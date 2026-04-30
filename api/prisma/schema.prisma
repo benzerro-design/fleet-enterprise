@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                 String             @id @default(cuid())
+  slug               String             @unique
+  name               String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  auditLogs          AuditLog[]
+  costEntries        CostEntry[]
+  maintenanceEntries MaintenanceEntry[]
+  memberships        TenantMembership[]
+  trips              Trip[]
+  vehicles           Vehicle[]
+}
+
+model User {
+  id               String             @id @default(cuid())
+  email            String             @unique
+  passwordHash     String
+  displayName      String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  auditLogsAsActor AuditLog[]         @relation("AuditActor")
+  memberships      TenantMembership[]
+  vehiclesCreated  Vehicle[]          @relation("VehicleCreatedBy")
+  vehiclesUpdated  Vehicle[]          @relation("VehicleUpdatedBy")
+}
+
+model TenantMembership {
+  id        String         @id @default(cuid())
+  userId    String
+  tenantId  String
+  role      MembershipRole @default(tenant_admin)
+  createdAt DateTime       @default(now())
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Vehicle {
+  id                 String             @id @default(cuid())
+  tenantId           String
+  clientId           String
+  registrationNumber String
+  type               VehicleType
+  vin                String?
+  status             VehicleStatus      @default(active)
+  odometerKm         Int                @default(0)
+  itpExpiresOn       DateTime?
+  itpStationName     String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  createdByUserId    String?
+  updatedByUserId    String?
+  costEntries        CostEntry[]
+  maintenanceEntries MaintenanceEntry[]
+  trips              Trip[]
+  createdBy          User?              @relation("VehicleCreatedBy", fields: [createdByUserId], references: [id])
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  updatedBy          User?              @relation("VehicleUpdatedBy", fields: [updatedByUserId], references: [id])
+  documents          VehicleDocument[]
+
+  @@unique([tenantId, registrationNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+/// Trasee / curse (MVP — extinde în fazele următoare).
+model Trip {
+  id          String    @id @default(cuid())
+  tenantId    String
+  vehicleId   String
+  reference   String?
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  originLabel String?
+  destLabel   String?
+  distanceKm  Int?
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([vehicleId])
+}
+
+/// Mentenanță planificată sau înregistrată (MVP).
+model MaintenanceEntry {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  vehicleId            String
+  title                String
+  performedAt          DateTime?
+  odometerKm           Int?
+  notes                String?
+  costCents            Int?
+  /// * Criteriu alocare costuri (cod predefinit: revizie, reparatie_mecanica, …).
+  costAllocationCode   String?
+  invoiceNumber        String?
+  invoiceDate          DateTime?
+  invoiceAttachmentUrl String?
+  provider             String?
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([vehicleId])
+}
+
+/// Costuri alocate vehiculului (MVP).
+model CostEntry {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  vehicleId            String
+  category             String
+  amountCents          Int
+  incurredOn           DateTime  @default(now())
+  notes                String?
+  odometerKm           Int?
+  invoiceNumber        String?
+  invoiceDate          DateTime?
+  invoiceAttachmentUrl String?
+  provider             String?
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([vehicleId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  meta        Json?
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model VehicleDocument {
+  id               String    @id @default(cuid())
+  vehicleId        String
+  documentTypeCode String
+  title            String
+  expiresOn        DateTime?
+  fileUrl          String?
+  createdAt        DateTime  @default(now())
+  vehicle          Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+}
+
+enum MembershipRole {
+  tenant_admin
+  tenant_viewer
+}
+
+enum VehicleType {
+  car
+  van_lt_3_5
+  van_gt_3_5
+  tractor_unit
+  trailer
+  semi_trailer
+}
+
+enum VehicleStatus {
+  active
+  inactive
+  in_maintenance
+  decommissioned
+}
