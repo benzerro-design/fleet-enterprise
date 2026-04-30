@@ -17,7 +17,7 @@ jobs:
       SERVICE: fleet-api
       REGION: europe-west1
       AR_REGION: europe-west1
-      REPO: fleet-enterprise
+      REPO: fleet
       IMAGE: fleet-api
 
     steps:
