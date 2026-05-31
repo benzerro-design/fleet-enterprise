@@ -117,6 +117,7 @@ function toRow(row: {
   vehicleDocumentId: string | null;
   maintenanceEntryId: string | null;
   costEntryId: string | null;
+  maintenancePlanItemId: string | null;
   dueOn: Date | null;
   reminderOffsetsDays: unknown;
   dueOdometerKm: number | null;
@@ -137,6 +138,7 @@ function toRow(row: {
   document?: { documentTypeCode: string } | null;
   maintenance?: { title: string } | null;
   cost?: { category: string } | null;
+  maintenancePlan?: { title: string; category: string | null } | null;
 }) {
   const reminderOffsetsDays = normalizeReminderOffsets(row.reminderOffsetsDays);
   const reminderOffsetsKm = normalizeReminderOffsetsKm(row.reminderOffsetsKm);
@@ -164,9 +166,11 @@ function toRow(row: {
     vehicleDocumentId: row.vehicleDocumentId,
     maintenanceEntryId: row.maintenanceEntryId,
     costEntryId: row.costEntryId,
+    maintenancePlanItemId: row.maintenancePlanItemId,
     documentTypeCode: row.document?.documentTypeCode ?? null,
     linkedMaintenanceTitle: row.maintenance?.title ?? null,
     linkedCostCategory: row.cost?.category ?? null,
+    linkedPlanCategory: row.maintenancePlan?.category ?? null,
     dueOn: row.dueOn ? row.dueOn.toISOString() : null,
     reminderOffsetsDays,
     dueOdometerKm: row.dueOdometerKm,
@@ -194,6 +198,7 @@ const includeRow = {
   document: { select: { documentTypeCode: true } },
   maintenance: { select: { title: true } },
   cost: { select: { category: true } },
+  maintenancePlan: { select: { title: true, category: true } },
 } as const;
 
 @Injectable()
@@ -387,7 +392,8 @@ export class RemindersService {
       (row.sourceType === 'document' && row.vehicleDocumentId) ||
       (row.sourceType === 'maintenance' && row.maintenanceEntryId) ||
       (row.sourceType === 'cost' && row.costEntryId) ||
-      (row.sourceType === 'vehicle_itp' && row.vehicleItpProfileVehicleId);
+      (row.sourceType === 'vehicle_itp' && row.vehicleItpProfileVehicleId) ||
+      (row.sourceType === 'maintenance_plan' && row.maintenancePlanItemId);
 
     if (isSynced) {
       if (row.sourceType === 'document' && row.vehicleDocumentId) {
@@ -409,6 +415,11 @@ export class RemindersService {
         await this.prisma.vehicle.update({
           where: { id: row.vehicleItpProfileVehicleId },
           data: { itpReminderMenuSyncEnabled: false },
+        });
+      } else if (row.sourceType === 'maintenance_plan' && row.maintenancePlanItemId) {
+        await this.prisma.maintenancePlanItem.update({
+          where: { id: row.maintenancePlanItemId },
+          data: { reminderMenuSyncEnabled: false },
         });
       }
     }
@@ -638,6 +649,78 @@ export class RemindersService {
         title,
         dueOn: vehicle.itpExpiresOn,
         reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        isActive: true,
+      },
+      include: includeRow,
+    });
+  }
+
+  /** Sincronizează acțiunea de reminder din planul de mentenanță preventivă al vehiculului. */
+  async syncFromMaintenancePlan(
+    tenantId: string,
+    item: {
+      id: string;
+      vehicleId: string;
+      title: string;
+      notes: string | null;
+      nextDueOn: Date | null;
+      reminderOffsetsDays: unknown;
+      dueOdometerKm?: number | null;
+      reminderOffsetsKm?: unknown;
+      intervalDays: number | null;
+      intervalKm: number | null;
+      lastServiceOn: Date | null;
+      lastServiceKm: number | null;
+    },
+  ) {
+    const payload = {
+      dueOn: item.nextDueOn,
+      reminderOffsetsDays: item.reminderOffsetsDays,
+      dueOdometerKm: item.dueOdometerKm ?? null,
+      reminderOffsetsKm: item.reminderOffsetsKm,
+    };
+    if (!hasReminderSyncConstraints(payload)) {
+      await this.prisma.reminderAction.deleteMany({ where: { maintenancePlanItemId: item.id } });
+      return null;
+    }
+
+    const dayOffsets = normalizeReminderOffsets(item.reminderOffsetsDays);
+    const kmOffsets = normalizeReminderOffsetsKm(item.reminderOffsetsKm);
+    const reminderTitle = item.title.trim().startsWith('PM —')
+      ? item.title.trim()
+      : `PM — ${item.title.trim()}`;
+
+    return this.prisma.reminderAction.upsert({
+      where: { maintenancePlanItemId: item.id },
+      create: {
+        tenantId,
+        vehicleId: item.vehicleId,
+        sourceType: ReminderSourceType.maintenance_plan,
+        title: reminderTitle,
+        notes: item.notes,
+        maintenancePlanItemId: item.id,
+        dueOn: item.nextDueOn,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: item.dueOdometerKm ?? null,
+        reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
+        intervalDays: item.intervalDays,
+        intervalKm: item.intervalKm,
+        lastPerformedOn: item.lastServiceOn,
+        lastPerformedOdometerKm: item.lastServiceKm,
+        isActive: true,
+      },
+      update: {
+        vehicleId: item.vehicleId,
+        title: reminderTitle,
+        notes: item.notes,
+        dueOn: item.nextDueOn,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: item.dueOdometerKm ?? null,
+        reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
+        intervalDays: item.intervalDays,
+        intervalKm: item.intervalKm,
+        lastPerformedOn: item.lastServiceOn,
+        lastPerformedOdometerKm: item.lastServiceKm,
         isActive: true,
       },
       include: includeRow,

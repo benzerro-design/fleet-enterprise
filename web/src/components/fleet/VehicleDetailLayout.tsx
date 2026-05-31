@@ -14,7 +14,7 @@ type Props = {
 };
 
 export function VehicleDetailLayout({ id, data, editable, canWrite }: Props) {
-  const { vehicle, maintenanceList, costsList, documentsList, civPayload, odometerPayload, mobilityPayload } = data;
+  const { vehicle, maintenanceList, costsList, documentsList, civPayload, odometerPayload, mobilityPayload, maintenancePlanPayload } = data;
   const regQs = `registrationNumber=${encodeURIComponent(vehicle.registrationNumber)}`;
   const profileWrite = editable && canWrite;
 
@@ -70,6 +70,7 @@ export function VehicleDetailLayout({ id, data, editable, canWrite }: Props) {
               write={profileWrite}
               civ={civPayload}
               odometer={odometerPayload}
+              maintenancePlan={maintenancePlanPayload}
             />
           </div>
         </Suspense>

@@ -37,4 +37,6 @@ export type OdometerReadingsPayload = {
   vehicleOdometerKm: number;
 };
 
-export type VehicleProfileTab = "basic" | "advanced" | "odometer";
+export type VehicleProfileTab = "basic" | "advanced" | "odometer" | "maintenance_plan";
+
+export type MaintenancePlanPayload = import("@/lib/maintenance-plan-types").MaintenancePlanPayload;

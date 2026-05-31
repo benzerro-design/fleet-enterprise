@@ -21,6 +21,7 @@ model Tenant {
   trips              Trip[]
   vehicles           Vehicle[]
   reminderActions    ReminderAction[]
+  maintenancePlanItems MaintenancePlanItem[]
 }
 
 model User {
@@ -89,6 +90,7 @@ model Vehicle {
   reminderActions    ReminderAction[]
   itpProfileReminder ReminderAction?    @relation("VehicleItpProfileReminder")
   odometerReadings   OdometerReading[]
+  maintenancePlanItems MaintenancePlanItem[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])
@@ -219,6 +221,47 @@ enum ReminderSourceType {
   cost
   custom
   vehicle_itp
+  maintenance_plan
+}
+
+enum MaintenancePlanTriggerMode {
+  time
+  km
+  whichever_first
+}
+
+/// Operațiune planificată în planul de mentenanță preventivă al vehiculului.
+model MaintenancePlanItem {
+  id                      String                     @id @default(cuid())
+  tenantId                String
+  vehicleId               String
+  title                   String
+  category                String?
+  notes                   String?
+  sortOrder               Int                        @default(0)
+  isActive                Boolean                    @default(true)
+  intervalDays            Int?
+  intervalKm              Int?
+  triggerMode             MaintenancePlanTriggerMode @default(whichever_first)
+  lastServiceOn           DateTime?
+  lastServiceKm           Int?
+  nextDueOn               DateTime?
+  dueOdometerKm           Int?
+  dueManualOverride       Boolean                    @default(false)
+  reminderOffsetsDays     Json?
+  reminderOffsetsKm       Json?
+  reminderMenuSyncEnabled Boolean                    @default(true)
+  preferredProvider       String?
+  estimatedCostCents      Int?
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  tenant                  Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle                 Vehicle                    @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  reminderAction          ReminderAction?
+
+  @@index([tenantId])
+  @@index([vehicleId])
+  @@index([vehicleId, sortOrder])
 }
 
 enum OdometerReadingSource {
@@ -253,6 +296,7 @@ model ReminderAction {
   maintenanceEntryId      String?            @unique
   costEntryId             String?            @unique
   vehicleItpProfileVehicleId String?         @unique
+  maintenancePlanItemId   String?            @unique
   dueOn                   DateTime?
   reminderOffsetsDays     Json?
   dueOdometerKm           Int?
@@ -270,6 +314,7 @@ model ReminderAction {
   maintenance             MaintenanceEntry?  @relation(fields: [maintenanceEntryId], references: [id], onDelete: Cascade)
   cost                    CostEntry?         @relation(fields: [costEntryId], references: [id], onDelete: Cascade)
   vehicleItpProfile       Vehicle?           @relation("VehicleItpProfileReminder", fields: [vehicleItpProfileVehicleId], references: [id], onDelete: Cascade)
+  maintenancePlan         MaintenancePlanItem? @relation(fields: [maintenancePlanItemId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([vehicleId])

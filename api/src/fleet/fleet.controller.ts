@@ -22,14 +22,23 @@ import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
 import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
+import type {
+  CreateMaintenancePlanItemDto,
+  MarkMaintenancePlanPerformedDto,
+  PatchMaintenancePlanItemDto,
+} from './dto/maintenance-plan.dto';
 import type { VehicleStatus } from './fleet.types';
 import { FleetService } from './fleet.service';
+import { MaintenancePlanService } from './maintenance-plan.service';
 import { TenantId } from './tenant-id.decorator';
 
 @Controller('fleet')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class FleetController {
-  constructor(private readonly fleet: FleetService) {}
+  constructor(
+    private readonly fleet: FleetService,
+    private readonly maintenancePlan: MaintenancePlanService,
+  ) {}
 
   @Get('vehicles/export')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
@@ -142,6 +151,67 @@ export class FleetController {
   ) {
     const dto = assertRecordOdometerDto(body);
     return this.fleet.recordOdometerReading(tenantId, vehicleId, dto, actorUserId);
+  }
+
+  @Get('vehicles/:vehicleId/maintenance-plan')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  listMaintenancePlan(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
+    return this.maintenancePlan.list(tenantId, vehicleId);
+  }
+
+  @Post('vehicles/:vehicleId/maintenance-plan')
+  @Roles(MembershipRole.tenant_admin)
+  @HttpCode(201)
+  createMaintenancePlanItem(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.maintenancePlan.create(tenantId, vehicleId, assertCreateMaintenancePlanDto(body), actorUserId);
+  }
+
+  @Patch('vehicles/:vehicleId/maintenance-plan/:itemId')
+  @Roles(MembershipRole.tenant_admin)
+  patchMaintenancePlanItem(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('itemId') itemId: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.maintenancePlan.patch(tenantId, vehicleId, itemId, assertPatchMaintenancePlanDto(body), actorUserId);
+  }
+
+  @Post('vehicles/:vehicleId/maintenance-plan/:itemId/mark-performed')
+  @Roles(MembershipRole.tenant_admin)
+  @HttpCode(200)
+  markMaintenancePlanPerformed(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('itemId') itemId: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.maintenancePlan.markPerformed(
+      tenantId,
+      vehicleId,
+      itemId,
+      assertMarkMaintenancePlanPerformedDto(body),
+      actorUserId,
+    );
+  }
+
+  @Delete('vehicles/:vehicleId/maintenance-plan/:itemId')
+  @Roles(MembershipRole.tenant_admin)
+  @HttpCode(204)
+  deleteMaintenancePlanItem(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('itemId') itemId: string,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.maintenancePlan.delete(tenantId, vehicleId, itemId, actorUserId);
   }
 
   @Delete('vehicles/:vehicleId')
@@ -426,4 +496,159 @@ function assertRecordOdometerDto(body: unknown): RecordOdometerDto {
     dto.source = s;
   }
   return dto;
+}
+
+const PLAN_TRIGGER_MODES = new Set(['time', 'km', 'whichever_first']);
+
+function assertCreateMaintenancePlanDto(body: unknown): CreateMaintenancePlanItemDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const title = asNonEmptyString(body.title, 'title');
+  const dto: CreateMaintenancePlanItemDto = { title };
+  if ('category' in body) dto.category = body.category === null ? null : optionalString(body.category) ?? null;
+  if ('notes' in body) dto.notes = body.notes === null ? null : optionalString(body.notes) ?? null;
+  if ('sortOrder' in body) dto.sortOrder = asNonNegativeNumber(body.sortOrder, 'sortOrder');
+  if ('isActive' in body) dto.isActive = optionalBoolean(body.isActive);
+  if ('intervalDays' in body) {
+    dto.intervalDays =
+      body.intervalDays === null ? null : asPositiveInt(body.intervalDays, 'intervalDays');
+  }
+  if ('intervalKm' in body) {
+    dto.intervalKm = body.intervalKm === null ? null : asPositiveInt(body.intervalKm, 'intervalKm');
+  }
+  if ('triggerMode' in body) {
+    if (typeof body.triggerMode !== 'string' || !PLAN_TRIGGER_MODES.has(body.triggerMode)) {
+      throw new BadRequestException('Invalid triggerMode');
+    }
+    dto.triggerMode = body.triggerMode as CreateMaintenancePlanItemDto['triggerMode'];
+  }
+  if ('lastServiceOn' in body) {
+    if (body.lastServiceOn === null) dto.lastServiceOn = null;
+    else dto.lastServiceOn = optionalIsoDateString(body.lastServiceOn);
+  }
+  if ('lastServiceKm' in body) {
+    dto.lastServiceKm =
+      body.lastServiceKm === null ? null : asNonNegativeNumber(body.lastServiceKm, 'lastServiceKm');
+  }
+  if ('nextDueOn' in body) {
+    if (body.nextDueOn === null) dto.nextDueOn = null;
+    else dto.nextDueOn = optionalIsoDateString(body.nextDueOn);
+  }
+  if ('dueOdometerKm' in body) {
+    dto.dueOdometerKm =
+      body.dueOdometerKm === null ? null : asNonNegativeNumber(body.dueOdometerKm, 'dueOdometerKm');
+  }
+  if ('dueManualOverride' in body) dto.dueManualOverride = optionalBoolean(body.dueManualOverride);
+  if ('reminderOffsetsDays' in body) {
+    dto.reminderOffsetsDays = parseReminderOffsetsField(body, 'reminderOffsetsDays') ?? null;
+  }
+  if ('reminderOffsetsKm' in body) {
+    dto.reminderOffsetsKm = parseReminderOffsetsKmField(body, 'reminderOffsetsKm') ?? null;
+  }
+  if ('syncReminderAction' in body) dto.syncReminderAction = optionalBoolean(body.syncReminderAction);
+  if ('preferredProvider' in body) {
+    dto.preferredProvider =
+      body.preferredProvider === null ? null : optionalString(body.preferredProvider) ?? null;
+  }
+  if ('estimatedCostCents' in body) {
+    dto.estimatedCostCents =
+      body.estimatedCostCents === null
+        ? null
+        : asNonNegativeNumber(body.estimatedCostCents, 'estimatedCostCents');
+  }
+  return dto;
+}
+
+function assertPatchMaintenancePlanDto(body: unknown): PatchMaintenancePlanItemDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const dto: PatchMaintenancePlanItemDto = {};
+  if ('title' in body) dto.title = asNonEmptyString(body.title, 'title');
+  if ('category' in body) dto.category = body.category === null ? null : optionalString(body.category) ?? null;
+  if ('notes' in body) dto.notes = body.notes === null ? null : optionalString(body.notes) ?? null;
+  if ('sortOrder' in body) dto.sortOrder = asNonNegativeNumber(body.sortOrder, 'sortOrder');
+  if ('isActive' in body) dto.isActive = optionalBoolean(body.isActive);
+  if ('intervalDays' in body) {
+    dto.intervalDays =
+      body.intervalDays === null ? null : asPositiveInt(body.intervalDays, 'intervalDays');
+  }
+  if ('intervalKm' in body) {
+    dto.intervalKm = body.intervalKm === null ? null : asPositiveInt(body.intervalKm, 'intervalKm');
+  }
+  if ('triggerMode' in body) {
+    if (typeof body.triggerMode !== 'string' || !PLAN_TRIGGER_MODES.has(body.triggerMode)) {
+      throw new BadRequestException('Invalid triggerMode');
+    }
+    dto.triggerMode = body.triggerMode as PatchMaintenancePlanItemDto['triggerMode'];
+  }
+  if ('lastServiceOn' in body) {
+    if (body.lastServiceOn === null) dto.lastServiceOn = null;
+    else dto.lastServiceOn = optionalIsoDateString(body.lastServiceOn);
+  }
+  if ('lastServiceKm' in body) {
+    dto.lastServiceKm =
+      body.lastServiceKm === null ? null : asNonNegativeNumber(body.lastServiceKm, 'lastServiceKm');
+  }
+  if ('nextDueOn' in body) {
+    if (body.nextDueOn === null) dto.nextDueOn = null;
+    else dto.nextDueOn = optionalIsoDateString(body.nextDueOn);
+  }
+  if ('dueOdometerKm' in body) {
+    dto.dueOdometerKm =
+      body.dueOdometerKm === null ? null : asNonNegativeNumber(body.dueOdometerKm, 'dueOdometerKm');
+  }
+  if ('dueManualOverride' in body) dto.dueManualOverride = optionalBoolean(body.dueManualOverride);
+  if ('reminderOffsetsDays' in body) {
+    dto.reminderOffsetsDays = parseReminderOffsetsField(body, 'reminderOffsetsDays') ?? null;
+  }
+  if ('reminderOffsetsKm' in body) {
+    dto.reminderOffsetsKm = parseReminderOffsetsKmField(body, 'reminderOffsetsKm') ?? null;
+  }
+  if ('syncReminderAction' in body) dto.syncReminderAction = optionalBoolean(body.syncReminderAction);
+  if ('preferredProvider' in body) {
+    dto.preferredProvider =
+      body.preferredProvider === null ? null : optionalString(body.preferredProvider) ?? null;
+  }
+  if ('estimatedCostCents' in body) {
+    dto.estimatedCostCents =
+      body.estimatedCostCents === null
+        ? null
+        : asNonNegativeNumber(body.estimatedCostCents, 'estimatedCostCents');
+  }
+  if (Object.keys(dto).length === 0) {
+    throw new BadRequestException('No fields to update');
+  }
+  return dto;
+}
+
+function assertMarkMaintenancePlanPerformedDto(body: unknown): MarkMaintenancePlanPerformedDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const dto: MarkMaintenancePlanPerformedDto = {};
+  if ('performedOn' in body) {
+    if (body.performedOn === null) dto.performedOn = null;
+    else dto.performedOn = optionalIsoDateString(body.performedOn);
+  }
+  if ('performedKm' in body) {
+    dto.performedKm =
+      body.performedKm === null ? null : asNonNegativeNumber(body.performedKm, 'performedKm');
+  }
+  if ('notes' in body) dto.notes = body.notes === null ? null : optionalString(body.notes) ?? null;
+  return dto;
+}
+
+function asPositiveInt(v: unknown, field: string): number {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) {
+    throw new BadRequestException(`Field "${field}" must be a positive integer`);
+  }
+  return v;
+}
+
+function parseReminderOffsetsKmField(
+  body: Record<string, unknown>,
+  key: string,
+): number[] | null | undefined {
+  if (!(key in body)) return undefined;
+  const raw = body[key];
+  if (raw === null) return null;
+  if (!Array.isArray(raw)) throw new BadRequestException(`${key} must be an array of numbers or null`);
+  const nums = raw.filter((v): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0);
+  return nums;
 }

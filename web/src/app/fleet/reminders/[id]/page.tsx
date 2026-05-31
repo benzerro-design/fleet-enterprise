@@ -34,7 +34,12 @@ export default async function ReminderDetailPage({ params }: Props) {
           ? { href: `/fleet/costs/${row.costEntryId}/edit`, label: "Editează costul" }
           : row.sourceType === "vehicle_itp"
             ? { href: `/fleet/vehicles/${row.vehicleId}/edit?tab=basic`, label: "Editează vehiculul" }
-            : null;
+            : row.sourceType === "maintenance_plan" && row.maintenancePlanItemId
+              ? {
+                  href: `/fleet/vehicles/${row.vehicleId}/edit?tab=maintenance_plan&planItem=${row.maintenancePlanItemId}`,
+                  label: "Editează planul PM",
+                }
+              : null;
 
   return (
     <div className="text-zinc-100">

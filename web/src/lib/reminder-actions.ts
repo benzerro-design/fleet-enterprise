@@ -12,6 +12,7 @@ export const REMINDER_SOURCE_TYPES = [
   { value: "maintenance", label: "Mentenanță" },
   { value: "cost", label: "Cost" },
   { value: "vehicle_itp", label: "ITP vehicul" },
+  { value: "maintenance_plan", label: "Plan mentenanță" },
   { value: "custom", label: "Personalizat" },
 ] as const;
 
@@ -61,9 +62,11 @@ export type ReminderActionRow = {
   vehicleDocumentId: string | null;
   maintenanceEntryId: string | null;
   costEntryId: string | null;
+  maintenancePlanItemId: string | null;
   documentTypeCode: string | null;
   linkedMaintenanceTitle: string | null;
   linkedCostCategory: string | null;
+  linkedPlanCategory: string | null;
   dueOn: string | null;
   reminderOffsetsDays: number[] | null;
   dueOdometerKm: number | null;

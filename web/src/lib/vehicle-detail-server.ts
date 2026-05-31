@@ -1,6 +1,7 @@
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { VehicleRecord } from "@/lib/fleet-api";
 import type { OdometerReadingsPayload, VehicleCivPayload } from "@/lib/vehicle-profile-types";
+import type { MaintenancePlanPayload } from "@/lib/maintenance-plan-types";
 import type { VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
 
 const OPS_PREVIEW_PAGE_SIZE = 50;
@@ -45,6 +46,12 @@ export type DocumentListPayload = {
     reminder?: import("@/lib/document-reminders").DocumentReminderSummary;
   }>;
   total: number;
+};
+
+export const EMPTY_MAINTENANCE_PLAN: MaintenancePlanPayload = {
+  items: [],
+  vehicleOdometerKm: 0,
+  stats: { total: 0, active: 0, dueSoon: 0, overdue: 0, syncedReminders: 0 },
 };
 
 export const EMPTY_CIV: VehicleCivPayload = {
@@ -143,6 +150,16 @@ async function getVehicleMobility(id: string): Promise<VehicleMobilityPayload | 
   }
 }
 
+async function getMaintenancePlan(id: string): Promise<MaintenancePlanPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/maintenance-plan`);
+    if (!res?.ok) return null;
+    return (await res.json()) as MaintenancePlanPayload;
+  } catch {
+    return null;
+  }
+}
+
 export type VehicleDetailData = {
   vehicle: VehicleRecord;
   maintenanceList: MaintenanceListPayload | null;
@@ -151,19 +168,22 @@ export type VehicleDetailData = {
   civPayload: VehicleCivPayload;
   odometerPayload: OdometerReadingsPayload;
   mobilityPayload: VehicleMobilityPayload | null;
+  maintenancePlanPayload: MaintenancePlanPayload;
 };
 
 export async function loadVehicleDetail(id: string): Promise<VehicleDetailData | null> {
   const vehicle = await getVehicle(id);
   if (!vehicle) return null;
 
-  const [maintenanceList, costsList, documentsList, civ, odometer, mobility] = await Promise.all([
+  const [maintenanceList, costsList, documentsList, civ, odometer, mobility, maintenancePlan] =
+    await Promise.all([
     getMaintenanceForVehicle(vehicle.registrationNumber),
     getCostsForVehicle(vehicle.registrationNumber),
     getDocumentsForVehicle(vehicle.registrationNumber),
     getVehicleCiv(id),
     getOdometerReadings(id),
     getVehicleMobility(id),
+    getMaintenancePlan(id),
   ]);
 
   return {
@@ -174,5 +194,9 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     civPayload: civ ?? EMPTY_CIV,
     odometerPayload: odometer ?? { items: [], vehicleOdometerKm: vehicle.odometerKm },
     mobilityPayload: mobility,
+    maintenancePlanPayload: maintenancePlan ?? {
+      ...EMPTY_MAINTENANCE_PLAN,
+      vehicleOdometerKm: vehicle.odometerKm,
+    },
   };
 }

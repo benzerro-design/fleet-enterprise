@@ -4,9 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { VehicleAdvancedCivTab } from "@/components/fleet/VehicleAdvancedCivTab";
 import { VehicleBasicInfoTab } from "@/components/fleet/VehicleBasicInfoTab";
+import { VehicleMaintenancePlanTab } from "@/components/fleet/VehicleMaintenancePlanTab";
 import { VehicleOdometerTab } from "@/components/fleet/VehicleOdometerTab";
 import type { VehicleRecord } from "@/lib/fleet-api";
 import type {
+  MaintenancePlanPayload,
   OdometerReadingsPayload,
   VehicleCivPayload,
   VehicleProfileTab,
@@ -16,6 +18,7 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "basic", label: "Basic Info" },
   { id: "advanced", label: "Advanced Infos" },
   { id: "odometer", label: "Odometru" },
+  { id: "maintenance_plan", label: "Plan Mentenanță" },
 ];
 
 type Props = {
@@ -23,16 +26,19 @@ type Props = {
   write: boolean;
   civ: VehicleCivPayload;
   odometer: OdometerReadingsPayload;
+  maintenancePlan: MaintenancePlanPayload;
 };
 
-export function VehicleProfileTabs({ vehicle, write, civ, odometer }: Props) {
+export function VehicleProfileTabs({ vehicle, write, civ, odometer, maintenancePlan }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const active = useMemo((): VehicleProfileTab => {
     const t = searchParams.get("tab");
-    if (t === "advanced" || t === "odometer" || t === "basic") return t;
+    if (t === "advanced" || t === "odometer" || t === "basic" || t === "maintenance_plan") return t;
     return "basic";
   }, [searchParams]);
+
+  const planItemHighlight = searchParams.get("planItem");
 
   const setTab = useCallback(
     (tab: VehicleProfileTab) => {
@@ -73,6 +79,14 @@ export function VehicleProfileTabs({ vehicle, write, civ, odometer }: Props) {
         ) : null}
         {active === "odometer" ? (
           <VehicleOdometerTab vehicleId={vehicle.id} write={write} initial={odometer} />
+        ) : null}
+        {active === "maintenance_plan" ? (
+          <VehicleMaintenancePlanTab
+            vehicleId={vehicle.id}
+            write={write}
+            initial={maintenancePlan}
+            highlightItemId={planItemHighlight}
+          />
         ) : null}
       </div>
     </section>
