@@ -8,6 +8,11 @@ import { isItpCostCategory, syncItpCertDocument, syncVehicleItpFromOps } from '.
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
+import {
+  reminderMenuSyncEnabledForCreate,
+  reminderMenuSyncEnabledPatchValue,
+  shouldRunReminderMenuSync,
+} from './reminder-sync';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -179,6 +184,7 @@ function toCostRow(row: {
   reminderOffsetsDays: unknown;
   dueOdometerKm: number | null;
   reminderOffsetsKm: unknown;
+  reminderMenuSyncEnabled: boolean;
   vehicle: { registrationNumber: string; clientId: string };
   tenant: { slug: string };
 }) {
@@ -201,6 +207,7 @@ function toCostRow(row: {
     reminderOffsetsDays: normalizeReminderOffsets(row.reminderOffsetsDays),
     dueOdometerKm: row.dueOdometerKm,
     reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
+    reminderMenuSyncEnabled: row.reminderMenuSyncEnabled,
   };
 }
 
@@ -333,6 +340,7 @@ export class CostsService {
         reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
         dueOdometerKm: dto.dueOdometerKm ?? null,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
+        reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
       },
       include: {
         vehicle: { select: { registrationNumber: true, clientId: true } },
@@ -360,23 +368,12 @@ export class CostsService {
     });
 
     let reminderSyncFailed = false;
-    if (dto.syncReminderAction !== false) {
-      try {
-        await this.reminders.syncFromCost(tenant.id, {
-          id: row.id,
-          vehicleId: row.vehicleId,
-          category: row.category,
-          title: `${row.category} — ${row.vehicle.registrationNumber}`,
-          nextDueOn: row.nextDueOn,
-          reminderOffsetsDays: row.reminderOffsetsDays,
-          dueOdometerKm: row.dueOdometerKm,
-          reminderOffsetsKm: row.reminderOffsetsKm,
-        });
-      } catch (err) {
-        reminderSyncFailed = true;
-        console.error('syncFromCost after create failed', err);
-      }
-    }
+    reminderSyncFailed = await this.applyCostReminderMenuSync(
+      tenant.id,
+      row,
+      `${row.category} — ${row.vehicle.registrationNumber}`,
+      dto.syncReminderAction,
+    );
 
     if (isItpCostCategory(row.category) && row.nextDueOn) {
       try {
@@ -432,6 +429,7 @@ export class CostsService {
       reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
       dueOdometerKm: dto.dueOdometerKm,
       reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
+      reminderMenuSyncEnabled: reminderMenuSyncEnabledPatchValue(dto.syncReminderAction),
     };
 
     const r = await this.prisma.costEntry.updateMany({
@@ -475,23 +473,21 @@ export class CostsService {
     const updated = await this.getById(tenantSlug, id);
 
     let reminderSyncFailed = false;
-    if (dto.syncReminderAction !== false) {
-      try {
-        await this.reminders.syncFromCost(before.tenantId, {
-          id: updated.id,
-          vehicleId: updated.vehicleId,
-          category: updated.category,
-          title: `${updated.category} — ${before.vehicle.registrationNumber}`,
-          nextDueOn: updated.nextDueOn ? new Date(updated.nextDueOn) : null,
-          reminderOffsetsDays: updated.reminderOffsetsDays,
-          dueOdometerKm: updated.dueOdometerKm,
-          reminderOffsetsKm: updated.reminderOffsetsKm,
-        });
-      } catch (err) {
-        reminderSyncFailed = true;
-        console.error('syncFromCost after patch failed', err);
-      }
-    }
+    reminderSyncFailed = await this.applyCostReminderMenuSync(
+      before.tenantId,
+      {
+        id: updated.id,
+        vehicleId: updated.vehicleId,
+        category: updated.category,
+        nextDueOn: updated.nextDueOn ? new Date(updated.nextDueOn) : null,
+        reminderOffsetsDays: updated.reminderOffsetsDays,
+        dueOdometerKm: updated.dueOdometerKm,
+        reminderOffsetsKm: updated.reminderOffsetsKm,
+        reminderMenuSyncEnabled: updated.reminderMenuSyncEnabled,
+      },
+      `${updated.category} — ${before.vehicle.registrationNumber}`,
+      dto.syncReminderAction,
+    );
 
     if (isItpCostCategory(updated.category) && updated.nextDueOn) {
       try {
@@ -508,6 +504,47 @@ export class CostsService {
     }
 
     return { ...updated, reminderSyncFailed };
+  }
+
+  private async applyCostReminderMenuSync(
+    tenantId: string,
+    row: {
+      id: string;
+      vehicleId: string;
+      category: string;
+      nextDueOn: Date | null;
+      reminderOffsetsDays: unknown;
+      dueOdometerKm: number | null;
+      reminderOffsetsKm: unknown;
+      reminderMenuSyncEnabled: boolean;
+    },
+    title: string,
+    syncReminderAction?: boolean,
+  ): Promise<boolean> {
+    if (shouldRunReminderMenuSync(row.reminderMenuSyncEnabled, syncReminderAction)) {
+      try {
+        await this.reminders.syncFromCost(tenantId, {
+          id: row.id,
+          vehicleId: row.vehicleId,
+          category: row.category,
+          title,
+          nextDueOn: row.nextDueOn,
+          reminderOffsetsDays: row.reminderOffsetsDays,
+          dueOdometerKm: row.dueOdometerKm,
+          reminderOffsetsKm: row.reminderOffsetsKm,
+        });
+        return false;
+      } catch (err) {
+        console.error('syncFromCost failed', err);
+        return true;
+      }
+    }
+    try {
+      await this.prisma.reminderAction.deleteMany({ where: { costEntryId: row.id } });
+    } catch (err) {
+      console.error('delete cost reminder failed', err);
+    }
+    return false;
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string) {

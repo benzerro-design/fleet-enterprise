@@ -382,31 +382,41 @@ export class RemindersService {
       include: { vehicle: { select: { registrationNumber: true, tenantId: true } } },
     });
     if (!row) throw new NotFoundException('Reminder not found');
-    if (row.sourceType === 'document' && row.vehicleDocumentId) {
-      throw new BadRequestException(
-        'Reminderul legat de document se gestionează din Documente. Editează documentul sau dezactivează reminderele acolo.',
-      );
-    }
-    if (row.sourceType === 'maintenance' && row.maintenanceEntryId) {
-      throw new BadRequestException(
-        'Reminderul legat de mentenanță se gestionează din Mentenanță. Editează intervenția sau dezactivează reminderele acolo.',
-      );
-    }
-    if (row.sourceType === 'cost' && row.costEntryId) {
-      throw new BadRequestException(
-        'Reminderul legat de cost se gestionează din Costuri. Editează înregistrarea sau dezactivează reminderele acolo.',
-      );
+
+    const isSynced =
+      (row.sourceType === 'document' && row.vehicleDocumentId) ||
+      (row.sourceType === 'maintenance' && row.maintenanceEntryId) ||
+      (row.sourceType === 'cost' && row.costEntryId);
+
+    if (isSynced) {
+      if (row.sourceType === 'document' && row.vehicleDocumentId) {
+        await this.prisma.vehicleDocument.update({
+          where: { id: row.vehicleDocumentId },
+          data: { reminderMenuSyncEnabled: false },
+        });
+      } else if (row.sourceType === 'maintenance' && row.maintenanceEntryId) {
+        await this.prisma.maintenanceEntry.update({
+          where: { id: row.maintenanceEntryId },
+          data: { reminderMenuSyncEnabled: false },
+        });
+      } else if (row.sourceType === 'cost' && row.costEntryId) {
+        await this.prisma.costEntry.update({
+          where: { id: row.costEntryId },
+          data: { reminderMenuSyncEnabled: false },
+        });
+      }
     }
 
     await this.audit.logVehicle({
       tenantUuid: row.vehicle.tenantId,
       actorUserId: actorUserId ?? undefined,
-      action: 'reminder_delete',
+      action: isSynced ? 'reminder_deactivate' : 'reminder_delete',
       vehicleId: row.vehicleId,
       meta: {
         reminderId: row.id,
         title: row.title,
         registrationNumber: row.vehicle.registrationNumber,
+        sourceType: row.sourceType,
       },
     });
 

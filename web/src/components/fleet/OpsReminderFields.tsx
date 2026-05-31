@@ -156,7 +156,8 @@ export function OpsReminderFields({
         <span className="text-sm text-zinc-300">
           <span className="font-medium text-violet-200">Creează acțiune în meniul Remindere</span>
           <span className="mt-0.5 block text-xs text-zinc-500">
-            Sincronizează automat cu setările de mai sus. Editarea ulterioară se face din modulul sursă.
+            Sincronizează automat cu setările de mai sus. Editarea ulterioară se face din modulul sursă; dezactivarea
+            din meniul Remindere păstrează înregistrarea sursă.
           </span>
         </span>
       </label>

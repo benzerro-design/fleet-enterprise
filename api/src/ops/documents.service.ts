@@ -14,6 +14,11 @@ import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
 import { syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
+import {
+  reminderMenuSyncEnabledForCreate,
+  reminderMenuSyncEnabledPatchValue,
+  shouldRunReminderMenuSync,
+} from './reminder-sync';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -153,6 +158,7 @@ function toDocRow(row: {
   reminderOffsetsDays: unknown;
   dueOdometerKm: number | null;
   reminderOffsetsKm: unknown;
+  reminderMenuSyncEnabled: boolean;
   createdAt: Date;
   vehicle: { registrationNumber: string; clientId: string; tenant: { slug: string } };
 }) {
@@ -172,6 +178,7 @@ function toDocRow(row: {
     reminderOffsetsDays,
     dueOdometerKm: row.dueOdometerKm,
     reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
+    reminderMenuSyncEnabled: row.reminderMenuSyncEnabled,
     reminder,
     createdAt: row.createdAt.toISOString(),
   };
@@ -308,6 +315,7 @@ export class DocumentsService {
         reminderOffsetsDays: reminderOffsetsForDb(reminderOffsets),
         dueOdometerKm: dto.dueOdometerKm ?? null,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
+        reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
       },
       include: {
         vehicle: {
@@ -334,22 +342,7 @@ export class DocumentsService {
     });
 
     let reminderSyncFailed = false;
-    if (dto.syncReminderAction !== false) {
-      try {
-        await this.reminders.syncFromDocument(tenant.id, {
-          id: row.id,
-          vehicleId: row.vehicleId,
-          title: row.title,
-          expiresOn: row.expiresOn,
-          reminderOffsetsDays: row.reminderOffsetsDays,
-          dueOdometerKm: row.dueOdometerKm,
-          reminderOffsetsKm: row.reminderOffsetsKm,
-        });
-      } catch (err) {
-        reminderSyncFailed = true;
-        console.error('syncFromDocument after create failed', err);
-      }
-    }
+    reminderSyncFailed = await this.applyDocumentReminderMenuSync(tenant.id, row, dto.syncReminderAction);
 
     if (row.documentTypeCode === 'itp_cert' && row.expiresOn) {
       try {
@@ -390,6 +383,7 @@ export class DocumentsService {
         reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
         dueOdometerKm: dto.dueOdometerKm,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
+        reminderMenuSyncEnabled: reminderMenuSyncEnabledPatchValue(dto.syncReminderAction),
       },
       include: {
         vehicle: {
@@ -416,22 +410,11 @@ export class DocumentsService {
     });
 
     let reminderSyncFailed = false;
-    if (dto.syncReminderAction !== false) {
-      try {
-        await this.reminders.syncFromDocument(before.vehicle.tenantId, {
-          id: row.id,
-          vehicleId: row.vehicleId,
-          title: row.title,
-          expiresOn: row.expiresOn,
-          reminderOffsetsDays: row.reminderOffsetsDays,
-          dueOdometerKm: row.dueOdometerKm,
-          reminderOffsetsKm: row.reminderOffsetsKm,
-        });
-      } catch (err) {
-        reminderSyncFailed = true;
-        console.error('syncFromDocument after patch failed', err);
-      }
-    }
+    reminderSyncFailed = await this.applyDocumentReminderMenuSync(
+      before.vehicle.tenantId,
+      row,
+      dto.syncReminderAction,
+    );
 
     if (row.documentTypeCode === 'itp_cert' && row.expiresOn) {
       try {
@@ -442,6 +425,45 @@ export class DocumentsService {
     }
 
     return { ...toDocRow(row), reminderSyncFailed };
+  }
+
+  private async applyDocumentReminderMenuSync(
+    tenantId: string,
+    row: {
+      id: string;
+      vehicleId: string;
+      title: string;
+      expiresOn: Date | null;
+      reminderOffsetsDays: unknown;
+      dueOdometerKm: number | null;
+      reminderOffsetsKm: unknown;
+      reminderMenuSyncEnabled: boolean;
+    },
+    syncReminderAction?: boolean,
+  ): Promise<boolean> {
+    if (shouldRunReminderMenuSync(row.reminderMenuSyncEnabled, syncReminderAction)) {
+      try {
+        await this.reminders.syncFromDocument(tenantId, {
+          id: row.id,
+          vehicleId: row.vehicleId,
+          title: row.title,
+          expiresOn: row.expiresOn,
+          reminderOffsetsDays: row.reminderOffsetsDays,
+          dueOdometerKm: row.dueOdometerKm,
+          reminderOffsetsKm: row.reminderOffsetsKm,
+        });
+        return false;
+      } catch (err) {
+        console.error('syncFromDocument failed', err);
+        return true;
+      }
+    }
+    try {
+      await this.prisma.reminderAction.deleteMany({ where: { vehicleDocumentId: row.id } });
+    } catch (err) {
+      console.error('delete document reminder failed', err);
+    }
+    return false;
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string) {

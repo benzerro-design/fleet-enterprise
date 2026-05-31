@@ -118,6 +118,8 @@ model MaintenanceEntry {
   reminderOffsetsDays  Json?
   dueOdometerKm        Int?
   reminderOffsetsKm    Json?
+  /** Dacă false, acțiunea nu apare în meniul Remindere până la reactivare din sursă. */
+  reminderMenuSyncEnabled Boolean @default(true)
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminderAction       ReminderAction?
@@ -145,6 +147,8 @@ model CostEntry {
   reminderOffsetsDays  Json?
   dueOdometerKm        Int?
   reminderOffsetsKm    Json?
+  /** Dacă false, acțiunea nu apare în meniul Remindere până la reactivare din sursă. */
+  reminderMenuSyncEnabled Boolean @default(true)
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminderAction       ReminderAction?
@@ -181,6 +185,8 @@ model VehicleDocument {
   reminderOffsetsDays Json?
   dueOdometerKm       Int?
   reminderOffsetsKm   Json?
+  /** Dacă false, acțiunea nu apare în meniul Remindere până la reactivare din sursă. */
+  reminderMenuSyncEnabled Boolean @default(true)
   createdAt           DateTime  @default(now())
   vehicle             Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminderAction      ReminderAction?

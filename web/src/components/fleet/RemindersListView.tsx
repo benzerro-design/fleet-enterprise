@@ -251,10 +251,22 @@ export function RemindersListView({
                       <span className="font-mono text-sky-300">{row.dueOdometerKm.toLocaleString("ro-RO")}</span>
                     </p>
                   ) : null}
-                  {write && row.sourceType !== "document" && row.sourceType !== "maintenance" && row.sourceType !== "cost" ? (
+                  {write && row.sourceType === "custom" ? (
                     <DeleteReminderButton
                       reminderId={row.id}
                       title={row.title}
+                      mode="delete"
+                      onDeleted={() => void load()}
+                    />
+                  ) : null}
+                  {write &&
+                  (row.sourceType === "document" ||
+                    row.sourceType === "maintenance" ||
+                    row.sourceType === "cost") ? (
+                    <DeleteReminderButton
+                      reminderId={row.id}
+                      title={row.title}
+                      mode="deactivate"
                       onDeleted={() => void load()}
                     />
                   ) : null}

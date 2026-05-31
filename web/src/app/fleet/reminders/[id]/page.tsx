@@ -64,12 +64,20 @@ export default async function ReminderDetailPage({ params }: Props) {
               </Link>
             ) : null}
             {write && sourceEdit ? (
-              <Link
-                href={sourceEdit.href}
-                className="rounded-lg border border-violet-700/60 bg-violet-950/30 px-4 py-2 text-sm text-violet-100 hover:bg-violet-950/50"
-              >
-                {sourceEdit.label}
-              </Link>
+              <>
+                <Link
+                  href={sourceEdit.href}
+                  className="rounded-lg border border-violet-700/60 bg-violet-950/30 px-4 py-2 text-sm text-violet-100 hover:bg-violet-950/50"
+                >
+                  {sourceEdit.label}
+                </Link>
+                <DeleteReminderButton
+                  reminderId={id}
+                  title={row.title}
+                  mode="deactivate"
+                  redirectTo="/fleet/reminders"
+                />
+              </>
             ) : null}
             {write && row.sourceType === "custom" ? (
               <DeleteReminderButton reminderId={id} title={row.title} redirectTo="/fleet/reminders" />
@@ -152,29 +160,30 @@ export default async function ReminderDetailPage({ params }: Props) {
 
         {row.sourceType === "document" && row.vehicleDocumentId ? (
           <p className="mt-6 text-sm text-zinc-500">
-            Acest reminder este sincronizat cu documentul.{" "}
+            Acest reminder este sincronizat cu documentul. Editează documentul pentru a modifica scadența sau
+            debifează sync-ul acolo. Poți și{" "}
+            <span className="text-violet-300">dezactiva</span> reminderul din listă — documentul rămâne intact.{" "}
             <Link href={`/fleet/documents/${row.vehicleDocumentId}/edit`} className="text-violet-400 hover:underline">
               Editează documentul
-            </Link>{" "}
-            pentru a modifica reminderele.
+            </Link>
           </p>
         ) : null}
         {row.sourceType === "maintenance" && row.maintenanceEntryId ? (
           <p className="mt-6 text-sm text-zinc-500">
-            Acest reminder este sincronizat cu intervenția de mentenanță.{" "}
+            Acest reminder este sincronizat cu intervenția de mentenanță. Editează mentenanța sau dezactivează
+            reminderul din listă — intervenția rămâne.{" "}
             <Link href={`/fleet/maintenance/${row.maintenanceEntryId}/edit`} className="text-violet-400 hover:underline">
               Editează mentenanța
-            </Link>{" "}
-            pentru a modifica reminderele.
+            </Link>
           </p>
         ) : null}
         {row.sourceType === "cost" && row.costEntryId ? (
           <p className="mt-6 text-sm text-zinc-500">
-            Acest reminder este sincronizat cu înregistrarea de cost.{" "}
+            Acest reminder este sincronizat cu înregistrarea de cost. Editează costul sau dezactivează reminderul din
+            listă — costul rămâne.{" "}
             <Link href={`/fleet/costs/${row.costEntryId}/edit`} className="text-violet-400 hover:underline">
               Editează costul
-            </Link>{" "}
-            pentru a modifica reminderele.
+            </Link>
           </p>
         ) : null}
       </main>

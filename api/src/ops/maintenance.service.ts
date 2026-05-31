@@ -9,6 +9,11 @@ import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import type { MaintenanceCostAllocationCode } from './maintenance-cost-allocation';
 import { RemindersService } from './reminders.service';
+import {
+  reminderMenuSyncEnabledForCreate,
+  reminderMenuSyncEnabledPatchValue,
+  shouldRunReminderMenuSync,
+} from './reminder-sync';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -184,6 +189,7 @@ function toMaintRow(row: {
   reminderOffsetsDays: unknown;
   dueOdometerKm: number | null;
   reminderOffsetsKm: unknown;
+  reminderMenuSyncEnabled: boolean;
   vehicle: { registrationNumber: string; clientId: string };
   tenant: { slug: string };
 }) {
@@ -207,6 +213,7 @@ function toMaintRow(row: {
     reminderOffsetsDays: normalizeReminderOffsets(row.reminderOffsetsDays),
     dueOdometerKm: row.dueOdometerKm,
     reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
+    reminderMenuSyncEnabled: row.reminderMenuSyncEnabled,
   };
 }
 
@@ -333,6 +340,7 @@ export class MaintenanceService {
         reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
         dueOdometerKm: dto.dueOdometerKm ?? null,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
+        reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
       },
       include: {
         vehicle: { select: { registrationNumber: true, clientId: true } },
@@ -358,22 +366,7 @@ export class MaintenanceService {
     });
 
     let reminderSyncFailed = false;
-    if (dto.syncReminderAction !== false) {
-      try {
-        await this.reminders.syncFromMaintenance(tenant.id, {
-          id: row.id,
-          vehicleId: row.vehicleId,
-          title: row.title,
-          nextDueOn: row.nextDueOn,
-          reminderOffsetsDays: row.reminderOffsetsDays,
-          dueOdometerKm: row.dueOdometerKm,
-          reminderOffsetsKm: row.reminderOffsetsKm,
-        });
-      } catch (err) {
-        reminderSyncFailed = true;
-        console.error('syncFromMaintenance after create failed', err);
-      }
-    }
+    reminderSyncFailed = await this.applyMaintenanceReminderMenuSync(tenant.id, row, dto.syncReminderAction);
 
     if (isItpMaintenanceAllocation(row.costAllocationCode) && row.nextDueOn) {
       try {
@@ -425,6 +418,7 @@ export class MaintenanceService {
       reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
       dueOdometerKm: dto.dueOdometerKm,
       reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
+      reminderMenuSyncEnabled: reminderMenuSyncEnabledPatchValue(dto.syncReminderAction),
     };
 
     const r = await this.prisma.maintenanceEntry.updateMany({
@@ -469,22 +463,20 @@ export class MaintenanceService {
     const updated = await this.getById(tenantSlug, id);
 
     let reminderSyncFailed = false;
-    if (dto.syncReminderAction !== false) {
-      try {
-        await this.reminders.syncFromMaintenance(before.tenantId, {
-          id: updated.id,
-          vehicleId: updated.vehicleId,
-          title: updated.title,
-          nextDueOn: updated.nextDueOn ? new Date(updated.nextDueOn) : null,
-          reminderOffsetsDays: updated.reminderOffsetsDays,
-          dueOdometerKm: updated.dueOdometerKm,
-          reminderOffsetsKm: updated.reminderOffsetsKm,
-        });
-      } catch (err) {
-        reminderSyncFailed = true;
-        console.error('syncFromMaintenance after patch failed', err);
-      }
-    }
+    reminderSyncFailed = await this.applyMaintenanceReminderMenuSync(
+      before.tenantId,
+      {
+        id: updated.id,
+        vehicleId: updated.vehicleId,
+        title: updated.title,
+        nextDueOn: updated.nextDueOn ? new Date(updated.nextDueOn) : null,
+        reminderOffsetsDays: updated.reminderOffsetsDays,
+        dueOdometerKm: updated.dueOdometerKm,
+        reminderOffsetsKm: updated.reminderOffsetsKm,
+        reminderMenuSyncEnabled: updated.reminderMenuSyncEnabled,
+      },
+      dto.syncReminderAction,
+    );
 
     if (isItpMaintenanceAllocation(updated.costAllocationCode) && updated.nextDueOn) {
       try {
@@ -501,6 +493,45 @@ export class MaintenanceService {
     }
 
     return { ...updated, reminderSyncFailed };
+  }
+
+  private async applyMaintenanceReminderMenuSync(
+    tenantId: string,
+    row: {
+      id: string;
+      vehicleId: string;
+      title: string;
+      nextDueOn: Date | null;
+      reminderOffsetsDays: unknown;
+      dueOdometerKm: number | null;
+      reminderOffsetsKm: unknown;
+      reminderMenuSyncEnabled: boolean;
+    },
+    syncReminderAction?: boolean,
+  ): Promise<boolean> {
+    if (shouldRunReminderMenuSync(row.reminderMenuSyncEnabled, syncReminderAction)) {
+      try {
+        await this.reminders.syncFromMaintenance(tenantId, {
+          id: row.id,
+          vehicleId: row.vehicleId,
+          title: row.title,
+          nextDueOn: row.nextDueOn,
+          reminderOffsetsDays: row.reminderOffsetsDays,
+          dueOdometerKm: row.dueOdometerKm,
+          reminderOffsetsKm: row.reminderOffsetsKm,
+        });
+        return false;
+      } catch (err) {
+        console.error('syncFromMaintenance failed', err);
+        return true;
+      }
+    }
+    try {
+      await this.prisma.reminderAction.deleteMany({ where: { maintenanceEntryId: row.id } });
+    } catch (err) {
+      console.error('delete maintenance reminder failed', err);
+    }
+    return false;
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string) {

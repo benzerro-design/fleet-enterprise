@@ -31,6 +31,7 @@ type MaintenanceRecord = {
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
+  reminderMenuSyncEnabled?: boolean;
 };
 
 type VehicleOption = {
@@ -129,7 +130,12 @@ export function MaintenanceForm(props: Props) {
   const [constraintMode, setConstraintMode] = useState<ReminderConstraintMode>(() =>
     inferReminderConstraintMode({ dueDate: initial.nextDueOn, dueOdometerKm: initial.dueOdometerKm }),
   );
-  const [syncReminderAction, setSyncReminderAction] = useState(true);
+  const [syncReminderAction, setSyncReminderAction] = useState(
+    () =>
+      props.mode === "edit"
+        ? (props.initial.reminderMenuSyncEnabled ?? true)
+        : true,
+  );
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -15,6 +15,7 @@ type DocumentRecord = {
   reminderOffsetsDays: number[] | null;
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
+  reminderMenuSyncEnabled?: boolean;
 };
 
 type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string; odometerKm: number }> };

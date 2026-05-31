@@ -19,3 +19,23 @@ export function hasReminderSyncConstraints(input: ReminderSyncPayload): boolean 
     Boolean(kmOffsets?.length);
   return hasTime || hasKm;
 }
+
+export function reminderMenuSyncEnabledForCreate(syncReminderAction?: boolean): boolean {
+  return syncReminderAction !== false;
+}
+
+export function reminderMenuSyncEnabledPatchValue(
+  syncReminderAction: boolean | undefined,
+): boolean | undefined {
+  if (syncReminderAction === false) return false;
+  if (syncReminderAction === true) return true;
+  return undefined;
+}
+
+export function shouldRunReminderMenuSync(
+  reminderMenuSyncEnabled: boolean,
+  syncReminderAction?: boolean,
+): boolean {
+  if (syncReminderAction === false) return false;
+  return reminderMenuSyncEnabled;
+}
