@@ -21,11 +21,26 @@ type Props = {
 };
 
 const STATUS_TABS = [
+  { value: "all", label: "Toate" },
   { value: "action", label: "Necesită atenție" },
   { value: "upcoming", label: "Viitoare" },
   { value: "expired", label: "Depășite" },
-  { value: "all", label: "Toate" },
 ] as const;
+
+async function parseApiError(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const j = JSON.parse(text) as { message?: string | string[] };
+    if (typeof j.message === "string") return j.message;
+    if (Array.isArray(j.message)) return j.message.join(", ");
+  } catch {
+    /* plain text */
+  }
+  if (text.includes("ReminderAction") || text.includes("does not exist")) {
+    return "Tabela ReminderAction lipsește în baza de date. Rulează migrarea: npx prisma migrate deploy (în folderul api).";
+  }
+  return text || `HTTP ${res.status}`;
+}
 
 export function RemindersListView({
   vehicleId,
@@ -37,7 +52,11 @@ export function RemindersListView({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const status = (searchParams.get("status") ?? "action") as (typeof STATUS_TABS)[number]["value"];
+  const urlStatus = searchParams.get("status");
+  const [localStatus, setLocalStatus] = useState<string>("all");
+  const status = (
+    compact ? localStatus : urlStatus ?? "all"
+  ) as (typeof STATUS_TABS)[number]["value"];
 
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,13 +74,13 @@ export function RemindersListView({
     try {
       const res = await fetch(`/api/reminders?${q.toString()}`);
       if (!res.ok) {
-        setError((await res.text()) || `HTTP ${res.status}`);
+        setError(await parseApiError(res));
         setData(null);
         return;
       }
       setData((await res.json()) as Payload);
     } catch {
-      setError("Nu am putut încărca reminderele.");
+      setError("Nu am putut încărca reminderele. Verifică că API-ul rulează și migrarea DB e aplicată.");
       setData(null);
     } finally {
       setLoading(false);
@@ -73,9 +92,13 @@ export function RemindersListView({
   }, [load]);
 
   function setStatus(next: string) {
+    if (compact) {
+      setLocalStatus(next);
+      return;
+    }
     const p = new URLSearchParams(searchParams.toString());
     p.set("status", next);
-    router.replace(`?${p.toString()}`, { scroll: false });
+    router.replace(`/fleet/reminders?${p.toString()}`, { scroll: false });
   }
 
   const newHref = vehicleId
@@ -84,24 +107,30 @@ export function RemindersListView({
 
   return (
     <>
-      {!compact ? (
-        <div className="mb-6 flex flex-wrap gap-2">
-          {STATUS_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setStatus(tab.value)}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                status === tab.value
-                  ? "border-violet-500/60 bg-violet-950/50 text-violet-100"
-                  : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div className={`mb-4 flex flex-wrap items-center gap-2 ${compact ? "" : "mb-6"}`}>
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setStatus(tab.value)}
+            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+              status === tab.value
+                ? "border-violet-500/60 bg-violet-950/50 text-violet-100"
+                : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+        {write ? (
+          <Link
+            href={newHref}
+            className="ml-auto inline-flex rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500"
+          >
+            + Acțiune nouă
+          </Link>
+        ) : null}
+      </div>
 
       {vehicleLabel ? (
         <p className="mb-4 text-sm text-zinc-400">
@@ -109,25 +138,22 @@ export function RemindersListView({
         </p>
       ) : null}
 
-      {write && !compact ? (
-        <div className="mb-4">
-          <Link
-            href={newHref}
-            className="inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
-          >
-            Acțiune reminder nouă
-          </Link>
-        </div>
-      ) : null}
-
       {loading ? <p className="text-sm text-zinc-500">Se încarcă…</p> : null}
-      {error ? <p className="text-sm text-amber-400">{error}</p> : null}
+      {error ? (
+        <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+          {error}
+        </p>
+      ) : null}
 
       {!loading && !error && data?.items.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 px-6 py-8 text-center">
-          <p className="text-zinc-300">Niciun reminder pentru filtrul selectat.</p>
+          <p className="text-zinc-300">Niciun reminder pentru filtrul „{STATUS_TABS.find((t) => t.value === status)?.label ?? status}”.</p>
+          <p className="mt-2 text-xs text-zinc-500">Încearcă tab-ul „Toate” sau creează o acțiune nouă.</p>
           {write ? (
-            <Link href={newHref} className="mt-3 inline-block text-sm text-violet-400 hover:underline">
+            <Link
+              href={newHref}
+              className="mt-4 inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
+            >
               Creează prima acțiune
             </Link>
           ) : null}
@@ -144,10 +170,7 @@ export function RemindersListView({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/fleet/reminders/${row.id}`}
-                      className="font-medium text-zinc-100 hover:text-white"
-                    >
+                    <Link href={`/fleet/reminders/${row.id}`} className="font-medium text-zinc-100 hover:text-white">
                       {row.title}
                     </Link>
                     <ReminderActionStatusBadge summary={row.summary} compact />
@@ -207,14 +230,6 @@ export function RemindersListView({
                       <span className="font-mono text-sky-300">{row.dueOdometerKm.toLocaleString("ro-RO")}</span>
                     </p>
                   ) : null}
-                  {row.summary.nextRemindOn ? (
-                    <p>
-                      Următor:{" "}
-                      <span className="font-mono text-violet-300">
-                        {new Date(row.summary.nextRemindOn).toLocaleDateString("ro-RO")}
-                      </span>
-                    </p>
-                  ) : null}
                   {write && row.sourceType !== "document" ? (
                     <DeleteReminderButton reminderId={row.id} title={row.title} />
                   ) : null}
@@ -231,7 +246,7 @@ export function RemindersListView({
             </article>
           ))}
           {!compact ? (
-            <p className="text-xs text-zinc-600">{data.total} acțiuni · in-app (email — fază următoare)</p>
+            <p className="text-xs text-zinc-600">{data.total} acțiuni în total pentru filtrul curent</p>
           ) : null}
         </div>
       ) : null}
@@ -247,5 +262,4 @@ export function RemindersListView({
   );
 }
 
-/** @deprecated Use RemindersListView */
 export const DocumentRemindersView = RemindersListView;

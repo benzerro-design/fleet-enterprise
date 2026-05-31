@@ -318,10 +318,12 @@ export class RemindersService {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
     const vehicle = await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
-    await this.validateLinks(tenant.id, dto);
+
+    const enriched = await this.enrichDtoFromLinks(tenant.id, dto);
+    await this.validateLinks(tenant.id, enriched);
 
     const row = await this.prisma.reminderAction.create({
-      data: this.buildCreateData(tenant.id, dto),
+      data: this.buildCreateData(tenant.id, enriched),
       include: includeRow,
     });
 
@@ -493,6 +495,32 @@ export class RemindersService {
     return data;
   }
 
+  private async enrichDtoFromLinks(
+    tenantId: string,
+    dto: CreateReminderInput,
+  ): Promise<CreateReminderInput> {
+    const out = { ...dto };
+    if (dto.sourceType === 'document' && dto.vehicleDocumentId) {
+      const doc = await this.prisma.vehicleDocument.findFirst({
+        where: { id: dto.vehicleDocumentId, vehicleId: dto.vehicleId, vehicle: { tenantId } },
+      });
+      if (doc) {
+        if (!out.title?.trim()) out.title = doc.title;
+        if (!out.dueOn && doc.expiresOn) out.dueOn = doc.expiresOn.toISOString();
+        if (!out.reminderOffsetsDays && doc.reminderOffsetsDays) {
+          out.reminderOffsetsDays = normalizeReminderOffsets(doc.reminderOffsetsDays);
+        }
+      }
+    }
+    if (dto.sourceType === 'maintenance' && dto.maintenanceEntryId) {
+      const m = await this.prisma.maintenanceEntry.findFirst({
+        where: { id: dto.maintenanceEntryId, vehicleId: dto.vehicleId, tenantId },
+      });
+      if (m && !out.title?.trim()) out.title = m.title;
+    }
+    return out;
+  }
+
   private async validateLinks(
     tenantId: string,
     dto: Partial<CreateReminderInput> & { vehicleId: string; sourceType: ReminderSourceType },
@@ -521,10 +549,19 @@ export class RemindersService {
     }
 
     const hasTime = Boolean(dto.dueOn);
-    const hasKm = dto.dueOdometerKm != null;
+    const hasKm = dto.dueOdometerKm != null && dto.dueOdometerKm > 0;
     const hasInterval = (dto.intervalDays ?? 0) > 0 || (dto.intervalKm ?? 0) > 0;
-    if (!hasTime && !hasKm && !hasInterval && dto.sourceType === 'custom') {
-      throw new BadRequestException('Set at least dueOn, dueOdometerKm, or interval fields');
+    if (!hasTime && !hasKm && !hasInterval) {
+      if (dto.sourceType === 'custom') {
+        throw new BadRequestException(
+          'Setează data scadență, km țintă sau interval (zile/km) pentru acțiunea personalizată.',
+        );
+      }
+      if (dto.sourceType === 'document' && dto.vehicleDocumentId) {
+        throw new BadRequestException(
+          'Documentul legat trebuie să aibă dată de expirare sau completează manual scadența.',
+        );
+      }
     }
   }
 }

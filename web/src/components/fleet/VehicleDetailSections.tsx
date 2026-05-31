@@ -12,7 +12,7 @@ import {
   vehicleDocumentsSummary,
   type VehicleDocumentRow,
 } from "@/components/fleet/VehicleDocumentsPanel";
-import { RemindersListView } from "@/components/fleet/RemindersListView";
+import { VehicleRemindersSection } from "@/components/fleet/VehicleRemindersSection";
 import {
   VehicleMaintenancePanel,
   vehicleMaintenanceSummary,
@@ -368,13 +368,10 @@ export function VehicleDetailSections({
           }
         >
           <div id="reminders">
-            <RemindersListView
+            <VehicleRemindersSection
               vehicleId={vehicleId}
               registrationNumber={registrationNumber}
-              vehicleLabel={registrationNumber}
-              backHref={`/fleet/vehicles/${vehicleId}`}
               write={write}
-              compact
             />
           </div>
         </AccordionSection>

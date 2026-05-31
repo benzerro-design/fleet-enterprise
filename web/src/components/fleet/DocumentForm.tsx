@@ -132,8 +132,12 @@ export function DocumentForm(props: Props) {
         setError(await readErrorMessage(res));
         return;
       }
-      const data = (await res.json()) as { id: string };
-      router.push(`/fleet/documents/${data.id}`);
+      const data = (await res.json()) as { id: string; reminderSyncFailed?: boolean };
+      if (data.reminderSyncFailed) {
+        router.push(`/fleet/documents/${data.id}?reminderSync=failed`);
+      } else {
+        router.push(`/fleet/documents/${data.id}`);
+      }
       router.refresh();
     } catch {
       setError("Rețea sau server indisponibil.");

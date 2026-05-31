@@ -143,6 +143,36 @@ export function ReminderForm(props: Props) {
     setPending(true);
     setError(null);
 
+    if (!vehicleId) {
+      setError("Selectează un vehicul.");
+      setPending(false);
+      return;
+    }
+    if (!title.trim()) {
+      setError("Titlul acțiunii este obligatoriu.");
+      setPending(false);
+      return;
+    }
+    if (sourceType === "document" && !vehicleDocumentId) {
+      setError("Selectează documentul legat.");
+      setPending(false);
+      return;
+    }
+    if (sourceType === "maintenance" && !maintenanceEntryId) {
+      setError("Selectează intervenția de mentenanță.");
+      setPending(false);
+      return;
+    }
+
+    const hasTime = Boolean(dueOn.trim());
+    const hasKm = dueOdometerKm != null && dueOdometerKm > 0;
+    const hasInterval = Boolean(intervalDays.trim()) || Boolean(intervalKm.trim());
+    if (sourceType === "custom" && !hasTime && !hasKm && !hasInterval) {
+      setError("Pentru acțiune personalizată, setează data scadență, km țintă sau un interval.");
+      setPending(false);
+      return;
+    }
+
     const payload = {
       vehicleId,
       sourceType,
@@ -171,8 +201,11 @@ export function ReminderForm(props: Props) {
         setError(await readErrorMessage(res));
         return;
       }
-      const row = (await res.json()) as { id: string };
-      router.push(`/fleet/reminders/${row.id}`);
+      await res.json();
+      const back = vehicleId
+        ? `/fleet/vehicles/${vehicleId}#reminders`
+        : `/fleet/reminders?status=all`;
+      router.push(back);
       router.refresh();
     } catch {
       setError("Nu am putut salva.");
@@ -183,6 +216,11 @@ export function ReminderForm(props: Props) {
 
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="mx-auto max-w-2xl space-y-6">
+      {error ? (
+        <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+          {error}
+        </p>
+      ) : null}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
         <select

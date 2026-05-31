@@ -323,17 +323,23 @@ export class DocumentsService {
       },
     });
 
+    let reminderSyncFailed = false;
     if (dto.syncReminderAction !== false) {
-      await this.reminders.syncFromDocument(tenant.id, {
-        id: row.id,
-        vehicleId: row.vehicleId,
-        title: row.title,
-        expiresOn: row.expiresOn,
-        reminderOffsetsDays: row.reminderOffsetsDays,
-      });
+      try {
+        await this.reminders.syncFromDocument(tenant.id, {
+          id: row.id,
+          vehicleId: row.vehicleId,
+          title: row.title,
+          expiresOn: row.expiresOn,
+          reminderOffsetsDays: row.reminderOffsetsDays,
+        });
+      } catch (err) {
+        reminderSyncFailed = true;
+        console.error('syncFromDocument after create failed', err);
+      }
     }
 
-    return toDocRow(row);
+    return { ...toDocRow(row), reminderSyncFailed };
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchDocumentInput, actorUserId?: string) {
@@ -387,17 +393,23 @@ export class DocumentsService {
       },
     });
 
+    let reminderSyncFailed = false;
     if (dto.syncReminderAction !== false) {
-      await this.reminders.syncFromDocument(before.vehicle.tenantId, {
-        id: row.id,
-        vehicleId: row.vehicleId,
-        title: row.title,
-        expiresOn: row.expiresOn,
-        reminderOffsetsDays: row.reminderOffsetsDays,
-      });
+      try {
+        await this.reminders.syncFromDocument(before.vehicle.tenantId, {
+          id: row.id,
+          vehicleId: row.vehicleId,
+          title: row.title,
+          expiresOn: row.expiresOn,
+          reminderOffsetsDays: row.reminderOffsetsDays,
+        });
+      } catch (err) {
+        reminderSyncFailed = true;
+        console.error('syncFromDocument after patch failed', err);
+      }
     }
 
-    return toDocRow(row);
+    return { ...toDocRow(row), reminderSyncFailed };
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string) {

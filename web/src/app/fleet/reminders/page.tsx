@@ -25,7 +25,7 @@ function buildQuery(sp: Search): string {
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   q.set("page", String(page));
   q.set("pageSize", "20");
-  q.set("status", sp.status?.trim() || "action");
+  q.set("status", sp.status?.trim() || "all");
   if (sp.registrationNumber?.trim()) q.set("registrationNumber", sp.registrationNumber.trim());
   if (sp.clientId?.trim()) q.set("clientId", sp.clientId.trim());
   if (sp.vehicleId?.trim()) q.set("vehicleId", sp.vehicleId.trim());

@@ -33,8 +33,15 @@ async function getDocument(id: string): Promise<DocumentRow | null> {
   return (await res.json()) as DocumentRow;
 }
 
-export default async function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DocumentDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ reminderSync?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const [row, auth] = await Promise.all([getDocument(id), getAuthMeResult()]);
   if (!row) notFound();
 
@@ -45,6 +52,13 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   return (
     <div className="text-zinc-100">
       <main className="mx-auto max-w-5xl px-6 py-16">
+        {sp.reminderSync === "failed" ? (
+          <p className="mb-6 rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+            Documentul a fost salvat, dar acțiunea din meniul Remindere nu s-a creat (probabil migrarea DB nu e
+            aplicată pe server). Rulează <code className="font-mono text-xs">npx prisma migrate deploy</code> în folderul{" "}
+            <code className="font-mono text-xs">api</code>, apoi editează documentul și salvează din nou.
+          </p>
+        ) : null}
         <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Document</p>
