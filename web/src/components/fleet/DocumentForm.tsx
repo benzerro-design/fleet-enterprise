@@ -98,7 +98,10 @@ export function DocumentForm(props: Props) {
     inferReminderConstraintMode({ dueDate: initial.expiresOn, dueOdometerKm: initial.dueOdometerKm }),
   );
   const [syncReminderAction, setSyncReminderAction] = useState(
-    () => (props.mode === "edit" ? (props.initial.reminderMenuSyncEnabled ?? true) : true),
+    () =>
+      props.mode === "edit"
+        ? (props.initial.reminderMenuSyncEnabled ?? true)
+        : initial.documentTypeCode !== "civ",
   );
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -217,7 +220,11 @@ export function DocumentForm(props: Props) {
         <label className="block text-sm font-medium text-zinc-300">Tip document</label>
         <select
           value={documentTypeCode}
-          onChange={(e) => setDocumentTypeCode(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setDocumentTypeCode(next);
+            if (props.mode === "create" && next === "civ") setSyncReminderAction(false);
+          }}
           required
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         >

@@ -148,17 +148,23 @@ export function OpsReminderFields({
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-violet-900/30 bg-violet-950/10 px-4 py-3">
         <input
           type="checkbox"
-          checked={syncReminderAction}
+          checked={configured && syncReminderAction}
           disabled={disabled || !configured}
           onChange={(e) => onSyncReminderActionChange(e.target.checked)}
           className="mt-0.5 rounded border-zinc-600"
         />
         <span className="text-sm text-zinc-300">
           <span className="font-medium text-violet-200">Creează acțiune în meniul Remindere</span>
-          <span className="mt-0.5 block text-xs text-zinc-500">
-            Sincronizează automat cu setările de mai sus. Editarea ulterioară se face din modulul sursă; dezactivarea
-            din meniul Remindere păstrează înregistrarea sursă.
-          </span>
+          {configured ? (
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Sincronizează automat cu setările de mai sus. Editarea ulterioară se face din modulul sursă; dezactivarea
+              din meniul Remindere păstrează înregistrarea sursă.
+            </span>
+          ) : (
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Debifat — nu se creează reminder fără dată de expirare sau km țintă completate mai sus.
+            </span>
+          )}
         </span>
       </label>
     </div>
