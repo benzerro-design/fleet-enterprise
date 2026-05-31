@@ -4,6 +4,7 @@ import Link from "next/link";
 import { COST_CATEGORY_VALUES, isKnownCostCategory } from "@/lib/cost-categories";
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { isItpCostCategory } from "@/lib/itp-ops";
+import { isFuelCostCategory } from "@/lib/fuel-ops";
 import {
   defaultDayOffsetsForMode,
   hasConfiguredOpsReminder,
@@ -27,6 +28,7 @@ type CostRecord = {
   invoiceAttachmentUrl: string | null;
   incurredOn: string;
   notes: string | null;
+  fuelLiters?: number | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;
@@ -42,7 +44,7 @@ type VehicleOption = {
 };
 
 type Props =
-  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string }
+  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string; defaultCategory?: string }
   | { mode: "edit"; entryId: string; initial: CostRecord; vehicles: VehicleOption[] };
 
 function toDateInput(iso: string): string {
@@ -79,7 +81,7 @@ export function CostForm(props: Props) {
     if (props.mode === "create") {
       return {
         vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
-        category: "",
+        category: props.defaultCategory ?? "",
         provider: "",
         amountCents: "",
         odometerKm: "",
@@ -88,6 +90,7 @@ export function CostForm(props: Props) {
         invoiceAttachmentUrl: "",
         incurredOn: toDateInput(new Date().toISOString()),
         notes: "",
+        fuelLiters: "",
         nextDueOn: "",
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
@@ -106,6 +109,7 @@ export function CostForm(props: Props) {
       invoiceAttachmentUrl: r.invoiceAttachmentUrl ?? "",
       incurredOn: toDateInput(r.incurredOn),
       notes: r.notes ?? "",
+      fuelLiters: r.fuelLiters != null ? String(r.fuelLiters) : "",
       nextDueOn: toDateInputOrEmpty(r.nextDueOn ?? null),
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
@@ -124,6 +128,7 @@ export function CostForm(props: Props) {
   const [invoiceAttachmentUrl, setInvoiceAttachmentUrl] = useState(initial.invoiceAttachmentUrl);
   const [incurredOn, setIncurredOn] = useState(initial.incurredOn);
   const [notes, setNotes] = useState(initial.notes);
+  const [fuelLiters, setFuelLiters] = useState(initial.fuelLiters);
   const [nextDueOn, setNextDueOn] = useState(initial.nextDueOn);
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
@@ -139,6 +144,7 @@ export function CostForm(props: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const isItp = isItpCostCategory(category);
+  const isFuel = isFuelCostCategory(category);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -178,6 +184,22 @@ export function CostForm(props: Props) {
       return;
     }
 
+    let liters: number | null = null;
+    if (isFuelCostCategory(category.trim())) {
+      const raw = fuelLiters.trim();
+      if (!raw) {
+        setError("Introdu litrii alimentați pentru costul de combustibil.");
+        setPending(false);
+        return;
+      }
+      liters = Number(raw);
+      if (!Number.isFinite(liters) || liters <= 0) {
+        setError("Litrii alimentați trebuie să fie un număr pozitiv.");
+        setPending(false);
+        return;
+      }
+    }
+
     const nextDue = constraintMode !== "km" ? toIsoDate(nextDueOn) : null;
     if (constraintMode !== "km" && nextDueOn.trim() && !nextDue) {
       setError("Data termenului este invalidă.");
@@ -206,6 +228,7 @@ export function CostForm(props: Props) {
       invoiceAttachmentUrl: invoiceAttachmentUrl.trim() || null,
       incurredOn: when,
       notes: notes.trim() || null,
+      fuelLiters: isFuelCostCategory(category.trim()) ? liters : null,
       nextDueOn: nextDue,
       reminderOffsetsDays: dayOffsets,
       dueOdometerKm: kmDue,
@@ -303,6 +326,24 @@ export function CostForm(props: Props) {
         <label className="block text-sm font-medium text-zinc-300">Suma (RON fără TVA)</label>
         <input type="text" inputMode="decimal" required value={amountCents} onChange={(e) => setAmountCents(e.target.value)} placeholder="ex. 150.00" className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
+      {isFuel ? (
+        <div className="space-y-2 rounded-lg border border-amber-900/40 bg-amber-950/20 p-4">
+          <label className="block text-sm font-medium text-amber-200/90">Litri alimentați</label>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            required
+            value={fuelLiters}
+            onChange={(e) => setFuelLiters(e.target.value)}
+            placeholder="ex. 45.5"
+            className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2"
+          />
+          <p className="text-xs text-zinc-500">
+            Cantitatea de combustibil — folosită pentru calcul consum (L/100km) în profilul vehiculului.
+          </p>
+        </div>
+      ) : null}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Km (opțional)</label>
         <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />

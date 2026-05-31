@@ -96,6 +96,12 @@ export class FleetController {
     return this.fleet.patchVehicle(tenantId, vehicleId, dto, actorUserId);
   }
 
+  @Get('vehicles/:vehicleId/mobility')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  getVehicleMobility(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
+    return this.fleet.getVehicleMobility(tenantId, vehicleId);
+  }
+
   @Get('vehicles/:vehicleId/civ')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
   getVehicleCiv(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
@@ -181,6 +187,8 @@ function assertCreateVehicleDto(body: unknown): CreateVehicleDto {
   );
   const type = asVehicleType(body.type, 'type');
   const vin = optionalString(body.vin);
+  const brand = optionalString(body.brand);
+  const model = optionalString(body.model);
   const odometerKm =
     'odometerKm' in body ? asNonNegativeNumber(body.odometerKm, 'odometerKm') : undefined;
   const itpExpiresOn = optionalIsoDateString(body.itpExpiresOn);
@@ -194,6 +202,8 @@ function assertCreateVehicleDto(body: unknown): CreateVehicleDto {
     registrationNumber,
     type,
     vin,
+    brand,
+    model,
     odometerKm,
     itpExpiresOn,
     itpStationName,
@@ -227,6 +237,14 @@ function assertPatchVehicleDto(body: unknown): PatchVehicleDto {
   if ('vin' in body) {
     if (body.vin === null) dto.vin = null;
     else dto.vin = optionalString(body.vin) ?? null;
+  }
+  if ('brand' in body) {
+    if (body.brand === null) dto.brand = null;
+    else dto.brand = optionalString(body.brand) ?? null;
+  }
+  if ('model' in body) {
+    if (body.model === null) dto.model = null;
+    else dto.model = optionalString(body.model) ?? null;
   }
 
   if ('itpExpiresOn' in body) {

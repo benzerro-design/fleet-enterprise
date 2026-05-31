@@ -27,6 +27,8 @@ export type VehicleRecord = {
   clientId: string;
   registrationNumber: string;
   type: VehicleType;
+  brand: string | null;
+  model: string | null;
   vin: string | null;
   status: VehicleStatus;
   odometerKm: number;

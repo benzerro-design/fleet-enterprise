@@ -9,6 +9,8 @@ export type CreateVehicleDto = {
     | 'trailer'
     | 'semi_trailer';
   vin?: string;
+  brand?: string;
+  model?: string;
   odometerKm?: number;
   itpExpiresOn?: string;
   itpStationName?: string;

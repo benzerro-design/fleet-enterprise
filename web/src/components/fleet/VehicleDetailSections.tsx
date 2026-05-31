@@ -12,22 +12,25 @@ import {
   vehicleDocumentsSummary,
   type VehicleDocumentRow,
 } from "@/components/fleet/VehicleDocumentsPanel";
-import { VehicleRemindersSection } from "@/components/fleet/VehicleRemindersSection";
 import {
   VehicleMaintenancePanel,
   vehicleMaintenanceSummary,
   type VehicleMaintenanceRow,
 } from "@/components/fleet/VehicleMaintenancePanel";
+import { VehicleRemindersSection } from "@/components/fleet/VehicleRemindersSection";
+import { VehicleMobilityPanel } from "@/components/fleet/VehicleMobilityPanel";
+import { mobilitySummaryLabel, type VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
 
-type SectionKey = "maintenance" | "costs" | "documents" | "reminders";
+type SectionKey = "maintenance" | "costs" | "documents" | "reminders" | "mobility";
 
-const SECTION_KEYS: SectionKey[] = ["maintenance", "costs", "documents", "reminders"];
+const SECTION_KEYS: SectionKey[] = ["maintenance", "costs", "documents", "reminders", "mobility"];
 
 const DEFAULT_OPEN: Record<SectionKey, boolean> = {
   maintenance: true,
   costs: false,
   documents: false,
   reminders: false,
+  mobility: false,
 };
 
 const ACCENT: Record<SectionKey, { bar: string; badge: string; ring: string }> = {
@@ -51,6 +54,11 @@ const ACCENT: Record<SectionKey, { bar: string; badge: string; ring: string }> =
     badge: "border-fuchsia-900/50 bg-fuchsia-950/40 text-fuchsia-300/90",
     ring: "focus-visible:ring-fuchsia-500/40",
   },
+  mobility: {
+    bar: "bg-amber-500/80",
+    badge: "border-amber-900/50 bg-amber-950/40 text-amber-300/90",
+    ring: "focus-visible:ring-amber-500/40",
+  },
 };
 
 type Props = {
@@ -61,6 +69,7 @@ type Props = {
   maintenance: { ok: true; items: VehicleMaintenanceRow[]; total: number } | { ok: false };
   costs: { ok: true; items: VehicleCostRow[]; total: number } | { ok: false };
   documents: { ok: true; items: VehicleDocumentRow[]; total: number } | { ok: false };
+  mobility: { ok: true; data: VehicleMobilityPayload } | { ok: false };
 };
 
 function Chevron({ open }: { open: boolean }) {
@@ -154,6 +163,7 @@ export function VehicleDetailSections({
   maintenance,
   costs,
   documents,
+  mobility,
 }: Props) {
   const storageKey = `fleet-vehicle-sections:${vehicleId}`;
 
@@ -170,6 +180,7 @@ export function VehicleDetailSections({
           costs: parsed.costs ?? prev.costs,
           documents: parsed.documents ?? prev.documents,
           reminders: parsed.reminders ?? prev.reminders,
+          mobility: parsed.mobility ?? prev.mobility,
         }));
       }
     } catch {
@@ -190,11 +201,23 @@ export function VehicleDetailSections({
   const openCount = SECTION_KEYS.filter((k) => open[k]).length;
 
   const expandAll = useCallback(() => {
-    setOpen({ maintenance: true, costs: true, documents: true, reminders: true });
+    setOpen({
+      maintenance: true,
+      costs: true,
+      documents: true,
+      reminders: true,
+      mobility: true,
+    });
   }, []);
 
   const collapseAll = useCallback(() => {
-    setOpen({ maintenance: false, costs: false, documents: false, reminders: false });
+    setOpen({
+      maintenance: false,
+      costs: false,
+      documents: false,
+      reminders: false,
+      mobility: false,
+    });
   }, []);
 
   const toggle = useCallback((key: SectionKey) => {
@@ -211,9 +234,12 @@ export function VehicleDetailSections({
         ? vehicleDocumentsSummary(documents.items, documents.total)
         : "Indisponibil",
       reminders: "Centralizat pe vehicul",
+      mobility: mobility.ok ? mobilitySummaryLabel(mobility.data) : "Indisponibil",
     }),
-    [maintenance, costs, documents],
+    [maintenance, costs, documents, mobility],
   );
+
+  const sectionCount = SECTION_KEYS.length;
 
   const actionLinkClass =
     "rounded-md border border-zinc-700/80 px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800/80";
@@ -237,7 +263,7 @@ export function VehicleDetailSections({
           <button
             type="button"
             onClick={expandAll}
-            disabled={openCount === 4}
+            disabled={openCount === sectionCount}
             className="rounded-lg border border-zinc-700/80 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Deschide toate
@@ -354,7 +380,7 @@ export function VehicleDetailSections({
           actions={
             <>
               <Link href={`/fleet/reminders?registrationNumber=${encodeURIComponent(registrationNumber)}`} className={actionLinkClass}>
-                Listă flotă
+                Listă
               </Link>
               {write ? (
                 <Link
@@ -374,6 +400,35 @@ export function VehicleDetailSections({
               write={write}
             />
           </div>
+        </AccordionSection>
+
+        <AccordionSection
+          sectionId="mobility"
+          title="Rulaj vs Consum"
+          summary={summaries.mobility}
+          open={open.mobility}
+          onToggle={() => toggle("mobility")}
+          actions={
+            <>
+              <Link href={`/fleet/trips?${regQs}`} className={actionLinkClass}>
+                Curse
+              </Link>
+              {write ? (
+                <Link
+                  href={`/fleet/costs/new?vehicleId=${encodeURIComponent(vehicleId)}&category=${encodeURIComponent("Combustibil")}`}
+                  className="rounded-md border border-amber-800/60 bg-amber-600/90 px-2.5 py-1 text-[11px] font-medium text-zinc-950 hover:bg-amber-500"
+                >
+                  + Alimentare
+                </Link>
+              ) : null}
+            </>
+          }
+        >
+          {!mobility.ok ? (
+            <p className="text-sm text-amber-400">Nu am putut încărca datele de rulaj și consum.</p>
+          ) : (
+            <VehicleMobilityPanel data={mobility.data} vehicleId={vehicleId} regQs={regQs} />
+          )}
         </AccordionSection>
       </div>
     </section>

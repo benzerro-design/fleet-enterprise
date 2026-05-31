@@ -14,7 +14,7 @@ type Props = {
 };
 
 export function VehicleDetailLayout({ id, data, editable, canWrite }: Props) {
-  const { vehicle, maintenanceList, costsList, documentsList, civPayload, odometerPayload } = data;
+  const { vehicle, maintenanceList, costsList, documentsList, civPayload, odometerPayload, mobilityPayload } = data;
   const regQs = `registrationNumber=${encodeURIComponent(vehicle.registrationNumber)}`;
   const profileWrite = editable && canWrite;
 
@@ -89,6 +89,9 @@ export function VehicleDetailLayout({ id, data, editable, canWrite }: Props) {
             documentsList
               ? { ok: true, items: documentsList.items, total: documentsList.total }
               : { ok: false }
+          }
+          mobility={
+            mobilityPayload ? { ok: true, data: mobilityPayload } : { ok: false }
           }
         />
       </main>

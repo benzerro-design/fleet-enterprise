@@ -27,6 +27,8 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
   const router = useRouter();
   const [clientId, setClientId] = useState(vehicle.clientId);
   const [registrationNumber, setRegistrationNumber] = useState(vehicle.registrationNumber);
+  const [brand, setBrand] = useState(vehicle.brand ?? "");
+  const [model, setModel] = useState(vehicle.model ?? "");
   const [type, setType] = useState(vehicle.type as VehicleTypeValue);
   const [status, setStatus] = useState(vehicle.status as VehicleStatusValue);
   const [vin, setVin] = useState(vehicle.vin ?? "");
@@ -64,6 +66,8 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
           type,
           status,
           vin: vin.trim() === "" ? null : vin.trim(),
+          brand: brand.trim() === "" ? null : brand.trim(),
+          model: model.trim() === "" ? null : model.trim(),
           ...itpPayload,
         }),
       });
@@ -91,6 +95,8 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
       <dl className="grid gap-4 sm:grid-cols-2">
         <Field label="Client" value={vehicle.clientId} mono />
         <Field label="Nr. înmatriculare" value={vehicle.registrationNumber} mono />
+        <Field label="Marcă" value={vehicle.brand ?? "—"} />
+        <Field label="Model" value={vehicle.model ?? "—"} />
         <Field label="Tip" value={VEHICLE_TYPES.find((t) => t.value === vehicle.type)?.label ?? vehicle.type} />
         <Field label="Status" value={VEHICLE_STATUSES.find((s) => s.value === vehicle.status)?.label ?? vehicle.status} />
         <Field label="VIN (E)" value={vehicle.vin ?? "—"} mono />
@@ -131,6 +137,8 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Input label="Client (ID)" value={clientId} onChange={setClientId} required />
         <Input label="Nr. înmatriculare" value={registrationNumber} onChange={setRegistrationNumber} required mono />
+        <Input label="Marcă" value={brand} onChange={setBrand} hint="D.1 din CIV — opțional la creare" />
+        <Input label="Model" value={model} onChange={setModel} hint="D.3 din CIV — opțional" />
         <Select
           label="Tip vehicul"
           value={type}

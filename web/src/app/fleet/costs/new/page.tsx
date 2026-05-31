@@ -18,7 +18,7 @@ async function getVehicleOptions() {
   }));
 }
 
-export default async function NewCostPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
+export default async function NewCostPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string; category?: string }> }) {
   const sp = await searchParams;
   const auth = await getAuthMeResult();
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
@@ -41,7 +41,7 @@ export default async function NewCostPage({ searchParams }: { searchParams: Prom
             Înapoi la listă
           </Link>
         </div>
-        <CostForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} />
+        <CostForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} defaultCategory={sp.category} />
       </main>
     </div>
   );

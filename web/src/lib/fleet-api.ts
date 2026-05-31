@@ -25,6 +25,8 @@ export type VehicleRecord = {
   tenantId: string;
   clientId: string;
   registrationNumber: string;
+  brand: string | null;
+  model: string | null;
   type: string;
   vin: string | null;
   status: string;

@@ -11,6 +11,8 @@ export type PatchVehicleDto = {
   status?: 'active' | 'inactive' | 'in_maintenance' | 'decommissioned';
   odometerKm?: number;
   vin?: string | null;
+  brand?: string | null;
+  model?: string | null;
   itpExpiresOn?: string | null;
   itpStationName?: string | null;
   itpReminderOffsetsDays?: number[] | null;

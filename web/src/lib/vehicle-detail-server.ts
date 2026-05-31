@@ -1,6 +1,7 @@
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { VehicleRecord } from "@/lib/fleet-api";
 import type { OdometerReadingsPayload, VehicleCivPayload } from "@/lib/vehicle-profile-types";
+import type { VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
 
 const OPS_PREVIEW_PAGE_SIZE = 50;
 
@@ -26,6 +27,7 @@ export type CostListPayload = {
     provider: string | null;
     amountCents: number;
     odometerKm: number | null;
+    fuelLiters: number | null;
     invoiceNumber: string | null;
     invoiceDate: string | null;
     incurredOn: string;
@@ -131,6 +133,16 @@ async function getDocumentsForVehicle(registrationNumber: string): Promise<Docum
   return (await res.json()) as DocumentListPayload;
 }
 
+async function getVehicleMobility(id: string): Promise<VehicleMobilityPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/mobility`);
+    if (!res?.ok) return null;
+    return (await res.json()) as VehicleMobilityPayload;
+  } catch {
+    return null;
+  }
+}
+
 export type VehicleDetailData = {
   vehicle: VehicleRecord;
   maintenanceList: MaintenanceListPayload | null;
@@ -138,18 +150,20 @@ export type VehicleDetailData = {
   documentsList: DocumentListPayload | null;
   civPayload: VehicleCivPayload;
   odometerPayload: OdometerReadingsPayload;
+  mobilityPayload: VehicleMobilityPayload | null;
 };
 
 export async function loadVehicleDetail(id: string): Promise<VehicleDetailData | null> {
   const vehicle = await getVehicle(id);
   if (!vehicle) return null;
 
-  const [maintenanceList, costsList, documentsList, civ, odometer] = await Promise.all([
+  const [maintenanceList, costsList, documentsList, civ, odometer, mobility] = await Promise.all([
     getMaintenanceForVehicle(vehicle.registrationNumber),
     getCostsForVehicle(vehicle.registrationNumber),
     getDocumentsForVehicle(vehicle.registrationNumber),
     getVehicleCiv(id),
     getOdometerReadings(id),
+    getVehicleMobility(id),
   ]);
 
   return {
@@ -159,5 +173,6 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     documentsList,
     civPayload: civ ?? EMPTY_CIV,
     odometerPayload: odometer ?? { items: [], vehicleOdometerKm: vehicle.odometerKm },
+    mobilityPayload: mobility,
   };
 }

@@ -18,6 +18,8 @@ import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
 import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
 import type { VehicleDocument, VehicleRecord, VehicleStatus } from './fleet.types';
 import type { CivImportSource, OdometerReadingRecord, VehicleCivPayload } from './vehicle-civ.types';
+import { buildVehicleMobilityPayload } from './vehicle-mobility';
+import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import {
   CIV_PROFILE_FIELDS,
   normalizeCivProfile,
@@ -80,6 +82,8 @@ function changedVehicleFieldKeys(
     status: string;
     odometerKm: number;
     vin: string | null;
+    brand: string | null;
+    model: string | null;
     itpExpiresOn: Date | null;
     itpStationName: string | null;
   },
@@ -105,6 +109,16 @@ function changedVehicleFieldKeys(
     const prev = normalizeVinForCompare(before.vin);
     const next = dto.vin === null ? null : normalizeVinForCompare(dto.vin);
     if (prev !== next) keys.push('vin');
+  }
+  if (dto.brand !== undefined) {
+    const prev = before.brand?.trim() || null;
+    const next = dto.brand === null ? null : dto.brand.trim() || null;
+    if (prev !== next) keys.push('brand');
+  }
+  if (dto.model !== undefined) {
+    const prev = before.model?.trim() || null;
+    const next = dto.model === null ? null : dto.model.trim() || null;
+    if (prev !== next) keys.push('model');
   }
   if (dto.itpExpiresOn !== undefined) {
     const prev = itpToDay(before.itpExpiresOn);
@@ -251,6 +265,8 @@ export class FleetService {
           registrationNumber: dto.registrationNumber,
           type: dto.type,
           vin: dto.vin ?? null,
+          brand: dto.brand?.trim() || null,
+          model: dto.model?.trim() || null,
           status: 'active',
           odometerKm: dto.odometerKm ?? 0,
           itpExpiresOn: dto.itpExpiresOn ? new Date(dto.itpExpiresOn) : null,
@@ -337,6 +353,18 @@ export class FleetService {
           status: dto.status,
           vin:
             dto.vin === undefined ? undefined : dto.vin === null ? null : dto.vin,
+          brand:
+            dto.brand === undefined
+              ? undefined
+              : dto.brand === null
+                ? null
+                : dto.brand.trim() || null,
+          model:
+            dto.model === undefined
+              ? undefined
+              : dto.model === null
+                ? null
+                : dto.model.trim() || null,
           itpExpiresOn:
             dto.itpExpiresOn === undefined
               ? undefined
@@ -699,6 +727,59 @@ export class FleetService {
     });
   }
 
+  async getVehicleMobility(
+    tenantSlug: string,
+    vehicleId: string,
+  ): Promise<VehicleMobilityPayload> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, odometerKm: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    const [costs, trips, odometerReadings] = await Promise.all([
+      this.prisma.costEntry.findMany({
+        where: { vehicleId },
+        select: {
+          id: true,
+          category: true,
+          incurredOn: true,
+          fuelLiters: true,
+          odometerKm: true,
+          provider: true,
+        },
+        orderBy: { incurredOn: 'desc' },
+        take: 200,
+      }),
+      this.prisma.trip.findMany({
+        where: { vehicleId },
+        select: {
+          id: true,
+          startedAt: true,
+          distanceKm: true,
+          reference: true,
+          originLabel: true,
+          destLabel: true,
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 200,
+      }),
+      this.prisma.odometerReading.findMany({
+        where: { vehicleId },
+        select: { id: true, recordedAt: true, odometerKm: true, source: true },
+        orderBy: { recordedAt: 'desc' },
+        take: 100,
+      }),
+    ]);
+
+    return buildVehicleMobilityPayload({
+      vehicleOdometerKm: vehicle.odometerKm,
+      costs,
+      trips,
+      odometerReadings,
+    });
+  }
+
   private async applyVehicleItpReminderSync(
     tenantId: string,
     vehicle: VehicleRow,
@@ -745,6 +826,8 @@ export class FleetService {
       clientId: row.clientId,
       registrationNumber: row.registrationNumber,
       type: row.type as VehicleRecord['type'],
+      brand: row.brand,
+      model: row.model,
       vin: row.vin,
       status: row.status as VehicleStatus,
       odometerKm: row.odometerKm,

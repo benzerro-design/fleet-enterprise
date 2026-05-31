@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normalizeReminderOffsets } from './document-reminders';
 import { normalizeReminderOffsetsKm } from './reminder-status';
 import { isItpCostCategory, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
+import { isFuelCostCategory } from './fuel-ops';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
@@ -21,6 +22,7 @@ export type CreateCostInput = {
   category: string;
   provider?: string | null;
   amountCents: number;
+  fuelLiters?: number | null;
   odometerKm?: number | null;
   invoiceNumber?: string | null;
   invoiceDate?: string | null;
@@ -168,12 +170,27 @@ function reminderOffsetsForDb(
   return value;
 }
 
+function normalizeFuelLiters(
+  liters: number | null | undefined,
+  category: string,
+): number | null {
+  if (!isFuelCostCategory(category)) return null;
+  if (liters === undefined || liters === null) {
+    throw new BadRequestException('fuelLiters is required for Combustibil costs');
+  }
+  if (!Number.isFinite(liters) || liters <= 0) {
+    throw new BadRequestException('fuelLiters must be a positive number');
+  }
+  return Math.round(liters * 100) / 100;
+}
+
 function toCostRow(row: {
   id: string;
   vehicleId: string;
   category: string;
   provider: string | null;
   amountCents: number;
+  fuelLiters: number | null;
   odometerKm: number | null;
   invoiceNumber: string | null;
   invoiceDate: Date | null;
@@ -197,6 +214,7 @@ function toCostRow(row: {
     category: row.category,
     provider: row.provider,
     amountCents: row.amountCents,
+    fuelLiters: row.fuelLiters,
     odometerKm: row.odometerKm,
     invoiceNumber: row.invoiceNumber,
     invoiceDate: row.invoiceDate ? row.invoiceDate.toISOString() : null,
@@ -317,6 +335,7 @@ export class CostsService {
         throw new BadRequestException('odometerKm must be a non-negative integer');
       }
     }
+    const fuelLiters = normalizeFuelLiters(dto.fuelLiters, dto.category);
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
@@ -328,6 +347,7 @@ export class CostsService {
         category: dto.category.trim(),
         provider: dto.provider ?? null,
         amountCents: Math.round(dto.amountCents),
+        fuelLiters,
         odometerKm: dto.odometerKm ?? null,
         invoiceNumber: dto.invoiceNumber ?? null,
         invoiceDate:
@@ -408,11 +428,23 @@ export class CostsService {
     });
     if (!before) throw new NotFoundException('Cost entry not found');
 
+    const nextCategory = dto.category !== undefined ? dto.category.trim() : before.category;
+    let fuelLiters: number | null | undefined = undefined;
+    if (dto.fuelLiters !== undefined || dto.category !== undefined) {
+      if (isFuelCostCategory(nextCategory)) {
+        const raw = dto.fuelLiters !== undefined ? dto.fuelLiters : before.fuelLiters;
+        fuelLiters = normalizeFuelLiters(raw, nextCategory);
+      } else {
+        fuelLiters = null;
+      }
+    }
+
     const data: Prisma.CostEntryUncheckedUpdateManyInput = {
       vehicleId: dto.vehicleId,
       category: dto.category !== undefined ? dto.category.trim() : undefined,
       provider: dto.provider,
       amountCents: dto.amountCents !== undefined ? Math.round(dto.amountCents) : undefined,
+      fuelLiters,
       odometerKm: dto.odometerKm,
       invoiceNumber: dto.invoiceNumber,
       invoiceDate:

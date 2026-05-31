@@ -16,6 +16,7 @@ type CostRecord = {
   invoiceAttachmentUrl: string | null;
   incurredOn: string;
   notes: string | null;
+  fuelLiters?: number | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;

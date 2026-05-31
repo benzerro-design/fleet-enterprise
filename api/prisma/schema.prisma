@@ -57,6 +57,8 @@ model Vehicle {
   clientId           String
   registrationNumber String
   type               VehicleType
+  brand              String?
+  model              String?
   vin                String?
   status             VehicleStatus      @default(active)
   odometerKm         Int                @default(0)
@@ -149,6 +151,8 @@ model CostEntry {
   vehicleId            String
   category             String
   amountCents          Int
+  /** Litri alimentați — relevant pentru categoria Combustibil. */
+  fuelLiters           Float?
   incurredOn           DateTime  @default(now())
   notes                String?
   odometerKm           Int?

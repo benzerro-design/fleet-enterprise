@@ -126,6 +126,7 @@ function assertCreateCostDto(body: unknown): CreateCostInput {
     category,
     provider: optionalNullableString(body.provider),
     amountCents,
+    fuelLiters: optionalNullablePositiveFloat(body.fuelLiters, 'fuelLiters'),
     odometerKm: optionalNullableNonNegativeInt(body.odometerKm, 'odometerKm'),
     invoiceNumber: optionalNullableString(body.invoiceNumber),
     invoiceDate:
@@ -159,6 +160,9 @@ function assertPatchCostDto(body: unknown): PatchCostInput {
   if ('category' in body) dto.category = asNonEmptyString(body.category, 'category');
   if ('provider' in body) dto.provider = optionalNullableString(body.provider);
   if ('amountCents' in body) dto.amountCents = asNonNegativeInt(body.amountCents, 'amountCents');
+  if ('fuelLiters' in body) {
+    dto.fuelLiters = optionalNullablePositiveFloat(body.fuelLiters, 'fuelLiters');
+  }
   if ('odometerKm' in body) {
     dto.odometerKm = optionalNullableNonNegativeInt(body.odometerKm, 'odometerKm');
   }
@@ -270,6 +274,19 @@ function parseReminderOffsetsField(
     );
   }
   return normalized;
+}
+
+function optionalNullablePositiveFloat(
+  v: unknown,
+  field: string,
+): number | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new BadRequestException(`Field "${field}" must be a positive number`);
+  }
+  return n;
 }
 
 function optionalBoolean(v: unknown): boolean | undefined {

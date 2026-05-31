@@ -10,6 +10,7 @@ import {
   vehicleDetailFilterLabelClass,
 } from "@/components/fleet/vehicle-detail-filter-styles";
 import { COST_CATEGORY_VALUES } from "@/lib/cost-categories";
+import { isFuelCostCategory } from "@/lib/fuel-ops";
 import { formatRonFromCents } from "@/lib/money";
 
 export type VehicleCostRow = {
@@ -18,6 +19,7 @@ export type VehicleCostRow = {
   provider: string | null;
   amountCents: number;
   odometerKm: number | null;
+  fuelLiters: number | null;
   invoiceNumber: string | null;
   invoiceDate: string | null;
   incurredOn: string;
@@ -134,6 +136,7 @@ export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
                 <th className="px-4 py-3">Data</th>
                 <th className="px-4 py-3">Furnizor</th>
                 <th className="px-4 py-3">Km</th>
+                <th className="px-4 py-3">Litri</th>
                 <th className="px-4 py-3">Factură</th>
                 <th className="px-4 py-3">Suma (RON fără TVA)</th>
                 <th className="px-4 py-3 text-right">Detaliu</th>
@@ -148,6 +151,9 @@ export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
                   </td>
                   <td className="px-4 py-3 text-zinc-300">{row.provider ?? "—"}</td>
                   <td className="px-4 py-3 font-mono text-zinc-300">{row.odometerKm ?? "—"}</td>
+                  <td className="px-4 py-3 font-mono text-zinc-300">
+                    {isFuelCostCategory(row.category) && row.fuelLiters != null ? `${row.fuelLiters} L` : "—"}
+                  </td>
                   <td className="px-4 py-3 font-mono text-xs text-zinc-400">{row.invoiceNumber ?? "—"}</td>
                   <td className="px-4 py-3 font-mono text-zinc-300">{formatRonFromCents(row.amountCents)}</td>
                   <td className="px-4 py-3 text-right">
