@@ -107,37 +107,44 @@ export function DocumentForm(props: Props) {
   }
 
   return (
-    <form onSubmit={(e) => void onSubmit(e)} className="flex max-w-xl flex-col gap-5 rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500">Vehicul</label>
+    <form onSubmit={(e) => void onSubmit(e)} className="mx-auto max-w-xl space-y-6">
+      {error ? (
+        <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+          {error}
+        </p>
+      ) : null}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
         <select
           value={vehicleId}
           onChange={(e) => setVehicleId(e.target.value)}
           required
-          className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         >
-          {props.vehicles.length === 0 ? (
-            <option value="">Niciun vehicul</option>
-          ) : (
-            props.vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.registrationNumber} · {v.clientId}
-              </option>
-            ))
-          )}
+          {props.vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
+          {props.vehicles.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.registrationNumber}
+            </option>
+          ))}
         </select>
-        {selectedVehicle ? (
-          <p className="text-xs text-zinc-500">Client: {selectedVehicle.clientId}</p>
-        ) : null}
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Client</label>
+        <input
+          value={selectedVehicle?.clientId ?? ""}
+          readOnly
+          className="w-full cursor-not-allowed rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 outline-none"
+        />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500">Tip document</label>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Tip document</label>
         <select
           value={documentTypeCode}
           onChange={(e) => setDocumentTypeCode(e.target.value)}
           required
-          className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         >
           {DOCUMENT_TYPE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -147,40 +154,38 @@ export function DocumentForm(props: Props) {
         </select>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500">Titlu / descriere</label>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Titlu / descriere</label>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
           placeholder="ex. RCA 2026 — Allianz"
-          className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500">Data expirare (opțional)</label>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Data expirare (opțional)</label>
         <input
           type="date"
           value={expiresOn}
           onChange={(e) => setExpiresOn(e.target.value)}
-          className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         />
         <p className="text-xs text-zinc-500">Lăsat gol dacă documentul nu expiră.</p>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500">URL fișier (opțional)</label>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">URL fișier (opțional)</label>
         <input
           value={fileUrl}
           onChange={(e) => setFileUrl(e.target.value)}
           placeholder="https://…"
-          className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         />
         <p className="text-xs text-zinc-500">Link către scan/PDF (upload direct — fază următoare).</p>
       </div>
-
-      {error ? <p className="text-sm text-amber-400">{error}</p> : null}
 
       <div className="flex flex-wrap gap-2">
         <button
