@@ -48,6 +48,15 @@ jobs:
         run: |
           docker push ${{ env.AR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
 
+      - name: Run database migrations (Neon)
+        run: |
+          DATABASE_URL="$(gcloud secrets versions access latest --secret=DATABASE_URL)"
+          docker run --rm \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -w /app \
+            ${{ env.AR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }} \
+            npx prisma migrate deploy
+
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE }} \
