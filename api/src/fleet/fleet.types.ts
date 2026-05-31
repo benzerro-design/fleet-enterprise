@@ -32,6 +32,8 @@ export type VehicleRecord = {
   odometerKm: number;
   itpExpiresOn: string | null;
   itpStationName: string | null;
+  itpReminderOffsetsDays: number[] | null;
+  itpReminderMenuSyncEnabled: boolean;
   civSeries: string | null;
   civIssuedOn: string | null;
   civRarOffice: string | null;

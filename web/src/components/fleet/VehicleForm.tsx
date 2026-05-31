@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { buildVehicleItpPayload, VehicleItpFields } from "@/components/fleet/VehicleItpFields";
 import {
   fleetBrowserBase,
   fleetJsonHeaders,
@@ -19,6 +20,8 @@ export function VehicleForm() {
   const [odometerKm, setOdometerKm] = useState("0");
   const [itpDate, setItpDate] = useState("");
   const [itpStationName, setItpStationName] = useState("");
+  const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>([]);
+  const [syncReminderAction, setSyncReminderAction] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,17 +37,22 @@ export function VehicleForm() {
         return;
       }
 
+      const itpPayload = buildVehicleItpPayload({
+        itpDate,
+        itpStationName,
+        reminderOffsetsDays,
+        syncReminderAction,
+      });
+
       const body: Record<string, unknown> = {
         clientId: clientId.trim(),
         registrationNumber: registrationNumber.trim(),
         type,
         odometerKm: odo,
+        ...itpPayload,
       };
       const v = vin.trim();
       if (v) body.vin = v;
-      if (itpDate) body.itpExpiresOn = `${itpDate}T12:00:00.000Z`;
-      const s = itpStationName.trim();
-      if (s) body.itpStationName = s;
 
       const res = await fetch(`${fleetBrowserBase}/vehicles`, {
         method: "POST",
@@ -63,8 +71,12 @@ export function VehicleForm() {
         setError(msg);
         return;
       }
-      const created = (await res.json()) as { id: string };
-      router.push(`/fleet/vehicles/${created.id}/edit`);
+      const created = (await res.json()) as { id: string; reminderSyncFailed?: boolean };
+      if (created.reminderSyncFailed) {
+        router.push(`/fleet/vehicles/${created.id}/edit?reminderSync=failed`);
+      } else {
+        router.push(`/fleet/vehicles/${created.id}/edit`);
+      }
       router.refresh();
     } catch {
       setError("Rețea sau server indisponibil.");
@@ -72,6 +84,9 @@ export function VehicleForm() {
       setPending(false);
     }
   }
+
+  const initialOdo = Number(odometerKm);
+  const vehicleOdometerKm = Number.isFinite(initialOdo) && initialOdo >= 0 ? initialOdo : 0;
 
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="mx-auto max-w-xl space-y-6">
@@ -144,25 +159,18 @@ export function VehicleForm() {
         </p>
       </div>
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">ITP — dată expirare (opțional)</label>
-        <input
-          type="date"
-          value={itpDate}
-          onChange={(e) => setItpDate(e.target.value)}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">ITP — stație (opțional)</label>
-        <input
-          value={itpStationName}
-          onChange={(e) => setItpStationName(e.target.value)}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-          placeholder="ex. RAR București"
-        />
-      </div>
+      <VehicleItpFields
+        itpDate={itpDate}
+        onItpDateChange={setItpDate}
+        itpStationName={itpStationName}
+        onItpStationNameChange={setItpStationName}
+        reminderOffsetsDays={reminderOffsetsDays}
+        onReminderOffsetsDaysChange={setReminderOffsetsDays}
+        syncReminderAction={syncReminderAction}
+        onSyncReminderActionChange={setSyncReminderAction}
+        vehicleOdometerKm={vehicleOdometerKm}
+        disabled={pending}
+      />
 
       <div className="flex flex-wrap gap-3 pt-2">
         <button

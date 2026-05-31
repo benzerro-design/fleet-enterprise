@@ -185,6 +185,9 @@ function assertCreateVehicleDto(body: unknown): CreateVehicleDto {
     'odometerKm' in body ? asNonNegativeNumber(body.odometerKm, 'odometerKm') : undefined;
   const itpExpiresOn = optionalIsoDateString(body.itpExpiresOn);
   const itpStationName = optionalString(body.itpStationName);
+  const itpReminderOffsetsDays = parseReminderOffsetsField(body, 'itpReminderOffsetsDays');
+  const syncItpReminderAction =
+    'syncItpReminderAction' in body ? optionalBoolean(body.syncItpReminderAction) : undefined;
 
   return {
     clientId,
@@ -194,6 +197,8 @@ function assertCreateVehicleDto(body: unknown): CreateVehicleDto {
     odometerKm,
     itpExpiresOn,
     itpStationName,
+    itpReminderOffsetsDays,
+    syncItpReminderAction,
   };
 }
 
@@ -231,6 +236,12 @@ function assertPatchVehicleDto(body: unknown): PatchVehicleDto {
   if ('itpStationName' in body) {
     if (body.itpStationName === null) dto.itpStationName = null;
     else dto.itpStationName = optionalString(body.itpStationName);
+  }
+  if ('itpReminderOffsetsDays' in body) {
+    dto.itpReminderOffsetsDays = parseReminderOffsetsField(body, 'itpReminderOffsetsDays');
+  }
+  if ('syncItpReminderAction' in body) {
+    dto.syncItpReminderAction = optionalBoolean(body.syncItpReminderAction);
   }
 
   if (Object.keys(dto).length === 0) {
@@ -359,6 +370,24 @@ function assertPatchVehicleCivDto(body: unknown): PatchVehicleCivDto {
     throw new BadRequestException('No fields to update');
   }
   return dto;
+}
+
+function parseReminderOffsetsField(
+  body: Record<string, unknown>,
+  key: string,
+): number[] | null | undefined {
+  if (!(key in body)) return undefined;
+  const raw = body[key];
+  if (raw === null) return null;
+  if (!Array.isArray(raw)) throw new BadRequestException(`${key} must be an array of numbers or null`);
+  const nums = raw.filter((v): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0);
+  return nums;
+}
+
+function optionalBoolean(v: unknown): boolean | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v === 'boolean') return v;
+  throw new BadRequestException('Expected boolean');
 }
 
 function assertRecordOdometerDto(body: unknown): RecordOdometerDto {

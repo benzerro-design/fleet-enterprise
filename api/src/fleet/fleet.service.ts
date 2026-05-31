@@ -5,6 +5,13 @@ import {
 } from '@nestjs/common';
 import { Prisma, type VehicleStatus as PrismaVehicleStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { normalizeReminderOffsets, REMINDER_PRESETS } from '../ops/document-reminders';
+import { RemindersService } from '../ops/reminders.service';
+import { syncItpCertDocument } from '../ops/itp-sync';
+import {
+  reminderMenuSyncEnabledForCreate,
+  reminderMenuSyncEnabledPatchValue,
+} from '../ops/reminder-sync';
 import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
@@ -17,6 +24,22 @@ import {
   civProfileFilledCount,
 } from './vehicle-civ-fields';
 import { PrismaService } from '../prisma/prisma.service';
+
+const ITP_PROFILE_DEFAULT_OFFSETS = [
+  ...REMINDER_PRESETS.find((p) => p.id === 'itp_rca')!.offsets,
+];
+
+function itpReminderOffsetsForDb(
+  offsets: number[] | null | undefined,
+  hasItpDate: boolean,
+): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  if (offsets === undefined) {
+    return hasItpDate ? ITP_PROFILE_DEFAULT_OFFSETS : Prisma.DbNull;
+  }
+  if (offsets === null) return Prisma.DbNull;
+  const n = normalizeReminderOffsets(offsets);
+  return n ?? Prisma.DbNull;
+}
 
 const vehicleInclude = {
   documents: true,
@@ -120,6 +143,7 @@ export class FleetService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly reminders: RemindersService,
   ) {}
 
   async listVehiclesPaged(
@@ -215,8 +239,9 @@ export class FleetService {
     tenantSlug: string,
     dto: CreateVehicleDto,
     actorUserId?: string,
-  ): Promise<VehicleRecord> {
+  ): Promise<VehicleRecord & { reminderSyncFailed?: boolean }> {
     const tenant = await this.ensureTenant(tenantSlug);
+    const hasItp = Boolean(dto.itpExpiresOn);
 
     try {
       const row = await this.prisma.vehicle.create({
@@ -230,6 +255,10 @@ export class FleetService {
           odometerKm: dto.odometerKm ?? 0,
           itpExpiresOn: dto.itpExpiresOn ? new Date(dto.itpExpiresOn) : null,
           itpStationName: dto.itpStationName ?? null,
+          itpReminderOffsetsDays: hasItp
+            ? itpReminderOffsetsForDb(dto.itpReminderOffsetsDays, true)
+            : Prisma.DbNull,
+          itpReminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncItpReminderAction),
           createdByUserId: actorUserId ?? null,
           updatedByUserId: actorUserId ?? null,
         },
@@ -260,7 +289,18 @@ export class FleetService {
         });
       }
 
-      return this.toRecord(row);
+      let reminderSyncFailed = false;
+      reminderSyncFailed = await this.applyVehicleItpReminderSync(tenant.id, row);
+
+      if (row.itpExpiresOn) {
+        try {
+          await syncItpCertDocument(this.prisma, row.id, row.itpExpiresOn);
+        } catch (err) {
+          console.error('syncItpCertDocument after vehicle create failed', err);
+        }
+      }
+
+      return { ...this.toRecord(row), reminderSyncFailed };
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException('Registration number already exists for this tenant');
@@ -274,7 +314,7 @@ export class FleetService {
     vehicleId: string,
     dto: PatchVehicleDto,
     actorUserId?: string,
-  ): Promise<VehicleRecord> {
+  ): Promise<VehicleRecord & { reminderSyncFailed?: boolean }> {
     if (dto.odometerKm !== undefined) {
       throw new ConflictException(
         'Odometrul se actualizează doar din tab-ul Odometru al vehiculului.',
@@ -287,6 +327,7 @@ export class FleetService {
     if (!existing) throw new NotFoundException('Vehicle not found');
 
     try {
+      const clearItp = dto.itpExpiresOn === null;
       await this.prisma.vehicle.update({
         where: { id: vehicleId },
         data: {
@@ -308,6 +349,15 @@ export class FleetService {
               : dto.itpStationName === null
                 ? null
                 : dto.itpStationName,
+          itpReminderOffsetsDays:
+            clearItp
+              ? Prisma.DbNull
+              : dto.itpReminderOffsetsDays === undefined
+                ? undefined
+                : dto.itpReminderOffsetsDays === null
+                  ? Prisma.DbNull
+                  : itpReminderOffsetsForDb(dto.itpReminderOffsetsDays, true),
+          itpReminderMenuSyncEnabled: reminderMenuSyncEnabledPatchValue(dto.syncItpReminderAction),
           updatedByUserId: actorUserId ?? undefined,
         },
       });
@@ -323,7 +373,22 @@ export class FleetService {
         },
       });
 
-      return this.getVehicle(tenantSlug, vehicleId);
+      const updated = await this.prisma.vehicle.findFirstOrThrow({
+        where: { id: vehicleId },
+        include: vehicleInclude,
+      });
+
+      const reminderSyncFailed = await this.applyVehicleItpReminderSync(existing.tenantId, updated);
+
+      if (updated.itpExpiresOn) {
+        try {
+          await syncItpCertDocument(this.prisma, updated.id, updated.itpExpiresOn);
+        } catch (err) {
+          console.error('syncItpCertDocument after vehicle patch failed', err);
+        }
+      }
+
+      return { ...this.toRecord(updated), reminderSyncFailed };
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException('Registration number already exists for this tenant');
@@ -634,6 +699,25 @@ export class FleetService {
     });
   }
 
+  private async applyVehicleItpReminderSync(
+    tenantId: string,
+    vehicle: VehicleRow,
+  ): Promise<boolean> {
+    try {
+      await this.reminders.syncFromVehicleItpProfile(tenantId, {
+        id: vehicle.id,
+        registrationNumber: vehicle.registrationNumber,
+        itpExpiresOn: vehicle.itpExpiresOn,
+        itpReminderOffsetsDays: vehicle.itpReminderOffsetsDays,
+        itpReminderMenuSyncEnabled: vehicle.itpReminderMenuSyncEnabled,
+      });
+      return false;
+    } catch (err) {
+      console.error('syncFromVehicleItpProfile failed', err);
+      return true;
+    }
+  }
+
   private async findCivImportSource(vehicleId: string): Promise<CivImportSource> {
     const doc = await this.prisma.vehicleDocument.findFirst({
       where: {
@@ -666,6 +750,8 @@ export class FleetService {
       odometerKm: row.odometerKm,
       itpExpiresOn: row.itpExpiresOn ? row.itpExpiresOn.toISOString() : null,
       itpStationName: row.itpStationName,
+      itpReminderOffsetsDays: normalizeReminderOffsets(row.itpReminderOffsetsDays),
+      itpReminderMenuSyncEnabled: row.itpReminderMenuSyncEnabled,
       civSeries: row.civSeries,
       civIssuedOn: row.civIssuedOn ? row.civIssuedOn.toISOString() : null,
       civRarOffice: row.civRarOffice,

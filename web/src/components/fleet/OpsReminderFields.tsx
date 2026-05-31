@@ -27,6 +27,8 @@ type Props = {
   onSyncReminderActionChange: (value: boolean) => void;
   disabled?: boolean;
   isItp?: boolean;
+  /** Ascunde selectorul timp/km/both — mod fix. */
+  fixedMode?: ReminderConstraintMode;
 };
 
 const MODE_OPTIONS: { value: ReminderConstraintMode; label: string }[] = [
@@ -53,6 +55,7 @@ export function OpsReminderFields({
   onSyncReminderActionChange,
   disabled,
   isItp = false,
+  fixedMode,
 }: Props) {
   const showTime = constraintMode === "time" || constraintMode === "both";
   const showKm = constraintMode === "km" || constraintMode === "both";
@@ -86,13 +89,13 @@ export function OpsReminderFields({
           <button
             key={opt.value}
             type="button"
-            disabled={disabled}
+            disabled={disabled || fixedMode != null}
             onClick={() => onModeChange(opt.value)}
             className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-              constraintMode === opt.value
+              (fixedMode ?? constraintMode) === opt.value
                 ? "border-violet-500/60 bg-violet-950/50 text-violet-100"
                 : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
-            }`}
+            } ${fixedMode != null && fixedMode !== opt.value ? "hidden" : ""}`}
           >
             {opt.label}
           </button>

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { buildVehicleItpPayload, VehicleItpFields } from "@/components/fleet/VehicleItpFields";
 import {
   fleetBrowserBase,
   fleetJsonHeaders,
@@ -31,6 +32,12 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
   const [vin, setVin] = useState(vehicle.vin ?? "");
   const [itpDate, setItpDate] = useState(isoDateOnly(vehicle.itpExpiresOn));
   const [itpStationName, setItpStationName] = useState(vehicle.itpStationName ?? "");
+  const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(
+    vehicle.itpReminderOffsetsDays?.length ? [...vehicle.itpReminderOffsetsDays] : [],
+  );
+  const [syncReminderAction, setSyncReminderAction] = useState(
+    vehicle.itpReminderMenuSyncEnabled ?? true,
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -42,6 +49,12 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
     setError(null);
     setSaved(false);
     try {
+      const itpPayload = buildVehicleItpPayload({
+        itpDate,
+        itpStationName,
+        reminderOffsetsDays,
+        syncReminderAction,
+      });
       const res = await fetch(`${fleetBrowserBase}/vehicles/${vehicle.id}`, {
         method: "PATCH",
         headers: fleetJsonHeaders(),
@@ -51,8 +64,7 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
           type,
           status,
           vin: vin.trim() === "" ? null : vin.trim(),
-          itpExpiresOn: itpDate === "" ? null : `${itpDate}T12:00:00.000Z`,
-          itpStationName: itpStationName.trim() === "" ? null : itpStationName.trim(),
+          ...itpPayload,
         }),
       });
       if (!res.ok) {
@@ -87,6 +99,16 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
           value={vehicle.itpExpiresOn ? new Date(vehicle.itpExpiresOn).toLocaleDateString("ro-RO") : "—"}
         />
         <Field label="Stație ITP" value={vehicle.itpStationName ?? "—"} />
+        {vehicle.itpExpiresOn && vehicle.itpReminderOffsetsDays?.length ? (
+          <Field
+            label="Reminder ITP"
+            value={
+              vehicle.itpReminderMenuSyncEnabled
+                ? `Activ · ${vehicle.itpReminderOffsetsDays.join(", ")} zile înainte`
+                : "Dezactivat din meniul Remindere"
+            }
+          />
+        ) : null}
         <Metadata vehicle={vehicle} />
       </dl>
     );
@@ -122,9 +144,19 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
           options={VEHICLE_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
         />
         <Input label="VIN — rubrica E" value={vin} onChange={setVin} mono hint="Serie șasiu din CIV/talon" />
-        <Input label="ITP — dată expirare" type="date" value={itpDate} onChange={setItpDate} />
-        <Input label="ITP — stație" value={itpStationName} onChange={setItpStationName} className="sm:col-span-2" />
       </div>
+      <VehicleItpFields
+        itpDate={itpDate}
+        onItpDateChange={setItpDate}
+        itpStationName={itpStationName}
+        onItpStationNameChange={setItpStationName}
+        reminderOffsetsDays={reminderOffsetsDays}
+        onReminderOffsetsDaysChange={setReminderOffsetsDays}
+        syncReminderAction={syncReminderAction}
+        onSyncReminderActionChange={setSyncReminderAction}
+        vehicleOdometerKm={vehicle.odometerKm}
+        disabled={pending}
+      />
       <button
         type="submit"
         disabled={pending}

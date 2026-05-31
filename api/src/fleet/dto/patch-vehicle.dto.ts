@@ -13,4 +13,6 @@ export type PatchVehicleDto = {
   vin?: string | null;
   itpExpiresOn?: string | null;
   itpStationName?: string | null;
+  itpReminderOffsetsDays?: number[] | null;
+  syncItpReminderAction?: boolean;
 };

@@ -386,7 +386,8 @@ export class RemindersService {
     const isSynced =
       (row.sourceType === 'document' && row.vehicleDocumentId) ||
       (row.sourceType === 'maintenance' && row.maintenanceEntryId) ||
-      (row.sourceType === 'cost' && row.costEntryId);
+      (row.sourceType === 'cost' && row.costEntryId) ||
+      (row.sourceType === 'vehicle_itp' && row.vehicleItpProfileVehicleId);
 
     if (isSynced) {
       if (row.sourceType === 'document' && row.vehicleDocumentId) {
@@ -403,6 +404,11 @@ export class RemindersService {
         await this.prisma.costEntry.update({
           where: { id: row.costEntryId },
           data: { reminderMenuSyncEnabled: false },
+        });
+      } else if (row.sourceType === 'vehicle_itp' && row.vehicleItpProfileVehicleId) {
+        await this.prisma.vehicle.update({
+          where: { id: row.vehicleItpProfileVehicleId },
+          data: { itpReminderMenuSyncEnabled: false },
         });
       }
     }
@@ -580,6 +586,58 @@ export class RemindersService {
         reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
         dueOdometerKm: cost.dueOdometerKm ?? null,
         reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
+        isActive: true,
+      },
+      include: includeRow,
+    });
+  }
+
+  /** Sincronizează reminder ITP din profilul vehiculului (Basic Info). */
+  async syncFromVehicleItpProfile(
+    tenantId: string,
+    vehicle: {
+      id: string;
+      registrationNumber: string;
+      itpExpiresOn: Date | null;
+      itpReminderOffsetsDays: unknown;
+      itpReminderMenuSyncEnabled: boolean;
+    },
+  ) {
+    const payload = {
+      dueOn: vehicle.itpExpiresOn,
+      reminderOffsetsDays: vehicle.itpReminderOffsetsDays,
+      dueOdometerKm: null,
+      reminderOffsetsKm: null,
+    };
+    if (!vehicle.itpReminderMenuSyncEnabled || !hasReminderSyncConstraints(payload)) {
+      await this.prisma.reminderAction.deleteMany({
+        where: { vehicleItpProfileVehicleId: vehicle.id },
+      });
+      return null;
+    }
+
+    const dayOffsets = normalizeReminderOffsets(vehicle.itpReminderOffsetsDays);
+    const title = `ITP — ${vehicle.registrationNumber}`;
+
+    return this.prisma.reminderAction.upsert({
+      where: { vehicleItpProfileVehicleId: vehicle.id },
+      create: {
+        tenantId,
+        vehicleId: vehicle.id,
+        sourceType: ReminderSourceType.vehicle_itp,
+        title,
+        vehicleItpProfileVehicleId: vehicle.id,
+        dueOn: vehicle.itpExpiresOn,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: null,
+        reminderOffsetsKm: Prisma.DbNull,
+        isActive: true,
+      },
+      update: {
+        vehicleId: vehicle.id,
+        title,
+        dueOn: vehicle.itpExpiresOn,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
         isActive: true,
       },
       include: includeRow,

@@ -30,6 +30,7 @@ export default async function EditReminderPage({ params }: Props) {
   if (row.sourceType === "document") redirect(`/fleet/reminders/${id}`);
   if (row.sourceType === "maintenance") redirect(`/fleet/reminders/${id}`);
   if (row.sourceType === "cost") redirect(`/fleet/reminders/${id}`);
+  if (row.sourceType === "vehicle_itp") redirect(`/fleet/vehicles/${row.vehicleId}/edit?tab=basic`);
 
   return (
     <div className="text-zinc-100">

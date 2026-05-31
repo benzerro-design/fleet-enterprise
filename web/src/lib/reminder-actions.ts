@@ -11,6 +11,7 @@ export const REMINDER_SOURCE_TYPES = [
   { value: "document", label: "Document" },
   { value: "maintenance", label: "Mentenanță" },
   { value: "cost", label: "Cost" },
+  { value: "vehicle_itp", label: "ITP vehicul" },
   { value: "custom", label: "Personalizat" },
 ] as const;
 

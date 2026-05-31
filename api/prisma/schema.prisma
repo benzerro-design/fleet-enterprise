@@ -62,6 +62,8 @@ model Vehicle {
   odometerKm         Int                @default(0)
   itpExpiresOn       DateTime?
   itpStationName     String?
+  itpReminderOffsetsDays     Json?
+  itpReminderMenuSyncEnabled Boolean            @default(true)
   /** Serie CIV (legată de rubrica X din talon). */
   civSeries          String?
   civIssuedOn        DateTime?
@@ -83,6 +85,7 @@ model Vehicle {
   updatedBy          User?              @relation("VehicleUpdatedBy", fields: [updatedByUserId], references: [id])
   documents          VehicleDocument[]
   reminderActions    ReminderAction[]
+  itpProfileReminder ReminderAction?    @relation("VehicleItpProfileReminder")
   odometerReadings   OdometerReading[]
 
   @@unique([tenantId, registrationNumber])
@@ -211,6 +214,7 @@ enum ReminderSourceType {
   maintenance
   cost
   custom
+  vehicle_itp
 }
 
 enum OdometerReadingSource {
@@ -244,6 +248,7 @@ model ReminderAction {
   vehicleDocumentId       String?            @unique
   maintenanceEntryId      String?            @unique
   costEntryId             String?            @unique
+  vehicleItpProfileVehicleId String?         @unique
   dueOn                   DateTime?
   reminderOffsetsDays     Json?
   dueOdometerKm           Int?
@@ -260,6 +265,7 @@ model ReminderAction {
   document                VehicleDocument?   @relation(fields: [vehicleDocumentId], references: [id], onDelete: Cascade)
   maintenance             MaintenanceEntry?  @relation(fields: [maintenanceEntryId], references: [id], onDelete: Cascade)
   cost                    CostEntry?         @relation(fields: [costEntryId], references: [id], onDelete: Cascade)
+  vehicleItpProfile       Vehicle?           @relation("VehicleItpProfileReminder", fields: [vehicleItpProfileVehicleId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([vehicleId])

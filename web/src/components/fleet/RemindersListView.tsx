@@ -262,7 +262,8 @@ export function RemindersListView({
                   {write &&
                   (row.sourceType === "document" ||
                     row.sourceType === "maintenance" ||
-                    row.sourceType === "cost") ? (
+                    row.sourceType === "cost" ||
+                    row.sourceType === "vehicle_itp") ? (
                     <DeleteReminderButton
                       reminderId={row.id}
                       title={row.title}
@@ -292,6 +293,14 @@ export function RemindersListView({
                       className="text-[11px] text-zinc-400 hover:text-zinc-200"
                     >
                       Editează cost
+                    </Link>
+                  ) : null}
+                  {write && row.sourceType === "vehicle_itp" ? (
+                    <Link
+                      href={`/fleet/vehicles/${row.vehicleId}/edit?tab=basic`}
+                      className="text-[11px] text-zinc-400 hover:text-zinc-200"
+                    >
+                      Editează vehicul
                     </Link>
                   ) : null}
                 </div>

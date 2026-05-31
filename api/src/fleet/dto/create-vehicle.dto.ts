@@ -12,4 +12,6 @@ export type CreateVehicleDto = {
   odometerKm?: number;
   itpExpiresOn?: string;
   itpStationName?: string;
+  itpReminderOffsetsDays?: number[] | null;
+  syncItpReminderAction?: boolean;
 };

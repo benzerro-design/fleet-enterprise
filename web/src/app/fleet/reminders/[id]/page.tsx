@@ -32,7 +32,9 @@ export default async function ReminderDetailPage({ params }: Props) {
         ? { href: `/fleet/maintenance/${row.maintenanceEntryId}/edit`, label: "Editează mentenanța" }
         : row.sourceType === "cost" && row.costEntryId
           ? { href: `/fleet/costs/${row.costEntryId}/edit`, label: "Editează costul" }
-          : null;
+          : row.sourceType === "vehicle_itp"
+            ? { href: `/fleet/vehicles/${row.vehicleId}/edit?tab=basic`, label: "Editează vehiculul" }
+            : null;
 
   return (
     <div className="text-zinc-100">
@@ -183,6 +185,18 @@ export default async function ReminderDetailPage({ params }: Props) {
             listă — costul rămâne.{" "}
             <Link href={`/fleet/costs/${row.costEntryId}/edit`} className="text-violet-400 hover:underline">
               Editează costul
+            </Link>
+          </p>
+        ) : null}
+        {row.sourceType === "vehicle_itp" ? (
+          <p className="mt-6 text-sm text-zinc-500">
+            Acest reminder este sincronizat cu profilul vehiculului (ITP). Editează Basic Info sau dezactivează
+            reminderul din listă — vehiculul rămâne.{" "}
+            <Link
+              href={`/fleet/vehicles/${row.vehicleId}/edit?tab=basic`}
+              className="text-violet-400 hover:underline"
+            >
+              Editează vehiculul
             </Link>
           </p>
         ) : null}
