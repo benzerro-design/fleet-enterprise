@@ -13,7 +13,8 @@ async function getVehicleOptions() {
   return data.items.map((v) => ({ id: v.id, registrationNumber: v.registrationNumber, clientId: v.clientId }));
 }
 
-export default async function NewCostPage() {
+export default async function NewCostPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
+  const sp = await searchParams;
   const auth = await getAuthMeResult();
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect("/login?next=/fleet/costs/new");
@@ -35,7 +36,7 @@ export default async function NewCostPage() {
             Înapoi la listă
           </Link>
         </div>
-        <CostForm mode="create" vehicles={vehicles} />
+        <CostForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} />
       </main>
     </div>
   );

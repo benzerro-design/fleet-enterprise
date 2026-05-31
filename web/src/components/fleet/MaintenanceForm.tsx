@@ -29,24 +29,19 @@ type VehicleOption = {
 };
 
 type Props =
-  | { mode: "create"; vehicles: VehicleOption[] }
+  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string }
   | { mode: "edit"; entryId: string; initial: MaintenanceRecord; vehicles: VehicleOption[] };
-
-function toDatetimeLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  return new Date(iso).toISOString().slice(0, 16);
-}
-
-function toIsoFromInput(v: string): string | null {
-  if (!v.trim()) return null;
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
 
 function toDateInputOrEmpty(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toISOString().slice(0, 10);
+}
+
+function toIsoDate(dateOnly: string): string | null {
+  if (!dateOnly.trim()) return null;
+  const d = new Date(`${dateOnly}T12:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 async function readErrorMessage(res: Response): Promise<string> {
@@ -66,7 +61,7 @@ export function MaintenanceForm(props: Props) {
   const initial = useMemo(() => {
     if (props.mode === "create") {
       return {
-        vehicleId: props.vehicles[0]?.id ?? "",
+        vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
         title: "",
         provider: "",
         costAllocationCode: "",
@@ -88,7 +83,7 @@ export function MaintenanceForm(props: Props) {
       invoiceNumber: r.invoiceNumber ?? "",
       invoiceDate: toDateInputOrEmpty(r.invoiceDate),
       invoiceAttachmentUrl: r.invoiceAttachmentUrl ?? "",
-      performedAt: toDatetimeLocalInput(r.performedAt),
+      performedAt: toDateInputOrEmpty(r.performedAt),
       odometerKm: r.odometerKm != null ? String(r.odometerKm) : "",
       notes: r.notes ?? "",
       costCents: r.costCents != null ? formatRonFromCents(r.costCents) : "",
@@ -134,7 +129,7 @@ export function MaintenanceForm(props: Props) {
       setPending(false);
       return;
     }
-    const when = toIsoFromInput(performedAt);
+    const when = toIsoDate(performedAt);
     const invoiceWhen = invoiceDate.trim() ? new Date(`${invoiceDate}T12:00:00.000Z`) : null;
     if (invoiceDate.trim() && (!invoiceWhen || Number.isNaN(invoiceWhen.getTime()))) {
       setError("Data facturii este invalidă.");
@@ -268,7 +263,7 @@ export function MaintenanceForm(props: Props) {
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Data efectuării (opțional)</label>
-        <input type="datetime-local" value={performedAt} onChange={(e) => setPerformedAt(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
+        <input type="date" value={performedAt} onChange={(e) => setPerformedAt(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Odometru km (opțional)</label>

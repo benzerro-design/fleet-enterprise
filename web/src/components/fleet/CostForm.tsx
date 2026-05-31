@@ -28,7 +28,7 @@ type VehicleOption = {
 };
 
 type Props =
-  | { mode: "create"; vehicles: VehicleOption[] }
+  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string }
   | { mode: "edit"; entryId: string; initial: CostRecord; vehicles: VehicleOption[] };
 
 function toDateInput(iso: string): string {
@@ -64,7 +64,7 @@ export function CostForm(props: Props) {
   const initial = useMemo(() => {
     if (props.mode === "create") {
       return {
-        vehicleId: props.vehicles[0]?.id ?? "",
+        vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
         category: "",
         provider: "",
         amountCents: "",

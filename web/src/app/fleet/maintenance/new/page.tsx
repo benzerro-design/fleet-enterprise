@@ -13,7 +13,8 @@ async function getVehicleOptions() {
   return data.items.map((v) => ({ id: v.id, registrationNumber: v.registrationNumber, clientId: v.clientId }));
 }
 
-export default async function NewMaintenancePage() {
+export default async function NewMaintenancePage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
+  const sp = await searchParams;
   const auth = await getAuthMeResult();
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect("/login?next=/fleet/maintenance/new");
@@ -35,7 +36,7 @@ export default async function NewMaintenancePage() {
             Înapoi la listă
           </Link>
         </div>
-        <MaintenanceForm mode="create" vehicles={vehicles} />
+        <MaintenanceForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} />
       </main>
     </div>
   );

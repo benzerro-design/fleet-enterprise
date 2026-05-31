@@ -201,14 +201,24 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         </dl>
 
         <section className="mt-10">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium text-zinc-200">Mentenanță</h2>
-            <Link
-              href={`/fleet/maintenance?${regQs}`}
-              className="text-sm text-emerald-400 hover:text-emerald-300 hover:underline"
-            >
-              Deschide lista completă
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/fleet/maintenance?${regQs}`}
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+              >
+                Toate intervențiile
+              </Link>
+              {write ? (
+                <Link
+                  href={`/fleet/maintenance/new?vehicleId=${encodeURIComponent(vehicle.id)}`}
+                  className="rounded-lg bg-emerald-500/90 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Intervenție nouă
+                </Link>
+              ) : null}
+            </div>
           </div>
           {!maintenanceList ? (
             <p className="mt-2 text-sm text-amber-400">Nu am putut încărca mentenanța pentru acest vehicul.</p>
@@ -267,14 +277,24 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         </section>
 
         <section className="mt-10">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-medium text-zinc-200">Costuri</h2>
-            <Link
-              href={`/fleet/costs?${regQs}`}
-              className="text-sm text-emerald-400 hover:text-emerald-300 hover:underline"
-            >
-              Deschide lista completă
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/fleet/costs?${regQs}`}
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+              >
+                Toate costurile
+              </Link>
+              {write ? (
+                <Link
+                  href={`/fleet/costs/new?vehicleId=${encodeURIComponent(vehicle.id)}`}
+                  className="rounded-lg bg-emerald-500/90 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Cost nou
+                </Link>
+              ) : null}
+            </div>
           </div>
           {!costsList ? (
             <p className="mt-2 text-sm text-amber-400">Nu am putut încărca costurile pentru acest vehicul.</p>
