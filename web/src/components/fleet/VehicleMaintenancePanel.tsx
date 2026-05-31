@@ -198,3 +198,11 @@ export function VehicleMaintenancePanel({ items, totalInDb, regQs }: Props) {
     </>
   );
 }
+
+export function vehicleMaintenanceSummary(items: VehicleMaintenanceRow[], totalInDb: number): string {
+  if (totalInDb === 0) return "Nicio intervenție";
+  const totalCents = items.reduce((s, r) => s + (r.costCents ?? 0), 0);
+  const countLabel = totalInDb === 1 ? "1 intervenție" : `${totalInDb} intervenții`;
+  if (totalCents > 0) return `${countLabel} · ${formatRonFromCents(totalCents)} RON`;
+  return countLabel;
+}

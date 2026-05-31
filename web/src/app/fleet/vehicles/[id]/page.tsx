@@ -1,11 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { VehicleCostsPanel } from "@/components/fleet/VehicleCostsPanel";
-import { VehicleMaintenancePanel } from "@/components/fleet/VehicleMaintenancePanel";
+import { VehicleDetailSections } from "@/components/fleet/VehicleDetailSections";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { VEHICLE_STATUSES, VEHICLE_TYPES, type VehicleRecord } from "@/lib/fleet-api";
-import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry";
-import { documentTypeLabel } from "@/lib/document-types";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
 const OPS_PREVIEW_PAGE_SIZE = 50;
@@ -200,124 +197,22 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           </div>
         </dl>
 
-        <section className="mt-10">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-medium text-zinc-200">Mentenanță</h2>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href={`/fleet/maintenance?${regQs}`}
-                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
-              >
-                Toate intervențiile
-              </Link>
-              {write ? (
-                <Link
-                  href={`/fleet/maintenance/new?vehicleId=${encodeURIComponent(vehicle.id)}`}
-                  className="rounded-lg bg-emerald-500/90 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-emerald-400"
-                >
-                  Intervenție nouă
-                </Link>
-              ) : null}
-            </div>
-          </div>
-          {!maintenanceList ? (
-            <p className="mt-2 text-sm text-amber-400">Nu am putut încărca mentenanța pentru acest vehicul.</p>
-          ) : (
-            <VehicleMaintenancePanel
-              items={maintenanceList.items}
-              totalInDb={maintenanceList.total}
-              regQs={regQs}
-            />
-          )}
-        </section>
-
-        <section className="mt-10">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-medium text-zinc-200">Costuri</h2>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href={`/fleet/costs?${regQs}`}
-                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
-              >
-                Toate costurile
-              </Link>
-              {write ? (
-                <Link
-                  href={`/fleet/costs/new?vehicleId=${encodeURIComponent(vehicle.id)}`}
-                  className="rounded-lg bg-emerald-500/90 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-emerald-400"
-                >
-                  Cost nou
-                </Link>
-              ) : null}
-            </div>
-          </div>
-          {!costsList ? (
-            <p className="mt-2 text-sm text-amber-400">Nu am putut încărca costurile pentru acest vehicul.</p>
-          ) : (
-            <VehicleCostsPanel items={costsList.items} totalInDb={costsList.total} regQs={regQs} />
-          )}
-        </section>
-
-        <section className="mt-10">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-medium text-zinc-200">Documente</h2>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href={`/fleet/documents?${regQs}`}
-                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
-              >
-                Toate documentele
-              </Link>
-              {write ? (
-                <Link
-                  href={`/fleet/documents/new?vehicleId=${encodeURIComponent(vehicle.id)}`}
-                  className="rounded-lg bg-emerald-500/90 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-emerald-400"
-                >
-                  Document nou
-                </Link>
-              ) : null}
-            </div>
-          </div>
-          {!documentsList ? (
-            <p className="mt-2 text-sm text-amber-400">Nu am putut încărca documentele pentru acest vehicul.</p>
-          ) : documentsList.items.length === 0 ? (
-            <p className="mt-2 text-sm text-zinc-500">Nu există documente înregistrate.</p>
-          ) : (
-            <>
-              <ul className="mt-4 space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-                {documentsList.items.map((d) => {
-                  const badge = documentExpiryBadge(documentExpiryStatus(d.expiresOn));
-                  return (
-                    <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                      <div>
-                        <Link href={`/fleet/documents/${d.id}`} className="text-zinc-200 hover:text-white">
-                          {d.title}
-                        </Link>
-                        <p className="text-xs text-zinc-500">{documentTypeLabel(d.documentTypeCode)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`rounded border px-1.5 py-0.5 text-[10px] ${badge.className}`}>
-                          {badge.label}
-                        </span>
-                        <span className="text-xs text-zinc-500">
-                          {d.expiresOn ? new Date(d.expiresOn).toLocaleDateString("ro-RO") : "—"}
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              {documentsList.total > documentsList.items.length ? (
-                <p className="mt-2 text-xs text-zinc-500">
-                  Afișate primele {documentsList.items.length} din {documentsList.total}.{" "}
-                  <Link href={`/fleet/documents?${regQs}`} className="text-emerald-400 hover:underline">
-                    Vezi restul în listă
-                  </Link>
-                </p>
-              ) : null}
-            </>
-          )}
-        </section>
+        <VehicleDetailSections
+          vehicleId={vehicle.id}
+          write={write}
+          regQs={regQs}
+          maintenance={
+            maintenanceList
+              ? { ok: true, items: maintenanceList.items, total: maintenanceList.total }
+              : { ok: false }
+          }
+          costs={costsList ? { ok: true, items: costsList.items, total: costsList.total } : { ok: false }}
+          documents={
+            documentsList
+              ? { ok: true, items: documentsList.items, total: documentsList.total }
+              : { ok: false }
+          }
+        />
       </main>
     </div>
   );

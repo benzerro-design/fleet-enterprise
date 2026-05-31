@@ -184,3 +184,10 @@ export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
     </>
   );
 }
+
+export function vehicleCostsSummary(items: VehicleCostRow[], totalInDb: number): string {
+  if (totalInDb === 0) return "Niciun cost";
+  const totalCents = items.reduce((s, r) => s + r.amountCents, 0);
+  const countLabel = totalInDb === 1 ? "1 cost" : `${totalInDb} costuri`;
+  return `${countLabel} · ${formatRonFromCents(totalCents)} RON`;
+}
