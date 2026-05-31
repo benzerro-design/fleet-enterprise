@@ -3,8 +3,6 @@ import { Suspense } from "react";
 import { RemindersListView } from "@/components/fleet/RemindersListView";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { remindersBrowserBase } from "@/lib/fleet-api";
-import { fleetServerFetch } from "@/lib/fleet-server";
-import type { ReminderActionRow } from "@/lib/reminder-actions";
 
 type Search = {
   page?: string;
@@ -17,24 +15,6 @@ type Search = {
   dueFrom?: string;
   dueTo?: string;
 };
-
-type Payload = { items: ReminderActionRow[]; total: number; page: number; pageSize: number };
-
-function buildQuery(sp: Search): string {
-  const q = new URLSearchParams();
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  q.set("page", String(page));
-  q.set("pageSize", "20");
-  q.set("status", sp.status?.trim() || "all");
-  if (sp.registrationNumber?.trim()) q.set("registrationNumber", sp.registrationNumber.trim());
-  if (sp.clientId?.trim()) q.set("clientId", sp.clientId.trim());
-  if (sp.vehicleId?.trim()) q.set("vehicleId", sp.vehicleId.trim());
-  if (sp.sourceType?.trim()) q.set("sourceType", sp.sourceType.trim());
-  if (sp.q?.trim()) q.set("q", sp.q.trim());
-  if (sp.dueFrom?.trim()) q.set("dueFrom", sp.dueFrom.trim());
-  if (sp.dueTo?.trim()) q.set("dueTo", sp.dueTo.trim());
-  return q.toString();
-}
 
 function buildExportQuery(sp: Search): string {
   const q = new URLSearchParams();
@@ -49,17 +29,11 @@ function buildExportQuery(sp: Search): string {
   return q.toString();
 }
 
-async function fetchRows(sp: Search): Promise<Payload | null> {
-  const res = await fleetServerFetch(`/reminders?${buildQuery(sp)}`);
-  if (!res?.ok) return null;
-  return (await res.json()) as Payload;
-}
-
 type Props = { searchParams: Promise<Search> };
 
 export default async function FleetRemindersPage({ searchParams }: Props) {
   const sp = await searchParams;
-  const [data, auth] = await Promise.all([fetchRows(sp), getAuthMeResult()]);
+  const auth = await getAuthMeResult();
   const write = canManageFleet(auth);
   const exportQs = buildExportQuery(sp);
   const exportHref = `${remindersBrowserBase}/export${exportQs ? `?${exportQs}` : ""}`;
@@ -100,6 +74,7 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
         </div>
 
         <form method="get" className="mb-8 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+          {sp.status?.trim() ? <input type="hidden" name="status" value={sp.status.trim()} /> : null}
           <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
             <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
             <input
@@ -133,13 +108,9 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
           </Link>
         </form>
 
-        {!data && !write ? (
-          <p className="text-amber-400">Nu am putut încărca reminderele.</p>
-        ) : (
-          <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
-            <RemindersListView backHref="/fleet/vehicles" write={write} />
-          </Suspense>
-        )}
+        <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
+          <RemindersListView backHref="/fleet/vehicles" write={write} />
+        </Suspense>
       </main>
     </div>
   );

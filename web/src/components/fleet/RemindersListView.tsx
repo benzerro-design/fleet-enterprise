@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DeleteReminderButton } from "@/components/fleet/DeleteReminderButton";
 import { ReminderActionStatusBadge } from "@/components/fleet/ReminderActionStatusBadge";
 import { formatOffsetDaysLabel } from "@/lib/document-reminders";
@@ -52,6 +52,7 @@ export function RemindersListView({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
   const urlStatus = searchParams.get("status");
   const [localStatus, setLocalStatus] = useState<string>("all");
   const status = (
@@ -62,17 +63,35 @@ export function RemindersListView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const apiQuery = useMemo(() => {
+    const q = new URLSearchParams();
+    q.set("page", searchParams.get("page") ?? "1");
+    q.set("pageSize", compact ? "20" : "100");
+    q.set("status", status);
+    if (vehicleId) {
+      q.set("vehicleId", vehicleId);
+    } else {
+      const reg = registrationNumber?.trim() || searchParams.get("registrationNumber")?.trim();
+      if (reg) q.set("registrationNumber", reg);
+      const clientId = searchParams.get("clientId")?.trim();
+      if (clientId) q.set("clientId", clientId);
+      const sourceType = searchParams.get("sourceType")?.trim();
+      if (sourceType) q.set("sourceType", sourceType);
+      const textQ = searchParams.get("q")?.trim();
+      if (textQ) q.set("q", textQ);
+      const dueFrom = searchParams.get("dueFrom")?.trim();
+      if (dueFrom) q.set("dueFrom", dueFrom);
+      const dueTo = searchParams.get("dueTo")?.trim();
+      if (dueTo) q.set("dueTo", dueTo);
+    }
+    return q.toString();
+  }, [status, vehicleId, registrationNumber, compact, searchKey]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const q = new URLSearchParams();
-    q.set("page", "1");
-    q.set("pageSize", compact ? "20" : "100");
-    q.set("status", status);
-    if (vehicleId) q.set("vehicleId", vehicleId);
-    if (registrationNumber) q.set("registrationNumber", registrationNumber);
     try {
-      const res = await fetch(`/api/reminders?${q.toString()}`);
+      const res = await fetch(`/api/reminders?${apiQuery}`);
       if (!res.ok) {
         setError(await parseApiError(res));
         setData(null);
@@ -85,7 +104,7 @@ export function RemindersListView({
     } finally {
       setLoading(false);
     }
-  }, [status, vehicleId, registrationNumber, compact]);
+  }, [apiQuery]);
 
   useEffect(() => {
     void load();
