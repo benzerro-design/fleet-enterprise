@@ -11,6 +11,7 @@ import {
   normalizeReminderOffsetsKm,
   type ReminderActionSummary,
 } from './reminder-status';
+import { hasReminderSyncConstraints } from './reminder-sync';
 import type { ReminderListFilterStatus } from './document-reminders';
 
 const MAX_PAGE_SIZE = 200;
@@ -421,13 +422,23 @@ export class RemindersService {
       title: string;
       expiresOn: Date | null;
       reminderOffsetsDays: unknown;
+      dueOdometerKm?: number | null;
+      reminderOffsetsKm?: unknown;
     },
   ) {
-    const offsets = normalizeReminderOffsets(doc.reminderOffsetsDays);
-    if (!doc.expiresOn || !offsets?.length) {
+    const payload = {
+      dueOn: doc.expiresOn,
+      reminderOffsetsDays: doc.reminderOffsetsDays,
+      dueOdometerKm: doc.dueOdometerKm ?? null,
+      reminderOffsetsKm: doc.reminderOffsetsKm,
+    };
+    if (!hasReminderSyncConstraints(payload)) {
       await this.prisma.reminderAction.deleteMany({ where: { vehicleDocumentId: doc.id } });
       return null;
     }
+
+    const dayOffsets = normalizeReminderOffsets(doc.reminderOffsetsDays);
+    const kmOffsets = normalizeReminderOffsetsKm(doc.reminderOffsetsKm);
 
     return this.prisma.reminderAction.upsert({
       where: { vehicleDocumentId: doc.id },
@@ -438,14 +449,18 @@ export class RemindersService {
         title: doc.title,
         vehicleDocumentId: doc.id,
         dueOn: doc.expiresOn,
-        reminderOffsetsDays: offsets,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: doc.dueOdometerKm ?? null,
+        reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
         isActive: true,
       },
       update: {
         vehicleId: doc.vehicleId,
         title: doc.title,
         dueOn: doc.expiresOn,
-        reminderOffsetsDays: offsets,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: doc.dueOdometerKm ?? null,
+        reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
         isActive: true,
       },
       include: includeRow,
@@ -461,13 +476,23 @@ export class RemindersService {
       title: string;
       nextDueOn: Date | null;
       reminderOffsetsDays: unknown;
+      dueOdometerKm?: number | null;
+      reminderOffsetsKm?: unknown;
     },
   ) {
-    const offsets = normalizeReminderOffsets(entry.reminderOffsetsDays);
-    if (!entry.nextDueOn || !offsets?.length) {
+    const payload = {
+      dueOn: entry.nextDueOn,
+      reminderOffsetsDays: entry.reminderOffsetsDays,
+      dueOdometerKm: entry.dueOdometerKm ?? null,
+      reminderOffsetsKm: entry.reminderOffsetsKm,
+    };
+    if (!hasReminderSyncConstraints(payload)) {
       await this.prisma.reminderAction.deleteMany({ where: { maintenanceEntryId: entry.id } });
       return null;
     }
+
+    const dayOffsets = normalizeReminderOffsets(entry.reminderOffsetsDays);
+    const kmOffsets = normalizeReminderOffsetsKm(entry.reminderOffsetsKm);
 
     return this.prisma.reminderAction.upsert({
       where: { maintenanceEntryId: entry.id },
@@ -478,14 +503,18 @@ export class RemindersService {
         title: entry.title,
         maintenanceEntryId: entry.id,
         dueOn: entry.nextDueOn,
-        reminderOffsetsDays: offsets,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: entry.dueOdometerKm ?? null,
+        reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
         isActive: true,
       },
       update: {
         vehicleId: entry.vehicleId,
         title: entry.title,
         dueOn: entry.nextDueOn,
-        reminderOffsetsDays: offsets,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: entry.dueOdometerKm ?? null,
+        reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
         isActive: true,
       },
       include: includeRow,
@@ -502,13 +531,23 @@ export class RemindersService {
       title: string;
       nextDueOn: Date | null;
       reminderOffsetsDays: unknown;
+      dueOdometerKm?: number | null;
+      reminderOffsetsKm?: unknown;
     },
   ) {
-    const offsets = normalizeReminderOffsets(cost.reminderOffsetsDays);
-    if (!cost.nextDueOn || !offsets?.length) {
+    const payload = {
+      dueOn: cost.nextDueOn,
+      reminderOffsetsDays: cost.reminderOffsetsDays,
+      dueOdometerKm: cost.dueOdometerKm ?? null,
+      reminderOffsetsKm: cost.reminderOffsetsKm,
+    };
+    if (!hasReminderSyncConstraints(payload)) {
       await this.prisma.reminderAction.deleteMany({ where: { costEntryId: cost.id } });
       return null;
     }
+
+    const dayOffsets = normalizeReminderOffsets(cost.reminderOffsetsDays);
+    const kmOffsets = normalizeReminderOffsetsKm(cost.reminderOffsetsKm);
 
     return this.prisma.reminderAction.upsert({
       where: { costEntryId: cost.id },
@@ -519,14 +558,18 @@ export class RemindersService {
         title: cost.title,
         costEntryId: cost.id,
         dueOn: cost.nextDueOn,
-        reminderOffsetsDays: offsets,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: cost.dueOdometerKm ?? null,
+        reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
         isActive: true,
       },
       update: {
         vehicleId: cost.vehicleId,
         title: cost.title,
         dueOn: cost.nextDueOn,
-        reminderOffsetsDays: offsets,
+        reminderOffsetsDays: dayOffsets ?? Prisma.DbNull,
+        dueOdometerKm: cost.dueOdometerKm ?? null,
+        reminderOffsetsKm: kmOffsets ?? Prisma.DbNull,
         isActive: true,
       },
       include: includeRow,

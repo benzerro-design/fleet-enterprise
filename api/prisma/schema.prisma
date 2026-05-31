@@ -116,6 +116,8 @@ model MaintenanceEntry {
   /** Termen / dată următoare acțiune (ex. ITP valabil până la). */
   nextDueOn            DateTime?
   reminderOffsetsDays  Json?
+  dueOdometerKm        Int?
+  reminderOffsetsKm    Json?
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminderAction       ReminderAction?
@@ -141,6 +143,8 @@ model CostEntry {
   /** Termen / dată următoare (ex. ITP valabil până la). */
   nextDueOn            DateTime?
   reminderOffsetsDays  Json?
+  dueOdometerKm        Int?
+  reminderOffsetsKm    Json?
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminderAction       ReminderAction?
@@ -175,6 +179,8 @@ model VehicleDocument {
   fileName            String?
   /** Zile înainte de expirare când se activează remindere (ex. [60, 30, 7, 1, 0]). */
   reminderOffsetsDays Json?
+  dueOdometerKm       Int?
+  reminderOffsetsKm   Json?
   createdAt           DateTime  @default(now())
   vehicle             Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminderAction      ReminderAction?

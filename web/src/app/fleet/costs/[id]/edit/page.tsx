@@ -18,8 +18,10 @@ type CostRecord = {
   notes: string | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
+  dueOdometerKm?: number | null;
+  reminderOffsetsKm?: number[] | null;
 };
-type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string }> };
+type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string; odometerKm: number }> };
 
 async function getEntry(id: string): Promise<CostRecord | null> {
   const res = await fleetServerFetch(`/costs/${id}`);
@@ -31,7 +33,12 @@ async function getVehicleOptions() {
   const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
   if (!res?.ok) return [];
   const data = (await res.json()) as VehiclesPayload;
-  return data.items.map((v) => ({ id: v.id, registrationNumber: v.registrationNumber, clientId: v.clientId }));
+  return data.items.map((v) => ({
+    id: v.id,
+    registrationNumber: v.registrationNumber,
+    clientId: v.clientId,
+    odometerKm: v.odometerKm,
+  }));
 }
 
 export default async function EditCostPage({ params }: { params: Promise<{ id: string }> }) {

@@ -13,9 +13,11 @@ type DocumentRecord = {
   fileUrl: string | null;
   fileName: string | null;
   reminderOffsetsDays: number[] | null;
+  dueOdometerKm?: number | null;
+  reminderOffsetsKm?: number[] | null;
 };
 
-type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string }> };
+type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string; odometerKm: number }> };
 
 async function getDocument(id: string): Promise<DocumentRecord | null> {
   const res = await fleetServerFetch(`/documents/${id}`);
@@ -27,7 +29,12 @@ async function getVehicleOptions() {
   const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
   if (!res?.ok) return [];
   const data = (await res.json()) as VehiclesPayload;
-  return data.items.map((v) => ({ id: v.id, registrationNumber: v.registrationNumber, clientId: v.clientId }));
+  return data.items.map((v) => ({
+    id: v.id,
+    registrationNumber: v.registrationNumber,
+    clientId: v.clientId,
+    odometerKm: v.odometerKm,
+  }));
 }
 
 export default async function EditDocumentPage({ params }: { params: Promise<{ id: string }> }) {

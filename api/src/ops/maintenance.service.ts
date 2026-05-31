@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeReminderOffsets } from './document-reminders';
+import { normalizeReminderOffsetsKm } from './reminder-status';
 import { isItpMaintenanceAllocation, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -26,6 +27,8 @@ export type CreateMaintenanceInput = {
   costCents?: number | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
+  dueOdometerKm?: number | null;
+  reminderOffsetsKm?: number[] | null;
   syncReminderAction?: boolean;
 };
 
@@ -179,6 +182,8 @@ function toMaintRow(row: {
   costCents: number | null;
   nextDueOn: Date | null;
   reminderOffsetsDays: unknown;
+  dueOdometerKm: number | null;
+  reminderOffsetsKm: unknown;
   vehicle: { registrationNumber: string; clientId: string };
   tenant: { slug: string };
 }) {
@@ -200,6 +205,8 @@ function toMaintRow(row: {
     costCents: row.costCents,
     nextDueOn: row.nextDueOn ? row.nextDueOn.toISOString() : null,
     reminderOffsetsDays: normalizeReminderOffsets(row.reminderOffsetsDays),
+    dueOdometerKm: row.dueOdometerKm,
+    reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
   };
 }
 
@@ -324,6 +331,8 @@ export class MaintenanceService {
         nextDueOn:
           dto.nextDueOn === undefined ? null : dto.nextDueOn ? new Date(dto.nextDueOn) : null,
         reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
+        dueOdometerKm: dto.dueOdometerKm ?? null,
+        reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
       },
       include: {
         vehicle: { select: { registrationNumber: true, clientId: true } },
@@ -357,6 +366,8 @@ export class MaintenanceService {
           title: row.title,
           nextDueOn: row.nextDueOn,
           reminderOffsetsDays: row.reminderOffsetsDays,
+          dueOdometerKm: row.dueOdometerKm,
+          reminderOffsetsKm: row.reminderOffsetsKm,
         });
       } catch (err) {
         reminderSyncFailed = true;
@@ -412,6 +423,8 @@ export class MaintenanceService {
             ? null
             : new Date(dto.nextDueOn),
       reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
+      dueOdometerKm: dto.dueOdometerKm,
+      reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
     };
 
     const r = await this.prisma.maintenanceEntry.updateMany({
@@ -464,6 +477,8 @@ export class MaintenanceService {
           title: updated.title,
           nextDueOn: updated.nextDueOn ? new Date(updated.nextDueOn) : null,
           reminderOffsetsDays: updated.reminderOffsetsDays,
+          dueOdometerKm: updated.dueOdometerKm,
+          reminderOffsetsKm: updated.reminderOffsetsKm,
         });
       } catch (err) {
         reminderSyncFailed = true;

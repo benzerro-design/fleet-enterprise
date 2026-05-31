@@ -25,6 +25,15 @@ export default async function ReminderDetailPage({ params }: Props) {
   const write = canManageFleet(auth);
   const canEdit = write && row.sourceType === "custom";
 
+  const sourceEdit =
+    row.sourceType === "document" && row.vehicleDocumentId
+      ? { href: `/fleet/documents/${row.vehicleDocumentId}/edit`, label: "Editează documentul" }
+      : row.sourceType === "maintenance" && row.maintenanceEntryId
+        ? { href: `/fleet/maintenance/${row.maintenanceEntryId}/edit`, label: "Editează mentenanța" }
+        : row.sourceType === "cost" && row.costEntryId
+          ? { href: `/fleet/costs/${row.costEntryId}/edit`, label: "Editează costul" }
+          : null;
+
   return (
     <div className="text-zinc-100">
       <main className="mx-auto max-w-3xl px-6 py-16">
@@ -52,6 +61,14 @@ export default async function ReminderDetailPage({ params }: Props) {
                 className="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-900"
               >
                 Editare
+              </Link>
+            ) : null}
+            {write && sourceEdit ? (
+              <Link
+                href={sourceEdit.href}
+                className="rounded-lg border border-violet-700/60 bg-violet-950/30 px-4 py-2 text-sm text-violet-100 hover:bg-violet-950/50"
+              >
+                {sourceEdit.label}
               </Link>
             ) : null}
             {write && row.sourceType === "custom" ? (

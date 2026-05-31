@@ -3,10 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
-import { ReminderSchedulePicker } from "@/components/fleet/ReminderSchedulePicker";
-import { DEFAULT_REMINDER_OFFSETS } from "@/lib/document-reminders";
+import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { uploadDocumentFile } from "@/lib/document-upload";
 import { DOCUMENT_TYPE_OPTIONS } from "@/lib/document-types";
+import {
+  hasConfiguredOpsReminder,
+  inferReminderConstraintMode,
+  type ReminderConstraintMode,
+} from "@/lib/ops-reminder-fields";
 
 type DocumentRecord = {
   id: string;
@@ -17,12 +21,15 @@ type DocumentRecord = {
   fileUrl: string | null;
   fileName?: string | null;
   reminderOffsetsDays?: number[] | null;
+  dueOdometerKm?: number | null;
+  reminderOffsetsKm?: number[] | null;
 };
 
 type VehicleOption = {
   id: string;
   registrationNumber: string;
   clientId: string;
+  odometerKm?: number;
 };
 
 type Props =
@@ -57,7 +64,9 @@ export function DocumentForm(props: Props) {
         expiresOn: "",
         fileUrl: "",
         fileName: "",
-        reminderOffsetsDays: [...DEFAULT_REMINDER_OFFSETS] as number[],
+        reminderOffsetsDays: [] as number[],
+        dueOdometerKm: null as number | null,
+        reminderOffsetsKm: [] as number[],
       };
     }
     const r = props.initial;
@@ -68,11 +77,9 @@ export function DocumentForm(props: Props) {
       expiresOn: toDateInputOrEmpty(r.expiresOn),
       fileUrl: r.fileUrl ?? "",
       fileName: r.fileName ?? "",
-      reminderOffsetsDays: r.reminderOffsetsDays?.length
-        ? [...r.reminderOffsetsDays]
-        : r.expiresOn
-          ? [...DEFAULT_REMINDER_OFFSETS]
-          : [],
+      reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
+      dueOdometerKm: r.dueOdometerKm ?? null,
+      reminderOffsetsKm: r.reminderOffsetsKm?.length ? [...r.reminderOffsetsKm] : [],
     };
   }, [props]);
 
@@ -84,6 +91,11 @@ export function DocumentForm(props: Props) {
   const [fileUrl, setFileUrl] = useState(initial.fileUrl);
   const [fileName, setFileName] = useState(initial.fileName);
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
+  const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
+  const [reminderOffsetsKm, setReminderOffsetsKm] = useState<number[]>(initial.reminderOffsetsKm);
+  const [constraintMode, setConstraintMode] = useState<ReminderConstraintMode>(() =>
+    inferReminderConstraintMode({ dueDate: initial.expiresOn, dueOdometerKm: initial.dueOdometerKm }),
+  );
   const [syncReminderAction, setSyncReminderAction] = useState(true);
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -109,16 +121,36 @@ export function DocumentForm(props: Props) {
     setPending(true);
     setError(null);
 
-    const hasExpiry = Boolean(expiresOn.trim());
+    const expiryIso =
+      constraintMode !== "km" && expiresOn.trim() ? new Date(expiresOn).toISOString() : null;
+    if (constraintMode !== "km" && expiresOn.trim() && !expiryIso) {
+      setError("Data expirării este invalidă.");
+      setPending(false);
+      return;
+    }
+
+    const kmDue = constraintMode !== "time" ? dueOdometerKm : null;
+    const dayOffsets = constraintMode !== "km" && expiryIso ? reminderOffsetsDays : null;
+    const kmOffsets = constraintMode !== "time" && kmDue != null ? reminderOffsetsKm : null;
+    const configured = hasConfiguredOpsReminder({
+      mode: constraintMode,
+      dueDate: expiresOn,
+      reminderOffsetsDays: dayOffsets ?? [],
+      dueOdometerKm: kmDue,
+      reminderOffsetsKm: kmOffsets ?? [],
+    });
+
     const payload = {
       vehicleId,
       documentTypeCode,
       title: title.trim(),
-      expiresOn: hasExpiry ? new Date(expiresOn).toISOString() : null,
+      expiresOn: expiryIso,
       fileUrl: fileUrl.trim() ? fileUrl.trim() : null,
       fileName: fileName.trim() ? fileName.trim() : null,
-      reminderOffsetsDays: hasExpiry && reminderOffsetsDays.length > 0 ? reminderOffsetsDays : null,
-      syncReminderAction: hasExpiry && reminderOffsetsDays.length > 0 ? syncReminderAction : false,
+      reminderOffsetsDays: dayOffsets,
+      dueOdometerKm: kmDue,
+      reminderOffsetsKm: kmOffsets,
+      syncReminderAction: configured ? syncReminderAction : false,
     };
 
     try {
@@ -205,49 +237,24 @@ export function DocumentForm(props: Props) {
         />
       </div>
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Data expirare</label>
-        <input
-          type="date"
-          value={expiresOn}
-          onChange={(e) => {
-            const v = e.target.value;
-            setExpiresOn(v);
-            if (v && reminderOffsetsDays.length === 0) {
-              setReminderOffsetsDays([...DEFAULT_REMINDER_OFFSETS]);
-            }
-            if (!v) setReminderOffsetsDays([]);
-          }}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-        />
-        <p className="text-xs text-zinc-500">Necesară pentru remindere. Lăsat gol dacă documentul nu expiră.</p>
-      </div>
-
-      {expiresOn ? (
-        <>
-          <ReminderSchedulePicker
-            expiresOn={expiresOn}
-            offsets={reminderOffsetsDays}
-            onChange={setReminderOffsetsDays}
-            disabled={pending}
-          />
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-violet-900/30 bg-violet-950/10 px-4 py-3">
-            <input
-              type="checkbox"
-              checked={syncReminderAction}
-              disabled={pending || reminderOffsetsDays.length === 0}
-              onChange={(e) => setSyncReminderAction(e.target.checked)}
-              className="mt-0.5 rounded border-zinc-600"
-            />
-            <span className="text-sm text-zinc-300">
-              <span className="font-medium text-violet-200">Creează acțiune în meniul Remindere</span>
-              <span className="mt-0.5 block text-xs text-zinc-500">
-                Sincronizează automat cu setările de mai sus (recomandat).
-              </span>
-            </span>
-          </label>
-        </>
-      ) : null}
+      <OpsReminderFields
+        constraintMode={constraintMode}
+        onConstraintModeChange={setConstraintMode}
+        dueDate={expiresOn}
+        onDueDateChange={setExpiresOn}
+        dueDateLabel="Data expirare"
+        dueDateHint="Necesară pentru remindere pe dată. Lăsați gol dacă documentul nu expiră la o dată fixă."
+        reminderOffsetsDays={reminderOffsetsDays}
+        onReminderOffsetsDaysChange={setReminderOffsetsDays}
+        dueOdometerKm={dueOdometerKm}
+        onDueOdometerKmChange={setDueOdometerKm}
+        reminderOffsetsKm={reminderOffsetsKm}
+        onReminderOffsetsKmChange={setReminderOffsetsKm}
+        vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+        syncReminderAction={syncReminderAction}
+        onSyncReminderActionChange={setSyncReminderAction}
+        disabled={pending}
+      />
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Fișier document</label>

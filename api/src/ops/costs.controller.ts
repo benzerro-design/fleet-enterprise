@@ -22,6 +22,7 @@ import { TenantId } from '../fleet/tenant-id.decorator';
 import type { CostBrowseFilters, CreateCostInput, PatchCostInput } from './costs.service';
 import { CostsService } from './costs.service';
 import { normalizeReminderOffsets } from './document-reminders';
+import { normalizeReminderOffsetsKm } from './reminder-status';
 
 @Controller('costs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -143,6 +144,8 @@ function assertCreateCostDto(body: unknown): CreateCostInput {
           : optionalIsoDateString(body.nextDueOn)
         : undefined,
     reminderOffsetsDays: parseReminderOffsetsField(body, 'reminderOffsetsDays'),
+    dueOdometerKm: optionalNullableNonNegativeInt(body.dueOdometerKm, 'dueOdometerKm'),
+    reminderOffsetsKm: parseReminderOffsetsKmField(body, 'reminderOffsetsKm'),
     syncReminderAction:
       'syncReminderAction' in body ? optionalBoolean(body.syncReminderAction) : undefined,
   };
@@ -185,6 +188,12 @@ function assertPatchCostDto(body: unknown): PatchCostInput {
   }
   if ('reminderOffsetsDays' in body) {
     dto.reminderOffsetsDays = parseReminderOffsetsField(body, 'reminderOffsetsDays');
+  }
+  if ('dueOdometerKm' in body) {
+    dto.dueOdometerKm = optionalNullableNonNegativeInt(body.dueOdometerKm, 'dueOdometerKm');
+  }
+  if ('reminderOffsetsKm' in body) {
+    dto.reminderOffsetsKm = parseReminderOffsetsKmField(body, 'reminderOffsetsKm');
   }
   if ('syncReminderAction' in body) {
     dto.syncReminderAction = optionalBoolean(body.syncReminderAction);
@@ -267,4 +276,20 @@ function optionalBoolean(v: unknown): boolean | undefined {
   if (v === undefined) return undefined;
   if (typeof v !== 'boolean') throw new BadRequestException('Expected boolean');
   return v;
+}
+
+function parseReminderOffsetsKmField(
+  body: Record<string, unknown>,
+  field: string,
+): number[] | null | undefined {
+  if (!(field in body)) return undefined;
+  const v = body[field];
+  if (v === null) return null;
+  const normalized = normalizeReminderOffsetsKm(v);
+  if (!normalized) {
+    throw new BadRequestException(
+      `Field "${field}" must be an array of integers between 0 and 500000 (max 10 unique values)`,
+    );
+  }
+  return normalized;
 }

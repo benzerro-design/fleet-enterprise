@@ -4,13 +4,18 @@ import { CostForm } from "@/components/fleet/CostForm";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
-type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string }> };
+type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string; odometerKm: number }> };
 
 async function getVehicleOptions() {
   const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
   if (!res?.ok) return [];
   const data = (await res.json()) as VehiclesPayload;
-  return data.items.map((v) => ({ id: v.id, registrationNumber: v.registrationNumber, clientId: v.clientId }));
+  return data.items.map((v) => ({
+    id: v.id,
+    registrationNumber: v.registrationNumber,
+    clientId: v.clientId,
+    odometerKm: v.odometerKm,
+  }));
 }
 
 export default async function NewCostPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {

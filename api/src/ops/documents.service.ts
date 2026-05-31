@@ -9,6 +9,7 @@ import {
   normalizeReminderOffsets,
   type DocumentReminderSummary,
 } from './document-reminders';
+import { normalizeReminderOffsetsKm } from './reminder-status';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
@@ -24,6 +25,8 @@ export type CreateDocumentInput = {
   fileUrl?: string | null;
   fileName?: string | null;
   reminderOffsetsDays?: number[] | null;
+  dueOdometerKm?: number | null;
+  reminderOffsetsKm?: number[] | null;
   /** Dacă true (implicit), creează/actualizează acțiune în meniul Remindere. */
   syncReminderAction?: boolean;
 };
@@ -148,6 +151,8 @@ function toDocRow(row: {
   fileUrl: string | null;
   fileName: string | null;
   reminderOffsetsDays: unknown;
+  dueOdometerKm: number | null;
+  reminderOffsetsKm: unknown;
   createdAt: Date;
   vehicle: { registrationNumber: string; clientId: string; tenant: { slug: string } };
 }) {
@@ -165,6 +170,8 @@ function toDocRow(row: {
     fileUrl: row.fileUrl,
     fileName: row.fileName,
     reminderOffsetsDays,
+    dueOdometerKm: row.dueOdometerKm,
+    reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
     reminder,
     createdAt: row.createdAt.toISOString(),
   };
@@ -299,6 +306,8 @@ export class DocumentsService {
         fileUrl: dto.fileUrl ?? null,
         fileName: dto.fileName ?? null,
         reminderOffsetsDays: reminderOffsetsForDb(reminderOffsets),
+        dueOdometerKm: dto.dueOdometerKm ?? null,
+        reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
       },
       include: {
         vehicle: {
@@ -333,6 +342,8 @@ export class DocumentsService {
           title: row.title,
           expiresOn: row.expiresOn,
           reminderOffsetsDays: row.reminderOffsetsDays,
+          dueOdometerKm: row.dueOdometerKm,
+          reminderOffsetsKm: row.reminderOffsetsKm,
         });
       } catch (err) {
         reminderSyncFailed = true;
@@ -377,6 +388,8 @@ export class DocumentsService {
         fileUrl: dto.fileUrl === undefined ? undefined : dto.fileUrl,
         fileName: dto.fileName === undefined ? undefined : dto.fileName,
         reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
+        dueOdometerKm: dto.dueOdometerKm,
+        reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
       },
       include: {
         vehicle: {
@@ -411,6 +424,8 @@ export class DocumentsService {
           title: row.title,
           expiresOn: row.expiresOn,
           reminderOffsetsDays: row.reminderOffsetsDays,
+          dueOdometerKm: row.dueOdometerKm,
+          reminderOffsetsKm: row.reminderOffsetsKm,
         });
       } catch (err) {
         reminderSyncFailed = true;

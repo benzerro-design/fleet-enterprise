@@ -2,9 +2,14 @@
 
 import Link from "next/link";
 import { COST_CATEGORY_VALUES, isKnownCostCategory } from "@/lib/cost-categories";
-import { ReminderSchedulePicker } from "@/components/fleet/ReminderSchedulePicker";
-import { DEFAULT_REMINDER_OFFSETS } from "@/lib/document-reminders";
-import { ITP_REMINDER_OFFSETS, isItpCostCategory } from "@/lib/itp-ops";
+import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
+import { isItpCostCategory } from "@/lib/itp-ops";
+import {
+  defaultDayOffsetsForMode,
+  hasConfiguredOpsReminder,
+  inferReminderConstraintMode,
+  type ReminderConstraintMode,
+} from "@/lib/ops-reminder-fields";
 import { formatRonFromCents, parseRonToCents } from "@/lib/money";
 import { uploadInvoiceFile } from "@/lib/invoice-upload";
 import { useRouter } from "next/navigation";
@@ -24,12 +29,15 @@ type CostRecord = {
   notes: string | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
+  dueOdometerKm?: number | null;
+  reminderOffsetsKm?: number[] | null;
 };
 
 type VehicleOption = {
   id: string;
   registrationNumber: string;
   clientId: string;
+  odometerKm?: number;
 };
 
 type Props =
@@ -81,6 +89,8 @@ export function CostForm(props: Props) {
         notes: "",
         nextDueOn: "",
         reminderOffsetsDays: [] as number[],
+        dueOdometerKm: null as number | null,
+        reminderOffsetsKm: [] as number[],
       };
     }
     const r = props.initial;
@@ -96,11 +106,9 @@ export function CostForm(props: Props) {
       incurredOn: toDateInput(r.incurredOn),
       notes: r.notes ?? "",
       nextDueOn: toDateInputOrEmpty(r.nextDueOn ?? null),
-      reminderOffsetsDays: r.reminderOffsetsDays?.length
-        ? [...r.reminderOffsetsDays]
-        : r.nextDueOn
-          ? [...DEFAULT_REMINDER_OFFSETS]
-          : [],
+      reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
+      dueOdometerKm: r.dueOdometerKm ?? null,
+      reminderOffsetsKm: r.reminderOffsetsKm?.length ? [...r.reminderOffsetsKm] : [],
     };
   }, [props]);
 
@@ -117,6 +125,11 @@ export function CostForm(props: Props) {
   const [notes, setNotes] = useState(initial.notes);
   const [nextDueOn, setNextDueOn] = useState(initial.nextDueOn);
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
+  const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
+  const [reminderOffsetsKm, setReminderOffsetsKm] = useState<number[]>(initial.reminderOffsetsKm);
+  const [constraintMode, setConstraintMode] = useState<ReminderConstraintMode>(() =>
+    inferReminderConstraintMode({ dueDate: initial.nextDueOn, dueOdometerKm: initial.dueOdometerKm }),
+  );
   const [syncReminderAction, setSyncReminderAction] = useState(true);
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -162,12 +175,22 @@ export function CostForm(props: Props) {
       return;
     }
 
-    const nextDue = toIsoDate(nextDueOn);
-    if (nextDueOn.trim() && !nextDue) {
+    const nextDue = constraintMode !== "km" ? toIsoDate(nextDueOn) : null;
+    if (constraintMode !== "km" && nextDueOn.trim() && !nextDue) {
       setError("Data termenului este invalidă.");
       setPending(false);
       return;
     }
+    const kmDue = constraintMode !== "time" ? dueOdometerKm : null;
+    const dayOffsets = constraintMode !== "km" && nextDue ? reminderOffsetsDays : null;
+    const kmOffsets = constraintMode !== "time" && kmDue != null ? reminderOffsetsKm : null;
+    const configured = hasConfiguredOpsReminder({
+      mode: constraintMode,
+      dueDate: nextDueOn,
+      reminderOffsetsDays: dayOffsets ?? [],
+      dueOdometerKm: kmDue,
+      reminderOffsetsKm: kmOffsets ?? [],
+    });
 
     const body: Record<string, unknown> = {
       vehicleId,
@@ -181,8 +204,10 @@ export function CostForm(props: Props) {
       incurredOn: when,
       notes: notes.trim() || null,
       nextDueOn: nextDue,
-      reminderOffsetsDays: nextDue && reminderOffsetsDays.length > 0 ? reminderOffsetsDays : null,
-      syncReminderAction: nextDue && reminderOffsetsDays.length > 0 ? syncReminderAction : false,
+      reminderOffsetsDays: dayOffsets,
+      dueOdometerKm: kmDue,
+      reminderOffsetsKm: kmOffsets,
+      syncReminderAction: configured ? syncReminderAction : false,
     };
 
     try {
@@ -247,7 +272,7 @@ export function CostForm(props: Props) {
             const v = e.target.value;
             setCategory(v);
             if (isItpCostCategory(v) && nextDueOn && reminderOffsetsDays.length === 0) {
-              setReminderOffsetsDays([...ITP_REMINDER_OFFSETS]);
+              setReminderOffsetsDays(defaultDayOffsetsForMode(true));
             }
           }}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
@@ -313,55 +338,29 @@ export function CostForm(props: Props) {
           </div>
         ) : null}
       </div>
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">
-          {isItp ? "ITP valabil până la" : "Termen / dată următoare (opțional)"}
-        </label>
-        <input
-          type="date"
-          value={nextDueOn}
-          onChange={(e) => {
-            const v = e.target.value;
-            setNextDueOn(v);
-            if (v && reminderOffsetsDays.length === 0) {
-              setReminderOffsetsDays(isItp ? [...ITP_REMINDER_OFFSETS] : [...DEFAULT_REMINDER_OFFSETS]);
-            }
-            if (!v) setReminderOffsetsDays([]);
-          }}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-        />
-        {isItp ? (
-          <p className="text-xs text-amber-200/80">
-            La salvare, data ITP și stația (furnizor) se actualizează automat în profilul vehiculului.
-          </p>
-        ) : null}
-      </div>
-
-      {nextDueOn ? (
-        <>
-          <ReminderSchedulePicker
-            expiresOn={nextDueOn}
-            offsets={reminderOffsetsDays}
-            onChange={setReminderOffsetsDays}
-            disabled={pending}
-          />
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-violet-900/30 bg-violet-950/10 px-4 py-3">
-            <input
-              type="checkbox"
-              checked={syncReminderAction}
-              disabled={pending || reminderOffsetsDays.length === 0}
-              onChange={(e) => setSyncReminderAction(e.target.checked)}
-              className="mt-0.5 rounded border-zinc-600"
-            />
-            <span className="text-sm text-zinc-300">
-              <span className="font-medium text-violet-200">Creează acțiune în meniul Remindere</span>
-              <span className="mt-0.5 block text-xs text-zinc-500">
-                Sincronizează automat cu setările de mai sus (recomandat).
-              </span>
-            </span>
-          </label>
-        </>
-      ) : null}
+      <OpsReminderFields
+        constraintMode={constraintMode}
+        onConstraintModeChange={setConstraintMode}
+        dueDate={nextDueOn}
+        onDueDateChange={setNextDueOn}
+        dueDateLabel={isItp ? "ITP valabil până la" : "Termen / dată următoare acțiune"}
+        dueDateHint={
+          isItp
+            ? "La salvare, data ITP și stația (furnizor) se actualizează automat în profilul vehiculului."
+            : "Opțional — pentru remindere pe dată (ex. următoarea plată sau termen)."
+        }
+        reminderOffsetsDays={reminderOffsetsDays}
+        onReminderOffsetsDaysChange={setReminderOffsetsDays}
+        dueOdometerKm={dueOdometerKm}
+        onDueOdometerKmChange={setDueOdometerKm}
+        reminderOffsetsKm={reminderOffsetsKm}
+        onReminderOffsetsKmChange={setReminderOffsetsKm}
+        vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+        syncReminderAction={syncReminderAction}
+        onSyncReminderActionChange={setSyncReminderAction}
+        disabled={pending}
+        isItp={isItp}
+      />
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Notițe (opțional)</label>
