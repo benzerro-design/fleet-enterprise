@@ -6,6 +6,8 @@ const ACTION_LABELS: Record<string, string> = {
   update: "Actualizare",
   delete: "Ștergere",
   document_add: "Document atașat vehiculului",
+  document_update: "Document actualizat",
+  document_delete: "Document șters",
   membership_role_update: "Actualizare rol utilizator",
 };
 

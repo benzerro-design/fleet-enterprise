@@ -104,7 +104,7 @@ Deschide [http://localhost:3000](http://localhost:3000). Pagina citește health 
 2. În **`api/.env`**: `JWT_SECRET` (vezi `api/.env.example`).
 3. În **`web/.env.local`**: `API_URL=http://localhost:4000` (vezi `web/.env.example`).
 4. Pornește API + web → [http://localhost:3000/login](http://localhost:3000/login): **email**, **parolă**, **tenant slug** (`demo`). Dacă utilizatorul are un singur tenant, poți lăsa slug gol.
-5. După login: cookie **httpOnly** cu JWT; `/fleet/*` → proxy **`/api/fleet/*`** cu `Authorization: Bearer …` (același cookie pentru **`/api/trips/*`**, **`/api/maintenance/*`**, **`/api/costs/*`** către Nest). Tenantul activ vine din JWT, nu din variabile publice în browser.
+5. După login: cookie **httpOnly** cu JWT; `/fleet/*` → proxy **`/api/fleet/*`** cu `Authorization: Bearer …` (același cookie pentru **`/api/trips/*`**, **`/api/maintenance/*`**, **`/api/costs/*`**, **`/api/documents/*`** către Nest). Tenantul activ vine din JWT, nu din variabile publice în browser.
 
 **Utilizatori noi:** `npm run auth:hash-password -- "parola"` apoi inserează rând în `User` + `TenantMembership` (sau Prisma Studio). Migrația adaugă tabelele `User` și `TenantMembership`.
 
@@ -114,8 +114,8 @@ Deschide [http://localhost:3000](http://localhost:3000). Pagina citește health 
 
 Rolul vine din **`TenantMembership.role`** (Prisma: `tenant_admin`, `tenant_viewer`) și este inclus în JWT la login pentru tenantul ales. Dacă îți schimbă rolul un administrator, trebuie **re-login** ca să primești un token nou.
 
-- **`tenant_admin`**: citire + creare / modificare / ștergere vehicule și documente (`POST` / `PATCH` / `DELETE` pe `/fleet/vehicles*`), plus scriere pe **`/trips`**, **`/maintenance`**, **`/costs`** (curse, mentenanță, costuri per vehicul).
-- **`tenant_viewer`**: doar **`GET`** pe `/fleet/vehicles*`, **`/trips`**, **`/maintenance`**, **`/costs`**; orice operație de scriere returnează **403** (`Insufficient role for this operation`).
+- **`tenant_admin`**: citire + creare / modificare / ștergere vehicule și documente (`POST` / `PATCH` / `DELETE` pe `/fleet/vehicles*`), plus scriere pe **`/trips`**, **`/maintenance`**, **`/costs`**, **`/documents`** (curse, mentenanță, costuri, documente per vehicul).
+- **`tenant_viewer`**: doar **`GET`** pe `/fleet/vehicles*`, **`/trips`**, **`/maintenance`**, **`/costs`**, **`/documents`**; orice operație de scriere returnează **403** (`Insufficient role for this operation`).
 
 **UI (Next):** pe rutele `/fleet/*`, serverul React apelează **`GET /auth/me`** (cu `Authorization: Bearer` din cookie **httpOnly** prin `API_URL`) ca să știe **rolul** și să ascundă butoanele de scriere pentru `tenant_viewer`. Dacă API-ul nu răspunde, se afișează un mesaj de eroare, nu se tratează contul ca „viewer” pe baza absenței răspunsului.
 
@@ -153,6 +153,7 @@ După migrația **`20260418213000_phase2_audit_modules`** (+ `npm run db:migrate
 | **Audit** | Tabel **`AuditLog`** + actor pe **`Vehicle`** (`createdByUserId`, `updatedByUserId`). Operațiile pe vehicule și schimbarea rolului membrilor generează înregistrări. **`/fleet/audit`** în UI. |
 | **Membri** | **`/fleet/members`** pentru `tenant_admin`: listă și schimbare rol (fără flux de invitație email încă). |
 | **Trip / mentenanță / costuri** | REST **`/trips`**, **`/maintenance`**, **`/costs`** (paginare + filtru `vehicleId`), mapate pe modelele Prisma; **BFF** Next: **`/api/trips/*`**, **`/api/maintenance/*`**, **`/api/costs/*`**. |
+| **Documente** | REST **`/documents`** (listă tenant, filtre expirare, CRUD, export CSV); tipuri: RCA, CASCO, certificat înmatriculare, CIV, ITP etc.; UI **`/fleet/documents`**; **BFF** **`/api/documents/*`**. |
 
 ### Variabile opționale
 
@@ -214,6 +215,16 @@ Repo-ul include `cloudbuild.yaml` pentru fluxul: build imagine API -> push în A
   - `_WEB_ORIGIN=<url-ul frontend>`
 
 După asta, orice `git push` pe `main` face deploy automat.
+
+### Frontend (`web/`) — GitHub Actions
+
+Workflow: `.github/workflows/deploy-web.yml` (deploy la `fleet-web-stg` pe Cloud Run).
+
+În GitHub **Settings → Secrets → Actions**, adaugă:
+
+- `API_URL` — URL-ul public al API-ului Nest (ex. `https://fleet-api-xxxxx.europe-west1.run.app`, fără slash final)
+
+La `git push` pe `main` cu modificări în `web/**`, se face build + deploy automat (la fel ca API-ul).
 
 ## Backup / restore Neon (manual, rapid)
 

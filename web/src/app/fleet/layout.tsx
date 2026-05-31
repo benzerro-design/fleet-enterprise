@@ -25,6 +25,9 @@ export default async function FleetLayout({ children }: { children: React.ReactN
             <Link href="/fleet/vehicles" className="font-medium text-zinc-200 hover:text-white">
               Vehicule
             </Link>
+            <Link href="/fleet/documents" className="text-zinc-400 hover:text-zinc-200">
+              Documente
+            </Link>
             <Link href="/fleet/trips" className="text-zinc-400 hover:text-zinc-200">
               Trips
             </Link>

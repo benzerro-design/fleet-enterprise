@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { VEHICLE_STATUSES, VEHICLE_TYPES, type VehicleRecord } from "@/lib/fleet-api";
+import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry";
+import { documentTypeLabel } from "@/lib/document-types";
 import { maintenanceCostAllocationLabel } from "@/lib/maintenance-cost-allocation";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { formatRonFromCents } from "@/lib/money";
@@ -37,6 +39,17 @@ type CostListPayload = {
   total: number;
 };
 
+type DocumentListPayload = {
+  items: Array<{
+    id: string;
+    title: string;
+    documentTypeCode: string;
+    expiresOn: string | null;
+    fileUrl: string | null;
+  }>;
+  total: number;
+};
+
 async function getVehicle(id: string): Promise<VehicleRecord | null> {
   try {
     const res = await fleetServerFetch(`/fleet/vehicles/${id}`);
@@ -65,6 +78,14 @@ function costsListQuery(registrationNumber: string): string {
   return q.toString();
 }
 
+function documentsListQuery(registrationNumber: string): string {
+  const q = new URLSearchParams();
+  q.set("page", "1");
+  q.set("pageSize", String(OPS_PREVIEW_PAGE_SIZE));
+  q.set("registrationNumber", registrationNumber.trim());
+  return q.toString();
+}
+
 async function getMaintenanceForVehicle(registrationNumber: string): Promise<MaintenanceListPayload | null> {
   const res = await fleetServerFetch(`/maintenance?${maintenanceListQuery(registrationNumber)}`);
   if (!res?.ok) return null;
@@ -77,6 +98,12 @@ async function getCostsForVehicle(registrationNumber: string): Promise<CostListP
   return (await res.json()) as CostListPayload;
 }
 
+async function getDocumentsForVehicle(registrationNumber: string): Promise<DocumentListPayload | null> {
+  const res = await fleetServerFetch(`/documents?${documentsListQuery(registrationNumber)}`);
+  if (!res?.ok) return null;
+  return (await res.json()) as DocumentListPayload;
+}
+
 function labelMap<T extends readonly { value: string; label: string }[]>(items: T, value: string): string {
   const row = items.find((x) => x.value === value);
   return row?.label ?? value;
@@ -87,9 +114,10 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   const [vehicle, auth] = await Promise.all([getVehicle(id), getAuthMeResult()]);
   if (!vehicle) notFound();
 
-  const [maintenanceList, costsList] = await Promise.all([
+  const [maintenanceList, costsList, documentsList] = await Promise.all([
     getMaintenanceForVehicle(vehicle.registrationNumber),
     getCostsForVehicle(vehicle.registrationNumber),
+    getDocumentsForVehicle(vehicle.registrationNumber),
   ]);
 
   const write = canManageFleet(auth);
@@ -301,18 +329,63 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         </section>
 
         <section className="mt-10">
-          <h2 className="text-lg font-medium text-zinc-200">Documente</h2>
-          {!vehicle.documents?.length ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-medium text-zinc-200">Documente</h2>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/fleet/documents?${regQs}`}
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+              >
+                Toate documentele
+              </Link>
+              {write ? (
+                <Link
+                  href={`/fleet/documents/new?vehicleId=${encodeURIComponent(vehicle.id)}`}
+                  className="rounded-lg bg-emerald-500/90 px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Document nou
+                </Link>
+              ) : null}
+            </div>
+          </div>
+          {!documentsList ? (
+            <p className="mt-2 text-sm text-amber-400">Nu am putut încărca documentele pentru acest vehicul.</p>
+          ) : documentsList.items.length === 0 ? (
             <p className="mt-2 text-sm text-zinc-500">Nu există documente înregistrate.</p>
           ) : (
-            <ul className="mt-4 space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-              {vehicle.documents.map((d) => (
-                <li key={d.id} className="flex flex-wrap justify-between gap-2 text-sm">
-                  <span className="text-zinc-200">{d.title}</span>
-                  <span className="font-mono text-xs text-zinc-500">{d.documentTypeCode}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="mt-4 space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                {documentsList.items.map((d) => {
+                  const badge = documentExpiryBadge(documentExpiryStatus(d.expiresOn));
+                  return (
+                    <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <div>
+                        <Link href={`/fleet/documents/${d.id}`} className="text-zinc-200 hover:text-white">
+                          {d.title}
+                        </Link>
+                        <p className="text-xs text-zinc-500">{documentTypeLabel(d.documentTypeCode)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded border px-1.5 py-0.5 text-[10px] ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                          {d.expiresOn ? new Date(d.expiresOn).toLocaleDateString("ro-RO") : "—"}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              {documentsList.total > documentsList.items.length ? (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Afișate primele {documentsList.items.length} din {documentsList.total}.{" "}
+                  <Link href={`/fleet/documents?${regQs}`} className="text-emerald-400 hover:underline">
+                    Vezi restul în listă
+                  </Link>
+                </p>
+              ) : null}
+            </>
           )}
         </section>
       </main>

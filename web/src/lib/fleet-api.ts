@@ -10,6 +10,9 @@ export const maintenanceBrowserBase = "/api/maintenance";
 /** Proxy Next → API Nest pentru costuri. */
 export const costsBrowserBase = "/api/costs";
 
+/** Proxy Next → API Nest pentru documente vehicul. */
+export const documentsBrowserBase = "/api/documents";
+
 export function fleetJsonHeaders(): HeadersInit {
   return { "Content-Type": "application/json" };
 }
