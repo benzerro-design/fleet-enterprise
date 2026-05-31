@@ -84,6 +84,7 @@ export function DocumentForm(props: Props) {
   const [fileUrl, setFileUrl] = useState(initial.fileUrl);
   const [fileName, setFileName] = useState(initial.fileName);
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
+  const [syncReminderAction, setSyncReminderAction] = useState(true);
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +118,7 @@ export function DocumentForm(props: Props) {
       fileUrl: fileUrl.trim() ? fileUrl.trim() : null,
       fileName: fileName.trim() ? fileName.trim() : null,
       reminderOffsetsDays: hasExpiry && reminderOffsetsDays.length > 0 ? reminderOffsetsDays : null,
+      syncReminderAction: hasExpiry && reminderOffsetsDays.length > 0 ? syncReminderAction : false,
     };
 
     try {
@@ -218,12 +220,29 @@ export function DocumentForm(props: Props) {
       </div>
 
       {expiresOn ? (
-        <ReminderSchedulePicker
-          expiresOn={expiresOn}
-          offsets={reminderOffsetsDays}
-          onChange={setReminderOffsetsDays}
-          disabled={pending}
-        />
+        <>
+          <ReminderSchedulePicker
+            expiresOn={expiresOn}
+            offsets={reminderOffsetsDays}
+            onChange={setReminderOffsetsDays}
+            disabled={pending}
+          />
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-violet-900/30 bg-violet-950/10 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={syncReminderAction}
+              disabled={pending || reminderOffsetsDays.length === 0}
+              onChange={(e) => setSyncReminderAction(e.target.checked)}
+              className="mt-0.5 rounded border-zinc-600"
+            />
+            <span className="text-sm text-zinc-300">
+              <span className="font-medium text-violet-200">Creează acțiune în meniul Remindere</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                Sincronizează automat cu setările de mai sus (recomandat).
+              </span>
+            </span>
+          </label>
+        </>
       ) : null}
 
       <div className="space-y-2">

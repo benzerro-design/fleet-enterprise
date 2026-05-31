@@ -148,12 +148,6 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                 Editare
               </Link>
             ) : null}
-            <Link
-              href={`/fleet/vehicles/${id}/reminders`}
-              className="inline-flex w-fit items-center justify-center rounded-lg border border-violet-800/60 bg-violet-950/30 px-4 py-2 text-sm text-violet-200 hover:bg-violet-950/50"
-            >
-              Remindere
-            </Link>
           </div>
         </div>
 
@@ -206,6 +200,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
         <VehicleDetailSections
           vehicleId={vehicle.id}
+          registrationNumber={vehicle.registrationNumber}
           write={write}
           regQs={regQs}
           maintenance={

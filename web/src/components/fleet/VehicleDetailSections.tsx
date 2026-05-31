@@ -12,20 +12,22 @@ import {
   vehicleDocumentsSummary,
   type VehicleDocumentRow,
 } from "@/components/fleet/VehicleDocumentsPanel";
+import { RemindersListView } from "@/components/fleet/RemindersListView";
 import {
   VehicleMaintenancePanel,
   vehicleMaintenanceSummary,
   type VehicleMaintenanceRow,
 } from "@/components/fleet/VehicleMaintenancePanel";
 
-type SectionKey = "maintenance" | "costs" | "documents";
+type SectionKey = "maintenance" | "costs" | "documents" | "reminders";
 
-const SECTION_KEYS: SectionKey[] = ["maintenance", "costs", "documents"];
+const SECTION_KEYS: SectionKey[] = ["maintenance", "costs", "documents", "reminders"];
 
 const DEFAULT_OPEN: Record<SectionKey, boolean> = {
   maintenance: true,
   costs: false,
   documents: false,
+  reminders: false,
 };
 
 const ACCENT: Record<SectionKey, { bar: string; badge: string; ring: string }> = {
@@ -44,10 +46,16 @@ const ACCENT: Record<SectionKey, { bar: string; badge: string; ring: string }> =
     badge: "border-violet-900/50 bg-violet-950/40 text-violet-300/90",
     ring: "focus-visible:ring-violet-500/40",
   },
+  reminders: {
+    bar: "bg-fuchsia-500/80",
+    badge: "border-fuchsia-900/50 bg-fuchsia-950/40 text-fuchsia-300/90",
+    ring: "focus-visible:ring-fuchsia-500/40",
+  },
 };
 
 type Props = {
   vehicleId: string;
+  registrationNumber: string;
   write: boolean;
   regQs: string;
   maintenance: { ok: true; items: VehicleMaintenanceRow[]; total: number } | { ok: false };
@@ -138,7 +146,15 @@ function AccordionSection({
   );
 }
 
-export function VehicleDetailSections({ vehicleId, write, regQs, maintenance, costs, documents }: Props) {
+export function VehicleDetailSections({
+  vehicleId,
+  registrationNumber,
+  write,
+  regQs,
+  maintenance,
+  costs,
+  documents,
+}: Props) {
   const storageKey = `fleet-vehicle-sections:${vehicleId}`;
 
   const [open, setOpen] = useState<Record<SectionKey, boolean>>(DEFAULT_OPEN);
@@ -153,6 +169,7 @@ export function VehicleDetailSections({ vehicleId, write, regQs, maintenance, co
           maintenance: parsed.maintenance ?? prev.maintenance,
           costs: parsed.costs ?? prev.costs,
           documents: parsed.documents ?? prev.documents,
+          reminders: parsed.reminders ?? prev.reminders,
         }));
       }
     } catch {
@@ -173,11 +190,11 @@ export function VehicleDetailSections({ vehicleId, write, regQs, maintenance, co
   const openCount = SECTION_KEYS.filter((k) => open[k]).length;
 
   const expandAll = useCallback(() => {
-    setOpen({ maintenance: true, costs: true, documents: true });
+    setOpen({ maintenance: true, costs: true, documents: true, reminders: true });
   }, []);
 
   const collapseAll = useCallback(() => {
-    setOpen({ maintenance: false, costs: false, documents: false });
+    setOpen({ maintenance: false, costs: false, documents: false, reminders: false });
   }, []);
 
   const toggle = useCallback((key: SectionKey) => {
@@ -193,6 +210,7 @@ export function VehicleDetailSections({ vehicleId, write, regQs, maintenance, co
       documents: documents.ok
         ? vehicleDocumentsSummary(documents.items, documents.total)
         : "Indisponibil",
+      reminders: "Centralizat pe vehicul",
     }),
     [maintenance, costs, documents],
   );
@@ -210,16 +228,16 @@ export function VehicleDetailSections({ vehicleId, write, regQs, maintenance, co
           <p className="mt-1 text-xs text-zinc-600">
             {openCount === 0
               ? "Toate secțiunile sunt închise"
-              : openCount === 3
+              : openCount === 4
                 ? "Toate secțiunile sunt deschise"
-                : `${openCount} din 3 secțiuni deschise`}
+                : `${openCount} din 4 secțiuni deschise`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={expandAll}
-            disabled={openCount === 3}
+            disabled={openCount === 4}
             className="rounded-lg border border-zinc-700/80 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Deschide toate
@@ -309,12 +327,6 @@ export function VehicleDetailSections({ vehicleId, write, regQs, maintenance, co
               <Link href={`/fleet/documents?${regQs}`} className={actionLinkClass}>
                 Listă
               </Link>
-              <Link
-                href={`/fleet/vehicles/${vehicleId}/reminders`}
-                className="rounded-md border border-violet-800/60 px-2.5 py-1 text-[11px] text-violet-200 hover:bg-violet-950/40"
-              >
-                Remindere
-              </Link>
               {write ? (
                 <Link
                   href={`/fleet/documents/new?vehicleId=${encodeURIComponent(vehicleId)}`}
@@ -331,6 +343,40 @@ export function VehicleDetailSections({ vehicleId, write, regQs, maintenance, co
           ) : (
             <VehicleDocumentsPanel items={documents.items} totalInDb={documents.total} regQs={regQs} />
           )}
+        </AccordionSection>
+
+        <AccordionSection
+          sectionId="reminders"
+          title="Remindere"
+          summary={summaries.reminders}
+          open={open.reminders}
+          onToggle={() => toggle("reminders")}
+          actions={
+            <>
+              <Link href={`/fleet/reminders?registrationNumber=${encodeURIComponent(registrationNumber)}`} className={actionLinkClass}>
+                Listă flotă
+              </Link>
+              {write ? (
+                <Link
+                  href={`/fleet/reminders/new?vehicleId=${encodeURIComponent(vehicleId)}`}
+                  className="rounded-md border border-fuchsia-800/60 bg-fuchsia-600/90 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-fuchsia-500"
+                >
+                  + Nou
+                </Link>
+              ) : null}
+            </>
+          }
+        >
+          <div id="reminders">
+            <RemindersListView
+              vehicleId={vehicleId}
+              registrationNumber={registrationNumber}
+              vehicleLabel={registrationNumber}
+              backHref={`/fleet/vehicles/${vehicleId}`}
+              write={write}
+              compact
+            />
+          </div>
         </AccordionSection>
       </div>
     </section>

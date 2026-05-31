@@ -53,7 +53,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={`/fleet/vehicles/${row.vehicleId}/reminders`}
+              href={`/fleet/vehicles/${row.vehicleId}#reminders`}
               className="rounded-lg border border-violet-800/60 bg-violet-950/30 px-4 py-2 text-sm text-violet-200 hover:bg-violet-950/50"
             >
               Remindere vehicul

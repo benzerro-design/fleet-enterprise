@@ -19,6 +19,7 @@ model Tenant {
   memberships        TenantMembership[]
   trips              Trip[]
   vehicles           Vehicle[]
+  reminderActions    ReminderAction[]
 }
 
 model User {
@@ -70,6 +71,7 @@ model Vehicle {
   tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   updatedBy          User?              @relation("VehicleUpdatedBy", fields: [updatedByUserId], references: [id])
   documents          VehicleDocument[]
+  reminderActions    ReminderAction[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])
@@ -112,6 +114,7 @@ model MaintenanceEntry {
   provider             String?
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  reminderAction       ReminderAction?
 
   @@index([tenantId])
   @@index([vehicleId])
@@ -166,9 +169,47 @@ model VehicleDocument {
   reminderOffsetsDays Json?
   createdAt           DateTime  @default(now())
   vehicle             Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  reminderAction      ReminderAction?
 
   @@index([vehicleId])
   @@index([expiresOn])
+}
+
+enum ReminderSourceType {
+  document
+  maintenance
+  custom
+}
+
+model ReminderAction {
+  id                      String             @id @default(cuid())
+  tenantId                String
+  vehicleId               String
+  sourceType              ReminderSourceType
+  title                   String
+  notes                   String?
+  vehicleDocumentId       String?            @unique
+  maintenanceEntryId      String?            @unique
+  dueOn                   DateTime?
+  reminderOffsetsDays     Json?
+  dueOdometerKm           Int?
+  reminderOffsetsKm       Json?
+  intervalDays            Int?
+  intervalKm              Int?
+  lastPerformedOn         DateTime?
+  lastPerformedOdometerKm Int?
+  isActive                Boolean            @default(true)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  tenant                  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle                 Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  document                VehicleDocument?   @relation(fields: [vehicleDocumentId], references: [id], onDelete: Cascade)
+  maintenance             MaintenanceEntry?  @relation(fields: [maintenanceEntryId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([vehicleId])
+  @@index([dueOn])
+  @@index([sourceType])
 }
 
 enum MembershipRole {

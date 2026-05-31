@@ -6,13 +6,12 @@ import { DOCUMENT_EXPIRING_WITHIN_DAYS, type DocumentTypeCode } from './document
 import {
   computeReminderSummary,
   DEFAULT_REMINDER_OFFSETS,
-  matchesReminderListFilter,
   normalizeReminderOffsets,
   type DocumentReminderSummary,
-  type ReminderListFilterStatus,
 } from './document-reminders';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
+import { RemindersService } from './reminders.service';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -24,6 +23,8 @@ export type CreateDocumentInput = {
   fileUrl?: string | null;
   fileName?: string | null;
   reminderOffsetsDays?: number[] | null;
+  /** Dacă true (implicit), creează/actualizează acțiune în meniul Remindere. */
+  syncReminderAction?: boolean;
 };
 
 export type PatchDocumentInput = Partial<CreateDocumentInput>;
@@ -173,6 +174,7 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly reminders: RemindersService,
   ) {}
 
   async list(tenantSlug: string, params: DocumentListParams) {
@@ -321,6 +323,16 @@ export class DocumentsService {
       },
     });
 
+    if (dto.syncReminderAction !== false) {
+      await this.reminders.syncFromDocument(tenant.id, {
+        id: row.id,
+        vehicleId: row.vehicleId,
+        title: row.title,
+        expiresOn: row.expiresOn,
+        reminderOffsetsDays: row.reminderOffsetsDays,
+      });
+    }
+
     return toDocRow(row);
   }
 
@@ -375,6 +387,16 @@ export class DocumentsService {
       },
     });
 
+    if (dto.syncReminderAction !== false) {
+      await this.reminders.syncFromDocument(before.vehicle.tenantId, {
+        id: row.id,
+        vehicleId: row.vehicleId,
+        title: row.title,
+        expiresOn: row.expiresOn,
+        reminderOffsetsDays: row.reminderOffsetsDays,
+      });
+    }
+
     return toDocRow(row);
   }
 
@@ -399,83 +421,5 @@ export class DocumentsService {
         registrationNumber: row.vehicle.registrationNumber,
       },
     });
-  }
-
-  async listReminders(
-    tenantSlug: string,
-    filters: {
-      vehicleId?: string;
-      registrationNumber?: string;
-      status?: ReminderListFilterStatus;
-      page: number;
-      pageSize: number;
-    },
-  ) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) {
-      return { items: [], total: 0, page: filters.page, pageSize: filters.pageSize };
-    }
-
-    const where: Prisma.VehicleDocumentWhereInput = {
-      vehicle: { tenantId: tenant.id },
-      expiresOn: { not: null },
-    };
-
-    if (filters.vehicleId?.trim()) {
-      where.vehicleId = filters.vehicleId.trim();
-    }
-    if (filters.registrationNumber?.trim()) {
-      where.vehicle = {
-        tenantId: tenant.id,
-        registrationNumber: { equals: filters.registrationNumber.trim(), mode: 'insensitive' },
-      };
-    }
-
-    const rows = await this.prisma.vehicleDocument.findMany({
-      where,
-      include: {
-        vehicle: {
-          select: {
-            registrationNumber: true,
-            clientId: true,
-            tenant: { select: { slug: true } },
-          },
-        },
-      },
-      orderBy: [{ expiresOn: 'asc' }],
-      take: MAX_EXPORT_ROWS,
-    });
-
-    const statusFilter = filters.status ?? 'all';
-    const mapped = rows
-      .map((r) => toDocRow(r))
-      .filter((row) => (row.reminderOffsetsDays?.length ?? 0) > 0)
-      .filter((row) => matchesReminderListFilter(row.reminder as DocumentReminderSummary, statusFilter))
-      .sort((a, b) => {
-        const ar = a.reminder as DocumentReminderSummary;
-        const br = b.reminder as DocumentReminderSummary;
-        if (ar.status === 'expired' && br.status !== 'expired') return -1;
-        if (br.status === 'expired' && ar.status !== 'expired') return 1;
-        if (ar.status === 'due_today' && br.status !== 'due_today') return -1;
-        if (br.status === 'due_today' && ar.status !== 'due_today') return 1;
-        const an = ar.nextRemindOn ? new Date(ar.nextRemindOn).getTime() : Number.MAX_SAFE_INTEGER;
-        const bn = br.nextRemindOn ? new Date(br.nextRemindOn).getTime() : Number.MAX_SAFE_INTEGER;
-        if (an !== bn) return an - bn;
-        const ae = a.expiresOn ? new Date(a.expiresOn).getTime() : Number.MAX_SAFE_INTEGER;
-        const be = b.expiresOn ? new Date(b.expiresOn).getTime() : Number.MAX_SAFE_INTEGER;
-        return ae - be;
-      });
-
-    const pageSize = Math.min(Math.max(1, filters.pageSize), MAX_PAGE_SIZE);
-    const page = Math.max(1, filters.page);
-    const skip = (page - 1) * pageSize;
-    const items = mapped.slice(skip, skip + pageSize);
-
-    return {
-      items,
-      total: mapped.length,
-      page,
-      pageSize,
-    };
   }
 }

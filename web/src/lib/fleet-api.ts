@@ -13,6 +13,9 @@ export const costsBrowserBase = "/api/costs";
 /** Proxy Next → API Nest pentru documente vehicul. */
 export const documentsBrowserBase = "/api/documents";
 
+/** Proxy Next → API Nest pentru acțiuni reminder. */
+export const remindersBrowserBase = "/api/reminders";
+
 export function fleetJsonHeaders(): HeadersInit {
   return { "Content-Type": "application/json" };
 }

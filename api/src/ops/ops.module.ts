@@ -7,12 +7,21 @@ import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { MaintenanceController } from './maintenance.controller';
 import { MaintenanceService } from './maintenance.service';
+import { RemindersController } from './reminders.controller';
+import { RemindersService } from './reminders.service';
 import { TripsController } from './trips.controller';
 import { TripsService } from './trips.service';
 
 @Module({
   imports: [AuthModule, AuditModule],
-  controllers: [TripsController, MaintenanceController, CostsController, DocumentsController],
-  providers: [TripsService, MaintenanceService, CostsService, DocumentsService],
+  controllers: [
+    TripsController,
+    MaintenanceController,
+    CostsController,
+    DocumentsController,
+    RemindersController,
+  ],
+  providers: [TripsService, MaintenanceService, CostsService, DocumentsService, RemindersService],
+  exports: [RemindersService],
 })
 export class OpsModule {}

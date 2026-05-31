@@ -20,7 +20,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { isDocumentTypeCode } from './document-types';
-import { normalizeReminderOffsets, type ReminderListFilterStatus } from './document-reminders';
+import { normalizeReminderOffsets } from './document-reminders';
 import type {
   CreateDocumentInput,
   DocumentBrowseFilters,
@@ -57,25 +57,6 @@ export class DocumentsController {
       page,
       pageSize,
       ...parseDocumentBrowseQuery(q),
-    });
-  }
-
-  @Get('reminders')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  listReminders(
-    @TenantId() tenantSlug: string,
-    @Query() q: Record<string, string | undefined>,
-    @Query('page') pageStr?: string,
-    @Query('pageSize') pageSizeStr?: string,
-  ) {
-    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
-    const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.documents.listReminders(tenantSlug, {
-      page,
-      pageSize,
-      vehicleId: q['vehicleId']?.trim(),
-      registrationNumber: q['registrationNumber']?.trim(),
-      status: parseReminderListStatus(q['status']),
     });
   }
 
@@ -153,13 +134,6 @@ function parseExpiryStatus(raw?: string): DocumentExpiryStatus | undefined {
   );
 }
 
-function parseReminderListStatus(raw?: string): ReminderListFilterStatus | undefined {
-  if (!raw?.trim()) return undefined;
-  const v = raw.trim();
-  if (v === 'all' || v === 'action' || v === 'upcoming' || v === 'expired') return v;
-  throw new BadRequestException('Invalid status; use all, action, upcoming, or expired');
-}
-
 function parseReminderOffsetsField(
   body: Record<string, unknown>,
   field: string,
@@ -192,6 +166,8 @@ function assertCreateDocumentDto(body: unknown): CreateDocumentInput {
   const fileName =
     'fileName' in body ? (body.fileName === null ? null : optionalString(body.fileName)) : undefined;
   const reminderOffsetsDays = parseReminderOffsetsField(body, 'reminderOffsetsDays');
+  const syncReminderAction =
+    'syncReminderAction' in body ? optionalBoolean(body.syncReminderAction) : undefined;
   return {
     vehicleId,
     documentTypeCode,
@@ -200,6 +176,7 @@ function assertCreateDocumentDto(body: unknown): CreateDocumentInput {
     fileUrl,
     fileName,
     reminderOffsetsDays,
+    syncReminderAction,
   };
 }
 
@@ -226,6 +203,9 @@ function assertPatchDocumentDto(body: unknown): PatchDocumentInput {
   }
   if ('reminderOffsetsDays' in body) {
     dto.reminderOffsetsDays = parseReminderOffsetsField(body, 'reminderOffsetsDays');
+  }
+  if ('syncReminderAction' in body) {
+    dto.syncReminderAction = optionalBoolean(body.syncReminderAction);
   }
 
   if (Object.keys(dto).length === 0) {
@@ -274,4 +254,10 @@ function optionalIsoDateString(v: unknown): string | undefined {
     throw new BadRequestException('Invalid date');
   }
   return d.toISOString();
+}
+
+function optionalBoolean(v: unknown): boolean | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'boolean') throw new BadRequestException('Expected boolean');
+  return v;
 }
