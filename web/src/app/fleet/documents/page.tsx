@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
+import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry";
+import type { DocumentReminderSummary } from "@/lib/document-reminders";
 import { documentsBrowserBase } from "@/lib/fleet-api";
 import { DOCUMENT_EXPIRY_STATUS_OPTIONS, DOCUMENT_TYPE_OPTIONS, documentTypeLabel } from "@/lib/document-types";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -27,6 +29,8 @@ type DocumentRow = {
   title: string;
   expiresOn: string | null;
   fileUrl: string | null;
+  fileName: string | null;
+  reminder?: DocumentReminderSummary;
   createdAt: string;
 };
 
@@ -230,11 +234,14 @@ export default async function DocumentsPage({ searchParams }: Props) {
                         <p className="mt-1 text-xs text-zinc-400">{documentTypeLabel(row.documentTypeCode)}</p>
                       </div>
                       <div className="flex flex-col items-start gap-2 sm:items-end">
-                        <span
-                          className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badge.className}`}
-                        >
-                          {badge.label}
-                        </span>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {row.reminder ? <ReminderStatusBadge reminder={row.reminder} compact /> : null}
+                          <span
+                            className={`rounded-md border px-2 py-0.5 text-xs font-medium ${badge.className}`}
+                          >
+                            {badge.label}
+                          </span>
+                        </div>
                         <p className="font-mono text-xs text-zinc-400">{row.registrationNumber}</p>
                         <p className="text-xs text-zinc-500">Client: {row.clientId}</p>
                       </div>

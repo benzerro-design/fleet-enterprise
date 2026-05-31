@@ -1,8 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DOCUMENT_EXPIRING_WITHIN_DAYS, type DocumentTypeCode } from './document-types';
+import {
+  computeReminderSummary,
+  DEFAULT_REMINDER_OFFSETS,
+  matchesReminderListFilter,
+  normalizeReminderOffsets,
+  type DocumentReminderSummary,
+  type ReminderListFilterStatus,
+} from './document-reminders';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 
@@ -14,6 +22,8 @@ export type CreateDocumentInput = {
   title: string;
   expiresOn?: string | null;
   fileUrl?: string | null;
+  fileName?: string | null;
+  reminderOffsetsDays?: number[] | null;
 };
 
 export type PatchDocumentInput = Partial<CreateDocumentInput>;
@@ -119,6 +129,14 @@ function documentWhere(tenantId: string, f: DocumentBrowseFilters): Prisma.Vehic
   return { AND: parts };
 }
 
+function reminderOffsetsForDb(
+  value: number[] | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.DbNull;
+  return value;
+}
+
 function toDocRow(row: {
   id: string;
   vehicleId: string;
@@ -126,9 +144,13 @@ function toDocRow(row: {
   title: string;
   expiresOn: Date | null;
   fileUrl: string | null;
+  fileName: string | null;
+  reminderOffsetsDays: unknown;
   createdAt: Date;
   vehicle: { registrationNumber: string; clientId: string; tenant: { slug: string } };
 }) {
+  const reminderOffsetsDays = normalizeReminderOffsets(row.reminderOffsetsDays);
+  const reminder = computeReminderSummary(row.expiresOn, reminderOffsetsDays);
   return {
     id: row.id,
     tenantSlug: row.vehicle.tenant.slug,
@@ -139,6 +161,9 @@ function toDocRow(row: {
     title: row.title,
     expiresOn: row.expiresOn ? row.expiresOn.toISOString() : null,
     fileUrl: row.fileUrl,
+    fileName: row.fileName,
+    reminderOffsetsDays,
+    reminder,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -199,7 +224,7 @@ export class DocumentsService {
   async exportCsv(tenantSlug: string, filters: DocumentBrowseFilters): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
-      return '\uFEFFid,vehicleId,registrationNumber,clientId,documentTypeCode,title,expiresOn,fileUrl,createdAt\n';
+      return '\uFEFFid,vehicleId,registrationNumber,clientId,documentTypeCode,title,expiresOn,fileUrl,fileName,reminderOffsetsDays,createdAt\n';
     }
     const where = documentWhere(tenant.id, filters);
     const rows = await this.prisma.vehicleDocument.findMany({
@@ -211,7 +236,7 @@ export class DocumentsService {
       },
     });
     const header =
-      'id,vehicleId,registrationNumber,clientId,documentTypeCode,title,expiresOn,fileUrl,createdAt';
+      'id,vehicleId,registrationNumber,clientId,documentTypeCode,title,expiresOn,fileUrl,fileName,reminderOffsetsDays,createdAt';
     const lines = rows.map((r) =>
       [
         r.id,
@@ -222,6 +247,8 @@ export class DocumentsService {
         r.title,
         r.expiresOn ? r.expiresOn.toISOString() : '',
         r.fileUrl ?? '',
+        r.fileName ?? '',
+        r.reminderOffsetsDays ? JSON.stringify(r.reminderOffsetsDays) : '',
         r.createdAt.toISOString(),
       ]
         .map((c) => escapeCsvCell(c))
@@ -252,6 +279,13 @@ export class DocumentsService {
     if (!tenant) throw new NotFoundException('Tenant not found');
     const vehicle = await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
+    const reminderOffsets =
+      dto.reminderOffsetsDays === undefined
+        ? dto.expiresOn
+          ? DEFAULT_REMINDER_OFFSETS
+          : null
+        : dto.reminderOffsetsDays;
+
     const row = await this.prisma.vehicleDocument.create({
       data: {
         vehicleId: dto.vehicleId,
@@ -260,6 +294,8 @@ export class DocumentsService {
         expiresOn:
           dto.expiresOn === undefined ? null : dto.expiresOn ? new Date(dto.expiresOn) : null,
         fileUrl: dto.fileUrl ?? null,
+        fileName: dto.fileName ?? null,
+        reminderOffsetsDays: reminderOffsetsForDb(reminderOffsets),
       },
       include: {
         vehicle: {
@@ -312,6 +348,8 @@ export class DocumentsService {
               ? new Date(dto.expiresOn)
               : null,
         fileUrl: dto.fileUrl === undefined ? undefined : dto.fileUrl,
+        fileName: dto.fileName === undefined ? undefined : dto.fileName,
+        reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
       },
       include: {
         vehicle: {
@@ -361,5 +399,83 @@ export class DocumentsService {
         registrationNumber: row.vehicle.registrationNumber,
       },
     });
+  }
+
+  async listReminders(
+    tenantSlug: string,
+    filters: {
+      vehicleId?: string;
+      registrationNumber?: string;
+      status?: ReminderListFilterStatus;
+      page: number;
+      pageSize: number;
+    },
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) {
+      return { items: [], total: 0, page: filters.page, pageSize: filters.pageSize };
+    }
+
+    const where: Prisma.VehicleDocumentWhereInput = {
+      vehicle: { tenantId: tenant.id },
+      expiresOn: { not: null },
+    };
+
+    if (filters.vehicleId?.trim()) {
+      where.vehicleId = filters.vehicleId.trim();
+    }
+    if (filters.registrationNumber?.trim()) {
+      where.vehicle = {
+        tenantId: tenant.id,
+        registrationNumber: { equals: filters.registrationNumber.trim(), mode: 'insensitive' },
+      };
+    }
+
+    const rows = await this.prisma.vehicleDocument.findMany({
+      where,
+      include: {
+        vehicle: {
+          select: {
+            registrationNumber: true,
+            clientId: true,
+            tenant: { select: { slug: true } },
+          },
+        },
+      },
+      orderBy: [{ expiresOn: 'asc' }],
+      take: MAX_EXPORT_ROWS,
+    });
+
+    const statusFilter = filters.status ?? 'all';
+    const mapped = rows
+      .map((r) => toDocRow(r))
+      .filter((row) => (row.reminderOffsetsDays?.length ?? 0) > 0)
+      .filter((row) => matchesReminderListFilter(row.reminder as DocumentReminderSummary, statusFilter))
+      .sort((a, b) => {
+        const ar = a.reminder as DocumentReminderSummary;
+        const br = b.reminder as DocumentReminderSummary;
+        if (ar.status === 'expired' && br.status !== 'expired') return -1;
+        if (br.status === 'expired' && ar.status !== 'expired') return 1;
+        if (ar.status === 'due_today' && br.status !== 'due_today') return -1;
+        if (br.status === 'due_today' && ar.status !== 'due_today') return 1;
+        const an = ar.nextRemindOn ? new Date(ar.nextRemindOn).getTime() : Number.MAX_SAFE_INTEGER;
+        const bn = br.nextRemindOn ? new Date(br.nextRemindOn).getTime() : Number.MAX_SAFE_INTEGER;
+        if (an !== bn) return an - bn;
+        const ae = a.expiresOn ? new Date(a.expiresOn).getTime() : Number.MAX_SAFE_INTEGER;
+        const be = b.expiresOn ? new Date(b.expiresOn).getTime() : Number.MAX_SAFE_INTEGER;
+        return ae - be;
+      });
+
+    const pageSize = Math.min(Math.max(1, filters.pageSize), MAX_PAGE_SIZE);
+    const page = Math.max(1, filters.page);
+    const skip = (page - 1) * pageSize;
+    const items = mapped.slice(skip, skip + pageSize);
+
+    return {
+      items,
+      total: mapped.length,
+      page,
+      pageSize,
+    };
   }
 }

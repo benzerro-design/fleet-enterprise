@@ -155,16 +155,20 @@ model AuditLog {
 }
 
 model VehicleDocument {
-  id               String    @id @default(cuid())
-  vehicleId        String
-  documentTypeCode String
-  title            String
-  expiresOn        DateTime?
-  fileUrl          String?
-  createdAt        DateTime  @default(now())
-  vehicle          Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(cuid())
+  vehicleId           String
+  documentTypeCode    String
+  title               String
+  expiresOn           DateTime?
+  fileUrl             String?
+  fileName            String?
+  /** Zile înainte de expirare când se activează remindere (ex. [60, 30, 7, 1, 0]). */
+  reminderOffsetsDays Json?
+  createdAt           DateTime  @default(now())
+  vehicle             Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@index([vehicleId])
+  @@index([expiresOn])
 }
 
 enum MembershipRole {

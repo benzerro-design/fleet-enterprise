@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
+import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry";
+import {
+  formatOffsetDaysLabel,
+  type DocumentReminderSummary,
+} from "@/lib/document-reminders";
 import { documentTypeLabel } from "@/lib/document-types";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
@@ -16,6 +21,9 @@ type DocumentRow = {
   title: string;
   expiresOn: string | null;
   fileUrl: string | null;
+  fileName: string | null;
+  reminderOffsetsDays: number[] | null;
+  reminder: DocumentReminderSummary;
   createdAt: string;
 };
 
@@ -45,6 +53,12 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
+              href={`/fleet/vehicles/${row.vehicleId}/reminders`}
+              className="rounded-lg border border-violet-800/60 bg-violet-950/30 px-4 py-2 text-sm text-violet-200 hover:bg-violet-950/50"
+            >
+              Remindere vehicul
+            </Link>
+            <Link
               href="/fleet/documents"
               className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
             >
@@ -62,9 +76,12 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
         </div>
 
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
-          <span className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${badge.className}`}>
-            {badge.label}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${badge.className}`}>
+              {badge.label}
+            </span>
+            {row.reminder ? <ReminderStatusBadge reminder={row.reminder} /> : null}
+          </div>
           <dl className="mt-6 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs uppercase text-zinc-500">Număr auto</dt>
@@ -77,10 +94,6 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
             <div>
               <dt className="text-xs uppercase text-zinc-500">Client</dt>
               <dd className="mt-1">{row.clientId}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase text-zinc-500">Tenant</dt>
-              <dd className="mt-1 font-mono">{row.tenantSlug}</dd>
             </div>
             <div>
               <dt className="text-xs uppercase text-zinc-500">Data expirare</dt>
@@ -97,7 +110,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               <dd className="mt-1">
                 {row.fileUrl ? (
                   <a className="text-emerald-400 hover:underline" href={row.fileUrl} target="_blank" rel="noreferrer">
-                    Deschide document
+                    {row.fileName ?? "Deschide document"}
                   </a>
                 ) : (
                   "—"
@@ -105,12 +118,38 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               </dd>
             </div>
           </dl>
-          {write ? (
-            <div className="mt-8 flex justify-end">
-              <DeleteDocumentButton documentId={row.id} label={row.title} redirectTo="/fleet/documents" />
-            </div>
-          ) : null}
         </div>
+
+        {row.reminderOffsetsDays?.length ? (
+          <section className="mt-6 rounded-xl border border-violet-900/40 bg-violet-950/10 p-6">
+            <h2 className="text-sm font-medium text-violet-100">Program remindere</h2>
+            <ul className="mt-4 space-y-2">
+              {row.reminder.timeline.map((t) => (
+                <li key={t.offsetDays} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="text-zinc-400">{formatOffsetDaysLabel(t.offsetDays)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-zinc-200">
+                      {new Date(t.remindOn).toLocaleDateString("ro-RO")}
+                    </span>
+                    {t.status === "past" ? (
+                      <span className="text-[10px] text-zinc-600">trecut</span>
+                    ) : t.status === "today" ? (
+                      <span className="rounded bg-amber-500/20 px-1.5 text-[10px] text-amber-200">azi</span>
+                    ) : (
+                      <span className="text-[10px] text-violet-400">viitor</span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {write ? (
+          <div className="mt-8 flex justify-end">
+            <DeleteDocumentButton documentId={row.id} label={row.title} redirectTo="/fleet/documents" />
+          </div>
+        ) : null}
       </main>
     </div>
   );

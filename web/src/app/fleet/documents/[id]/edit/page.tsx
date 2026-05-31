@@ -11,6 +11,8 @@ type DocumentRecord = {
   title: string;
   expiresOn: string | null;
   fileUrl: string | null;
+  fileName: string | null;
+  reminderOffsetsDays: number[] | null;
 };
 
 type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string }> };

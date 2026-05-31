@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
+import { ReminderSchedulePicker } from "@/components/fleet/ReminderSchedulePicker";
+import { DEFAULT_REMINDER_OFFSETS } from "@/lib/document-reminders";
+import { uploadDocumentFile } from "@/lib/document-upload";
 import { DOCUMENT_TYPE_OPTIONS } from "@/lib/document-types";
 
 type DocumentRecord = {
@@ -12,6 +15,8 @@ type DocumentRecord = {
   title: string;
   expiresOn: string | null;
   fileUrl: string | null;
+  fileName?: string | null;
+  reminderOffsetsDays?: number[] | null;
 };
 
 type VehicleOption = {
@@ -51,6 +56,8 @@ export function DocumentForm(props: Props) {
         title: "",
         expiresOn: "",
         fileUrl: "",
+        fileName: "",
+        reminderOffsetsDays: [...DEFAULT_REMINDER_OFFSETS] as number[],
       };
     }
     const r = props.initial;
@@ -60,6 +67,12 @@ export function DocumentForm(props: Props) {
       title: r.title,
       expiresOn: toDateInputOrEmpty(r.expiresOn),
       fileUrl: r.fileUrl ?? "",
+      fileName: r.fileName ?? "",
+      reminderOffsetsDays: r.reminderOffsetsDays?.length
+        ? [...r.reminderOffsetsDays]
+        : r.expiresOn
+          ? [...DEFAULT_REMINDER_OFFSETS]
+          : [],
     };
   }, [props]);
 
@@ -69,20 +82,41 @@ export function DocumentForm(props: Props) {
   const [title, setTitle] = useState(initial.title);
   const [expiresOn, setExpiresOn] = useState(initial.expiresOn);
   const [fileUrl, setFileUrl] = useState(initial.fileUrl);
+  const [fileName, setFileName] = useState(initial.fileName);
+  const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [pending, setPending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function onPickFile(file: File | null) {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const uploaded = await uploadDocumentFile(file, title || documentTypeCode);
+      setFileUrl(uploaded.url);
+      setFileName(uploaded.name);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload eșuat.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setPending(true);
     setError(null);
 
+    const hasExpiry = Boolean(expiresOn.trim());
     const payload = {
       vehicleId,
       documentTypeCode,
       title: title.trim(),
-      expiresOn: expiresOn.trim() ? new Date(expiresOn).toISOString() : null,
+      expiresOn: hasExpiry ? new Date(expiresOn).toISOString() : null,
       fileUrl: fileUrl.trim() ? fileUrl.trim() : null,
+      fileName: fileName.trim() ? fileName.trim() : null,
+      reminderOffsetsDays: hasExpiry && reminderOffsetsDays.length > 0 ? reminderOffsetsDays : null,
     };
 
     try {
@@ -166,31 +200,76 @@ export function DocumentForm(props: Props) {
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Data expirare (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">Data expirare</label>
         <input
           type="date"
           value={expiresOn}
-          onChange={(e) => setExpiresOn(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setExpiresOn(v);
+            if (v && reminderOffsetsDays.length === 0) {
+              setReminderOffsetsDays([...DEFAULT_REMINDER_OFFSETS]);
+            }
+            if (!v) setReminderOffsetsDays([]);
+          }}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         />
-        <p className="text-xs text-zinc-500">Lăsat gol dacă documentul nu expiră.</p>
+        <p className="text-xs text-zinc-500">Necesară pentru remindere. Lăsat gol dacă documentul nu expiră.</p>
+      </div>
+
+      {expiresOn ? (
+        <ReminderSchedulePicker
+          expiresOn={expiresOn}
+          offsets={reminderOffsetsDays}
+          onChange={setReminderOffsetsDays}
+          disabled={pending}
+        />
+      ) : null}
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Fișier document</label>
+        <input
+          type="file"
+          accept="application/pdf,image/jpeg,image/png,image/webp"
+          disabled={uploading || pending}
+          onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:text-zinc-200"
+        />
+        {uploading ? <p className="text-xs text-zinc-500">Se încarcă fișierul…</p> : null}
+        <p className="text-xs text-zinc-500">PDF sau imagine (max 10MB). Opțional — poți folosi și URL mai jos.</p>
+        {fileUrl ? (
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <a href={fileUrl} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">
+              {fileName || "Fișier încărcat"}
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                setFileUrl("");
+                setFileName("");
+              }}
+              className="text-zinc-400 hover:text-zinc-200"
+            >
+              Elimină
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">URL fișier (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">URL fișier (alternativ)</label>
         <input
           value={fileUrl}
           onChange={(e) => setFileUrl(e.target.value)}
           placeholder="https://…"
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         />
-        <p className="text-xs text-zinc-500">Link către scan/PDF (upload direct — fază următoare).</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
         <button
           type="submit"
-          disabled={pending || props.vehicles.length === 0}
+          disabled={pending || uploading || props.vehicles.length === 0}
           className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
         >
           {pending ? "Se salvează…" : isEdit ? "Salvează" : "Adaugă document"}

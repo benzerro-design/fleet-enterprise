@@ -309,6 +309,12 @@ export function VehicleDetailSections({ vehicleId, write, regQs, maintenance, co
               <Link href={`/fleet/documents?${regQs}`} className={actionLinkClass}>
                 Listă
               </Link>
+              <Link
+                href={`/fleet/vehicles/${vehicleId}/reminders`}
+                className="rounded-md border border-violet-800/60 px-2.5 py-1 text-[11px] text-violet-200 hover:bg-violet-950/40"
+              >
+                Remindere
+              </Link>
               {write ? (
                 <Link
                   href={`/fleet/documents/new?vehicleId=${encodeURIComponent(vehicleId)}`}

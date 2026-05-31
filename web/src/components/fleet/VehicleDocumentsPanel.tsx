@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry";
 import { documentTypeLabel } from "@/lib/document-types";
+import type { DocumentReminderSummary } from "@/lib/document-reminders";
+import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
 
 export type VehicleDocumentRow = {
   id: string;
@@ -10,6 +12,7 @@ export type VehicleDocumentRow = {
   documentTypeCode: string;
   expiresOn: string | null;
   fileUrl: string | null;
+  reminder?: DocumentReminderSummary;
 };
 
 type Props = {
@@ -36,8 +39,9 @@ export function VehicleDocumentsPanel({ items, totalInDb, regQs }: Props) {
                 </Link>
                 <p className="text-xs text-zinc-500">{documentTypeLabel(d.documentTypeCode)}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={`rounded border px-1.5 py-0.5 text-[10px] ${badge.className}`}>
+                      <div className="flex items-center gap-2">
+                        {d.reminder ? <ReminderStatusBadge reminder={d.reminder} compact /> : null}
+                        <span className={`rounded border px-1.5 py-0.5 text-[10px] ${badge.className}`}>
                   {badge.label}
                 </span>
                 <span className="text-xs text-zinc-500">
