@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { VehicleDetailSections } from "@/components/fleet/VehicleDetailSections";
+import { VehicleProfileTabs } from "@/components/fleet/VehicleProfileTabs";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
-import { VEHICLE_STATUSES, VEHICLE_TYPES, type VehicleRecord } from "@/lib/fleet-api";
+import { type VehicleRecord } from "@/lib/fleet-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import type { OdometerReadingsPayload, VehicleCivPayload } from "@/lib/vehicle-profile-types";
 
 const OPS_PREVIEW_PAGE_SIZE = 50;
 
@@ -60,6 +63,26 @@ async function getVehicle(id: string): Promise<VehicleRecord | null> {
   }
 }
 
+async function getVehicleCiv(id: string): Promise<VehicleCivPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/civ`);
+    if (!res?.ok) return null;
+    return (await res.json()) as VehicleCivPayload;
+  } catch {
+    return null;
+  }
+}
+
+async function getOdometerReadings(id: string): Promise<OdometerReadingsPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/odometer-readings`);
+    if (!res?.ok) return null;
+    return (await res.json()) as OdometerReadingsPayload;
+  } catch {
+    return null;
+  }
+}
+
 function maintenanceListQuery(registrationNumber: string): string {
   const q = new URLSearchParams();
   q.set("page", "1");
@@ -102,24 +125,39 @@ async function getDocumentsForVehicle(registrationNumber: string): Promise<Docum
   return (await res.json()) as DocumentListPayload;
 }
 
-function labelMap<T extends readonly { value: string; label: string }[]>(items: T, value: string): string {
-  const row = items.find((x) => x.value === value);
-  return row?.label ?? value;
-}
+const EMPTY_CIV: VehicleCivPayload = {
+  civSeries: null,
+  civIssuedOn: null,
+  civRarOffice: null,
+  civMentions: null,
+  civProfile: {},
+  civImportedFromDocumentId: null,
+  civFilledCount: 0,
+  civTotalFields: 0,
+  importSource: null,
+};
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [vehicle, auth] = await Promise.all([getVehicle(id), getAuthMeResult()]);
   if (!vehicle) notFound();
 
-  const [maintenanceList, costsList, documentsList] = await Promise.all([
+  const [maintenanceList, costsList, documentsList, civ, odometer] = await Promise.all([
     getMaintenanceForVehicle(vehicle.registrationNumber),
     getCostsForVehicle(vehicle.registrationNumber),
     getDocumentsForVehicle(vehicle.registrationNumber),
+    getVehicleCiv(id),
+    getOdometerReadings(id),
   ]);
 
   const write = canManageFleet(auth);
   const regQs = `registrationNumber=${encodeURIComponent(vehicle.registrationNumber)}`;
+
+  const civPayload = civ ?? EMPTY_CIV;
+  const odometerPayload: OdometerReadingsPayload = odometer ?? {
+    items: [],
+    vehicleOdometerKm: vehicle.odometerKm,
+  };
 
   return (
     <div className="text-zinc-100">
@@ -131,6 +169,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             <p className="mt-2 text-sm text-zinc-400">
               Client <span className="font-mono text-zinc-300">{vehicle.clientId}</span> · tenant{" "}
               <span className="font-mono text-zinc-300">{vehicle.tenantId}</span>
+              <span className="mx-2 text-zinc-600">·</span>
+              <span className="font-mono text-sky-300">{vehicle.odometerKm.toLocaleString("ro-RO")} km</span>
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -142,7 +182,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             </Link>
             {write ? (
               <Link
-                href={`/fleet/vehicles/${id}/edit`}
+                href={`/fleet/vehicles/${id}?tab=basic`}
                 className="inline-flex w-fit items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
               >
                 Editare
@@ -151,52 +191,11 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
 
-        <dl className="grid gap-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:grid-cols-2">
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Tip vehicul</dt>
-            <dd className="mt-1 text-zinc-200">{labelMap(VEHICLE_TYPES, vehicle.type)}</dd>
+        <Suspense fallback={<p className="mb-10 text-sm text-zinc-500">Se încarcă profilul…</p>}>
+          <div className="mb-10">
+            <VehicleProfileTabs vehicle={vehicle} write={write} civ={civPayload} odometer={odometerPayload} />
           </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Status</dt>
-            <dd className="mt-1 text-zinc-200">{labelMap(VEHICLE_STATUSES, vehicle.status)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Odometru</dt>
-            <dd className="mt-1 font-mono text-zinc-200">{vehicle.odometerKm} km</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">VIN</dt>
-            <dd className="mt-1 font-mono text-zinc-200">{vehicle.vin ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">ITP expiră</dt>
-            <dd className="mt-1 font-mono text-zinc-200">
-              {vehicle.itpExpiresOn ? new Date(vehicle.itpExpiresOn).toLocaleDateString("ro-RO") : "—"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Stație ITP</dt>
-            <dd className="mt-1 text-zinc-200">{vehicle.itpStationName ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Creat</dt>
-            <dd className="mt-1 text-sm text-zinc-300">
-              {new Date(vehicle.createdAt).toLocaleString("ro-RO")}
-              {vehicle.createdByEmail ? (
-                <span className="block text-xs text-zinc-500">de {vehicle.createdByEmail}</span>
-              ) : null}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Actualizat</dt>
-            <dd className="mt-1 text-sm text-zinc-300">
-              {new Date(vehicle.updatedAt).toLocaleString("ro-RO")}
-              {vehicle.updatedByEmail ? (
-                <span className="block text-xs text-zinc-500">de {vehicle.updatedByEmail}</span>
-              ) : null}
-            </dd>
-          </div>
-        </dl>
+        </Suspense>
 
         <VehicleDetailSections
           vehicleId={vehicle.id}

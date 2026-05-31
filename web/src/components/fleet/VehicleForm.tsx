@@ -2,67 +2,23 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import {
   fleetBrowserBase,
   fleetJsonHeaders,
-  type VehicleRecord,
-  type VehicleStatusValue,
   type VehicleTypeValue,
-  VEHICLE_STATUSES,
   VEHICLE_TYPES,
 } from "@/lib/fleet-api";
 
-function isoDateOnlyFromApi(iso: string | null): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
-}
-
-type Mode = "create" | "edit";
-
-type Props =
-  | { mode: "create" }
-  | { mode: "edit"; vehicleId: string; initial: VehicleRecord };
-
-export function VehicleForm(props: Props) {
+export function VehicleForm() {
   const router = useRouter();
-  const isEdit = props.mode === "edit";
-
-  const initial = useMemo(() => {
-    if (props.mode === "create") {
-      return {
-        clientId: "",
-        registrationNumber: "",
-        type: "car" as VehicleTypeValue,
-        vin: "",
-        status: "active" as VehicleStatusValue,
-        odometerKm: "0",
-        itpDate: "",
-        itpStationName: "",
-      };
-    }
-    const v = props.initial;
-    return {
-      clientId: v.clientId,
-      registrationNumber: v.registrationNumber,
-      type: v.type as VehicleTypeValue,
-      vin: v.vin ?? "",
-      status: v.status as VehicleStatusValue,
-      odometerKm: String(v.odometerKm),
-      itpDate: isoDateOnlyFromApi(v.itpExpiresOn),
-      itpStationName: v.itpStationName ?? "",
-    };
-  }, [props]);
-
-  const [clientId, setClientId] = useState(initial.clientId);
-  const [registrationNumber, setRegistrationNumber] = useState(initial.registrationNumber);
-  const [type, setType] = useState<VehicleTypeValue>(initial.type);
-  const [vin, setVin] = useState(initial.vin);
-  const [status, setStatus] = useState<VehicleStatusValue>(initial.status);
-  const [odometerKm, setOdometerKm] = useState(initial.odometerKm);
-  const [itpDate, setItpDate] = useState(initial.itpDate);
-  const [itpStationName, setItpStationName] = useState(initial.itpStationName);
-
+  const [clientId, setClientId] = useState("");
+  const [registrationNumber, setRegistrationNumber] = useState("");
+  const [type, setType] = useState<VehicleTypeValue>("car");
+  const [vin, setVin] = useState("");
+  const [odometerKm, setOdometerKm] = useState("0");
+  const [itpDate, setItpDate] = useState("");
+  const [itpStationName, setItpStationName] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,58 +34,23 @@ export function VehicleForm(props: Props) {
         return;
       }
 
-      if (props.mode === "create") {
-        const body: Record<string, unknown> = {
-          clientId: clientId.trim(),
-          registrationNumber: registrationNumber.trim(),
-          type,
-          odometerKm: odo,
-        };
-        const v = vin.trim();
-        if (v) body.vin = v;
-        if (itpDate) body.itpExpiresOn = `${itpDate}T12:00:00.000Z`;
-        const s = itpStationName.trim();
-        if (s) body.itpStationName = s;
-
-        const res = await fetch(`${fleetBrowserBase}/vehicles`, {
-          method: "POST",
-          headers: fleetJsonHeaders(),
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          let msg = `HTTP ${res.status}`;
-          try {
-            const j = (await res.json()) as { message?: string | string[] };
-            if (typeof j.message === "string") msg = j.message;
-            else if (Array.isArray(j.message)) msg = j.message.join(", ");
-          } catch {
-            /* ignore */
-          }
-          setError(msg);
-          return;
-        }
-        router.push("/fleet/vehicles");
-        router.refresh();
-        return;
-      }
-
       const body: Record<string, unknown> = {
         clientId: clientId.trim(),
         registrationNumber: registrationNumber.trim(),
         type,
-        status,
         odometerKm: odo,
-        vin: vin.trim() === "" ? null : vin.trim(),
-        itpExpiresOn: itpDate === "" ? null : `${itpDate}T12:00:00.000Z`,
-        itpStationName: itpStationName.trim() === "" ? null : itpStationName.trim(),
       };
+      const v = vin.trim();
+      if (v) body.vin = v;
+      if (itpDate) body.itpExpiresOn = `${itpDate}T12:00:00.000Z`;
+      const s = itpStationName.trim();
+      if (s) body.itpStationName = s;
 
-      const res = await fetch(`${fleetBrowserBase}/vehicles/${props.vehicleId}`, {
-        method: "PATCH",
+      const res = await fetch(`${fleetBrowserBase}/vehicles`, {
+        method: "POST",
         headers: fleetJsonHeaders(),
         body: JSON.stringify(body),
       });
-
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
         try {
@@ -142,8 +63,8 @@ export function VehicleForm(props: Props) {
         setError(msg);
         return;
       }
-
-      router.push("/fleet/vehicles");
+      const created = (await res.json()) as { id: string };
+      router.push(`/fleet/vehicles/${created.id}?tab=basic`);
       router.refresh();
     } catch {
       setError("Rețea sau server indisponibil.");
@@ -205,30 +126,10 @@ export function VehicleForm(props: Props) {
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
           placeholder="—"
         />
-        {isEdit ? (
-          <p className="text-xs text-zinc-500">Lasă gol pentru a șterge VIN-ul din baza de date.</p>
-        ) : null}
       </div>
 
-      {isEdit ? (
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-300">Status</label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as VehicleStatusValue)}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-          >
-            {VEHICLE_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
-
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Kilometraj (odometru)</label>
+        <label className="block text-sm font-medium text-zinc-300">Kilometraj inițial (odometru)</label>
         <input
           required
           type="number"
@@ -238,6 +139,9 @@ export function VehicleForm(props: Props) {
           onChange={(e) => setOdometerKm(e.target.value)}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         />
+        <p className="text-xs text-zinc-500">
+          La creare se înregistrează prima citire. Actualizările ulterioare se fac din tab-ul Odometru.
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -266,7 +170,7 @@ export function VehicleForm(props: Props) {
           disabled={pending}
           className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
         >
-          {pending ? "Salvez…" : isEdit ? "Salvează modificările" : "Creează vehicul"}
+          {pending ? "Salvez…" : "Creează vehicul"}
         </button>
         <Link
           href="/fleet/vehicles"

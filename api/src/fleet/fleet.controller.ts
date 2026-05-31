@@ -21,6 +21,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
+import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
 import type { VehicleStatus } from './fleet.types';
 import { FleetService } from './fleet.service';
 import { TenantId } from './tenant-id.decorator';
@@ -93,6 +94,48 @@ export class FleetController {
   ) {
     const dto = assertPatchVehicleDto(body);
     return this.fleet.patchVehicle(tenantId, vehicleId, dto, actorUserId);
+  }
+
+  @Get('vehicles/:vehicleId/civ')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  getVehicleCiv(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
+    return this.fleet.getVehicleCiv(tenantId, vehicleId);
+  }
+
+  @Patch('vehicles/:vehicleId/civ')
+  @Roles(MembershipRole.tenant_admin)
+  patchVehicleCiv(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    const dto = assertPatchVehicleCivDto(body);
+    return this.fleet.patchVehicleCiv(tenantId, vehicleId, dto, actorUserId);
+  }
+
+  @Get('vehicles/:vehicleId/odometer-readings')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  listOdometerReadings(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const limit = Math.min(Math.max(1, parseInt(limitStr ?? '50', 10) || 50), 100);
+    return this.fleet.listOdometerReadings(tenantId, vehicleId, limit);
+  }
+
+  @Post('vehicles/:vehicleId/odometer-readings')
+  @Roles(MembershipRole.tenant_admin)
+  @HttpCode(201)
+  recordOdometerReading(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    const dto = assertRecordOdometerDto(body);
+    return this.fleet.recordOdometerReading(tenantId, vehicleId, dto, actorUserId);
   }
 
   @Delete('vehicles/:vehicleId')
@@ -170,7 +213,11 @@ function assertPatchVehicleDto(body: unknown): PatchVehicleDto {
   }
   if ('type' in body) dto.type = asVehicleType(body.type, 'type');
   if ('status' in body) dto.status = asVehicleStatus(body.status, 'status');
-  if ('odometerKm' in body) dto.odometerKm = asNonNegativeNumber(body.odometerKm, 'odometerKm');
+  if ('odometerKm' in body) {
+    throw new BadRequestException(
+      'Odometrul se actualizează doar din tab-ul Odometru al vehiculului.',
+    );
+  }
 
   if ('vin' in body) {
     if (body.vin === null) dto.vin = null;
@@ -279,4 +326,57 @@ function asVehicleStatus(v: unknown, field: string) {
     throw new BadRequestException(`Field "${field}" has an invalid status`);
   }
   return v as NonNullable<PatchVehicleDto['status']>;
+}
+
+function assertPatchVehicleCivDto(body: unknown): PatchVehicleCivDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const dto: PatchVehicleCivDto = {};
+  if ('civSeries' in body) {
+    dto.civSeries = body.civSeries === null ? null : optionalString(body.civSeries) ?? null;
+  }
+  if ('civIssuedOn' in body) {
+    if (body.civIssuedOn === null) dto.civIssuedOn = null;
+    else dto.civIssuedOn = optionalIsoDateString(body.civIssuedOn);
+  }
+  if ('civRarOffice' in body) {
+    dto.civRarOffice = body.civRarOffice === null ? null : optionalString(body.civRarOffice) ?? null;
+  }
+  if ('civMentions' in body) {
+    dto.civMentions = body.civMentions === null ? null : optionalString(body.civMentions) ?? null;
+  }
+  if ('civImportedFromDocumentId' in body) {
+    dto.civImportedFromDocumentId =
+      body.civImportedFromDocumentId === null
+        ? null
+        : optionalString(body.civImportedFromDocumentId) ?? null;
+  }
+  if ('civProfile' in body) {
+    if (body.civProfile === null) dto.civProfile = null;
+    else if (isRecord(body.civProfile)) dto.civProfile = body.civProfile as PatchVehicleCivDto['civProfile'];
+    else throw new BadRequestException('civProfile must be an object or null');
+  }
+  if (Object.keys(dto).length === 0) {
+    throw new BadRequestException('No fields to update');
+  }
+  return dto;
+}
+
+function assertRecordOdometerDto(body: unknown): RecordOdometerDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const odometerKm = asNonNegativeNumber(body.odometerKm, 'odometerKm');
+  const dto: RecordOdometerDto = { odometerKm: Math.round(odometerKm) };
+  if ('notes' in body) {
+    dto.notes = body.notes === null ? null : optionalString(body.notes) ?? null;
+  }
+  if ('sourceRef' in body) {
+    dto.sourceRef = body.sourceRef === null ? null : optionalString(body.sourceRef) ?? null;
+  }
+  if ('source' in body) {
+    const s = body.source;
+    if (s !== 'manual' && s !== 'tracking' && s !== 'import') {
+      throw new BadRequestException('source must be manual, tracking, or import');
+    }
+    dto.source = s;
+  }
+  return dto;
 }

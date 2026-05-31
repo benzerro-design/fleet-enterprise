@@ -1,0 +1,283 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, type FormEvent } from "react";
+import {
+  CIV_FIELD_GROUPS,
+  CIV_PROFILE_FIELDS,
+  type VehicleCivProfile,
+} from "@/lib/vehicle-civ-fields";
+import { fleetBrowserBase, fleetJsonHeaders, type VehicleRecord } from "@/lib/fleet-api";
+import type { VehicleCivPayload } from "@/lib/vehicle-profile-types";
+
+type Props = {
+  vehicle: VehicleRecord;
+  write: boolean;
+  initial: VehicleCivPayload;
+};
+
+function profileToFormState(profile: VehicleCivProfile): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of CIV_PROFILE_FIELDS) {
+    const v = profile[f.key];
+    out[f.key] = v == null ? "" : String(v);
+  }
+  return out;
+}
+
+function formToProfile(form: Record<string, string>): VehicleCivProfile {
+  const out: VehicleCivProfile = {};
+  for (const f of CIV_PROFILE_FIELDS) {
+    const raw = form[f.key]?.trim() ?? "";
+    if (!raw) continue;
+    if (f.kind === "number" || f.kind === "year") {
+      const n = Number(raw);
+      if (Number.isFinite(n)) out[f.key] = n;
+    } else {
+      out[f.key] = raw;
+    }
+  }
+  return out;
+}
+
+export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
+  const router = useRouter();
+  const [civSeries, setCivSeries] = useState(initial.civSeries ?? "");
+  const [civIssuedOn, setCivIssuedOn] = useState(initial.civIssuedOn?.slice(0, 10) ?? "");
+  const [civRarOffice, setCivRarOffice] = useState(initial.civRarOffice ?? "");
+  const [civMentions, setCivMentions] = useState(initial.civMentions ?? "");
+  const [profileForm, setProfileForm] = useState(() => profileToFormState(initial.civProfile));
+  const [importMode, setImportMode] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const filled = useMemo(() => {
+    let n = 0;
+    for (const f of CIV_PROFILE_FIELDS) {
+      if (profileForm[f.key]?.trim()) n++;
+    }
+    if (civSeries.trim()) n++;
+    if (civMentions.trim()) n++;
+    return n;
+  }, [profileForm, civSeries, civMentions]);
+
+  async function save(payload: {
+    civProfile: VehicleCivProfile;
+    civImportedFromDocumentId?: string | null;
+  }) {
+    setPending(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const res = await fetch(`${fleetBrowserBase}/vehicles/${vehicle.id}/civ`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({
+          civSeries: civSeries.trim() || null,
+          civIssuedOn: civIssuedOn ? `${civIssuedOn}T12:00:00.000Z` : null,
+          civRarOffice: civRarOffice.trim() || null,
+          civMentions: civMentions.trim() || null,
+          civProfile: payload.civProfile,
+          civImportedFromDocumentId: payload.civImportedFromDocumentId ?? null,
+        }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+          else if (Array.isArray(j.message)) msg = j.message.join(", ");
+        } catch {}
+        setError(msg);
+        return;
+      }
+      setSaved(true);
+      setImportMode(false);
+      router.refresh();
+    } catch {
+      setError("Rețea sau server indisponibil.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!write) return;
+    await save({ civProfile: formToProfile(profileForm) });
+  }
+
+  async function onApplyImport() {
+    if (!initial.importSource) return;
+    await save({
+      civProfile: formToProfile(profileForm),
+      civImportedFromDocumentId: initial.importSource.documentId,
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-zinc-400">
+          Date tehnice CIV (rubici standard RAR). Completare manuală sau import asistat din scan.
+        </p>
+        <p className="text-xs text-zinc-500">
+          {filled} / {initial.civTotalFields + 3} câmpuri completate
+        </p>
+      </div>
+
+      {initial.importSource ? (
+        <div className="rounded-lg border border-violet-900/40 bg-violet-950/20 p-4">
+          <p className="text-sm font-medium text-violet-200">CIV încărcat în Documente</p>
+          <p className="mt-1 text-sm text-zinc-400">{initial.importSource.title}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href={initial.importSource.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-violet-700/50 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-950/40"
+            >
+              Deschide scan CIV
+            </a>
+            {write ? (
+              <button
+                type="button"
+                onClick={() => setImportMode((v) => !v)}
+                className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-950/50"
+              >
+                {importMode ? "Închide import asistat" : "Import inteligent din scan"}
+              </button>
+            ) : null}
+          </div>
+          {importMode && write ? (
+            <p className="mt-3 text-xs text-zinc-500">
+              Deschide scanul alături și completează rubricile de mai jos. La salvare, legăm importul de documentul CIV.
+              (OCR automat — planificat pentru integrarea viitoare.)
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 text-sm text-zinc-500">
+          Nu există document CIV încărcat.{" "}
+          <Link href={`/fleet/documents/new?vehicleId=${vehicle.id}`} className="text-violet-400 hover:underline">
+            Adaugă document CIV
+          </Link>{" "}
+          pentru a activa importul asistat.
+        </div>
+      )}
+
+      {error ? (
+        <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p>
+      ) : null}
+      {saved ? (
+        <p className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">
+          Date CIV salvate.
+        </p>
+      ) : null}
+
+      <form onSubmit={(e) => void onSubmit(e)} className="space-y-8">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FieldInput label="Serie CIV (X)" value={civSeries} onChange={setCivSeries} disabled={!write} mono />
+          <FieldInput label="Dată eliberare" type="date" value={civIssuedOn} onChange={setCivIssuedOn} disabled={!write} />
+          <FieldInput
+            label="Reprezentanță RAR"
+            value={civRarOffice}
+            onChange={setCivRarOffice}
+            disabled={!write}
+            className="sm:col-span-2"
+          />
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-zinc-300">VIN (E) — din Basic Info</label>
+            <p className="mt-1 font-mono text-sm text-zinc-400">{vehicle.vin ?? "— necompletat"}</p>
+          </div>
+        </div>
+
+        {CIV_FIELD_GROUPS.map((group) => (
+          <div key={group.id}>
+            <h3 className="mb-3 text-sm font-medium text-zinc-300">{group.label}</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {CIV_PROFILE_FIELDS.filter((f) => f.group === group.id).map((f) => (
+                <FieldInput
+                  key={f.key}
+                  label={`${f.rubric} — ${f.label}${f.unit ? ` (${f.unit})` : ""}`}
+                  value={profileForm[f.key] ?? ""}
+                  onChange={(v) => setProfileForm((prev) => ({ ...prev, [f.key]: v }))}
+                  disabled={!write}
+                  mono={f.kind !== "text"}
+                  type={f.kind === "text" ? "text" : "number"}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-300">Mențiuni (pag. 4)</label>
+          <textarea
+            value={civMentions}
+            onChange={(e) => setCivMentions(e.target.value)}
+            disabled={!write}
+            rows={4}
+            placeholder="Montări, limitări, GNC/GPL, modificări omologate…"
+            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2 disabled:opacity-60"
+          />
+        </div>
+
+        {write ? (
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+            >
+              {pending ? "Salvez…" : "Salvează Advanced Infos"}
+            </button>
+            {importMode && initial.importSource ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void onApplyImport()}
+                className="rounded-lg border border-violet-700/60 bg-violet-950/40 px-4 py-2 text-sm text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+              >
+                Salvează și leagă de document CIV
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </form>
+    </div>
+  );
+}
+
+function FieldInput({
+  label,
+  value,
+  onChange,
+  disabled,
+  type = "text",
+  mono,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  type?: string;
+  mono?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label className="block text-xs text-zinc-500">{label}</label>
+      <input
+        type={type}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={`mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2 disabled:opacity-60 ${mono ? "font-mono" : ""}`}
+      />
+    </div>
+  );
+}

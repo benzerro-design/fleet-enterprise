@@ -31,7 +31,7 @@ export default async function NewVehiclePage() {
           </Link>
         </div>
 
-        <VehicleForm mode="create" />
+        <VehicleForm />
       </main>
     </div>
   );

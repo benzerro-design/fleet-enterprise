@@ -31,6 +31,12 @@ export type VehicleRecord = {
   odometerKm: number;
   itpExpiresOn: string | null;
   itpStationName: string | null;
+  civSeries?: string | null;
+  civIssuedOn?: string | null;
+  civRarOffice?: string | null;
+  civMentions?: string | null;
+  civProfile?: Record<string, string | number | null>;
+  civImportedFromDocumentId?: string | null;
   createdAt: string;
   updatedAt: string;
   documents?: Array<{

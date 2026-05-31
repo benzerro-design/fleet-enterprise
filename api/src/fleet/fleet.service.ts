@@ -8,7 +8,14 @@ import { AuditService } from '../audit/audit.service';
 import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
+import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
 import type { VehicleDocument, VehicleRecord, VehicleStatus } from './fleet.types';
+import type { CivImportSource, OdometerReadingRecord, VehicleCivPayload } from './vehicle-civ.types';
+import {
+  CIV_PROFILE_FIELDS,
+  normalizeCivProfile,
+  civProfileFilledCount,
+} from './vehicle-civ-fields';
 import { PrismaService } from '../prisma/prisma.service';
 
 const vehicleInclude = {
@@ -240,6 +247,19 @@ export class FleetService {
         },
       });
 
+      const initialKm = dto.odometerKm ?? 0;
+      if (initialKm > 0) {
+        await this.prisma.odometerReading.create({
+          data: {
+            vehicleId: row.id,
+            odometerKm: initialKm,
+            source: 'import',
+            notes: 'Km inițial la crearea vehiculului',
+            recordedByUserId: actorUserId ?? null,
+          },
+        });
+      }
+
       return this.toRecord(row);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -255,6 +275,11 @@ export class FleetService {
     dto: PatchVehicleDto,
     actorUserId?: string,
   ): Promise<VehicleRecord> {
+    if (dto.odometerKm !== undefined) {
+      throw new ConflictException(
+        'Odometrul se actualizează doar din tab-ul Odometru al vehiculului.',
+      );
+    }
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       include: { tenant: true },
@@ -269,7 +294,6 @@ export class FleetService {
           registrationNumber: dto.registrationNumber,
           type: dto.type,
           status: dto.status,
-          odometerKm: dto.odometerKm,
           vin:
             dto.vin === undefined ? undefined : dto.vin === null ? null : dto.vin,
           itpExpiresOn:
@@ -306,6 +330,209 @@ export class FleetService {
       }
       throw e;
     }
+  }
+
+  async getVehicleCiv(tenantSlug: string, vehicleId: string): Promise<VehicleCivPayload> {
+    const row = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+    });
+    if (!row) throw new NotFoundException('Vehicle not found');
+
+    const profile = normalizeCivProfile(row.civProfile);
+    return {
+      civSeries: row.civSeries,
+      civIssuedOn: row.civIssuedOn ? row.civIssuedOn.toISOString() : null,
+      civRarOffice: row.civRarOffice,
+      civMentions: row.civMentions,
+      civProfile: profile,
+      civImportedFromDocumentId: row.civImportedFromDocumentId,
+      civFilledCount: civProfileFilledCount(profile),
+      civTotalFields: CIV_PROFILE_FIELDS.length,
+      importSource: await this.findCivImportSource(vehicleId),
+    };
+  }
+
+  async patchVehicleCiv(
+    tenantSlug: string,
+    vehicleId: string,
+    dto: PatchVehicleCivDto,
+    actorUserId?: string,
+  ): Promise<VehicleCivPayload> {
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      include: { tenant: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found');
+
+    if (dto.civImportedFromDocumentId) {
+      const doc = await this.prisma.vehicleDocument.findFirst({
+        where: {
+          id: dto.civImportedFromDocumentId,
+          vehicleId,
+          documentTypeCode: 'civ',
+        },
+      });
+      if (!doc) throw new NotFoundException('CIV document not found for this vehicle');
+    }
+
+    await this.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: {
+        civSeries:
+          dto.civSeries === undefined
+            ? undefined
+            : dto.civSeries === null
+              ? null
+              : dto.civSeries.trim() || null,
+        civIssuedOn:
+          dto.civIssuedOn === undefined
+            ? undefined
+            : dto.civIssuedOn === null
+              ? null
+              : new Date(dto.civIssuedOn),
+        civRarOffice:
+          dto.civRarOffice === undefined
+            ? undefined
+            : dto.civRarOffice === null
+              ? null
+              : dto.civRarOffice.trim() || null,
+        civMentions:
+          dto.civMentions === undefined
+            ? undefined
+            : dto.civMentions === null
+              ? null
+              : dto.civMentions.trim() || null,
+        civProfile:
+          dto.civProfile === undefined
+            ? undefined
+            : dto.civProfile === null
+              ? Prisma.DbNull
+              : normalizeCivProfile(dto.civProfile),
+        civImportedFromDocumentId:
+          dto.civImportedFromDocumentId === undefined
+            ? undefined
+            : dto.civImportedFromDocumentId,
+        updatedByUserId: actorUserId ?? undefined,
+      },
+    });
+
+    await this.audit.logVehicle({
+      tenantUuid: existing.tenantId,
+      actorUserId: actorUserId ?? undefined,
+      action: 'vehicle_civ_update',
+      vehicleId,
+      meta: { registrationNumber: existing.registrationNumber },
+    });
+
+    return this.getVehicleCiv(tenantSlug, vehicleId);
+  }
+
+  async listOdometerReadings(
+    tenantSlug: string,
+    vehicleId: string,
+    limit = 50,
+  ): Promise<{ items: OdometerReadingRecord[]; vehicleOdometerKm: number }> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, odometerKm: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    const take = Math.min(Math.max(1, limit), 100);
+    const rows = await this.prisma.odometerReading.findMany({
+      where: { vehicleId },
+      orderBy: { recordedAt: 'desc' },
+      take,
+      include: { recordedBy: { select: { email: true } } },
+    });
+
+    return {
+      vehicleOdometerKm: vehicle.odometerKm,
+      items: rows.map((r) => ({
+        id: r.id,
+        vehicleId: r.vehicleId,
+        odometerKm: r.odometerKm,
+        source: r.source as OdometerReadingRecord['source'],
+        sourceRef: r.sourceRef,
+        notes: r.notes,
+        recordedAt: r.recordedAt.toISOString(),
+        recordedByEmail: r.recordedBy?.email ?? null,
+      })),
+    };
+  }
+
+  async recordOdometerReading(
+    tenantSlug: string,
+    vehicleId: string,
+    dto: RecordOdometerDto,
+    actorUserId?: string,
+  ): Promise<{ reading: OdometerReadingRecord; vehicle: VehicleRecord }> {
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      include: { tenant: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found');
+
+    if (!Number.isFinite(dto.odometerKm) || dto.odometerKm < 0) {
+      throw new ConflictException('odometerKm must be a non-negative integer');
+    }
+
+    const source = dto.source ?? 'manual';
+    if (source === 'tracking' && dto.odometerKm < existing.odometerKm) {
+      throw new ConflictException(
+        'Citirea din tracking nu poate fi sub km-ul curent al vehiculului. Verificați sincronizarea.',
+      );
+    }
+
+    const reading = await this.prisma.odometerReading.create({
+      data: {
+        vehicleId,
+        odometerKm: Math.round(dto.odometerKm),
+        source,
+        sourceRef: dto.sourceRef?.trim() || null,
+        notes: dto.notes?.trim() || null,
+        recordedByUserId: actorUserId ?? null,
+      },
+      include: { recordedBy: { select: { email: true } } },
+    });
+
+    if (dto.odometerKm >= existing.odometerKm) {
+      await this.prisma.vehicle.update({
+        where: { id: vehicleId },
+        data: {
+          odometerKm: Math.round(dto.odometerKm),
+          updatedByUserId: actorUserId ?? undefined,
+        },
+      });
+    }
+
+    await this.audit.logVehicle({
+      tenantUuid: existing.tenantId,
+      actorUserId: actorUserId ?? undefined,
+      action: 'odometer_update',
+      vehicleId,
+      meta: {
+        registrationNumber: existing.registrationNumber,
+        odometerKm: Math.round(dto.odometerKm),
+        source,
+        previousKm: existing.odometerKm,
+      },
+    });
+
+    const vehicle = await this.getVehicle(tenantSlug, vehicleId);
+    return {
+      reading: {
+        id: reading.id,
+        vehicleId: reading.vehicleId,
+        odometerKm: reading.odometerKm,
+        source: reading.source as OdometerReadingRecord['source'],
+        sourceRef: reading.sourceRef,
+        notes: reading.notes,
+        recordedAt: reading.recordedAt.toISOString(),
+        recordedByEmail: reading.recordedBy?.email ?? null,
+      },
+      vehicle,
+    };
   }
 
   async addVehicleDocument(
@@ -407,6 +634,26 @@ export class FleetService {
     });
   }
 
+  private async findCivImportSource(vehicleId: string): Promise<CivImportSource> {
+    const doc = await this.prisma.vehicleDocument.findFirst({
+      where: {
+        vehicleId,
+        documentTypeCode: 'civ',
+        fileUrl: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!doc?.fileUrl) return null;
+    return {
+      documentId: doc.id,
+      title: doc.title,
+      fileUrl: doc.fileUrl,
+      fileName: doc.fileName,
+      expiresOn: doc.expiresOn ? doc.expiresOn.toISOString() : null,
+      uploadedAt: doc.createdAt.toISOString(),
+    };
+  }
+
   private toRecord(row: VehicleRow): VehicleRecord {
     return {
       id: row.id,
@@ -419,6 +666,12 @@ export class FleetService {
       odometerKm: row.odometerKm,
       itpExpiresOn: row.itpExpiresOn ? row.itpExpiresOn.toISOString() : null,
       itpStationName: row.itpStationName,
+      civSeries: row.civSeries,
+      civIssuedOn: row.civIssuedOn ? row.civIssuedOn.toISOString() : null,
+      civRarOffice: row.civRarOffice,
+      civMentions: row.civMentions,
+      civProfile: normalizeCivProfile(row.civProfile),
+      civImportedFromDocumentId: row.civImportedFromDocumentId,
       documents: row.documents.map((d) => this.toDocument(d)),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
