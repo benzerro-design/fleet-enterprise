@@ -231,7 +231,11 @@ export function RemindersListView({
                     </p>
                   ) : null}
                   {write && row.sourceType !== "document" ? (
-                    <DeleteReminderButton reminderId={row.id} title={row.title} />
+                    <DeleteReminderButton
+                      reminderId={row.id}
+                      title={row.title}
+                      onDeleted={() => void load()}
+                    />
                   ) : null}
                   {write && row.sourceType === "document" && row.vehicleDocumentId ? (
                     <Link

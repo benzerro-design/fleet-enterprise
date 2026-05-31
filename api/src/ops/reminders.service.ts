@@ -382,7 +382,6 @@ export class RemindersService {
       );
     }
 
-    await this.prisma.reminderAction.delete({ where: { id } });
     await this.audit.logVehicle({
       tenantUuid: row.vehicle.tenantId,
       actorUserId: actorUserId ?? undefined,
@@ -394,6 +393,8 @@ export class RemindersService {
         registrationNumber: row.vehicle.registrationNumber,
       },
     });
+
+    await this.prisma.reminderAction.delete({ where: { id } });
   }
 
   /** Sincronizează acțiunea de reminder din setările documentului. */

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { nextResponseFromUpstream } from "@/lib/bff-proxy";
 
 const COOKIE = "fleet_access";
 
@@ -33,12 +34,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path?: string[] 
 
   const upstream = await fetch(url, { method: req.method, headers, body });
 
-  const outHeaders = new Headers();
-  const uct = upstream.headers.get("content-type");
-  if (uct) outHeaders.set("Content-Type", uct);
-
-  const buf = await upstream.arrayBuffer();
-  return new NextResponse(buf, { status: upstream.status, headers: outHeaders });
+  return nextResponseFromUpstream(upstream);
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {

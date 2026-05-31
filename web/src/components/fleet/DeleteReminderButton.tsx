@@ -7,9 +7,10 @@ type Props = {
   reminderId: string;
   title: string;
   redirectTo?: string;
+  onDeleted?: () => void;
 };
 
-export function DeleteReminderButton({ reminderId, title, redirectTo }: Props) {
+export function DeleteReminderButton({ reminderId, title, redirectTo, onDeleted }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,9 +21,10 @@ export function DeleteReminderButton({ reminderId, title, redirectTo }: Props) {
     setError(null);
     try {
       const res = await fetch(`/api/reminders/${reminderId}`, { method: "DELETE" });
-      if (res.status === 204 || res.status === 404) {
+      if (res.ok || res.status === 204 || res.status === 404) {
+        onDeleted?.();
         if (redirectTo) router.push(redirectTo);
-        router.refresh();
+        else router.refresh();
         return;
       }
       setError((await res.text()) || `Eroare ${res.status}`);
