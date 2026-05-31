@@ -38,23 +38,6 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.AR_REGION }}-docker.pkg.dev --quiet
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: api/package-lock.json
-
-      - name: Run database migrations (Neon)
-        working-directory: api
-        run: |
-          DB_URL="$(gcloud secrets versions access latest --secret=DATABASE_URL --project="${{ env.PROJECT_ID }}")"
-          # Prisma migrate needs direct Neon host (pooler hangs on advisory lock).
-          DB_URL="${DB_URL//-pooler/}"
-          export DATABASE_URL="$DB_URL"
-          npm ci
-          npx prisma migrate deploy
-
       - name: Build image
         run: |
           docker build -f api/Dockerfile \
