@@ -64,7 +64,7 @@ export function VehicleForm() {
         return;
       }
       const created = (await res.json()) as { id: string };
-      router.push(`/fleet/vehicles/${created.id}?tab=basic`);
+      router.push(`/fleet/vehicles/${created.id}/edit`);
       router.refresh();
     } catch {
       setError("Rețea sau server indisponibil.");
