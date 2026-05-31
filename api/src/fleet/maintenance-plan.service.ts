@@ -130,9 +130,18 @@ export class MaintenancePlanService {
     private readonly reminders: RemindersService,
   ) {}
 
-  private async assertVehicle(tenantId: string, vehicleId: string) {
+  /** @param tenantSlug — slug din JWT (@TenantId), nu UUID-ul din DB. */
+  private async ensureTenant(tenantSlug: string) {
+    return this.prisma.tenant.upsert({
+      where: { slug: tenantSlug },
+      create: { slug: tenantSlug, name: tenantSlug },
+      update: { name: tenantSlug },
+    });
+  }
+
+  private async assertVehicle(tenantSlug: string, vehicleId: string) {
     const vehicle = await this.prisma.vehicle.findFirst({
-      where: { id: vehicleId, tenantId },
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: { id: true, registrationNumber: true, odometerKm: true },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
@@ -169,13 +178,13 @@ export class MaintenancePlanService {
   }
 
   private async applyReminderSync(
-    tenantId: string,
+    tenantUuid: string,
     row: MaintenancePlanItem,
     syncReminderAction?: boolean,
   ): Promise<boolean> {
     try {
       if (shouldRunReminderMenuSync(row.reminderMenuSyncEnabled, syncReminderAction)) {
-        await this.reminders.syncFromMaintenancePlan(tenantId, {
+        await this.reminders.syncFromMaintenancePlan(tenantUuid, {
           id: row.id,
           vehicleId: row.vehicleId,
           title: row.title,
@@ -198,10 +207,11 @@ export class MaintenancePlanService {
     }
   }
 
-  async list(tenantId: string, vehicleId: string): Promise<MaintenancePlanPayload> {
-    const vehicle = await this.assertVehicle(tenantId, vehicleId);
+  async list(tenantSlug: string, vehicleId: string): Promise<MaintenancePlanPayload> {
+    const tenant = await this.ensureTenant(tenantSlug);
+    const vehicle = await this.assertVehicle(tenantSlug, vehicleId);
     const rows = await this.prisma.maintenancePlanItem.findMany({
-      where: { tenantId, vehicleId },
+      where: { tenantId: tenant.id, vehicleId },
       include: { vehicle: { select: { odometerKm: true } } },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
@@ -210,12 +220,13 @@ export class MaintenancePlanService {
   }
 
   async create(
-    tenantId: string,
+    tenantSlug: string,
     vehicleId: string,
     dto: CreateMaintenancePlanItemDto,
     actorUserId?: string,
   ) {
-    const vehicle = await this.assertVehicle(tenantId, vehicleId);
+    const tenant = await this.ensureTenant(tenantSlug);
+    const vehicle = await this.assertVehicle(tenantSlug, vehicleId);
     const title = dto.title?.trim();
     if (!title) throw new BadRequestException('title is required');
 
@@ -257,7 +268,7 @@ export class MaintenancePlanService {
 
     const row = await this.prisma.maintenancePlanItem.create({
       data: {
-        tenantId,
+        tenantId: tenant.id,
         vehicleId,
         title,
         category: dto.category?.trim() || null,
@@ -281,10 +292,10 @@ export class MaintenancePlanService {
       include: { vehicle: { select: { odometerKm: true } } },
     });
 
-    const reminderSyncFailed = await this.applyReminderSync(tenantId, row, dto.syncReminderAction);
+    const reminderSyncFailed = await this.applyReminderSync(tenant.id, row, dto.syncReminderAction);
 
     await this.audit.logVehicle({
-      tenantUuid: tenantId,
+      tenantUuid: tenant.id,
       actorUserId,
       action: 'maintenance_plan_create',
       vehicleId,
@@ -295,15 +306,16 @@ export class MaintenancePlanService {
   }
 
   async patch(
-    tenantId: string,
+    tenantSlug: string,
     vehicleId: string,
     itemId: string,
     dto: PatchMaintenancePlanItemDto,
     actorUserId?: string,
   ) {
-    const vehicle = await this.assertVehicle(tenantId, vehicleId);
+    const tenant = await this.ensureTenant(tenantSlug);
+    const vehicle = await this.assertVehicle(tenantSlug, vehicleId);
     const before = await this.prisma.maintenancePlanItem.findFirst({
-      where: { id: itemId, tenantId, vehicleId },
+      where: { id: itemId, tenantId: tenant.id, vehicleId },
     });
     if (!before) throw new NotFoundException('Maintenance plan item not found');
 
@@ -381,10 +393,10 @@ export class MaintenancePlanService {
       include: { vehicle: { select: { odometerKm: true } } },
     });
 
-    const reminderSyncFailed = await this.applyReminderSync(tenantId, row, dto.syncReminderAction);
+    const reminderSyncFailed = await this.applyReminderSync(tenant.id, row, dto.syncReminderAction);
 
     await this.audit.logVehicle({
-      tenantUuid: tenantId,
+      tenantUuid: tenant.id,
       actorUserId,
       action: 'maintenance_plan_update',
       vehicleId,
@@ -395,15 +407,16 @@ export class MaintenancePlanService {
   }
 
   async markPerformed(
-    tenantId: string,
+    tenantSlug: string,
     vehicleId: string,
     itemId: string,
     dto: MarkMaintenancePlanPerformedDto,
     actorUserId?: string,
   ) {
-    const vehicle = await this.assertVehicle(tenantId, vehicleId);
+    const tenant = await this.ensureTenant(tenantSlug);
+    const vehicle = await this.assertVehicle(tenantSlug, vehicleId);
     const before = await this.prisma.maintenancePlanItem.findFirst({
-      where: { id: itemId, tenantId, vehicleId },
+      where: { id: itemId, tenantId: tenant.id, vehicleId },
     });
     if (!before) throw new NotFoundException('Maintenance plan item not found');
 
@@ -440,10 +453,10 @@ export class MaintenancePlanService {
       include: { vehicle: { select: { odometerKm: true } } },
     });
 
-    const reminderSyncFailed = await this.applyReminderSync(tenantId, row);
+    const reminderSyncFailed = await this.applyReminderSync(tenant.id, row);
 
     await this.audit.logVehicle({
-      tenantUuid: tenantId,
+      tenantUuid: tenant.id,
       actorUserId,
       action: 'maintenance_plan_performed',
       vehicleId,
@@ -453,17 +466,18 @@ export class MaintenancePlanService {
     return { ...toRecord(row), reminderSyncFailed };
   }
 
-  async delete(tenantId: string, vehicleId: string, itemId: string, actorUserId?: string) {
-    await this.assertVehicle(tenantId, vehicleId);
+  async delete(tenantSlug: string, vehicleId: string, itemId: string, actorUserId?: string) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await this.assertVehicle(tenantSlug, vehicleId);
     const row = await this.prisma.maintenancePlanItem.findFirst({
-      where: { id: itemId, tenantId, vehicleId },
+      where: { id: itemId, tenantId: tenant.id, vehicleId },
     });
     if (!row) throw new NotFoundException('Maintenance plan item not found');
 
     await this.prisma.maintenancePlanItem.delete({ where: { id: itemId } });
 
     await this.audit.logVehicle({
-      tenantUuid: tenantId,
+      tenantUuid: tenant.id,
       actorUserId,
       action: 'maintenance_plan_delete',
       vehicleId,
