@@ -8,9 +8,10 @@ import {
 export const REMINDER_OFFSET_KM_CHOICES = [20000, 10000, 5000, 3000, 1000, 500] as const;
 
 export const REMINDER_SOURCE_TYPES = [
-  { value: "document", label: "Document existent" },
-  { value: "maintenance", label: "Mentenanță existentă" },
-  { value: "custom", label: "Acțiune personalizată" },
+  { value: "document", label: "Document" },
+  { value: "maintenance", label: "Mentenanță" },
+  { value: "cost", label: "Cost" },
+  { value: "custom", label: "Personalizat" },
 ] as const;
 
 export type ReminderSourceType = (typeof REMINDER_SOURCE_TYPES)[number]["value"];
@@ -58,8 +59,10 @@ export type ReminderActionRow = {
   notes: string | null;
   vehicleDocumentId: string | null;
   maintenanceEntryId: string | null;
+  costEntryId: string | null;
   documentTypeCode: string | null;
   linkedMaintenanceTitle: string | null;
+  linkedCostCategory: string | null;
   dueOn: string | null;
   reminderOffsetsDays: number[] | null;
   dueOdometerKm: number | null;

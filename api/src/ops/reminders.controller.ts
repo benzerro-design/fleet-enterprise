@@ -130,8 +130,8 @@ function parseReminderBrowseQuery(q: Record<string, string | undefined>): Remind
 function parseSourceType(raw?: string): ReminderSourceType | undefined {
   if (!raw?.trim()) return undefined;
   const v = raw.trim();
-  if (v === 'document' || v === 'maintenance' || v === 'custom') return v;
-  throw new BadRequestException('Invalid sourceType; use document, maintenance, or custom');
+  if (v === 'document' || v === 'maintenance' || v === 'custom' || v === 'cost') return v;
+  throw new BadRequestException('Invalid sourceType; use document, maintenance, cost, or custom');
 }
 
 function parseReminderListStatus(raw?: string): ReminderListFilterStatus | undefined {

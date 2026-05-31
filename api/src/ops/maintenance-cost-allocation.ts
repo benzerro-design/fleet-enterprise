@@ -1,6 +1,7 @@
 /** Coduri stabile pentru alocarea costurilor la mentenanță (API + DB). */
 export const MAINTENANCE_COST_ALLOCATION_CODES = [
   'revizie',
+  'itp',
   'reparatie_mecanica',
   'reparatie_electrica',
   'dauna',
@@ -21,6 +22,7 @@ export function isMaintenanceCostAllocationCode(v: string): v is MaintenanceCost
 /** Etichete afișate în UI (RO) — aliniate cu web/src/lib/maintenance-cost-allocation.ts */
 export const MAINTENANCE_COST_ALLOCATION_LABELS: Record<MaintenanceCostAllocationCode, string> = {
   revizie: 'Revizie',
+  itp: 'ITP',
   reparatie_mecanica: 'Reparație mecanică',
   reparatie_electrica: 'Reparație electrică',
   dauna: 'Daună',

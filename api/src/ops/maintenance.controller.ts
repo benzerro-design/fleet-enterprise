@@ -20,6 +20,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { isMaintenanceCostAllocationCode } from './maintenance-cost-allocation';
+import { normalizeReminderOffsets } from './document-reminders';
 import type {
   CreateMaintenanceInput,
   MaintenanceBrowseFilters,
@@ -152,6 +153,15 @@ function assertCreateMaintenanceDto(body: unknown): CreateMaintenanceInput {
     odometerKm: optionalNonNegativeInt(body.odometerKm, 'odometerKm'),
     notes: optionalNullableString(body.notes),
     costCents: optionalNonNegativeInt(body.costCents, 'costCents'),
+    nextDueOn:
+      'nextDueOn' in body
+        ? body.nextDueOn === null
+          ? null
+          : optionalIsoDateString(body.nextDueOn)
+        : undefined,
+    reminderOffsetsDays: parseReminderOffsetsField(body, 'reminderOffsetsDays'),
+    syncReminderAction:
+      'syncReminderAction' in body ? optionalBoolean(body.syncReminderAction) : undefined,
   };
 }
 
@@ -203,6 +213,18 @@ function assertPatchMaintenanceDto(body: unknown): PatchMaintenanceInput {
   if ('invoiceAttachmentUrl' in body) {
     dto.invoiceAttachmentUrl = optionalNullableString(body.invoiceAttachmentUrl);
   }
+  if ('nextDueOn' in body) {
+    dto.nextDueOn = body.nextDueOn === null ? null : optionalIsoDateString(body.nextDueOn);
+    if (body.nextDueOn !== null && dto.nextDueOn === undefined) {
+      throw new BadRequestException('Field "nextDueOn" must be a valid ISO date string or null');
+    }
+  }
+  if ('reminderOffsetsDays' in body) {
+    dto.reminderOffsetsDays = parseReminderOffsetsField(body, 'reminderOffsetsDays');
+  }
+  if ('syncReminderAction' in body) {
+    dto.syncReminderAction = optionalBoolean(body.syncReminderAction);
+  }
 
   if (Object.keys(dto).length === 0) {
     throw new BadRequestException('No fields to update');
@@ -251,5 +273,27 @@ function optionalNonNegativeInt(v: unknown, field: string): number | undefined {
   if (typeof v !== 'number' || !Number.isFinite(v) || !Number.isInteger(v) || v < 0) {
     throw new BadRequestException(`Field "${field}" must be a non-negative integer`);
   }
+  return v;
+}
+
+function parseReminderOffsetsField(
+  body: Record<string, unknown>,
+  field: string,
+): number[] | null | undefined {
+  if (!(field in body)) return undefined;
+  const v = body[field];
+  if (v === null) return null;
+  const normalized = normalizeReminderOffsets(v);
+  if (!normalized) {
+    throw new BadRequestException(
+      `Field "${field}" must be an array of integers between 0 and 365 (max 10 unique values)`,
+    );
+  }
+  return normalized;
+}
+
+function optionalBoolean(v: unknown): boolean | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'boolean') throw new BadRequestException('Expected boolean');
   return v;
 }

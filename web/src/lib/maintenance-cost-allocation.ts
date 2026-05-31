@@ -1,6 +1,7 @@
 /** Coduri alocare cost mentenanță — păstrate în sync cu API (`maintenance-cost-allocation.ts`). */
 export const MAINTENANCE_COST_ALLOCATION_OPTIONS: ReadonlyArray<{ code: string; label: string }> = [
   { code: "revizie", label: "Revizie" },
+  { code: "itp", label: "ITP" },
   { code: "reparatie_mecanica", label: "Reparație mecanică" },
   { code: "reparatie_electrica", label: "Reparație electrică" },
   { code: "dauna", label: "Daună" },

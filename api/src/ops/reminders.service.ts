@@ -115,6 +115,7 @@ function toRow(row: {
   notes: string | null;
   vehicleDocumentId: string | null;
   maintenanceEntryId: string | null;
+  costEntryId: string | null;
   dueOn: Date | null;
   reminderOffsetsDays: unknown;
   dueOdometerKm: number | null;
@@ -134,6 +135,7 @@ function toRow(row: {
   };
   document?: { documentTypeCode: string } | null;
   maintenance?: { title: string } | null;
+  cost?: { category: string } | null;
 }) {
   const reminderOffsetsDays = normalizeReminderOffsets(row.reminderOffsetsDays);
   const reminderOffsetsKm = normalizeReminderOffsetsKm(row.reminderOffsetsKm);
@@ -160,8 +162,10 @@ function toRow(row: {
     notes: row.notes,
     vehicleDocumentId: row.vehicleDocumentId,
     maintenanceEntryId: row.maintenanceEntryId,
+    costEntryId: row.costEntryId,
     documentTypeCode: row.document?.documentTypeCode ?? null,
     linkedMaintenanceTitle: row.maintenance?.title ?? null,
+    linkedCostCategory: row.cost?.category ?? null,
     dueOn: row.dueOn ? row.dueOn.toISOString() : null,
     reminderOffsetsDays,
     dueOdometerKm: row.dueOdometerKm,
@@ -188,6 +192,7 @@ const includeRow = {
   },
   document: { select: { documentTypeCode: true } },
   maintenance: { select: { title: true } },
+  cost: { select: { category: true } },
 } as const;
 
 @Injectable()
@@ -381,6 +386,16 @@ export class RemindersService {
         'Reminderul legat de document se gestionează din Documente. Editează documentul sau dezactivează reminderele acolo.',
       );
     }
+    if (row.sourceType === 'maintenance' && row.maintenanceEntryId) {
+      throw new BadRequestException(
+        'Reminderul legat de mentenanță se gestionează din Mentenanță. Editează intervenția sau dezactivează reminderele acolo.',
+      );
+    }
+    if (row.sourceType === 'cost' && row.costEntryId) {
+      throw new BadRequestException(
+        'Reminderul legat de cost se gestionează din Costuri. Editează înregistrarea sau dezactivează reminderele acolo.',
+      );
+    }
 
     await this.audit.logVehicle({
       tenantUuid: row.vehicle.tenantId,
@@ -430,6 +445,87 @@ export class RemindersService {
         vehicleId: doc.vehicleId,
         title: doc.title,
         dueOn: doc.expiresOn,
+        reminderOffsetsDays: offsets,
+        isActive: true,
+      },
+      include: includeRow,
+    });
+  }
+
+  /** Sincronizează acțiunea de reminder din setările unei intervenții de mentenanță. */
+  async syncFromMaintenance(
+    tenantId: string,
+    entry: {
+      id: string;
+      vehicleId: string;
+      title: string;
+      nextDueOn: Date | null;
+      reminderOffsetsDays: unknown;
+    },
+  ) {
+    const offsets = normalizeReminderOffsets(entry.reminderOffsetsDays);
+    if (!entry.nextDueOn || !offsets?.length) {
+      await this.prisma.reminderAction.deleteMany({ where: { maintenanceEntryId: entry.id } });
+      return null;
+    }
+
+    return this.prisma.reminderAction.upsert({
+      where: { maintenanceEntryId: entry.id },
+      create: {
+        tenantId,
+        vehicleId: entry.vehicleId,
+        sourceType: ReminderSourceType.maintenance,
+        title: entry.title,
+        maintenanceEntryId: entry.id,
+        dueOn: entry.nextDueOn,
+        reminderOffsetsDays: offsets,
+        isActive: true,
+      },
+      update: {
+        vehicleId: entry.vehicleId,
+        title: entry.title,
+        dueOn: entry.nextDueOn,
+        reminderOffsetsDays: offsets,
+        isActive: true,
+      },
+      include: includeRow,
+    });
+  }
+
+  /** Sincronizează acțiunea de reminder din setările unui cost. */
+  async syncFromCost(
+    tenantId: string,
+    cost: {
+      id: string;
+      vehicleId: string;
+      category: string;
+      title: string;
+      nextDueOn: Date | null;
+      reminderOffsetsDays: unknown;
+    },
+  ) {
+    const offsets = normalizeReminderOffsets(cost.reminderOffsetsDays);
+    if (!cost.nextDueOn || !offsets?.length) {
+      await this.prisma.reminderAction.deleteMany({ where: { costEntryId: cost.id } });
+      return null;
+    }
+
+    return this.prisma.reminderAction.upsert({
+      where: { costEntryId: cost.id },
+      create: {
+        tenantId,
+        vehicleId: cost.vehicleId,
+        sourceType: ReminderSourceType.cost,
+        title: cost.title,
+        costEntryId: cost.id,
+        dueOn: cost.nextDueOn,
+        reminderOffsetsDays: offsets,
+        isActive: true,
+      },
+      update: {
+        vehicleId: cost.vehicleId,
+        title: cost.title,
+        dueOn: cost.nextDueOn,
         reminderOffsetsDays: offsets,
         isActive: true,
       },

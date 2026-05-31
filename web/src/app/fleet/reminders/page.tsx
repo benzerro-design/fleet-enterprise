@@ -93,6 +93,7 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
               <option value="">Toate</option>
               <option value="document">Document</option>
               <option value="maintenance">Mentenanță</option>
+              <option value="cost">Cost</option>
               <option value="custom">Personalizat</option>
             </select>
           </div>

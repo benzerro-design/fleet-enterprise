@@ -113,6 +113,9 @@ model MaintenanceEntry {
   invoiceDate          DateTime?
   invoiceAttachmentUrl String?
   provider             String?
+  /** Termen / dată următoare acțiune (ex. ITP valabil până la). */
+  nextDueOn            DateTime?
+  reminderOffsetsDays  Json?
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminderAction       ReminderAction?
@@ -135,8 +138,12 @@ model CostEntry {
   invoiceDate          DateTime?
   invoiceAttachmentUrl String?
   provider             String?
+  /** Termen / dată următoare (ex. ITP valabil până la). */
+  nextDueOn            DateTime?
+  reminderOffsetsDays  Json?
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  reminderAction       ReminderAction?
 
   @@index([tenantId])
   @@index([vehicleId])
@@ -179,6 +186,7 @@ model VehicleDocument {
 enum ReminderSourceType {
   document
   maintenance
+  cost
   custom
 }
 
@@ -191,6 +199,7 @@ model ReminderAction {
   notes                   String?
   vehicleDocumentId       String?            @unique
   maintenanceEntryId      String?            @unique
+  costEntryId             String?            @unique
   dueOn                   DateTime?
   reminderOffsetsDays     Json?
   dueOdometerKm           Int?
@@ -206,6 +215,7 @@ model ReminderAction {
   vehicle                 Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   document                VehicleDocument?   @relation(fields: [vehicleDocumentId], references: [id], onDelete: Cascade)
   maintenance             MaintenanceEntry?  @relation(fields: [maintenanceEntryId], references: [id], onDelete: Cascade)
+  cost                    CostEntry?         @relation(fields: [costEntryId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([vehicleId])

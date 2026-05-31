@@ -1,10 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeReminderOffsets } from './document-reminders';
+import { isItpMaintenanceAllocation, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import type { MaintenanceCostAllocationCode } from './maintenance-cost-allocation';
+import { RemindersService } from './reminders.service';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -21,6 +24,9 @@ export type CreateMaintenanceInput = {
   odometerKm?: number | null;
   notes?: string | null;
   costCents?: number | null;
+  nextDueOn?: string | null;
+  reminderOffsetsDays?: number[] | null;
+  syncReminderAction?: boolean;
 };
 
 export type PatchMaintenanceInput = Partial<CreateMaintenanceInput>;
@@ -150,6 +156,14 @@ function maintPatchFieldKeys(
   return keys;
 }
 
+function reminderOffsetsForDb(
+  value: number[] | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.DbNull;
+  return value;
+}
+
 function toMaintRow(row: {
   id: string;
   vehicleId: string;
@@ -163,6 +177,8 @@ function toMaintRow(row: {
   odometerKm: number | null;
   notes: string | null;
   costCents: number | null;
+  nextDueOn: Date | null;
+  reminderOffsetsDays: unknown;
   vehicle: { registrationNumber: string; clientId: string };
   tenant: { slug: string };
 }) {
@@ -182,6 +198,8 @@ function toMaintRow(row: {
     odometerKm: row.odometerKm,
     notes: row.notes,
     costCents: row.costCents,
+    nextDueOn: row.nextDueOn ? row.nextDueOn.toISOString() : null,
+    reminderOffsetsDays: normalizeReminderOffsets(row.reminderOffsetsDays),
   };
 }
 
@@ -190,6 +208,7 @@ export class MaintenanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly reminders: RemindersService,
   ) {}
 
   async list(tenantSlug: string, params: MaintenanceListParams) {
@@ -302,6 +321,9 @@ export class MaintenanceService {
         odometerKm: dto.odometerKm ?? null,
         notes: dto.notes ?? null,
         costCents: dto.costCents ?? null,
+        nextDueOn:
+          dto.nextDueOn === undefined ? null : dto.nextDueOn ? new Date(dto.nextDueOn) : null,
+        reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
       },
       include: {
         vehicle: { select: { registrationNumber: true, clientId: true } },
@@ -326,7 +348,32 @@ export class MaintenanceService {
       },
     });
 
-    return toMaintRow(row);
+    let reminderSyncFailed = false;
+    if (dto.syncReminderAction !== false) {
+      try {
+        await this.reminders.syncFromMaintenance(tenant.id, {
+          id: row.id,
+          vehicleId: row.vehicleId,
+          title: row.title,
+          nextDueOn: row.nextDueOn,
+          reminderOffsetsDays: row.reminderOffsetsDays,
+        });
+      } catch (err) {
+        reminderSyncFailed = true;
+        console.error('syncFromMaintenance after create failed', err);
+      }
+    }
+
+    if (isItpMaintenanceAllocation(row.costAllocationCode) && row.nextDueOn) {
+      try {
+        await syncVehicleItpFromOps(this.prisma, row.vehicleId, row.nextDueOn, row.provider);
+        await syncItpCertDocument(this.prisma, row.vehicleId, row.nextDueOn);
+      } catch (err) {
+        console.error('syncVehicleItpFromOps after maintenance create failed', err);
+      }
+    }
+
+    return { ...toMaintRow(row), reminderSyncFailed };
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchMaintenanceInput, actorUserId?: string) {
@@ -358,6 +405,13 @@ export class MaintenanceService {
       odometerKm: dto.odometerKm,
       notes: dto.notes,
       costCents: dto.costCents,
+      nextDueOn:
+        dto.nextDueOn === undefined
+          ? undefined
+          : dto.nextDueOn === null
+            ? null
+            : new Date(dto.nextDueOn),
+      reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
     };
 
     const r = await this.prisma.maintenanceEntry.updateMany({
@@ -399,7 +453,39 @@ export class MaintenanceService {
       },
     });
 
-    return this.getById(tenantSlug, id);
+    const updated = await this.getById(tenantSlug, id);
+
+    let reminderSyncFailed = false;
+    if (dto.syncReminderAction !== false) {
+      try {
+        await this.reminders.syncFromMaintenance(before.tenantId, {
+          id: updated.id,
+          vehicleId: updated.vehicleId,
+          title: updated.title,
+          nextDueOn: updated.nextDueOn ? new Date(updated.nextDueOn) : null,
+          reminderOffsetsDays: updated.reminderOffsetsDays,
+        });
+      } catch (err) {
+        reminderSyncFailed = true;
+        console.error('syncFromMaintenance after patch failed', err);
+      }
+    }
+
+    if (isItpMaintenanceAllocation(updated.costAllocationCode) && updated.nextDueOn) {
+      try {
+        await syncVehicleItpFromOps(
+          this.prisma,
+          updated.vehicleId,
+          new Date(updated.nextDueOn),
+          updated.provider,
+        );
+        await syncItpCertDocument(this.prisma, updated.vehicleId, new Date(updated.nextDueOn));
+      } catch (err) {
+        console.error('syncVehicleItpFromOps after maintenance patch failed', err);
+      }
+    }
+
+    return { ...updated, reminderSyncFailed };
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string) {

@@ -23,7 +23,7 @@ export default async function ReminderDetailPage({ params }: Props) {
   const [row, auth] = await Promise.all([getRow(id), getAuthMeResult()]);
   if (!row) notFound();
   const write = canManageFleet(auth);
-  const canEdit = write && row.sourceType !== "document";
+  const canEdit = write && row.sourceType === "custom";
 
   return (
     <div className="text-zinc-100">
@@ -54,7 +54,7 @@ export default async function ReminderDetailPage({ params }: Props) {
                 Editare
               </Link>
             ) : null}
-            {write && row.sourceType !== "document" ? (
+            {write && row.sourceType === "custom" ? (
               <DeleteReminderButton reminderId={id} title={row.title} redirectTo="/fleet/reminders" />
             ) : null}
           </div>
@@ -138,6 +138,24 @@ export default async function ReminderDetailPage({ params }: Props) {
             Acest reminder este sincronizat cu documentul.{" "}
             <Link href={`/fleet/documents/${row.vehicleDocumentId}/edit`} className="text-violet-400 hover:underline">
               Editează documentul
+            </Link>{" "}
+            pentru a modifica reminderele.
+          </p>
+        ) : null}
+        {row.sourceType === "maintenance" && row.maintenanceEntryId ? (
+          <p className="mt-6 text-sm text-zinc-500">
+            Acest reminder este sincronizat cu intervenția de mentenanță.{" "}
+            <Link href={`/fleet/maintenance/${row.maintenanceEntryId}/edit`} className="text-violet-400 hover:underline">
+              Editează mentenanța
+            </Link>{" "}
+            pentru a modifica reminderele.
+          </p>
+        ) : null}
+        {row.sourceType === "cost" && row.costEntryId ? (
+          <p className="mt-6 text-sm text-zinc-500">
+            Acest reminder este sincronizat cu înregistrarea de cost.{" "}
+            <Link href={`/fleet/costs/${row.costEntryId}/edit`} className="text-violet-400 hover:underline">
+              Editează costul
             </Link>{" "}
             pentru a modifica reminderele.
           </p>

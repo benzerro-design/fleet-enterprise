@@ -12,6 +12,7 @@ import {
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
+import { syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -339,6 +340,14 @@ export class DocumentsService {
       }
     }
 
+    if (row.documentTypeCode === 'itp_cert' && row.expiresOn) {
+      try {
+        await syncVehicleItpFromOps(this.prisma, row.vehicleId, row.expiresOn);
+      } catch (err) {
+        console.error('syncVehicleItpFromOps after document create failed', err);
+      }
+    }
+
     return { ...toDocRow(row), reminderSyncFailed };
   }
 
@@ -406,6 +415,14 @@ export class DocumentsService {
       } catch (err) {
         reminderSyncFailed = true;
         console.error('syncFromDocument after patch failed', err);
+      }
+    }
+
+    if (row.documentTypeCode === 'itp_cert' && row.expiresOn) {
+      try {
+        await syncVehicleItpFromOps(this.prisma, row.vehicleId, row.expiresOn);
+      } catch (err) {
+        console.error('syncVehicleItpFromOps after document patch failed', err);
       }
     }
 

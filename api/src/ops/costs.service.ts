@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeReminderOffsets } from './document-reminders';
+import { isItpCostCategory, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
+import { RemindersService } from './reminders.service';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -18,6 +21,9 @@ export type CreateCostInput = {
   invoiceAttachmentUrl?: string | null;
   incurredOn?: string;
   notes?: string | null;
+  nextDueOn?: string | null;
+  reminderOffsetsDays?: number[] | null;
+  syncReminderAction?: boolean;
 };
 
 export type PatchCostInput = Partial<CreateCostInput>;
@@ -146,6 +152,14 @@ function costPatchFieldKeys(
   return keys;
 }
 
+function reminderOffsetsForDb(
+  value: number[] | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.DbNull;
+  return value;
+}
+
 function toCostRow(row: {
   id: string;
   vehicleId: string;
@@ -158,6 +172,8 @@ function toCostRow(row: {
   invoiceAttachmentUrl: string | null;
   incurredOn: Date;
   notes: string | null;
+  nextDueOn: Date | null;
+  reminderOffsetsDays: unknown;
   vehicle: { registrationNumber: string; clientId: string };
   tenant: { slug: string };
 }) {
@@ -176,6 +192,8 @@ function toCostRow(row: {
     invoiceAttachmentUrl: row.invoiceAttachmentUrl,
     incurredOn: row.incurredOn.toISOString(),
     notes: row.notes,
+    nextDueOn: row.nextDueOn ? row.nextDueOn.toISOString() : null,
+    reminderOffsetsDays: normalizeReminderOffsets(row.reminderOffsetsDays),
   };
 }
 
@@ -184,6 +202,7 @@ export class CostsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly reminders: RemindersService,
   ) {}
 
   async list(tenantSlug: string, params: CostListParams) {
@@ -302,6 +321,9 @@ export class CostsService {
         invoiceAttachmentUrl: dto.invoiceAttachmentUrl ?? null,
         incurredOn: dto.incurredOn ? new Date(dto.incurredOn) : new Date(),
         notes: dto.notes ?? null,
+        nextDueOn:
+          dto.nextDueOn === undefined ? null : dto.nextDueOn ? new Date(dto.nextDueOn) : null,
+        reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
       },
       include: {
         vehicle: { select: { registrationNumber: true, clientId: true } },
@@ -328,7 +350,33 @@ export class CostsService {
       },
     });
 
-    return toCostRow(row);
+    let reminderSyncFailed = false;
+    if (dto.syncReminderAction !== false) {
+      try {
+        await this.reminders.syncFromCost(tenant.id, {
+          id: row.id,
+          vehicleId: row.vehicleId,
+          category: row.category,
+          title: `${row.category} — ${row.vehicle.registrationNumber}`,
+          nextDueOn: row.nextDueOn,
+          reminderOffsetsDays: row.reminderOffsetsDays,
+        });
+      } catch (err) {
+        reminderSyncFailed = true;
+        console.error('syncFromCost after create failed', err);
+      }
+    }
+
+    if (isItpCostCategory(row.category) && row.nextDueOn) {
+      try {
+        await syncVehicleItpFromOps(this.prisma, row.vehicleId, row.nextDueOn, row.provider);
+        await syncItpCertDocument(this.prisma, row.vehicleId, row.nextDueOn);
+      } catch (err) {
+        console.error('syncVehicleItpFromOps after cost create failed', err);
+      }
+    }
+
+    return { ...toCostRow(row), reminderSyncFailed };
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchCostInput, actorUserId?: string) {
@@ -364,6 +412,13 @@ export class CostsService {
       invoiceAttachmentUrl: dto.invoiceAttachmentUrl,
       incurredOn: dto.incurredOn !== undefined ? new Date(dto.incurredOn) : undefined,
       notes: dto.notes,
+      nextDueOn:
+        dto.nextDueOn === undefined
+          ? undefined
+          : dto.nextDueOn === null
+            ? null
+            : new Date(dto.nextDueOn),
+      reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
     };
 
     const r = await this.prisma.costEntry.updateMany({
@@ -404,7 +459,40 @@ export class CostsService {
       },
     });
 
-    return this.getById(tenantSlug, id);
+    const updated = await this.getById(tenantSlug, id);
+
+    let reminderSyncFailed = false;
+    if (dto.syncReminderAction !== false) {
+      try {
+        await this.reminders.syncFromCost(before.tenantId, {
+          id: updated.id,
+          vehicleId: updated.vehicleId,
+          category: updated.category,
+          title: `${updated.category} — ${before.vehicle.registrationNumber}`,
+          nextDueOn: updated.nextDueOn ? new Date(updated.nextDueOn) : null,
+          reminderOffsetsDays: updated.reminderOffsetsDays,
+        });
+      } catch (err) {
+        reminderSyncFailed = true;
+        console.error('syncFromCost after patch failed', err);
+      }
+    }
+
+    if (isItpCostCategory(updated.category) && updated.nextDueOn) {
+      try {
+        await syncVehicleItpFromOps(
+          this.prisma,
+          updated.vehicleId,
+          new Date(updated.nextDueOn),
+          updated.provider,
+        );
+        await syncItpCertDocument(this.prisma, updated.vehicleId, new Date(updated.nextDueOn));
+      } catch (err) {
+        console.error('syncVehicleItpFromOps after cost patch failed', err);
+      }
+    }
+
+    return { ...updated, reminderSyncFailed };
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string) {

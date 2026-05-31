@@ -16,6 +16,8 @@ type CostRecord = {
   invoiceAttachmentUrl: string | null;
   incurredOn: string;
   notes: string | null;
+  nextDueOn?: string | null;
+  reminderOffsetsDays?: number[] | null;
 };
 type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string }> };
 

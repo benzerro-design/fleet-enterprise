@@ -17,6 +17,8 @@ type MaintenanceRecord = {
   odometerKm: number | null;
   notes: string | null;
   costCents: number | null;
+  nextDueOn?: string | null;
+  reminderOffsetsDays?: number[] | null;
 };
 type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string }> };
 

@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
+import { ReminderSchedulePicker } from "@/components/fleet/ReminderSchedulePicker";
+import { DEFAULT_REMINDER_OFFSETS } from "@/lib/document-reminders";
+import { ITP_REMINDER_OFFSETS, isItpMaintenanceAllocation } from "@/lib/itp-ops";
 import { MAINTENANCE_COST_ALLOCATION_OPTIONS } from "@/lib/maintenance-cost-allocation";
 import { formatRonFromCents, parseRonToCents } from "@/lib/money";
 import { uploadInvoiceFile } from "@/lib/invoice-upload";
@@ -20,6 +23,8 @@ type MaintenanceRecord = {
   odometerKm: number | null;
   notes: string | null;
   costCents: number | null;
+  nextDueOn?: string | null;
+  reminderOffsetsDays?: number[] | null;
 };
 
 type VehicleOption = {
@@ -72,6 +77,8 @@ export function MaintenanceForm(props: Props) {
         odometerKm: "",
         notes: "",
         costCents: "",
+        nextDueOn: "",
+        reminderOffsetsDays: [] as number[],
       };
     }
     const r = props.initial;
@@ -87,6 +94,12 @@ export function MaintenanceForm(props: Props) {
       odometerKm: r.odometerKm != null ? String(r.odometerKm) : "",
       notes: r.notes ?? "",
       costCents: r.costCents != null ? formatRonFromCents(r.costCents) : "",
+      nextDueOn: toDateInputOrEmpty(r.nextDueOn ?? null),
+      reminderOffsetsDays: r.reminderOffsetsDays?.length
+        ? [...r.reminderOffsetsDays]
+        : r.nextDueOn
+          ? [...DEFAULT_REMINDER_OFFSETS]
+          : [],
     };
   }, [props]);
 
@@ -102,9 +115,14 @@ export function MaintenanceForm(props: Props) {
   const [odometerKm, setOdometerKm] = useState(initial.odometerKm);
   const [notes, setNotes] = useState(initial.notes);
   const [costCents, setCostCents] = useState(initial.costCents);
+  const [nextDueOn, setNextDueOn] = useState(initial.nextDueOn);
+  const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
+  const [syncReminderAction, setSyncReminderAction] = useState(true);
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isItp = isItpMaintenanceAllocation(costAllocationCode);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -142,6 +160,13 @@ export function MaintenanceForm(props: Props) {
       return;
     }
 
+    const nextDue = toIsoDate(nextDueOn);
+    if (nextDueOn.trim() && !nextDue) {
+      setError("Data termenului este invalidă.");
+      setPending(false);
+      return;
+    }
+
     const body: Record<string, unknown> = {
       vehicleId,
       title: title.trim(),
@@ -154,6 +179,9 @@ export function MaintenanceForm(props: Props) {
       odometerKm: parsedOdo,
       notes: notes.trim() || null,
       costCents: parsedCost,
+      nextDueOn: nextDue,
+      reminderOffsetsDays: nextDue && reminderOffsetsDays.length > 0 ? reminderOffsetsDays : null,
+      syncReminderAction: nextDue && reminderOffsetsDays.length > 0 ? syncReminderAction : false,
     };
 
     try {
@@ -219,7 +247,13 @@ export function MaintenanceForm(props: Props) {
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Alocare costuri</label>
-        <select required value={costAllocationCode} onChange={(e) => setCostAllocationCode(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
+        <select required value={costAllocationCode} onChange={(e) => {
+          const v = e.target.value;
+          setCostAllocationCode(v);
+          if (isItpMaintenanceAllocation(v) && nextDueOn && reminderOffsetsDays.length === 0) {
+            setReminderOffsetsDays([...ITP_REMINDER_OFFSETS]);
+          }
+        }} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
           <option value="" disabled>
             Selectați criteriul…
           </option>
@@ -276,6 +310,58 @@ export function MaintenanceForm(props: Props) {
           Exemplu: <span className="font-mono text-zinc-400">150.00</span>. Folosiți punct sau virgulă pentru zecimale. Lăsați gol dacă nu se aplică.
         </p>
       </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">
+          {isItp ? "ITP valabil până la" : "Termen / dată următoare acțiune (opțional)"}
+        </label>
+        <input
+          type="date"
+          value={nextDueOn}
+          onChange={(e) => {
+            const v = e.target.value;
+            setNextDueOn(v);
+            if (v && reminderOffsetsDays.length === 0) {
+              setReminderOffsetsDays(isItp ? [...ITP_REMINDER_OFFSETS] : [...DEFAULT_REMINDER_OFFSETS]);
+            }
+            if (!v) setReminderOffsetsDays([]);
+          }}
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+        />
+        {isItp ? (
+          <p className="text-xs text-amber-200/80">
+            La salvare, data ITP și stația (furnizor) se actualizează automat în profilul vehiculului.
+          </p>
+        ) : (
+          <p className="text-xs text-zinc-500">Necesară pentru remindere (ex. următoarea revizie).</p>
+        )}
+      </div>
+
+      {nextDueOn ? (
+        <>
+          <ReminderSchedulePicker
+            expiresOn={nextDueOn}
+            offsets={reminderOffsetsDays}
+            onChange={setReminderOffsetsDays}
+            disabled={pending}
+          />
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-violet-900/30 bg-violet-950/10 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={syncReminderAction}
+              disabled={pending || reminderOffsetsDays.length === 0}
+              onChange={(e) => setSyncReminderAction(e.target.checked)}
+              className="mt-0.5 rounded border-zinc-600"
+            />
+            <span className="text-sm text-zinc-300">
+              <span className="font-medium text-violet-200">Creează acțiune în meniul Remindere</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                Sincronizează automat cu setările de mai sus (recomandat).
+              </span>
+            </span>
+          </label>
+        </>
+      ) : null}
+
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Notițe (opțional)</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />

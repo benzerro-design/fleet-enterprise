@@ -213,7 +213,9 @@ export function RemindersListView({
                       ? documentTypeLabel(row.documentTypeCode)
                       : row.linkedMaintenanceTitle
                         ? `Mentenanță: ${row.linkedMaintenanceTitle}`
-                        : "Acțiune personalizată"}
+                        : row.linkedCostCategory
+                          ? `Cost: ${row.linkedCostCategory}`
+                          : "Acțiune personalizată"}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {row.reminderOffsetsDays?.map((d) => (
@@ -249,7 +251,7 @@ export function RemindersListView({
                       <span className="font-mono text-sky-300">{row.dueOdometerKm.toLocaleString("ro-RO")}</span>
                     </p>
                   ) : null}
-                  {write && row.sourceType !== "document" ? (
+                  {write && row.sourceType !== "document" && row.sourceType !== "maintenance" && row.sourceType !== "cost" ? (
                     <DeleteReminderButton
                       reminderId={row.id}
                       title={row.title}
@@ -262,6 +264,22 @@ export function RemindersListView({
                       className="text-[11px] text-zinc-400 hover:text-zinc-200"
                     >
                       Editează document
+                    </Link>
+                  ) : null}
+                  {write && row.sourceType === "maintenance" && row.maintenanceEntryId ? (
+                    <Link
+                      href={`/fleet/maintenance/${row.maintenanceEntryId}/edit`}
+                      className="text-[11px] text-zinc-400 hover:text-zinc-200"
+                    >
+                      Editează mentenanță
+                    </Link>
+                  ) : null}
+                  {write && row.sourceType === "cost" && row.costEntryId ? (
+                    <Link
+                      href={`/fleet/costs/${row.costEntryId}/edit`}
+                      className="text-[11px] text-zinc-400 hover:text-zinc-200"
+                    >
+                      Editează cost
                     </Link>
                   ) : null}
                 </div>
