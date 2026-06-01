@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { ClientSelect } from "@/components/fleet/ClientSelect";
 import { buildVehicleItpPayload, VehicleItpFields } from "@/components/fleet/VehicleItpFields";
 import {
   fleetBrowserBase,
@@ -93,7 +94,11 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
   if (!write) {
     return (
       <dl className="grid gap-4 sm:grid-cols-2">
-        <Field label="Client" value={vehicle.clientId} mono />
+        <Field
+          label="Client"
+          value={`${vehicle.clientId}${vehicle.clientLegalName ? ` — ${vehicle.clientLegalName}` : ""}`}
+          mono
+        />
         <Field label="Nr. înmatriculare" value={vehicle.registrationNumber} mono />
         <Field label="Marcă" value={vehicle.brand ?? "—"} />
         <Field label="Model" value={vehicle.model ?? "—"} />
@@ -135,7 +140,9 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
         </p>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Client (ID)" value={clientId} onChange={setClientId} required />
+        <div className="sm:col-span-2">
+          <ClientSelect value={clientId} onChange={setClientId} required />
+        </div>
         <Input label="Nr. înmatriculare" value={registrationNumber} onChange={setRegistrationNumber} required mono />
         <Input label="Marcă" value={brand} onChange={setBrand} hint="D.1 din CIV — opțional la creare" />
         <Input label="Model" value={model} onChange={setModel} hint="D.3 din CIV — opțional" />

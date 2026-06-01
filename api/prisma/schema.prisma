@@ -21,8 +21,33 @@ model Tenant {
   trips              Trip[]
   tripSheetDocuments TripSheetDocument[]
   vehicles           Vehicle[]
+  clients            Client[]
   reminderActions    ReminderAction[]
   maintenancePlanItems MaintenancePlanItem[]
+}
+
+enum ClientStatus {
+  active
+  inactive
+}
+
+/// Organizație client (contractual) — înlocuiește `clientId` liber pe vehicul.
+model Client {
+  id        String       @id @default(cuid())
+  tenantId  String
+  code      String
+  legalName String
+  taxId     String?
+  status    ClientStatus @default(active)
+  notes     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicles  Vehicle[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, status])
 }
 
 model User {
@@ -57,6 +82,7 @@ model Vehicle {
   id                 String             @id @default(cuid())
   tenantId           String
   clientId           String
+  client             Client             @relation(fields: [clientId], references: [id])
   registrationNumber String
   type               VehicleType
   brand              String?

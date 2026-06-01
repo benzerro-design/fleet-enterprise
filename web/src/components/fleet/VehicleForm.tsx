@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { buildVehicleItpPayload, VehicleItpFields } from "@/components/fleet/VehicleItpFields";
+import { ClientSelect } from "@/components/fleet/ClientSelect";
 import {
   fleetBrowserBase,
   fleetJsonHeaders,
@@ -102,16 +103,7 @@ export function VehicleForm() {
         </p>
       ) : null}
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Client (ID)</label>
-        <input
-          required
-          value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-          placeholder="ex. client-1"
-        />
-      </div>
+      <ClientSelect value={clientId} onChange={setClientId} required />
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Număr înmatriculare</label>

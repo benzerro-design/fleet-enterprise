@@ -26,7 +26,10 @@ export function fleetJsonHeaders(): HeadersInit {
 export type VehicleRecord = {
   id: string;
   tenantId: string;
+  /** Cod client (afișare / filtre). */
   clientId: string;
+  clientRefId?: string;
+  clientLegalName?: string;
   registrationNumber: string;
   brand: string | null;
   model: string | null;

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma, TripPurpose, TripRoadType } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 
@@ -58,7 +59,11 @@ function parseDayEnd(s: string): Date {
   return d;
 }
 
-function tripWhere(tenantId: string, f: TripBrowseFilters): Prisma.TripWhereInput {
+async function tripWhere(
+  prisma: PrismaService,
+  tenantId: string,
+  f: TripBrowseFilters,
+): Promise<Prisma.TripWhereInput> {
   const parts: Prisma.TripWhereInput[] = [{ tenantId }];
   if (f.registrationNumber?.trim()) {
     const reg = f.registrationNumber.trim();
@@ -69,14 +74,9 @@ function tripWhere(tenantId: string, f: TripBrowseFilters): Prisma.TripWhereInpu
       },
     });
   }
-  if (f.clientId?.trim()) {
-    const clientId = f.clientId.trim();
-    parts.push({
-      vehicle: {
-        tenantId,
-        clientId: { equals: clientId, mode: 'insensitive' },
-      },
-    });
+  const clientVehicle = await resolveOptionalClientVehicleFilter(prisma, tenantId, f.clientId);
+  if (clientVehicle) {
+    parts.push({ vehicle: { tenantId, ...clientVehicle } });
   }
   if (f.q?.trim()) {
     const q = f.q.trim();
@@ -163,7 +163,7 @@ function toTripRow(row: {
   odometerStartKm: number | null;
   odometerEndKm: number | null;
   driverName: string | null;
-  vehicle: { registrationNumber: string; clientId: string };
+  vehicle: { registrationNumber: string; client: { code: string } };
   tenant: { slug: string };
 }) {
   return {
@@ -171,7 +171,7 @@ function toTripRow(row: {
     tenantSlug: row.tenant.slug,
     vehicleId: row.vehicleId,
     registrationNumber: row.vehicle.registrationNumber,
-    clientId: row.vehicle.clientId,
+    clientId: row.vehicle.client.code,
     reference: row.reference,
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
@@ -202,7 +202,7 @@ export class TripsService {
     const page = Math.max(1, params.page);
     const skip = (page - 1) * pageSize;
 
-    const where = tripWhere(tenant.id, {
+    const where = await tripWhere(this.prisma, tenant.id, {
       registrationNumber: params.registrationNumber,
       clientId: params.clientId,
       q: params.q,
@@ -216,7 +216,7 @@ export class TripsService {
       this.prisma.trip.findMany({
         where,
         include: {
-          vehicle: { select: { registrationNumber: true, clientId: true } },
+          vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
           tenant: { select: { slug: true } },
         },
         orderBy: { startedAt: 'desc' },
@@ -238,12 +238,12 @@ export class TripsService {
     if (!tenant) {
       return '\uFEFFid,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm\n';
     }
-    const where = tripWhere(tenant.id, filters);
+    const where = await tripWhere(this.prisma, tenant.id, filters);
     const rows = await this.prisma.trip.findMany({
       where,
       orderBy: { startedAt: 'desc' },
       take: MAX_EXPORT_ROWS,
-      include: { vehicle: { select: { registrationNumber: true, clientId: true } } },
+      include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
     });
     const header =
       'id,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm,purpose,roadType,odometerStartKm,odometerEndKm,driverName';
@@ -252,7 +252,7 @@ export class TripsService {
         r.id,
         r.vehicleId,
         r.vehicle.registrationNumber,
-        r.vehicle.clientId,
+        r.vehicle.client.code,
         r.reference ?? '',
         r.startedAt.toISOString(),
         r.endedAt ? r.endedAt.toISOString() : '',
@@ -275,7 +275,7 @@ export class TripsService {
     const row = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },
       include: {
-        vehicle: { select: { registrationNumber: true, clientId: true } },
+        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
         tenant: { select: { slug: true } },
       },
     });
@@ -305,7 +305,7 @@ export class TripsService {
         driverName: dto.driverName ?? null,
       },
       include: {
-        vehicle: { select: { registrationNumber: true, clientId: true } },
+        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
         tenant: { select: { slug: true } },
       },
     });
@@ -318,7 +318,7 @@ export class TripsService {
       entityId: row.id,
       meta: {
         registrationNumber: row.vehicle.registrationNumber,
-        clientId: row.vehicle.clientId,
+        clientId: row.vehicle.client.code,
         reference: row.reference,
         vehicleId: row.vehicleId,
       },
@@ -334,7 +334,10 @@ export class TripsService {
 
     const before = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },
-      include: { vehicle: { select: { registrationNumber: true, clientId: true } }, tenant: true },
+      include: {
+        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
+        tenant: true,
+      },
     });
     if (!before) throw new NotFoundException('Trip not found');
 
@@ -381,7 +384,7 @@ export class TripsService {
       entityId: tripId,
       meta: {
         registrationNumber: before.vehicle.registrationNumber,
-        clientId: before.vehicle.clientId,
+        clientId: before.vehicle.client.code,
         fields,
       },
     });
@@ -392,7 +395,7 @@ export class TripsService {
   async delete(tenantSlug: string, tripId: string, actorUserId?: string) {
     const row = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },
-      include: { vehicle: { select: { registrationNumber: true, clientId: true } } },
+      include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
     });
     if (!row) throw new NotFoundException('Trip not found');
 
@@ -404,7 +407,7 @@ export class TripsService {
       entityId: tripId,
       meta: {
         registrationNumber: row.vehicle.registrationNumber,
-        clientId: row.vehicle.clientId,
+        clientId: row.vehicle.client.code,
         reference: row.reference,
       },
     });

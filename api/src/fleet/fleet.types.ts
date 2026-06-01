@@ -24,7 +24,10 @@ export type VehicleDocument = {
 export type VehicleRecord = {
   id: string;
   tenantId: string;
+  /** Cod client (afișare / filtre / compat API). */
   clientId: string;
+  clientRefId: string;
+  clientLegalName: string;
   registrationNumber: string;
   type: VehicleType;
   brand: string | null;

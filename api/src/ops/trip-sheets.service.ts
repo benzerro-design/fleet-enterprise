@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma, TripSheetDocType } from '@prisma/client';
+import { resolveClientInTenant, resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { tripPurposeLabel, tripRoadTypeLabel, tripSheetDocTypeLabel } from './trip-sheet-labels';
@@ -108,14 +109,14 @@ async function buildTripSheetWhere(
   }
 
   if (f.clientId?.trim()) {
-    const clientId = f.clientId.trim();
+    const client = await resolveClientInTenant(prisma, tenantId, f.clientId);
     const vehicles = await prisma.vehicle.findMany({
-      where: { tenantId, clientId: { equals: clientId, mode: 'insensitive' } },
+      where: { tenantId, clientId: client.id },
       select: { id: true },
     });
     const vehicleIds = vehicles.map((v) => v.id);
     const clientParts: Prisma.TripSheetDocumentWhereInput[] = [
-      { clientIdFilter: { equals: clientId, mode: 'insensitive' } },
+      { clientIdFilter: { equals: client.code, mode: 'insensitive' } },
     ];
     if (vehicleIds.length > 0) {
       clientParts.push({ vehicleIds: { hasSome: vehicleIds } });
@@ -252,23 +253,27 @@ export class TripSheetsService {
       throw new BadRequestException(`Maximum ${MAX_VEHICLES} vehicles per document`);
     }
 
-    const clientFilter = input.clientId?.trim() || null;
+    let clientCodeFilter: string | null = null;
+    let clientFkFilter: string | undefined;
+    if (input.clientId?.trim()) {
+      const resolved = await resolveClientInTenant(this.prisma, tenant.id, input.clientId);
+      clientCodeFilter = resolved.code;
+      clientFkFilter = resolved.id;
+    }
 
     const vehicles = await this.prisma.vehicle.findMany({
       where: {
         tenantId: tenant.id,
         id: { in: vehicleIds },
-        ...(clientFilter
-          ? { clientId: { equals: clientFilter, mode: 'insensitive' as const } }
-          : {}),
+        ...(clientFkFilter ? { clientId: clientFkFilter } : {}),
       },
       select: {
         id: true,
         registrationNumber: true,
-        clientId: true,
         brand: true,
         model: true,
         odometerKm: true,
+        client: { select: { code: true } },
       },
     });
     if (vehicles.length !== vehicleIds.length) {
@@ -283,7 +288,12 @@ export class TripSheetsService {
       },
       include: {
         vehicle: {
-          select: { registrationNumber: true, clientId: true, brand: true, model: true },
+          select: {
+            registrationNumber: true,
+            brand: true,
+            model: true,
+            client: { select: { code: true } },
+          },
         },
       },
       orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
@@ -317,7 +327,7 @@ export class TripSheetsService {
     const tripLines: TripSheetLine[] = trips.map((t) => ({
       date: t.startedAt.toISOString(),
       registrationNumber: t.vehicle.registrationNumber,
-      clientId: t.vehicle.clientId,
+      clientId: t.vehicle.client.code,
       reference: t.reference,
       route: [t.originLabel, t.destLabel].filter(Boolean).join(' → ') || '—',
       distanceKm: t.distanceKm,
@@ -363,7 +373,7 @@ export class TripSheetsService {
       driverName,
       vehicles: vehicles.map((v) => ({
         registrationNumber: v.registrationNumber,
-        clientId: v.clientId,
+        clientId: v.client.code,
         brand: v.brand,
         model: v.model,
       })),
@@ -398,7 +408,7 @@ export class TripSheetsService {
         periodEnd,
         vehicleIds,
         driverName,
-        clientIdFilter: clientFilter,
+        clientIdFilter: clientCodeFilter,
         title,
         summaryJson,
         pdfData: Uint8Array.from(pdfBuffer),
@@ -452,7 +462,7 @@ function buildFazDailyLines(
     distanceKm: number | null;
     odometerStartKm: number | null;
     odometerEndKm: number | null;
-    vehicle: { registrationNumber: string; clientId: string };
+    vehicle: { registrationNumber: string; client: { code: string } };
     vehicleId: string;
   }>,
   costs: Array<{
@@ -464,7 +474,7 @@ function buildFazDailyLines(
   odometerReadings: Array<{ vehicleId: string; odometerKm: number; recordedAt: Date }>,
   vehicleById: Map<
     string,
-    { registrationNumber: string; clientId: string }
+    { registrationNumber: string; client: { code: string } }
   >,
 ): FazDailyLine[] {
   const map = new Map<string, FazDailyLine>();
@@ -492,7 +502,7 @@ function buildFazDailyLines(
       map.set(key, {
         date: t.startedAt.toISOString(),
         registrationNumber: t.vehicle.registrationNumber,
-        clientId: t.vehicle.clientId,
+        clientId: t.vehicle.client.code,
         tripCount: 1,
         distanceKm: km,
         fuelLiters: 0,
@@ -515,7 +525,7 @@ function buildFazDailyLines(
       map.set(key, {
         date: c.incurredOn.toISOString(),
         registrationNumber: v.registrationNumber,
-        clientId: v.clientId,
+        clientId: v.client.code,
         tripCount: 0,
         distanceKm: 0,
         fuelLiters: liters,
@@ -528,7 +538,7 @@ function buildFazDailyLines(
   for (const r of odometerReadings) {
     const v = vehicleById.get(r.vehicleId);
     const reg = v?.registrationNumber;
-    const clientId = v?.clientId ?? '';
+    const clientId = v?.client.code ?? '';
     if (!reg) continue;
     const key = `${dayKey(r.recordedAt)}|${reg}`;
     const line = map.get(key);

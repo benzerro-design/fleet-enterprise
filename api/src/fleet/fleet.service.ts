@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, type VehicleStatus as PrismaVehicleStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { ClientsService } from '../clients/clients.service';
+import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { normalizeReminderOffsets, REMINDER_PRESETS } from '../ops/document-reminders';
 import { RemindersService } from '../ops/reminders.service';
 import { syncItpCertDocument } from '../ops/itp-sync';
@@ -45,6 +47,7 @@ function itpReminderOffsetsForDb(
 
 const vehicleInclude = {
   documents: true,
+  client: { select: { id: true, code: true, legalName: true } },
   tenant: { select: { slug: true } },
   createdBy: { select: { email: true } },
   updatedBy: { select: { email: true } },
@@ -90,7 +93,10 @@ function changedVehicleFieldKeys(
   dto: PatchVehicleDto,
 ): string[] {
   const keys: string[] = [];
-  if (dto.clientId !== undefined && dto.clientId !== before.clientId) {
+  if (
+    dto.clientId !== undefined &&
+    dto.clientId.trim().toLowerCase() !== before.clientId.trim().toLowerCase()
+  ) {
     keys.push('clientId');
   }
   if (dto.registrationNumber !== undefined && dto.registrationNumber !== before.registrationNumber) {
@@ -137,6 +143,8 @@ function changedVehicleFieldKeys(
 export type VehicleBrowseFilters = {
   q?: string;
   status?: VehicleStatus;
+  /** Cod client sau id Client — filtrează vehiculele. */
+  clientId?: string;
 };
 
 export type ListVehiclesFilters = VehicleBrowseFilters & {
@@ -158,6 +166,7 @@ export class FleetService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly reminders: RemindersService,
+    private readonly clients: ClientsService,
   ) {}
 
   async listVehiclesPaged(
@@ -175,9 +184,10 @@ export class FleetService {
     const page = Math.max(1, filters.page);
     const skip = (page - 1) * pageSize;
 
-    const where = this.vehicleWhere(tenant.id, {
+    const where = await this.vehicleWhere(tenant.id, {
       q: filters.q,
       status: filters.status,
+      clientId: filters.clientId,
     });
 
     const [total, rows] = await Promise.all([
@@ -203,9 +213,11 @@ export class FleetService {
     const tenant = await this.prisma.tenant.findUnique({
       where: { slug: tenantSlug },
     });
-    if (!tenant) return '\uFEFFid,registrationNumber,clientId,status,type,odometerKm,createdAt\n';
+    if (!tenant) {
+      return '\uFEFFid,registrationNumber,clientCode,clientLegalName,status,type,odometerKm,createdAt\n';
+    }
 
-    const where = this.vehicleWhere(tenant.id, browse);
+    const where = await this.vehicleWhere(tenant.id, browse);
 
     const rows = await this.prisma.vehicle.findMany({
       where,
@@ -214,21 +226,22 @@ export class FleetService {
       select: {
         id: true,
         registrationNumber: true,
-        clientId: true,
         status: true,
         type: true,
         odometerKm: true,
         createdAt: true,
+        client: { select: { code: true, legalName: true } },
       },
     });
 
     const header =
-      'id,registrationNumber,clientId,status,type,odometerKm,createdAt';
+      'id,registrationNumber,clientCode,clientLegalName,status,type,odometerKm,createdAt';
     const lines = rows.map((r) =>
       [
         r.id,
         r.registrationNumber,
-        r.clientId,
+        r.client.code,
+        r.client.legalName,
         r.status,
         r.type,
         String(r.odometerKm),
@@ -256,12 +269,13 @@ export class FleetService {
   ): Promise<VehicleRecord & { reminderSyncFailed?: boolean }> {
     const tenant = await this.ensureTenant(tenantSlug);
     const hasItp = Boolean(dto.itpExpiresOn);
+    const client = await this.clients.resolveForVehicle(tenant.id, dto.clientId);
 
     try {
       const row = await this.prisma.vehicle.create({
         data: {
           tenantId: tenant.id,
-          clientId: dto.clientId,
+          clientId: client.id,
           registrationNumber: dto.registrationNumber,
           type: dto.type,
           vin: dto.vin ?? null,
@@ -288,7 +302,7 @@ export class FleetService {
         vehicleId: row.id,
         meta: {
           registrationNumber: row.registrationNumber,
-          clientId: row.clientId,
+          clientId: row.client.code,
         },
       });
 
@@ -338,16 +352,22 @@ export class FleetService {
     }
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      include: { tenant: true },
+      include: { tenant: true, client: { select: { id: true, code: true } } },
     });
     if (!existing) throw new NotFoundException('Vehicle not found');
+
+    let resolvedClientId: string | undefined;
+    if (dto.clientId !== undefined) {
+      const client = await this.clients.resolveForVehicle(existing.tenantId, dto.clientId);
+      resolvedClientId = client.id;
+    }
 
     try {
       const clearItp = dto.itpExpiresOn === null;
       await this.prisma.vehicle.update({
         where: { id: vehicleId },
         data: {
-          clientId: dto.clientId,
+          ...(resolvedClientId !== undefined ? { clientId: resolvedClientId } : {}),
           registrationNumber: dto.registrationNumber,
           type: dto.type,
           status: dto.status,
@@ -396,7 +416,10 @@ export class FleetService {
         action: 'update',
         vehicleId,
         meta: {
-          fields: changedVehicleFieldKeys(existing, dto),
+          fields: changedVehicleFieldKeys(
+            { ...existing, clientId: existing.client.code },
+            dto,
+          ),
           registrationNumber: existing.registrationNumber,
         },
       });
@@ -694,7 +717,10 @@ export class FleetService {
     });
   }
 
-  private vehicleWhere(tenantUuid: string, browse: VehicleBrowseFilters): Prisma.VehicleWhereInput {
+  private async vehicleWhere(
+    tenantUuid: string,
+    browse: VehicleBrowseFilters,
+  ): Promise<Prisma.VehicleWhereInput> {
     const q = browse.q?.trim();
     const statusOk =
       browse.status &&
@@ -706,14 +732,24 @@ export class FleetService {
       parts.push({
         OR: [
           { registrationNumber: { contains: q, mode: 'insensitive' } },
-          { clientId: { contains: q, mode: 'insensitive' } },
           { vin: { contains: q, mode: 'insensitive' } },
+          { client: { code: { contains: q, mode: 'insensitive' } } },
+          { client: { legalName: { contains: q, mode: 'insensitive' } } },
         ],
       });
     }
 
     if (statusOk) {
       parts.push({ status: browse.status as PrismaVehicleStatus });
+    }
+
+    const clientFilter = await resolveOptionalClientVehicleFilter(
+      this.prisma,
+      tenantUuid,
+      browse.clientId,
+    );
+    if (clientFilter) {
+      parts.push(clientFilter);
     }
 
     return { AND: parts };
@@ -823,7 +859,9 @@ export class FleetService {
     return {
       id: row.id,
       tenantId: row.tenant.slug,
-      clientId: row.clientId,
+      clientId: row.client.code,
+      clientRefId: row.client.id,
+      clientLegalName: row.client.legalName,
       registrationNumber: row.registrationNumber,
       type: row.type as VehicleRecord['type'],
       brand: row.brand,

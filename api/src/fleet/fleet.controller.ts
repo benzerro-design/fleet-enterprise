@@ -48,10 +48,12 @@ export class FleetController {
     @TenantId() tenantId: string,
     @Query('q') q?: string,
     @Query('status') status?: string,
+    @Query('clientId') clientId?: string,
   ): Promise<StreamableFile> {
     const csv = await this.fleet.exportVehiclesCsv(tenantId, {
       q: q?.trim(),
       status: parseOptionalStatus(status),
+      clientId: clientId?.trim(),
     });
     return new StreamableFile(Buffer.from(csv, 'utf8'));
   }
@@ -64,6 +66,7 @@ export class FleetController {
     @Query('pageSize') pageSizeStr?: string,
     @Query('q') q?: string,
     @Query('status') status?: string,
+    @Query('clientId') clientId?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
@@ -72,6 +75,7 @@ export class FleetController {
       pageSize,
       q: q?.trim(),
       status: parseOptionalStatus(status),
+      clientId: clientId?.trim(),
     });
   }
 

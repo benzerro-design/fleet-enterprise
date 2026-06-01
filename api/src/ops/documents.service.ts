@@ -10,6 +10,7 @@ import {
   type DocumentReminderSummary,
 } from './document-reminders';
 import { normalizeReminderOffsetsKm } from './reminder-status';
+import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
@@ -75,7 +76,11 @@ function parseDayEnd(s: string): Date {
   return new Date(t);
 }
 
-function documentWhere(tenantId: string, f: DocumentBrowseFilters): Prisma.VehicleDocumentWhereInput {
+async function documentWhere(
+  prisma: PrismaService,
+  tenantId: string,
+  f: DocumentBrowseFilters,
+): Promise<Prisma.VehicleDocumentWhereInput> {
   const parts: Prisma.VehicleDocumentWhereInput[] = [{ vehicle: { tenantId } }];
 
   if (f.registrationNumber?.trim()) {
@@ -87,14 +92,9 @@ function documentWhere(tenantId: string, f: DocumentBrowseFilters): Prisma.Vehic
       },
     });
   }
-  if (f.clientId?.trim()) {
-    const clientId = f.clientId.trim();
-    parts.push({
-      vehicle: {
-        tenantId,
-        clientId: { equals: clientId, mode: 'insensitive' },
-      },
-    });
+  const clientVehicle = await resolveOptionalClientVehicleFilter(prisma, tenantId, f.clientId);
+  if (clientVehicle) {
+    parts.push({ vehicle: { tenantId, ...clientVehicle } });
   }
   if (f.documentTypeCode?.trim()) {
     parts.push({ documentTypeCode: f.documentTypeCode.trim() });
@@ -160,7 +160,7 @@ function toDocRow(row: {
   reminderOffsetsKm: unknown;
   reminderMenuSyncEnabled: boolean;
   createdAt: Date;
-  vehicle: { registrationNumber: string; clientId: string; tenant: { slug: string } };
+  vehicle: { registrationNumber: string; client: { code: string }; tenant: { slug: string } };
 }) {
   const reminderOffsetsDays = normalizeReminderOffsets(row.reminderOffsetsDays);
   const reminder = computeReminderSummary(row.expiresOn, reminderOffsetsDays);
@@ -169,7 +169,7 @@ function toDocRow(row: {
     tenantSlug: row.vehicle.tenant.slug,
     vehicleId: row.vehicleId,
     registrationNumber: row.vehicle.registrationNumber,
-    clientId: row.vehicle.clientId,
+    clientId: row.vehicle.client.code,
     documentTypeCode: row.documentTypeCode,
     title: row.title,
     expiresOn: row.expiresOn ? row.expiresOn.toISOString() : null,
@@ -201,7 +201,7 @@ export class DocumentsService {
     const page = Math.max(1, params.page);
     const skip = (page - 1) * pageSize;
 
-    const where = documentWhere(tenant.id, {
+    const where = await documentWhere(this.prisma, tenant.id, {
       registrationNumber: params.registrationNumber,
       clientId: params.clientId,
       documentTypeCode: params.documentTypeCode,
@@ -219,7 +219,7 @@ export class DocumentsService {
           vehicle: {
             select: {
               registrationNumber: true,
-              clientId: true,
+              client: { select: { code: true } },
               tenant: { select: { slug: true } },
             },
           },
@@ -243,13 +243,13 @@ export class DocumentsService {
     if (!tenant) {
       return '\uFEFFid,vehicleId,registrationNumber,clientId,documentTypeCode,title,expiresOn,fileUrl,fileName,reminderOffsetsDays,createdAt\n';
     }
-    const where = documentWhere(tenant.id, filters);
+    const where = await documentWhere(this.prisma, tenant.id, filters);
     const rows = await this.prisma.vehicleDocument.findMany({
       where,
       orderBy: [{ expiresOn: 'asc' }, { createdAt: 'desc' }],
       take: MAX_EXPORT_ROWS,
       include: {
-        vehicle: { select: { registrationNumber: true, clientId: true } },
+        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
       },
     });
     const header =
@@ -259,7 +259,7 @@ export class DocumentsService {
         r.id,
         r.vehicleId,
         r.vehicle.registrationNumber,
-        r.vehicle.clientId,
+        r.vehicle.client.code,
         r.documentTypeCode,
         r.title,
         r.expiresOn ? r.expiresOn.toISOString() : '',
@@ -281,7 +281,7 @@ export class DocumentsService {
         vehicle: {
           select: {
             registrationNumber: true,
-            clientId: true,
+            client: { select: { code: true } },
             tenant: { select: { slug: true } },
           },
         },
@@ -321,7 +321,7 @@ export class DocumentsService {
         vehicle: {
           select: {
             registrationNumber: true,
-            clientId: true,
+            client: { select: { code: true } },
             tenant: { select: { slug: true } },
           },
         },
@@ -389,7 +389,7 @@ export class DocumentsService {
         vehicle: {
           select: {
             registrationNumber: true,
-            clientId: true,
+            client: { select: { code: true } },
             tenant: { select: { slug: true } },
           },
         },

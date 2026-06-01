@@ -33,6 +33,7 @@ async function assertSeedSchemaReady(prisma) {
       select: { id: true, brand: true, model: true },
       take: 1,
     });
+    await prisma.client.findFirst({ select: { id: true }, take: 1 });
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     throw new Error(
@@ -290,9 +291,27 @@ const FUEL_COSTS = [
   { reg: 'IS 55 DRV', daysAgo: 8, liters: 35.4, amountCents: 28900 },
 ];
 
+async function ensureClient(prisma, tenantId, code, legalName) {
+  const trimmed = code.trim();
+  const existing = await prisma.client.findFirst({
+    where: { tenantId, code: { equals: trimmed, mode: 'insensitive' } },
+  });
+  if (existing) return existing.id;
+  const created = await prisma.client.create({
+    data: {
+      tenantId,
+      code: trimmed,
+      legalName: legalName.trim() || trimmed,
+      status: 'active',
+    },
+  });
+  return created.id;
+}
+
 async function upsertSeedVehicles(prisma, tenantId, adminUserId) {
   const byReg = new Map();
   for (const v of SEED_VEHICLES) {
+    const clientFk = await ensureClient(prisma, tenantId, v.clientId, v.clientId);
     const row = await prisma.vehicle.upsert({
       where: {
         tenantId_registrationNumber: {
@@ -302,7 +321,7 @@ async function upsertSeedVehicles(prisma, tenantId, adminUserId) {
       },
       create: {
         tenantId,
-        clientId: v.clientId,
+        clientId: clientFk,
         registrationNumber: v.registrationNumber,
         type: v.type,
         brand: v.brand,
@@ -313,7 +332,7 @@ async function upsertSeedVehicles(prisma, tenantId, adminUserId) {
         updatedByUserId: adminUserId ?? undefined,
       },
       update: {
-        clientId: v.clientId,
+        clientId: clientFk,
         brand: v.brand,
         model: v.model,
         odometerKm: v.odometerKm,

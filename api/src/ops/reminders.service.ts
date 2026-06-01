@@ -3,6 +3,7 @@ import { Prisma, ReminderSourceType } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_REMINDER_OFFSETS, normalizeReminderOffsets } from './document-reminders';
+import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import {
@@ -76,7 +77,11 @@ function reminderOffsetsForDb(
   return value;
 }
 
-function reminderWhere(tenantId: string, f: ReminderBrowseFilters): Prisma.ReminderActionWhereInput {
+async function reminderWhere(
+  prisma: PrismaService,
+  tenantId: string,
+  f: ReminderBrowseFilters,
+): Promise<Prisma.ReminderActionWhereInput> {
   const parts: Prisma.ReminderActionWhereInput[] = [{ tenantId, isActive: true }];
   if (f.vehicleId?.trim()) parts.push({ vehicleId: f.vehicleId.trim() });
   if (f.registrationNumber?.trim()) {
@@ -87,10 +92,9 @@ function reminderWhere(tenantId: string, f: ReminderBrowseFilters): Prisma.Remin
       },
     });
   }
-  if (f.clientId?.trim()) {
-    parts.push({
-      vehicle: { tenantId, clientId: { equals: f.clientId.trim(), mode: 'insensitive' } },
-    });
+  const clientVehicle = await resolveOptionalClientVehicleFilter(prisma, tenantId, f.clientId);
+  if (clientVehicle) {
+    parts.push({ vehicle: { tenantId, ...clientVehicle } });
   }
   if (f.sourceType) parts.push({ sourceType: f.sourceType });
   if (f.q?.trim()) {
@@ -131,7 +135,7 @@ function toRow(row: {
   updatedAt: Date;
   vehicle: {
     registrationNumber: string;
-    clientId: string;
+    client: { code: string };
     odometerKm: number;
     tenant: { slug: string };
   };
@@ -158,7 +162,7 @@ function toRow(row: {
     tenantSlug: row.vehicle.tenant.slug,
     vehicleId: row.vehicleId,
     registrationNumber: row.vehicle.registrationNumber,
-    clientId: row.vehicle.clientId,
+    clientId: row.vehicle.client.code,
     vehicleOdometerKm: row.vehicle.odometerKm,
     sourceType: row.sourceType,
     title: row.title,
@@ -190,7 +194,7 @@ const includeRow = {
   vehicle: {
     select: {
       registrationNumber: true,
-      clientId: true,
+      client: { select: { code: true } },
       odometerKm: true,
       tenant: { select: { slug: true } },
     },
@@ -214,7 +218,7 @@ export class RemindersService {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
     }
 
-    const where = reminderWhere(tenant.id, params);
+    const where = await reminderWhere(this.prisma, tenant.id, params);
     const rows = await this.prisma.reminderAction.findMany({
       where,
       include: includeRow,
@@ -241,7 +245,7 @@ export class RemindersService {
       return '\uFEFFid,vehicleId,registrationNumber,sourceType,title,dueOn,dueOdometerKm,isActive,createdAt\n';
     }
 
-    const where = reminderWhere(tenant.id, filters);
+    const where = await reminderWhere(this.prisma, tenant.id, filters);
     const rows = await this.prisma.reminderAction.findMany({
       where,
       include: includeRow,

@@ -93,7 +93,13 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
     id: "clients",
     label: "Clienți & CRM",
     items: [
-      { kind: "soon", label: "Clienți (organizații)", phase: "phase1" },
+      {
+        kind: "link",
+        label: "Clienți (organizații)",
+        href: "/fleet/clients",
+        phase: "live",
+        activePrefixes: ["/fleet/clients"],
+      },
       { kind: "soon", label: "Șoferi & utilizatori", phase: "phase1" },
       { kind: "soon", label: "Tichete CRM", phase: "phase1" },
       { kind: "soon", label: "Contracte / SLA", phase: "later" },

@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normalizeReminderOffsets } from './document-reminders';
 import { normalizeReminderOffsetsKm } from './reminder-status';
 import { isItpMaintenanceAllocation, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
+import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import type { MaintenanceCostAllocationCode } from './maintenance-cost-allocation';
@@ -70,7 +71,11 @@ function parseDayEnd(s: string): Date {
   return new Date(t);
 }
 
-function maintenanceWhere(tenantId: string, f: MaintenanceBrowseFilters): Prisma.MaintenanceEntryWhereInput {
+async function maintenanceWhere(
+  prisma: PrismaService,
+  tenantId: string,
+  f: MaintenanceBrowseFilters,
+): Promise<Prisma.MaintenanceEntryWhereInput> {
   const parts: Prisma.MaintenanceEntryWhereInput[] = [{ tenantId }];
   if (f.registrationNumber?.trim()) {
     const reg = f.registrationNumber.trim();
@@ -81,14 +86,9 @@ function maintenanceWhere(tenantId: string, f: MaintenanceBrowseFilters): Prisma
       },
     });
   }
-  if (f.clientId?.trim()) {
-    const clientId = f.clientId.trim();
-    parts.push({
-      vehicle: {
-        tenantId,
-        clientId: { equals: clientId, mode: 'insensitive' },
-      },
-    });
+  const clientVehicle = await resolveOptionalClientVehicleFilter(prisma, tenantId, f.clientId);
+  if (clientVehicle) {
+    parts.push({ vehicle: { tenantId, ...clientVehicle } });
   }
   if (f.provider?.trim()) {
     parts.push({ provider: { equals: f.provider.trim(), mode: 'insensitive' } });
@@ -190,7 +190,7 @@ function toMaintRow(row: {
   dueOdometerKm: number | null;
   reminderOffsetsKm: unknown;
   reminderMenuSyncEnabled: boolean;
-  vehicle: { registrationNumber: string; clientId: string };
+  vehicle: { registrationNumber: string; client: { code: string } };
   tenant: { slug: string };
 }) {
   return {
@@ -198,7 +198,7 @@ function toMaintRow(row: {
     tenantSlug: row.tenant.slug,
     vehicleId: row.vehicleId,
     registrationNumber: row.vehicle.registrationNumber,
-    clientId: row.vehicle.clientId,
+    clientId: row.vehicle.client.code,
     title: row.title,
     provider: row.provider,
     costAllocationCode: row.costAllocationCode,
@@ -234,7 +234,7 @@ export class MaintenanceService {
     const page = Math.max(1, params.page);
     const skip = (page - 1) * pageSize;
 
-    const where = maintenanceWhere(tenant.id, {
+    const where = await maintenanceWhere(this.prisma, tenant.id, {
       registrationNumber: params.registrationNumber,
       clientId: params.clientId,
       provider: params.provider,
@@ -248,7 +248,7 @@ export class MaintenanceService {
       this.prisma.maintenanceEntry.findMany({
         where,
         include: {
-          vehicle: { select: { registrationNumber: true, clientId: true } },
+          vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
           tenant: { select: { slug: true } },
         },
         orderBy: { id: 'desc' },
@@ -270,12 +270,12 @@ export class MaintenanceService {
     if (!tenant) {
       return '\uFEFFid,vehicleId,registrationNumber,clientId,title,provider,costAllocationCode,invoiceNumber,invoiceDate,invoiceAttachmentUrl,performedAt,odometerKm,costCents,notes\n';
     }
-    const where = maintenanceWhere(tenant.id, filters);
+    const where = await maintenanceWhere(this.prisma, tenant.id, filters);
     const rows = await this.prisma.maintenanceEntry.findMany({
       where,
       orderBy: { id: 'desc' },
       take: MAX_EXPORT_ROWS,
-      include: { vehicle: { select: { registrationNumber: true, clientId: true } } },
+      include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
     });
     const header =
       'id,vehicleId,registrationNumber,clientId,title,provider,costAllocationCode,invoiceNumber,invoiceDate,invoiceAttachmentUrl,performedAt,odometerKm,costCents,notes';
@@ -284,7 +284,7 @@ export class MaintenanceService {
         r.id,
         r.vehicleId,
         r.vehicle.registrationNumber,
-        r.vehicle.clientId,
+        r.vehicle.client.code,
         r.title,
         r.provider ?? '',
         r.costAllocationCode ?? '',
@@ -306,7 +306,7 @@ export class MaintenanceService {
     const row = await this.prisma.maintenanceEntry.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
       include: {
-        vehicle: { select: { registrationNumber: true, clientId: true } },
+        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
         tenant: { select: { slug: true } },
       },
     });
@@ -343,7 +343,7 @@ export class MaintenanceService {
         reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
       },
       include: {
-        vehicle: { select: { registrationNumber: true, clientId: true } },
+        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
         tenant: { select: { slug: true } },
       },
     });
@@ -356,7 +356,7 @@ export class MaintenanceService {
       entityId: row.id,
       meta: {
         registrationNumber: row.vehicle.registrationNumber,
-        clientId: row.vehicle.clientId,
+        clientId: row.vehicle.client.code,
         title: row.title,
         provider: row.provider,
         vehicleId: row.vehicleId,
@@ -387,7 +387,7 @@ export class MaintenanceService {
 
     const before = await this.prisma.maintenanceEntry.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
-      include: { vehicle: { select: { registrationNumber: true, clientId: true } } },
+      include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
     });
     if (!before) throw new NotFoundException('Maintenance entry not found');
 
@@ -452,7 +452,7 @@ export class MaintenanceService {
       entityId: id,
       meta: {
         registrationNumber: before.vehicle.registrationNumber,
-        clientId: before.vehicle.clientId,
+        clientId: before.vehicle.client.code,
         title: before.title,
         provider: before.provider,
         fields,
@@ -537,7 +537,7 @@ export class MaintenanceService {
   async delete(tenantSlug: string, id: string, actorUserId?: string) {
     const row = await this.prisma.maintenanceEntry.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
-      include: { vehicle: { select: { registrationNumber: true, clientId: true } } },
+      include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
     });
     if (!row) throw new NotFoundException('Maintenance entry not found');
 
@@ -549,7 +549,7 @@ export class MaintenanceService {
       entityId: id,
       meta: {
         registrationNumber: row.vehicle.registrationNumber,
-        clientId: row.vehicle.clientId,
+        clientId: row.vehicle.client.code,
         title: row.title,
         provider: row.provider,
         costAllocationCode: row.costAllocationCode,
