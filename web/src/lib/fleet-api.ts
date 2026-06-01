@@ -4,6 +4,9 @@ export const fleetBrowserBase = "/api/fleet";
 /** Proxy Next → API Nest pentru curse (fără prefix `/fleet`). */
 export const tripsBrowserBase = "/api/trips";
 
+/** Proxy Next → API Nest pentru foi de parcurs / FAZ. */
+export const tripSheetsBrowserBase = "/api/trip-sheets";
+
 /** Proxy Next → API Nest pentru mentenanță. */
 export const maintenanceBrowserBase = "/api/maintenance";
 

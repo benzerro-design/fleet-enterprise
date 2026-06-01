@@ -13,7 +13,7 @@ import {
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import { MembershipRole } from '@prisma/client';
+import { MembershipRole, TripPurpose, TripRoadType } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -132,6 +132,11 @@ function assertCreateTripDto(body: unknown): CreateTripInput {
     originLabel: optionalNullableString(body.originLabel),
     destLabel: optionalNullableString(body.destLabel),
     distanceKm: optionalNonNegativeInt(body.distanceKm, 'distanceKm'),
+    purpose: optionalTripPurpose(body.purpose),
+    roadType: optionalTripRoadType(body.roadType),
+    odometerStartKm: optionalNonNegativeInt(body.odometerStartKm, 'odometerStartKm') ?? null,
+    odometerEndKm: optionalNonNegativeInt(body.odometerEndKm, 'odometerEndKm') ?? null,
+    driverName: optionalNullableString(body.driverName),
   };
 }
 
@@ -222,4 +227,25 @@ function optionalNonNegativeInt(v: unknown, field: string): number | undefined {
     throw new BadRequestException(`Field "${field}" must be a non-negative integer`);
   }
   return v;
+}
+
+const TRIP_PURPOSES: TripPurpose[] = ['business', 'personal', 'mixed'];
+const TRIP_ROAD_TYPES: TripRoadType[] = ['urban', 'extra_urban', 'highway', 'mixed'];
+
+function optionalTripPurpose(v: unknown): TripPurpose | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'string' || !TRIP_PURPOSES.includes(v as TripPurpose)) {
+    throw new BadRequestException(`purpose must be one of: ${TRIP_PURPOSES.join(', ')}`);
+  }
+  return v as TripPurpose;
+}
+
+function optionalTripRoadType(v: unknown): TripRoadType | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'string' || !TRIP_ROAD_TYPES.includes(v as TripRoadType)) {
+    throw new BadRequestException(`roadType must be one of: ${TRIP_ROAD_TYPES.join(', ')}`);
+  }
+  return v as TripRoadType;
 }

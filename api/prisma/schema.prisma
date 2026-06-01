@@ -19,6 +19,7 @@ model Tenant {
   maintenanceEntries MaintenanceEntry[]
   memberships        TenantMembership[]
   trips              Trip[]
+  tripSheetDocuments TripSheetDocument[]
   vehicles           Vehicle[]
   reminderActions    ReminderAction[]
   maintenancePlanItems MaintenancePlanItem[]
@@ -97,22 +98,66 @@ model Vehicle {
   @@index([tenantId, status])
 }
 
-/// Trasee / curse (MVP — extinde în fazele următoare).
+enum TripPurpose {
+  business
+  personal
+  mixed
+}
+
+enum TripRoadType {
+  urban
+  extra_urban
+  highway
+  mixed
+}
+
+/// Trasee / curse (MVP — extins pentru FAZ-lite).
 model Trip {
-  id          String    @id @default(cuid())
-  tenantId    String
-  vehicleId   String
-  reference   String?
-  startedAt   DateTime  @default(now())
-  endedAt     DateTime?
-  originLabel String?
-  destLabel   String?
-  distanceKm  Int?
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  id               String         @id @default(cuid())
+  tenantId         String
+  vehicleId        String
+  reference        String?
+  startedAt        DateTime       @default(now())
+  endedAt          DateTime?
+  originLabel      String?
+  destLabel        String?
+  distanceKm       Int?
+  purpose          TripPurpose?
+  roadType         TripRoadType?
+  odometerStartKm  Int?
+  odometerEndKm    Int?
+  /// Conducător (text liber până la modulul Client).
+  driverName       String?
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle          Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([vehicleId])
+}
+
+enum TripSheetDocType {
+  trip_sheet
+  faz_monthly
+}
+
+/// Document generat: foaie de parcurs sau FAZ lunar (arhivă PDF).
+model TripSheetDocument {
+  id              String           @id @default(cuid())
+  tenantId        String
+  docType         TripSheetDocType
+  periodStart     DateTime
+  periodEnd       DateTime
+  vehicleIds      String[]
+  driverName      String?
+  clientIdFilter  String?
+  title           String
+  summaryJson     Json
+  pdfData         Bytes
+  createdByUserId String?
+  createdAt       DateTime         @default(now())
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }
 
 /// Mentenanță planificată sau înregistrată (MVP).

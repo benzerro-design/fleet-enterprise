@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
+import { TRIP_PURPOSE_OPTIONS, TRIP_ROAD_TYPE_OPTIONS } from "@/lib/trip-ops";
 
 type TripRecord = {
   id: string;
@@ -13,6 +14,11 @@ type TripRecord = {
   originLabel: string | null;
   destLabel: string | null;
   distanceKm: number | null;
+  purpose?: string | null;
+  roadType?: string | null;
+  odometerStartKm?: number | null;
+  odometerEndKm?: number | null;
+  driverName?: string | null;
 };
 
 type VehicleOption = {
@@ -64,6 +70,11 @@ export function TripForm(props: Props) {
         originLabel: "",
         destLabel: "",
         distanceKm: "",
+        purpose: "",
+        roadType: "",
+        odometerStartKm: "",
+        odometerEndKm: "",
+        driverName: "",
       };
     }
     const t = props.initial;
@@ -75,6 +86,11 @@ export function TripForm(props: Props) {
       originLabel: t.originLabel ?? "",
       destLabel: t.destLabel ?? "",
       distanceKm: t.distanceKm != null ? String(t.distanceKm) : "",
+      purpose: t.purpose ?? "",
+      roadType: t.roadType ?? "",
+      odometerStartKm: t.odometerStartKm != null ? String(t.odometerStartKm) : "",
+      odometerEndKm: t.odometerEndKm != null ? String(t.odometerEndKm) : "",
+      driverName: t.driverName ?? "",
     };
   }, [props]);
 
@@ -86,6 +102,11 @@ export function TripForm(props: Props) {
   const [originLabel, setOriginLabel] = useState(initial.originLabel);
   const [destLabel, setDestLabel] = useState(initial.destLabel);
   const [distanceKm, setDistanceKm] = useState(initial.distanceKm);
+  const [purpose, setPurpose] = useState(initial.purpose);
+  const [roadType, setRoadType] = useState(initial.roadType);
+  const [odometerStartKm, setOdometerStartKm] = useState(initial.odometerStartKm);
+  const [odometerEndKm, setOdometerEndKm] = useState(initial.odometerEndKm);
+  const [driverName, setDriverName] = useState(initial.driverName);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,6 +139,26 @@ export function TripForm(props: Props) {
       parsedDistance = n;
     }
 
+    const parseOptionalKm = (raw: string, label: string): number | null | "invalid" => {
+      const t = raw.trim();
+      if (!t) return null;
+      const n = Number(t);
+      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) return "invalid";
+      return n;
+    };
+    const odoStart = parseOptionalKm(odometerStartKm, "odometerStartKm");
+    if (odoStart === "invalid") {
+      setError("Odometru start trebuie să fie un număr întreg >= 0.");
+      setPending(false);
+      return;
+    }
+    const odoEnd = parseOptionalKm(odometerEndKm, "odometerEndKm");
+    if (odoEnd === "invalid") {
+      setError("Odometru final trebuie să fie un număr întreg >= 0.");
+      setPending(false);
+      return;
+    }
+
     const body: Record<string, unknown> = {
       vehicleId,
       startedAt: startIso,
@@ -126,6 +167,11 @@ export function TripForm(props: Props) {
       originLabel: originLabel.trim() || null,
       destLabel: destLabel.trim() || null,
       distanceKm: parsedDistance,
+      purpose: purpose.trim() ? purpose.trim() : null,
+      roadType: roadType.trim() ? roadType.trim() : null,
+      odometerStartKm: odoStart,
+      odometerEndKm: odoEnd,
+      driverName: driverName.trim() || null,
     };
 
     try {
@@ -190,6 +236,42 @@ export function TripForm(props: Props) {
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Distanță km (opțional)</label>
         <input type="number" min={0} step={1} value={distanceKm} onChange={(e) => setDistanceKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">Scop</label>
+          <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
+            {TRIP_PURPOSE_OPTIONS.map((o) => (
+              <option key={o.value || "none"} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">Tip drum</label>
+          <select value={roadType} onChange={(e) => setRoadType(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
+            {TRIP_ROAD_TYPE_OPTIONS.map((o) => (
+              <option key={o.value || "none"} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">Odometru start (opțional)</label>
+          <input type="number" min={0} step={1} value={odometerStartKm} onChange={(e) => setOdometerStartKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
+        </div>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">Odometru final (opțional)</label>
+          <input type="number" min={0} step={1} value={odometerEndKm} onChange={(e) => setOdometerEndKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Conducător (text liber)</label>
+        <input value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="Până la modulul Client" className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">

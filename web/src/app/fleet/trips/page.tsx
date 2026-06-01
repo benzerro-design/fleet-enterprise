@@ -1,5 +1,7 @@
 ﻿import Link from "next/link";
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
+import { TripSheetDocumentsList } from "@/components/fleet/TripSheetDocumentsList";
+import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -12,6 +14,8 @@ type Search = {
   startedFrom?: string;
   startedTo?: string;
   ended?: string;
+  view?: string;
+  generated?: string;
 };
 
 type TripRow = {
@@ -29,6 +33,21 @@ type TripRow = {
 };
 
 type TripListPayload = { items: TripRow[]; total: number; page: number; pageSize: number };
+
+type TripSheetDocRow = {
+  id: string;
+  docType: string;
+  docTypeLabel: string;
+  title: string;
+  periodStart: string;
+  periodEnd: string;
+  driverName: string | null;
+  createdAt: string;
+};
+
+type TripSheetListPayload = { items: TripSheetDocRow[]; total: number };
+
+type VehicleOption = { id: string; registrationNumber: string; clientId: string };
 
 function buildQuery(sp: Search): string {
   const q = new URLSearchParams();
@@ -61,11 +80,34 @@ async function fetchTrips(sp: Search): Promise<TripListPayload | null> {
   return (await res.json()) as TripListPayload;
 }
 
+async function fetchTripSheets(): Promise<TripSheetListPayload | null> {
+  const res = await fleetServerFetch("/trip-sheets?page=1&pageSize=50");
+  if (!res?.ok) return null;
+  return (await res.json()) as TripSheetListPayload;
+}
+
+async function fetchVehicleOptions(): Promise<VehicleOption[]> {
+  const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
+  if (!res?.ok) return [];
+  const data = (await res.json()) as { items: VehicleOption[] };
+  return data.items.map((v) => ({
+    id: v.id,
+    registrationNumber: v.registrationNumber,
+    clientId: v.clientId,
+  }));
+}
+
 type Props = { searchParams: Promise<Search> };
 
 export default async function TripsPage({ searchParams }: Props) {
   const sp = await searchParams;
-  const [data, auth] = await Promise.all([fetchTrips(sp), getAuthMeResult()]);
+  const showDocuments = sp.view === "documents";
+  const [data, auth, documents, vehicles] = await Promise.all([
+    showDocuments ? Promise.resolve(null) : fetchTrips(sp),
+    getAuthMeResult(),
+    showDocuments ? fetchTripSheets() : Promise.resolve(null),
+    fetchVehicleOptions(),
+  ]);
   const write = canManageFleet(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
@@ -93,18 +135,21 @@ export default async function TripsPage({ searchParams }: Props) {
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Curse</h1>
             <p className="mt-3 text-zinc-400">
-              Filtrare după nr. înmatriculare/client, text (ref./traseu), interval start și stare cursă (deschisă/închisă).
-              Export CSV cu aceleași filtre ca lista.
+              Curse operaționale, generare foaie de parcurs / FAZ lunar (PDF) și arhivă documente. Conducătorul este text
+              liber până la modulul Client.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {write ? (
-              <Link
-                href="/fleet/trips/new"
-                className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
-              >
-                Cursă nouă
-              </Link>
+              <>
+                <Link
+                  href="/fleet/trips/new"
+                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Cursă nouă
+                </Link>
+                <TripSheetWizard vehicles={vehicles} />
+              </>
             ) : null}
             <a
               href={exportHref}
@@ -121,6 +166,36 @@ export default async function TripsPage({ searchParams }: Props) {
           </div>
         </div>
 
+        <nav className="flex gap-2 border-b border-zinc-800 pb-1">
+          <Link
+            href="/fleet/trips"
+            className={`rounded-t-lg px-4 py-2 text-sm ${!showDocuments ? "bg-zinc-900 text-emerald-400" : "text-zinc-400 hover:text-zinc-200"}`}
+          >
+            Listă curse
+          </Link>
+          <Link
+            href="/fleet/trips?view=documents"
+            className={`rounded-t-lg px-4 py-2 text-sm ${showDocuments ? "bg-zinc-900 text-emerald-400" : "text-zinc-400 hover:text-zinc-200"}`}
+          >
+            Documente parcurs
+          </Link>
+        </nav>
+
+        {showDocuments ? (
+          <section className="space-y-4">
+            {sp.generated ? (
+              <p className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+                Document generat. Descarcă PDF din tabelul de mai jos.
+              </p>
+            ) : null}
+            {!documents ? (
+              <p className="text-amber-400">Nu am putut încărca arhiva documentelor.</p>
+            ) : (
+              <TripSheetDocumentsList items={documents.items} highlightId={sp.generated ?? null} />
+            )}
+          </section>
+        ) : (
+          <>
         <form
           action="/fleet/trips"
           method="get"
@@ -261,6 +336,8 @@ export default async function TripsPage({ searchParams }: Props) {
                 ) : null}
               </div>
             </div>
+          </>
+        )}
           </>
         )}
       </main>

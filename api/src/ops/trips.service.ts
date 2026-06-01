@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, TripPurpose, TripRoadType } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertVehicleInTenant } from './ops-scope';
@@ -15,6 +15,11 @@ export type CreateTripInput = {
   originLabel?: string | null;
   destLabel?: string | null;
   distanceKm?: number | null;
+  purpose?: TripPurpose | null;
+  roadType?: TripRoadType | null;
+  odometerStartKm?: number | null;
+  odometerEndKm?: number | null;
+  driverName?: string | null;
 };
 
 export type PatchTripInput = Partial<CreateTripInput>;
@@ -106,6 +111,11 @@ function tripPatchFieldKeys(
     originLabel: string | null;
     destLabel: string | null;
     distanceKm: number | null;
+    purpose: TripPurpose | null;
+    roadType: TripRoadType | null;
+    odometerStartKm: number | null;
+    odometerEndKm: number | null;
+    driverName: string | null;
   },
   dto: PatchTripInput,
 ): string[] {
@@ -126,6 +136,15 @@ function tripPatchFieldKeys(
   if (dto.originLabel !== undefined && dto.originLabel !== before.originLabel) keys.push('originLabel');
   if (dto.destLabel !== undefined && dto.destLabel !== before.destLabel) keys.push('destLabel');
   if (dto.distanceKm !== undefined && dto.distanceKm !== before.distanceKm) keys.push('distanceKm');
+  if (dto.purpose !== undefined && dto.purpose !== before.purpose) keys.push('purpose');
+  if (dto.roadType !== undefined && dto.roadType !== before.roadType) keys.push('roadType');
+  if (dto.odometerStartKm !== undefined && dto.odometerStartKm !== before.odometerStartKm) {
+    keys.push('odometerStartKm');
+  }
+  if (dto.odometerEndKm !== undefined && dto.odometerEndKm !== before.odometerEndKm) {
+    keys.push('odometerEndKm');
+  }
+  if (dto.driverName !== undefined && dto.driverName !== before.driverName) keys.push('driverName');
   return keys;
 }
 
@@ -139,6 +158,11 @@ function toTripRow(row: {
   originLabel: string | null;
   destLabel: string | null;
   distanceKm: number | null;
+  purpose: TripPurpose | null;
+  roadType: TripRoadType | null;
+  odometerStartKm: number | null;
+  odometerEndKm: number | null;
+  driverName: string | null;
   vehicle: { registrationNumber: string; clientId: string };
   tenant: { slug: string };
 }) {
@@ -154,6 +178,11 @@ function toTripRow(row: {
     originLabel: row.originLabel,
     destLabel: row.destLabel,
     distanceKm: row.distanceKm,
+    purpose: row.purpose,
+    roadType: row.roadType,
+    odometerStartKm: row.odometerStartKm,
+    odometerEndKm: row.odometerEndKm,
+    driverName: row.driverName,
   };
 }
 
@@ -217,7 +246,7 @@ export class TripsService {
       include: { vehicle: { select: { registrationNumber: true, clientId: true } } },
     });
     const header =
-      'id,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm';
+      'id,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm,purpose,roadType,odometerStartKm,odometerEndKm,driverName';
     const lines = rows.map((r) =>
       [
         r.id,
@@ -230,6 +259,11 @@ export class TripsService {
         r.originLabel ?? '',
         r.destLabel ?? '',
         r.distanceKm != null ? String(r.distanceKm) : '',
+        r.purpose ?? '',
+        r.roadType ?? '',
+        r.odometerStartKm != null ? String(r.odometerStartKm) : '',
+        r.odometerEndKm != null ? String(r.odometerEndKm) : '',
+        r.driverName ?? '',
       ]
         .map((c) => escapeCsvCell(c))
         .join(','),
@@ -264,6 +298,11 @@ export class TripsService {
         originLabel: dto.originLabel ?? null,
         destLabel: dto.destLabel ?? null,
         distanceKm: dto.distanceKm ?? null,
+        purpose: dto.purpose ?? null,
+        roadType: dto.roadType ?? null,
+        odometerStartKm: dto.odometerStartKm ?? null,
+        odometerEndKm: dto.odometerEndKm ?? null,
+        driverName: dto.driverName ?? null,
       },
       include: {
         vehicle: { select: { registrationNumber: true, clientId: true } },
@@ -325,6 +364,11 @@ export class TripsService {
         originLabel: before.originLabel,
         destLabel: before.destLabel,
         distanceKm: before.distanceKm,
+        purpose: before.purpose,
+        roadType: before.roadType,
+        odometerStartKm: before.odometerStartKm,
+        odometerEndKm: before.odometerEndKm,
+        driverName: before.driverName,
       },
       dto,
     );
