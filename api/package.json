@@ -25,6 +25,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:seed:trips": "node scripts/seed-trips-demo.js",
     "db:studio": "prisma studio",
     "auth:hash-password": "node scripts/hash-dev-password.js"
   },

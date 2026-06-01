@@ -100,7 +100,7 @@ Deschide [http://localhost:3000](http://localhost:3000). Pagina citește health 
 
 ### Autentificare (utilizatori în Postgres)
 
-1. După ce ai rulat **`npm run db:migrate`**, rulează **`npm run db:seed`** (din `api/`): creează tenanții `default` / `demo`, **`admin@demo.local`** (rol **`tenant_admin`**) și **`viewer@demo.local`** (rol **`tenant_viewer`**), ambele cu parola **`demo12345`** pe tenant **`demo`**. Dacă ai actualizat proiectul și contul viewer nu exista, **rulează din nou seed** ca să fie creat/actualizat.
+1. După ce ai rulat **`npm run db:migrate`**, rulează **`npm run db:seed`** (din `api/`): creează tenanții `default` / `demo`, **`admin@demo.local`** (rol **`tenant_admin`**) și **`viewer@demo.local`** (rol **`tenant_viewer`**), ambele cu parola **`demo12345`** pe tenant **`demo`**, plus **12 curse demo**, **4 vehicule** și **costuri combustibil** pentru testarea FAZ. Dacă ai actualizat proiectul și contul viewer nu exista, **rulează din nou seed** ca să fie creat/actualizat. Doar curse: **`npm run db:seed:trips`** (opțional `TENANT_SLUG=demo`).
 2. În **`api/.env`**: `JWT_SECRET` (vezi `api/.env.example`).
 3. În **`web/.env.local`**: `API_URL=http://localhost:4000` (vezi `web/.env.example`).
 4. Pornește API + web → [http://localhost:3000/login](http://localhost:3000/login): **email**, **parolă**, **tenant slug** (`demo`). Dacă utilizatorul are un singur tenant, poți lăsa slug gol.
@@ -166,7 +166,8 @@ După migrația **`20260418213000_phase2_audit_modules`** (+ `npm run db:migrate
 - `npm run db:generate` — regenerează clientul Prisma
 - `npm run db:migrate` — aplică migrațiile (`prisma migrate deploy`)
 - `npm run db:migrate:dev` — creează migrații noi în dev (`prisma migrate dev`)
-- `npm run db:seed` — seed (tenanți + `admin@demo.local` + `viewer@demo.local`)
+- `npm run db:seed` — seed (tenanți + utilizatori demo + curse demo pe tenant `demo`)
+- `npm run db:seed:trips` — doar vehicule/curse/combustibil demo (`TENANT_SLUG` opțional; implicit `demo` + `default` dacă există)
 - `npm run db:studio` — Prisma Studio
 
 ### Teste e2e

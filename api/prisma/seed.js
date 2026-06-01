@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
+const { seedTripsForTenant } = require('../scripts/seed-trips-demo');
 
 const prisma = new PrismaClient();
 
@@ -75,6 +76,12 @@ async function main() {
     },
     update: { role: 'tenant_viewer' },
   });
+
+  const tripsSeed = await seedTripsForTenant('demo');
+  // eslint-disable-next-line no-console
+  console.log(
+    `Demo trips: ${tripsSeed.tripCount} curse, ${tripsSeed.fuelCount} alimentări combustibil, ${tripsSeed.vehicleCount} vehicule.`,
+  );
 }
 
 main()
