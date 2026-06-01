@@ -43,8 +43,8 @@ WHERE c."tenantId" = v."tenantId"
 -- Fallback for empty legacy codes
 INSERT INTO "Client" ("id", "tenantId", "code", "legalName", "status", "createdAt", "updatedAt")
 SELECT
-    'cl_' || substr(md5("tenantId" || '|__internal__'), 1, 22),
-    "tenantId",
+    'cl_' || substr(md5(t."id" || '|__internal__'), 1, 22),
+    t."id",
     'INTERN',
     'Intern / neasignat',
     'active'::"ClientStatus",
