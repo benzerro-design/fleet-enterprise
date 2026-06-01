@@ -17,7 +17,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
-import type { GenerateTripSheetInput } from './trip-sheets.service';
+import type {
+  GenerateTripSheetInput,
+  TripSheetBrowseFilters,
+} from './trip-sheets.service';
 import { TripSheetsService } from './trip-sheets.service';
 
 @Controller('trip-sheets')
@@ -29,12 +32,17 @@ export class TripSheetsController {
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
   list(
     @TenantId() tenantSlug: string,
+    @Query() q: Record<string, string | undefined>,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '20', 10) || 20), 50);
-    return this.tripSheets.list(tenantSlug, page, pageSize);
+    return this.tripSheets.list(tenantSlug, {
+      page,
+      pageSize,
+      ...parseTripSheetBrowseQuery(q),
+    });
   }
 
   @Get(':docId/pdf')
@@ -65,6 +73,31 @@ export class TripSheetsController {
     const dto = assertGenerateDto(body);
     return this.tripSheets.generate(tenantSlug, dto, actorUserId);
   }
+}
+
+function parseTripSheetBrowseQuery(q: Record<string, string | undefined>): TripSheetBrowseFilters {
+  const registrationNumber = q['registrationNumber']?.trim();
+  const clientId = q['clientId']?.trim();
+  const searchQ = q['q']?.trim();
+  const periodFrom = q['periodFrom']?.trim();
+  const periodTo = q['periodTo']?.trim();
+  const createdFrom = q['createdFrom']?.trim();
+  const createdTo = q['createdTo']?.trim();
+  const docTypeRaw = q['docType']?.trim();
+  let docType: TripSheetBrowseFilters['docType'];
+  if (docTypeRaw === 'trip_sheet' || docTypeRaw === 'faz_monthly') {
+    docType = docTypeRaw;
+  }
+  return {
+    ...(registrationNumber ? { registrationNumber } : {}),
+    ...(clientId ? { clientId } : {}),
+    ...(searchQ ? { q: searchQ } : {}),
+    ...(periodFrom ? { periodFrom } : {}),
+    ...(periodTo ? { periodTo } : {}),
+    ...(createdFrom ? { createdFrom } : {}),
+    ...(createdTo ? { createdTo } : {}),
+    ...(docType ? { docType } : {}),
+  };
 }
 
 function assertGenerateDto(body: unknown): GenerateTripSheetInput {

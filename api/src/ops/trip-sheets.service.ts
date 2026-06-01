@@ -25,6 +25,22 @@ export type GenerateTripSheetInput = {
   clientId?: string | null;
 };
 
+export type TripSheetBrowseFilters = {
+  registrationNumber?: string;
+  clientId?: string;
+  q?: string;
+  docType?: TripSheetDocType;
+  periodFrom?: string;
+  periodTo?: string;
+  createdFrom?: string;
+  createdTo?: string;
+};
+
+export type TripSheetListParams = TripSheetBrowseFilters & {
+  page: number;
+  pageSize: number;
+};
+
 function parseDayStart(s: string): Date {
   const t = s.trim();
   if (t.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(t)) {
@@ -80,6 +96,75 @@ function toDocRow(row: {
   };
 }
 
+async function buildTripSheetWhere(
+  prisma: PrismaService,
+  tenantId: string,
+  f: TripSheetBrowseFilters,
+): Promise<Prisma.TripSheetDocumentWhereInput> {
+  const parts: Prisma.TripSheetDocumentWhereInput[] = [{ tenantId }];
+
+  if (f.docType) {
+    parts.push({ docType: f.docType });
+  }
+
+  if (f.clientId?.trim()) {
+    const clientId = f.clientId.trim();
+    const vehicles = await prisma.vehicle.findMany({
+      where: { tenantId, clientId: { equals: clientId, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    const vehicleIds = vehicles.map((v) => v.id);
+    const clientParts: Prisma.TripSheetDocumentWhereInput[] = [
+      { clientIdFilter: { equals: clientId, mode: 'insensitive' } },
+    ];
+    if (vehicleIds.length > 0) {
+      clientParts.push({ vehicleIds: { hasSome: vehicleIds } });
+    }
+    parts.push({ OR: clientParts });
+  }
+
+  if (f.registrationNumber?.trim()) {
+    const reg = f.registrationNumber.trim();
+    const vehicles = await prisma.vehicle.findMany({
+      where: {
+        tenantId,
+        registrationNumber: { equals: reg, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    const vehicleIds = vehicles.map((v) => v.id);
+    if (vehicleIds.length === 0) {
+      return { AND: [{ tenantId }, { id: { in: [] } }] };
+    }
+    parts.push({ vehicleIds: { hasSome: vehicleIds } });
+  }
+
+  if (f.q?.trim()) {
+    const q = f.q.trim();
+    parts.push({
+      OR: [
+        { title: { contains: q, mode: 'insensitive' } },
+        { driverName: { contains: q, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  if (f.periodFrom?.trim()) {
+    parts.push({ periodEnd: { gte: parseDayStart(f.periodFrom) } });
+  }
+  if (f.periodTo?.trim()) {
+    parts.push({ periodStart: { lte: parseDayEnd(f.periodTo) } });
+  }
+  if (f.createdFrom?.trim()) {
+    parts.push({ createdAt: { gte: parseDayStart(f.createdFrom) } });
+  }
+  if (f.createdTo?.trim()) {
+    parts.push({ createdAt: { lte: parseDayEnd(f.createdTo) } });
+  }
+
+  return { AND: parts };
+}
+
 @Injectable()
 export class TripSheetsService {
   constructor(
@@ -87,14 +172,15 @@ export class TripSheetsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(tenantSlug: string, page = 1, pageSize = 20) {
+  async list(tenantSlug: string, params: TripSheetListParams) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
-      return { items: [], total: 0, page, pageSize };
+      return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
     }
-    const take = Math.min(Math.max(1, pageSize), 50);
-    const skip = (Math.max(1, page) - 1) * take;
-    const where = { tenantId: tenant.id };
+    const take = Math.min(Math.max(1, params.pageSize), 50);
+    const page = Math.max(1, params.page);
+    const skip = (page - 1) * take;
+    const where = await buildTripSheetWhere(this.prisma, tenant.id, params);
     const [total, rows] = await Promise.all([
       this.prisma.tripSheetDocument.count({ where }),
       this.prisma.tripSheetDocument.findMany({
@@ -116,7 +202,7 @@ export class TripSheetsService {
         },
       }),
     ]);
-    return { items: rows.map(toDocRow), total, page: Math.max(1, page), pageSize: take };
+    return { items: rows.map(toDocRow), total, page, pageSize: take };
   }
 
   async getById(tenantSlug: string, docId: string) {

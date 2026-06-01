@@ -61,6 +61,16 @@ export function TripSheetWizard({ vehicles }: Props) {
     setSelectedIds(new Set());
   }
 
+  function resetForm() {
+    setDocType("trip_sheet");
+    setPeriodStart("");
+    setPeriodEnd("");
+    setClientId("");
+    setDriverName("");
+    setSelectedIds(new Set());
+    setError(null);
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -124,7 +134,8 @@ export function TripSheetWizard({ vehicles }: Props) {
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
               Agregă cursele, costurile de combustibil și citirile de odometru din perioada selectată. Conducătorul este
-              text liber (modul Client vine ulterior).
+              text liber (modul Client vine ulterior). După generare, valorile rămân — folosește{" "}
+              <span className="text-zinc-300">Resetează</span> pentru un document nou de la zero.
             </p>
 
             <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4">
@@ -238,10 +249,18 @@ export function TripSheetWizard({ vehicles }: Props) {
                 <button
                   type="button"
                   disabled={pending}
+                  onClick={resetForm}
+                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+                >
+                  Resetează
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
                   onClick={() => setOpen(false)}
                   className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
                 >
-                  Anulează
+                  Închide
                 </button>
               </div>
             </form>
