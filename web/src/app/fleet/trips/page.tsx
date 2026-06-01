@@ -2,6 +2,7 @@
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { TripSheetDocumentsList } from "@/components/fleet/TripSheetDocumentsList";
 import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
+import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -59,6 +60,18 @@ type TripSheetListPayload = {
 };
 
 type VehicleOption = { id: string; registrationNumber: string; clientId: string };
+
+type TripsView = "trips" | "documents" | "tachograph";
+
+function resolveTripsView(sp: Search): TripsView {
+  if (sp.view === "documents") return "documents";
+  if (sp.view === "tachograph") return "tachograph";
+  return "trips";
+}
+
+function tabLinkClass(active: boolean): string {
+  return `rounded-t-lg px-4 py-2 text-sm ${active ? "bg-zinc-900 text-emerald-400" : "text-zinc-400 hover:text-zinc-200"}`;
+}
 
 function buildQuery(sp: Search): string {
   const q = new URLSearchParams();
@@ -128,9 +141,12 @@ type Props = { searchParams: Promise<Search> };
 
 export default async function TripsPage({ searchParams }: Props) {
   const sp = await searchParams;
-  const showDocuments = sp.view === "documents";
+  const view = resolveTripsView(sp);
+  const showTrips = view === "trips";
+  const showDocuments = view === "documents";
+  const showTachograph = view === "tachograph";
   const [data, auth, documents, vehicles] = await Promise.all([
-    showDocuments ? Promise.resolve(null) : fetchTrips(sp),
+    showTrips ? fetchTrips(sp) : Promise.resolve(null),
     getAuthMeResult(),
     showDocuments ? fetchTripSheets(sp) : Promise.resolve(null),
     fetchVehicleOptions(),
@@ -211,22 +227,21 @@ export default async function TripsPage({ searchParams }: Props) {
           </div>
         </div>
 
-        <nav className="flex gap-2 border-b border-zinc-800 pb-1">
-          <Link
-            href="/fleet/trips"
-            className={`rounded-t-lg px-4 py-2 text-sm ${!showDocuments ? "bg-zinc-900 text-emerald-400" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
+        <nav className="flex flex-wrap gap-2 border-b border-zinc-800 pb-1">
+          <Link href="/fleet/trips" className={tabLinkClass(showTrips)}>
             Listă curse
           </Link>
-          <Link
-            href="/fleet/trips?view=documents"
-            className={`rounded-t-lg px-4 py-2 text-sm ${showDocuments ? "bg-zinc-900 text-emerald-400" : "text-zinc-400 hover:text-zinc-200"}`}
-          >
+          <Link href="/fleet/trips?view=documents" className={tabLinkClass(showDocuments)}>
             Documente parcurs
+          </Link>
+          <Link href="/fleet/trips?view=tachograph" className={tabLinkClass(showTachograph)}>
+            Tahograf
           </Link>
         </nav>
 
-        {showDocuments ? (
+        {showTachograph ? (
+          <TripTachographPlaceholder />
+        ) : showDocuments ? (
           <section className="space-y-4">
             {sp.generated ? (
               <p className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">

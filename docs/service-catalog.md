@@ -32,6 +32,7 @@ Bazat pe sectiunile „Catalog servicii oferite (business scope)” si „Grupar
 
 - **Phase 2 (Should/Must extins)**:
   - tahograf, foi de parcurs, CMR;
+  - UI: tab **Tahograf** în modulul **Curse** (placeholder; implementare după modulul Client / șoferi);
   - asistenta rutiera;
   - vignette/eTransport/eToll;
   - RAR, DITL, DRPCIV;
