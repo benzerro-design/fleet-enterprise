@@ -8,7 +8,41 @@
  */
 const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient();
+let defaultPrisma;
+
+function getDefaultPrisma() {
+  if (!defaultPrisma) {
+    defaultPrisma = new PrismaClient();
+  }
+  return defaultPrisma;
+}
+
+async function assertSeedSchemaReady(prisma) {
+  try {
+    await prisma.trip.findFirst({
+      select: {
+        id: true,
+        purpose: true,
+        roadType: true,
+        driverName: true,
+        odometerStartKm: true,
+      },
+      take: 1,
+    });
+    await prisma.vehicle.findFirst({
+      select: { id: true, brand: true, model: true },
+      take: 1,
+    });
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      'Schema DB incompletă pentru Curse/FAZ. Din folderul api rulează:\n' +
+        '  npx.cmd prisma migrate deploy\n' +
+        'Apoi reîncearcă: npm run db:seed\n\n' +
+        `Detaliu: ${detail}`,
+    );
+  }
+}
 
 const SEED_TRIP_REF_PREFIX = 'SEED-TRIP-';
 const SEED_COST_NOTE_PREFIX = 'SEED combustibil demo';
@@ -256,7 +290,7 @@ const FUEL_COSTS = [
   { reg: 'IS 55 DRV', daysAgo: 8, liters: 35.4, amountCents: 28900 },
 ];
 
-async function upsertSeedVehicles(tenantId, adminUserId) {
+async function upsertSeedVehicles(prisma, tenantId, adminUserId) {
   const byReg = new Map();
   for (const v of SEED_VEHICLES) {
     const row = await prisma.vehicle.upsert({
@@ -291,7 +325,10 @@ async function upsertSeedVehicles(tenantId, adminUserId) {
   return byReg;
 }
 
-async function seedTripsForTenant(tenantSlug) {
+async function seedTripsForTenant(tenantSlug, prismaOverride) {
+  const prisma = prismaOverride ?? getDefaultPrisma();
+  await assertSeedSchemaReady(prisma);
+
   const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
   if (!tenant) {
     throw new Error(`Tenant "${tenantSlug}" not found. Create it first (npm run db:seed).`);
@@ -304,7 +341,7 @@ async function seedTripsForTenant(tenantSlug) {
     },
   });
 
-  const vehiclesByReg = await upsertSeedVehicles(tenant.id, admin?.id ?? null);
+  const vehiclesByReg = await upsertSeedVehicles(prisma, tenant.id, admin?.id ?? null);
 
   await prisma.trip.deleteMany({
     where: {
@@ -380,7 +417,7 @@ async function main() {
       console.warn(`Skip tenant "${slug}" — not found.`);
       continue;
     }
-    const result = await seedTripsForTenant(slug);
+    const result = await seedTripsForTenant(slug, prisma);
     // eslint-disable-next-line no-console
     console.log(
       `Trips seed OK — tenant: ${result.tenantSlug}, ${result.tripCount} curse, ${result.fuelCount} costuri combustibil, ${result.vehicleCount} vehicule demo.`,
@@ -396,8 +433,11 @@ if (require.main === module) {
       process.exit(1);
     })
     .finally(async () => {
-      await prisma.$disconnect();
+      if (defaultPrisma) {
+        await defaultPrisma.$disconnect();
+        defaultPrisma = null;
+      }
     });
 }
 
-module.exports = { seedTripsForTenant };
+module.exports = { seedTripsForTenant, assertSeedSchemaReady };

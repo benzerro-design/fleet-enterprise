@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
-const { seedTripsForTenant } = require('../scripts/seed-trips-demo');
+const { seedTripsForTenant } = require(path.join(__dirname, '..', 'scripts', 'seed-trips-demo.js'));
 
 const prisma = new PrismaClient();
 
@@ -77,11 +78,16 @@ async function main() {
     update: { role: 'tenant_viewer' },
   });
 
-  const tripsSeed = await seedTripsForTenant('demo');
-  // eslint-disable-next-line no-console
-  console.log(
-    `Demo trips: ${tripsSeed.tripCount} curse, ${tripsSeed.fuelCount} alimentări combustibil, ${tripsSeed.vehicleCount} vehicule.`,
-  );
+  if (process.env.SEED_SKIP_TRIPS === '1') {
+    // eslint-disable-next-line no-console
+    console.log('SEED_SKIP_TRIPS=1 — sărit popularea curse demo.');
+  } else {
+    const tripsSeed = await seedTripsForTenant('demo', prisma);
+    // eslint-disable-next-line no-console
+    console.log(
+      `Demo trips: ${tripsSeed.tripCount} curse, ${tripsSeed.fuelCount} alimentări combustibil, ${tripsSeed.vehicleCount} vehicule.`,
+    );
+  }
 }
 
 main()
@@ -101,7 +107,11 @@ main()
   })
   .catch((e) => {
     // eslint-disable-next-line no-console
-    console.error(e);
+    console.error('Seed failed:', e instanceof Error ? e.message : e);
+    if (e instanceof Error && e.stack) {
+      // eslint-disable-next-line no-console
+      console.error(e.stack);
+    }
     process.exit(1);
   })
   .finally(async () => {
