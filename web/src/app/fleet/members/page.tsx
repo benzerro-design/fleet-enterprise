@@ -1,3 +1,4 @@
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MembersAdminPanel } from "@/components/fleet/MembersAdminPanel";
@@ -30,8 +31,7 @@ export default async function FleetMembersPage() {
   const currentUserEmail = auth.ok ? auth.me.email : undefined;
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto max-w-3xl px-6 py-16">
+    <FleetPageMain narrow="sm">
         <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
@@ -53,7 +53,6 @@ export default async function FleetMembersPage() {
         ) : (
           <MembersAdminPanel members={data.members} currentUserEmail={currentUserEmail} />
         )}
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }

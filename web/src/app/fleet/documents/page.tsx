@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
 import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -95,8 +96,7 @@ export default async function DocumentsPage({ searchParams }: Props) {
   };
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16">
+    <FleetPageMain>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Conformitate</p>
@@ -318,7 +318,6 @@ export default async function DocumentsPage({ searchParams }: Props) {
             </div>
           </>
         )}
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }

@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -35,8 +36,7 @@ export default async function CostDetailPage({ params }: { params: Promise<{ id:
   const write = canManageFleet(auth);
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto max-w-4xl px-6 py-16">
+    <FleetPageMain narrow="md">
         <div className="mb-8 flex items-end justify-between gap-4">
           <div><p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Cost</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">{row.category}</h1></div>
           <div className="flex flex-wrap gap-2">
@@ -67,8 +67,7 @@ export default async function CostDetailPage({ params }: { params: Promise<{ id:
           <div><dt className="text-xs uppercase text-zinc-500">Vehicle ID</dt><dd className="mt-1 font-mono text-xs text-zinc-400">{row.vehicleId}</dd></div>
           <div className="sm:col-span-2"><dt className="text-xs uppercase text-zinc-500">Notițe</dt><dd className="mt-1 text-zinc-200">{row.notes ?? "—"}</dd></div>
         </dl>
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }
 

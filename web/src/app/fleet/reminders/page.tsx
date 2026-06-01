@@ -1,3 +1,4 @@
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { Suspense } from "react";
 import { RemindersListView } from "@/components/fleet/RemindersListView";
@@ -39,8 +40,7 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
   const exportHref = `${remindersBrowserBase}/export${exportQs ? `?${exportQs}` : ""}`;
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto max-w-5xl px-6 py-16">
+    <FleetPageMain>
         <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Conformitate</p>
@@ -112,7 +112,6 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
         <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
           <RemindersListView backHref="/fleet/vehicles" write={write} />
         </Suspense>
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }

@@ -1,10 +1,14 @@
-import Link from "next/link";
+import { FleetShell } from "@/components/fleet/FleetShell";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
-import { LogoutButton } from "./logout-button";
+import { getFleetNavForUser } from "@/lib/fleet-nav";
 
 export default async function FleetLayout({ children }: { children: React.ReactNode }) {
   const auth = await getAuthMeResult();
   const write = canManageFleet(auth);
+  const { groups, admin } = getFleetNavForUser({
+    canWrite: write,
+    authenticated: auth.ok,
+  });
 
   const authBanner =
     auth.ok === false && auth.kind === "backend_error" ? (
@@ -17,54 +21,15 @@ export default async function FleetLayout({ children }: { children: React.ReactN
     ) : null;
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      {authBanner}
-      <header className="border-b border-zinc-800 bg-zinc-950/90">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
-          <nav className="flex flex-wrap items-center gap-4 text-sm">
-            <Link href="/fleet/vehicles" className="font-medium text-zinc-200 hover:text-white">
-              Vehicule
-            </Link>
-            <Link href="/fleet/documents" className="text-zinc-400 hover:text-zinc-200">
-              Documente
-            </Link>
-            <Link href="/fleet/reminders" className="text-zinc-400 hover:text-zinc-200">
-              Remindere
-            </Link>
-            <Link href="/fleet/trips" className="text-zinc-400 hover:text-zinc-200">
-              Trips
-            </Link>
-            <Link href="/fleet/maintenance" className="text-zinc-400 hover:text-zinc-200">
-              Mentenanță
-            </Link>
-            <Link href="/fleet/costs" className="text-zinc-400 hover:text-zinc-200">
-              Costuri
-            </Link>
-            {write ? (
-              <Link href="/fleet/vehicles/new" className="text-zinc-400 hover:text-zinc-200">
-                Nou
-              </Link>
-            ) : null}
-            {auth.ok ? (
-              <Link href="/fleet/audit" className="text-zinc-400 hover:text-zinc-200">
-                Audit
-              </Link>
-            ) : null}
-            {write ? (
-              <Link href="/fleet/members" className="text-zinc-400 hover:text-zinc-200">
-                Membri
-              </Link>
-            ) : null}
-            {auth.ok && auth.me.role === "tenant_viewer" ? (
-              <span className="rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-0.5 text-xs text-zinc-400">
-                Doar citire
-              </span>
-            ) : null}
-          </nav>
-          <LogoutButton />
-        </div>
-      </header>
+    <FleetShell
+      groups={groups}
+      admin={admin}
+      tenantSlug={auth.ok ? auth.me.tenantSlug : undefined}
+      userEmail={auth.ok ? auth.me.email : undefined}
+      readOnly={auth.ok && auth.me.role === "tenant_viewer"}
+      authBanner={authBanner}
+    >
       {children}
-    </div>
+    </FleetShell>
   );
 }

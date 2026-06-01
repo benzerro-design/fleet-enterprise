@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { TripSheetDocumentsList } from "@/components/fleet/TripSheetDocumentsList";
 import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
@@ -189,8 +190,7 @@ export default async function TripsPage({ searchParams }: Props) {
   };
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16">
+    <FleetPageMain>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
@@ -518,7 +518,6 @@ export default async function TripsPage({ searchParams }: Props) {
         )}
           </>
         )}
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }

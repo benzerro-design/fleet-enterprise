@@ -1,3 +1,4 @@
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MaintenanceForm } from "@/components/fleet/MaintenanceForm";
@@ -30,8 +31,7 @@ export default async function NewMaintenancePage({ searchParams }: { searchParam
   const vehicles = await getVehicleOptions();
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto max-w-5xl px-6 py-16">
+    <FleetPageMain>
         <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
@@ -42,7 +42,6 @@ export default async function NewMaintenancePage({ searchParams }: { searchParam
           </Link>
         </div>
         <MaintenanceForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} />
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }

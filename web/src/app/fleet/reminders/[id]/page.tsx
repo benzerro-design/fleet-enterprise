@@ -1,3 +1,4 @@
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteReminderButton } from "@/components/fleet/DeleteReminderButton";
@@ -42,8 +43,7 @@ export default async function ReminderDetailPage({ params }: Props) {
               : null;
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto max-w-3xl px-6 py-16">
+    <FleetPageMain narrow="sm">
         <Link href="/fleet/reminders" className="text-sm text-zinc-400 hover:text-zinc-200">
           ← Remindere
         </Link>
@@ -205,7 +205,6 @@ export default async function ReminderDetailPage({ params }: Props) {
             </Link>
           </p>
         ) : null}
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }

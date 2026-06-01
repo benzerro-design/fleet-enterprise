@@ -1,3 +1,4 @@
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
@@ -50,8 +51,7 @@ export default async function DocumentDetailPage({
   const badge = documentExpiryBadge(expiry);
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto max-w-5xl px-6 py-16">
+    <FleetPageMain>
         {sp.reminderSync === "failed" ? (
           <p className="mb-6 rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
             Documentul a fost salvat, dar acțiunea din meniul Remindere nu s-a creat (probabil migrarea DB nu e
@@ -164,7 +164,6 @@ export default async function DocumentDetailPage({
             <DeleteDocumentButton documentId={row.id} label={row.title} redirectTo="/fleet/documents" />
           </div>
         ) : null}
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }

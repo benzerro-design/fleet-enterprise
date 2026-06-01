@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -37,8 +38,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const write = canManageFleet(auth);
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto max-w-4xl px-6 py-16">
+    <FleetPageMain narrow="md">
         <div className="mb-8 flex items-end justify-between gap-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Trip</p>
@@ -74,8 +74,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           <div><dt className="text-xs uppercase text-zinc-500">Conducător</dt><dd className="mt-1">{trip.driverName ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Vehicle ID</dt><dd className="mt-1 font-mono text-xs text-zinc-400">{trip.vehicleId}</dd></div>
         </dl>
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }
 

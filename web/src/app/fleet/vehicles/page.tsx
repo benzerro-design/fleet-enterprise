@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { type VehicleListPayload, VEHICLE_STATUSES, fleetBrowserBase } from "@/lib/fleet-api";
@@ -57,8 +58,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   };
 
   return (
-    <div className="text-zinc-100">
-      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-16">
+    <FleetPageMain>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Fleet core</p>
@@ -245,7 +245,6 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
             </>
           )}
         </section>
-      </main>
-    </div>
+    </FleetPageMain>
   );
 }
