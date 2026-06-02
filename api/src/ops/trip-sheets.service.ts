@@ -231,10 +231,16 @@ export class TripSheetsService {
   async getPdfBuffer(tenantSlug: string, docId: string): Promise<Buffer> {
     const row = await this.prisma.tripSheetDocument.findFirst({
       where: { id: docId, tenant: { slug: tenantSlug } },
-      select: { pdfData: true },
+      select: { pdfData: true, pdfStorageKey: true },
     });
     if (!row) throw new NotFoundException('Document not found');
-    return Buffer.from(row.pdfData as Uint8Array);
+    if (row.pdfStorageKey) {
+      return this.pdfStorage.download(tenantSlug, row.pdfStorageKey);
+    }
+    if (row.pdfData) {
+      return Buffer.from(row.pdfData as Uint8Array);
+    }
+    throw new NotFoundException('PDF not available for this document');
   }
 
   async generate(tenantSlug: string, input: GenerateTripSheetInput, actorUserId?: string) {
@@ -424,11 +430,16 @@ export class TripSheetsService {
     });
 
     if (storageMode === 'gcs') {
-      const pdfStorageKey = await this.pdfStorage.upload(tenant.slug, row.id, pdfBuffer);
-      await this.prisma.tripSheetDocument.update({
-        where: { id: row.id },
-        data: { pdfStorageKey },
-      });
+      try {
+        const pdfStorageKey = await this.pdfStorage.upload(tenant.slug, row.id, pdfBuffer);
+        await this.prisma.tripSheetDocument.update({
+          where: { id: row.id },
+          data: { pdfStorageKey },
+        });
+      } catch (e) {
+        await this.prisma.tripSheetDocument.delete({ where: { id: row.id } }).catch(() => undefined);
+        throw e;
+      }
     }
 
     await this.audit.log({
