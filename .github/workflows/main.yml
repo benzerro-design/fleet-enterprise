@@ -56,4 +56,4 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --set-secrets DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest \
-            --set-env-vars WEB_ORIGIN=${{ secrets.WEB_ORIGIN }},NODE_ENV=production
+            --set-env-vars WEB_ORIGIN=${{ secrets.WEB_ORIGIN }},NODE_ENV=production,GCS_BUCKET=fleet-enterprise-trip-sheets

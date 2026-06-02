@@ -29,7 +29,7 @@ steps:
       - --set-secrets
       - DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest
       - --set-env-vars
-      - WEB_ORIGIN=${_WEB_ORIGIN},NODE_ENV=production
+      - WEB_ORIGIN=${_WEB_ORIGIN},NODE_ENV=production,GCS_BUCKET=${_GCS_BUCKET}
 
 images:
   - ${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA
@@ -40,3 +40,4 @@ substitutions:
   _AR_REGION: europe-west1
   _AR_REPO: fleet-enterprise
   _WEB_ORIGIN: https://example-web-url.run.app
+  _GCS_BUCKET: fleet-enterprise-trip-sheets
