@@ -426,6 +426,7 @@ async function seedTripsForTenant(tenantSlug, prismaOverride) {
 }
 
 async function main() {
+  const prisma = getDefaultPrisma();
   const explicit = process.env.TENANT_SLUG?.trim();
   const slugs = explicit ? [explicit] : ['demo', 'default'];
 

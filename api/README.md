@@ -1,99 +1,62 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Fleet Enterprise API (NestJS)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Setup local
 
 ```bash
-$ npm install
+npm install
+cp .env.example .env
+# DATABASE_URL, JWT_SECRET, WEB_ORIGIN
+npm run db:migrate
+npm run db:seed
+npm run start:dev
 ```
 
-## Compile and run the project
+## Trip sheet PDF storage (GCS)
+
+Generated FAZ / foi de parcurs PDFs are stored in **Google Cloud Storage** when `GCS_BUCKET` is set. Without it, **development** falls back to Postgres `BYTEA` (`pdfData`). In **production**, `GCS_BUCKET` is required for new documents.
+
+| Env | Description |
+|-----|-------------|
+| `GCS_BUCKET` | Bucket name (e.g. `fleet-enterprise-trip-sheets`) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Optional locally — path to service account JSON |
+| (Cloud Run) | Workload Identity / attached SA — no key file needed |
+
+**Object path:** `tenants/{tenantSlug}/trip-sheets/{documentId}.pdf`
+
+**Download:** `GET /trip-sheets/:docId/pdf` streams the file (from GCS or legacy BYTEA). Tenant is checked via JWT before read.
+
+### Bucket & IAM (GCP)
+
+1. Create a regional bucket (e.g. `europe-west1`), uniform access, no public read.
+2. Service account used by Cloud Run (or local dev) needs:
+   - `roles/storage.objectAdmin` on the bucket (or narrower: create + get object).
+3. Set `GCS_BUCKET` on the Cloud Run service.
+4. Deploy API, run `npm run db:migrate` so `pdfStorageKey` / `pdfByteSize` exist.
+
+### Backfill legacy BYTEA → GCS
+
+After migration and bucket setup:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cd api
+GCS_BUCKET=your-bucket node scripts/backfill-trip-sheet-pdf-gcs.js
+# optional: TENANT_SLUG=demo
 ```
 
-## Run tests
+Clears `pdfData` after successful upload.
+
+## Scripts
+
+| Command | Purpose |
+|---------|---------|
+| `npm run db:migrate` | Apply Prisma migrations |
+| `npm run db:seed` | Demo tenants/users/vehicles |
+| `npm run db:seed:trips` | Demo trips + fuel costs |
+| `npm run auth:hash-password -- "secret"` | Bcrypt hash for manual user insert |
+
+## Tests
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run test:e2e
+npm run test:e2e:rbac
 ```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-"# fleet-enterprise" 

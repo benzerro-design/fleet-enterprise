@@ -13,6 +13,7 @@ import {
   type FazDailyLine,
   type TripSheetLine,
 } from './trip-sheet-pdf';
+import { TripSheetPdfStorageService } from '../storage/trip-sheet-pdf-storage.service';
 
 const MAX_VEHICLES = 20;
 const MAX_TRIPS = 800;
@@ -171,6 +172,7 @@ export class TripSheetsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly pdfStorage: TripSheetPdfStorageService,
   ) {}
 
   async list(tenantSlug: string, params: TripSheetListParams) {
@@ -400,6 +402,9 @@ export class TripSheetsService {
       vehicleCount: vehicles.length,
     };
 
+    const storageMode = this.pdfStorage.resolveStorageMode();
+    const pdfByteSize = pdfBuffer.length;
+
     const row = await this.prisma.tripSheetDocument.create({
       data: {
         tenantId: tenant.id,
@@ -411,10 +416,20 @@ export class TripSheetsService {
         clientIdFilter: clientCodeFilter,
         title,
         summaryJson,
-        pdfData: Uint8Array.from(pdfBuffer),
+        pdfByteSize,
+        pdfData: storageMode === 'bytea' ? Uint8Array.from(pdfBuffer) : null,
+        pdfStorageKey: null,
         createdByUserId: actorUserId ?? null,
       },
     });
+
+    if (storageMode === 'gcs') {
+      const pdfStorageKey = await this.pdfStorage.upload(tenant.slug, row.id, pdfBuffer);
+      await this.prisma.tripSheetDocument.update({
+        where: { id: row.id },
+        data: { pdfStorageKey },
+      });
+    }
 
     await this.audit.log({
       tenantId: tenant.id,

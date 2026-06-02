@@ -30,6 +30,7 @@
     "auth:hash-password": "node scripts/hash-dev-password.js"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.16.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",

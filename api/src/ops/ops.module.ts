@@ -13,6 +13,7 @@ import { TripSheetsController } from './trip-sheets.controller';
 import { TripSheetsService } from './trip-sheets.service';
 import { TripsController } from './trips.controller';
 import { TripsService } from './trips.service';
+import { TripSheetPdfStorageService } from '../storage/trip-sheet-pdf-storage.service';
 
 @Module({
   imports: [AuthModule, AuditModule],
@@ -27,6 +28,7 @@ import { TripsService } from './trips.service';
   providers: [
     TripsService,
     TripSheetsService,
+    TripSheetPdfStorageService,
     MaintenanceService,
     CostsService,
     DocumentsService,

@@ -178,7 +178,10 @@ model TripSheetDocument {
   clientIdFilter  String?
   title           String
   summaryJson     Json
-  pdfData         Bytes
+  /// Legacy inline storage; null when `pdfStorageKey` is set (GCS).
+  pdfData         Bytes?
+  pdfStorageKey   String?
+  pdfByteSize     Int?
   createdByUserId String?
   createdAt       DateTime         @default(now())
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
