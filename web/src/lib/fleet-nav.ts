@@ -43,7 +43,13 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
     id: "operations",
     label: "Flotă & operațiuni",
     items: [
-      { kind: "soon", label: "Panou general", phase: "phase1" },
+      {
+        kind: "link",
+        label: "Panou general",
+        href: "/fleet/dashboard",
+        phase: "live",
+        activePrefixes: ["/fleet/dashboard"],
+      },
       {
         kind: "link",
         label: "Vehicule",
@@ -170,8 +176,8 @@ export type FleetMobileTab = {
 export const FLEET_MOBILE_TABS: FleetMobileTab[] = [
   {
     label: "Acasă",
-    href: "/fleet/vehicles",
-    activePrefixes: ["/fleet/vehicles"],
+    href: "/fleet/dashboard",
+    activePrefixes: ["/fleet/dashboard"],
   },
   {
     label: "Vehicule",

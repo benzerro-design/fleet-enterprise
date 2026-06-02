@@ -58,7 +58,7 @@ export function FleetShell({
       {/* Desktop sidebar */}
       <aside className="hidden w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
         <div className="border-b border-zinc-800 px-4 py-4">
-          <Link href="/fleet/vehicles" className="block">
+          <Link href="/fleet/dashboard" className="block">
             <p className="text-sm font-semibold text-zinc-100">Fleet Enterprise</p>
             {tenantSlug ? (
               <p className="mt-0.5 font-mono text-xs text-zinc-500">tenant: {tenantSlug}</p>

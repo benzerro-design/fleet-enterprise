@@ -5,7 +5,7 @@ type Props = { searchParams: Promise<{ next?: string }> };
 
 export default async function LoginPage({ searchParams }: Props) {
   const { next } = await searchParams;
-  const nextPath = next?.startsWith("/") ? next : "/fleet/vehicles";
+  const nextPath = next?.startsWith("/") ? next : "/fleet/dashboard";
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">

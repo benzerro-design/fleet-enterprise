@@ -28,6 +28,7 @@ import type {
   PatchMaintenancePlanItemDto,
 } from './dto/maintenance-plan.dto';
 import type { VehicleStatus } from './fleet.types';
+import { DashboardService } from './dashboard.service';
 import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
 import { TenantId } from './tenant-id.decorator';
@@ -38,7 +39,14 @@ export class FleetController {
   constructor(
     private readonly fleet: FleetService,
     private readonly maintenancePlan: MaintenancePlanService,
+    private readonly dashboard: DashboardService,
   ) {}
+
+  @Get('dashboard')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  getDashboard(@TenantId() tenantSlug: string) {
+    return this.dashboard.getSnapshot(tenantSlug);
+  }
 
   @Get('vehicles/export')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
