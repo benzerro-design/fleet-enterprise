@@ -76,11 +76,11 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 
 | # | Pas | OK |
 |---|-----|-----|
-| 4.6 | Cursă nouă pe vehicul pilot | ☐ |
+| 4.6 | Cursă nouă pe vehicul pilot | [x] |
 | 4.7 | **Generează document parcurs** — perioadă + vehicule → succes | [x] |
 | 4.8 | **Descarcă PDF** — deschide fișier valid (nu 500) | [x] |
-| 4.9 | În GCS: obiect `tenants/{slug}/trip-sheets/{id}.pdf` | ☐ |
-| 4.10 | FAZ lunar (`faz_monthly`) — generate + download | ☐ |
+| 4.9 | În GCS: obiect `tenants/{slug}/trip-sheets/{id}.pdf` | [x] |
+| 4.10 | FAZ lunar (`faz_monthly`) — generate + download | [x] |
 
 ### Conformitate
 
@@ -93,7 +93,7 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 
 | # | Pas | OK |
 |---|-----|-----|
-| 4.13 | `tenant_viewer` — nu poate POST vehicul / generate FAZ | ☐ |
+| 4.13 | `tenant_viewer` — nu poate POST vehicul / generate FAZ | [x] |
 | 4.14 | Fără `X-Tenant-Id` / JWT invalid → 401 pe API | [x] |
 
 ---
@@ -126,9 +126,9 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 
 | Pas | Unde | Bifează |
 |-----|------|---------|
-| 4.6 | **Curse** → cursă nouă pe un vehicul | ☐ |
-| 4.9 | GCP **Storage** → bucket `fleet-enterprise-trip-sheets` → `tenants/demo/trip-sheets/{id}.pdf` | ☐ |
-| 4.10 | **Curse** → Generează foaie / FAZ → tip **FAZ lunar** → generate + download PDF | ☐ |
+| 4.6 | **Curse** → cursă nouă pe un vehicul | [x] |
+| 4.9 | GCP **Storage** → bucket `fleet-enterprise-trip-sheets` → `tenants/demo/trip-sheets/{id}.pdf` | [x] |
+| 4.10 | **Curse** → Generează foaie / FAZ → tip **FAZ lunar** → generate + download PDF | [x] |
 
 ### Pas D — RBAC manual (≈ 5 min) → 4.13
 
@@ -239,3 +239,5 @@ Dacă URL-ul arată **„Page not found”** pe **fundal alb**, verifică mai î
 | 2026-05-31 | Deploy web: `/`→login; smoke API login+dashboard+401; ghid „Continuare pilot” în checklist | Parcurge Pas A→D; 1.6 în Console |
 | 2026-05-31 | Pas A: `WEB_ORIGIN` = fleet-web-stg URL; `JWT_SECRET` = Secret Manager | 1.6 bifat; Pas B următor |
 | 2026-05-31 | Pas B smoke manual 4.1–4.5, 4.11–4.12 OK | Pas C–D + fix reset filtre |
+| 2026-06-03 | Pas C: cursă nouă, PDF în GCS, FAZ lunar generate + download | Pas D (viewer RBAC) următor |
+| 2026-06-03 | Pas D: viewer — butoane creare vehicul / generate FAZ ascunse | Secțiunea 4 completă; Pas E + semnare |
