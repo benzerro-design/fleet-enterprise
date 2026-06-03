@@ -8,6 +8,7 @@ import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlac
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
+import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { TRIP_SHEET_DOC_TYPES } from "@/lib/trip-ops";
 
@@ -468,8 +469,8 @@ export default async function TripsPage({ searchParams }: Props) {
                       <td className="px-4 py-3 font-mono">{row.reference ?? "—"}</td>
                       <td className="px-4 py-3 font-mono">{row.registrationNumber}</td>
                       <td className="px-4 py-3">{row.clientId}</td>
-                      <td className="px-4 py-3">{new Date(row.startedAt).toLocaleString("ro-RO")}</td>
-                      <td className="px-4 py-3">{row.endedAt ? new Date(row.endedAt).toLocaleString("ro-RO") : "—"}</td>
+                      <td className="px-4 py-3">{formatDateTimeRo(row.startedAt)}</td>
+                      <td className="px-4 py-3">{formatDateTimeRo(row.endedAt)}</td>
                       <td className="px-4 py-3 font-mono">{row.distanceKm ?? "—"}</td>
                       <td className="px-4 py-3 text-right">
                         <Link href={`/fleet/trips/${row.id}`} className="text-emerald-400 hover:underline">

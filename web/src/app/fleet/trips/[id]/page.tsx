@@ -3,6 +3,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { tripPurposeLabel, tripRoadTypeLabel } from "@/lib/trip-ops";
 
@@ -62,8 +63,8 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           <div><dt className="text-xs uppercase text-zinc-500">Număr auto</dt><dd className="mt-1 font-mono">{trip.registrationNumber}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Client</dt><dd className="mt-1">{trip.clientId}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Tenant</dt><dd className="mt-1 font-mono">{trip.tenantSlug}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Start</dt><dd className="mt-1">{new Date(trip.startedAt).toLocaleString("ro-RO")}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Stop</dt><dd className="mt-1">{trip.endedAt ? new Date(trip.endedAt).toLocaleString("ro-RO") : "—"}</dd></div>
+          <div><dt className="text-xs uppercase text-zinc-500">Start</dt><dd className="mt-1">{formatDateTimeRo(trip.startedAt)}</dd></div>
+          <div><dt className="text-xs uppercase text-zinc-500">Stop</dt><dd className="mt-1">{formatDateTimeRo(trip.endedAt)}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Origine</dt><dd className="mt-1">{trip.originLabel ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Destinație</dt><dd className="mt-1">{trip.destLabel ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Distanță</dt><dd className="mt-1 font-mono">{trip.distanceKm ?? "—"} km</dd></div>
