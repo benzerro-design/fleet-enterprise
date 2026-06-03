@@ -1,5 +1,7 @@
 "use client";
 
+import { formatPeriodRange } from "@/lib/calendar-date";
+
 type DocRow = {
   id: string;
   docType: string;
@@ -44,10 +46,7 @@ export function TripSheetDocumentsList({ items, highlightId }: Props) {
               >
                 <td className="px-4 py-3">{row.title}</td>
                 <td className="px-4 py-3 text-zinc-400">{row.docTypeLabel}</td>
-                <td className="px-4 py-3 text-zinc-300">
-                  {new Date(row.periodStart).toLocaleDateString("ro-RO")} –{" "}
-                  {new Date(row.periodEnd).toLocaleDateString("ro-RO")}
-                </td>
+                <td className="px-4 py-3 text-zinc-300">{formatPeriodRange(row.periodStart, row.periodEnd)}</td>
                 <td className="px-4 py-3">{row.driverName ?? "—"}</td>
                 <td className="px-4 py-3">{new Date(row.createdAt).toLocaleString("ro-RO")}</td>
                 <td className="px-4 py-3 text-right">

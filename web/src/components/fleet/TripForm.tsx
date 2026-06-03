@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
+import { toDatetimeLocalInput, toIsoFromDatetimeLocal } from "@/lib/datetime-local";
 import { TRIP_PURPOSE_OPTIONS, TRIP_ROAD_TYPE_OPTIONS } from "@/lib/trip-ops";
 
 type TripRecord = {
@@ -30,19 +31,6 @@ type VehicleOption = {
 type Props =
   | { mode: "create"; vehicles: VehicleOption[] }
   | { mode: "edit"; tripId: string; initial: TripRecord; vehicles: VehicleOption[] };
-
-function toDatetimeLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  return new Date(iso).toISOString().slice(0, 16);
-}
-
-function toIsoFromInput(v: string): string | undefined {
-  const t = v.trim();
-  if (!t) return undefined;
-  const d = new Date(t);
-  if (Number.isNaN(d.getTime())) return undefined;
-  return d.toISOString();
-}
 
 async function readErrorMessage(res: Response): Promise<string> {
   let msg = `HTTP ${res.status}`;
@@ -121,7 +109,7 @@ export function TripForm(props: Props) {
       setPending(false);
       return;
     }
-    const endIso = endedAt.trim() ? toIsoFromInput(endedAt) : null;
+    const endIso = endedAt.trim() ? toIsoFromDatetimeLocal(endedAt) : null;
     if (endedAt.trim() && !endIso) {
       setError("Data de stop este invalidă.");
       setPending(false);

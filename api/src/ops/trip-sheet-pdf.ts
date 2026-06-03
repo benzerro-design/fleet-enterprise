@@ -48,10 +48,16 @@ export type TripSheetPdfInput = {
   };
 };
 
+/** Dată calendaristică din ISO (perioadă FAZ); evită +1 zi la 23:59 UTC. */
 function formatDateRo(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('ro-RO');
+  const day = iso.trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    const [y, m, d] = day.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('ro-RO');
+  }
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleDateString('ro-RO');
 }
 
 function formatMoneyCents(cents: number): string {
