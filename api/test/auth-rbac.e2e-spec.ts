@@ -20,7 +20,7 @@ const VIEWER = {
 describe('Auth + RBAC (JWT, e2e)', () => {
   let app: INestApplication<App>;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -29,7 +29,7 @@ describe('Auth + RBAC (JWT, e2e)', () => {
     await app.init();
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await app.close();
   });
 
@@ -84,12 +84,19 @@ describe('Auth + RBAC (JWT, e2e)', () => {
       });
 
     const registrationNumber = `RBAC-${randomUUID().slice(0, 8)}`;
+    const clientCode = `rbac-${randomUUID().slice(0, 8)}`;
+
+    await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ code: clientCode, legalName: 'RBAC E2E Client' })
+      .expect(201);
 
     await request(app.getHttpServer())
       .post('/fleet/vehicles')
       .set('Authorization', `Bearer ${tokenViewer}`)
       .send({
-        clientId: 'rbac-client',
+        clientId: clientCode,
         registrationNumber,
         type: 'car',
       })
@@ -102,7 +109,7 @@ describe('Auth + RBAC (JWT, e2e)', () => {
       .post('/fleet/vehicles')
       .set('Authorization', `Bearer ${tokenAdmin}`)
       .send({
-        clientId: 'rbac-admin',
+        clientId: clientCode,
         registrationNumber,
         type: 'car',
       })

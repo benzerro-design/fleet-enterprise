@@ -56,7 +56,11 @@ Clears `pdfData` after successful upload.
 
 ## Tests
 
+Requires `DATABASE_URL` in `.env` (local Postgres or Neon branch de test).
+
 ```bash
-npm run test:e2e
-npm run test:e2e:rbac
+npm run test:e2e          # fleet + Q3 pilot (Client, dashboard, trip-sheet PDF)
+npm run test:e2e:rbac     # JWT roles — run db:seed first
 ```
+
+Pilot go-live checklist: `docs/go-live-pilot-checklist.md`.

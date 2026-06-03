@@ -102,7 +102,7 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 | Securitate | Eliminare fallback `TenantId` → `'default'` în producție |
 | Tech debt mic | Extragere `ops-dates.ts` (parsare date partajată) — opțional dacă atinge fișiere atinse |
 
-**Milestone sfârșit Q3:** **Go-live pilot** pe staging → producție limitată pentru client pilot, cu checklist semnat (dashboard + clienți + FAZ per client).
+**Milestone sfârșit Q3:** **Go-live pilot** pe staging → producție limitată pentru client pilot, cu checklist semnat (dashboard + clienți + FAZ per client). Checklist: `docs/go-live-pilot-checklist.md`.
 
 ---
 

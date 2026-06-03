@@ -236,9 +236,11 @@ export class ClientsService {
   }
 
   private async ensureTenant(slug: string) {
-    const t = await this.prisma.tenant.findUnique({ where: { slug } });
-    if (!t) throw new NotFoundException('Tenant not found');
-    return t;
+    return this.prisma.tenant.upsert({
+      where: { slug },
+      create: { slug, name: slug },
+      update: { name: slug },
+    });
   }
 
   private toRecord(

@@ -5,10 +5,24 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
+async function ensureClient(
+  server: Parameters<typeof request>[0],
+  tenant: string,
+  code: string,
+): Promise<void> {
+  const res = await request(server)
+    .post('/clients')
+    .set('X-Tenant-Id', tenant)
+    .send({ code, legalName: `E2E ${code}` });
+  if (res.status !== 201 && res.status !== 409) {
+    throw new Error(`ensureClient failed: ${res.status} ${JSON.stringify(res.body)}`);
+  }
+}
+
 describe('FleetController (e2e)', () => {
   let app: INestApplication<App>;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -20,6 +34,8 @@ describe('FleetController (e2e)', () => {
   it('creates and lists vehicles (tenant scoped)', async () => {
     const tenant = 'tenant-e2e';
     const registrationNumber = `E2E ${randomUUID().slice(0, 10)}`;
+
+    await ensureClient(app.getHttpServer(), tenant, 'client-1');
 
     const created = await request(app.getHttpServer())
       .post('/fleet/vehicles')
@@ -54,6 +70,9 @@ describe('FleetController (e2e)', () => {
     const b = 'tenant-b';
     const regA = `E2E-A ${randomUUID().slice(0, 8)}`;
     const regB = `E2E-B ${randomUUID().slice(0, 8)}`;
+
+    await ensureClient(app.getHttpServer(), a, 'client-a');
+    await ensureClient(app.getHttpServer(), b, 'client-b');
 
     const vA = await request(app.getHttpServer())
       .post('/fleet/vehicles')
@@ -90,6 +109,8 @@ describe('FleetController (e2e)', () => {
     const tenant = 'tenant-e2e-delete';
     const registrationNumber = `E2E-DEL ${randomUUID().slice(0, 8)}`;
 
+    await ensureClient(app.getHttpServer(), tenant, 'client-del');
+
     const created = await request(app.getHttpServer())
       .post('/fleet/vehicles')
       .set('X-Tenant-Id', tenant)
@@ -111,7 +132,7 @@ describe('FleetController (e2e)', () => {
       .expect(404);
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await app.close();
   });
 });

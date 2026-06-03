@@ -21,7 +21,6 @@ export class JwtAuthGuard implements CanActivate {
       const v = Array.isArray(raw) ? raw[0] : raw;
       if (typeof v === 'string' && v.trim().length > 0) {
         req.user = {
-          sub: 'e2e',
           tenantSlug: v.trim(),
           role: MembershipRole.tenant_admin,
         };
