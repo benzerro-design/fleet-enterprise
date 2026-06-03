@@ -1,8 +1,10 @@
 ﻿import Link from "next/link";
+import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { costsBrowserBase } from "@/lib/fleet-api";
+import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { formatRonFromCents } from "@/lib/money";
 
@@ -129,6 +131,7 @@ export default async function CostsPage({ searchParams }: Props) {
         </div>
 
         <form
+          key={filterFormKey(sp)}
           action="/fleet/costs"
           method="get"
           className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
@@ -200,9 +203,7 @@ export default async function CostsPage({ searchParams }: Props) {
           <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
             Aplică
           </button>
-          <Link href="/fleet/costs" className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400">
-            Resetează
-          </Link>
+          <FilterResetLink href="/fleet/costs" />
         </form>
 
         {!data ? (

@@ -25,7 +25,7 @@
 | 1.3 | `DATABASE_URL` (Neon) — migrări la zi: `npm run db:migrate` din `api/` | [x] |
 | 1.4 | `GCS_BUCKET=fleet-enterprise-trip-sheets` pe `fleet-api` (persistă în deploy workflow) | [x] |
 | 1.5 | IAM: SA Cloud Run → `roles/storage.objectAdmin` pe bucket | [x] |
-| 1.6 | `WEB_ORIGIN` = URL web staging; `JWT_SECRET` setat | ☐ |
+| 1.6 | `WEB_ORIGIN` = URL web staging; `JWT_SECRET` setat | [x] |
 
 ---
 
@@ -61,16 +61,16 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 
 | # | Pas | OK |
 |---|-----|-----|
-| 4.1 | Login → redirect `/fleet/dashboard` | ☐ |
-| 4.2 | KPI-uri se încarcă (&lt; 2s percepție) | ☐ |
-| 4.3 | Click KPI → listă pre-filtrată (vehicule, remindere, documente, costuri, curse) | ☐ |
+| 4.1 | Login → redirect `/fleet/dashboard` | [x] |
+| 4.2 | KPI-uri se încarcă (&lt; 2s percepție) | [x] |
+| 4.3 | Click KPI → listă pre-filtrată (vehicule, remindere, documente, costuri, curse) | [x] |
 
 ### Clienți & vehicule
 
 | # | Pas | OK |
 |---|-----|-----|
-| 4.4 | Creează client → vehicul legat de client | ☐ |
-| 4.5 | Listă vehicule filtrată după `clientId` | ☐ |
+| 4.4 | Creează client → vehicul legat de client | [x] |
+| 4.5 | Listă vehicule filtrată după `clientId` | [x] |
 
 ### Curse & FAZ / foi de parcurs
 
@@ -94,7 +94,54 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 | # | Pas | OK |
 |---|-----|-----|
 | 4.13 | `tenant_viewer` — nu poate POST vehicul / generate FAZ | ☐ |
-| 4.14 | Fără `X-Tenant-Id` / JWT invalid → 401 pe API | ☐ |
+| 4.14 | Fără `X-Tenant-Id` / JWT invalid → 401 pe API | [x] |
+
+---
+
+## Continuare pilot — rundă curentă (ordine)
+
+**Cont smoke staging (seed pe Neon):** `admin@demo.local` / `demo12345` / tenant `demo`. Viewer: `viewer@demo.local`, aceeași parolă.
+
+### Pas A — Console GCP (≈ 5 min) → bifează 1.6
+
+1. **Cloud Run** → `fleet-api` → tab **Variables & secrets**
+2. **WEB_ORIGIN** = `https://fleet-web-stg-1096713529891.europe-west1.run.app` (fără slash final, fără `/login`)
+3. **JWT_SECRET** = referință Secret Manager (nu gol)
+4. GitHub **Settings → Secrets → Actions**: `WEB_ORIGIN` același URL (pentru deploy API viitor)
+5. După modificare env: așteaptă revizie nouă sau **Redeploy** dacă login eșuează cu CORS (rar — web folosește proxy server-side)
+
+### Pas B — Browser cu admin demo (≈ 15 min) → 4.1–4.5, 4.11–4.12
+
+| Pas | Unde în app | Bifează |
+|-----|-------------|---------|
+| 4.1 | Login → ajungi la **Acasă / Dashboard** (nu pagina MVP) | [x] |
+| 4.2 | KPI-uri vizibile; acceptabil dacă &lt; 3s prima dată (cold start) | [x] |
+| 4.3 | Click fiecare KPI → listă cu filtre (vehicule, remindere, etc.) | [x] |
+| 4.4 | **Clienți** → client nou → **Vehicule** → vehicul cu client selectat | [x] |
+| 4.5 | Listă vehicule → filtru client în URL `?clientId=…` | [x] |
+| 4.11 | **Remindere** → filtru status acțiune | [x] |
+| 4.12 | **Documente** → expiring / expired | [x] |
+
+### Pas C — Curse & PDF (≈ 10 min) → 4.6, 4.9, 4.10
+
+| Pas | Unde | Bifează |
+|-----|------|---------|
+| 4.6 | **Curse** → cursă nouă pe un vehicul | ☐ |
+| 4.9 | GCP **Storage** → bucket `fleet-enterprise-trip-sheets` → `tenants/demo/trip-sheets/{id}.pdf` | ☐ |
+| 4.10 | **Curse** → Generează foaie / FAZ → tip **FAZ lunar** → generate + download PDF | ☐ |
+
+### Pas D — RBAC manual (≈ 5 min) → 4.13
+
+1. Logout → login `viewer@demo.local` / `demo` / `demo12345`
+2. Încearcă **Vehicul nou** sau **Generează foaie** → trebuie refuz (403 sau buton ascuns)
+3. Bifează 4.13
+
+### Pas E — Conturi pilot reali (când ai clientul) → secțiunea 2 + 3
+
+- Tenant nou: deocamdată **seed / SQL** (vezi `api/prisma/seed.js` ca model; slug dedicat pilot, ex. `pilot-acme`)
+- Transmite parole prin canal securizat; nu folosi `demo12345` în producție pilot
+
+**Verificat automat (sesiune):** API health OK; `/` → 307 `/login`; login demo 200; dashboard 200 (~0,9s); `GET /fleet/vehicles` fără JWT → 401.
 
 ---
 
@@ -189,3 +236,6 @@ Dacă URL-ul arată **„Page not found”** pe **fundal alb**, verifică mai î
 | Data | Observație | Acțiune |
 |------|------------|---------|
 | 2026-06-03 | URL web greșit în doc: `109871…` vs corect `109671…` (project number); login OK pe URL corect | Folosește doar link din Cloud Run Console |
+| 2026-05-31 | Deploy web: `/`→login; smoke API login+dashboard+401; ghid „Continuare pilot” în checklist | Parcurge Pas A→D; 1.6 în Console |
+| 2026-05-31 | Pas A: `WEB_ORIGIN` = fleet-web-stg URL; `JWT_SECRET` = Secret Manager | 1.6 bifat; Pas B următor |
+| 2026-05-31 | Pas B smoke manual 4.1–4.5, 4.11–4.12 OK | Pas C–D + fix reset filtre |

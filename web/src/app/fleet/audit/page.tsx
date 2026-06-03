@@ -1,3 +1,4 @@
+import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { AuditDetailExpandable } from "@/components/fleet/AuditDetailExpandable";
@@ -9,6 +10,7 @@ import {
   auditEntityLabel,
   auditVehicleRegistrationFromMeta,
 } from "@/lib/audit-display";
+import { filterFormKey } from "@/lib/filter-form-key";
 import { apiServerFetch } from "@/lib/fleet-server";
 
 type AuditResponse = {
@@ -88,6 +90,7 @@ export default async function FleetAuditPage({ searchParams }: Props) {
         </div>
 
         <form
+          key={filterFormKey(sp)}
           action="/fleet/audit"
           method="get"
           className="mb-6 flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
@@ -129,12 +132,7 @@ export default async function FleetAuditPage({ searchParams }: Props) {
           >
             Aplică filtre
           </button>
-          <Link
-            href="/fleet/audit"
-            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-900"
-          >
-            Resetează
-          </Link>
+          <FilterResetLink href="/fleet/audit" />
         </form>
 
         {!data ? (

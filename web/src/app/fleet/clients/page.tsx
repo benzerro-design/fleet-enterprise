@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
+import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
 type Search = { q?: string; status?: string; page?: string };
@@ -85,6 +87,7 @@ export default async function FleetClientsPage({ searchParams }: PageProps) {
         >
           Filtrează
         </button>
+        <FilterResetLink href="/fleet/clients" />
       </form>
 
       {!list ? (

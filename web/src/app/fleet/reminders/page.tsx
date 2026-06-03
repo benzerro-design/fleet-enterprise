@@ -1,9 +1,11 @@
+import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { Suspense } from "react";
 import { RemindersListView } from "@/components/fleet/RemindersListView";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { remindersBrowserBase } from "@/lib/fleet-api";
+import { filterFormKey } from "@/lib/filter-form-key";
 
 type Search = {
   page?: string;
@@ -73,7 +75,7 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
           </div>
         </div>
 
-        <form method="get" className="mb-8 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+        <form key={filterFormKey(sp)} method="get" className="mb-8 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
           {sp.status?.trim() ? <input type="hidden" name="status" value={sp.status.trim()} /> : null}
           <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
             <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
@@ -104,9 +106,7 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
           <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
             Aplică
           </button>
-          <Link href="/fleet/reminders" className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400">
-            Resetează
-          </Link>
+          <FilterResetLink href="/fleet/reminders" />
         </form>
 
         <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>

@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { type VehicleListPayload, VEHICLE_STATUSES, fleetBrowserBase } from "@/lib/fleet-api";
+import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
 type Search = {
@@ -87,6 +89,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
         </div>
 
         <form
+          key={filterFormKey(sp)}
           action="/fleet/vehicles"
           method="get"
           className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
@@ -121,12 +124,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
           >
             Aplică
           </button>
-          <Link
-            href="/fleet/vehicles"
-            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-900"
-          >
-            Resetează
-          </Link>
+          <FilterResetLink href="/fleet/vehicles" />
         </form>
 
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">

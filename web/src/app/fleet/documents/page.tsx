@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
 import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
@@ -7,6 +8,7 @@ import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry
 import type { DocumentReminderSummary } from "@/lib/document-reminders";
 import { documentsBrowserBase } from "@/lib/fleet-api";
 import { DOCUMENT_EXPIRY_STATUS_OPTIONS, DOCUMENT_TYPE_OPTIONS, documentTypeLabel } from "@/lib/document-types";
+import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
 type Search = {
@@ -130,6 +132,7 @@ export default async function DocumentsPage({ searchParams }: Props) {
         </div>
 
         <form
+          key={filterFormKey(sp)}
           action="/fleet/documents"
           method="get"
           className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
@@ -211,9 +214,7 @@ export default async function DocumentsPage({ searchParams }: Props) {
           <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
             Aplică
           </button>
-          <Link href="/fleet/documents" className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400">
-            Resetează
-          </Link>
+          <FilterResetLink href="/fleet/documents" />
         </form>
 
         {!data ? (

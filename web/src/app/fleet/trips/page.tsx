@@ -1,4 +1,5 @@
 ﻿import Link from "next/link";
+import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { TripSheetDocumentsList } from "@/components/fleet/TripSheetDocumentsList";
@@ -6,6 +7,7 @@ import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
 import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
+import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { TRIP_SHEET_DOC_TYPES } from "@/lib/trip-ops";
 
@@ -250,6 +252,7 @@ export default async function TripsPage({ searchParams }: Props) {
             ) : null}
 
             <form
+              key={`docs-${filterFormKey(sp)}`}
               action="/fleet/trips"
               method="get"
               className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
@@ -337,12 +340,7 @@ export default async function TripsPage({ searchParams }: Props) {
               <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
                 Aplică
               </button>
-              <Link
-                href="/fleet/trips?view=documents"
-                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400"
-              >
-                Resetează
-              </Link>
+              <FilterResetLink href="/fleet/trips?view=documents" />
             </form>
 
             {!documents ? (
@@ -375,6 +373,7 @@ export default async function TripsPage({ searchParams }: Props) {
         ) : (
           <>
         <form
+          key={filterFormKey(sp)}
           action="/fleet/trips"
           method="get"
           className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
@@ -440,9 +439,7 @@ export default async function TripsPage({ searchParams }: Props) {
           <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
             Aplică
           </button>
-          <Link href="/fleet/trips" className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400">
-            Resetează
-          </Link>
+          <FilterResetLink href="/fleet/trips" />
         </form>
 
         {!data ? (

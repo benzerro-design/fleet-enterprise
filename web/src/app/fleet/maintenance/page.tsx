@@ -1,9 +1,11 @@
 ﻿import Link from "next/link";
+import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteMaintenanceButton } from "@/components/fleet/DeleteMaintenanceButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { maintenanceBrowserBase } from "@/lib/fleet-api";
 import { maintenanceCostAllocationLabel } from "@/lib/maintenance-cost-allocation";
+import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { formatRonFromCents } from "@/lib/money";
 
@@ -127,6 +129,7 @@ export default async function MaintenancePage({ searchParams }: Props) {
         </div>
 
         <form
+          key={filterFormKey(sp)}
           action="/fleet/maintenance"
           method="get"
           className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
@@ -189,12 +192,7 @@ export default async function MaintenancePage({ searchParams }: Props) {
           <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
             Aplică
           </button>
-          <Link
-            href="/fleet/maintenance"
-            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400"
-          >
-            Resetează
-          </Link>
+          <FilterResetLink href="/fleet/maintenance" />
         </form>
 
         {!data ? (
