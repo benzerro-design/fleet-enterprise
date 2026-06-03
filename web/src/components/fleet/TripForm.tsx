@@ -103,7 +103,7 @@ export function TripForm(props: Props) {
     setPending(true);
     setError(null);
 
-    const startIso = toIsoFromInput(startedAt);
+    const startIso = toIsoFromDatetimeLocal(startedAt);
     if (!startIso) {
       setError("Data de start este invalidă.");
       setPending(false);
