@@ -39,7 +39,8 @@ export function LoginForm({ nextPath }: Props) {
         setError(msg);
         return;
       }
-      router.push(nextPath);
+      // replace + refresh: cookie httpOnly vizibil pentru RSC; fără push dublu în istoric
+      router.replace(nextPath);
       router.refresh();
     } catch {
       setError("Nu m-am putut conecta la server.");
@@ -104,7 +105,7 @@ export function LoginForm({ nextPath }: Props) {
         disabled={pending}
         className="w-full rounded-lg bg-emerald-500 py-2.5 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
       >
-        {pending ? "Conectare…" : "Intră"}
+        {pending ? "Conectare… (poate dura câteva secunde)" : "Intră"}
       </button>
     </form>
   );

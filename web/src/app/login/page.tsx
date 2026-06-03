@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { LoginForm } from "./login-form";
 
 type Props = { searchParams: Promise<{ next?: string }> };
@@ -24,12 +23,6 @@ export default async function LoginPage({ searchParams }: Props) {
         </div>
 
         <LoginForm nextPath={nextPath} />
-
-        <p className="text-center text-sm text-zinc-500">
-          <Link href="/" className="text-emerald-400 hover:text-emerald-300">
-            Înapoi la start
-          </Link>
-        </p>
       </main>
     </div>
   );

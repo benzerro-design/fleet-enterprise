@@ -9,13 +9,22 @@
 
 ## 1. Infrastructură (o dată / după deploy)
 
+**URL-uri staging (referință):**
+
+- API: `https://fleet-api-cxsqhb2qmq-ew.a.run.app`
+- Web: `https://fleet-web-stg-1096713529891.europe-west1.run.app` (număr = **project number** GCP, nu îl inventa)
+
+**Intrare aplicație:** rădăcina web (`/`) redirecționează la **login** (anonim) sau **dashboard** (sesiune activă). Nu există pagină MVP publică cu linkuri „Vehicule”.
+
+**Login:** https://fleet-web-stg-1096713529891.europe-west1.run.app/login
+
 | # | Verificare | OK |
 |---|------------|-----|
-| 1.1 | API Cloud Run `fleet-api` — health `GET /health` → `{ status: "ok" }` | ☐ |
-| 1.2 | Web Cloud Run `fleet-web-stg` — login se încarcă | ☐ |
-| 1.3 | `DATABASE_URL` (Neon) — migrări la zi: `npm run db:migrate` din `api/` | ☐ |
-| 1.4 | `GCS_BUCKET=fleet-enterprise-trip-sheets` pe `fleet-api` (persistă în deploy workflow) | ☐ |
-| 1.5 | IAM: SA Cloud Run → `roles/storage.objectAdmin` pe bucket | ☐ |
+| 1.1 | API Cloud Run `fleet-api` — health `GET /health` → `{ status: "ok" }` | [x] |
+| 1.2 | Web Cloud Run `fleet-web-stg` — login se încarcă | [x] |
+| 1.3 | `DATABASE_URL` (Neon) — migrări la zi: `npm run db:migrate` din `api/` | [x] |
+| 1.4 | `GCS_BUCKET=fleet-enterprise-trip-sheets` pe `fleet-api` (persistă în deploy workflow) | [x] |
+| 1.5 | IAM: SA Cloud Run → `roles/storage.objectAdmin` pe bucket | [x] |
 | 1.6 | `WEB_ORIGIN` = URL web staging; `JWT_SECRET` setat | ☐ |
 
 ---
@@ -68,8 +77,8 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 | # | Pas | OK |
 |---|-----|-----|
 | 4.6 | Cursă nouă pe vehicul pilot | ☐ |
-| 4.7 | **Generează document parcurs** — perioadă + vehicule → succes | ☐ |
-| 4.8 | **Descarcă PDF** — deschide fișier valid (nu 500) | ☐ |
+| 4.7 | **Generează document parcurs** — perioadă + vehicule → succes | [x] |
+| 4.8 | **Descarcă PDF** — deschide fișier valid (nu 500) | [x] |
 | 4.9 | În GCS: obiect `tenants/{slug}/trip-sheets/{id}.pdf` | ☐ |
 | 4.10 | FAZ lunar (`faz_monthly`) — generate + download | ☐ |
 
@@ -102,8 +111,8 @@ npm run test:e2e:rbac     # JWT + roluri (necesită db:seed)
 
 | # | Verificare | OK |
 |---|------------|-----|
-| 5.1 | `test:e2e` verde | ☐ |
-| 5.2 | `test:e2e:rbac` verde | ☐ |
+| 5.1 | `test:e2e` verde | [x] |
+| 5.2 | `test:e2e:rbac` verde | [x] |
 
 ---
 
@@ -130,6 +139,43 @@ npm run test:e2e:rbac     # JWT + roluri (necesită db:seed)
 
 ---
 
+## URL Cloud Run — de unde vine cifra din link?
+
+Format: `https://{SERVICE}-{PROJECT_NUMBER}.{REGION}.run.app`
+
+| Parte | Exemplu tău |
+|--------|-------------|
+| Serviciu | `fleet-web-stg` |
+| **Project number** (GCP) | `1096713529891` |
+| Regiune | `europe-west1` |
+
+**Unde îl vezi corect:** GCP Console → pagina proiectului (Project number) sau Cloud Run → serviciul `fleet-web-stg` → URL afișat sus.
+
+**Greșeală frecventă:** alt număr (ex. `109**8**713529891` în loc de `109**6**713529891`) → 404 pe tot site-ul, deși aplicația e OK pe URL-ul din Console.
+
+**API** poate avea alt host (`fleet-api-cxsqhb2qmq-ew…`) — e normal; nu trebuie același prefix ca web-ul.
+
+## Login lent pe staging (normal, nu e bug de parolă)
+
+Flux: browser → **web Cloud Run** → **API Cloud Run** → **Neon** + `bcrypt` (12 runde, intenționat lent).
+
+| Cauză | Durată tipică |
+|--------|----------------|
+| Cold start Cloud Run (web sau API) după inactivitate | 1–5 s |
+| Neon wake-up (primul query) | 0,5–3 s |
+| `bcrypt.compare` (securitate) | ~0,2–0,5 s |
+| După login: `GET /auth/me` + `GET /fleet/dashboard` (agregate) | 0,5–3 s |
+
+**Pilot:** în GCP Cloud Run setează **Minimum instances = 1** pe `fleet-api` și `fleet-web-stg` ca să dispară pauza la primul click.
+
+---
+
+## Troubleshooting web 404 (staging)
+
+Dacă URL-ul arată **„Page not found”** pe **fundal alb**, verifică mai întâi că **project number** din link = cel din GCP Console. Dacă e corect și tot 404: revizie Cloud Run lipsă / deploy eșuat → **Actions → Deploy Web to Cloud Run**.
+
+---
+
 ## 8. Rollback rapid
 
 1. Cloud Run → revizie API/web anterioară (traffic 100% pe revision stabilă).  
@@ -142,4 +188,4 @@ npm run test:e2e:rbac     # JWT + roluri (necesită db:seed)
 
 | Data | Observație | Acțiune |
 |------|------------|---------|
-| | | |
+| 2026-06-03 | URL web greșit în doc: `109871…` vs corect `109671…` (project number); login OK pe URL corect | Folosește doar link din Cloud Run Console |
