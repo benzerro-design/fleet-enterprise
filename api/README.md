@@ -52,6 +52,8 @@ Clears `pdfData` after successful upload.
 | `npm run db:migrate` | Apply Prisma migrations |
 | `npm run db:seed` | Demo tenants/users/vehicles |
 | `npm run db:seed:trips` | Demo trips + fuel costs |
+| `npm run db:seed:flotax` | Tenant pilot **FlotaX** (admin + șofer viewer); needs `PILOT_FLOTAX_PASSWORD` (CMD: `set VAR=val` **fără spații**) |
+| `npm run db:verify:flotax` | Verifică tenant/useri FlotaX în DB-ul din `DATABASE_URL` |
 | `npm run auth:hash-password -- "secret"` | Bcrypt hash for manual user insert |
 
 ## Tests

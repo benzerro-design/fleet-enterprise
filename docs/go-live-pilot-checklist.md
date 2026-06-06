@@ -138,7 +138,41 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 
 ### Pas E — Conturi pilot reali (când ai clientul) → secțiunea 2 + 3
 
-- Tenant nou: deocamdată **seed / SQL** (vezi `api/prisma/seed.js` ca model; slug dedicat pilot, ex. `pilot-acme`)
+**Tenant FlotaX (staging):**
+
+| Rol | Email (login) | Display | Tenant slug |
+|-----|---------------|---------|-------------|
+| Administrator | `flotax_admin@flotax.local` | FlotaX_Admin | `flotax` |
+| Șofer (viewer) | `flotax_sofer@flotax.local` | FlotaX_Sofer | `flotax` |
+
+Login: emailul e **lowercase** automat; slug **`flotax`** (nu `FlotaX` — slug-ul din DB e lowercase).
+
+**Creare (o dată), din `api/` cu `DATABASE_URL` = Neon staging în `api/.env` (copiat din Secret Manager GCP).**
+
+**CMD (Windows) — fără spații în jurul `=`:**
+
+```cmd
+cd /d c:\path\fleet-enterprise\api
+set PILOT_FLOTAX_PASSWORD=ParolaTaSigura-min-10-chars
+npm run db:seed:flotax
+npm run db:verify:flotax
+```
+
+**PowerShell:**
+
+```powershell
+$env:PILOT_FLOTAX_PASSWORD = "ParolaTaSigura-min-10-chars"
+npm run db:seed:flotax
+npm run db:verify:flotax
+```
+
+> **Atenție CMD:** `set VAR = valoare` (cu spații) **nu** setează variabila corect → parola din seed ≠ parola de login. Folosește **`set VAR=valoare`**.
+
+Nu atinge tenantul **`demo`**. Parola se transmite clientului securizat; nu o pune în repo.
+
+După seed: date flotă (clienți, vehicule, ITP) din UI ca **FlotaX_Admin** → secțiunea 3.
+
+- Tenant nou (generic): **seed / SQL** (vezi `api/scripts/seed-pilot-flotax.js` ca model)
 - Transmite parole prin canal securizat; nu folosi `demo12345` în producție pilot
 
 **Verificat automat (sesiune):** API health OK; `/` → 307 `/login`; login demo 200; dashboard 200 (~0,9s); `GET /fleet/vehicles` fără JWT → 401.

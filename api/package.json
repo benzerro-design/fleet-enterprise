@@ -26,6 +26,8 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:seed:trips": "node scripts/seed-trips-demo.js",
+    "db:seed:flotax": "node scripts/seed-pilot-flotax.js",
+    "db:verify:flotax": "node scripts/verify-pilot-flotax.js",
     "db:studio": "prisma studio",
     "auth:hash-password": "node scripts/hash-dev-password.js"
   },
