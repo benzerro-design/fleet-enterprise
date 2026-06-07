@@ -212,11 +212,13 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 
 **Q4 — ordine strictă:**
 
-1. CRM ticket schema + API + UI  
-2. Legături reminder ↔ tichet  
-3. `FleetResponsiveList` pe vehicule + remindere  
-4. Driver entity + trip form  
-5. Retrospectivă pilot  
+1. **Consum combustibil Faza A** (§10) — KPI L/100km, legătură alimentări ↔ curse  
+2. CRM ticket schema + API + UI  
+3. Legături reminder ↔ tichet  
+4. `FleetResponsiveList` pe vehicule + remindere  
+5. Driver entity + trip form  
+6. **Faza B–C tracking** (§10) — `FuelLevelReading`, ingest telemetrie — după alegere furnizor  
+7. Retrospectivă pilot  
 
 ---
 
@@ -234,4 +236,71 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 
 | Data | Observație | Impact backlog |
 |------|------------|----------------|
-| | | |
+| 2026-06 | Tenant **FlotaX** — smoke cap-coadă pe 1 vehicul (costuri, documente, remindere, curse, mentenanță). Totul OK. | Go-live pilot fezabil; îmbunătățiri incrementale |
+| 2026-06 | **Revenire obligatorie:** consum combustibil în modul Curse — acum FAZ agregă litri din `CostEntry` categorie `combustibil`, nu consum derivat pe cursă. | Epic §10 — fazat manual → telemetrie |
+
+---
+
+## 10. Epic obligatoriu post-pilot: consum combustibil & tracking (Curse)
+
+**Problemă:** consumul în FAZ/foi de parcurs vine din **alimentări** (`CostEntry` + `fuelLiters`), nu din **consum pe distanță** (L/100 km) și nu din **nivel rezervor**. Fără odometru consistent, raportul e incomplet.
+
+**Țintă:** consum credibil per vehicul / perioadă / cursă, pregătit pentru integrare tracking (CAN: litri rezervor, % combustibil).
+
+### Faza A — fără GPS (1–2 sprinturi, poate înainte de tracking)
+
+| Livrabil | Detaliu |
+|----------|---------|
+| Reguli date | Validare cursă: `odometerEndKm ≥ odometerStartKm`, `distanceKm` aliniat la delta odometru |
+| Legătură cost ↔ cursă | `CostEntry.tripId?` opțional; la alimentare, opțional „cursă / perioadă” |
+| KPI consum | `GET /fleet/vehicles/:id/consumption?from&to` — litri, km, **L/100km**, sursă (alimentări) |
+| UI Curse | Panou vehicul: consum perioadă, avertisment date lipsă; FAZ păstrează agregarea zilnică |
+
+**Acceptanță:** pentru un vehicul pilot, L/100km calculat din sumă litri ÷ km (odometru sau curse) în perioada FAZ.
+
+### Faza B — citiri rezervor manuale + telemetrie ușoară
+
+| Livrabil | Detaliu |
+|----------|---------|
+| Schema | `FuelLevelReading`: `vehicleId`, `recordedAt`, `liters?`, `percent?`, `source` (`manual` \| `import` \| `telematics`) |
+| UI | Formular rapid „nivel rezervor” (șofer/admin); istoric pe vehicul |
+| Logică | La alimentare: `liters_added` ≈ delta nivel (înainte/după) + bon; flag inconsistență |
+| API ingest | `POST /integrations/telematics/fuel-readings` (API key per tenant), payload normalizat |
+
+### Faza C — modul tracking (Q4+ / partener)
+
+| Livrabil | Detaliu |
+|----------|---------|
+| Integrare | Adapter per furnizor (webhook sau poll): poziție GPS + **fuel level CAN** + odometru CAN |
+| Evenimente | `TelematicsEvent` — mapare la `Trip` (auto-detect segment) sau sugestie cursă de confirmat |
+| Consum | **Prioritate citiri:** CAN rezervor > odometru > distanță manuală; alimentări = ground truth pentru refill |
+| UI | Hartă / timeline (nav „Tracking” deja `soon`); overlay consum pe zi |
+
+```mermaid
+flowchart LR
+  subgraph today [Azi Q3]
+    Trip[Curse + odometru]
+    Cost[Cost combustibil]
+    FAZ[FAZ PDF]
+    Trip --> FAZ
+    Cost --> FAZ
+  end
+  subgraph phaseA [Faza A]
+    KPI[L/100km KPI]
+    Trip --> KPI
+    Cost --> KPI
+  end
+  subgraph phaseB [Faza B]
+    Tank[FuelLevelReading]
+    Tank --> KPI
+  end
+  subgraph phaseC [Faza C tracking]
+    CAN[Telematics CAN]
+    CAN --> Tank
+    CAN --> Trip
+  end
+```
+
+**Decizie de discutat cu pilotul:** toleranță la date incomplete (estimare vs blocare FAZ), frecvența citirilor rezervor, furnizor tracking preferat (API deschis).
+
+**Out of scope inițial:** rutare optimă, geofencing, control viteză.

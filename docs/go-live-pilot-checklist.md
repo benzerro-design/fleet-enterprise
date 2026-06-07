@@ -33,9 +33,9 @@
 
 | # | Verificare | OK |
 |---|------------|-----|
-| 2.1 | Tenant pilot creat (slug + nume) | ☐ |
-| 2.2 | `tenant_admin` — email / parolă transmise securizat | ☐ |
-| 2.3 | (Opțional) `tenant_viewer` — doar citire | ☐ |
+| 2.1 | Tenant pilot creat (slug + nume) | [x] |
+| 2.2 | `tenant_admin` — email / parolă transmise securizat | [x] |
+| 2.3 | (Opțional) `tenant_viewer` — doar citire | [x] |
 | 2.4 | Parole Neon / secrete rotite dacă au fost expuse în suport | ☐ |
 
 **Notă:** utilizatori noi încă prin seed / SQL / runbook — fără self-service invite (out of scope Q3).
@@ -46,10 +46,10 @@
 
 | # | Verificare | OK |
 |---|------------|-----|
-| 3.1 | Clienți (organizații) — CRUD `/fleet/clients`, cod unic per tenant | ☐ |
-| 3.2 | ≥ 80% vehicule cu **client valid** (FK), nu cod liber | ☐ |
-| 3.3 | ITP / documente reprezentative pe câteva vehicule | ☐ |
-| 3.4 | (Staging) seed demo opțional: `npm run db:seed` + `db:seed:trips` | ☐ |
+| 3.1 | Clienți (organizații) — CRUD `/fleet/clients`, cod unic per tenant | [x] |
+| 3.2 | ≥ 80% vehicule cu **client valid** (FK), nu cod liber | [x] |
+| 3.3 | ITP / documente reprezentative pe câteva vehicule | [x] |
+| 3.4 | (Staging) seed demo opțional: `npm run db:seed` + `db:seed:trips` | [x] |
 
 ---
 
@@ -86,8 +86,8 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 
 | # | Pas | OK |
 |---|-----|-----|
-| 4.11 | Remindere — listă + filtru `status=action` | ☐ |
-| 4.12 | Documente — `expiryStatus=expiring` / `expired` | ☐ |
+| 4.11 | Remindere — listă + filtru `status=action` | [x] |
+| 4.12 | Documente — `expiryStatus=expiring` / `expired` | [x] |
 
 ### Securitate tenant
 
@@ -218,6 +218,10 @@ npm run test:e2e:rbac     # JWT + roluri (necesită db:seed)
 
 **Limitări cunoscute (Q3):** fără portal user client; fără tracking; user management doar manual; liste mobil = tabele.
 
+**Concluzie pilot FlotaX (2026-06):** toate modulele testate pe useri noi (`flotax`); 1 vehicul — costuri, documente, remindere, curse, mentenanță — **funcționează**. Îmbunătățiri incrementale pe parcurs.
+
+**Revenire obligatorie:** modul **Curse** — optimizare **determinare consum** (vezi `docs/roadmap-2026-q3-q4.md` §10).
+
 ---
 
 ## URL Cloud Run — de unde vine cifra din link?
@@ -275,3 +279,4 @@ Dacă URL-ul arată **„Page not found”** pe **fundal alb**, verifică mai î
 | 2026-05-31 | Pas B smoke manual 4.1–4.5, 4.11–4.12 OK | Pas C–D + fix reset filtre |
 | 2026-06-03 | Pas C: cursă nouă, PDF în GCS, FAZ lunar generate + download | Pas D (viewer RBAC) următor |
 | 2026-06-03 | Pas D: viewer — butoane creare vehicul / generate FAZ ascunse | Secțiunea 4 completă; Pas E + semnare |
+| 2026-06-03 | FlotaX: toate modulele OK (1 vehicul); consum curse → backlog obligatoriu + tracking | Semnare §7; scalare date flotă |
