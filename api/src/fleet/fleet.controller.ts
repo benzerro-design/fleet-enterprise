@@ -22,6 +22,7 @@ import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
 import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
+import type { CreateVehiclePhotoDto, PatchVehicleAcquisitionDto } from './dto/patch-vehicle-acquisition.dto';
 import type {
   CreateMaintenancePlanItemDto,
   MarkMaintenancePlanPerformedDto,
@@ -147,6 +148,55 @@ export class FleetController {
   ) {
     const dto = assertPatchVehicleCivDto(body);
     return this.fleet.patchVehicleCiv(tenantId, vehicleId, dto, actorUserId);
+  }
+
+  @Get('vehicles/:vehicleId/acquisition')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  getVehicleAcquisition(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
+    return this.fleet.getVehicleAcquisition(tenantId, vehicleId);
+  }
+
+  @Patch('vehicles/:vehicleId/acquisition')
+  @Roles(MembershipRole.tenant_admin)
+  patchVehicleAcquisition(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    const dto = assertPatchVehicleAcquisitionDto(body);
+    return this.fleet.patchVehicleAcquisition(tenantId, vehicleId, dto, actorUserId);
+  }
+
+  @Get('vehicles/:vehicleId/photos')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  listVehiclePhotos(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
+    return this.fleet.listVehiclePhotos(tenantId, vehicleId);
+  }
+
+  @Post('vehicles/:vehicleId/photos')
+  @Roles(MembershipRole.tenant_admin)
+  @HttpCode(201)
+  addVehiclePhoto(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    const dto = assertCreateVehiclePhotoDto(body);
+    return this.fleet.addVehiclePhoto(tenantId, vehicleId, dto, actorUserId);
+  }
+
+  @Delete('vehicles/:vehicleId/photos/:photoId')
+  @Roles(MembershipRole.tenant_admin)
+  @HttpCode(204)
+  deleteVehiclePhoto(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('photoId') photoId: string,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.fleet.deleteVehiclePhoto(tenantId, vehicleId, photoId, actorUserId);
   }
 
   @Get('vehicles/:vehicleId/odometer-readings')
@@ -496,6 +546,98 @@ function optionalBoolean(v: unknown): boolean | undefined {
   if (v === undefined) return undefined;
   if (typeof v === 'boolean') return v;
   throw new BadRequestException('Expected boolean');
+}
+
+const ACQUISITION_TYPES = new Set(['cash', 'financial_leasing', 'operational_leasing']);
+
+function optionalAcquisitionType(v: unknown): PatchVehicleAcquisitionDto['acquisitionType'] | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'string' || !ACQUISITION_TYPES.has(v)) {
+    throw new BadRequestException('acquisitionType must be cash, financial_leasing, or operational_leasing');
+  }
+  return v as PatchVehicleAcquisitionDto['acquisitionType'];
+}
+
+function optionalCents(v: unknown, field: string): number | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) {
+    throw new BadRequestException(`Field "${field}" must be a non-negative number or null`);
+  }
+  return Math.round(v);
+}
+
+function optionalPositiveInt(v: unknown, field: string): number | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) {
+    throw new BadRequestException(`Field "${field}" must be a non-negative integer or null`);
+  }
+  return v;
+}
+
+function assertPatchVehicleAcquisitionDto(body: unknown): PatchVehicleAcquisitionDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const dto: PatchVehicleAcquisitionDto = {};
+  if ('acquisitionType' in body) dto.acquisitionType = optionalAcquisitionType(body.acquisitionType);
+  if ('acquiredOn' in body) {
+    if (body.acquiredOn === null) dto.acquiredOn = null;
+    else dto.acquiredOn = optionalIsoDateString(body.acquiredOn) ?? null;
+  }
+  if ('dealerName' in body) {
+    dto.dealerName = body.dealerName === null ? null : optionalString(body.dealerName) ?? null;
+  }
+  if ('financierName' in body) {
+    dto.financierName = body.financierName === null ? null : optionalString(body.financierName) ?? null;
+  }
+  if ('purchasePriceCents' in body) dto.purchasePriceCents = optionalCents(body.purchasePriceCents, 'purchasePriceCents');
+  if ('downPaymentCents' in body) dto.downPaymentCents = optionalCents(body.downPaymentCents, 'downPaymentCents');
+  if ('contractNumber' in body) {
+    dto.contractNumber = body.contractNumber === null ? null : optionalString(body.contractNumber) ?? null;
+  }
+  if ('contractStartOn' in body) {
+    if (body.contractStartOn === null) dto.contractStartOn = null;
+    else dto.contractStartOn = optionalIsoDateString(body.contractStartOn) ?? null;
+  }
+  if ('contractEndOn' in body) {
+    if (body.contractEndOn === null) dto.contractEndOn = null;
+    else dto.contractEndOn = optionalIsoDateString(body.contractEndOn) ?? null;
+  }
+  if ('monthlyPaymentCents' in body) {
+    dto.monthlyPaymentCents = optionalCents(body.monthlyPaymentCents, 'monthlyPaymentCents');
+  }
+  if ('residualValueCents' in body) dto.residualValueCents = optionalCents(body.residualValueCents, 'residualValueCents');
+  if ('warrantyExpiresOn' in body) {
+    if (body.warrantyExpiresOn === null) dto.warrantyExpiresOn = null;
+    else dto.warrantyExpiresOn = optionalIsoDateString(body.warrantyExpiresOn) ?? null;
+  }
+  if ('warrantyKmLimit' in body) {
+    dto.warrantyKmLimit = optionalPositiveInt(body.warrantyKmLimit, 'warrantyKmLimit');
+  }
+  if ('warrantyProvider' in body) {
+    dto.warrantyProvider = body.warrantyProvider === null ? null : optionalString(body.warrantyProvider) ?? null;
+  }
+  if ('acquisitionNotes' in body) {
+    dto.acquisitionNotes = body.acquisitionNotes === null ? null : optionalString(body.acquisitionNotes) ?? null;
+  }
+  if (Object.keys(dto).length === 0) {
+    throw new BadRequestException('No fields to update');
+  }
+  return dto;
+}
+
+function assertCreateVehiclePhotoDto(body: unknown): CreateVehiclePhotoDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const fileUrl = asNonEmptyString(body.fileUrl, 'fileUrl');
+  const dto: CreateVehiclePhotoDto = { fileUrl };
+  if ('fileName' in body) {
+    dto.fileName = body.fileName === null ? null : optionalString(body.fileName) ?? null;
+  }
+  if ('caption' in body) {
+    dto.caption = body.caption === null ? null : optionalString(body.caption) ?? null;
+  }
+  return dto;
 }
 
 function assertRecordOdometerDto(body: unknown): RecordOdometerDto {

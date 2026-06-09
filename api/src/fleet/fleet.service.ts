@@ -18,8 +18,14 @@ import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
 import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
+import type { CreateVehiclePhotoDto, PatchVehicleAcquisitionDto } from './dto/patch-vehicle-acquisition.dto';
 import type { VehicleDocument, VehicleRecord, VehicleStatus } from './fleet.types';
 import type { CivImportSource, OdometerReadingRecord, VehicleCivPayload } from './vehicle-civ.types';
+import type {
+  VehicleAcquisitionPayload,
+  VehiclePhotoRecord,
+  VehiclePhotosPayload,
+} from './vehicle-acquisition.types';
 import { buildVehicleMobilityPayload } from './vehicle-mobility';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import {
@@ -543,6 +549,238 @@ export class FleetService {
     return this.getVehicleCiv(tenantSlug, vehicleId);
   }
 
+  async getVehicleAcquisition(
+    tenantSlug: string,
+    vehicleId: string,
+  ): Promise<VehicleAcquisitionPayload> {
+    const row = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: {
+        acquisitionType: true,
+        acquiredOn: true,
+        dealerName: true,
+        financierName: true,
+        purchasePriceCents: true,
+        downPaymentCents: true,
+        contractNumber: true,
+        contractStartOn: true,
+        contractEndOn: true,
+        monthlyPaymentCents: true,
+        residualValueCents: true,
+        warrantyExpiresOn: true,
+        warrantyKmLimit: true,
+        warrantyProvider: true,
+        acquisitionNotes: true,
+      },
+    });
+    if (!row) throw new NotFoundException('Vehicle not found');
+    return this.toAcquisitionPayload(row);
+  }
+
+  async patchVehicleAcquisition(
+    tenantSlug: string,
+    vehicleId: string,
+    dto: PatchVehicleAcquisitionDto,
+    actorUserId?: string,
+  ): Promise<VehicleAcquisitionPayload> {
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, tenantId: true, registrationNumber: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found');
+
+    await this.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: {
+        acquisitionType:
+          dto.acquisitionType === undefined
+            ? undefined
+            : dto.acquisitionType === null
+              ? null
+              : dto.acquisitionType,
+        acquiredOn:
+          dto.acquiredOn === undefined
+            ? undefined
+            : dto.acquiredOn === null
+              ? null
+              : new Date(dto.acquiredOn),
+        dealerName:
+          dto.dealerName === undefined
+            ? undefined
+            : dto.dealerName === null
+              ? null
+              : dto.dealerName.trim() || null,
+        financierName:
+          dto.financierName === undefined
+            ? undefined
+            : dto.financierName === null
+              ? null
+              : dto.financierName.trim() || null,
+        purchasePriceCents:
+          dto.purchasePriceCents === undefined
+            ? undefined
+            : dto.purchasePriceCents === null
+              ? null
+              : Math.round(dto.purchasePriceCents),
+        downPaymentCents:
+          dto.downPaymentCents === undefined
+            ? undefined
+            : dto.downPaymentCents === null
+              ? null
+              : Math.round(dto.downPaymentCents),
+        contractNumber:
+          dto.contractNumber === undefined
+            ? undefined
+            : dto.contractNumber === null
+              ? null
+              : dto.contractNumber.trim() || null,
+        contractStartOn:
+          dto.contractStartOn === undefined
+            ? undefined
+            : dto.contractStartOn === null
+              ? null
+              : new Date(dto.contractStartOn),
+        contractEndOn:
+          dto.contractEndOn === undefined
+            ? undefined
+            : dto.contractEndOn === null
+              ? null
+              : new Date(dto.contractEndOn),
+        monthlyPaymentCents:
+          dto.monthlyPaymentCents === undefined
+            ? undefined
+            : dto.monthlyPaymentCents === null
+              ? null
+              : Math.round(dto.monthlyPaymentCents),
+        residualValueCents:
+          dto.residualValueCents === undefined
+            ? undefined
+            : dto.residualValueCents === null
+              ? null
+              : Math.round(dto.residualValueCents),
+        warrantyExpiresOn:
+          dto.warrantyExpiresOn === undefined
+            ? undefined
+            : dto.warrantyExpiresOn === null
+              ? null
+              : new Date(dto.warrantyExpiresOn),
+        warrantyKmLimit:
+          dto.warrantyKmLimit === undefined
+            ? undefined
+            : dto.warrantyKmLimit === null
+              ? null
+              : Math.round(dto.warrantyKmLimit),
+        warrantyProvider:
+          dto.warrantyProvider === undefined
+            ? undefined
+            : dto.warrantyProvider === null
+              ? null
+              : dto.warrantyProvider.trim() || null,
+        acquisitionNotes:
+          dto.acquisitionNotes === undefined
+            ? undefined
+            : dto.acquisitionNotes === null
+              ? null
+              : dto.acquisitionNotes.trim() || null,
+        updatedByUserId: actorUserId ?? undefined,
+      },
+    });
+
+    await this.audit.logVehicle({
+      tenantUuid: existing.tenantId,
+      actorUserId: actorUserId ?? undefined,
+      action: 'vehicle_acquisition_update',
+      vehicleId,
+      meta: { registrationNumber: existing.registrationNumber },
+    });
+
+    return this.getVehicleAcquisition(tenantSlug, vehicleId);
+  }
+
+  async listVehiclePhotos(tenantSlug: string, vehicleId: string): Promise<VehiclePhotosPayload> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    const rows = await this.prisma.vehiclePhoto.findMany({
+      where: { vehicleId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      include: { uploadedBy: { select: { email: true } } },
+    });
+
+    return { items: rows.map((r) => this.toPhotoRecord(r)) };
+  }
+
+  async addVehiclePhoto(
+    tenantSlug: string,
+    vehicleId: string,
+    dto: CreateVehiclePhotoDto,
+    actorUserId?: string,
+  ): Promise<VehiclePhotoRecord> {
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, tenantId: true, registrationNumber: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found');
+
+    const maxSort = await this.prisma.vehiclePhoto.aggregate({
+      where: { vehicleId },
+      _max: { sortOrder: true },
+    });
+
+    const photo = await this.prisma.vehiclePhoto.create({
+      data: {
+        vehicleId,
+        fileUrl: dto.fileUrl.trim(),
+        fileName: dto.fileName?.trim() || null,
+        caption: dto.caption?.trim() || null,
+        sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+        uploadedByUserId: actorUserId ?? null,
+      },
+      include: { uploadedBy: { select: { email: true } } },
+    });
+
+    await this.audit.logVehicle({
+      tenantUuid: existing.tenantId,
+      actorUserId: actorUserId ?? undefined,
+      action: 'vehicle_photo_add',
+      vehicleId,
+      meta: { registrationNumber: existing.registrationNumber, photoId: photo.id },
+    });
+
+    return this.toPhotoRecord(photo);
+  }
+
+  async deleteVehiclePhoto(
+    tenantSlug: string,
+    vehicleId: string,
+    photoId: string,
+    actorUserId?: string,
+  ): Promise<void> {
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, tenantId: true, registrationNumber: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found');
+
+    const photo = await this.prisma.vehiclePhoto.findFirst({
+      where: { id: photoId, vehicleId },
+    });
+    if (!photo) throw new NotFoundException('Photo not found');
+
+    await this.prisma.vehiclePhoto.delete({ where: { id: photoId } });
+
+    await this.audit.logVehicle({
+      tenantUuid: existing.tenantId,
+      actorUserId: actorUserId ?? undefined,
+      action: 'vehicle_photo_delete',
+      vehicleId,
+      meta: { registrationNumber: existing.registrationNumber, photoId },
+    });
+  }
+
   async listOdometerReadings(
     tenantSlug: string,
     vehicleId: string,
@@ -886,6 +1124,64 @@ export class FleetService {
       updatedByUserId: row.updatedByUserId,
       createdByEmail: row.createdBy?.email ?? null,
       updatedByEmail: row.updatedBy?.email ?? null,
+    };
+  }
+
+  private toAcquisitionPayload(row: {
+    acquisitionType: string | null;
+    acquiredOn: Date | null;
+    dealerName: string | null;
+    financierName: string | null;
+    purchasePriceCents: number | null;
+    downPaymentCents: number | null;
+    contractNumber: string | null;
+    contractStartOn: Date | null;
+    contractEndOn: Date | null;
+    monthlyPaymentCents: number | null;
+    residualValueCents: number | null;
+    warrantyExpiresOn: Date | null;
+    warrantyKmLimit: number | null;
+    warrantyProvider: string | null;
+    acquisitionNotes: string | null;
+  }): VehicleAcquisitionPayload {
+    return {
+      acquisitionType: row.acquisitionType as VehicleAcquisitionPayload['acquisitionType'],
+      acquiredOn: row.acquiredOn ? row.acquiredOn.toISOString() : null,
+      dealerName: row.dealerName,
+      financierName: row.financierName,
+      purchasePriceCents: row.purchasePriceCents,
+      downPaymentCents: row.downPaymentCents,
+      contractNumber: row.contractNumber,
+      contractStartOn: row.contractStartOn ? row.contractStartOn.toISOString() : null,
+      contractEndOn: row.contractEndOn ? row.contractEndOn.toISOString() : null,
+      monthlyPaymentCents: row.monthlyPaymentCents,
+      residualValueCents: row.residualValueCents,
+      warrantyExpiresOn: row.warrantyExpiresOn ? row.warrantyExpiresOn.toISOString() : null,
+      warrantyKmLimit: row.warrantyKmLimit,
+      warrantyProvider: row.warrantyProvider,
+      acquisitionNotes: row.acquisitionNotes,
+    };
+  }
+
+  private toPhotoRecord(row: {
+    id: string;
+    vehicleId: string;
+    fileUrl: string;
+    fileName: string | null;
+    caption: string | null;
+    sortOrder: number;
+    createdAt: Date;
+    uploadedBy: { email: string } | null;
+  }): VehiclePhotoRecord {
+    return {
+      id: row.id,
+      vehicleId: row.vehicleId,
+      fileUrl: row.fileUrl,
+      fileName: row.fileName,
+      caption: row.caption,
+      sortOrder: row.sortOrder,
+      createdAt: row.createdAt.toISOString(),
+      uploadedByEmail: row.uploadedBy?.email ?? null,
     };
   }
 

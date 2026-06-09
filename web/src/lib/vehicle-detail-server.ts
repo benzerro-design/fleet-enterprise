@@ -1,6 +1,11 @@
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { VehicleRecord } from "@/lib/fleet-api";
-import type { OdometerReadingsPayload, VehicleCivPayload } from "@/lib/vehicle-profile-types";
+import type {
+  OdometerReadingsPayload,
+  VehicleAcquisitionPayload,
+  VehicleCivPayload,
+  VehiclePhotosPayload,
+} from "@/lib/vehicle-profile-types";
 import type { MaintenancePlanPayload } from "@/lib/maintenance-plan-types";
 import type { VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
 
@@ -52,6 +57,24 @@ export const EMPTY_MAINTENANCE_PLAN: MaintenancePlanPayload = {
   items: [],
   vehicleOdometerKm: 0,
   stats: { total: 0, active: 0, dueSoon: 0, overdue: 0, syncedReminders: 0 },
+};
+
+export const EMPTY_ACQUISITION: VehicleAcquisitionPayload = {
+  acquisitionType: null,
+  acquiredOn: null,
+  dealerName: null,
+  financierName: null,
+  purchasePriceCents: null,
+  downPaymentCents: null,
+  contractNumber: null,
+  contractStartOn: null,
+  contractEndOn: null,
+  monthlyPaymentCents: null,
+  residualValueCents: null,
+  warrantyExpiresOn: null,
+  warrantyKmLimit: null,
+  warrantyProvider: null,
+  acquisitionNotes: null,
 };
 
 export const EMPTY_CIV: VehicleCivPayload = {
@@ -150,6 +173,26 @@ async function getVehicleMobility(id: string): Promise<VehicleMobilityPayload | 
   }
 }
 
+async function getVehicleAcquisition(id: string): Promise<VehicleAcquisitionPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/acquisition`);
+    if (!res?.ok) return null;
+    return (await res.json()) as VehicleAcquisitionPayload;
+  } catch {
+    return null;
+  }
+}
+
+async function getVehiclePhotos(id: string): Promise<VehiclePhotosPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/photos`);
+    if (!res?.ok) return null;
+    return (await res.json()) as VehiclePhotosPayload;
+  } catch {
+    return null;
+  }
+}
+
 async function getMaintenancePlan(id: string): Promise<MaintenancePlanPayload | null> {
   try {
     const res = await fleetServerFetch(`/fleet/vehicles/${id}/maintenance-plan`);
@@ -166,6 +209,8 @@ export type VehicleDetailData = {
   costsList: CostListPayload | null;
   documentsList: DocumentListPayload | null;
   civPayload: VehicleCivPayload;
+  acquisitionPayload: VehicleAcquisitionPayload;
+  photosPayload: VehiclePhotosPayload;
   odometerPayload: OdometerReadingsPayload;
   mobilityPayload: VehicleMobilityPayload | null;
   maintenancePlanPayload: MaintenancePlanPayload;
@@ -175,12 +220,14 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
   const vehicle = await getVehicle(id);
   if (!vehicle) return null;
 
-  const [maintenanceList, costsList, documentsList, civ, odometer, mobility, maintenancePlan] =
+  const [maintenanceList, costsList, documentsList, civ, acquisition, photos, odometer, mobility, maintenancePlan] =
     await Promise.all([
     getMaintenanceForVehicle(vehicle.registrationNumber),
     getCostsForVehicle(vehicle.registrationNumber),
     getDocumentsForVehicle(vehicle.registrationNumber),
     getVehicleCiv(id),
+    getVehicleAcquisition(id),
+    getVehiclePhotos(id),
     getOdometerReadings(id),
     getVehicleMobility(id),
     getMaintenancePlan(id),
@@ -192,6 +239,8 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     costsList,
     documentsList,
     civPayload: civ ?? EMPTY_CIV,
+    acquisitionPayload: acquisition ?? EMPTY_ACQUISITION,
+    photosPayload: photos ?? { items: [] },
     odometerPayload: odometer ?? { items: [], vehicleOdometerKm: vehicle.odometerKm },
     mobilityPayload: mobility,
     maintenancePlanPayload: maintenancePlan ?? {

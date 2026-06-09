@@ -2,21 +2,27 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
+import { VehicleAcquisitionTab } from "@/components/fleet/VehicleAcquisitionTab";
 import { VehicleAdvancedCivTab } from "@/components/fleet/VehicleAdvancedCivTab";
 import { VehicleBasicInfoTab } from "@/components/fleet/VehicleBasicInfoTab";
 import { VehicleMaintenancePlanTab } from "@/components/fleet/VehicleMaintenancePlanTab";
 import { VehicleOdometerTab } from "@/components/fleet/VehicleOdometerTab";
+import { VehiclePhotosTab } from "@/components/fleet/VehiclePhotosTab";
 import type { VehicleRecord } from "@/lib/fleet-api";
 import type {
   MaintenancePlanPayload,
   OdometerReadingsPayload,
+  VehicleAcquisitionPayload,
   VehicleCivPayload,
+  VehiclePhotosPayload,
   VehicleProfileTab,
 } from "@/lib/vehicle-profile-types";
 
 const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "basic", label: "Basic Info" },
   { id: "advanced", label: "Advanced Infos" },
+  { id: "acquisition", label: "Date achiziție" },
+  { id: "photos", label: "Fotografii" },
   { id: "odometer", label: "Odometru" },
   { id: "maintenance_plan", label: "Plan Mentenanță" },
 ];
@@ -25,16 +31,27 @@ type Props = {
   vehicle: VehicleRecord;
   write: boolean;
   civ: VehicleCivPayload;
+  acquisition: VehicleAcquisitionPayload;
+  photos: VehiclePhotosPayload;
   odometer: OdometerReadingsPayload;
   maintenancePlan: MaintenancePlanPayload;
 };
 
-export function VehicleProfileTabs({ vehicle, write, civ, odometer, maintenancePlan }: Props) {
+export function VehicleProfileTabs({ vehicle, write, civ, acquisition, photos, odometer, maintenancePlan }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const active = useMemo((): VehicleProfileTab => {
     const t = searchParams.get("tab");
-    if (t === "advanced" || t === "odometer" || t === "basic" || t === "maintenance_plan") return t;
+    if (
+      t === "advanced" ||
+      t === "acquisition" ||
+      t === "photos" ||
+      t === "odometer" ||
+      t === "basic" ||
+      t === "maintenance_plan"
+    ) {
+      return t;
+    }
     return "basic";
   }, [searchParams]);
 
@@ -76,6 +93,12 @@ export function VehicleProfileTabs({ vehicle, write, civ, odometer, maintenanceP
         ) : null}
         {active === "advanced" ? (
           <VehicleAdvancedCivTab vehicle={vehicle} write={write} initial={civ} />
+        ) : null}
+        {active === "acquisition" ? (
+          <VehicleAcquisitionTab vehicleId={vehicle.id} write={write} initial={acquisition} />
+        ) : null}
+        {active === "photos" ? (
+          <VehiclePhotosTab vehicleId={vehicle.id} write={write} initial={photos} />
         ) : null}
         {active === "odometer" ? (
           <VehicleOdometerTab vehicleId={vehicle.id} write={write} initial={odometer} />

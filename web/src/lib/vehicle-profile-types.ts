@@ -37,6 +37,47 @@ export type OdometerReadingsPayload = {
   vehicleOdometerKm: number;
 };
 
-export type VehicleProfileTab = "basic" | "advanced" | "odometer" | "maintenance_plan";
+export type AcquisitionType = "cash" | "financial_leasing" | "operational_leasing";
+
+export type VehicleAcquisitionPayload = {
+  acquisitionType: AcquisitionType | null;
+  acquiredOn: string | null;
+  dealerName: string | null;
+  financierName: string | null;
+  purchasePriceCents: number | null;
+  downPaymentCents: number | null;
+  contractNumber: string | null;
+  contractStartOn: string | null;
+  contractEndOn: string | null;
+  monthlyPaymentCents: number | null;
+  residualValueCents: number | null;
+  warrantyExpiresOn: string | null;
+  warrantyKmLimit: number | null;
+  warrantyProvider: string | null;
+  acquisitionNotes: string | null;
+};
+
+export type VehiclePhotoRow = {
+  id: string;
+  vehicleId: string;
+  fileUrl: string;
+  fileName: string | null;
+  caption: string | null;
+  sortOrder: number;
+  createdAt: string;
+  uploadedByEmail: string | null;
+};
+
+export type VehiclePhotosPayload = {
+  items: VehiclePhotoRow[];
+};
+
+export type VehicleProfileTab =
+  | "basic"
+  | "advanced"
+  | "acquisition"
+  | "photos"
+  | "odometer"
+  | "maintenance_plan";
 
 export type MaintenancePlanPayload = import("@/lib/maintenance-plan-types").MaintenancePlanPayload;

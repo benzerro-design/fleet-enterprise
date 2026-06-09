@@ -62,6 +62,7 @@ model User {
   vehiclesCreated  Vehicle[]          @relation("VehicleCreatedBy")
   vehiclesUpdated  Vehicle[]          @relation("VehicleUpdatedBy")
   odometerReadings OdometerReading[]  @relation("OdometerReadingBy")
+  vehiclePhotosUploaded VehiclePhoto[] @relation("VehiclePhotoUploadedBy")
 }
 
 model TenantMembership {
@@ -103,6 +104,22 @@ model Vehicle {
   /** Pagina 4 — Mențiuni CIV. */
   civMentions        String?
   civImportedFromDocumentId String?
+  /** Date achiziție — tip, dealer, finanțator, contract, garanție. */
+  acquisitionType    AcquisitionType?
+  acquiredOn         DateTime?
+  dealerName         String?
+  financierName      String?
+  purchasePriceCents Int?
+  downPaymentCents   Int?
+  contractNumber     String?
+  contractStartOn    DateTime?
+  contractEndOn      DateTime?
+  monthlyPaymentCents Int?
+  residualValueCents Int?
+  warrantyExpiresOn  DateTime?
+  warrantyKmLimit    Int?
+  warrantyProvider   String?
+  acquisitionNotes   String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   createdByUserId    String?
@@ -118,10 +135,34 @@ model Vehicle {
   itpProfileReminder ReminderAction?    @relation("VehicleItpProfileReminder")
   odometerReadings   OdometerReading[]
   maintenancePlanItems MaintenancePlanItem[]
+  photos             VehiclePhoto[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])
   @@index([tenantId, status])
+}
+
+enum AcquisitionType {
+  cash
+  financial_leasing
+  operational_leasing
+}
+
+/// Fotografii vehicul (galerie profil).
+model VehiclePhoto {
+  id               String   @id @default(cuid())
+  vehicleId        String
+  fileUrl          String
+  fileName         String?
+  caption          String?
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  uploadedByUserId String?
+  vehicle          Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  uploadedBy       User?    @relation("VehiclePhotoUploadedBy", fields: [uploadedByUserId], references: [id])
+
+  @@index([vehicleId])
+  @@index([vehicleId, sortOrder])
 }
 
 enum TripPurpose {
