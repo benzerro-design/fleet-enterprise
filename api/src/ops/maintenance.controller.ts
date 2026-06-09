@@ -154,6 +154,10 @@ function assertCreateMaintenanceDto(body: unknown): CreateMaintenanceInput {
     odometerKm: optionalNonNegativeInt(body.odometerKm, 'odometerKm'),
     notes: optionalNullableString(body.notes),
     costCents: optionalNonNegativeInt(body.costCents, 'costCents'),
+    warrantyRepair: 'warrantyRepair' in body ? optionalBoolean(body.warrantyRepair) : undefined,
+    potentialCostCents: optionalNonNegativeInt(body.potentialCostCents, 'potentialCostCents'),
+    damageClaimFileNumber: optionalNullableString(body.damageClaimFileNumber),
+    insurerName: optionalNullableString(body.insurerName),
     nextDueOn:
       'nextDueOn' in body
         ? body.nextDueOn === null
@@ -191,6 +195,15 @@ function assertPatchMaintenanceDto(body: unknown): PatchMaintenanceInput {
     if (body.costCents === null) dto.costCents = null;
     else dto.costCents = optionalNonNegativeInt(body.costCents, 'costCents') ?? undefined;
   }
+  if ('warrantyRepair' in body) dto.warrantyRepair = optionalBoolean(body.warrantyRepair);
+  if ('potentialCostCents' in body) {
+    if (body.potentialCostCents === null) dto.potentialCostCents = null;
+    else dto.potentialCostCents = optionalNonNegativeInt(body.potentialCostCents, 'potentialCostCents') ?? undefined;
+  }
+  if ('damageClaimFileNumber' in body) {
+    dto.damageClaimFileNumber = optionalNullableString(body.damageClaimFileNumber);
+  }
+  if ('insurerName' in body) dto.insurerName = optionalNullableString(body.insurerName);
   if ('costAllocationCode' in body) {
     const raw = body.costAllocationCode;
     if (typeof raw !== 'string') {

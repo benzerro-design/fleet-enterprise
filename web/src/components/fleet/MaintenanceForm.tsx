@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
-import { MAINTENANCE_COST_ALLOCATION_OPTIONS } from "@/lib/maintenance-cost-allocation";
+import {
+  isDamageClaimAllocation,
+  MAINTENANCE_COST_ALLOCATION_OPTIONS,
+} from "@/lib/maintenance-cost-allocation";
 import {
   hasConfiguredOpsReminder,
   inferReminderConstraintMode,
@@ -37,6 +40,10 @@ type MaintenanceRecord = {
   odometerKm: number | null;
   notes: string | null;
   costCents: number | null;
+  warrantyRepair?: boolean;
+  potentialCostCents?: number | null;
+  damageClaimFileNumber?: string | null;
+  insurerName?: string | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;
@@ -95,6 +102,10 @@ export function MaintenanceForm(props: Props) {
         odometerKm: "",
         notes: "",
         costCents: "",
+        warrantyRepair: false,
+        potentialCostCents: "",
+        damageClaimFileNumber: "",
+        insurerName: "",
         nextDueOn: "",
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
@@ -114,6 +125,8 @@ export function MaintenanceForm(props: Props) {
       odometerKm: r.odometerKm != null ? String(r.odometerKm) : "",
       notes: r.notes ?? "",
       costCents: r.costCents != null ? formatRonFromCents(r.costCents) : "",
+      warrantyRepair: r.warrantyRepair ?? false,
+      potentialCostCents: r.potentialCostCents != null ? formatRonFromCents(r.potentialCostCents) : "",
       nextDueOn: toDateInputOrEmpty(r.nextDueOn ?? null),
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
@@ -137,6 +150,10 @@ export function MaintenanceForm(props: Props) {
   const [odometerKm, setOdometerKm] = useState(initial.odometerKm);
   const [notes, setNotes] = useState(initial.notes);
   const [costCents, setCostCents] = useState(initial.costCents);
+  const [warrantyRepair, setWarrantyRepair] = useState(initial.warrantyRepair);
+  const [potentialCostCents, setPotentialCostCents] = useState(initial.potentialCostCents);
+  const [damageClaimFileNumber, setDamageClaimFileNumber] = useState(initial.damageClaimFileNumber);
+  const [insurerName, setInsurerName] = useState(initial.insurerName);
   const [nextDueOn, setNextDueOn] = useState(initial.nextDueOn);
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
@@ -155,6 +172,25 @@ export function MaintenanceForm(props: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const isItp = isItpMaintenanceAllocation(costAllocationCode);
+  const isDauna = isDamageClaimAllocation(costAllocationCode);
+
+  function onCostAllocationChange(code: string) {
+    setCostAllocationCode(code);
+    if (!isDamageClaimAllocation(code)) {
+      setDamageClaimFileNumber("");
+      setInsurerName("");
+    }
+  }
+
+  function onWarrantyRepairChange(checked: boolean) {
+    setWarrantyRepair(checked);
+    if (checked) {
+      setCostCents(formatRonFromCents(0));
+      return;
+    }
+    setPotentialCostCents("");
+    if (parseRonToCents(costCents) === 0) setCostCents("");
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -173,9 +209,16 @@ export function MaintenanceForm(props: Props) {
       setPending(false);
       return;
     }
-    const parsedCost = costCents.trim() ? parseRonToCents(costCents) : null;
-    if (costCents.trim() && parsedCost === null) {
+    const parsedCost = warrantyRepair ? 0 : costCents.trim() ? parseRonToCents(costCents) : null;
+    if (!warrantyRepair && costCents.trim() && parsedCost === null) {
       setError("Costul trebuie să fie în RON fără TVA (maxim 2 zecimale).");
+      setPending(false);
+      return;
+    }
+    const parsedPotential =
+      warrantyRepair && potentialCostCents.trim() ? parseRonToCents(potentialCostCents) : null;
+    if (warrantyRepair && potentialCostCents.trim() && parsedPotential === null) {
+      setError("Costul potențial trebuie să fie în RON fără TVA (maxim 2 zecimale).");
       setPending(false);
       return;
     }
@@ -221,6 +264,10 @@ export function MaintenanceForm(props: Props) {
       odometerKm: parsedOdo,
       notes: notes.trim() || null,
       costCents: parsedCost,
+      warrantyRepair,
+      potentialCostCents: warrantyRepair ? parsedPotential : null,
+      damageClaimFileNumber: isDauna ? (damageClaimFileNumber ?? "").trim() || null : null,
+      insurerName: isDauna ? (insurerName ?? "").trim() || null : null,
       nextDueOn: nextDue,
       reminderOffsetsDays: dayOffsets,
       dueOdometerKm: kmDue,
@@ -301,7 +348,7 @@ export function MaintenanceForm(props: Props) {
               <input required value={title} onChange={(e) => setTitle(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
             <OpsFormField label="Alocare costuri" required>
-              <select required value={costAllocationCode} onChange={(e) => setCostAllocationCode(e.target.value)} className={OPS_INPUT_CLASS}>
+              <select required value={costAllocationCode} onChange={(e) => onCostAllocationChange(e.target.value)} className={OPS_INPUT_CLASS}>
                 <option value="" disabled>
                   Selectați…
                 </option>
@@ -316,15 +363,73 @@ export function MaintenanceForm(props: Props) {
               <input type="date" value={performedAt} onChange={(e) => setPerformedAt(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
           </div>
+          {isDauna ? (
+            <div className="mt-3 grid grid-cols-1 gap-3 rounded-lg border border-rose-900/30 bg-rose-950/10 p-3 sm:grid-cols-2">
+              <OpsFormField label="Nr. dosar de daună">
+                <input
+                  value={damageClaimFileNumber}
+                  onChange={(e) => setDamageClaimFileNumber(e.target.value)}
+                  placeholder="ex. DA-2026-0042"
+                  className={OPS_INPUT_MONO_CLASS}
+                />
+              </OpsFormField>
+              <OpsFormField label="Asigurator">
+                <input
+                  value={insurerName}
+                  onChange={(e) => setInsurerName(e.target.value)}
+                  placeholder="ex. Allianz Țiriac"
+                  className={OPS_INPUT_CLASS}
+                />
+              </OpsFormField>
+            </div>
+          ) : null}
         </OpsFormPrimaryBand>
         <OpsFormSection number={3} title="Detalii operaționale">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpsFormField label="Odometru km">
               <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Cost (RON)">
-              <input type="text" inputMode="decimal" value={costCents} onChange={(e) => setCostCents(e.target.value)} placeholder="ex. 320,00" className={OPS_INPUT_MONO_CLASS} />
-            </OpsFormField>
+            <div className="space-y-3 sm:col-span-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={warrantyRepair}
+                  onChange={(e) => onWarrantyRepairChange(e.target.checked)}
+                  className="rounded border-zinc-600 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/40"
+                />
+                Reparație în garanție
+              </label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <OpsFormField label="Cost (RON)">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={costCents}
+                    onChange={(e) => setCostCents(e.target.value)}
+                    placeholder="ex. 320,00"
+                    disabled={warrantyRepair}
+                    className={`${OPS_INPUT_MONO_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
+                  />
+                </OpsFormField>
+                {warrantyRepair ? (
+                  <OpsFormField label="Cost potențial">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={potentialCostCents}
+                      onChange={(e) => setPotentialCostCents(e.target.value)}
+                      placeholder="ex. 1.200,00"
+                      className={OPS_INPUT_MONO_CLASS}
+                    />
+                  </OpsFormField>
+                ) : null}
+              </div>
+              {warrantyRepair ? (
+                <p className="text-xs text-zinc-500">
+                  Cost efectiv 0 — introduceți estimarea dacă reparația nu ar fi fost în garanție.
+                </p>
+              ) : null}
+            </div>
           </div>
         </OpsFormSection>
         <OpsFormSection number={4} title="Financiar & atașamente">
@@ -386,7 +491,7 @@ export function MaintenanceForm(props: Props) {
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Alocare costuri</label>
-        <select required value={costAllocationCode} onChange={(e) => setCostAllocationCode(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
+        <select required value={costAllocationCode} onChange={(e) => onCostAllocationChange(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
           <option value="" disabled>
             Selectați criteriul…
           </option>
@@ -398,6 +503,28 @@ export function MaintenanceForm(props: Props) {
         </select>
         <p className="text-xs text-zinc-500">Clasificare predefinită pentru raportare și alocare pe buget.</p>
       </div>
+      {isDauna ? (
+        <div className="grid gap-4 rounded-lg border border-rose-900/30 bg-rose-950/10 p-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-zinc-300">Nr. dosar de daună</label>
+            <input
+              value={damageClaimFileNumber}
+              onChange={(e) => setDamageClaimFileNumber(e.target.value)}
+              placeholder="ex. DA-2026-0042"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-zinc-300">Asigurator</label>
+            <input
+              value={insurerName}
+              onChange={(e) => setInsurerName(e.target.value)}
+              placeholder="ex. Allianz Țiriac"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Număr factură (opțional)</label>
         <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
@@ -436,12 +563,46 @@ export function MaintenanceForm(props: Props) {
         <label className="block text-sm font-medium text-zinc-300">Odometru km (opțional)</label>
         <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Cost (RON fără TVA) — opțional</label>
-        <input type="text" inputMode="decimal" value={costCents} onChange={(e) => setCostCents(e.target.value)} placeholder="ex. 150.00" className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
-        <p className="text-xs text-zinc-500">
-          Exemplu: <span className="font-mono text-zinc-400">150.00</span>. Folosiți punct sau virgulă pentru zecimale. Lăsați gol dacă nu se aplică.
-        </p>
+      <div className="space-y-3">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-300">
+          <input
+            type="checkbox"
+            checked={warrantyRepair}
+            onChange={(e) => onWarrantyRepairChange(e.target.checked)}
+            className="rounded border-zinc-600 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/40"
+          />
+          Reparație în garanție
+        </label>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">Cost (RON fără TVA) — opțional</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={costCents}
+            onChange={(e) => setCostCents(e.target.value)}
+            placeholder="ex. 150.00"
+            disabled={warrantyRepair}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+          />
+        </div>
+        {warrantyRepair ? (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-zinc-300">Cost potențial</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={potentialCostCents}
+              onChange={(e) => setPotentialCostCents(e.target.value)}
+              placeholder="ex. 1.200,00"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+            />
+            <p className="text-xs text-zinc-500">Estimare dacă reparația nu ar fi fost acoperită de garanție.</p>
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500">
+            Exemplu: <span className="font-mono text-zinc-400">150.00</span>. Folosiți punct sau virgulă pentru zecimale. Lăsați gol dacă nu se aplică.
+          </p>
+        )}
       </div>
       {reminderBlock}
 

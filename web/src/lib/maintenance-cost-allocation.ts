@@ -11,6 +11,10 @@ export const MAINTENANCE_COST_ALLOCATION_OPTIONS: ReadonlyArray<{ code: string; 
   { code: "altele", label: "Altele" },
 ] as const;
 
+export function isDamageClaimAllocation(code: string | null | undefined): boolean {
+  return code?.trim() === "dauna";
+}
+
 export function maintenanceCostAllocationLabel(code: string | null | undefined): string {
   if (!code?.trim()) return "—";
   const row = MAINTENANCE_COST_ALLOCATION_OPTIONS.find((o) => o.code === code);

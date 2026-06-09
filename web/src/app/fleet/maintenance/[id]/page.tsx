@@ -3,7 +3,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteMaintenanceButton } from "@/components/fleet/DeleteMaintenanceButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
-import { maintenanceCostAllocationLabel } from "@/lib/maintenance-cost-allocation";
+import { isDamageClaimAllocation, maintenanceCostAllocationLabel } from "@/lib/maintenance-cost-allocation";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { formatRonFromCents } from "@/lib/money";
 
@@ -23,6 +23,10 @@ type MaintenanceRow = {
   odometerKm: number | null;
   notes: string | null;
   costCents: number | null;
+  warrantyRepair?: boolean;
+  potentialCostCents?: number | null;
+  damageClaimFileNumber?: string | null;
+  insurerName?: string | null;
 };
 
 async function getEntry(id: string): Promise<MaintenanceRow | null> {
@@ -60,13 +64,23 @@ export default async function MaintenanceDetailPage({ params }: { params: Promis
           <div><dt className="text-xs uppercase text-zinc-500">Client</dt><dd className="mt-1">{row.clientId}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Tenant</dt><dd className="mt-1 font-mono">{row.tenantSlug}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Alocare costuri</dt><dd className="mt-1 text-zinc-200">{maintenanceCostAllocationLabel(row.costAllocationCode)}</dd></div>
+          {isDamageClaimAllocation(row.costAllocationCode) ? (
+            <>
+              <div><dt className="text-xs uppercase text-zinc-500">Nr. dosar de daună</dt><dd className="mt-1 font-mono">{row.damageClaimFileNumber ?? "—"}</dd></div>
+              <div><dt className="text-xs uppercase text-zinc-500">Asigurator</dt><dd className="mt-1">{row.insurerName ?? "—"}</dd></div>
+            </>
+          ) : null}
           <div><dt className="text-xs uppercase text-zinc-500">Furnizor</dt><dd className="mt-1 text-zinc-200">{row.provider ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Data</dt><dd className="mt-1">{row.performedAt ? new Date(row.performedAt).toLocaleString("ro-RO") : "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Odometru</dt><dd className="mt-1 font-mono">{row.odometerKm ?? "—"} km</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Număr factură</dt><dd className="mt-1 font-mono">{row.invoiceNumber ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Data facturii</dt><dd className="mt-1">{row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString("ro-RO") : "—"}</dd></div>
           <div className="sm:col-span-2"><dt className="text-xs uppercase text-zinc-500">Atașare factură</dt><dd className="mt-1">{row.invoiceAttachmentUrl ? <a className="text-emerald-400 hover:underline" href={row.invoiceAttachmentUrl} target="_blank" rel="noreferrer">Deschide document</a> : "—"}</dd></div>
+          <div><dt className="text-xs uppercase text-zinc-500">Reparație în garanție</dt><dd className="mt-1">{row.warrantyRepair ? "Da" : "Nu"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Cost (RON fără TVA)</dt><dd className="mt-1 font-mono">{row.costCents != null ? formatRonFromCents(row.costCents) : "—"}</dd></div>
+          {row.warrantyRepair && row.potentialCostCents != null ? (
+            <div><dt className="text-xs uppercase text-zinc-500">Cost potențial</dt><dd className="mt-1 font-mono">{formatRonFromCents(row.potentialCostCents)}</dd></div>
+          ) : null}
           <div><dt className="text-xs uppercase text-zinc-500">Vehicle ID</dt><dd className="mt-1 font-mono text-xs text-zinc-400">{row.vehicleId}</dd></div>
           <div className="sm:col-span-2"><dt className="text-xs uppercase text-zinc-500">Notițe</dt><dd className="mt-1 text-zinc-200">{row.notes ?? "—"}</dd></div>
         </dl>

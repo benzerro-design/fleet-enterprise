@@ -240,8 +240,14 @@ model MaintenanceEntry {
   odometerKm           Int?
   notes                String?
   costCents            Int?
+  /** Reparație acoperită de garanție — cost efectiv 0, cu cost potențial estimat. */
+  warrantyRepair       Boolean   @default(false)
+  potentialCostCents   Int?
   /// * Criteriu alocare costuri (cod predefinit: revizie, reparatie_mecanica, …).
   costAllocationCode   String?
+  /** Alocare „daună” — dosar și asigurator. */
+  damageClaimFileNumber String?
+  insurerName          String?
   invoiceNumber        String?
   invoiceDate          DateTime?
   invoiceAttachmentUrl String?

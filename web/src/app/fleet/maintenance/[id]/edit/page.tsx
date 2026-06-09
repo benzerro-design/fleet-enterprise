@@ -18,6 +18,10 @@ type MaintenanceRecord = {
   odometerKm: number | null;
   notes: string | null;
   costCents: number | null;
+  warrantyRepair?: boolean;
+  potentialCostCents?: number | null;
+  damageClaimFileNumber?: string | null;
+  insurerName?: string | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;

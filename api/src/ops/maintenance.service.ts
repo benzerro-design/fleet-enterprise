@@ -31,6 +31,10 @@ export type CreateMaintenanceInput = {
   odometerKm?: number | null;
   notes?: string | null;
   costCents?: number | null;
+  warrantyRepair?: boolean;
+  potentialCostCents?: number | null;
+  damageClaimFileNumber?: string | null;
+  insurerName?: string | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;
@@ -125,6 +129,10 @@ function maintPatchFieldKeys(
     odometerKm: number | null;
     notes: string | null;
     costCents: number | null;
+    warrantyRepair: boolean;
+    potentialCostCents: number | null;
+    damageClaimFileNumber: string | null;
+    insurerName: string | null;
   },
   dto: PatchMaintenanceInput,
 ): string[] {
@@ -161,6 +169,18 @@ function maintPatchFieldKeys(
   if (dto.odometerKm !== undefined && dto.odometerKm !== before.odometerKm) keys.push('odometerKm');
   if (dto.notes !== undefined && dto.notes !== before.notes) keys.push('notes');
   if (dto.costCents !== undefined && dto.costCents !== before.costCents) keys.push('costCents');
+  if (dto.warrantyRepair !== undefined && dto.warrantyRepair !== before.warrantyRepair) {
+    keys.push('warrantyRepair');
+  }
+  if (dto.potentialCostCents !== undefined && dto.potentialCostCents !== before.potentialCostCents) {
+    keys.push('potentialCostCents');
+  }
+  if (dto.damageClaimFileNumber !== undefined && dto.damageClaimFileNumber !== before.damageClaimFileNumber) {
+    keys.push('damageClaimFileNumber');
+  }
+  if (dto.insurerName !== undefined && dto.insurerName !== before.insurerName) {
+    keys.push('insurerName');
+  }
   return keys;
 }
 
@@ -185,6 +205,10 @@ function toMaintRow(row: {
   odometerKm: number | null;
   notes: string | null;
   costCents: number | null;
+  warrantyRepair: boolean;
+  potentialCostCents: number | null;
+  damageClaimFileNumber: string | null;
+  insurerName: string | null;
   nextDueOn: Date | null;
   reminderOffsetsDays: unknown;
   dueOdometerKm: number | null;
@@ -209,6 +233,10 @@ function toMaintRow(row: {
     odometerKm: row.odometerKm,
     notes: row.notes,
     costCents: row.costCents,
+    warrantyRepair: row.warrantyRepair,
+    potentialCostCents: row.potentialCostCents,
+    damageClaimFileNumber: row.damageClaimFileNumber,
+    insurerName: row.insurerName,
     nextDueOn: row.nextDueOn ? row.nextDueOn.toISOString() : null,
     reminderOffsetsDays: normalizeReminderOffsets(row.reminderOffsetsDays),
     dueOdometerKm: row.dueOdometerKm,
@@ -334,7 +362,12 @@ export class MaintenanceService {
           dto.performedAt === undefined ? null : dto.performedAt ? new Date(dto.performedAt) : null,
         odometerKm: dto.odometerKm ?? null,
         notes: dto.notes ?? null,
-        costCents: dto.costCents ?? null,
+        costCents: dto.warrantyRepair ? 0 : (dto.costCents ?? null),
+        warrantyRepair: dto.warrantyRepair ?? false,
+        potentialCostCents: dto.warrantyRepair ? (dto.potentialCostCents ?? null) : null,
+        damageClaimFileNumber:
+          dto.costAllocationCode === 'dauna' ? (dto.damageClaimFileNumber?.trim() || null) : null,
+        insurerName: dto.costAllocationCode === 'dauna' ? (dto.insurerName?.trim() || null) : null,
         nextDueOn:
           dto.nextDueOn === undefined ? null : dto.nextDueOn ? new Date(dto.nextDueOn) : null,
         reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
@@ -391,6 +424,17 @@ export class MaintenanceService {
     });
     if (!before) throw new NotFoundException('Maintenance entry not found');
 
+    const effectiveAlloc = dto.costAllocationCode ?? before.costAllocationCode;
+    const isDauna = effectiveAlloc === 'dauna';
+    const daunaStringField = (value: string | null | undefined): string | null | undefined => {
+      if (value === undefined) {
+        if (dto.costAllocationCode !== undefined && !isDauna) return null;
+        return undefined;
+      }
+      if (!isDauna) return null;
+      return value === null ? null : value.trim() || null;
+    };
+
     const data: Prisma.MaintenanceEntryUncheckedUpdateManyInput = {
       vehicleId: dto.vehicleId,
       title: dto.title,
@@ -408,7 +452,21 @@ export class MaintenanceService {
             : new Date(dto.performedAt),
       odometerKm: dto.odometerKm,
       notes: dto.notes,
-      costCents: dto.costCents,
+      costCents:
+        dto.warrantyRepair === true
+          ? 0
+          : dto.warrantyRepair === false && dto.costCents === undefined
+            ? undefined
+            : dto.costCents,
+      warrantyRepair: dto.warrantyRepair,
+      potentialCostCents:
+        dto.warrantyRepair === true
+          ? (dto.potentialCostCents ?? null)
+          : dto.warrantyRepair === false
+            ? null
+            : dto.potentialCostCents,
+      damageClaimFileNumber: daunaStringField(dto.damageClaimFileNumber),
+      insurerName: daunaStringField(dto.insurerName),
       nextDueOn:
         dto.nextDueOn === undefined
           ? undefined
@@ -440,6 +498,10 @@ export class MaintenanceService {
         odometerKm: before.odometerKm,
         notes: before.notes,
         costCents: before.costCents,
+        warrantyRepair: before.warrantyRepair,
+        potentialCostCents: before.potentialCostCents,
+        damageClaimFileNumber: before.damageClaimFileNumber,
+        insurerName: before.insurerName,
       },
       dto,
     );
