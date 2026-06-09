@@ -3,7 +3,7 @@
 **Scop:** validare cap-coadă pe **staging** înainte de acces limitat pentru clientul pilot.  
 **ICP:** administrator flotă / dispecer, ~20–150 vehicule, România — fără tracking GPS.
 
-**Referințe:** `docs/roadmap-2026-q3-q4.md`, `api/README.md` (GCS PDF).
+**Referințe:** `docs/roadmap-2026-q3-q4.md`, `api/README.md` (GCS PDF), **`docs/pilot-handoff-flotax.md`** (text predare client).
 
 ---
 
@@ -210,11 +210,13 @@ npm run test:e2e:rbac     # JWT + roluri (necesită db:seed)
 
 ## 7. Semnare go-live
 
+**Predare client:** completează checklist + email din `docs/pilot-handoff-flotax.md` (§1 intern, §4 text client, §3 suport).
+
 | Rol | Nume | Data | Semnătură |
 |-----|------|------|-----------|
 | Produs / owner | | | |
 | Tehnic | | | |
-| Client pilot | | | |
+| Client pilot (FlotaX) | | | |
 
 **Limitări cunoscute (Q3):** fără portal user client; fără tracking; user management doar manual; liste mobil = tabele.
 

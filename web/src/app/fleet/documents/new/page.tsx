@@ -1,27 +1,12 @@
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DocumentForm } from "@/components/fleet/DocumentForm";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
-import { fleetServerFetch } from "@/lib/fleet-server";
+import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
-type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string; odometerKm: number }> };
-
-type Props = { searchParams: Promise<{ vehicleId?: string }> };
-
-async function getVehicleOptions() {
-  const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
-  if (!res?.ok) return [];
-  const data = (await res.json()) as VehiclesPayload;
-  return data.items.map((v) => ({
-    id: v.id,
-    registrationNumber: v.registrationNumber,
-    clientId: v.clientId,
-    odometerKm: v.odometerKm,
-  }));
-}
-
-export default async function NewDocumentPage({ searchParams }: Props) {
+export default async function NewDocumentPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
   const sp = await searchParams;
   const auth = await getAuthMeResult();
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
@@ -34,19 +19,18 @@ export default async function NewDocumentPage({ searchParams }: Props) {
 
   return (
     <FleetPageMain>
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Conformitate</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Document nou</h1>
-          </div>
-          <Link
-            href="/fleet/documents"
-            className="inline-flex w-fit items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-          >
-            Înapoi la listă
-          </Link>
-        </div>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
+        <Link
+          href="/fleet/documents"
+          className="inline-flex w-fit items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+        >
+          Înapoi la listă
+        </Link>
+      </div>
+      <OpsFormLayout module="documents" formTitle="Document nou" vehicles={vehicles} defaultVehicleId={sp.vehicleId}>
         <DocumentForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} />
+      </OpsFormLayout>
     </FleetPageMain>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 import { toDatetimeLocalInput, toIsoFromDatetimeLocal } from "@/lib/datetime-local";
@@ -29,7 +30,7 @@ type VehicleOption = {
 };
 
 type Props =
-  | { mode: "create"; vehicles: VehicleOption[] }
+  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string }
   | { mode: "edit"; tripId: string; initial: TripRecord; vehicles: VehicleOption[] };
 
 async function readErrorMessage(res: Response): Promise<string> {
@@ -51,7 +52,7 @@ export function TripForm(props: Props) {
   const initial = useMemo(() => {
     if (props.mode === "create") {
       return {
-        vehicleId: props.vehicles[0]?.id ?? "",
+        vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
         reference: "",
         startedAt: toDatetimeLocalInput(new Date().toISOString()),
         endedAt: "",
@@ -83,7 +84,11 @@ export function TripForm(props: Props) {
   }, [props]);
 
   const [vehicleId, setVehicleId] = useState(initial.vehicleId);
-  const selectedVehicle = props.vehicles.find((v) => v.id === vehicleId) ?? null;
+  const selectedVehicleLocal = props.vehicles.find((v) => v.id === vehicleId) ?? null;
+  const { embedded, vehicleId: boundVehicleId, selectedVehicle, formClassName } = useOpsFormVehicleBinding({
+    vehicleId,
+    selectedVehicle: selectedVehicleLocal,
+  });
   const [reference, setReference] = useState(initial.reference);
   const [startedAt, setStartedAt] = useState(initial.startedAt);
   const [endedAt, setEndedAt] = useState(initial.endedAt);
@@ -148,7 +153,7 @@ export function TripForm(props: Props) {
     }
 
     const body: Record<string, unknown> = {
-      vehicleId,
+      vehicleId: boundVehicleId,
       startedAt: startIso,
       endedAt: endIso,
       reference: reference.trim() || null,
@@ -184,23 +189,27 @@ export function TripForm(props: Props) {
   }
 
   return (
-    <form onSubmit={(e) => void onSubmit(e)} className="mx-auto max-w-xl space-y-6">
+    <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
-        <select required value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
-          {props.vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
-          {props.vehicles.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.registrationNumber}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Client</label>
-        <input value={selectedVehicle?.clientId ?? ""} readOnly className="w-full cursor-not-allowed rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 outline-none" />
-      </div>
+      {!embedded ? (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
+          <select required value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
+            {props.vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
+            {props.vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.registrationNumber}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {!embedded ? (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">Client</label>
+          <input value={selectedVehicleLocal?.clientId ?? ""} readOnly className="w-full cursor-not-allowed rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 outline-none" />
+        </div>
+      ) : null}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Referință (opțional)</label>
         <input value={reference} onChange={(e) => setReference(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />

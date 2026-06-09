@@ -7,10 +7,11 @@ import { DashboardService } from './dashboard.service';
 import { FleetController } from './fleet.controller';
 import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
+import { VehicleFormBriefService } from './vehicle-form-brief.service';
 
 @Module({
   imports: [AuthModule, AuditModule, ClientsModule, OpsModule],
   controllers: [FleetController],
-  providers: [FleetService, MaintenancePlanService, DashboardService],
+  providers: [FleetService, MaintenancePlanService, DashboardService, VehicleFormBriefService],
 })
 export class FleetModule {}

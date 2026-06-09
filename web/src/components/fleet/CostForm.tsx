@@ -13,6 +13,7 @@ import {
 } from "@/lib/ops-reminder-fields";
 import { formatRonFromCents, parseRonToCents } from "@/lib/money";
 import { uploadInvoiceFile } from "@/lib/invoice-upload";
+import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 
@@ -118,7 +119,11 @@ export function CostForm(props: Props) {
   }, [props]);
 
   const [vehicleId, setVehicleId] = useState(initial.vehicleId);
-  const selectedVehicle = props.vehicles.find((v) => v.id === vehicleId) ?? null;
+  const selectedVehicleLocal = props.vehicles.find((v) => v.id === vehicleId) ?? null;
+  const { embedded, vehicleId: boundVehicleId, selectedVehicle, formClassName } = useOpsFormVehicleBinding({
+    vehicleId,
+    selectedVehicle: selectedVehicleLocal,
+  });
   const [category, setCategory] = useState(initial.category);
   const [provider, setProvider] = useState(initial.provider);
   const [amountCents, setAmountCents] = useState(initial.amountCents);
@@ -218,7 +223,7 @@ export function CostForm(props: Props) {
     });
 
     const body: Record<string, unknown> = {
-      vehicleId,
+      vehicleId: boundVehicleId,
       category: category.trim(),
       provider: provider.trim() || null,
       amountCents: amount,
@@ -272,23 +277,27 @@ export function CostForm(props: Props) {
   }
 
   return (
-    <form onSubmit={(e) => void onSubmit(e)} className="mx-auto max-w-xl space-y-6">
+    <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
-        <select required value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
-          {props.vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
-          {props.vehicles.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.registrationNumber}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Client</label>
-        <input value={selectedVehicle?.clientId ?? ""} readOnly className="w-full cursor-not-allowed rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 outline-none" />
-      </div>
+      {!embedded ? (
+        <>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
+            <select required value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
+              {props.vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
+              {props.vehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.registrationNumber}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-zinc-300">Client</label>
+            <input value={selectedVehicleLocal?.clientId ?? ""} readOnly className="w-full cursor-not-allowed rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 outline-none" />
+          </div>
+        </>
+      ) : null}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Categorie</label>
         <select

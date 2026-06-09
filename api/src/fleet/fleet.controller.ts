@@ -31,6 +31,7 @@ import type { VehicleStatus } from './fleet.types';
 import { DashboardService } from './dashboard.service';
 import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
+import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TenantId } from './tenant-id.decorator';
 
 @Controller('fleet')
@@ -40,6 +41,7 @@ export class FleetController {
     private readonly fleet: FleetService,
     private readonly maintenancePlan: MaintenancePlanService,
     private readonly dashboard: DashboardService,
+    private readonly formBrief: VehicleFormBriefService,
   ) {}
 
   @Get('dashboard')
@@ -91,6 +93,12 @@ export class FleetController {
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
   getVehicle(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
     return this.fleet.getVehicle(tenantId, vehicleId);
+  }
+
+  @Get('vehicles/:vehicleId/form-brief')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  getVehicleFormBrief(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
+    return this.formBrief.getBrief(tenantId, vehicleId);
   }
 
   @Post('vehicles')
