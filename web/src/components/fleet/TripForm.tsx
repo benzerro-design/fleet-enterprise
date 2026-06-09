@@ -1,6 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import {
+  OPS_INPUT_CLASS,
+  OPS_INPUT_MONO_CLASS,
+  OpsFormField,
+  OpsFormPrimaryBand,
+  OpsFormSection,
+  OpsFormStickyActions,
+} from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
@@ -186,6 +194,74 @@ export function TripForm(props: Props) {
     } finally {
       setPending(false);
     }
+  }
+
+  const useP1Layout = embedded && !isEdit;
+
+  if (useP1Layout) {
+    return (
+      <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
+        {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
+        <OpsFormPrimaryBand module="trips" title="Înregistrare — câmpuri obligatorii">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <OpsFormField label="Start" required>
+              <input type="datetime-local" required value={startedAt} onChange={(e) => setStartedAt(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Stop">
+              <input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Referință">
+              <input value={reference} onChange={(e) => setReference(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+          </div>
+        </OpsFormPrimaryBand>
+        <OpsFormSection number={3} title="Traseu">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <OpsFormField label="Origine">
+              <input value={originLabel} onChange={(e) => setOriginLabel(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Destinație">
+              <input value={destLabel} onChange={(e) => setDestLabel(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Distanță km">
+              <input type="number" min={0} step={1} value={distanceKm} onChange={(e) => setDistanceKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Scop">
+              <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className={OPS_INPUT_CLASS}>
+                {TRIP_PURPOSE_OPTIONS.map((o) => (
+                  <option key={o.value || "none"} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+        <OpsFormSection number={4} title="Odometru & conducător">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <OpsFormField label="Odometru start">
+              <input type="number" min={0} step={1} value={odometerStartKm} onChange={(e) => setOdometerStartKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Odometru final">
+              <input type="number" min={0} step={1} value={odometerEndKm} onChange={(e) => setOdometerEndKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Tip drum">
+              <select value={roadType} onChange={(e) => setRoadType(e.target.value)} className={OPS_INPUT_CLASS}>
+                {TRIP_ROAD_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value || "none"} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </OpsFormField>
+            <OpsFormField label="Conducător">
+              <input value={driverName} onChange={(e) => setDriverName(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+        <OpsFormStickyActions submitLabel="Creează cursa" pendingLabel="Salvez..." cancelHref="/fleet/trips" pending={pending} />
+      </form>
+    );
   }
 
   return (

@@ -13,6 +13,14 @@ import {
   type ReminderSourceType,
 } from "@/lib/reminder-actions";
 import { documentTypeLabel } from "@/lib/document-types";
+import {
+  OPS_INPUT_CLASS,
+  OpsFormCollapsible,
+  OpsFormField,
+  OpsFormPrimaryBand,
+  OpsFormSection,
+  OpsFormStickyActions,
+} from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 
 type VehicleOption = {
@@ -219,6 +227,131 @@ export function ReminderForm(props: Props) {
     } finally {
       setPending(false);
     }
+  }
+
+  const useP1Layout = embedded && !isEdit;
+
+  if (useP1Layout) {
+    return (
+      <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
+        {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
+        <OpsFormPrimaryBand module="reminders" title="Înregistrare — câmpuri obligatorii">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <OpsFormField label="Tip acțiune" required>
+              <select
+                value={sourceType}
+                onChange={(e) => {
+                  const st = e.target.value as ReminderSourceType;
+                  setSourceType(st);
+                  setVehicleDocumentId("");
+                  setMaintenanceEntryId("");
+                }}
+                className={OPS_INPUT_CLASS}
+              >
+                {REMINDER_SOURCE_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </OpsFormField>
+            <OpsFormField label="Titlu acțiune" required>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} required className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+          </div>
+        </OpsFormPrimaryBand>
+        <OpsFormSection number={3} title="Legături & șabloane">
+          {sourceType === "document" ? (
+            <OpsFormField label="Document legat">
+              <select value={vehicleDocumentId} disabled={!ctx?.documents.length} onChange={(e) => applyDocumentLink(e.target.value)} className={OPS_INPUT_CLASS}>
+                <option value="">— Alege document —</option>
+                {ctx?.documents.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.title} ({documentTypeLabel(d.documentTypeCode)})
+                  </option>
+                ))}
+              </select>
+            </OpsFormField>
+          ) : null}
+          {sourceType === "maintenance" ? (
+            <OpsFormField label="Mentenanță legată">
+              <select value={maintenanceEntryId} disabled={!ctx?.maintenance.length} onChange={(e) => applyMaintenanceLink(e.target.value)} className={OPS_INPUT_CLASS}>
+                <option value="">— Alege intervenție —</option>
+                {ctx?.maintenance.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.title}
+                    {m.performedAt ? ` · ${new Date(m.performedAt).toLocaleDateString("ro-RO")}` : ""}
+                  </option>
+                ))}
+              </select>
+            </OpsFormField>
+          ) : null}
+          {sourceType === "custom" ? (
+            <div className="flex flex-wrap gap-2">
+              {CUSTOM_REMINDER_PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    setTitle(p.title);
+                    if ("intervalKm" in p && p.intervalKm) setIntervalKm(String(p.intervalKm));
+                    if ("intervalDays" in p && p.intervalDays) setIntervalDays(String(p.intervalDays));
+                  }}
+                  className="rounded-full border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-fuchsia-700 hover:text-fuchsia-200"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </OpsFormSection>
+        <OpsFormCollapsible title="5. Scadență & remindere (pliable)">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <OpsFormField label="Interval zile">
+              <input type="number" min={0} value={intervalDays} onChange={(e) => setIntervalDays(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Interval km">
+              <input type="number" min={0} value={intervalKm} onChange={(e) => setIntervalKm(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+          </div>
+          <OpsFormField label="Scadență (dată)">
+            <input
+              type="date"
+              value={dueOn}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDueOn(v);
+                if (v && reminderOffsetsDays.length === 0) setReminderOffsetsDays([...DEFAULT_REMINDER_OFFSETS]);
+              }}
+              className={OPS_INPUT_CLASS}
+            />
+          </OpsFormField>
+          {dueOn ? (
+            <ReminderSchedulePicker expiresOn={dueOn} offsets={reminderOffsetsDays} onChange={setReminderOffsetsDays} disabled={pending} />
+          ) : null}
+          <ReminderKmPicker
+            dueOdometerKm={dueOdometerKm}
+            offsets={reminderOffsetsKm}
+            currentOdometerKm={odometer}
+            onChange={setReminderOffsetsKm}
+            onDueOdometerChange={setDueOdometerKm}
+            disabled={pending}
+          />
+          <OpsFormField label="Note">
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={OPS_INPUT_CLASS} />
+          </OpsFormField>
+        </OpsFormCollapsible>
+        <OpsFormStickyActions
+          submitLabel="Creează acțiunea"
+          pendingLabel="Se salvează…"
+          cancelHref="/fleet/reminders"
+          pending={pending}
+          disabled={!boundVehicleId || !title.trim()}
+          submitClassName="rounded-lg bg-fuchsia-600 px-4 py-2 text-sm font-medium text-white hover:bg-fuchsia-500 disabled:opacity-50"
+        />
+      </form>
+    );
   }
 
   return (

@@ -20,11 +20,16 @@ type Props = {
 export function OpsFormModuleHeader({ module, formTitle }: { module: OpsFormModuleKey; formTitle: string }) {
   const accent = OPS_SECTION_ACCENT[module];
   return (
-    <div className="mb-6 flex items-center gap-2.5">
-      <span className={`h-5 w-1 shrink-0 rounded-sm ${accent.bar}`} aria-hidden />
-      <h2 className="text-xl font-semibold tracking-tight text-zinc-100">
-        {OPS_FORM_SECTION_LABELS[module]} — {formTitle}
-      </h2>
+    <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`h-5 w-1 shrink-0 rounded-sm ${accent.bar}`} aria-hidden />
+        <h2 className="text-xl font-semibold tracking-tight text-zinc-100">
+          {OPS_FORM_SECTION_LABELS[module]} — {formTitle}
+        </h2>
+      </div>
+      <span className="shrink-0 rounded-full border border-zinc-700 bg-zinc-900/60 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+        Draft
+      </span>
     </div>
   );
 }

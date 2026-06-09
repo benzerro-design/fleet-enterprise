@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { uploadDocumentFile } from "@/lib/document-upload";
+import {
+  OPS_INPUT_CLASS,
+  OpsFormCollapsible,
+  OpsFormField,
+  OpsFormPrimaryBand,
+  OpsFormSection,
+  OpsFormStickyActions,
+} from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { DOCUMENT_TYPE_OPTIONS } from "@/lib/document-types";
 import {
@@ -189,6 +197,77 @@ export function DocumentForm(props: Props) {
     }
   }
 
+  const useP1Layout = embedded && !isEdit;
+
+  const reminderBlock = (
+    <OpsReminderFields
+      constraintMode={constraintMode}
+      onConstraintModeChange={setConstraintMode}
+      dueDate={expiresOn}
+      onDueDateChange={setExpiresOn}
+      dueDateLabel="Data expirare"
+      dueDateHint="Necesară pentru remindere pe dată. Lăsați gol dacă documentul nu expiră la o dată fixă."
+      reminderOffsetsDays={reminderOffsetsDays}
+      onReminderOffsetsDaysChange={setReminderOffsetsDays}
+      dueOdometerKm={dueOdometerKm}
+      onDueOdometerKmChange={setDueOdometerKm}
+      reminderOffsetsKm={reminderOffsetsKm}
+      onReminderOffsetsKmChange={setReminderOffsetsKm}
+      vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+      syncReminderAction={syncReminderAction}
+      onSyncReminderActionChange={setSyncReminderAction}
+      disabled={pending}
+    />
+  );
+
+  if (useP1Layout) {
+    return (
+      <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
+        {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
+        <OpsFormPrimaryBand module="documents" title="Înregistrare — câmpuri obligatorii">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <OpsFormField label="Tip document" required>
+              <select
+                value={documentTypeCode}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setDocumentTypeCode(next);
+                  if (next === "civ") setSyncReminderAction(false);
+                }}
+                required
+                className={OPS_INPUT_CLASS}
+              >
+                {DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </OpsFormField>
+            <OpsFormField label="Titlu" required>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="ex. RCA 2026" className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Data expirare">
+              <input type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+          </div>
+        </OpsFormPrimaryBand>
+        <OpsFormSection number={4} title="Fișier document">
+          <div className="grid grid-cols-1 gap-3">
+            <OpsFormField label="Upload" hint="PDF sau imagine, max 10MB.">
+              <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" disabled={uploading || pending} onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)} className={`${OPS_INPUT_CLASS} file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:text-zinc-200`} />
+            </OpsFormField>
+            <OpsFormField label="URL fișier (alternativ)">
+              <input value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} placeholder="https://…" className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+        <OpsFormCollapsible title="5. Termene & remindere (pliable)">{reminderBlock}</OpsFormCollapsible>
+        <OpsFormStickyActions submitLabel="Creează documentul" pendingLabel="Se salvează…" cancelHref="/fleet/documents" pending={pending} disabled={props.vehicles.length === 0} />
+      </form>
+    );
+  }
+
   return (
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? (
@@ -256,24 +335,7 @@ export function DocumentForm(props: Props) {
         />
       </div>
 
-      <OpsReminderFields
-        constraintMode={constraintMode}
-        onConstraintModeChange={setConstraintMode}
-        dueDate={expiresOn}
-        onDueDateChange={setExpiresOn}
-        dueDateLabel="Data expirare"
-        dueDateHint="Necesară pentru remindere pe dată. Lăsați gol dacă documentul nu expiră la o dată fixă."
-        reminderOffsetsDays={reminderOffsetsDays}
-        onReminderOffsetsDaysChange={setReminderOffsetsDays}
-        dueOdometerKm={dueOdometerKm}
-        onDueOdometerKmChange={setDueOdometerKm}
-        reminderOffsetsKm={reminderOffsetsKm}
-        onReminderOffsetsKmChange={setReminderOffsetsKm}
-        vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
-        syncReminderAction={syncReminderAction}
-        onSyncReminderActionChange={setSyncReminderAction}
-        disabled={pending}
-      />
+      {reminderBlock}
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Fișier document</label>

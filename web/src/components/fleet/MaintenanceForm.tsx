@@ -13,6 +13,15 @@ import {
 import { isItpMaintenanceAllocation } from "@/lib/itp-ops";
 import { formatRonFromCents, parseRonToCents } from "@/lib/money";
 import { uploadInvoiceFile } from "@/lib/invoice-upload";
+import {
+  OPS_INPUT_CLASS,
+  OPS_INPUT_MONO_CLASS,
+  OpsFormCollapsible,
+  OpsFormField,
+  OpsFormPrimaryBand,
+  OpsFormSection,
+  OpsFormStickyActions,
+} from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 
 type MaintenanceRecord = {
@@ -254,6 +263,97 @@ export function MaintenanceForm(props: Props) {
     }
   }
 
+  const useP1Layout = embedded && !isEdit;
+
+  const reminderBlock = (
+    <OpsReminderFields
+      constraintMode={constraintMode}
+      onConstraintModeChange={setConstraintMode}
+      dueDate={nextDueOn}
+      onDueDateChange={setNextDueOn}
+      dueDateLabel={isItp ? "ITP valabil până la" : "Termen / dată următoare acțiune"}
+      dueDateHint={
+        isItp
+          ? "La salvare, data ITP și stația (furnizor) se actualizează automat în profilul vehiculului."
+          : "Opțional — pentru remindere pe dată (ex. următoarea revizie)."
+      }
+      reminderOffsetsDays={reminderOffsetsDays}
+      onReminderOffsetsDaysChange={setReminderOffsetsDays}
+      dueOdometerKm={dueOdometerKm}
+      onDueOdometerKmChange={setDueOdometerKm}
+      reminderOffsetsKm={reminderOffsetsKm}
+      onReminderOffsetsKmChange={setReminderOffsetsKm}
+      vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+      syncReminderAction={syncReminderAction}
+      onSyncReminderActionChange={setSyncReminderAction}
+      disabled={pending}
+      isItp={isItp}
+    />
+  );
+
+  if (useP1Layout) {
+    return (
+      <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
+        {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
+        <OpsFormPrimaryBand module="maintenance" title="Înregistrare — câmpuri obligatorii">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <OpsFormField label="Titlu" required>
+              <input required value={title} onChange={(e) => setTitle(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Alocare costuri" required>
+              <select required value={costAllocationCode} onChange={(e) => setCostAllocationCode(e.target.value)} className={OPS_INPUT_CLASS}>
+                <option value="" disabled>
+                  Selectați…
+                </option>
+                {MAINTENANCE_COST_ALLOCATION_OPTIONS.map((o) => (
+                  <option key={o.code} value={o.code}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </OpsFormField>
+            <OpsFormField label="Data efectuării">
+              <input type="date" value={performedAt} onChange={(e) => setPerformedAt(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+          </div>
+        </OpsFormPrimaryBand>
+        <OpsFormSection number={3} title="Detalii operaționale">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <OpsFormField label="Odometru km">
+              <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Cost (RON)">
+              <input type="text" inputMode="decimal" value={costCents} onChange={(e) => setCostCents(e.target.value)} placeholder="ex. 320,00" className={OPS_INPUT_MONO_CLASS} />
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+        <OpsFormSection number={4} title="Financiar & atașamente">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <OpsFormField label="Furnizor">
+              <input value={provider} onChange={(e) => setProvider(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Nr. factură">
+              <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Data factură">
+              <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="PDF factură">
+              <input type="file" accept="application/pdf" disabled={uploading} onChange={(e) => void onPickInvoice(e.target.files?.[0] ?? null)} className={`${OPS_INPUT_CLASS} file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:text-zinc-200`} />
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+        <OpsFormCollapsible title="5. Termene & remindere (pliable)">
+          {reminderBlock}
+          <OpsFormField label="Notițe">
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={OPS_INPUT_CLASS} />
+          </OpsFormField>
+        </OpsFormCollapsible>
+        <OpsFormStickyActions submitLabel="Creează intervenția" pendingLabel="Salvez..." cancelHref="/fleet/maintenance" pending={pending} />
+      </form>
+    );
+  }
+
   return (
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
@@ -343,29 +443,7 @@ export function MaintenanceForm(props: Props) {
           Exemplu: <span className="font-mono text-zinc-400">150.00</span>. Folosiți punct sau virgulă pentru zecimale. Lăsați gol dacă nu se aplică.
         </p>
       </div>
-      <OpsReminderFields
-        constraintMode={constraintMode}
-        onConstraintModeChange={setConstraintMode}
-        dueDate={nextDueOn}
-        onDueDateChange={setNextDueOn}
-        dueDateLabel={isItp ? "ITP valabil până la" : "Termen / dată următoare acțiune"}
-        dueDateHint={
-          isItp
-            ? "La salvare, data ITP și stația (furnizor) se actualizează automat în profilul vehiculului."
-            : "Opțional — pentru remindere pe dată (ex. următoarea revizie)."
-        }
-        reminderOffsetsDays={reminderOffsetsDays}
-        onReminderOffsetsDaysChange={setReminderOffsetsDays}
-        dueOdometerKm={dueOdometerKm}
-        onDueOdometerKmChange={setDueOdometerKm}
-        reminderOffsetsKm={reminderOffsetsKm}
-        onReminderOffsetsKmChange={setReminderOffsetsKm}
-        vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
-        syncReminderAction={syncReminderAction}
-        onSyncReminderActionChange={setSyncReminderAction}
-        disabled={pending}
-        isItp={isItp}
-      />
+      {reminderBlock}
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Notițe (opțional)</label>

@@ -13,6 +13,15 @@ import {
 } from "@/lib/ops-reminder-fields";
 import { formatRonFromCents, parseRonToCents } from "@/lib/money";
 import { uploadInvoiceFile } from "@/lib/invoice-upload";
+import {
+  OPS_INPUT_CLASS,
+  OPS_INPUT_MONO_CLASS,
+  OpsFormCollapsible,
+  OpsFormField,
+  OpsFormPrimaryBand,
+  OpsFormSection,
+  OpsFormStickyActions,
+} from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
@@ -276,6 +285,170 @@ export function CostForm(props: Props) {
     }
   }
 
+  const useP1Layout = embedded && !isEdit;
+
+  const categorySelect = (
+    <select
+      required
+      value={category}
+      onChange={(e) => {
+        const v = e.target.value;
+        setCategory(v);
+        if (isItpCostCategory(v) && nextDueOn && reminderOffsetsDays.length === 0) {
+          setReminderOffsetsDays(defaultDayOffsetsForMode(true));
+        }
+      }}
+      className={OPS_INPUT_CLASS}
+    >
+      <option value="" disabled>
+        Alege categoria…
+      </option>
+      {COST_CATEGORY_VALUES.map((c) => (
+        <option key={c} value={c}>
+          {c}
+        </option>
+      ))}
+      {isEdit && props.initial.category && !isKnownCostCategory(props.initial.category) ? (
+        <option value={props.initial.category}>{props.initial.category} (înregistrat)</option>
+      ) : null}
+    </select>
+  );
+
+  const reminderBlock = (
+    <OpsReminderFields
+      constraintMode={constraintMode}
+      onConstraintModeChange={setConstraintMode}
+      dueDate={nextDueOn}
+      onDueDateChange={setNextDueOn}
+      dueDateLabel={isItp ? "ITP valabil până la" : "Termen / dată următoare acțiune"}
+      dueDateHint={
+        isItp
+          ? "La salvare, data ITP și stația (furnizor) se actualizează automat în profilul vehiculului."
+          : "Opțional — pentru remindere pe dată (ex. următoarea plată sau termen)."
+      }
+      reminderOffsetsDays={reminderOffsetsDays}
+      onReminderOffsetsDaysChange={setReminderOffsetsDays}
+      dueOdometerKm={dueOdometerKm}
+      onDueOdometerKmChange={setDueOdometerKm}
+      reminderOffsetsKm={reminderOffsetsKm}
+      onReminderOffsetsKmChange={setReminderOffsetsKm}
+      vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+      syncReminderAction={syncReminderAction}
+      onSyncReminderActionChange={setSyncReminderAction}
+      disabled={pending}
+      isItp={isItp}
+    />
+  );
+
+  if (useP1Layout) {
+    return (
+      <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
+        {error ? (
+          <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p>
+        ) : null}
+
+        <OpsFormPrimaryBand module="costs" title="Înregistrare — câmpuri obligatorii">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <OpsFormField label="Categorie" required>
+              {categorySelect}
+            </OpsFormField>
+            <OpsFormField label="Data costului" required>
+              <input type="date" required value={incurredOn} onChange={(e) => setIncurredOn(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Suma (RON)" required>
+              <input
+                type="text"
+                inputMode="decimal"
+                required
+                value={amountCents}
+                onChange={(e) => setAmountCents(e.target.value)}
+                placeholder="ex. 485,20"
+                className={OPS_INPUT_MONO_CLASS}
+              />
+            </OpsFormField>
+          </div>
+        </OpsFormPrimaryBand>
+
+        <OpsFormSection number={3} title="Detalii operaționale">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {isFuel ? (
+              <OpsFormField label="Litri alimentați" required hint="Folosit pentru consum L/100km în profilul vehiculului.">
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  required
+                  value={fuelLiters}
+                  onChange={(e) => setFuelLiters(e.target.value)}
+                  placeholder="ex. 42,5"
+                  className={OPS_INPUT_MONO_CLASS}
+                />
+              </OpsFormField>
+            ) : null}
+            <OpsFormField label="Km la eveniment">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={odometerKm}
+                onChange={(e) => setOdometerKm(e.target.value)}
+                className={OPS_INPUT_MONO_CLASS}
+              />
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+
+        <OpsFormSection number={4} title="Financiar & atașamente">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <OpsFormField label="Furnizor">
+              <input value={provider} onChange={(e) => setProvider(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Nr. factură">
+              <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="Data factură">
+              <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className={OPS_INPUT_CLASS} />
+            </OpsFormField>
+            <OpsFormField label="PDF factură" hint="Doar PDF, max 10MB.">
+              <input
+                type="file"
+                accept="application/pdf"
+                disabled={uploading}
+                onChange={(e) => void onPickInvoice(e.target.files?.[0] ?? null)}
+                className={`${OPS_INPUT_CLASS} file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:text-zinc-200`}
+              />
+              {uploading ? <p className="mt-1 text-xs text-zinc-500">Încarc factura PDF…</p> : null}
+              {invoiceAttachmentUrl ? (
+                <div className="mt-1 flex items-center gap-3 text-xs">
+                  <a href={invoiceAttachmentUrl} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">
+                    Factură încărcată
+                  </a>
+                  <button type="button" onClick={() => setInvoiceAttachmentUrl("")} className="text-zinc-400 hover:text-zinc-200">
+                    Elimină
+                  </button>
+                </div>
+              ) : null}
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+
+        <OpsFormCollapsible title="5. Termene & remindere (pliable)">
+          {reminderBlock}
+          <OpsFormField label="Notițe">
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={OPS_INPUT_CLASS} />
+          </OpsFormField>
+        </OpsFormCollapsible>
+
+        <OpsFormStickyActions
+          submitLabel="Creează costul"
+          pendingLabel="Salvez..."
+          cancelHref="/fleet/costs"
+          pending={pending}
+        />
+      </form>
+    );
+  }
+
   return (
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
@@ -300,32 +473,7 @@ export function CostForm(props: Props) {
       ) : null}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Categorie</label>
-        <select
-          required
-          value={category}
-          onChange={(e) => {
-            const v = e.target.value;
-            setCategory(v);
-            if (isItpCostCategory(v) && nextDueOn && reminderOffsetsDays.length === 0) {
-              setReminderOffsetsDays(defaultDayOffsetsForMode(true));
-            }
-          }}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-        >
-          <option value="" disabled>
-            Alege categoria…
-          </option>
-          {COST_CATEGORY_VALUES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-          {props.mode === "edit" &&
-          props.initial.category &&
-          !isKnownCostCategory(props.initial.category) ? (
-            <option value={props.initial.category}>{props.initial.category} (înregistrat)</option>
-          ) : null}
-        </select>
+        {categorySelect}
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Furnizor (opțional)</label>
@@ -391,29 +539,7 @@ export function CostForm(props: Props) {
           </div>
         ) : null}
       </div>
-      <OpsReminderFields
-        constraintMode={constraintMode}
-        onConstraintModeChange={setConstraintMode}
-        dueDate={nextDueOn}
-        onDueDateChange={setNextDueOn}
-        dueDateLabel={isItp ? "ITP valabil până la" : "Termen / dată următoare acțiune"}
-        dueDateHint={
-          isItp
-            ? "La salvare, data ITP și stația (furnizor) se actualizează automat în profilul vehiculului."
-            : "Opțional — pentru remindere pe dată (ex. următoarea plată sau termen)."
-        }
-        reminderOffsetsDays={reminderOffsetsDays}
-        onReminderOffsetsDaysChange={setReminderOffsetsDays}
-        dueOdometerKm={dueOdometerKm}
-        onDueOdometerKmChange={setDueOdometerKm}
-        reminderOffsetsKm={reminderOffsetsKm}
-        onReminderOffsetsKmChange={setReminderOffsetsKm}
-        vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
-        syncReminderAction={syncReminderAction}
-        onSyncReminderActionChange={setSyncReminderAction}
-        disabled={pending}
-        isItp={isItp}
-      />
+      {reminderBlock}
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Notițe (opțional)</label>
