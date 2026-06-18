@@ -8,6 +8,7 @@ import { isItpCostCategory, syncItpCertDocument, syncVehicleItpFromOps } from '.
 import { isFuelCostCategory } from './fuel-ops';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
+import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
 import {
@@ -408,9 +409,6 @@ export class CostsService {
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchCostInput, actorUserId?: string) {
-    if (dto.vehicleId) {
-      await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
-    }
     if (dto.amountCents !== undefined) {
       if (!Number.isFinite(dto.amountCents) || dto.amountCents < 0) {
         throw new BadRequestException('amountCents must be a non-negative integer');
@@ -428,6 +426,8 @@ export class CostsService {
     });
     if (!before) throw new NotFoundException('Cost entry not found');
 
+    rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
+
     const nextCategory = dto.category !== undefined ? dto.category.trim() : before.category;
     let fuelLiters: number | null | undefined = undefined;
     if (dto.fuelLiters !== undefined || dto.category !== undefined) {
@@ -440,7 +440,6 @@ export class CostsService {
     }
 
     const data: Prisma.CostEntryUncheckedUpdateManyInput = {
-      vehicleId: dto.vehicleId,
       category: dto.category !== undefined ? dto.category.trim() : undefined,
       provider: dto.provider,
       amountCents: dto.amountCents !== undefined ? Math.round(dto.amountCents) : undefined,

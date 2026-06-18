@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_REMINDER_OFFSETS, normalizeReminderOffsets } from './document-reminders';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
+import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import {
   computeReminderActionSummary,
@@ -360,8 +361,9 @@ export class RemindersService {
     });
     if (!before) throw new NotFoundException('Reminder not found');
 
-    const vehicleId = dto.vehicleId ?? before.vehicleId;
-    if (dto.vehicleId) await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
+    rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
+
+    const vehicleId = before.vehicleId;
     await this.validateLinks(before.tenantId, { ...dto, vehicleId, sourceType: dto.sourceType ?? before.sourceType });
 
     const row = await this.prisma.reminderAction.update({
@@ -754,7 +756,6 @@ export class RemindersService {
 
   private buildPatchData(dto: PatchReminderInput): Prisma.ReminderActionUpdateInput {
     const data: Prisma.ReminderActionUpdateInput = {};
-    if (dto.vehicleId !== undefined) data.vehicle = { connect: { id: dto.vehicleId } };
     if (dto.sourceType !== undefined) data.sourceType = dto.sourceType;
     if (dto.title !== undefined) data.title = dto.title.trim();
     if (dto.notes !== undefined) data.notes = dto.notes;

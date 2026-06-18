@@ -12,6 +12,7 @@ import {
 import { normalizeReminderOffsetsKm } from './reminder-status';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
+import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
 import { syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
@@ -356,20 +357,17 @@ export class DocumentsService {
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchDocumentInput, actorUserId?: string) {
-    if (dto.vehicleId) {
-      await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
-    }
-
     const before = await this.prisma.vehicleDocument.findFirst({
       where: { id, vehicle: { tenant: { slug: tenantSlug } } },
       include: { vehicle: { select: { registrationNumber: true, tenantId: true } } },
     });
     if (!before) throw new NotFoundException('Document not found');
 
+    rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
+
     const row = await this.prisma.vehicleDocument.update({
       where: { id },
       data: {
-        vehicleId: dto.vehicleId,
         documentTypeCode: dto.documentTypeCode,
         title: dto.title,
         expiresOn:

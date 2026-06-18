@@ -7,6 +7,7 @@ import { normalizeReminderOffsetsKm } from './reminder-status';
 import { isItpMaintenanceAllocation, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
+import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import type { MaintenanceCostAllocationCode } from './maintenance-cost-allocation';
 import { RemindersService } from './reminders.service';
@@ -414,15 +415,13 @@ export class MaintenanceService {
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchMaintenanceInput, actorUserId?: string) {
-    if (dto.vehicleId) {
-      await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
-    }
-
     const before = await this.prisma.maintenanceEntry.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
       include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
     });
     if (!before) throw new NotFoundException('Maintenance entry not found');
+
+    rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
 
     const effectiveAlloc = dto.costAllocationCode ?? before.costAllocationCode;
     const isDauna = effectiveAlloc === 'dauna';
@@ -436,7 +435,6 @@ export class MaintenanceService {
     };
 
     const data: Prisma.MaintenanceEntryUncheckedUpdateManyInput = {
-      vehicleId: dto.vehicleId,
       title: dto.title,
       provider: dto.provider,
       costAllocationCode: dto.costAllocationCode,

@@ -95,7 +95,7 @@ export function ReminderForm(props: Props) {
 
   const [vehicleId, setVehicleId] = useState(initial.vehicleId);
   const selectedVehicleLocal = props.vehicles.find((v) => v.id === vehicleId);
-  const { embedded, vehicleId: boundVehicleId } = useOpsFormVehicleBinding({
+  const { embedded, vehicleLocked, vehicleId: boundVehicleId } = useOpsFormVehicleBinding({
     vehicleId,
     selectedVehicle: selectedVehicleLocal,
   });
@@ -189,7 +189,7 @@ export function ReminderForm(props: Props) {
     }
 
     const payload = {
-      vehicleId: boundVehicleId,
+      ...(isEdit ? {} : { vehicleId: boundVehicleId }),
       sourceType,
       title: title.trim(),
       notes: notes.trim() ? notes.trim() : null,
@@ -362,25 +362,40 @@ export function ReminderForm(props: Props) {
         </p>
       ) : null}
       {!embedded ? (
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
-          <select
-            value={vehicleId}
-            disabled={isDocumentLinked || pending}
-            onChange={(e) => {
-              setVehicleId(e.target.value);
-              setVehicleDocumentId("");
-              setMaintenanceEntryId("");
-            }}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-          >
-            {props.vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.registrationNumber} · {v.clientId}
-              </option>
-            ))}
-          </select>
-        </div>
+        isEdit || vehicleLocked ? (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2">
+              <span className="font-mono text-sm font-semibold text-zinc-100">
+                {props.vehicles.find((v) => v.id === vehicleId)?.registrationNumber ?? "—"}
+              </span>
+              <span className="shrink-0 rounded-full border border-sky-800/60 bg-sky-950/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-300/90">
+                Fixat
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500">Vehiculul înregistrării nu poate fi schimbat la editare.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
+            <select
+              value={vehicleId}
+              disabled={isDocumentLinked || pending}
+              onChange={(e) => {
+                setVehicleId(e.target.value);
+                setVehicleDocumentId("");
+                setMaintenanceEntryId("");
+              }}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+            >
+              {props.vehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.registrationNumber} · {v.clientId}
+                </option>
+              ))}
+            </select>
+          </div>
+        )
       ) : null}
 
       <div className="space-y-2">

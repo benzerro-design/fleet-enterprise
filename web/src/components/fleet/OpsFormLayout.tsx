@@ -51,6 +51,7 @@ export function OpsFormModuleHeader({
 }
 
 export function OpsFormLayout({ module, formTitle, mode = "create", vehicles, defaultVehicleId, children }: Props) {
+  const vehicleLocked = mode === "edit";
   const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? vehicles[0]?.id ?? "");
 
   const selectedVehicle = useMemo(
@@ -61,12 +62,13 @@ export function OpsFormLayout({ module, formTitle, mode = "create", vehicles, de
   const ctx = useMemo(
     () => ({
       vehicleId,
-      setVehicleId,
+      setVehicleId: vehicleLocked ? () => {} : setVehicleId,
       vehicles,
       selectedVehicle,
       embedded: true,
+      vehicleLocked,
     }),
-    [vehicleId, vehicles, selectedVehicle],
+    [vehicleId, vehicles, selectedVehicle, vehicleLocked],
   );
 
   return (
@@ -78,6 +80,7 @@ export function OpsFormLayout({ module, formTitle, mode = "create", vehicles, de
             vehicleId={vehicleId}
             onVehicleIdChange={setVehicleId}
             vehicles={vehicles}
+            vehicleLocked={vehicleLocked}
           />
         </aside>
         <div className="min-w-0 flex-1 lg:w-[60%]">

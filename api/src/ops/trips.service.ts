@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
+import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 
 const MAX_PAGE_SIZE = 200;
@@ -328,10 +329,6 @@ export class TripsService {
   }
 
   async patch(tenantSlug: string, tripId: string, dto: PatchTripInput, actorUserId?: string) {
-    if (dto.vehicleId) {
-      await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
-    }
-
     const before = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },
       include: {
@@ -341,8 +338,9 @@ export class TripsService {
     });
     if (!before) throw new NotFoundException('Trip not found');
 
+    rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
+
     const data: Prisma.TripUncheckedUpdateManyInput = {
-      vehicleId: dto.vehicleId,
       reference: dto.reference,
       startedAt: dto.startedAt !== undefined ? new Date(dto.startedAt) : undefined,
       endedAt:

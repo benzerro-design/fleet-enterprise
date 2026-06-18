@@ -15,6 +15,7 @@ type OpsFormContextValue = {
   vehicles: OpsVehicleOption[];
   selectedVehicle: OpsVehicleOption | undefined;
   embedded: boolean;
+  vehicleLocked: boolean;
 };
 
 const OpsFormContext = createContext<OpsFormContextValue | null>(null);
@@ -42,6 +43,7 @@ export function useOpsFormVehicleBinding(local: {
   const embedded = Boolean(ctx?.embedded);
   return {
     embedded,
+    vehicleLocked: ctx?.vehicleLocked ?? false,
     vehicleId: embedded && ctx ? ctx.vehicleId : local.vehicleId,
     selectedVehicle: embedded && ctx ? ctx.selectedVehicle : local.selectedVehicle,
     formClassName: embedded ? "space-y-6" : "mx-auto max-w-xl space-y-6",

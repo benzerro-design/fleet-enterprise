@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import type { OpsFormModuleKey } from "@/lib/ops-section-theme";
+import type { OpsVehicleOption } from "@/lib/ops-form-context";
 
 export const OPS_INPUT_CLASS =
   "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2";
@@ -165,5 +166,62 @@ export function OpsFormStickyActions({
         Anulează
       </Link>
     </div>
+  );
+}
+
+export function OpsFormVehicleField({
+  vehicles,
+  vehicleId,
+  onVehicleIdChange,
+  locked,
+}: {
+  vehicles: OpsVehicleOption[];
+  vehicleId: string;
+  onVehicleIdChange: (id: string) => void;
+  locked?: boolean;
+}) {
+  const selected = vehicles.find((v) => v.id === vehicleId);
+
+  return (
+    <>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
+        {locked ? (
+          <>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2">
+              <span className="font-mono text-sm font-semibold text-zinc-100">
+                {selected?.registrationNumber ?? "—"}
+              </span>
+              <span className="shrink-0 rounded-full border border-sky-800/60 bg-sky-950/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-300/90">
+                Fixat
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500">Vehiculul înregistrării nu poate fi schimbat la editare.</p>
+          </>
+        ) : (
+          <select
+            required
+            value={vehicleId}
+            onChange={(e) => onVehicleIdChange(e.target.value)}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+          >
+            {vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.registrationNumber}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Client</label>
+        <input
+          value={selected?.clientId ?? ""}
+          readOnly
+          className="w-full cursor-not-allowed rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 outline-none"
+        />
+      </div>
+    </>
   );
 }

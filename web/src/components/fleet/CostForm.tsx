@@ -21,6 +21,7 @@ import {
   OpsFormPrimaryBand,
   OpsFormSection,
   OpsFormStickyActions,
+  OpsFormVehicleField,
 } from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
@@ -129,7 +130,7 @@ export function CostForm(props: Props) {
 
   const [vehicleId, setVehicleId] = useState(initial.vehicleId);
   const selectedVehicleLocal = props.vehicles.find((v) => v.id === vehicleId) ?? null;
-  const { embedded, vehicleId: boundVehicleId, selectedVehicle, formClassName } = useOpsFormVehicleBinding({
+  const { embedded, vehicleLocked, vehicleId: boundVehicleId, selectedVehicle, formClassName } = useOpsFormVehicleBinding({
     vehicleId,
     selectedVehicle: selectedVehicleLocal,
   });
@@ -232,7 +233,7 @@ export function CostForm(props: Props) {
     });
 
     const body: Record<string, unknown> = {
-      vehicleId: boundVehicleId,
+      ...(isEdit ? {} : { vehicleId: boundVehicleId }),
       category: category.trim(),
       provider: provider.trim() || null,
       amountCents: amount,
@@ -453,23 +454,12 @@ export function CostForm(props: Props) {
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
       {!embedded ? (
-        <>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
-            <select required value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
-              {props.vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
-              {props.vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.registrationNumber}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-zinc-300">Client</label>
-            <input value={selectedVehicleLocal?.clientId ?? ""} readOnly className="w-full cursor-not-allowed rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300 outline-none" />
-          </div>
-        </>
+        <OpsFormVehicleField
+          vehicles={props.vehicles}
+          vehicleId={vehicleId}
+          onVehicleIdChange={setVehicleId}
+          locked={isEdit || vehicleLocked}
+        />
       ) : null}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Categorie</label>

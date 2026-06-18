@@ -22,6 +22,7 @@ type Props = {
   vehicleId: string;
   onVehicleIdChange: (id: string) => void;
   vehicles: OpsVehicleOption[];
+  vehicleLocked?: boolean;
 };
 
 function BriefChevron({ open }: { open: boolean }) {
@@ -283,7 +284,7 @@ function fmtDateRo(iso: string | null): string {
   return new Date(iso).toLocaleDateString("ro-RO");
 }
 
-export function VehicleFormBrief({ activeModule, vehicleId, onVehicleIdChange, vehicles }: Props) {
+export function VehicleFormBrief({ activeModule, vehicleId, onVehicleIdChange, vehicles, vehicleLocked = false }: Props) {
   const [payload, setPayload] = useState<VehicleFormBriefPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -314,20 +315,36 @@ export function VehicleFormBrief({ activeModule, vehicleId, onVehicleIdChange, v
   return (
     <div className="space-y-3">
       <div>
-        <label className="mb-1 block text-[11px] font-semibold text-zinc-300">Vehicul *</label>
-        <select
-          required
-          value={vehicleId}
-          onChange={(e) => onVehicleIdChange(e.target.value)}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-        >
-          {vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
-          {vehicles.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.registrationNumber}
-            </option>
-          ))}
-        </select>
+        <label className="mb-1 block text-[11px] font-semibold text-zinc-300">Vehicul{vehicleLocked ? "" : " *"}</label>
+        {vehicleLocked ? (
+          <>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2">
+              <span className="font-mono text-sm font-semibold text-zinc-100">
+                {vehicles.find((v) => v.id === vehicleId)?.registrationNumber ??
+                  payload?.vehicle.registrationNumber ??
+                  "—"}
+              </span>
+              <span className="shrink-0 rounded-full border border-sky-800/60 bg-sky-950/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-300/90">
+                Fixat
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] text-zinc-500">Înregistrarea rămâne pe acest vehicul.</p>
+          </>
+        ) : (
+          <select
+            required
+            value={vehicleId}
+            onChange={(e) => onVehicleIdChange(e.target.value)}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+          >
+            {vehicles.length === 0 ? <option value="">Nu există vehicule</option> : null}
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.registrationNumber}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading ? <p className="text-[11px] text-zinc-500">Se încarcă contextul vehiculului…</p> : null}
