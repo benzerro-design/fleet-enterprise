@@ -26,7 +26,7 @@
 |---|------|-----|
 | 9 | Client a reușit login fără asistență | ☐ |
 | 10 | ≥ 1 FAZ sau foaie parcurs generată pe perioadă reală | ☐ |
-| 11 | Feedback centralizat (notițe / call 30 min la 2 săptămâni) | ☐ |
+| 11 | Feedback centralizat (notițe / call 30 min la 2 săptămâni) | ☑ feedback scurt §5.1 (2026-06) |
 
 ---
 
@@ -126,7 +126,24 @@ Cu stimă,
 | 4 | Curse + cost combustibil pe o perioadă scurtă |
 | 5 | Generare FAZ sau foaie parcurs → descărcare PDF |
 | 6 | Login șofer (alt browser) — confirmare că nu poate modifica |
-| 7 | Feedback scurt către *[CONTACT]*: ce e util, ce lipsește |
+| 7 | Feedback scurt către *[CONTACT]*: ce e util, ce lipsește — ☑ **2026-06**, sinteză §5.1 |
+
+### 5.1 Feedback scurt — sinteză (2026-06)
+
+**Stare:** punctul 7 atins cu maturitate — observațiile și ajustările din perioada recentă sunt consolidate aici (nu backlog separat ad-hoc).
+
+| Temă | Ce s-a observat | Răspuns livrat |
+|------|-----------------|----------------|
+| **Formulare ops (create)** | Context vehicul greu de urmărit; câmpuri critice pierdute în form lung | Layout 40/60: brief vehicul stânga + bandă P1 dreapta (costuri, mentenanță, documente, remindere, curse) |
+| **Formulare ops (edit)** | Același UX ca la create; vehicul schimbabil induce confuzie | Layout ops + P1 la edit; **vehicul fixat** (read-only UI, PATCH fără `vehicleId`, API respinge schimbarea) |
+| **Profil vehicul** | Lipsă date achiziție și dovezi foto | Taburi **Date achiziție** + **Fotografii** |
+| **Mentenanță** | Garanție și daune — câmpuri lipsă în flux operațional | `warrantyRepair`, cost potențial, nr. dosar daună, asigurator |
+| **Istoric vehicul (scalare)** | La sute de linii, preview/brief devine limitant | **Neacționat** — de analizat la scalare flotă (nu blocker pilot curent) |
+| **Curse / consum** | Consum derivat pe cursă, nu doar agregare alimentări | Rămâne în backlog §10 roadmap (epic post-pilot) |
+
+**Util pentru client (feedback pozitiv):** modulele ops sunt utilizabile cap-coadă pe 1 vehicul; formularele sunt mai clare; profil vehicul mai complet.
+
+**Ce lipsește (transmis / de confirmat cu client):** consum pe distanță în Curse, scalare liste mari, tracking GPS — conform limitărilor pilot §4.
 
 ---
 

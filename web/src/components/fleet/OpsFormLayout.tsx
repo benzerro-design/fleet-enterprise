@@ -52,7 +52,7 @@ export function OpsFormModuleHeader({
 
 export function OpsFormLayout({ module, formTitle, mode = "create", vehicles, defaultVehicleId, children }: Props) {
   const vehicleLocked = mode === "edit";
-  const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? vehicles[0]?.id ?? "");
+  const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? "");
 
   const selectedVehicle = useMemo(
     () => vehicles.find((v) => v.id === vehicleId),

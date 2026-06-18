@@ -69,7 +69,7 @@ export function DocumentForm(props: Props) {
   const initial = useMemo(() => {
     if (props.mode === "create") {
       return {
-        vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
+        vehicleId: props.defaultVehicleId ?? "",
         documentTypeCode: "rca",
         title: "",
         expiresOn: "",
@@ -141,6 +141,12 @@ export function DocumentForm(props: Props) {
     setPending(true);
     setError(null);
 
+    if (!isEdit && !boundVehicleId) {
+      setError("Selectează vehiculul.");
+      setPending(false);
+      return;
+    }
+
     const expiryIso =
       constraintMode !== "km" && expiresOn.trim() ? new Date(expiresOn).toISOString() : null;
     if (constraintMode !== "km" && expiresOn.trim() && !expiryIso) {
@@ -186,9 +192,9 @@ export function DocumentForm(props: Props) {
       }
       const data = (await res.json()) as { id: string; reminderSyncFailed?: boolean };
       if (data.reminderSyncFailed) {
-        router.push(`/fleet/documents/${data.id}?reminderSync=failed`);
+        router.push("/fleet/documents?reminderSync=failed");
       } else {
-        router.push(`/fleet/documents/${data.id}`);
+        router.push("/fleet/documents");
       }
       router.refresh();
     } catch {
@@ -267,9 +273,9 @@ export function DocumentForm(props: Props) {
         <OpsFormStickyActions
           submitLabel={isEdit ? "Salvează modificările" : "Creează documentul"}
           pendingLabel="Se salvează…"
-          cancelHref={isEdit ? `/fleet/documents/${props.documentId}` : "/fleet/documents"}
+          cancelHref="/fleet/documents"
           pending={pending}
-          disabled={props.vehicles.length === 0}
+          disabled={props.vehicles.length === 0 || (!isEdit && !boundVehicleId)}
         />
       </form>
     );
@@ -367,7 +373,7 @@ export function DocumentForm(props: Props) {
       <div className="flex flex-wrap gap-2">
         <button
           type="submit"
-          disabled={pending || uploading || props.vehicles.length === 0}
+          disabled={pending || uploading || props.vehicles.length === 0 || (!isEdit && !boundVehicleId)}
           className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
         >
           {pending ? "Se salvează…" : isEdit ? "Salvează" : "Adaugă document"}

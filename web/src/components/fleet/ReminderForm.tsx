@@ -62,7 +62,7 @@ export function ReminderForm(props: Props) {
   const initial = useMemo(() => {
     if (props.mode === "create") {
       return {
-        vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
+        vehicleId: props.defaultVehicleId ?? "",
         sourceType: "custom" as ReminderSourceType,
         title: "",
         notes: "",
@@ -217,10 +217,7 @@ export function ReminderForm(props: Props) {
         return;
       }
       await res.json();
-      const back = boundVehicleId
-        ? `/fleet/vehicles/${boundVehicleId}#reminders`
-        : `/fleet/reminders?status=all`;
-      router.push(back);
+      router.push(isEdit ? "/fleet/reminders" : boundVehicleId ? `/fleet/vehicles/${boundVehicleId}#reminders` : "/fleet/reminders");
       router.refresh();
     } catch {
       setError("Nu am putut salva.");
@@ -345,7 +342,7 @@ export function ReminderForm(props: Props) {
         <OpsFormStickyActions
           submitLabel={isEdit ? "Salvează modificările" : "Creează acțiunea"}
           pendingLabel="Se salvează…"
-          cancelHref={isEdit ? `/fleet/reminders/${props.reminderId}` : "/fleet/reminders"}
+          cancelHref="/fleet/reminders"
           pending={pending}
           disabled={!boundVehicleId || !title.trim()}
           submitClassName="rounded-lg bg-fuchsia-600 px-4 py-2 text-sm font-medium text-white hover:bg-fuchsia-500 disabled:opacity-50"
@@ -580,7 +577,7 @@ export function ReminderForm(props: Props) {
           {pending ? "Se salvează…" : isEdit ? "Salvează" : "Creează acțiune"}
         </button>
         <Link
-          href={isEdit ? `/fleet/reminders/${props.reminderId}` : "/fleet/reminders"}
+          href="/fleet/reminders"
           className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
         >
           Anulează

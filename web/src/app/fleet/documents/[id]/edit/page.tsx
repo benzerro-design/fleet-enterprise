@@ -44,10 +44,10 @@ export default async function EditDocumentPage({ params }: { params: Promise<{ i
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Conformitate</p>
         <Link
-          href={`/fleet/documents/${id}`}
+          href="/fleet/documents"
           className="inline-flex w-fit items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
         >
-          Înapoi la detaliu
+          Înapoi la listă
         </Link>
       </div>
       <OpsFormLayout

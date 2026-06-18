@@ -91,7 +91,7 @@ export function CostForm(props: Props) {
   const initial = useMemo(() => {
     if (props.mode === "create") {
       return {
-        vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
+        vehicleId: props.defaultVehicleId ?? "",
         category: props.defaultCategory ?? "",
         provider: "",
         amountCents: "",
@@ -189,6 +189,12 @@ export function CostForm(props: Props) {
 
     if (!when) {
       setError("Data costului este invalidă.");
+      setPending(false);
+      return;
+    }
+
+    if (!isEdit && !boundVehicleId) {
+      setError("Selectează vehiculul.");
       setPending(false);
       return;
     }
@@ -443,7 +449,7 @@ export function CostForm(props: Props) {
         <OpsFormStickyActions
           submitLabel={isEdit ? "Salvează modificările" : "Creează costul"}
           pendingLabel="Salvez..."
-          cancelHref={isEdit ? `/fleet/costs/${props.entryId}` : "/fleet/costs"}
+          cancelHref="/fleet/costs"
           pending={pending}
         />
       </form>

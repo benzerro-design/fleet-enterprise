@@ -238,6 +238,7 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 |------|------------|----------------|
 | 2026-06 | Tenant **FlotaX** — smoke cap-coadă pe 1 vehicul (costuri, documente, remindere, curse, mentenanță). Totul OK. | Go-live pilot fezabil; îmbunătățiri incrementale |
 | 2026-06 | **Revenire obligatorie:** consum combustibil în modul Curse — acum FAZ agregă litri din `CostEntry` categorie `combustibil`, nu consum derivat pe cursă. | Epic §10 — fazat manual → telemetrie |
+| 2026-06 | **Feedback scurt pilot (handoff §5.1):** formulare ops 40/60 + P1, profil vehicul (achiziție/foto), mentenanță garanție/daună, vehicul imuabil la edit. Istoric la scară mare — amânat. | Livrat Q3 incremental; consum curse rămâne epic §10 |
 
 ---
 

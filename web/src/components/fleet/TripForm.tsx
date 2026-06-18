@@ -61,7 +61,7 @@ export function TripForm(props: Props) {
   const initial = useMemo(() => {
     if (props.mode === "create") {
       return {
-        vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
+        vehicleId: props.defaultVehicleId ?? "",
         reference: "",
         startedAt: toDatetimeLocalInput(new Date().toISOString()),
         endedAt: "",
@@ -116,6 +116,12 @@ export function TripForm(props: Props) {
     e.preventDefault();
     setPending(true);
     setError(null);
+
+    if (!isEdit && !boundVehicleId) {
+      setError("Selectează vehiculul.");
+      setPending(false);
+      return;
+    }
 
     const startIso = toIsoFromDatetimeLocal(startedAt);
     if (!startIso) {
@@ -263,7 +269,7 @@ export function TripForm(props: Props) {
         <OpsFormStickyActions
           submitLabel={isEdit ? "Salvează modificările" : "Creează cursa"}
           pendingLabel="Salvez..."
-          cancelHref={isEdit ? `/fleet/trips/${props.tripId}` : "/fleet/trips"}
+          cancelHref="/fleet/trips"
           pending={pending}
         />
       </form>

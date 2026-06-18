@@ -92,7 +92,7 @@ export function MaintenanceForm(props: Props) {
   const initial = useMemo(() => {
     if (props.mode === "create") {
       return {
-        vehicleId: props.defaultVehicleId ?? props.vehicles[0]?.id ?? "",
+        vehicleId: props.defaultVehicleId ?? "",
         title: "",
         provider: "",
         costAllocationCode: "",
@@ -197,6 +197,12 @@ export function MaintenanceForm(props: Props) {
     e.preventDefault();
     setPending(true);
     setError(null);
+
+    if (!isEdit && !boundVehicleId) {
+      setError("Selectează vehiculul.");
+      setPending(false);
+      return;
+    }
 
     if (!costAllocationCode.trim()) {
       setError("Selectați criteriul de alocare costuri.");
@@ -458,7 +464,7 @@ export function MaintenanceForm(props: Props) {
         <OpsFormStickyActions
           submitLabel={isEdit ? "Salvează modificările" : "Creează intervenția"}
           pendingLabel="Salvez..."
-          cancelHref={isEdit ? `/fleet/maintenance/${props.entryId}` : "/fleet/maintenance"}
+          cancelHref="/fleet/maintenance"
           pending={pending}
         />
       </form>
