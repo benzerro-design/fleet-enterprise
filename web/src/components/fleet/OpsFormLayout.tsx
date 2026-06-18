@@ -12,13 +12,23 @@ import {
 type Props = {
   module: OpsFormModuleKey;
   formTitle: string;
+  mode?: "create" | "edit";
   vehicles: OpsVehicleOption[];
   defaultVehicleId?: string;
   children: ReactNode;
 };
 
-export function OpsFormModuleHeader({ module, formTitle }: { module: OpsFormModuleKey; formTitle: string }) {
+export function OpsFormModuleHeader({
+  module,
+  formTitle,
+  mode = "create",
+}: {
+  module: OpsFormModuleKey;
+  formTitle: string;
+  mode?: "create" | "edit";
+}) {
   const accent = OPS_SECTION_ACCENT[module];
+  const isEdit = mode === "edit";
   return (
     <div className="mb-6 flex items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -27,14 +37,20 @@ export function OpsFormModuleHeader({ module, formTitle }: { module: OpsFormModu
           {OPS_FORM_SECTION_LABELS[module]} — {formTitle}
         </h2>
       </div>
-      <span className="shrink-0 rounded-full border border-zinc-700 bg-zinc-900/60 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-        Draft
+      <span
+        className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+          isEdit
+            ? "border-sky-800/60 bg-sky-950/40 text-sky-300/90"
+            : "border-zinc-700 bg-zinc-900/60 text-zinc-500"
+        }`}
+      >
+        {isEdit ? "Editare" : "Draft"}
       </span>
     </div>
   );
 }
 
-export function OpsFormLayout({ module, formTitle, vehicles, defaultVehicleId, children }: Props) {
+export function OpsFormLayout({ module, formTitle, mode = "create", vehicles, defaultVehicleId, children }: Props) {
   const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? vehicles[0]?.id ?? "");
 
   const selectedVehicle = useMemo(
@@ -65,7 +81,7 @@ export function OpsFormLayout({ module, formTitle, vehicles, defaultVehicleId, c
           />
         </aside>
         <div className="min-w-0 flex-1 lg:w-[60%]">
-          <OpsFormModuleHeader module={module} formTitle={formTitle} />
+          <OpsFormModuleHeader module={module} formTitle={formTitle} mode={mode} />
           {children}
         </div>
       </div>

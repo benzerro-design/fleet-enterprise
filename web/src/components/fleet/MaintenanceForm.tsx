@@ -310,7 +310,7 @@ export function MaintenanceForm(props: Props) {
     }
   }
 
-  const useP1Layout = embedded && !isEdit;
+  const useP1Layout = embedded;
 
   const reminderBlock = (
     <OpsReminderFields
@@ -342,7 +342,7 @@ export function MaintenanceForm(props: Props) {
     return (
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-        <OpsFormPrimaryBand module="maintenance" title="Înregistrare — câmpuri obligatorii">
+        <OpsFormPrimaryBand module="maintenance" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <OpsFormField label="Titlu" required>
               <input required value={title} onChange={(e) => setTitle(e.target.value)} className={OPS_INPUT_CLASS} />
@@ -454,7 +454,12 @@ export function MaintenanceForm(props: Props) {
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={OPS_INPUT_CLASS} />
           </OpsFormField>
         </OpsFormCollapsible>
-        <OpsFormStickyActions submitLabel="Creează intervenția" pendingLabel="Salvez..." cancelHref="/fleet/maintenance" pending={pending} />
+        <OpsFormStickyActions
+          submitLabel={isEdit ? "Salvează modificările" : "Creează intervenția"}
+          pendingLabel="Salvez..."
+          cancelHref={isEdit ? `/fleet/maintenance/${props.entryId}` : "/fleet/maintenance"}
+          pending={pending}
+        />
       </form>
     );
   }

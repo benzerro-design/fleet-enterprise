@@ -285,7 +285,7 @@ export function CostForm(props: Props) {
     }
   }
 
-  const useP1Layout = embedded && !isEdit;
+  const useP1Layout = embedded;
 
   const categorySelect = (
     <select
@@ -347,7 +347,7 @@ export function CostForm(props: Props) {
           <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p>
         ) : null}
 
-        <OpsFormPrimaryBand module="costs" title="Înregistrare — câmpuri obligatorii">
+        <OpsFormPrimaryBand module="costs" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <OpsFormField label="Categorie" required>
               {categorySelect}
@@ -440,9 +440,9 @@ export function CostForm(props: Props) {
         </OpsFormCollapsible>
 
         <OpsFormStickyActions
-          submitLabel="Creează costul"
+          submitLabel={isEdit ? "Salvează modificările" : "Creează costul"}
           pendingLabel="Salvez..."
-          cancelHref="/fleet/costs"
+          cancelHref={isEdit ? `/fleet/costs/${props.entryId}` : "/fleet/costs"}
           pending={pending}
         />
       </form>

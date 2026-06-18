@@ -197,7 +197,7 @@ export function DocumentForm(props: Props) {
     }
   }
 
-  const useP1Layout = embedded && !isEdit;
+  const useP1Layout = embedded;
 
   const reminderBlock = (
     <OpsReminderFields
@@ -224,7 +224,7 @@ export function DocumentForm(props: Props) {
     return (
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-        <OpsFormPrimaryBand module="documents" title="Înregistrare — câmpuri obligatorii">
+        <OpsFormPrimaryBand module="documents" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <OpsFormField label="Tip document" required>
               <select
@@ -263,7 +263,13 @@ export function DocumentForm(props: Props) {
           </div>
         </OpsFormSection>
         <OpsFormCollapsible title="5. Termene & remindere (pliable)">{reminderBlock}</OpsFormCollapsible>
-        <OpsFormStickyActions submitLabel="Creează documentul" pendingLabel="Se salvează…" cancelHref="/fleet/documents" pending={pending} disabled={props.vehicles.length === 0} />
+        <OpsFormStickyActions
+          submitLabel={isEdit ? "Salvează modificările" : "Creează documentul"}
+          pendingLabel="Se salvează…"
+          cancelHref={isEdit ? `/fleet/documents/${props.documentId}` : "/fleet/documents"}
+          pending={pending}
+          disabled={props.vehicles.length === 0}
+        />
       </form>
     );
   }

@@ -196,13 +196,13 @@ export function TripForm(props: Props) {
     }
   }
 
-  const useP1Layout = embedded && !isEdit;
+  const useP1Layout = embedded;
 
   if (useP1Layout) {
     return (
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-        <OpsFormPrimaryBand module="trips" title="Înregistrare — câmpuri obligatorii">
+        <OpsFormPrimaryBand module="trips" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <OpsFormField label="Start" required>
               <input type="datetime-local" required value={startedAt} onChange={(e) => setStartedAt(e.target.value)} className={OPS_INPUT_CLASS} />
@@ -259,7 +259,12 @@ export function TripForm(props: Props) {
             </OpsFormField>
           </div>
         </OpsFormSection>
-        <OpsFormStickyActions submitLabel="Creează cursa" pendingLabel="Salvez..." cancelHref="/fleet/trips" pending={pending} />
+        <OpsFormStickyActions
+          submitLabel={isEdit ? "Salvează modificările" : "Creează cursa"}
+          pendingLabel="Salvez..."
+          cancelHref={isEdit ? `/fleet/trips/${props.tripId}` : "/fleet/trips"}
+          pending={pending}
+        />
       </form>
     );
   }

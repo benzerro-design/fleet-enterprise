@@ -229,13 +229,13 @@ export function ReminderForm(props: Props) {
     }
   }
 
-  const useP1Layout = embedded && !isEdit;
+  const useP1Layout = embedded;
 
   if (useP1Layout) {
     return (
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-        <OpsFormPrimaryBand module="reminders" title="Înregistrare — câmpuri obligatorii">
+        <OpsFormPrimaryBand module="reminders" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpsFormField label="Tip acțiune" required>
               <select
@@ -343,9 +343,9 @@ export function ReminderForm(props: Props) {
           </OpsFormField>
         </OpsFormCollapsible>
         <OpsFormStickyActions
-          submitLabel="Creează acțiunea"
+          submitLabel={isEdit ? "Salvează modificările" : "Creează acțiunea"}
           pendingLabel="Se salvează…"
-          cancelHref="/fleet/reminders"
+          cancelHref={isEdit ? `/fleet/reminders/${props.reminderId}` : "/fleet/reminders"}
           pending={pending}
           disabled={!boundVehicleId || !title.trim()}
           submitClassName="rounded-lg bg-fuchsia-600 px-4 py-2 text-sm font-medium text-white hover:bg-fuchsia-500 disabled:opacity-50"

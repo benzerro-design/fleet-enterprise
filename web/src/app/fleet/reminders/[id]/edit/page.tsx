@@ -1,12 +1,12 @@
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ReminderForm } from "@/components/fleet/ReminderForm";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import type { ReminderActionRow } from "@/lib/reminder-actions";
 import { fleetServerFetch } from "@/lib/fleet-server";
-
-type VehiclesPayload = { items: Array<{ id: string; registrationNumber: string; clientId: string }> };
+import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 async function getRow(id: string): Promise<ReminderActionRow | null> {
   const res = await fleetServerFetch(`/reminders/${id}`);
@@ -14,18 +14,14 @@ async function getRow(id: string): Promise<ReminderActionRow | null> {
   return (await res.json()) as ReminderActionRow;
 }
 
-async function getVehicles() {
-  const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
-  if (!res?.ok) return [];
-  const data = (await res.json()) as VehiclesPayload;
-  return data.items.map((v) => ({ id: v.id, registrationNumber: v.registrationNumber, clientId: v.clientId }));
-}
-
 type Props = { params: Promise<{ id: string }> };
 
 export default async function EditReminderPage({ params }: Props) {
   const { id } = await params;
-  const [row, auth, vehicles] = await Promise.all([getRow(id), getAuthMeResult(), getVehicles()]);
+  const [row, auth, vehicles] = await Promise.all([getRow(id), getAuthMeResult(), getVehicleOptions()]);
+  if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
+    redirect(`/login?next=${encodeURIComponent(`/fleet/reminders/${id}/edit`)}`);
+  }
   if (!canManageFleet(auth)) redirect(`/fleet/reminders/${id}`);
   if (!row) notFound();
   if (row.sourceType === "document") redirect(`/fleet/reminders/${id}`);
@@ -37,14 +33,25 @@ export default async function EditReminderPage({ params }: Props) {
   }
 
   return (
-    <FleetPageMain narrow="sm">
-        <Link href={`/fleet/reminders/${id}`} className="text-sm text-zinc-400 hover:text-zinc-200">
-          ← Detaliu
+    <FleetPageMain>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
+        <Link
+          href={`/fleet/reminders/${id}`}
+          className="inline-flex w-fit items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+        >
+          Înapoi la detaliu
         </Link>
-        <h1 className="mt-4 text-2xl font-semibold">Editare reminder</h1>
-        <div className="mt-8">
-          <ReminderForm mode="edit" reminderId={id} initial={row} vehicles={vehicles} />
-        </div>
+      </div>
+      <OpsFormLayout
+        module="reminders"
+        mode="edit"
+        formTitle="Editare acțiune"
+        vehicles={vehicles}
+        defaultVehicleId={row.vehicleId}
+      >
+        <ReminderForm mode="edit" reminderId={id} initial={row} vehicles={vehicles} />
+      </OpsFormLayout>
     </FleetPageMain>
   );
 }
