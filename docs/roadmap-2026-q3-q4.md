@@ -241,6 +241,7 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 | 2026-06 | Tenant **FlotaX** — smoke cap-coadă pe 1 vehicul (costuri, documente, remindere, curse, mentenanță). Totul OK. | Go-live pilot fezabil; îmbunătățiri incrementale |
 | 2026-06 | **Revenire obligatorie:** consum combustibil în modul Curse — acum FAZ agregă litri din `CostEntry` categorie `combustibil`, nu consum derivat pe cursă. | Epic §10 — fazat manual → telemetrie |
 | 2026-06 | **Feedback scurt pilot (handoff §5.1):** formulare ops 40/60 + P1, profil vehicul (achiziție/foto), mentenanță garanție/daună, vehicul imuabil la edit. Istoric la scară mare — amânat. | Livrat Q3 incremental; consum curse rămâne epic §10 |
+| 2026-06-21 | **Curse/Consum Faza A (parțial):** `GET /trips/consumption`, tab Consum, segmente fill-to-fill, reconciliere km, filtre; distanță cursă din odometru; tip combustibil pe cost | Livrat pe `main`; CAN + Setări tenant → §10.1 |
 | 2026-06 | **IAM canonic:** `docs/identity-access-model.md` — SaaS multi-tenant, FlotaX = abonat, platform_admin viitor | Referință din toate doc-urile cheie |
 
 ---
@@ -253,12 +254,14 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 
 ### Faza A — fără GPS (1–2 sprinturi, poate înainte de tracking)
 
-| Livrabil | Detaliu |
-|----------|---------|
-| Reguli date | Validare cursă: `odometerEndKm ≥ odometerStartKm`, `distanceKm` aliniat la delta odometru |
-| Legătură cost ↔ cursă | `CostEntry.tripId?` opțional; la alimentare, opțional „cursă / perioadă” |
-| KPI consum | `GET /fleet/vehicles/:id/consumption?from&to` — litri, km, **L/100km**, sursă (alimentări) |
-| UI Curse | Panou vehicul: consum perioadă, avertisment date lipsă; FAZ păstrează agregarea zilnică |
+| Livrabil | Detaliu | Stare |
+|----------|---------|--------|
+| Reguli date | Validare cursă: `odometerEndKm ≥ odometerStartKm`, `distanceKm` aliniat la delta odometru | ☑ livrat 2026-06 |
+| Tab Consum + KPI | `GET /trips/consumption`, segmente fill-to-fill L/100km, reconciliere km, filtre vehicul/tip energie | ☑ livrat 2026-06 |
+| Tip combustibil cost | `fuelProductType` pe Combustibil; infer din CIV P.3 | ☑ livrat 2026-06 |
+| Legătură cost ↔ cursă | `CostEntry.tripId?` opțional; la alimentare, opțional „cursă / perioadă” | ☐ backlog |
+| KPI consum per vehicul | `GET /fleet/vehicles/:id/consumption?from&to` — reutilizare engine | ☐ backlog |
+| UI panou vehicul | Consum perioadă pe profil vehicul; FAZ păstrează agregarea zilnică | ☐ backlog |
 
 **Acceptanță:** pentru un vehicul pilot, L/100km calculat din sumă litri ÷ km (odometru sau curse) în perioada FAZ.
 
@@ -308,3 +311,34 @@ flowchart LR
 **Decizie de discutat cu pilotul:** toleranță la date incomplete (estimare vs blocare FAZ), frecvența citirilor rezervor, furnizor tracking preferat (API deschis).
 
 **Out of scope inițial:** rutare optimă, geofencing, control viteză.
+
+### 10.1 Odometru CAN — decizie produs (2026-06-21)
+
+**Context:** la integrarea tracking, odometrul vine din **CAN** (nu tastat de șofer). Modulul de **gestiune useri / setări tenant** va include și **monitorizarea km** (vehicule cu device, stare semnal, ultima citire).
+
+**Decizie recomandată — model hibrid (nu eliminăm manualul complet):**
+
+| Situație | Comportament km |
+|----------|-----------------|
+| Vehicul **cu tracking activ** + semnal CAN **valid** (ultima citire ≤ prag, ex. 24h) | Km **completat automat** la data/ora evenimentului; câmp **read-only** în UI; sursă = `telematics` |
+| Vehicul cu tracking, semnal **expirat** (offline / defect) | Permitem **manual** cu badge „fără CAN”; avertisment în Consum / FAZ |
+| Vehicul **fără** device tracking | **Manual** ca azi (`manual` / `import`) |
+| Conflict manual vs CAN (> prag, ex. 2% sau 5 km) | Păstrăm CAN ca valoare autoritară; manual → `OdometerReading` cu flag `conflict`; audit + notificare admin |
+
+**Regula de completare automată (concretă):**
+
+1. Fiecare ping CAN creează/actualizează `OdometerReading` (`source=telematics`, `recordedAt`, `odometerKm`).
+2. La **salvare cost Combustibil**, **cursă**, **mentenanță** cu timestamp `T`: serviciu `resolveOdometerAt(vehicleId, T)` → cea mai apropiată citire CAN ≤ `T` (sau interpolare între două citiri dacă gap < 15 min).
+3. **`distanceKm` pe cursă** = mereu derivat din odometru start/final (CAN sau manual), nu tastat separat când ambele există.
+4. **Consum L/100km** rămâne pe **km odometru la alimentări** — la tracking, acel km vine din CAN la `incurredOn`, nu din curse.
+
+**Ce NU facem:** eliminarea totală a introducerii manuale — rămâne **fallback obligatoriu** pentru vehicule fără device, perioade pre-tracking, și incidente telemetrie.
+
+**Pregătire tehnică (înainte de Faza C):**
+
+- Extinde `OdometerReading.source`: `manual` \| `import` \| `telematics`
+- API intern `OdometerResolver.resolveAt(vehicleId, at)` — folosit de toate formularele ops
+- UI Setări tenant: listă vehicule + „tracking activ”, „ultima citire CAN”, prag offline
+- Poziționare UI: **Setări / Administrare** (același epic cu **user management**), nu în fiecare formular
+
+**Acceptanță Faza C (odometru):** pentru un vehicul cu CAN, o alimentare și o cursă create fără tastare km — câmpurile odometru populate corect din citirea CAN la data/ora evenimentului; Consum calculează segment L/100km fără intervenție manuală.

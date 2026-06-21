@@ -131,10 +131,10 @@ Cu stimă,
 | 1 | Login admin → verificare dashboard → 1 client + toate vehiculele |
 | 2 | Documente + ITP pe vehicule reprezentative |
 | 3 | Remindere — verificare filtre „acțiune” |
-| 4 | Curse + cost combustibil pe o perioadă scurtă |
+| 4 | Curse + cost combustibil pe o perioadă scurtă; tab **Consum** (segmente L/100km, reconciliere km) |
 | 5 | Generare FAZ sau foaie parcurs → descărcare PDF |
 | 6 | Login șofer (alt browser) — confirmare că nu poate modifica |
-| 7 | Feedback scurt către *[CONTACT]*: ce e util, ce lipsește — ☑ **2026-06**, sinteză §5.1 |
+| 7 | Feedback scurt către *[CONTACT]*: ce e util, ce lipsește — ☑ **2026-06**, sinteză §5.1; update **2026-06-21** §5.1 |
 
 ### 5.1 Feedback scurt — sinteză (2026-06)
 
@@ -147,13 +147,18 @@ Cu stimă,
 | **Profil vehicul** | Lipsă date achiziție și dovezi foto | Taburi **Date achiziție** + **Fotografii** |
 | **Mentenanță** | Garanție și daune — câmpuri lipsă în flux operațional | `warrantyRepair`, cost potențial, nr. dosar daună, asigurator |
 | **Istoric vehicul (scalare)** | La sute de linii, preview/brief devine limitant | **Neacționat** — de analizat la scalare flotă (nu blocker pilot curent) |
-| **Curse / consum** | Consum derivat pe cursă, nu doar agregare alimentări | Rămâne în backlog §10 roadmap (epic post-pilot) |
+| **Curse / consum** | Consum derivat pe cursă, nu doar agregare alimentări | **Parțial livrat (2026-06-21):** tab Consum — segmente fill-to-fill L/100km, reconciliere km, filtre vehicul/tip energie; km curse din odometru start/final; telemetrie CAN → roadmap §10.1 |
+| **Curse — distanță** | Distanță km introdusă manual, desincronizată de odometru | **Livrat:** `distanceKm` calculat automat din odometru start/final (formular + API); PATCH cursă salvează toate câmpurile |
+| **Curse — filtre Consum** | Selector vehicule greu de folosit | **Livrat:** filtru collapsible (Alege / Ascunde), chips removable; filtru tip energie după `fuelProductType` alimentări |
+| **Curse — calitate date** | L/100km / reconciliere „—” fără explicație | **Livrat:** avertismente calitate + mesaje UI; reconciliere cu fallback citiri → alimentări → curse; **cauză tipică:** km odometru incoerenti pe cost Combustibil (ex. BV34ERT) |
 | **Liste ops (scroll + tabele)** | Scroll într-un box mic; header tabel pierdut la derulare; tab-uri remindere se mișcau cu lista | `FleetListPageLayout` — antet + filtre fixe, scroll sub filtre; `FleetDataTable` — header sticky, celule compacte; liste card (documente, mentenanță, remindere) + `.fleet-scroll-pane`; toolbar status remindere fix; eliminat rând debug Vehicule |
 | **Liste ops (antet + filtre)** | Zonă fixă antet + filtre ocupă prea mult viewport | **Neacționat** — variantele compact/ops respinse; layout actual păstrat |
 
-**Util pentru client (feedback pozitiv):** modulele ops sunt utilizabile cap-coadă pe 1 vehicul; formularele sunt mai clare; profil vehicul mai complet.
+**Util pentru client (feedback pozitiv):** modulele ops sunt utilizabile cap-coadă pe 1 vehicul; formularele sunt mai clare; profil vehicul mai complet; tab Consum oferă vizibilitate litri / km / segmente fără alocare litri pe cursă.
 
-**Ce lipsește (transmis / de confirmat cu client):** consum pe distanță în Curse, scalare liste mari, tracking GPS — conform limitărilor pilot §4.
+**Ce lipsește (transmis / de confirmat cu client):** scalare liste mari, tracking GPS live, **odometru CAN automat** (roadmap §10.1), portal user self-service — conform limitărilor pilot §4.
+
+**Notă calitate date (2026-06-21):** consumul L/100km pe segmente folosește **km odometru de pe alimentări** (nu km din curse). Km trebuie să crească cronologic între alimentări consecutive; altfel media rămâne „—”.
 
 ---
 
@@ -168,6 +173,7 @@ Cu stimă,
 
 ## 7. După pilot (orientare)
 
-- Feedback → backlog Q4: **consum combustibil** (prioritar), CRM, liste mobil, tracking  
-- Producție dedicată (URL propriu, backup, SLA) — decizie separată după 8+ săptămâni pilot reușit  
+- Feedback → backlog Q4: **consum combustibil** (continuare §10), CRM, liste mobil, **tracking + odometru CAN** (§10.1)
+- **Setări tenant (viitor, alături de useri):** monitorizare km — vehicule cu tracking activ, stare semnal CAN, politică completare odometru (vezi `roadmap-2026-q3-q4.md` §10.1)
+- Producție dedicată (URL propriu, backup, SLA) — decizie separată după 8+ săptămâni pilot reușit
 - Semnare acceptanță pilot: `go-live-pilot-checklist.md` §7
