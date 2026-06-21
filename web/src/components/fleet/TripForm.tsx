@@ -10,6 +10,8 @@ import {
   OpsFormStickyActions,
   OpsFormVehicleField,
 } from "@/components/fleet/ops-form-primitives";
+import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
+import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -36,6 +38,7 @@ type VehicleOption = {
   id: string;
   registrationNumber: string;
   clientId: string;
+  odometerKm?: number;
 };
 
 type Props =
@@ -126,12 +129,15 @@ export function TripForm(props: Props) {
   const [driverName, setDriverName] = useState(initial.driverName);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   const computedDistanceKm = useMemo(
     () => distanceFromOdometers(odometerStartKm, odometerEndKm),
     [odometerStartKm, odometerEndKm],
   );
   const distanceFromOdometer = computedDistanceKm != null;
+
+  const tripSyncOdometerKm = odometerEndKm.trim() || odometerStartKm.trim();
 
   useEffect(() => {
     if (computedDistanceKm != null) {
@@ -143,6 +149,7 @@ export function TripForm(props: Props) {
     e.preventDefault();
     setPending(true);
     setError(null);
+    setSyncNotice(null);
 
     if (!isEdit && !boundVehicleId) {
       setError("Selectează vehiculul.");
@@ -217,9 +224,14 @@ export function TripForm(props: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        setError(await readErrorMessage(res));
+      const parsed = await readOpsSaveResponse(res);
+      if (!parsed.ok) {
+        setError(parsed.error ?? "Eroare la salvare.");
         return;
+      }
+      if (parsed.vehicleOdometerSync?.message) {
+        setSyncNotice(parsed.vehicleOdometerSync.message);
+        await new Promise((r) => setTimeout(r, 2200));
       }
       router.push("/fleet/trips");
       router.refresh();
@@ -236,6 +248,9 @@ export function TripForm(props: Props) {
     return (
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
+        {syncNotice ? (
+          <p className="rounded-lg border border-sky-900/40 bg-sky-950/25 px-4 py-3 text-sm text-sky-200">{syncNotice}</p>
+        ) : null}
         <OpsFormPrimaryBand module="trips" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <OpsFormField label="Start" required>
@@ -299,6 +314,12 @@ export function TripForm(props: Props) {
             <OpsFormField label="Conducător">
               <input value={driverName} onChange={(e) => setDriverName(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
+            <div className="sm:col-span-2">
+              <OpsOdometerKmHint
+                odometerKm={tripSyncOdometerKm}
+                vehicleOdometerKm={selectedVehicleLocal?.odometerKm ?? 0}
+              />
+            </div>
           </div>
         </OpsFormSection>
         <OpsFormStickyActions
@@ -314,6 +335,9 @@ export function TripForm(props: Props) {
   return (
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
+      {syncNotice ? (
+        <p className="rounded-lg border border-sky-900/40 bg-sky-950/25 px-4 py-3 text-sm text-sky-200">{syncNotice}</p>
+      ) : null}
       {!embedded ? (
         <OpsFormVehicleField
           vehicles={props.vehicles}
@@ -395,6 +419,10 @@ export function TripForm(props: Props) {
         <label className="block text-sm font-medium text-zinc-300">Conducător (text liber)</label>
         <input value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="Până la modulul Client" className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
+      <OpsOdometerKmHint
+        odometerKm={tripSyncOdometerKm}
+        vehicleOdometerKm={selectedVehicleLocal?.odometerKm ?? 0}
+      />
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">
           {pending ? "Salvez..." : isEdit ? "Salvează modificările" : "Creează cursa"}

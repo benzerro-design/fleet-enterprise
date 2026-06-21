@@ -9,6 +9,7 @@ import { isFuelCostCategory } from './fuel-ops';
 import { normalizeFuelProductType } from './fuel-types';
 import { normalizeCivProfile } from '../fleet/vehicle-civ-fields';
 import { resolveVehicleFuelFromCivP3 } from '../fleet/vehicle-fuel-resolve';
+import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
@@ -242,6 +243,7 @@ export class CostsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly reminders: RemindersService,
+    private readonly odometerSync: VehicleOdometerSyncService,
   ) {}
 
   async list(tenantSlug: string, params: CostListParams) {
@@ -422,7 +424,19 @@ export class CostsService {
       }
     }
 
-    return { ...toCostRow(row), reminderSyncFailed };
+    const vehicleOdometerSync = await this.odometerSync.syncFromOps({
+      tenantId: tenant.id,
+      vehicleId: row.vehicleId,
+      registrationNumber: row.vehicle.registrationNumber,
+      odometerKm: row.odometerKm,
+      recordedAt: row.incurredOn,
+      entity: 'cost',
+      entityId: row.id,
+      entityLabel: `cost ${row.category}`,
+      actorUserId,
+    });
+
+    return { ...toCostRow(row), reminderSyncFailed, vehicleOdometerSync };
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchCostInput, actorUserId?: string) {
@@ -566,7 +580,22 @@ export class CostsService {
       }
     }
 
-    return { ...updated, reminderSyncFailed };
+    const vehicleOdometerSync =
+      dto.odometerKm !== undefined
+        ? await this.odometerSync.syncFromOps({
+            tenantId: before.tenantId,
+            vehicleId: updated.vehicleId,
+            registrationNumber: before.vehicle.registrationNumber,
+            odometerKm: updated.odometerKm,
+            recordedAt: new Date(updated.incurredOn),
+            entity: 'cost',
+            entityId: updated.id,
+            entityLabel: `cost ${updated.category}`,
+            actorUserId,
+          })
+        : null;
+
+    return { ...updated, reminderSyncFailed, vehicleOdometerSync };
   }
 
   private async applyCostReminderMenuSync(

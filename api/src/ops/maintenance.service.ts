@@ -11,6 +11,7 @@ import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import type { MaintenanceCostAllocationCode } from './maintenance-cost-allocation';
 import { RemindersService } from './reminders.service';
+import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
 import {
   reminderMenuSyncEnabledForCreate,
   reminderMenuSyncEnabledPatchValue,
@@ -252,6 +253,7 @@ export class MaintenanceService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly reminders: RemindersService,
+    private readonly odometerSync: VehicleOdometerSyncService,
   ) {}
 
   async list(tenantSlug: string, params: MaintenanceListParams) {
@@ -411,7 +413,19 @@ export class MaintenanceService {
       }
     }
 
-    return { ...toMaintRow(row), reminderSyncFailed };
+    const vehicleOdometerSync = await this.odometerSync.syncFromOps({
+      tenantId: tenant.id,
+      vehicleId: row.vehicleId,
+      registrationNumber: row.vehicle.registrationNumber,
+      odometerKm: row.odometerKm,
+      recordedAt: row.performedAt ?? new Date(),
+      entity: 'maintenance',
+      entityId: row.id,
+      entityLabel: `mentenanță (${row.title})`,
+      actorUserId,
+    });
+
+    return { ...toMaintRow(row), reminderSyncFailed, vehicleOdometerSync };
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchMaintenanceInput, actorUserId?: string) {
@@ -552,7 +566,22 @@ export class MaintenanceService {
       }
     }
 
-    return { ...updated, reminderSyncFailed };
+    const vehicleOdometerSync =
+      dto.odometerKm !== undefined
+        ? await this.odometerSync.syncFromOps({
+            tenantId: before.tenantId,
+            vehicleId: updated.vehicleId,
+            registrationNumber: before.vehicle.registrationNumber,
+            odometerKm: updated.odometerKm,
+            recordedAt: updated.performedAt ? new Date(updated.performedAt) : new Date(),
+            entity: 'maintenance',
+            entityId: updated.id,
+            entityLabel: `mentenanță (${updated.title})`,
+            actorUserId,
+          })
+        : null;
+
+    return { ...updated, reminderSyncFailed, vehicleOdometerSync };
   }
 
   private async applyMaintenanceReminderMenuSync(

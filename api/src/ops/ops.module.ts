@@ -14,6 +14,7 @@ import { TripSheetsService } from './trip-sheets.service';
 import { TripsController } from './trips.controller';
 import { TripsService } from './trips.service';
 import { TripSheetPdfStorageService } from '../storage/trip-sheet-pdf-storage.service';
+import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
 
 @Module({
   imports: [AuthModule, AuditModule],
@@ -33,6 +34,7 @@ import { TripSheetPdfStorageService } from '../storage/trip-sheet-pdf-storage.se
     CostsService,
     DocumentsService,
     RemindersService,
+    VehicleOdometerSyncService,
   ],
   exports: [RemindersService],
 })

@@ -11,6 +11,10 @@ import type { ConsumptionPayload } from './consumption.types';
 import type { FuelType } from '@prisma/client';
 import { normalizeCivProfile } from '../fleet/vehicle-civ-fields';
 import { resolveVehicleFuelType } from '../fleet/vehicle-fuel-resolve';
+import {
+  resolveTripOdometerKmForSync,
+  VehicleOdometerSyncService,
+} from './vehicle-odometer-sync.service';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -219,6 +223,7 @@ export class TripsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly odometerSync: VehicleOdometerSyncService,
   ) {}
 
   async list(tenantSlug: string, params: TripListParams) {
@@ -356,7 +361,22 @@ export class TripsService {
       },
     });
 
-    return toTripRow(row);
+    const vehicleOdometerSync = await this.odometerSync.syncFromOps({
+      tenantId: tenant.id,
+      vehicleId: row.vehicleId,
+      registrationNumber: row.vehicle.registrationNumber,
+      odometerKm: resolveTripOdometerKmForSync({
+        odometerStartKm: row.odometerStartKm,
+        odometerEndKm: row.odometerEndKm,
+      }),
+      recordedAt: row.endedAt ?? row.startedAt,
+      entity: 'trip',
+      entityId: row.id,
+      entityLabel: `cursă${row.reference ? ` (${row.reference})` : ''}`,
+      actorUserId,
+    });
+
+    return { ...toTripRow(row), vehicleOdometerSync };
   }
 
   async patch(tenantSlug: string, tripId: string, dto: PatchTripInput, actorUserId?: string) {
@@ -435,7 +455,28 @@ export class TripsService {
       },
     });
 
-    return this.getById(tenantSlug, tripId);
+    const updated = await this.getById(tenantSlug, tripId);
+
+    const odometerTouched =
+      dto.odometerStartKm !== undefined || dto.odometerEndKm !== undefined;
+    const vehicleOdometerSync = odometerTouched
+      ? await this.odometerSync.syncFromOps({
+          tenantId: before.tenantId,
+          vehicleId: updated.vehicleId,
+          registrationNumber: updated.registrationNumber,
+          odometerKm: resolveTripOdometerKmForSync({
+            odometerStartKm: updated.odometerStartKm ?? null,
+            odometerEndKm: updated.odometerEndKm ?? null,
+          }),
+          recordedAt: updated.endedAt ? new Date(updated.endedAt) : new Date(updated.startedAt),
+          entity: 'trip',
+          entityId: updated.id,
+          entityLabel: `cursă${updated.reference ? ` (${updated.reference})` : ''}`,
+          actorUserId,
+        })
+      : null;
+
+    return { ...updated, vehicleOdometerSync };
   }
 
   async delete(tenantSlug: string, tripId: string, actorUserId?: string) {

@@ -134,8 +134,9 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="space-y-6">
       <p className="text-sm text-zinc-400">
-        Informații de bază — completate manual. Kilometrajul se actualizează exclusiv din tab-ul{" "}
-        <span className="text-emerald-400">Odometru</span>.
+        Informații de bază — completate manual. Kilometrajul se actualizează din tab-ul{" "}
+        <span className="text-emerald-400">Odometru</span> sau automat la cost / mentenanță / cursă (km mai mare decât
+        curent).
       </p>
       {error ? (
         <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p>

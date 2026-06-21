@@ -24,6 +24,8 @@ import {
   OpsFormStickyActions,
   OpsFormVehicleField,
 } from "@/components/fleet/ops-form-primitives";
+import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
+import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect, type FormEvent } from "react";
@@ -164,6 +166,7 @@ export function CostForm(props: Props) {
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   const isItp = isItpCostCategory(category);
   const isFuel = isFuelCostCategory(category);
@@ -184,6 +187,7 @@ export function CostForm(props: Props) {
     e.preventDefault();
     setPending(true);
     setError(null);
+    setSyncNotice(null);
 
     const amount = parseRonToCents(amountCents);
     if (amount === null) {
@@ -290,9 +294,14 @@ export function CostForm(props: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        setError(await readErrorMessage(res));
+      const parsed = await readOpsSaveResponse(res);
+      if (!parsed.ok) {
+        setError(parsed.error ?? "Eroare la salvare.");
         return;
+      }
+      if (parsed.vehicleOdometerSync?.message) {
+        setSyncNotice(parsed.vehicleOdometerSync.message);
+        await new Promise((r) => setTimeout(r, 2200));
       }
       router.push("/fleet/costs");
       router.refresh();
@@ -398,6 +407,9 @@ export function CostForm(props: Props) {
         {error ? (
           <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p>
         ) : null}
+        {syncNotice ? (
+          <p className="rounded-lg border border-sky-900/40 bg-sky-950/25 px-4 py-3 text-sm text-sky-200">{syncNotice}</p>
+        ) : null}
 
         <OpsFormPrimaryBand module="costs" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -460,6 +472,12 @@ export function CostForm(props: Props) {
                 className={OPS_INPUT_MONO_CLASS}
               />
             </OpsFormField>
+            <div className="sm:col-span-2">
+              <OpsOdometerKmHint
+                odometerKm={odometerKm}
+                vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+              />
+            </div>
           </div>
         </OpsFormSection>
 
@@ -517,6 +535,9 @@ export function CostForm(props: Props) {
   return (
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
+      {syncNotice ? (
+        <p className="rounded-lg border border-sky-900/40 bg-sky-950/25 px-4 py-3 text-sm text-sky-200">{syncNotice}</p>
+      ) : null}
       {!embedded ? (
         <OpsFormVehicleField
           vehicles={props.vehicles}
@@ -571,6 +592,7 @@ export function CostForm(props: Props) {
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Km (opțional)</label>
         <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
+        <OpsOdometerKmHint odometerKm={odometerKm} vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0} />
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Data costului</label>

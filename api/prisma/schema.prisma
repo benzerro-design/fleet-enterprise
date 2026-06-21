@@ -401,6 +401,8 @@ enum OdometerReadingSource {
   manual
   tracking
   import
+  /** Citire derivată din cost / mentenanță / cursă (pre-tracking). */
+  ops
 }
 
 model OdometerReading {
