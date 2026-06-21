@@ -1,4 +1,12 @@
 import Link from "next/link";
+import {
+  FleetDataTable,
+  fleetTableClass,
+  fleetTdClass,
+  fleetThClass,
+  fleetThRightClass,
+  fleetTheadClass,
+} from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
@@ -159,32 +167,32 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
             </p>
           ) : (
             <>
-              <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-800">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-zinc-950 text-xs uppercase tracking-wide text-zinc-500">
+              <FleetDataTable className="mt-4">
+                <table className={fleetTableClass}>
+                  <thead className={`${fleetTheadClass} tracking-wide`}>
                     <tr>
-                      <th className="px-4 py-3">Nr. înmatriculare</th>
-                      <th className="px-4 py-3">Client</th>
-                      <th className="px-4 py-3">Tip</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Km</th>
-                      <th className="px-4 py-3">ITP expiră</th>
-                      <th className="px-4 py-3 text-right">Detaliu</th>
-                      {write ? <th className="px-4 py-3 text-right">Acțiuni</th> : null}
+                      <th className={fleetThClass}>Nr. înmatriculare</th>
+                      <th className={fleetThClass}>Client</th>
+                      <th className={fleetThClass}>Tip</th>
+                      <th className={fleetThClass}>Status</th>
+                      <th className={fleetThClass}>Km</th>
+                      <th className={fleetThClass}>ITP expiră</th>
+                      <th className={fleetThRightClass}>Detaliu</th>
+                      {write ? <th className={fleetThRightClass}>Acțiuni</th> : null}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800">
                     {vehicles.map((v) => (
                       <tr key={v.id} className="bg-zinc-900/30">
-                        <td className="px-4 py-3 font-mono text-zinc-200">{v.registrationNumber}</td>
-                        <td className="px-4 py-3 text-zinc-300">{v.clientId}</td>
-                        <td className="px-4 py-3 text-zinc-300">{v.type}</td>
-                        <td className="px-4 py-3 text-zinc-300">{v.status}</td>
-                        <td className="px-4 py-3 font-mono text-zinc-300">{v.odometerKm}</td>
-                        <td className="px-4 py-3 font-mono text-zinc-300">
+                        <td className={`${fleetTdClass} font-mono text-zinc-200`}>{v.registrationNumber}</td>
+                        <td className={`${fleetTdClass} text-zinc-300`}>{v.clientId}</td>
+                        <td className={`${fleetTdClass} text-zinc-300`}>{v.type}</td>
+                        <td className={`${fleetTdClass} text-zinc-300`}>{v.status}</td>
+                        <td className={`${fleetTdClass} font-mono text-zinc-300`}>{v.odometerKm}</td>
+                        <td className={`${fleetTdClass} font-mono text-zinc-300`}>
                           {v.itpExpiresOn ? new Date(v.itpExpiresOn).toLocaleDateString("ro-RO") : "—"}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className={`${fleetTdClass} text-right`}>
                           <Link
                             href={`/fleet/vehicles/${v.id}`}
                             className="text-emerald-400 underline hover:text-emerald-300"
@@ -193,7 +201,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                           </Link>
                         </td>
                         {write ? (
-                          <td className="px-4 py-3">
+                          <td className={fleetTdClass}>
                             <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
                               <Link
                                 href={`/fleet/vehicles/${v.id}/edit`}
@@ -209,7 +217,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </FleetDataTable>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
                 <p>

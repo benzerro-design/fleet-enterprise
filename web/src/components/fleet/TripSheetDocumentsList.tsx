@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  FleetDataTable,
+  fleetTableClass,
+  fleetTdClass,
+  fleetThClass,
+  fleetThRightClass,
+  fleetTheadClass,
+} from "@/components/fleet/fleet-data-table";
 import { formatPeriodRange } from "@/lib/calendar-date";
 
 type DocRow = {
@@ -24,16 +32,16 @@ export function TripSheetDocumentsList({ items, highlightId }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-800">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-zinc-950 text-xs uppercase text-zinc-500">
+    <FleetDataTable>
+      <table className={fleetTableClass}>
+        <thead className={fleetTheadClass}>
           <tr>
-            <th className="px-4 py-3">Titlu</th>
-            <th className="px-4 py-3">Tip</th>
-            <th className="px-4 py-3">Perioadă</th>
-            <th className="px-4 py-3">Conducător</th>
-            <th className="px-4 py-3">Creat</th>
-            <th className="px-4 py-3 text-right">PDF</th>
+            <th className={fleetThClass}>Titlu</th>
+            <th className={fleetThClass}>Tip</th>
+            <th className={fleetThClass}>Perioadă</th>
+            <th className={fleetThClass}>Conducător</th>
+            <th className={fleetThClass}>Creat</th>
+            <th className={fleetThRightClass}>PDF</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-800">
@@ -44,12 +52,12 @@ export function TripSheetDocumentsList({ items, highlightId }: Props) {
                 key={row.id}
                 className={highlighted ? "bg-emerald-950/30" : "bg-zinc-900/30"}
               >
-                <td className="px-4 py-3">{row.title}</td>
-                <td className="px-4 py-3 text-zinc-400">{row.docTypeLabel}</td>
-                <td className="px-4 py-3 text-zinc-300">{formatPeriodRange(row.periodStart, row.periodEnd)}</td>
-                <td className="px-4 py-3">{row.driverName ?? "—"}</td>
-                <td className="px-4 py-3">{new Date(row.createdAt).toLocaleString("ro-RO")}</td>
-                <td className="px-4 py-3 text-right">
+                <td className={fleetTdClass}>{row.title}</td>
+                <td className={`${fleetTdClass} text-zinc-400`}>{row.docTypeLabel}</td>
+                <td className={`${fleetTdClass} text-zinc-300`}>{formatPeriodRange(row.periodStart, row.periodEnd)}</td>
+                <td className={fleetTdClass}>{row.driverName ?? "—"}</td>
+                <td className={fleetTdClass}>{new Date(row.createdAt).toLocaleString("ro-RO")}</td>
+                <td className={`${fleetTdClass} text-right`}>
                   <a
                     href={`/api/trip-sheets/${row.id}/pdf`}
                     className="text-emerald-400 hover:underline"
@@ -63,6 +71,6 @@ export function TripSheetDocumentsList({ items, highlightId }: Props) {
           })}
         </tbody>
       </table>
-    </div>
+    </FleetDataTable>
   );
 }

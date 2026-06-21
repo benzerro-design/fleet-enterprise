@@ -1,4 +1,11 @@
 import Link from "next/link";
+import {
+  FleetDataTable,
+  fleetTableClass,
+  fleetTdClass,
+  fleetThClass,
+  fleetTheadClass,
+} from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -95,27 +102,27 @@ export default async function FleetClientsPage({ searchParams }: PageProps) {
       ) : list.items.length === 0 ? (
         <p className="text-zinc-500">Niciun client găsit.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-zinc-800">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-zinc-800 bg-zinc-900/50 text-xs uppercase tracking-wide text-zinc-500">
+        <FleetDataTable>
+          <table className={fleetTableClass}>
+            <thead className={`${fleetTheadClass} tracking-wide`}>
               <tr>
-                <th className="px-4 py-3">Cod</th>
-                <th className="px-4 py-3">Denumire</th>
-                <th className="px-4 py-3">CUI</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Vehicule</th>
-                <th className="px-4 py-3" />
+                <th className={fleetThClass}>Cod</th>
+                <th className={fleetThClass}>Denumire</th>
+                <th className={fleetThClass}>CUI</th>
+                <th className={fleetThClass}>Status</th>
+                <th className={fleetThClass}>Vehicule</th>
+                <th className={fleetThClass} />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/80">
               {list.items.map((row) => (
                 <tr key={row.id} className="text-zinc-200">
-                  <td className="px-4 py-3 font-mono text-emerald-300/90">{row.code}</td>
-                  <td className="px-4 py-3">{row.legalName}</td>
-                  <td className="px-4 py-3 font-mono text-zinc-400">{row.taxId ?? "—"}</td>
-                  <td className="px-4 py-3 capitalize">{row.status}</td>
-                  <td className="px-4 py-3">{row.vehicleCount}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className={`${fleetTdClass} font-mono text-emerald-300/90`}>{row.code}</td>
+                  <td className={fleetTdClass}>{row.legalName}</td>
+                  <td className={`${fleetTdClass} font-mono text-zinc-400`}>{row.taxId ?? "—"}</td>
+                  <td className={`${fleetTdClass} capitalize`}>{row.status}</td>
+                  <td className={fleetTdClass}>{row.vehicleCount}</td>
+                  <td className={`${fleetTdClass} text-right`}>
                     {write ? (
                       <Link
                         href={`/fleet/clients/${row.id}/edit`}
@@ -131,7 +138,7 @@ export default async function FleetClientsPage({ searchParams }: PageProps) {
               ))}
             </tbody>
           </table>
-        </div>
+        </FleetDataTable>
       )}
 
       {list && list.total > list.pageSize ? (

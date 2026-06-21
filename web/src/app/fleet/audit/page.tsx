@@ -1,5 +1,12 @@
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import {
+  FleetDataTable,
+  fleetTableClass,
+  fleetTdClass,
+  fleetThClass,
+  fleetTheadClass,
+} from "@/components/fleet/fleet-data-table";
 import Link from "next/link";
 import { AuditDetailExpandable } from "@/components/fleet/AuditDetailExpandable";
 import {
@@ -139,15 +146,15 @@ export default async function FleetAuditPage({ searchParams }: Props) {
           <p className="text-amber-400">Nu am putut încărca jurnalul.</p>
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border border-zinc-800">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-zinc-950 text-xs uppercase text-zinc-500">
+            <FleetDataTable>
+              <table className={fleetTableClass}>
+                <thead className={fleetTheadClass}>
                   <tr>
-                    <th className="px-4 py-3">Când</th>
-                    <th className="px-4 py-3">Acțiune</th>
-                    <th className="px-4 py-3">Obiect</th>
-                    <th className="px-4 py-3">Actor</th>
-                    <th className="min-w-[16rem] px-4 py-3">Detaliu</th>
+                    <th className={fleetThClass}>Când</th>
+                    <th className={fleetThClass}>Acțiune</th>
+                    <th className={fleetThClass}>Obiect</th>
+                    <th className={fleetThClass}>Actor</th>
+                    <th className={`min-w-[16rem] ${fleetThClass}`}>Detaliu</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
@@ -183,11 +190,11 @@ export default async function FleetAuditPage({ searchParams }: Props) {
                               : null;
                     return (
                       <tr key={row.id} className="bg-zinc-900/30 align-top">
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-400">
+                        <td className={`whitespace-nowrap ${fleetTdClass} text-xs text-zinc-400`}>
                           {new Date(row.createdAt).toLocaleString("ro-RO")}
                         </td>
-                        <td className="px-4 py-3 text-zinc-100">{auditActionLabel(row.action)}</td>
-                        <td className="px-4 py-3">
+                        <td className={`${fleetTdClass} text-zinc-100`}>{auditActionLabel(row.action)}</td>
+                        <td className={fleetTdClass}>
                           {fleetRelatedObject ? (
                             <>
                               <div
@@ -224,7 +231,7 @@ export default async function FleetAuditPage({ searchParams }: Props) {
                             </>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-zinc-300">
+                        <td className={`${fleetTdClass} text-zinc-300`}>
                           {row.actorDisplayName ? (
                             <>
                               <span>{row.actorDisplayName}</span>
@@ -234,7 +241,7 @@ export default async function FleetAuditPage({ searchParams }: Props) {
                             <span>{row.actorEmail ?? "—"}</span>
                           )}
                         </td>
-                        <td className="max-w-xl px-4 py-3">
+                        <td className={`max-w-xl ${fleetTdClass}`}>
                           <AuditDetailExpandable summary={summary} meta={row.meta} />
                         </td>
                       </tr>
@@ -242,7 +249,7 @@ export default async function FleetAuditPage({ searchParams }: Props) {
                   })}
                 </tbody>
               </table>
-            </div>
+            </FleetDataTable>
             <div className="mt-4 flex justify-between text-sm text-zinc-500">
               <span>
                 Total {data.total} · pagina {data.page}

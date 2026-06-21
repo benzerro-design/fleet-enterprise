@@ -1,6 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import {
+  FleetDataTable,
+  fleetTableClass,
+  fleetTdClass,
+  fleetThClass,
+  fleetTheadClass,
+} from "@/components/fleet/fleet-data-table";
 import type { VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
 
 type Props = {
@@ -123,31 +130,31 @@ export function VehicleMobilityPanel({ data, vehicleId, regQs }: Props) {
       {data.segments.length > 0 ? (
         <div>
           <h3 className="mb-3 text-sm font-medium text-zinc-300">Segmente consum (între alimentări)</h3>
-          <div className="overflow-x-auto rounded-lg border border-zinc-800">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-zinc-950 text-xs uppercase text-zinc-500">
+          <FleetDataTable>
+            <table className={fleetTableClass}>
+              <thead className={fleetTheadClass}>
                 <tr>
-                  <th className="px-3 py-2">Perioadă</th>
-                  <th className="px-3 py-2">Km</th>
-                  <th className="px-3 py-2">Litri</th>
-                  <th className="px-3 py-2">L/100km</th>
+                  <th className={fleetThClass}>Perioadă</th>
+                  <th className={fleetThClass}>Km</th>
+                  <th className={fleetThClass}>Litri</th>
+                  <th className={fleetThClass}>L/100km</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 {data.segments.map((s, i) => (
                   <tr key={i}>
-                    <td className="px-3 py-2 text-xs text-zinc-400">
+                    <td className={`${fleetTdClass} text-xs text-zinc-400`}>
                       {new Date(s.fromDate).toLocaleDateString("ro-RO")} →{" "}
                       {new Date(s.toDate).toLocaleDateString("ro-RO")}
                     </td>
-                    <td className="px-3 py-2 font-mono text-zinc-200">{s.km.toLocaleString("ro-RO")}</td>
-                    <td className="px-3 py-2 font-mono text-amber-200/90">{s.liters} L</td>
-                    <td className="px-3 py-2 font-mono text-emerald-300">{s.l100}</td>
+                    <td className={`${fleetTdClass} font-mono text-zinc-200`}>{s.km.toLocaleString("ro-RO")}</td>
+                    <td className={`${fleetTdClass} font-mono text-amber-200/90`}>{s.liters} L</td>
+                    <td className={`${fleetTdClass} font-mono text-emerald-300`}>{s.l100}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </FleetDataTable>
         </div>
       ) : null}
 

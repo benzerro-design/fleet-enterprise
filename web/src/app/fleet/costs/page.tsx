@@ -1,4 +1,12 @@
 ﻿import Link from "next/link";
+import {
+  FleetDataTable,
+  fleetTableClass,
+  fleetTdClass,
+  fleetThClass,
+  fleetThRightClass,
+  fleetTheadClass,
+} from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
@@ -212,36 +220,36 @@ export default async function CostsPage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există costuri pentru filtrele curente.</p>
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border border-zinc-800">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-zinc-950 text-xs uppercase text-zinc-500">
+            <FleetDataTable>
+              <table className={fleetTableClass}>
+                <thead className={fleetTheadClass}>
                   <tr>
-                    <th className="px-4 py-3">Categorie</th>
-                    <th className="px-4 py-3">Nr. auto</th>
-                    <th className="px-4 py-3">Client</th>
-                    <th className="px-4 py-3">Furnizor</th>
-                    <th className="px-4 py-3">Data</th>
-                    <th className="px-4 py-3">Km</th>
-                    <th className="px-4 py-3">Factură</th>
-                    <th className="px-4 py-3">Data factură</th>
-                    <th className="px-4 py-3">Document</th>
-                    <th className="px-4 py-3">Suma (RON fără TVA)</th>
-                    <th className="px-4 py-3 text-right">Detaliu</th>
-                    {write ? <th className="px-4 py-3 text-right">Acțiuni</th> : null}
+                    <th className={fleetThClass}>Categorie</th>
+                    <th className={fleetThClass}>Nr. auto</th>
+                    <th className={fleetThClass}>Client</th>
+                    <th className={fleetThClass}>Furnizor</th>
+                    <th className={fleetThClass}>Data</th>
+                    <th className={fleetThClass}>Km</th>
+                    <th className={fleetThClass}>Factură</th>
+                    <th className={fleetThClass}>Data factură</th>
+                    <th className={fleetThClass}>Document</th>
+                    <th className={fleetThClass}>Suma (RON fără TVA)</th>
+                    <th className={fleetThRightClass}>Detaliu</th>
+                    {write ? <th className={fleetThRightClass}>Acțiuni</th> : null}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
                   {data.items.map((row) => (
                     <tr key={row.id} className="bg-zinc-900/30">
-                      <td className="px-4 py-3">{row.category}</td>
-                      <td className="px-4 py-3 font-mono">{row.registrationNumber}</td>
-                      <td className="px-4 py-3">{row.clientId}</td>
-                      <td className="px-4 py-3">{row.provider ?? "—"}</td>
-                      <td className="px-4 py-3">{new Date(row.incurredOn).toLocaleDateString("ro-RO")}</td>
-                      <td className="px-4 py-3 font-mono">{row.odometerKm ?? "—"}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{row.invoiceNumber ?? "—"}</td>
-                      <td className="px-4 py-3">{row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString("ro-RO") : "—"}</td>
-                      <td className="px-4 py-3">
+                      <td className={fleetTdClass}>{row.category}</td>
+                      <td className={`${fleetTdClass} font-mono`}>{row.registrationNumber}</td>
+                      <td className={fleetTdClass}>{row.clientId}</td>
+                      <td className={fleetTdClass}>{row.provider ?? "—"}</td>
+                      <td className={fleetTdClass}>{new Date(row.incurredOn).toLocaleDateString("ro-RO")}</td>
+                      <td className={`${fleetTdClass} font-mono`}>{row.odometerKm ?? "—"}</td>
+                      <td className={`${fleetTdClass} font-mono text-xs`}>{row.invoiceNumber ?? "—"}</td>
+                      <td className={fleetTdClass}>{row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString("ro-RO") : "—"}</td>
+                      <td className={fleetTdClass}>
                         {row.invoiceAttachmentUrl ? (
                           <a href={row.invoiceAttachmentUrl} download className="text-emerald-400 hover:underline">
                             Descarcă
@@ -250,14 +258,14 @@ export default async function CostsPage({ searchParams }: Props) {
                           "—"
                         )}
                       </td>
-                      <td className="px-4 py-3 font-mono">{formatRonFromCents(row.amountCents)}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className={`${fleetTdClass} font-mono`}>{formatRonFromCents(row.amountCents)}</td>
+                      <td className={`${fleetTdClass} text-right`}>
                         <Link href={`/fleet/costs/${row.id}`} className="text-emerald-400 hover:underline">
                           Vezi
                         </Link>
                       </td>
                       {write ? (
-                        <td className="px-4 py-3">
+                        <td className={fleetTdClass}>
                           <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
                             <Link
                               href={`/fleet/costs/${row.id}/edit`}
@@ -273,7 +281,7 @@ export default async function CostsPage({ searchParams }: Props) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </FleetDataTable>
             <div className="flex justify-between text-sm text-zinc-400">
               <span>
                 Pagina {page} / {totalPages} · {data.total} costuri

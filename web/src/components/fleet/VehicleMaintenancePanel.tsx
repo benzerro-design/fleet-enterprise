@@ -3,6 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
+  FleetDataTable,
+  fleetTableClass,
+  fleetTdClass,
+  fleetThClass,
+  fleetThRightClass,
+  fleetTheadClass,
+} from "@/components/fleet/fleet-data-table";
+import {
   matchesDateRange,
   matchesText,
   vehicleDetailFilterBarClass,
@@ -134,37 +142,37 @@ export function VehicleMaintenancePanel({ items, totalInDb, regQs }: Props) {
       {filtered.length === 0 ? (
         <p className="mt-3 text-sm text-zinc-500">Nicio înregistrare nu corespunde filtrelor.</p>
       ) : (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-800">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-zinc-950 text-xs uppercase text-zinc-500">
+        <FleetDataTable className="mt-3">
+          <table className={fleetTableClass}>
+            <thead className={fleetTheadClass}>
               <tr>
-                <th className="px-4 py-3">Titlu</th>
-                <th className="px-4 py-3">Alocare</th>
-                <th className="px-4 py-3">Furnizor</th>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Km</th>
-                <th className="px-4 py-3">Factură</th>
-                <th className="px-4 py-3">Cost (RON fără TVA)</th>
-                <th className="px-4 py-3 text-right">Detaliu</th>
+                <th className={fleetThClass}>Titlu</th>
+                <th className={fleetThClass}>Alocare</th>
+                <th className={fleetThClass}>Furnizor</th>
+                <th className={fleetThClass}>Data</th>
+                <th className={fleetThClass}>Km</th>
+                <th className={fleetThClass}>Factură</th>
+                <th className={fleetThClass}>Cost (RON fără TVA)</th>
+                <th className={fleetThRightClass}>Detaliu</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
               {filtered.map((row) => (
                 <tr key={row.id} className="bg-zinc-900/30">
-                  <td className="px-4 py-3 text-zinc-200">{row.title}</td>
-                  <td className="max-w-[9rem] truncate px-4 py-3 text-xs text-zinc-400">
+                  <td className={`${fleetTdClass} text-zinc-200`}>{row.title}</td>
+                  <td className={`max-w-[9rem] truncate ${fleetTdClass} text-xs text-zinc-400`}>
                     {maintenanceCostAllocationLabel(row.costAllocationCode)}
                   </td>
-                  <td className="px-4 py-3 text-zinc-300">{row.provider ?? "—"}</td>
-                  <td className="px-4 py-3 text-zinc-300">
+                  <td className={`${fleetTdClass} text-zinc-300`}>{row.provider ?? "—"}</td>
+                  <td className={`${fleetTdClass} text-zinc-300`}>
                     {row.performedAt ? new Date(row.performedAt).toLocaleDateString("ro-RO") : "—"}
                   </td>
-                  <td className="px-4 py-3 font-mono text-zinc-300">{row.odometerKm ?? "—"}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-400">{row.invoiceNumber ?? "—"}</td>
-                  <td className="px-4 py-3 font-mono text-zinc-300">
+                  <td className={`${fleetTdClass} font-mono text-zinc-300`}>{row.odometerKm ?? "—"}</td>
+                  <td className={`${fleetTdClass} font-mono text-xs text-zinc-400`}>{row.invoiceNumber ?? "—"}</td>
+                  <td className={`${fleetTdClass} font-mono text-zinc-300`}>
                     {row.costCents != null ? formatRonFromCents(row.costCents) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className={`${fleetTdClass} text-right`}>
                     <Link href={`/fleet/maintenance/${row.id}`} className="text-emerald-400 hover:underline">
                       Vezi
                     </Link>
@@ -184,7 +192,7 @@ export function VehicleMaintenancePanel({ items, totalInDb, regQs }: Props) {
               <span className="text-zinc-600"> RON fără TVA</span>
             </span>
           </div>
-        </div>
+        </FleetDataTable>
       )}
 
       {totalInDb > items.length ? (
