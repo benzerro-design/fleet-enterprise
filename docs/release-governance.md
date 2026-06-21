@@ -23,6 +23,8 @@
 
 ### 3. Governance si roluri
 
+> Roluri **aplicație** (tenant, client, platformă): [`identity-access-model.md`](identity-access-model.md). Rolurile de mai jos sunt **organizaționale** (echipa de livrare).
+
 - `Product Owner`:
   - defineste backlog-ul pe baza planului;
   - prioritizeaza epics/stories per release.

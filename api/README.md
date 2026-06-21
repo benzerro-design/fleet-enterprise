@@ -1,5 +1,7 @@
 # Fleet Enterprise API (NestJS)
 
+**IAM (canonic):** [`../docs/identity-access-model.md`](../docs/identity-access-model.md) — tenant, roluri, FlotaX ca abonat SaaS.
+
 ## Setup local
 
 ```bash

@@ -1,5 +1,7 @@
 ## Platform foundation (multi-tenancy, RBAC, audit, observability, security)
 
+> **IAM canonic:** [`identity-access-model.md`](identity-access-model.md) — sursa de adevăr pentru straturi (platformă / tenant / client / user), roluri, pilot FlotaX și principii obligatorii. Secțiunea RBAC de mai jos este **orientare țintă**; implementarea curentă și deciziile de produs sunt în documentul IAM.
+
 ### 1. Multi-tenancy model
 
 - **Tenant-per-row (shared schema)** in baza de date (Cloud SQL Postgres):
@@ -11,6 +13,8 @@
   - injectat printr-un `TenantContext` service in Nest, disponibil in module.
 
 ### 2. RBAC (role-based access control)
+
+> Detaliu implementat vs. planificat: [`identity-access-model.md`](identity-access-model.md) §4–§8.
 
 - Roluri de baza (din plan):
   - `SUPERADMIN`, `ADMIN`, `FLEET_MANAGER_CLIENT`, `SOFER_CLIENT`,

@@ -3,7 +3,15 @@
 **Scop:** materiale pentru handoff către clientul pilot și checklist intern înainte/după predare.  
 **Mediu:** **staging** (nu producție dedicată) — date partajate infrastructură cu testele interne; tenant izolat `flotax`.
 
-**Referințe:** `docs/go-live-pilot-checklist.md` (§7 semnare), `docs/roadmap-2026-q3-q4.md` (§10 consum).
+**Referințe:** [`identity-access-model.md`](identity-access-model.md) (model SaaS — FlotaX = abonat tenant), `docs/go-live-pilot-checklist.md` (§7 semnare), `docs/roadmap-2026-q3-q4.md` (§10 consum).
+
+---
+
+## 0. Model conturi (pentru echipă — nu trimite clientului)
+
+FlotaX este **abonat SaaS** (tenant `flotax`), **nu** un „client” în tenant-ul `demo`. `flotax_admin` are aceleași tipuri de drepturi ca `admin@demo.local`, dar **doar în tenant-ul FlotaX**. Echipa vendor nu vede datele FlotaX din contul demo — by design.
+
+Detaliu complet: [`identity-access-model.md`](identity-access-model.md).
 
 ---
 

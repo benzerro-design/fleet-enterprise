@@ -2,6 +2,8 @@
 
 Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și ops core. Este aliniat la `release-governance.md` (cadenta trimestrială) și la gap-ul identificat față de `phase1-mvp-scope.md`.
 
+**IAM / useri / roluri (canonic):** [`identity-access-model.md`](identity-access-model.md) — orice epic care atinge accesul sau ierarhia trebuie aliniat la acest document înainte de implementare.
+
 **ICP ales:** **client pilot** — o firmă reală (sau divizie internă) care folosește zilnic aplicația pentru evidența flotei, conformitate și raportare, **fără GPS/tracking în Q3–Q4**.
 
 ---
@@ -239,6 +241,7 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 | 2026-06 | Tenant **FlotaX** — smoke cap-coadă pe 1 vehicul (costuri, documente, remindere, curse, mentenanță). Totul OK. | Go-live pilot fezabil; îmbunătățiri incrementale |
 | 2026-06 | **Revenire obligatorie:** consum combustibil în modul Curse — acum FAZ agregă litri din `CostEntry` categorie `combustibil`, nu consum derivat pe cursă. | Epic §10 — fazat manual → telemetrie |
 | 2026-06 | **Feedback scurt pilot (handoff §5.1):** formulare ops 40/60 + P1, profil vehicul (achiziție/foto), mentenanță garanție/daună, vehicul imuabil la edit. Istoric la scară mare — amânat. | Livrat Q3 incremental; consum curse rămâne epic §10 |
+| 2026-06 | **IAM canonic:** `docs/identity-access-model.md` — SaaS multi-tenant, FlotaX = abonat, platform_admin viitor | Referință din toate doc-urile cheie |
 
 ---
 

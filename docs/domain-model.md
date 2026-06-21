@@ -1,5 +1,7 @@
 ## Domain model canonical (vehicul, trip/job, event, maintenance, cost)
 
+**Izolare și acces:** toate entitățile operaționale sunt `TenantScoped` (`tenantId`). Ierarhia tenant → client contractual → useri și roluri este definită în [`identity-access-model.md`](identity-access-model.md).
+
 ### Obiectiv
 Stabilim un set de entitati canonice care vor fi folosite atat in API (NestJS), cat si in frontend (Next.js) si in Integration Hub:
 

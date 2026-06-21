@@ -2,6 +2,9 @@
 
 Monorepo minim: **web** (Next.js) + **api** (NestJS), aliniat cu rularea pe **Google Cloud**.
 
+> **Document fundațional — identitate și acces (IAM):** [`docs/identity-access-model.md`](docs/identity-access-model.md)  
+> Model SaaS multi-tenant, ierarhie tenant → client contractual → useri, roluri și ce există vs. țintă. **Prioritate canonică** pentru orice decizie legată de useri și drepturi.
+
 ## Cerințe
 
 - Node.js LTS (instalat pe mașina de dezvoltare)
@@ -111,6 +114,8 @@ Deschide [http://localhost:3000](http://localhost:3000). Pagina citește health 
 **curl la Nest:** `POST /auth/login` cu `{ "email", "password", "tenantSlug"? }` → token, apoi `Authorization: Bearer` pe `/fleet/*`, `/trips`, `/maintenance`, `/costs`. Pentru teste automate poți folosi `ALLOW_HEADER_TENANT=true` (vezi `test/jest-e2e-setup.ts`).
 
 ### RBAC (roluri pe tenant)
+
+**Model complet (canonic):** [`docs/identity-access-model.md`](docs/identity-access-model.md) — ierarhie platformă → tenant → client → useri; FlotaX = abonat SaaS (tenant), nu client în `demo`.
 
 Rolul vine din **`TenantMembership.role`** (Prisma: `tenant_admin`, `tenant_viewer`) și este inclus în JWT la login pentru tenantul ales. Dacă îți schimbă rolul un administrator, trebuie **re-login** ca să primești un token nou.
 
