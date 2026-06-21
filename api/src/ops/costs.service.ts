@@ -7,6 +7,8 @@ import { normalizeReminderOffsetsKm } from './reminder-status';
 import { isItpCostCategory, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
 import { isFuelCostCategory } from './fuel-ops';
 import { normalizeFuelProductType } from './fuel-types';
+import { normalizeCivProfile } from '../fleet/vehicle-civ-fields';
+import { resolveVehicleFuelFromCivP3 } from '../fleet/vehicle-fuel-resolve';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
@@ -341,8 +343,13 @@ export class CostsService {
       }
     }
     const fuelLiters = normalizeFuelLiters(dto.fuelLiters, dto.category);
+    const inferredFuelProductType = await this.inferFuelProductTypeFromVehicle(
+      dto.vehicleId,
+      dto.category,
+      dto.fuelProductType,
+    );
     const fuelProductType = normalizeFuelProductType(
-      dto.fuelProductType ?? undefined,
+      inferredFuelProductType ?? undefined,
       dto.category,
       isFuelCostCategory,
     );
@@ -452,9 +459,12 @@ export class CostsService {
     let fuelProductType: ReturnType<typeof normalizeFuelProductType> | null | undefined = undefined;
     if (dto.fuelProductType !== undefined || dto.category !== undefined) {
       if (isFuelCostCategory(nextCategory)) {
-        const raw =
-          dto.fuelProductType !== undefined ? dto.fuelProductType : before.fuelProductType;
-        fuelProductType = normalizeFuelProductType(raw ?? undefined, nextCategory, isFuelCostCategory);
+        const inferred = await this.inferFuelProductTypeFromVehicle(
+          before.vehicleId,
+          nextCategory,
+          dto.fuelProductType !== undefined ? dto.fuelProductType : before.fuelProductType,
+        );
+        fuelProductType = normalizeFuelProductType(inferred ?? undefined, nextCategory, isFuelCostCategory);
       } else {
         fuelProductType = null;
       }
@@ -627,5 +637,21 @@ export class CostsService {
     await this.prisma.costEntry.deleteMany({
       where: { id, tenant: { slug: tenantSlug } },
     });
+  }
+
+  /** Combustibil: CIV P.3 (Motor / P.3) first; explicit dto value wins when provided. */
+  private async inferFuelProductTypeFromVehicle(
+    vehicleId: string,
+    category: string,
+    explicit?: CreateCostInput['fuelProductType'],
+  ): Promise<CreateCostInput['fuelProductType']> {
+    if (!isFuelCostCategory(category)) return null;
+    if (explicit != null) return explicit;
+
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { civProfile: true },
+    });
+    return resolveVehicleFuelFromCivP3(normalizeCivProfile(vehicle?.civProfile ?? null));
   }
 }

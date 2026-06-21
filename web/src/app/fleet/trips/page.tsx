@@ -22,6 +22,7 @@ import { filterFormKey } from "@/lib/filter-form-key";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
+import { parseFuelTypesCsv, resolveVehicleFuelType } from "@/lib/fuel-types";
 import { TRIP_SHEET_DOC_TYPES } from "@/lib/trip-ops";
 
 type Search = {
@@ -38,6 +39,7 @@ type Search = {
   periodFrom?: string;
   periodTo?: string;
   vehicleIds?: string;
+  fuelTypes?: string;
   createdFrom?: string;
   createdTo?: string;
 };
@@ -76,7 +78,13 @@ type TripSheetListPayload = {
   pageSize: number;
 };
 
-type VehicleOption = { id: string; registrationNumber: string; clientId: string };
+type VehicleOption = {
+  id: string;
+  registrationNumber: string;
+  clientId: string;
+  fuelType?: string | null;
+  civProfile?: Record<string, string | number | null>;
+};
 
 type TripsView = "trips" | "documents" | "tachograph" | "consumption";
 
@@ -164,6 +172,7 @@ async function fetchConsumption(sp: Search): Promise<ConsumptionPayload | null> 
   const to = sp.periodTo?.trim() || defaults.to;
   const q = new URLSearchParams({ from, to });
   if (sp.vehicleIds?.trim()) q.set("vehicleIds", sp.vehicleIds.trim());
+  if (sp.fuelTypes?.trim()) q.set("fuelTypes", sp.fuelTypes.trim());
   const res = await fleetServerFetch(`/trips/consumption?${q}`);
   if (!res?.ok) return null;
   return (await res.json()) as ConsumptionPayload;
@@ -172,11 +181,21 @@ async function fetchConsumption(sp: Search): Promise<ConsumptionPayload | null> 
 async function fetchVehicleOptions(): Promise<VehicleOption[]> {
   const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
   if (!res?.ok) return [];
-  const data = (await res.json()) as { items: VehicleOption[] };
+  const data = (await res.json()) as {
+    items: Array<{
+      id: string;
+      registrationNumber: string;
+      clientId: string;
+      fuelType?: string | null;
+      civProfile?: Record<string, string | number | null>;
+    }>;
+  };
   return data.items.map((v) => ({
     id: v.id,
     registrationNumber: v.registrationNumber,
     clientId: v.clientId,
+    fuelType: v.fuelType ?? null,
+    civProfile: v.civProfile ?? {},
   }));
 }
 
@@ -193,6 +212,7 @@ export default async function TripsPage({ searchParams }: Props) {
   const consumptionPeriodFrom = sp.periodFrom?.trim() || consumptionDefaults.from;
   const consumptionPeriodTo = sp.periodTo?.trim() || consumptionDefaults.to;
   const selectedVehicleIds = parseSelectedVehicleIds(sp.vehicleIds);
+  const selectedFuelTypes = parseFuelTypesCsv(sp.fuelTypes);
   const [data, auth, documents, vehicles, consumption] = await Promise.all([
     showTrips ? fetchTrips(sp) : Promise.resolve(null),
     getAuthMeResult(),
@@ -200,6 +220,13 @@ export default async function TripsPage({ searchParams }: Props) {
     fetchVehicleOptions(),
     showConsumption ? fetchConsumption(sp) : Promise.resolve(null),
   ]);
+  const consumptionVehicleOptions =
+    selectedFuelTypes.length > 0
+      ? vehicles.filter((v) => {
+          const ft = resolveVehicleFuelType({ fuelType: v.fuelType, civProfile: v.civProfile });
+          return ft != null && selectedFuelTypes.includes(ft);
+        })
+      : vehicles;
   const write = canManageFleet(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
@@ -297,10 +324,11 @@ export default async function TripsPage({ searchParams }: Props) {
         filters={
           showTachograph ? undefined : showConsumption ? (
             <ConsumptionFilterForm
-              vehicles={vehicles}
+              vehicles={consumptionVehicleOptions}
               periodFrom={consumptionPeriodFrom}
               periodTo={consumptionPeriodTo}
               selectedVehicleIds={selectedVehicleIds}
+              selectedFuelTypes={selectedFuelTypes}
             />
           ) : showDocuments ? (
             <form

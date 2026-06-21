@@ -58,6 +58,20 @@ export type ConsumptionFuelMixRow = {
   liters: number;
 };
 
+export type ConsumptionFuelTypeSummary = {
+  fuelType: FuelType;
+  label: string;
+  energyUnit: 'L' | 'kWh';
+  totalTripKm: number;
+  totalEnergy: number;
+  totalFuelCostCents: number;
+  avgConsumptionPer100: number | null;
+  segmentCount: number;
+  tripCount: number;
+  fillCount: number;
+  vehicleCount: number;
+};
+
 export type ConsumptionSummary = {
   totalTripKm: number;
   totalFuelLiters: number;
@@ -75,7 +89,9 @@ export type ConsumptionPayload = {
   periodEnd: string;
   vehicleScope: 'all' | 'selected';
   selectedVehicleCount: number;
+  fuelTypeFilter: FuelType[] | null;
   summary: ConsumptionSummary;
+  summaryByFuelType: ConsumptionFuelTypeSummary[];
   weekly: ConsumptionWeeklyBucket[];
   fuelMix: ConsumptionFuelMixRow[];
   trips: ConsumptionTripRow[];

@@ -21,6 +21,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import type { CreateTripInput, PatchTripInput, TripBrowseFilters } from './trips.service';
 import { TripsService } from './trips.service';
+import { parseFuelTypesCsv } from './fuel-types';
 
 @Controller('trips')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -65,7 +66,8 @@ export class TripsController {
     const vehicleIds = vehicleIdsRaw
       ? vehicleIdsRaw.split(',').map((id) => id.trim()).filter(Boolean)
       : undefined;
-    return this.trips.getConsumption(tenantSlug, { from, to, vehicleIds });
+    const fuelTypes = parseFuelTypesCsv(q['fuelTypes']);
+    return this.trips.getConsumption(tenantSlug, { from, to, vehicleIds, fuelTypes });
   }
 
   @Get(':tripId')

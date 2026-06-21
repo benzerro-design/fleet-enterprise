@@ -8,6 +8,9 @@ import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { buildConsumptionPayload } from './consumption-engine';
 import type { ConsumptionPayload } from './consumption.types';
+import type { FuelType } from '@prisma/client';
+import { normalizeCivProfile } from '../fleet/vehicle-civ-fields';
+import { resolveVehicleFuelType } from '../fleet/vehicle-fuel-resolve';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -48,6 +51,7 @@ export type ConsumptionQuery = {
   from: string;
   to: string;
   vehicleIds?: string[];
+  fuelTypes?: FuelType[];
 };
 
 function parseDayStart(s: string): Date {
@@ -437,6 +441,8 @@ export class TripsService {
         periodEnd: to,
         vehicleScope: 'all',
         selectedVehicleCount: 0,
+        fuelTypeFilter: query.fuelTypes?.length ? query.fuelTypes : null,
+        vehicleFuelById: new Map(),
         trips: [],
         costs: [],
         allFuelCostsForSegments: [],
@@ -446,13 +452,43 @@ export class TripsService {
 
     const vehicleIds = [...new Set((query.vehicleIds ?? []).map((id) => id.trim()).filter(Boolean))];
     const vehicleScope = vehicleIds.length > 0 ? 'selected' : 'all';
+    const fuelTypeFilter = query.fuelTypes?.length ? query.fuelTypes : null;
 
     for (const vehicleId of vehicleIds) {
       await assertVehicleInTenant(this.prisma, tenantSlug, vehicleId);
     }
 
+    const tenantVehicles = await this.prisma.vehicle.findMany({
+      where: { tenantId: tenant.id },
+      select: { id: true, fuelType: true, civProfile: true },
+    });
+
+    const vehicleFuelById = new Map<string, FuelType | null>();
+    for (const v of tenantVehicles) {
+      vehicleFuelById.set(
+        v.id,
+        resolveVehicleFuelType({
+          fuelType: v.fuelType,
+          civProfile: normalizeCivProfile(v.civProfile),
+        }),
+      );
+    }
+
+    let allowedVehicleIds = tenantVehicles.map((v) => v.id);
+    if (vehicleIds.length > 0) {
+      const selected = new Set(vehicleIds);
+      allowedVehicleIds = allowedVehicleIds.filter((id) => selected.has(id));
+    }
+    if (fuelTypeFilter?.length) {
+      const fuelSet = new Set(fuelTypeFilter);
+      allowedVehicleIds = allowedVehicleIds.filter((id) => {
+        const ft = vehicleFuelById.get(id);
+        return ft != null && fuelSet.has(ft);
+      });
+    }
+
     const vehicleFilter: Prisma.VehicleWhereInput =
-      vehicleIds.length > 0 ? { id: { in: vehicleIds } } : { tenantId: tenant.id };
+      allowedVehicleIds.length > 0 ? { id: { in: allowedVehicleIds } } : { id: { in: [] } };
 
     const tripWhere: Prisma.TripWhereInput = {
       tenantId: tenant.id,
@@ -526,6 +562,8 @@ export class TripsService {
       periodEnd: to,
       vehicleScope,
       selectedVehicleCount: vehicleIds.length,
+      fuelTypeFilter,
+      vehicleFuelById,
       trips: trips.map((t) => ({
         id: t.id,
         vehicleId: t.vehicleId,

@@ -11,6 +11,7 @@ import {
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
+import { consumptionPer100Label, fuelTypeLabel } from "@/lib/fuel-types";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { formatRonFromCents } from "@/lib/money";
 
@@ -188,6 +189,12 @@ export function TripsConsumptionView({ data }: Props) {
         {data.vehicleScope === "all"
           ? "Toată flota"
           : `${data.selectedVehicleCount} vehicule selectate`}
+        {data.fuelTypeFilter?.length ? (
+          <>
+            {" · "}
+            {data.fuelTypeFilter.map((ft) => fuelTypeLabel(ft)).join(", ")}
+          </>
+        ) : null}
       </p>
 
       {summary.qualityWarnings.length > 0 ? (
@@ -226,6 +233,37 @@ export function TripsConsumptionView({ data }: Props) {
           accent="violet"
         />
       </div>
+
+      {data.summaryByFuelType.length > 0 ? (
+        <div>
+          <h3 className="mb-3 text-sm font-medium text-zinc-300">Consum pe tip combustibil / energie</h3>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {data.summaryByFuelType.map((row) => (
+              <StatCard
+                key={row.fuelType}
+                label={row.label}
+                value={
+                  row.avgConsumptionPer100 != null
+                    ? `${row.avgConsumptionPer100} ${consumptionPer100Label(row.fuelType)}`
+                    : "—"
+                }
+                hint={`${row.totalEnergy.toLocaleString("ro-RO")} ${row.energyUnit} · ${row.totalTripKm.toLocaleString("ro-RO")} km · ${row.vehicleCount} vehicule · ${row.segmentCount} segmente`}
+                accent={
+                  row.fuelType === "electric"
+                    ? "violet"
+                    : row.fuelType === "diesel"
+                      ? "sky"
+                      : row.fuelType === "petrol"
+                        ? "amber"
+                        : row.fuelType === "lpg"
+                          ? "emerald"
+                          : "sky"
+                }
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
@@ -322,7 +360,10 @@ export function TripsConsumptionView({ data }: Props) {
                       <td className={fleetTdClass}>{new Date(row.incurredOn).toLocaleDateString("ro-RO")}</td>
                       <td className={`${fleetTdClass} font-mono`}>{row.registrationNumber}</td>
                       <td className={fleetTdClass}>{row.fuelProductLabel}</td>
-                      <td className={`${fleetTdClass} font-mono text-amber-200/90`}>{row.fuelLiters} L</td>
+                      <td className={`${fleetTdClass} font-mono text-amber-200/90`}>
+                        {row.fuelLiters}{" "}
+                        {row.fuelProductType === "electric" ? "kWh" : "L"}
+                      </td>
                       <td className={`${fleetTdClass} font-mono text-zinc-400`}>
                         {row.odometerKm != null ? row.odometerKm.toLocaleString("ro-RO") : "—"}
                       </td>
@@ -355,7 +396,7 @@ export function TripsConsumptionView({ data }: Props) {
                     <th className={fleetThClass}>Produs</th>
                     <th className={fleetThClass}>Litri</th>
                     <th className={fleetThClass}>Km</th>
-                    <th className={fleetThClass}>L/100km</th>
+                    <th className={fleetThClass}>Consum/100km</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
@@ -367,9 +408,17 @@ export function TripsConsumptionView({ data }: Props) {
                         {new Date(row.periodEnd).toLocaleDateString("ro-RO")}
                       </td>
                       <td className={fleetTdClass}>{row.fuelProductLabel}</td>
-                      <td className={`${fleetTdClass} font-mono text-amber-200/90`}>{row.fillLiters} L</td>
+                      <td className={`${fleetTdClass} font-mono text-amber-200/90`}>
+                        {row.fillLiters}{" "}
+                        {row.fuelProductType === "electric" ? "kWh" : "L"}
+                      </td>
                       <td className={`${fleetTdClass} font-mono`}>{row.kmDelta.toLocaleString("ro-RO")}</td>
-                      <td className={`${fleetTdClass} font-mono text-emerald-300`}>{row.l100}</td>
+                      <td className={`${fleetTdClass} font-mono text-emerald-300`}>
+                        {row.l100}{" "}
+                        <span className="text-xs text-zinc-500">
+                          {consumptionPer100Label(row.fuelProductType)}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -5,7 +5,7 @@ import { COST_CATEGORY_VALUES, isKnownCostCategory } from "@/lib/cost-categories
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { isItpCostCategory } from "@/lib/itp-ops";
 import { isFuelCostCategory } from "@/lib/fuel-ops";
-import { FUEL_TYPE_OPTIONS, type FuelTypeValue } from "@/lib/fuel-types";
+import { FUEL_TYPE_OPTIONS, resolveVehicleFuelFromCivP3, type FuelTypeValue } from "@/lib/fuel-types";
 import {
   defaultDayOffsetsForMode,
   hasConfiguredOpsReminder,
@@ -26,7 +26,7 @@ import {
 } from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, useEffect, type FormEvent } from "react";
 
 type CostRecord = {
   id: string;
@@ -54,6 +54,8 @@ type VehicleOption = {
   registrationNumber: string;
   clientId: string;
   odometerKm?: number;
+  fuelType?: string | null;
+  civProfile?: Record<string, string | number | null>;
 };
 
 type Props =
@@ -166,6 +168,17 @@ export function CostForm(props: Props) {
   const isItp = isItpCostCategory(category);
   const isFuel = isFuelCostCategory(category);
 
+  const resolvedFuelFromCiv = useMemo(
+    () => resolveVehicleFuelFromCivP3(selectedVehicle?.civProfile),
+    [selectedVehicle?.civProfile],
+  );
+  const fuelTypeLockedByCiv = isFuel && resolvedFuelFromCiv != null;
+
+  useEffect(() => {
+    if (!isFuel || !selectedVehicle) return;
+    if (resolvedFuelFromCiv) setFuelProductType(resolvedFuelFromCiv);
+  }, [isFuel, selectedVehicle?.id, resolvedFuelFromCiv]);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setPending(true);
@@ -225,7 +238,7 @@ export function CostForm(props: Props) {
         return;
       }
       if (!fuelProductType) {
-        setError("Alege tipul de carburant alimentat.");
+        setError("Alege tipul de carburant alimentat sau completează CIV P.3 în profilul vehiculului.");
         setPending(false);
         return;
       }
@@ -391,10 +404,19 @@ export function CostForm(props: Props) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {isFuel ? (
               <>
-                <OpsFormField label="Tip carburant" required>
+                <OpsFormField
+                  label="Tip carburant"
+                  required
+                  hint={
+                    fuelTypeLockedByCiv
+                      ? "Completat automat din CIV P.3 (Motor / Propulsie)."
+                      : "Completează CIV P.3 în Advanced Info dacă lipsește."
+                  }
+                >
                   <select
                     required
                     value={fuelProductType}
+                    disabled={fuelTypeLockedByCiv}
                     onChange={(e) => setFuelProductType(e.target.value as FuelTypeValue)}
                     className={OPS_INPUT_CLASS}
                   >
@@ -513,8 +535,9 @@ export function CostForm(props: Props) {
             <select
               required
               value={fuelProductType}
+              disabled={fuelTypeLockedByCiv}
               onChange={(e) => setFuelProductType(e.target.value as FuelTypeValue)}
-              className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2"
+              className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2 disabled:opacity-70"
             >
               {FUEL_TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -522,6 +545,11 @@ export function CostForm(props: Props) {
                 </option>
               ))}
             </select>
+            <p className="text-xs text-zinc-500">
+              {fuelTypeLockedByCiv
+                ? "Preluat automat din CIV P.3 (Motor / Propulsie)."
+                : "Selectează manual sau completează CIV P.3 în profilul vehiculului."}
+            </p>
           </div>
           <div className="space-y-2">
             <label className="block text-sm font-medium text-amber-200/90">Litri alimentați</label>

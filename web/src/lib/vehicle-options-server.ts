@@ -2,7 +2,14 @@ import { fleetServerFetch } from "@/lib/fleet-server";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
 
 type VehiclesPayload = {
-  items: Array<{ id: string; registrationNumber: string; clientId: string; odometerKm: number }>;
+  items: Array<{
+    id: string;
+    registrationNumber: string;
+    clientId: string;
+    odometerKm: number;
+    fuelType?: string | null;
+    civProfile?: Record<string, string | number | null>;
+  }>;
 };
 
 export async function getVehicleOptions(): Promise<OpsVehicleOption[]> {
@@ -14,5 +21,7 @@ export async function getVehicleOptions(): Promise<OpsVehicleOption[]> {
     registrationNumber: v.registrationNumber,
     clientId: v.clientId,
     odometerKm: v.odometerKm,
+    fuelType: v.fuelType ?? null,
+    civProfile: v.civProfile ?? {},
   }));
 }

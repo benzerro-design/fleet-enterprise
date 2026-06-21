@@ -1,17 +1,26 @@
 "use client";
 
 import { VehicleMultiSelect } from "@/components/fleet/VehicleMultiSelect";
+import { FuelTypeFilter } from "@/components/fleet/FuelTypeFilter";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import type { VehicleMultiSelectOption } from "@/components/fleet/VehicleMultiSelect";
+import type { FuelTypeValue } from "@/lib/fuel-types";
 
 type Props = {
   vehicles: VehicleMultiSelectOption[];
   periodFrom: string;
   periodTo: string;
   selectedVehicleIds: string[];
+  selectedFuelTypes: FuelTypeValue[];
 };
 
-export function ConsumptionFilterForm({ vehicles, periodFrom, periodTo, selectedVehicleIds }: Props) {
+export function ConsumptionFilterForm({
+  vehicles,
+  periodFrom,
+  periodTo,
+  selectedVehicleIds,
+  selectedFuelTypes,
+}: Props) {
   return (
     <form
       action="/fleet/trips"
@@ -48,6 +57,13 @@ export function ConsumptionFilterForm({ vehicles, periodFrom, periodTo, selected
           Aplică
         </button>
         <FilterResetLink href="/fleet/trips?view=consumption" />
+      </div>
+      <div className="mt-3 border-t border-zinc-800 pt-3">
+        <label className="mb-2 block text-xs font-medium text-zinc-500">Tip combustibil / energie</label>
+        <FuelTypeFilter selected={selectedFuelTypes} />
+        <p className="mt-2 text-xs text-zinc-500">
+          Filtrează vehiculele după tipul de energie (CIV P.3 sau profil vehicul). Poți combina cu selecția manuală de vehicule.
+        </p>
       </div>
     </form>
   );

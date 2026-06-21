@@ -1,9 +1,11 @@
 import type { FuelType } from '@prisma/client';
+import { fuelEnergyUnit } from '../fleet/vehicle-fuel-resolve';
 import { isFuelCostCategory } from './fuel-ops';
 import { fuelTypeLabel } from './fuel-types';
 import type {
   ConsumptionFillRow,
   ConsumptionFuelMixRow,
+  ConsumptionFuelTypeSummary,
   ConsumptionPayload,
   ConsumptionSegmentRow,
   ConsumptionSummary,
@@ -147,11 +149,64 @@ function buildSegments(
   return segments.sort((a, b) => a.fillAt.localeCompare(b.fillAt));
 }
 
+function buildSummaryByFuelType(input: {
+  trips: ConsumptionTripRow[];
+  fills: ConsumptionFillRow[];
+  segments: ConsumptionSegmentRow[];
+  vehicleFuelById: Map<string, FuelType | null>;
+}): ConsumptionFuelTypeSummary[] {
+  const types = new Set<FuelType>();
+  for (const ft of input.vehicleFuelById.values()) {
+    if (ft) types.add(ft);
+  }
+  for (const f of input.fills) {
+    if (f.fuelProductType) types.add(f.fuelProductType);
+  }
+
+  const summaries: ConsumptionFuelTypeSummary[] = [];
+  for (const fuelType of [...types].sort()) {
+    const vehicleIds = [...input.vehicleFuelById.entries()]
+      .filter(([, ft]) => ft === fuelType)
+      .map(([id]) => id);
+    const vehicleIdSet = new Set(vehicleIds);
+
+    const trips = input.trips.filter((t) => vehicleIdSet.has(t.vehicleId));
+    const fills = input.fills.filter((f) => vehicleIdSet.has(f.vehicleId));
+    const segments = input.segments.filter((s) => vehicleIdSet.has(s.vehicleId));
+
+    const totalTripKm = trips.reduce((s, t) => s + (t.distanceKm ?? 0), 0);
+    const totalEnergy = fills.reduce((s, f) => s + f.fuelLiters, 0);
+    const totalFuelCostCents = fills.reduce((s, f) => s + f.amountCents, 0);
+    const avgConsumptionPer100 =
+      segments.length > 0
+        ? round1(segments.reduce((s, seg) => s + seg.l100, 0) / segments.length)
+        : null;
+
+    summaries.push({
+      fuelType,
+      label: fuelTypeLabel(fuelType),
+      energyUnit: fuelEnergyUnit(fuelType),
+      totalTripKm,
+      totalEnergy: round1(totalEnergy),
+      totalFuelCostCents,
+      avgConsumptionPer100,
+      segmentCount: segments.length,
+      tripCount: trips.length,
+      fillCount: fills.length,
+      vehicleCount: vehicleIds.length,
+    });
+  }
+
+  return summaries.sort((a, b) => b.totalEnergy - a.totalEnergy);
+}
+
 export function buildConsumptionPayload(input: {
   periodStart: Date;
   periodEnd: Date;
   vehicleScope: 'all' | 'selected';
   selectedVehicleCount: number;
+  fuelTypeFilter: FuelType[] | null;
+  vehicleFuelById: Map<string, FuelType | null>;
   trips: Array<{
     id: string;
     vehicleId: string;
@@ -304,7 +359,14 @@ export function buildConsumptionPayload(input: {
     periodEnd: input.periodEnd.toISOString(),
     vehicleScope: input.vehicleScope,
     selectedVehicleCount: input.selectedVehicleCount,
+    fuelTypeFilter: input.fuelTypeFilter,
     summary,
+    summaryByFuelType: buildSummaryByFuelType({
+      trips: tripRows,
+      fills: fillsInPeriod,
+      segments,
+      vehicleFuelById: input.vehicleFuelById,
+    }),
     weekly,
     fuelMix: buildFuelMix(fillsInPeriod),
     trips: tripRows,

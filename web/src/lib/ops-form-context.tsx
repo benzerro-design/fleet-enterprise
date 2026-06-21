@@ -7,6 +7,8 @@ export type OpsVehicleOption = {
   registrationNumber: string;
   clientId: string;
   odometerKm?: number;
+  fuelType?: string | null;
+  civProfile?: Record<string, string | number | null>;
 };
 
 type OpsFormContextValue = {

@@ -11,6 +11,18 @@ export const FUEL_TYPE_LABELS: Record<FuelType, string> = {
   lpg: 'GPL',
 };
 
+export const CONSUMPTION_FUEL_FILTER_VALUES: FuelType[] = ['diesel', 'petrol', 'lpg', 'electric', 'hybrid'];
+
+export function parseFuelTypesCsv(raw: string | undefined): FuelType[] | undefined {
+  if (!raw?.trim()) return undefined;
+  const out: FuelType[] = [];
+  for (const part of raw.split(',')) {
+    const parsed = parseFuelType(part.trim());
+    if (parsed && !out.includes(parsed)) out.push(parsed);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 export function fuelTypeLabel(value: FuelType | null | undefined): string {
   if (!value) return '—';
   return FUEL_TYPE_LABELS[value] ?? value;
