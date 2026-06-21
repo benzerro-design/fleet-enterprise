@@ -30,6 +30,7 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds" 
     });
   }, [vehicles, clientQ, search]);
 
+  const selectedVehicles = vehicles.filter((v) => selected.has(v.id));
   const allFleet = selected.size === 0;
 
   function toggle(id: string) {
@@ -37,6 +38,14 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds" 
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }
+
+  function remove(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
       return next;
     });
   }
@@ -49,18 +58,14 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds" 
     setSelected(new Set());
   }
 
-  const selectedPlates = vehicles.filter((v) => selected.has(v.id)).map((v) => v.registrationNumber);
-
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <input type="hidden" name={name} value={[...selected].join(",")} readOnly />
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => {
-            clearAll();
-          }}
-          className={`rounded-lg px-3 py-1.5 text-sm ${
+          onClick={clearAll}
+          className={`shrink-0 rounded-lg px-3 py-2 text-sm ${
             allFleet
               ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40"
               : "border border-zinc-700 text-zinc-300 hover:bg-zinc-900"
@@ -71,29 +76,32 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds" 
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
+          className="shrink-0 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
         >
-          {open ? "Ascunde selector" : "Alege vehicule…"}
+          {open ? "Ascunde" : "Alege…"}
         </button>
-        <span className="text-xs text-zinc-500">
-          {allFleet ? "Toate vehiculele" : `${selected.size} selectate`}
-        </span>
-      </div>
-      {!allFleet && selectedPlates.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {selectedPlates.slice(0, 5).map((plate) => (
+        {allFleet ? (
+          <span className="text-xs text-zinc-500">Toate vehiculele</span>
+        ) : (
+          selectedVehicles.map((v) => (
             <span
-              key={plate}
-              className="rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-0.5 font-mono text-xs text-zinc-300"
+              key={v.id}
+              className="inline-flex max-w-full items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 py-0.5 pl-2 pr-1 font-mono text-xs text-zinc-300"
             >
-              {plate}
+              <span className="truncate">{v.registrationNumber}</span>
+              <button
+                type="button"
+                onClick={() => remove(v.id)}
+                className="rounded px-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                aria-label={`Elimină ${v.registrationNumber}`}
+                title={`Elimină ${v.registrationNumber}`}
+              >
+                ×
+              </button>
             </span>
-          ))}
-          {selectedPlates.length > 5 ? (
-            <span className="text-xs text-zinc-500">+{selectedPlates.length - 5} altele</span>
-          ) : null}
-        </div>
-      ) : null}
+          ))
+        )}
+      </div>
       {open ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
           <div className="flex flex-col gap-2 sm:flex-row">
