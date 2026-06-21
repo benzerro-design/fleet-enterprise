@@ -4,6 +4,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { Suspense } from "react";
 import { RemindersListView } from "@/components/fleet/RemindersListView";
+import { RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolbar";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { remindersBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
@@ -130,9 +131,14 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
             <FilterResetLink href="/fleet/reminders" />
           </form>
         }
+        toolbar={
+          <Suspense fallback={null}>
+            <RemindersStatusToolbar write={write} />
+          </Suspense>
+        }
       >
         <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
-          <RemindersListView backHref="/fleet/vehicles" write={write} />
+          <RemindersListView backHref="/fleet/vehicles" write={write} showStatusToolbar={false} />
         </Suspense>
       </FleetListPageLayout>
     </FleetPageMain>

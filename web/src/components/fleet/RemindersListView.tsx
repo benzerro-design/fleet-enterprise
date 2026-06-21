@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DeleteReminderButton } from "@/components/fleet/DeleteReminderButton";
+import { REMINDER_STATUS_TABS, RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolbar";
 import { ReminderActionStatusBadge } from "@/components/fleet/ReminderActionStatusBadge";
 import { formatOffsetDaysLabel } from "@/lib/document-reminders";
 import { formatOffsetKmLabel, reminderSourceLabel, type ReminderActionRow } from "@/lib/reminder-actions";
@@ -18,14 +19,9 @@ type Props = {
   backHref: string;
   write?: boolean;
   compact?: boolean;
+  /** false pe pagina /fleet/reminders — toolbar-ul e fix sub filtre. */
+  showStatusToolbar?: boolean;
 };
-
-const STATUS_TABS = [
-  { value: "all", label: "Toate" },
-  { value: "action", label: "Necesită atenție" },
-  { value: "upcoming", label: "Viitoare" },
-  { value: "expired", label: "Depășite" },
-] as const;
 
 async function parseApiError(res: Response): Promise<string> {
   const text = await res.text();
@@ -49,15 +45,15 @@ export function RemindersListView({
   backHref,
   write = false,
   compact = false,
+  showStatusToolbar = true,
 }: Props) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const searchKey = searchParams.toString();
   const urlStatus = searchParams.get("status");
   const [localStatus, setLocalStatus] = useState<string>("all");
   const status = (
     compact ? localStatus : urlStatus ?? "all"
-  ) as (typeof STATUS_TABS)[number]["value"];
+  ) as (typeof REMINDER_STATUS_TABS)[number]["value"];
 
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,14 +106,8 @@ export function RemindersListView({
     void load();
   }, [load]);
 
-  function setStatus(next: string) {
-    if (compact) {
-      setLocalStatus(next);
-      return;
-    }
-    const p = new URLSearchParams(searchParams.toString());
-    p.set("status", next);
-    router.replace(`/fleet/reminders?${p.toString()}`, { scroll: false });
+  function setLocalStatusOnly(next: string) {
+    setLocalStatus(next);
   }
 
   const newHref = vehicleId
@@ -126,30 +116,15 @@ export function RemindersListView({
 
   return (
     <>
-      <div className={`mb-4 flex flex-wrap items-center gap-2 ${compact ? "" : "mb-6"}`}>
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => setStatus(tab.value)}
-            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-              status === tab.value
-                ? "border-violet-500/60 bg-violet-950/50 text-violet-100"
-                : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-        {write ? (
-          <Link
-            href={newHref}
-            className="ml-auto inline-flex rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-500"
-          >
-            + Acțiune nouă
-          </Link>
-        ) : null}
-      </div>
+      {showStatusToolbar ? (
+        <RemindersStatusToolbar
+          write={write}
+          vehicleId={vehicleId}
+          compact={compact}
+          status={compact ? localStatus : undefined}
+          onStatusChange={compact ? setLocalStatusOnly : undefined}
+        />
+      ) : null}
 
       {vehicleLabel ? (
         <p className="mb-4 text-sm text-zinc-400">
@@ -166,7 +141,7 @@ export function RemindersListView({
 
       {!loading && !error && data?.items.length === 0 ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 px-6 py-8 text-center">
-          <p className="text-zinc-300">Niciun reminder pentru filtrul „{STATUS_TABS.find((t) => t.value === status)?.label ?? status}”.</p>
+          <p className="text-zinc-300">Niciun reminder pentru filtrul „{REMINDER_STATUS_TABS.find((t) => t.value === status)?.label ?? status}”.</p>
           <p className="mt-2 text-xs text-zinc-500">Încearcă tab-ul „Toate” sau creează o acțiune nouă.</p>
           {write ? (
             <Link
