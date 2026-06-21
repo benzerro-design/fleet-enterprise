@@ -17,8 +17,8 @@ type FleetListPageLayoutProps = {
  */
 export function FleetListPageLayout({ header, filters, toolbar, children }: FleetListPageLayoutProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
-      {header ? <div className="shrink-0 space-y-6">{header}</div> : null}
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {header ? <div className="shrink-0 space-y-3">{header}</div> : null}
       {filters ? <div className="shrink-0">{filters}</div> : null}
       {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
       <div className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col`}>

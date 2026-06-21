@@ -110,8 +110,14 @@ function parseSelectedVehicleIds(raw: string | undefined): string[] {
 }
 
 function tabLinkClass(active: boolean): string {
-  return `rounded-t-lg px-4 py-2 text-sm ${active ? "bg-zinc-900 text-emerald-400" : "text-zinc-400 hover:text-zinc-200"}`;
+  return `rounded-t-md px-3 py-1.5 text-xs ${active ? "bg-zinc-900 text-emerald-400" : "text-zinc-400 hover:text-zinc-200"}`;
 }
+
+const tripActionBtn =
+  "inline-flex shrink-0 items-center rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap";
+const tripActionBtnPrimary = `${tripActionBtn} bg-emerald-500 text-zinc-950 hover:bg-emerald-400`;
+const tripActionBtnOutline = `${tripActionBtn} border border-zinc-700 bg-zinc-900/40 text-zinc-200 hover:bg-zinc-900`;
+const tripActionBtnEmeraldOutline = `${tripActionBtn} border border-emerald-700/60 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-950/70`;
 
 function buildQuery(sp: Search): string {
   const q = new URLSearchParams();
@@ -269,43 +275,30 @@ export default async function TripsPage({ searchParams }: Props) {
       <FleetListPageLayout
         header={
           <>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight">Curse</h1>
-                <p className="mt-3 text-zinc-400">
-                  Curse operaționale, generare foaie de parcurs / FAZ lunar (PDF) și arhivă documente. Conducătorul este text
-                  liber până la modulul Client.
-                </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-baseline gap-3">
+                <p className="text-xs font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
+                <h1 className="text-2xl font-semibold tracking-tight">Curse</h1>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
                 {write ? (
                   <>
-                    <Link
-                      href="/fleet/trips/new"
-                      className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
-                    >
+                    <Link href="/fleet/trips/new" className={tripActionBtnPrimary}>
                       Cursă nouă
                     </Link>
-                    <TripSheetWizard vehicles={vehicles} />
+                    <TripSheetWizard vehicles={vehicles} triggerClassName={tripActionBtnEmeraldOutline} />
                   </>
                 ) : null}
-                <a
-                  href={exportHref}
-                  className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-                >
+                <a href={exportHref} className={tripActionBtnOutline}>
                   Export CSV
                 </a>
-                <Link
-                  href="/fleet/vehicles"
-                  className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-                >
+                <Link href="/fleet/vehicles" className={tripActionBtnOutline}>
                   Înapoi la vehicule
                 </Link>
               </div>
             </div>
 
-            <nav className="flex flex-wrap gap-2 border-b border-zinc-800 pb-1">
+            <nav className="flex flex-wrap gap-1 border-b border-zinc-800">
               <Link href="/fleet/trips" className={tabLinkClass(showTrips)}>
                 Listă curse
               </Link>

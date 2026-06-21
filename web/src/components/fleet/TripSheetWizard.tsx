@@ -12,6 +12,7 @@ type VehicleOption = {
 
 type Props = {
   vehicles: VehicleOption[];
+  triggerClassName?: string;
 };
 
 async function readErrorMessage(res: Response): Promise<string> {
@@ -26,7 +27,7 @@ async function readErrorMessage(res: Response): Promise<string> {
   return msg;
 }
 
-export function TripSheetWizard({ vehicles }: Props) {
+export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [docType, setDocType] = useState<"trip_sheet" | "faz_monthly">("trip_sheet");
@@ -117,7 +118,10 @@ export function TripSheetWizard({ vehicles }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-950/70"
+        className={
+          triggerClassName ??
+          "rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-950/70"
+        }
       >
         Generează foaie / FAZ
       </button>

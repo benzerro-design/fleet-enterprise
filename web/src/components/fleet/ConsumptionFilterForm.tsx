@@ -14,6 +14,11 @@ type Props = {
   selectedFuelTypes: FuelTypeValue[];
 };
 
+const fieldLabel = "text-[10px] font-medium uppercase tracking-wide text-zinc-500";
+const fieldInput = "rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs";
+const filterBtn = "rounded-md bg-zinc-800 px-3 py-1.5 text-xs";
+const resetBtn = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900";
+
 export function ConsumptionFilterForm({
   vehicles,
   periodFrom,
@@ -22,48 +27,43 @@ export function ConsumptionFilterForm({
   selectedFuelTypes,
 }: Props) {
   return (
-    <form
-      action="/fleet/trips"
-      method="get"
-      className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"
-    >
+    <form action="/fleet/trips" method="get" className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
       <input type="hidden" name="view" value="consumption" />
-      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
-        <div className="flex min-w-[9rem] flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500">Perioadă de la</label>
-          <input
-            name="periodFrom"
-            type="date"
-            required
-            defaultValue={periodFrom}
-            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-          />
+      <div className="flex flex-col gap-2 xl:flex-row xl:flex-wrap xl:items-end">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-0.5">
+            <label className={fieldLabel}>De la</label>
+            <input
+              name="periodFrom"
+              type="date"
+              required
+              defaultValue={periodFrom}
+              className={`${fieldInput} w-[8.5rem]`}
+            />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <label className={fieldLabel}>Până la</label>
+            <input
+              name="periodTo"
+              type="date"
+              required
+              defaultValue={periodTo}
+              className={`${fieldInput} w-[8.5rem]`}
+            />
+          </div>
+          <button type="submit" className={filterBtn}>
+            Aplică
+          </button>
+          <FilterResetLink href="/fleet/trips?view=consumption" className={resetBtn} />
         </div>
-        <div className="flex min-w-[9rem] flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500">Perioadă până la</label>
-          <input
-            name="periodTo"
-            type="date"
-            required
-            defaultValue={periodTo}
-            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-          />
+        <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex">
+          <label className={fieldLabel}>Vehicule</label>
+          <VehicleMultiSelect vehicles={vehicles} selectedIds={selectedVehicleIds} compact />
         </div>
-        <div className="min-w-[14rem] flex-1 flex-col gap-1 lg:flex">
-          <label className="text-xs font-medium text-zinc-500">Vehicule</label>
-          <VehicleMultiSelect vehicles={vehicles} selectedIds={selectedVehicleIds} />
+        <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex xl:min-w-[20rem]">
+          <label className={fieldLabel}>Tip energie</label>
+          <FuelTypeFilter selected={selectedFuelTypes} compact />
         </div>
-        <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
-          Aplică
-        </button>
-        <FilterResetLink href="/fleet/trips?view=consumption" />
-      </div>
-      <div className="mt-3 border-t border-zinc-800 pt-3">
-        <label className="mb-2 block text-xs font-medium text-zinc-500">Tip combustibil / energie</label>
-        <FuelTypeFilter selected={selectedFuelTypes} />
-        <p className="mt-2 text-xs text-zinc-500">
-          Filtrează vehiculele după tipul de energie (CIV P.3 sau profil vehicul). Poți combina cu selecția manuală de vehicule.
-        </p>
       </div>
     </form>
   );

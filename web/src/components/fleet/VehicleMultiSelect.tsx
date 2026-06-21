@@ -12,9 +12,10 @@ type Props = {
   vehicles: VehicleMultiSelectOption[];
   selectedIds: string[];
   name?: string;
+  compact?: boolean;
 };
 
-export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds" }: Props) {
+export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds", compact = false }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [clientQ, setClientQ] = useState("");
@@ -58,14 +59,21 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds" 
     setSelected(new Set());
   }
 
+  const chipBtn = compact
+    ? "shrink-0 rounded-md px-2 py-1 text-[11px]"
+    : "shrink-0 rounded-lg px-3 py-2 text-sm";
+  const chipTag =
+    "inline-flex max-w-full items-center gap-0.5 rounded border border-zinc-700 bg-zinc-900/60 font-mono text-zinc-300 " +
+    (compact ? "py-0 pl-1.5 pr-0.5 text-[10px]" : "py-0.5 pl-2 pr-1 text-xs");
+
   return (
-    <div className="space-y-2">
+    <div className={compact ? "space-y-1" : "space-y-2"}>
       <input type="hidden" name={name} value={[...selected].join(",")} readOnly />
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={`flex flex-wrap items-center ${compact ? "gap-1" : "gap-2"}`}>
         <button
           type="button"
           onClick={clearAll}
-          className={`shrink-0 rounded-lg px-3 py-2 text-sm ${
+          className={`${chipBtn} ${
             allFleet
               ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40"
               : "border border-zinc-700 text-zinc-300 hover:bg-zinc-900"
@@ -76,18 +84,15 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds" 
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="shrink-0 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+          className={`${chipBtn} border border-zinc-700 text-zinc-300 hover:bg-zinc-900`}
         >
           {open ? "Ascunde" : "Alege…"}
         </button>
         {allFleet ? (
-          <span className="text-xs text-zinc-500">Toate vehiculele</span>
+          <span className={`text-zinc-500 ${compact ? "text-[10px]" : "text-xs"}`}>Toate vehiculele</span>
         ) : (
           selectedVehicles.map((v) => (
-            <span
-              key={v.id}
-              className="inline-flex max-w-full items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 py-0.5 pl-2 pr-1 font-mono text-xs text-zinc-300"
-            >
+            <span key={v.id} className={chipTag}>
               <span className="truncate">{v.registrationNumber}</span>
               <button
                 type="button"
@@ -103,7 +108,7 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds" 
         )}
       </div>
       {open ? (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+        <div className={`rounded-lg border border-zinc-800 bg-zinc-900/40 ${compact ? "p-2" : "p-3"}`}>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               value={search}
