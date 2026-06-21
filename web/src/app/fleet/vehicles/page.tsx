@@ -8,6 +8,7 @@ import {
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -68,73 +69,77 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   };
 
   return (
-    <FleetPageMain>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Fleet core</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Vehicule</h1>
-            <p className="mt-3 max-w-2xl text-zinc-400">
-              Căutare, filtru status, paginare și export CSV. Detaliu pe vehicul fără a intra direct în editare.
-            </p>
-          </div>
+    <FleetPageMain fill>
+      <FleetListPageLayout
+        header={
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Fleet core</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Vehicule</h1>
+              <p className="mt-3 max-w-2xl text-zinc-400">
+                Căutare, filtru status, paginare și export CSV. Detaliu pe vehicul fără a intra direct în editare.
+              </p>
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            {write ? (
-              <Link
-                href="/fleet/vehicles/new"
-                className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+            <div className="flex flex-wrap gap-2">
+              {write ? (
+                <Link
+                  href="/fleet/vehicles/new"
+                  className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Vehicul nou
+                </Link>
+              ) : null}
+              <a
+                href={exportHref}
+                className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
               >
-                Vehicul nou
-              </Link>
-            ) : null}
-            <a
-              href={exportHref}
-              className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-            >
-              Export CSV
-            </a>
+                Export CSV
+              </a>
+            </div>
           </div>
-        </div>
-
-        <form
-          key={filterFormKey(sp)}
-          action="/fleet/vehicles"
-          method="get"
-          className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
-        >
-          <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Căutare</label>
-            <input
-              name="q"
-              defaultValue={sp.q ?? ""}
-              placeholder="Nr. înmatriculare, client, VIN…"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-            />
-          </div>
-          <div className="flex min-w-[10rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Status</label>
-            <select
-              name="status"
-              defaultValue={sp.status ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-            >
-              <option value="">Toate</option>
-              {VEHICLE_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="submit"
-            className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+        }
+        filters={
+          <form
+            key={filterFormKey(sp)}
+            action="/fleet/vehicles"
+            method="get"
+            className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
           >
-            Aplică
-          </button>
-          <FilterResetLink href="/fleet/vehicles" />
-        </form>
-
+            <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Căutare</label>
+              <input
+                name="q"
+                defaultValue={sp.q ?? ""}
+                placeholder="Nr. înmatriculare, client, VIN…"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              />
+            </div>
+            <div className="flex min-w-[10rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Status</label>
+              <select
+                name="status"
+                defaultValue={sp.status ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              >
+                <option value="">Toate</option>
+                {VEHICLE_STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+            >
+              Aplică
+            </button>
+            <FilterResetLink href="/fleet/vehicles" />
+          </form>
+        }
+      >
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-medium text-zinc-300">Listă paginată</h2>
@@ -167,7 +172,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
             </p>
           ) : (
             <>
-              <FleetDataTable className="mt-4">
+              <FleetDataTable>
                 <table className={fleetTableClass}>
                   <thead className={`${fleetTheadClass} tracking-wide`}>
                     <tr>
@@ -245,6 +250,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
             </>
           )}
         </section>
+      </FleetListPageLayout>
     </FleetPageMain>
   );
 }

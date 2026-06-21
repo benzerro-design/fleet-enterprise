@@ -8,6 +8,7 @@ import {
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -105,115 +106,119 @@ export default async function CostsPage({ searchParams }: Props) {
   };
 
   return (
-    <FleetPageMain>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Costuri</h1>
-            <p className="mt-3 text-zinc-400">
-              Filtrare după nr. înmatriculare/client, categorie, furnizor, text în categorie/note, interval dată, export CSV.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {write ? (
-              <Link
-                href="/fleet/costs/new"
-                className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+    <FleetPageMain fill>
+      <FleetListPageLayout
+        header={
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Costuri</h1>
+              <p className="mt-3 text-zinc-400">
+                Filtrare după nr. înmatriculare/client, categorie, furnizor, text în categorie/note, interval dată, export CSV.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {write ? (
+                <Link
+                  href="/fleet/costs/new"
+                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Cost nou
+                </Link>
+              ) : null}
+              <a
+                href={exportHref}
+                className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
               >
-                Cost nou
+                Export CSV
+              </a>
+              <Link
+                href="/fleet/vehicles"
+                className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+              >
+                Înapoi la vehicule
               </Link>
-            ) : null}
-            <a
-              href={exportHref}
-              className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-            >
-              Export CSV
-            </a>
-            <Link
-              href="/fleet/vehicles"
-              className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-            >
-              Înapoi la vehicule
-            </Link>
+            </div>
           </div>
-        </div>
-
-        <form
-          key={filterFormKey(sp)}
-          action="/fleet/costs"
-          method="get"
-          className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
-        >
-          <input type="hidden" name="page" value="1" />
-          <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
-            <input
-              name="registrationNumber"
-              defaultValue={sp.registrationNumber ?? ""}
-              placeholder="ex. B 123 ABC"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[10rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Client</label>
-            <input
-              name="clientId"
-              defaultValue={sp.clientId ?? ""}
-              placeholder="ex. Client A"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[10rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Categorie (exact)</label>
-            <input
-              name="category"
-              defaultValue={sp.category ?? ""}
-              placeholder="ex. combustibil"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Furnizor</label>
-            <input
-              name="provider"
-              defaultValue={sp.provider ?? ""}
-              placeholder="ex. Petrom"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Căutare text</label>
-            <input
-              name="q"
-              defaultValue={sp.q ?? ""}
-              placeholder="Categorie, note…"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[9rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Data de la</label>
-            <input
-              name="incurredFrom"
-              type="date"
-              defaultValue={sp.incurredFrom ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[9rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Data până la</label>
-            <input
-              name="incurredTo"
-              type="date"
-              defaultValue={sp.incurredTo ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
-            Aplică
-          </button>
-          <FilterResetLink href="/fleet/costs" />
-        </form>
-
+        }
+        filters={
+          <form
+            key={filterFormKey(sp)}
+            action="/fleet/costs"
+            method="get"
+            className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
+          >
+            <input type="hidden" name="page" value="1" />
+            <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
+              <input
+                name="registrationNumber"
+                defaultValue={sp.registrationNumber ?? ""}
+                placeholder="ex. B 123 ABC"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[10rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Client</label>
+              <input
+                name="clientId"
+                defaultValue={sp.clientId ?? ""}
+                placeholder="ex. Client A"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[10rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Categorie (exact)</label>
+              <input
+                name="category"
+                defaultValue={sp.category ?? ""}
+                placeholder="ex. combustibil"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Furnizor</label>
+              <input
+                name="provider"
+                defaultValue={sp.provider ?? ""}
+                placeholder="ex. Petrom"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Căutare text</label>
+              <input
+                name="q"
+                defaultValue={sp.q ?? ""}
+                placeholder="Categorie, note…"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[9rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Data de la</label>
+              <input
+                name="incurredFrom"
+                type="date"
+                defaultValue={sp.incurredFrom ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[9rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Data până la</label>
+              <input
+                name="incurredTo"
+                type="date"
+                defaultValue={sp.incurredTo ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
+              Aplică
+            </button>
+            <FilterResetLink href="/fleet/costs" />
+          </form>
+        }
+      >
         {!data ? (
           <p className="text-amber-400">Nu am putut încărca costurile.</p>
         ) : data.items.length === 0 ? (
@@ -301,6 +306,7 @@ export default async function CostsPage({ searchParams }: Props) {
             </div>
           </>
         )}
+      </FleetListPageLayout>
     </FleetPageMain>
   );
 }

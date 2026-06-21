@@ -1,4 +1,5 @@
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import {
   FleetDataTable,
@@ -78,70 +79,74 @@ export default async function FleetAuditPage({ searchParams }: Props) {
   const prevHref = auditPageHref(sp, Math.max(1, page - 1));
 
   return (
-    <FleetPageMain>
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Transparență</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Jurnal audit</h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Filtrare după tip obiect și tip acțiune (server + paginare). Rezumat citibil; meta complet
-              JSON, expandabil.
-            </p>
-          </div>
-          <Link
-            href="/fleet/vehicles"
-            className="inline-flex w-fit rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-          >
-            Înapoi la vehicule
-          </Link>
-        </div>
-
-        <form
-          key={filterFormKey(sp)}
-          action="/fleet/audit"
-          method="get"
-          className="mb-6 flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
-        >
-          <input type="hidden" name="page" value="1" />
-          <div className="flex min-w-[11rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Tip obiect</label>
-            <select
-              name="entityType"
-              defaultValue={sp.entityType ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+    <FleetPageMain fill>
+      <FleetListPageLayout
+        header={
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Transparență</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Jurnal audit</h1>
+              <p className="mt-2 text-sm text-zinc-400">
+                Filtrare după tip obiect și tip acțiune (server + paginare). Rezumat citibil; meta complet JSON,
+                expandabil.
+              </p>
+            </div>
+            <Link
+              href="/fleet/vehicles"
+              className="inline-flex w-fit rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
             >
-              <option value="">Toate tipurile</option>
-              {AUDIT_ENTITY_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {auditEntityLabel(t)}
-                </option>
-              ))}
-            </select>
+              Înapoi la vehicule
+            </Link>
           </div>
-          <div className="flex min-w-[14rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Acțiune</label>
-            <select
-              name="action"
-              defaultValue={sp.action ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-            >
-              <option value="">Toate acțiunile</option>
-              {AUDIT_ACTION_VALUES.map((a) => (
-                <option key={a} value={a}>
-                  {auditActionLabel(a)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="submit"
-            className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+        }
+        filters={
+          <form
+            key={filterFormKey(sp)}
+            action="/fleet/audit"
+            method="get"
+            className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
           >
-            Aplică filtre
-          </button>
-          <FilterResetLink href="/fleet/audit" />
-        </form>
-
+            <input type="hidden" name="page" value="1" />
+            <div className="flex min-w-[11rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Tip obiect</label>
+              <select
+                name="entityType"
+                defaultValue={sp.entityType ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              >
+                <option value="">Toate tipurile</option>
+                {AUDIT_ENTITY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {auditEntityLabel(t)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex min-w-[14rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Acțiune</label>
+              <select
+                name="action"
+                defaultValue={sp.action ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              >
+                <option value="">Toate acțiunile</option>
+                {AUDIT_ACTION_VALUES.map((a) => (
+                  <option key={a} value={a}>
+                    {auditActionLabel(a)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+            >
+              Aplică filtre
+            </button>
+            <FilterResetLink href="/fleet/audit" />
+          </form>
+        }
+      >
         {!data ? (
           <p className="text-amber-400">Nu am putut încărca jurnalul.</p>
         ) : (
@@ -250,7 +255,7 @@ export default async function FleetAuditPage({ searchParams }: Props) {
                 </tbody>
               </table>
             </FleetDataTable>
-            <div className="mt-4 flex justify-between text-sm text-zinc-500">
+            <div className="flex justify-between text-sm text-zinc-500">
               <span>
                 Total {data.total} · pagina {data.page}
               </span>
@@ -269,6 +274,7 @@ export default async function FleetAuditPage({ searchParams }: Props) {
             </div>
           </>
         )}
+      </FleetListPageLayout>
     </FleetPageMain>
   );
 }
