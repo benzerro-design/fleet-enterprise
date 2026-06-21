@@ -51,10 +51,6 @@ export function ConsumptionFilterForm({
               className={`${fieldInput} w-[8.5rem]`}
             />
           </div>
-          <button type="submit" className={filterBtn}>
-            Aplică
-          </button>
-          <FilterResetLink href="/fleet/trips?view=consumption" className={resetBtn} />
         </div>
         <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex">
           <label className={fieldLabel}>Vehicule</label>
@@ -63,6 +59,12 @@ export function ConsumptionFilterForm({
         <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex xl:min-w-[20rem]">
           <label className={fieldLabel}>Tip energie</label>
           <FuelTypeFilter selected={selectedFuelTypes} compact />
+        </div>
+        <div className="flex shrink-0 items-end justify-end gap-2 xl:ml-auto">
+          <button type="submit" className={filterBtn}>
+            Aplică
+          </button>
+          <FilterResetLink href="/fleet/trips?view=consumption" className={resetBtn} />
         </div>
       </div>
     </form>

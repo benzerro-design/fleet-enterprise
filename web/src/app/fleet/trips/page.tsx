@@ -110,7 +110,11 @@ function parseSelectedVehicleIds(raw: string | undefined): string[] {
 }
 
 function tabLinkClass(active: boolean): string {
-  return `rounded-t-md px-3 py-1.5 text-xs ${active ? "bg-zinc-900 text-emerald-400" : "text-zinc-400 hover:text-zinc-200"}`;
+  return `rounded-t-lg border px-4 py-2 text-sm transition-colors ${
+    active
+      ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
+      : "border-transparent text-zinc-500 hover:text-zinc-200"
+  }`;
 }
 
 const tripActionBtn =
@@ -298,7 +302,8 @@ export default async function TripsPage({ searchParams }: Props) {
               </div>
             </div>
 
-            <nav className="flex flex-wrap gap-1 border-b border-zinc-800">
+            <nav className="border-b border-zinc-800 pt-1">
+              <div className="flex flex-wrap gap-2">
               <Link href="/fleet/trips" className={tabLinkClass(showTrips)}>
                 Listă curse
               </Link>
@@ -311,6 +316,7 @@ export default async function TripsPage({ searchParams }: Props) {
               <Link href="/fleet/trips?view=tachograph" className={tabLinkClass(showTachograph)}>
                 Tahograf
               </Link>
+              </div>
             </nav>
           </>
         }
