@@ -69,7 +69,7 @@ export function ConsumptionFilterForm({
           vehicles={vehicles}
           selectedIds={selectedVehicleIds}
           compact
-          listAlwaysVisible
+          defaultOpen={selectedVehicleIds.length > 0}
         />
       </div>
     </form>
