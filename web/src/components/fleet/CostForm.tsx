@@ -106,7 +106,7 @@ export function CostForm(props: Props) {
         incurredOn: toDateInput(new Date().toISOString()),
         notes: "",
         fuelLiters: "",
-        fuelProductType: "diesel" as FuelTypeValue,
+        fuelProductType: "" as FuelTypeValue | "",
         nextDueOn: "",
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
@@ -126,7 +126,7 @@ export function CostForm(props: Props) {
       incurredOn: toDateInput(r.incurredOn),
       notes: r.notes ?? "",
       fuelLiters: r.fuelLiters != null ? String(r.fuelLiters) : "",
-      fuelProductType: (r.fuelProductType as FuelTypeValue | null) ?? "diesel",
+      fuelProductType: (r.fuelProductType as FuelTypeValue | null) ?? ("" as const),
       nextDueOn: toDateInputOrEmpty(r.nextDueOn ?? null),
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
@@ -150,7 +150,7 @@ export function CostForm(props: Props) {
   const [incurredOn, setIncurredOn] = useState(initial.incurredOn);
   const [notes, setNotes] = useState(initial.notes);
   const [fuelLiters, setFuelLiters] = useState(initial.fuelLiters);
-  const [fuelProductType, setFuelProductType] = useState<FuelTypeValue>(initial.fuelProductType);
+  const [fuelProductType, setFuelProductType] = useState<FuelTypeValue | "">(initial.fuelProductType);
   const [nextDueOn, setNextDueOn] = useState(initial.nextDueOn);
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
@@ -177,6 +177,7 @@ export function CostForm(props: Props) {
   useEffect(() => {
     if (!isFuel || !selectedVehicle) return;
     if (resolvedFuelFromCiv) setFuelProductType(resolvedFuelFromCiv);
+    else setFuelProductType("");
   }, [isFuel, selectedVehicle?.id, resolvedFuelFromCiv]);
 
   async function onSubmit(e: FormEvent) {
@@ -273,7 +274,7 @@ export function CostForm(props: Props) {
       incurredOn: when,
       notes: notes.trim() || null,
       fuelLiters: isFuelCostCategory(category.trim()) ? liters : null,
-      fuelProductType: isFuelCostCategory(category.trim()) ? fuelProductType : null,
+      fuelProductType: isFuelCostCategory(category.trim()) && fuelProductType ? fuelProductType : null,
       nextDueOn: nextDue,
       reminderOffsetsDays: dayOffsets,
       dueOdometerKm: kmDue,
@@ -371,6 +372,26 @@ export function CostForm(props: Props) {
     />
   );
 
+  const fuelProductTypeSelect = (className: string) => (
+    <select
+      required
+      value={fuelProductType}
+      disabled={fuelTypeLockedByCiv}
+      onChange={(e) => {
+        const v = e.target.value;
+        setFuelProductType(v === "" ? "" : (v as FuelTypeValue));
+      }}
+      className={className}
+    >
+      {!fuelTypeLockedByCiv ? <option value="">—</option> : null}
+      {FUEL_TYPE_OPTIONS.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+
   if (useP1Layout) {
     return (
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
@@ -413,19 +434,7 @@ export function CostForm(props: Props) {
                       : "Completează CIV P.3 în Advanced Info dacă lipsește."
                   }
                 >
-                  <select
-                    required
-                    value={fuelProductType}
-                    disabled={fuelTypeLockedByCiv}
-                    onChange={(e) => setFuelProductType(e.target.value as FuelTypeValue)}
-                    className={OPS_INPUT_CLASS}
-                  >
-                    {FUEL_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                  {fuelProductTypeSelect(OPS_INPUT_CLASS)}
                 </OpsFormField>
                 <OpsFormField label="Litri alimentați" required hint="Cantitate alimentată — nu se alocă pe curse.">
                   <input
@@ -532,19 +541,9 @@ export function CostForm(props: Props) {
         <div className="space-y-3 rounded-lg border border-amber-900/40 bg-amber-950/20 p-4">
           <div className="space-y-2">
             <label className="block text-sm font-medium text-amber-200/90">Tip carburant</label>
-            <select
-              required
-              value={fuelProductType}
-              disabled={fuelTypeLockedByCiv}
-              onChange={(e) => setFuelProductType(e.target.value as FuelTypeValue)}
-              className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2 disabled:opacity-70"
-            >
-              {FUEL_TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            {fuelProductTypeSelect(
+              "w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2 disabled:opacity-70",
+            )}
             <p className="text-xs text-zinc-500">
               {fuelTypeLockedByCiv
                 ? "Preluat automat din CIV P.3 (Motor / Propulsie)."

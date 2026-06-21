@@ -52,12 +52,8 @@ export function ConsumptionFilterForm({
             />
           </div>
         </div>
-        <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex">
-          <label className={fieldLabel}>Vehicule</label>
-          <VehicleMultiSelect vehicles={vehicles} selectedIds={selectedVehicleIds} compact />
-        </div>
         <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex xl:min-w-[20rem]">
-          <label className={fieldLabel}>Tip energie</label>
+          <label className={fieldLabel}>Tip energie (alimentări)</label>
           <FuelTypeFilter selected={selectedFuelTypes} compact />
         </div>
         <div className="flex shrink-0 items-end justify-end gap-2 xl:ml-auto">
@@ -66,6 +62,15 @@ export function ConsumptionFilterForm({
           </button>
           <FilterResetLink href="/fleet/trips?view=consumption" className={resetBtn} />
         </div>
+      </div>
+      <div className="mt-2 border-t border-zinc-800 pt-2">
+        <label className={`${fieldLabel} mb-1 block`}>Vehicule</label>
+        <VehicleMultiSelect
+          vehicles={vehicles}
+          selectedIds={selectedVehicleIds}
+          compact
+          listAlwaysVisible
+        />
       </div>
     </form>
   );

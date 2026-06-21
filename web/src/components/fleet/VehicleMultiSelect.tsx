@@ -13,10 +13,18 @@ type Props = {
   selectedIds: string[];
   name?: string;
   compact?: boolean;
+  /** Afișează lista cu checkbox-uri permanent (fără toggle). */
+  listAlwaysVisible?: boolean;
 };
 
-export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds", compact = false }: Props) {
-  const [open, setOpen] = useState(false);
+export function VehicleMultiSelect({
+  vehicles,
+  selectedIds,
+  name = "vehicleIds",
+  compact = false,
+  listAlwaysVisible = false,
+}: Props) {
+  const [open, setOpen] = useState(listAlwaysVisible);
   const [search, setSearch] = useState("");
   const [clientQ, setClientQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(() => new Set(selectedIds));
@@ -81,13 +89,15 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds",
         >
           Toată flota
         </button>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className={`${chipBtn} border border-zinc-700 text-zinc-300 hover:bg-zinc-900`}
-        >
-          {open ? "Ascunde" : "Alege…"}
-        </button>
+        {!listAlwaysVisible ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className={`${chipBtn} border border-zinc-700 text-zinc-300 hover:bg-zinc-900`}
+          >
+            {open ? "Ascunde" : "Alege…"}
+          </button>
+        ) : null}
         {allFleet ? (
           <span className={`text-zinc-500 ${compact ? "text-[10px]" : "text-xs"}`}>Toate vehiculele</span>
         ) : (
@@ -107,7 +117,7 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds",
           ))
         )}
       </div>
-      {open ? (
+      {open || listAlwaysVisible ? (
         <div className={`rounded-lg border border-zinc-800 bg-zinc-900/40 ${compact ? "p-2" : "p-3"}`}>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -131,7 +141,11 @@ export function VehicleMultiSelect({ vehicles, selectedIds, name = "vehicleIds",
               Golește selecția
             </button>
           </div>
-          <ul className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-zinc-800">
+          <ul
+            className={`mt-2 overflow-y-auto rounded-lg border border-zinc-800 ${
+              listAlwaysVisible ? "max-h-52" : "max-h-44"
+            }`}
+          >
             {filtered.length === 0 ? (
               <li className="p-3 text-sm text-zinc-500">Niciun vehicul.</li>
             ) : (

@@ -153,26 +153,21 @@ function buildSummaryByFuelType(input: {
   trips: ConsumptionTripRow[];
   fills: ConsumptionFillRow[];
   segments: ConsumptionSegmentRow[];
-  vehicleFuelById: Map<string, FuelType | null>;
 }): ConsumptionFuelTypeSummary[] {
   const types = new Set<FuelType>();
-  for (const ft of input.vehicleFuelById.values()) {
-    if (ft) types.add(ft);
-  }
   for (const f of input.fills) {
     if (f.fuelProductType) types.add(f.fuelProductType);
+  }
+  for (const s of input.segments) {
+    if (s.fuelProductType) types.add(s.fuelProductType);
   }
 
   const summaries: ConsumptionFuelTypeSummary[] = [];
   for (const fuelType of [...types].sort()) {
-    const vehicleIds = [...input.vehicleFuelById.entries()]
-      .filter(([, ft]) => ft === fuelType)
-      .map(([id]) => id);
-    const vehicleIdSet = new Set(vehicleIds);
-
+    const fills = input.fills.filter((f) => f.fuelProductType === fuelType);
+    const segments = input.segments.filter((s) => s.fuelProductType === fuelType);
+    const vehicleIdSet = new Set(fills.map((f) => f.vehicleId));
     const trips = input.trips.filter((t) => vehicleIdSet.has(t.vehicleId));
-    const fills = input.fills.filter((f) => vehicleIdSet.has(f.vehicleId));
-    const segments = input.segments.filter((s) => vehicleIdSet.has(s.vehicleId));
 
     const totalTripKm = trips.reduce((s, t) => s + (t.distanceKm ?? 0), 0);
     const totalEnergy = fills.reduce((s, f) => s + f.fuelLiters, 0);
@@ -193,7 +188,7 @@ function buildSummaryByFuelType(input: {
       segmentCount: segments.length,
       tripCount: trips.length,
       fillCount: fills.length,
-      vehicleCount: vehicleIds.length,
+      vehicleCount: vehicleIdSet.size,
     });
   }
 
@@ -365,7 +360,6 @@ export function buildConsumptionPayload(input: {
       trips: tripRows,
       fills: fillsInPeriod,
       segments,
-      vehicleFuelById: input.vehicleFuelById,
     }),
     weekly,
     fuelMix: buildFuelMix(fillsInPeriod),

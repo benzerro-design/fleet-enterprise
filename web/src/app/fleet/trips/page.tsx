@@ -22,7 +22,7 @@ import { filterFormKey } from "@/lib/filter-form-key";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
-import { parseFuelTypesCsv, resolveVehicleFuelType } from "@/lib/fuel-types";
+import { parseFuelTypesCsv } from "@/lib/fuel-types";
 import { TRIP_SHEET_DOC_TYPES } from "@/lib/trip-ops";
 
 type Search = {
@@ -230,13 +230,6 @@ export default async function TripsPage({ searchParams }: Props) {
     fetchVehicleOptions(),
     showConsumption ? fetchConsumption(sp) : Promise.resolve(null),
   ]);
-  const consumptionVehicleOptions =
-    selectedFuelTypes.length > 0
-      ? vehicles.filter((v) => {
-          const ft = resolveVehicleFuelType({ fuelType: v.fuelType, civProfile: v.civProfile });
-          return ft != null && selectedFuelTypes.includes(ft);
-        })
-      : vehicles;
   const write = canManageFleet(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
@@ -323,7 +316,7 @@ export default async function TripsPage({ searchParams }: Props) {
         filters={
           showTachograph ? undefined : showConsumption ? (
             <ConsumptionFilterForm
-              vehicles={consumptionVehicleOptions}
+              vehicles={vehicles}
               periodFrom={consumptionPeriodFrom}
               periodTo={consumptionPeriodTo}
               selectedVehicleIds={selectedVehicleIds}

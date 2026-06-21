@@ -474,17 +474,22 @@ export class TripsService {
       );
     }
 
-    let allowedVehicleIds = tenantVehicles.map((v) => v.id);
-    if (vehicleIds.length > 0) {
-      const selected = new Set(vehicleIds);
-      allowedVehicleIds = allowedVehicleIds.filter((id) => selected.has(id));
-    }
+    let allowedVehicleIds = vehicleIds.length > 0 ? vehicleIds : tenantVehicles.map((v) => v.id);
+
     if (fuelTypeFilter?.length) {
-      const fuelSet = new Set(fuelTypeFilter);
-      allowedVehicleIds = allowedVehicleIds.filter((id) => {
-        const ft = vehicleFuelById.get(id);
-        return ft != null && fuelSet.has(ft);
+      const fillVehicleRows = await this.prisma.costEntry.findMany({
+        where: {
+          tenantId: tenant.id,
+          incurredOn: { gte: from, lte: to },
+          category: { equals: 'Combustibil', mode: 'insensitive' },
+          fuelProductType: { in: fuelTypeFilter },
+          fuelLiters: { gt: 0 },
+          ...(vehicleIds.length > 0 ? { vehicleId: { in: vehicleIds } } : {}),
+        },
+        select: { vehicleId: true },
+        distinct: ['vehicleId'],
       });
+      allowedVehicleIds = fillVehicleRows.map((r) => r.vehicleId);
     }
 
     const vehicleFilter: Prisma.VehicleWhereInput =
@@ -501,6 +506,7 @@ export class TripsService {
       incurredOn: { gte: from, lte: to },
       vehicle: vehicleFilter,
       category: { equals: 'Combustibil', mode: 'insensitive' },
+      ...(fuelTypeFilter?.length ? { fuelProductType: { in: fuelTypeFilter } } : {}),
     };
 
     const segmentCostWhere: Prisma.CostEntryWhereInput = {
@@ -508,6 +514,7 @@ export class TripsService {
       vehicle: vehicleFilter,
       category: { equals: 'Combustibil', mode: 'insensitive' },
       fuelLiters: { gt: 0 },
+      ...(fuelTypeFilter?.length ? { fuelProductType: { in: fuelTypeFilter } } : {}),
     };
 
     const vehicleSelect = {
