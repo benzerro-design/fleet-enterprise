@@ -185,6 +185,22 @@ function assertPatchTripDto(body: unknown): PatchTripInput {
     if (body.distanceKm === null) dto.distanceKm = null;
     else dto.distanceKm = optionalNonNegativeInt(body.distanceKm, 'distanceKm') ?? undefined;
   }
+  if ('purpose' in body) dto.purpose = optionalTripPurpose(body.purpose);
+  if ('roadType' in body) dto.roadType = optionalTripRoadType(body.roadType);
+  if ('odometerStartKm' in body) {
+    if (body.odometerStartKm === null) dto.odometerStartKm = null;
+    else {
+      dto.odometerStartKm =
+        optionalNonNegativeInt(body.odometerStartKm, 'odometerStartKm') ?? null;
+    }
+  }
+  if ('odometerEndKm' in body) {
+    if (body.odometerEndKm === null) dto.odometerEndKm = null;
+    else {
+      dto.odometerEndKm = optionalNonNegativeInt(body.odometerEndKm, 'odometerEndKm') ?? null;
+    }
+  }
+  if ('driverName' in body) dto.driverName = optionalNullableString(body.driverName);
 
   if (Object.keys(dto).length === 0) {
     throw new BadRequestException('No fields to update');

@@ -69,7 +69,8 @@ function ReconciliationChart({ weekly }: { weekly: ConsumptionPayload["weekly"] 
   if (withOdo.length === 0) {
     return (
       <p className="text-sm text-zinc-500">
-        Reconciliere km curse vs odometru necesită alimentări cu km înregistrat în perioadă.
+        Reconciliere km curse vs odometru necesită km înregistrați: citiri odometru, km la alimentări sau odometru
+        start/final pe curse.
       </p>
     );
   }
@@ -221,7 +222,11 @@ export function TripsConsumptionView({ data }: Props) {
         <StatCard
           label="Consum mediu (segmente)"
           value={summary.avgSegmentL100 != null ? `${summary.avgSegmentL100} L/100km` : "—"}
-          hint={`${summary.segmentCount} segmente fill-to-fill`}
+          hint={
+            summary.segmentCount > 0
+              ? `${summary.segmentCount} segmente fill-to-fill`
+              : "Necesită ≥2 alimentări consecutive cu km odometru"
+          }
           accent="emerald"
         />
         <StatCard
@@ -229,7 +234,7 @@ export function TripsConsumptionView({ data }: Props) {
           value={
             summary.kmReconciliationPct != null ? `${summary.kmReconciliationPct}%` : "—"
           }
-          hint="Km curse vs Δ odometru (alimentări)"
+          hint="Diferență % între km curse și Δ odometru (citiri, alimentări sau curse)"
           accent="violet"
         />
       </div>
@@ -263,6 +268,11 @@ export function TripsConsumptionView({ data }: Props) {
             ))}
           </div>
         </div>
+      ) : data.fills.length > 0 ? (
+        <p className="text-sm text-zinc-500">
+          Consum pe tip combustibil necesită alimentări cu tip produs setat (Motorină, Benzină, etc.). Editează costurile
+          Combustibil fără tip.
+        </p>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">

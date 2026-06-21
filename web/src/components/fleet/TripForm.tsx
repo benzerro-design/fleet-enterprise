@@ -12,7 +12,7 @@ import {
 } from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toDatetimeLocalInput, toIsoFromDatetimeLocal } from "@/lib/datetime-local";
 import { TRIP_PURPOSE_OPTIONS, TRIP_ROAD_TYPE_OPTIONS } from "@/lib/trip-ops";
 
@@ -41,6 +41,21 @@ type VehicleOption = {
 type Props =
   | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string }
   | { mode: "edit"; tripId: string; initial: TripRecord; vehicles: VehicleOption[] };
+
+function parseOdometerKm(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) return null;
+  return n;
+}
+
+function distanceFromOdometers(startRaw: string, endRaw: string): number | null {
+  const start = parseOdometerKm(startRaw);
+  const end = parseOdometerKm(endRaw);
+  if (start == null || end == null || end < start) return null;
+  return end - start;
+}
 
 async function readErrorMessage(res: Response): Promise<string> {
   let msg = `HTTP ${res.status}`;
@@ -112,6 +127,18 @@ export function TripForm(props: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const computedDistanceKm = useMemo(
+    () => distanceFromOdometers(odometerStartKm, odometerEndKm),
+    [odometerStartKm, odometerEndKm],
+  );
+  const distanceFromOdometer = computedDistanceKm != null;
+
+  useEffect(() => {
+    if (computedDistanceKm != null) {
+      setDistanceKm(String(computedDistanceKm));
+    }
+  }, [computedDistanceKm]);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setPending(true);
@@ -136,8 +163,28 @@ export function TripForm(props: Props) {
       return;
     }
 
+    const odoStart = parseOdometerKm(odometerStartKm);
+    if (odometerStartKm.trim() && odoStart == null) {
+      setError("Odometru start trebuie să fie un număr întreg >= 0.");
+      setPending(false);
+      return;
+    }
+    const odoEnd = parseOdometerKm(odometerEndKm);
+    if (odometerEndKm.trim() && odoEnd == null) {
+      setError("Odometru final trebuie să fie un număr întreg >= 0.");
+      setPending(false);
+      return;
+    }
+    if (odoStart != null && odoEnd != null && odoEnd < odoStart) {
+      setError("Odometru final trebuie să fie >= odometru start.");
+      setPending(false);
+      return;
+    }
+
     let parsedDistance: number | null = null;
-    if (distanceKm.trim()) {
+    if (odoStart != null && odoEnd != null) {
+      parsedDistance = odoEnd - odoStart;
+    } else if (distanceKm.trim()) {
       const n = Number(distanceKm);
       if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
         setError("Distanța trebuie să fie un număr întreg >= 0.");
@@ -145,26 +192,6 @@ export function TripForm(props: Props) {
         return;
       }
       parsedDistance = n;
-    }
-
-    const parseOptionalKm = (raw: string, label: string): number | null | "invalid" => {
-      const t = raw.trim();
-      if (!t) return null;
-      const n = Number(t);
-      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) return "invalid";
-      return n;
-    };
-    const odoStart = parseOptionalKm(odometerStartKm, "odometerStartKm");
-    if (odoStart === "invalid") {
-      setError("Odometru start trebuie să fie un număr întreg >= 0.");
-      setPending(false);
-      return;
-    }
-    const odoEnd = parseOptionalKm(odometerEndKm, "odometerEndKm");
-    if (odoEnd === "invalid") {
-      setError("Odometru final trebuie să fie un număr întreg >= 0.");
-      setPending(false);
-      return;
     }
 
     const body: Record<string, unknown> = {
@@ -230,8 +257,16 @@ export function TripForm(props: Props) {
             <OpsFormField label="Destinație">
               <input value={destLabel} onChange={(e) => setDestLabel(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Distanță km">
-              <input type="number" min={0} step={1} value={distanceKm} onChange={(e) => setDistanceKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
+            <OpsFormField label="Distanță km" hint={distanceFromOdometer ? "Calculată din odometru start/final" : undefined}>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={distanceKm}
+                onChange={(e) => setDistanceKm(e.target.value)}
+                readOnly={distanceFromOdometer}
+                className={`${OPS_INPUT_MONO_CLASS}${distanceFromOdometer ? " cursor-default opacity-90" : ""}`}
+              />
             </OpsFormField>
             <OpsFormField label="Scop">
               <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className={OPS_INPUT_CLASS}>
@@ -308,8 +343,21 @@ export function TripForm(props: Props) {
         <input value={destLabel} onChange={(e) => setDestLabel(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Distanță km (opțional)</label>
-        <input type="number" min={0} step={1} value={distanceKm} onChange={(e) => setDistanceKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
+        <label className="block text-sm font-medium text-zinc-300">
+          Distanță km {distanceFromOdometer ? "(calculată automat)" : "(opțional)"}
+        </label>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={distanceKm}
+          onChange={(e) => setDistanceKm(e.target.value)}
+          readOnly={distanceFromOdometer}
+          className={`w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2${distanceFromOdometer ? " cursor-default opacity-90" : ""}`}
+        />
+        {distanceFromOdometer ? (
+          <p className="text-xs text-zinc-500">Diferență odometru final − odometru start.</p>
+        ) : null}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">

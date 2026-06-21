@@ -115,6 +115,21 @@ async function tripWhere(
   return { AND: parts };
 }
 
+function resolveDistanceKm(input: {
+  distanceKm?: number | null;
+  odometerStartKm?: number | null;
+  odometerEndKm?: number | null;
+}): number | null {
+  if (
+    input.odometerStartKm != null &&
+    input.odometerEndKm != null &&
+    input.odometerEndKm >= input.odometerStartKm
+  ) {
+    return input.odometerEndKm - input.odometerStartKm;
+  }
+  return input.distanceKm ?? null;
+}
+
 function tripPatchFieldKeys(
   before: {
     vehicleId: string;
@@ -310,7 +325,11 @@ export class TripsService {
         endedAt: dto.endedAt === undefined ? undefined : dto.endedAt ? new Date(dto.endedAt) : null,
         originLabel: dto.originLabel ?? null,
         destLabel: dto.destLabel ?? null,
-        distanceKm: dto.distanceKm ?? null,
+        distanceKm: resolveDistanceKm({
+          distanceKm: dto.distanceKm ?? null,
+          odometerStartKm: dto.odometerStartKm ?? null,
+          odometerEndKm: dto.odometerEndKm ?? null,
+        }),
         purpose: dto.purpose ?? null,
         roadType: dto.roadType ?? null,
         odometerStartKm: dto.odometerStartKm ?? null,
@@ -352,6 +371,16 @@ export class TripsService {
 
     rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
 
+    const nextOdometerStartKm =
+      dto.odometerStartKm !== undefined ? dto.odometerStartKm : before.odometerStartKm;
+    const nextOdometerEndKm =
+      dto.odometerEndKm !== undefined ? dto.odometerEndKm : before.odometerEndKm;
+    const nextDistanceKm = resolveDistanceKm({
+      distanceKm: dto.distanceKm !== undefined ? dto.distanceKm : before.distanceKm,
+      odometerStartKm: nextOdometerStartKm,
+      odometerEndKm: nextOdometerEndKm,
+    });
+
     const data: Prisma.TripUncheckedUpdateManyInput = {
       reference: dto.reference,
       startedAt: dto.startedAt !== undefined ? new Date(dto.startedAt) : undefined,
@@ -359,7 +388,14 @@ export class TripsService {
         dto.endedAt === undefined ? undefined : dto.endedAt ? new Date(dto.endedAt) : null,
       originLabel: dto.originLabel,
       destLabel: dto.destLabel,
-      distanceKm: dto.distanceKm,
+      distanceKm: dto.distanceKm !== undefined || dto.odometerStartKm !== undefined || dto.odometerEndKm !== undefined
+        ? nextDistanceKm
+        : undefined,
+      purpose: dto.purpose,
+      roadType: dto.roadType,
+      odometerStartKm: dto.odometerStartKm,
+      odometerEndKm: dto.odometerEndKm,
+      driverName: dto.driverName,
     };
 
     const r = await this.prisma.trip.updateMany({

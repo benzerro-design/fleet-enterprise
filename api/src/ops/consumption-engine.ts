@@ -17,6 +17,40 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+function deriveOdometerSpanKm(input: {
+  readings: Array<{ recordedAt: Date; odometerKm: number }>;
+  fills: Array<{ incurredOn: Date; odometerKm: number | null }>;
+  trips: Array<{ odometerStartKm: number | null; odometerEndKm: number | null }>;
+}): number | null {
+  const readingsAsc = [...input.readings].sort(
+    (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime(),
+  );
+  if (readingsAsc.length >= 2) {
+    const span = readingsAsc[readingsAsc.length - 1]!.odometerKm - readingsAsc[0]!.odometerKm;
+    if (span > 0) return span;
+  }
+
+  const fillOdos = input.fills
+    .filter((f) => f.odometerKm != null && f.odometerKm > 0)
+    .sort((a, b) => a.incurredOn.getTime() - b.incurredOn.getTime());
+  if (fillOdos.length >= 2) {
+    const span = fillOdos[fillOdos.length - 1]!.odometerKm! - fillOdos[0]!.odometerKm!;
+    if (span > 0) return span;
+  }
+
+  let tripSpan = 0;
+  for (const t of input.trips) {
+    if (
+      t.odometerStartKm != null &&
+      t.odometerEndKm != null &&
+      t.odometerEndKm > t.odometerStartKm
+    ) {
+      tripSpan += t.odometerEndKm - t.odometerStartKm;
+    }
+  }
+  return tripSpan > 0 ? tripSpan : null;
+}
+
 function weekIndex(date: Date, periodStart: Date): number {
   const ms = date.getTime() - periodStart.getTime();
   if (ms < 0) return 0;
@@ -27,7 +61,7 @@ function buildWeeklyBuckets(
   periodStart: Date,
   periodEnd: Date,
   trips: Array<{ startedAt: Date; distanceKm: number | null }>,
-  fills: Array<{ incurredOn: Date; fuelLiters: number }>,
+  fills: Array<{ incurredOn: Date; fuelLiters: number; odometerKm: number | null }>,
   readings: Array<{ recordedAt: Date; odometerKm: number }>,
 ): ConsumptionWeeklyBucket[] {
   const totalWeeks = Math.max(1, weekIndex(periodEnd, periodStart) + 1);
@@ -58,6 +92,10 @@ function buildWeeklyBuckets(
   }
 
   const readingsAsc = [...readings].sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
+  const fillsAsc = [...fills]
+    .filter((f) => f.odometerKm != null && f.odometerKm > 0)
+    .sort((a, b) => a.incurredOn.getTime() - b.incurredOn.getTime());
+
   for (let i = 0; i < buckets.length; i++) {
     const weekStart = new Date(periodStart.getTime() + i * 7 * 24 * 60 * 60 * 1000);
     const weekEnd =
@@ -77,6 +115,30 @@ function buildWeeklyBuckets(
         buckets[i]!.odometerKm = inWeek[0]!.odometerKm - prev.odometerKm;
       } else if (next && inWeek[0]!.recordedAt <= weekEnd) {
         buckets[i]!.odometerKm = next.odometerKm - inWeek[0]!.odometerKm;
+      }
+    }
+
+    const bucketOdo = buckets[i]!.odometerKm;
+    if (bucketOdo == null || bucketOdo <= 0) {
+      const fillsInWeek = fillsAsc.filter(
+        (f) => f.incurredOn >= weekStart && f.incurredOn <= weekEnd,
+      );
+      if (fillsInWeek.length >= 2) {
+        buckets[i]!.odometerKm =
+          Math.max(...fillsInWeek.map((f) => f.odometerKm!)) -
+          Math.min(...fillsInWeek.map((f) => f.odometerKm!));
+      } else if (fillsInWeek.length === 1 && fillsAsc.length >= 2) {
+        const idxFill = fillsAsc.findIndex(
+          (f) => f.incurredOn.getTime() === fillsInWeek[0]!.incurredOn.getTime(),
+        );
+        const prev = idxFill > 0 ? fillsAsc[idxFill - 1] : null;
+        const next =
+          idxFill >= 0 && idxFill < fillsAsc.length - 1 ? fillsAsc[idxFill + 1] : null;
+        if (prev && fillsInWeek[0]!.incurredOn >= weekStart) {
+          buckets[i]!.odometerKm = fillsInWeek[0]!.odometerKm! - prev.odometerKm!;
+        } else if (next && fillsInWeek[0]!.incurredOn <= weekEnd) {
+          buckets[i]!.odometerKm = next.odometerKm! - fillsInWeek[0]!.odometerKm!;
+        }
       }
     }
   }
@@ -298,13 +360,14 @@ export function buildConsumptionPayload(input: {
   const totalFuelLiters = fillsInPeriod.reduce((s, f) => s + f.fuelLiters, 0);
   const totalFuelCostCents = fillsInPeriod.reduce((s, f) => s + f.amountCents, 0);
 
-  const readingsAsc = [...input.odometerReadings].sort(
-    (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime(),
-  );
-  const odometerSpanKm =
-    readingsAsc.length >= 2
-      ? readingsAsc[readingsAsc.length - 1]!.odometerKm - readingsAsc[0]!.odometerKm
-      : null;
+  const odometerSpanKm = deriveOdometerSpanKm({
+    readings: input.odometerReadings,
+    fills: fillsInPeriod.map((f) => ({
+      incurredOn: new Date(f.incurredOn),
+      odometerKm: f.odometerKm,
+    })),
+    trips: input.trips,
+  });
 
   let kmReconciliationPct: number | null = null;
   if (odometerSpanKm != null && odometerSpanKm > 0 && totalTripKm > 0) {
@@ -345,7 +408,11 @@ export function buildConsumptionPayload(input: {
     input.periodStart,
     input.periodEnd,
     input.trips,
-    fillsInPeriod.map((f) => ({ incurredOn: new Date(f.incurredOn), fuelLiters: f.fuelLiters })),
+    fillsInPeriod.map((f) => ({
+      incurredOn: new Date(f.incurredOn),
+      fuelLiters: f.fuelLiters,
+      odometerKm: f.odometerKm,
+    })),
     input.odometerReadings,
   );
 
