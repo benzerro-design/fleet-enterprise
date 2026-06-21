@@ -136,7 +136,7 @@ export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
       {filtered.length === 0 ? (
         <p className="mt-3 text-sm text-zinc-500">Nicio înregistrare nu corespunde filtrelor.</p>
       ) : (
-        <FleetDataTable className="mt-3">
+        <FleetDataTable className="mt-3" contained>
           <table className={fleetTableClass}>
             <thead className={fleetTheadClass}>
               <tr>

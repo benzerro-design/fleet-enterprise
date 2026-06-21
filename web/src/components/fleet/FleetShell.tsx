@@ -54,9 +54,9 @@ export function FleetShell({
   }, [menuOpen, closeMenu]);
 
   return (
-    <div className="flex min-h-screen bg-zinc-950">
+    <div className="flex h-dvh overflow-hidden bg-zinc-950">
       {/* Desktop sidebar */}
-      <aside className="hidden w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
+      <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
         <div className="border-b border-zinc-800 px-4 py-4">
           <Link href="/fleet/dashboard" className="block">
             <p className="text-sm font-semibold text-zinc-100">Fleet Enterprise</p>
@@ -77,11 +77,11 @@ export function FleetShell({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {authBanner}
 
-        {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 backdrop-blur lg:hidden">
+        {/* Mobile top bar — fix deasupra zonei scrollabile */}
+        <header className="z-30 flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950 px-4 py-3 lg:hidden">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
@@ -100,7 +100,7 @@ export function FleetShell({
           <LogoutButton />
         </header>
 
-        <div className="flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-y-contain pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
           <div className="mx-auto w-full max-w-[90rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">{children}</div>
         </div>
 
