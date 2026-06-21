@@ -53,6 +53,21 @@ export class TripsController {
     });
   }
 
+  @Get('consumption')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  getConsumption(@TenantId() tenantSlug: string, @Query() q: Record<string, string | undefined>) {
+    const from = q['from']?.trim();
+    const to = q['to']?.trim();
+    if (!from || !to) {
+      throw new BadRequestException('from and to are required');
+    }
+    const vehicleIdsRaw = q['vehicleIds']?.trim();
+    const vehicleIds = vehicleIdsRaw
+      ? vehicleIdsRaw.split(',').map((id) => id.trim()).filter(Boolean)
+      : undefined;
+    return this.trips.getConsumption(tenantSlug, { from, to, vehicleIds });
+  }
+
   @Get(':tripId')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
   getTrip(@TenantId() tenantSlug: string, @Param('tripId') tripId: string) {

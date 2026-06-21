@@ -13,6 +13,7 @@ import {
   type VehicleStatusValue,
   type VehicleTypeValue,
 } from "@/lib/fleet-api";
+import { FUEL_TYPE_OPTIONS, fuelTypeLabel, type FuelTypeValue } from "@/lib/fuel-types";
 
 type Props = {
   vehicle: VehicleRecord;
@@ -31,6 +32,9 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
   const [brand, setBrand] = useState(vehicle.brand ?? "");
   const [model, setModel] = useState(vehicle.model ?? "");
   const [type, setType] = useState(vehicle.type as VehicleTypeValue);
+  const [fuelType, setFuelType] = useState<FuelTypeValue>(
+    (vehicle.fuelType as FuelTypeValue | null) ?? "diesel",
+  );
   const [status, setStatus] = useState(vehicle.status as VehicleStatusValue);
   const [vin, setVin] = useState(vehicle.vin ?? "");
   const [itpDate, setItpDate] = useState(isoDateOnly(vehicle.itpExpiresOn));
@@ -65,6 +69,7 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
           clientId: clientId.trim(),
           registrationNumber: registrationNumber.trim(),
           type,
+          fuelType,
           status,
           vin: vin.trim() === "" ? null : vin.trim(),
           brand: brand.trim() === "" ? null : brand.trim(),
@@ -103,6 +108,7 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
         <Field label="Marcă" value={vehicle.brand ?? "—"} />
         <Field label="Model" value={vehicle.model ?? "—"} />
         <Field label="Tip" value={VEHICLE_TYPES.find((t) => t.value === vehicle.type)?.label ?? vehicle.type} />
+        <Field label="Carburant" value={fuelTypeLabel(vehicle.fuelType)} />
         <Field label="Status" value={VEHICLE_STATUSES.find((s) => s.value === vehicle.status)?.label ?? vehicle.status} />
         <Field label="VIN (E)" value={vehicle.vin ?? "—"} mono />
         <Field
@@ -151,6 +157,12 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
           value={type}
           onChange={(v) => setType(v as VehicleTypeValue)}
           options={VEHICLE_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+        />
+        <Select
+          label="Tip carburant"
+          value={fuelType}
+          onChange={(v) => setFuelType(v as FuelTypeValue)}
+          options={FUEL_TYPE_OPTIONS.map((t) => ({ value: t.value, label: t.label }))}
         />
         <Select
           label="Status"

@@ -283,3 +283,4 @@ Dacă URL-ul arată **„Page not found”** pe **fundal alb**, verifică mai î
 | 2026-06-03 | Pas D: viewer — butoane creare vehicul / generate FAZ ascunse | Secțiunea 4 completă; Pas E + semnare |
 | 2026-06-03 | FlotaX: toate modulele OK (1 vehicul); consum curse → backlog obligatoriu + tracking | Semnare §7; scalare date flotă |
 | 2026-06-18 | **Feedback scurt (pilot-handoff §5.1):** UX formulare ops, profil vehicul, mentenanță garanție/daună, vehicul fixat la edit | Livrat pe `main`; punct 7 ghid prima săptămână atins |
+| 2026-05-31 | **Feedback scurt (pilot-handoff §5 zi 7 / §5.1):** liste ops — scroll sub filtre, header sticky, card lists, toolbar remindere | Livrat pe `main`; compactare antet+filtre neacționată |

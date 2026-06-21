@@ -13,12 +13,15 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { TripSheetDocumentsList } from "@/components/fleet/TripSheetDocumentsList";
 import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
+import { ConsumptionFilterForm } from "@/components/fleet/ConsumptionFilterForm";
+import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import type { ConsumptionPayload } from "@/lib/consumption-types";
 import { TRIP_SHEET_DOC_TYPES } from "@/lib/trip-ops";
 
 type Search = {
@@ -34,6 +37,7 @@ type Search = {
   docType?: string;
   periodFrom?: string;
   periodTo?: string;
+  vehicleIds?: string;
   createdFrom?: string;
   createdTo?: string;
 };
@@ -74,12 +78,27 @@ type TripSheetListPayload = {
 
 type VehicleOption = { id: string; registrationNumber: string; clientId: string };
 
-type TripsView = "trips" | "documents" | "tachograph";
+type TripsView = "trips" | "documents" | "tachograph" | "consumption";
 
 function resolveTripsView(sp: Search): TripsView {
   if (sp.view === "documents") return "documents";
   if (sp.view === "tachograph") return "tachograph";
+  if (sp.view === "consumption") return "consumption";
   return "trips";
+}
+
+function defaultConsumptionPeriod(): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: now.toISOString().slice(0, 10),
+  };
+}
+
+function parseSelectedVehicleIds(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw.split(",").map((id) => id.trim()).filter(Boolean);
 }
 
 function tabLinkClass(active: boolean): string {
@@ -139,6 +158,17 @@ async function fetchTripSheets(sp: Search): Promise<TripSheetListPayload | null>
   return (await res.json()) as TripSheetListPayload;
 }
 
+async function fetchConsumption(sp: Search): Promise<ConsumptionPayload | null> {
+  const defaults = defaultConsumptionPeriod();
+  const from = sp.periodFrom?.trim() || defaults.from;
+  const to = sp.periodTo?.trim() || defaults.to;
+  const q = new URLSearchParams({ from, to });
+  if (sp.vehicleIds?.trim()) q.set("vehicleIds", sp.vehicleIds.trim());
+  const res = await fleetServerFetch(`/trips/consumption?${q}`);
+  if (!res?.ok) return null;
+  return (await res.json()) as ConsumptionPayload;
+}
+
 async function fetchVehicleOptions(): Promise<VehicleOption[]> {
   const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
   if (!res?.ok) return [];
@@ -158,11 +188,17 @@ export default async function TripsPage({ searchParams }: Props) {
   const showTrips = view === "trips";
   const showDocuments = view === "documents";
   const showTachograph = view === "tachograph";
-  const [data, auth, documents, vehicles] = await Promise.all([
+  const showConsumption = view === "consumption";
+  const consumptionDefaults = defaultConsumptionPeriod();
+  const consumptionPeriodFrom = sp.periodFrom?.trim() || consumptionDefaults.from;
+  const consumptionPeriodTo = sp.periodTo?.trim() || consumptionDefaults.to;
+  const selectedVehicleIds = parseSelectedVehicleIds(sp.vehicleIds);
+  const [data, auth, documents, vehicles, consumption] = await Promise.all([
     showTrips ? fetchTrips(sp) : Promise.resolve(null),
     getAuthMeResult(),
     showDocuments ? fetchTripSheets(sp) : Promise.resolve(null),
     fetchVehicleOptions(),
+    showConsumption ? fetchConsumption(sp) : Promise.resolve(null),
   ]);
   const write = canManageFleet(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
@@ -249,6 +285,9 @@ export default async function TripsPage({ searchParams }: Props) {
               <Link href="/fleet/trips?view=documents" className={tabLinkClass(showDocuments)}>
                 Documente parcurs
               </Link>
+              <Link href="/fleet/trips?view=consumption" className={tabLinkClass(showConsumption)}>
+                Consum
+              </Link>
               <Link href="/fleet/trips?view=tachograph" className={tabLinkClass(showTachograph)}>
                 Tahograf
               </Link>
@@ -256,7 +295,14 @@ export default async function TripsPage({ searchParams }: Props) {
           </>
         }
         filters={
-          showTachograph ? undefined : showDocuments ? (
+          showTachograph ? undefined : showConsumption ? (
+            <ConsumptionFilterForm
+              vehicles={vehicles}
+              periodFrom={consumptionPeriodFrom}
+              periodTo={consumptionPeriodTo}
+              selectedVehicleIds={selectedVehicleIds}
+            />
+          ) : showDocuments ? (
             <form
               key={`docs-${filterFormKey(sp)}`}
               action="/fleet/trips"
@@ -423,6 +469,12 @@ export default async function TripsPage({ searchParams }: Props) {
       >
         {showTachograph ? (
           <TripTachographPlaceholder />
+        ) : showConsumption ? (
+          !consumption ? (
+            <p className="text-amber-400">Nu am putut încărca datele de consum.</p>
+          ) : (
+            <TripsConsumptionView data={consumption} />
+          )
         ) : showDocuments ? (
           <>
             {sp.generated ? (

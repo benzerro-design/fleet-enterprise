@@ -8,6 +8,7 @@ export type PatchVehicleDto = {
     | 'tractor_unit'
     | 'trailer'
     | 'semi_trailer';
+  fuelType?: 'diesel' | 'petrol' | 'hybrid' | 'electric' | 'lpg' | null;
   status?: 'active' | 'inactive' | 'in_maintenance' | 'decommissioned';
   odometerKm?: number;
   vin?: string | null;

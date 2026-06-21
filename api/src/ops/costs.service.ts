@@ -6,6 +6,7 @@ import { normalizeReminderOffsets } from './document-reminders';
 import { normalizeReminderOffsetsKm } from './reminder-status';
 import { isItpCostCategory, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
 import { isFuelCostCategory } from './fuel-ops';
+import { normalizeFuelProductType } from './fuel-types';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
@@ -25,6 +26,7 @@ export type CreateCostInput = {
   provider?: string | null;
   amountCents: number;
   fuelLiters?: number | null;
+  fuelProductType?: 'diesel' | 'petrol' | 'hybrid' | 'electric' | 'lpg' | null;
   odometerKm?: number | null;
   invoiceNumber?: string | null;
   invoiceDate?: string | null;
@@ -192,6 +194,7 @@ function toCostRow(row: {
   provider: string | null;
   amountCents: number;
   fuelLiters: number | null;
+  fuelProductType: string | null;
   odometerKm: number | null;
   invoiceNumber: string | null;
   invoiceDate: Date | null;
@@ -216,6 +219,7 @@ function toCostRow(row: {
     provider: row.provider,
     amountCents: row.amountCents,
     fuelLiters: row.fuelLiters,
+    fuelProductType: row.fuelProductType,
     odometerKm: row.odometerKm,
     invoiceNumber: row.invoiceNumber,
     invoiceDate: row.invoiceDate ? row.invoiceDate.toISOString() : null,
@@ -337,6 +341,11 @@ export class CostsService {
       }
     }
     const fuelLiters = normalizeFuelLiters(dto.fuelLiters, dto.category);
+    const fuelProductType = normalizeFuelProductType(
+      dto.fuelProductType ?? undefined,
+      dto.category,
+      isFuelCostCategory,
+    );
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
@@ -349,6 +358,7 @@ export class CostsService {
         provider: dto.provider ?? null,
         amountCents: Math.round(dto.amountCents),
         fuelLiters,
+        fuelProductType,
         odometerKm: dto.odometerKm ?? null,
         invoiceNumber: dto.invoiceNumber ?? null,
         invoiceDate:
@@ -439,11 +449,23 @@ export class CostsService {
       }
     }
 
+    let fuelProductType: ReturnType<typeof normalizeFuelProductType> | null | undefined = undefined;
+    if (dto.fuelProductType !== undefined || dto.category !== undefined) {
+      if (isFuelCostCategory(nextCategory)) {
+        const raw =
+          dto.fuelProductType !== undefined ? dto.fuelProductType : before.fuelProductType;
+        fuelProductType = normalizeFuelProductType(raw ?? undefined, nextCategory, isFuelCostCategory);
+      } else {
+        fuelProductType = null;
+      }
+    }
+
     const data: Prisma.CostEntryUncheckedUpdateManyInput = {
       category: dto.category !== undefined ? dto.category.trim() : undefined,
       provider: dto.provider,
       amountCents: dto.amountCents !== undefined ? Math.round(dto.amountCents) : undefined,
       fuelLiters,
+      fuelProductType,
       odometerKm: dto.odometerKm,
       invoiceNumber: dto.invoiceNumber,
       invoiceDate:

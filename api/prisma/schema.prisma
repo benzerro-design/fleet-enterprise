@@ -79,6 +79,14 @@ model TenantMembership {
   @@index([userId])
 }
 
+enum FuelType {
+  diesel
+  petrol
+  hybrid
+  electric
+  lpg
+}
+
 model Vehicle {
   id                 String             @id @default(cuid())
   tenantId           String
@@ -91,6 +99,8 @@ model Vehicle {
   vin                String?
   status             VehicleStatus      @default(active)
   odometerKm         Int                @default(0)
+  /** Combustibil principal — motorină, benzină, GPL, etc. */
+  fuelType           FuelType?
   itpExpiresOn       DateTime?
   itpStationName     String?
   itpReminderOffsetsDays     Json?
@@ -276,6 +286,8 @@ model CostEntry {
   amountCents          Int
   /** Litri alimentați — relevant pentru categoria Combustibil. */
   fuelLiters           Float?
+  /** Tip carburant la alimentare (motorină, benzină, GPL). */
+  fuelProductType      FuelType?
   incurredOn           DateTime  @default(now())
   notes                String?
   odometerKm           Int?

@@ -35,6 +35,7 @@ export type VehicleRecord = {
   vin: string | null;
   status: VehicleStatus;
   odometerKm: number;
+  fuelType: string | null;
   itpExpiresOn: string | null;
   itpStationName: string | null;
   itpReminderOffsetsDays: number[] | null;

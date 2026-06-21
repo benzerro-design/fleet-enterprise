@@ -8,6 +8,7 @@ export type CreateVehicleDto = {
     | 'tractor_unit'
     | 'trailer'
     | 'semi_trailer';
+  fuelType: 'diesel' | 'petrol' | 'hybrid' | 'electric' | 'lpg';
   vin?: string;
   brand?: string;
   model?: string;

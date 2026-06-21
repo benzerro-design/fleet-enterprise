@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma, TripPurpose, TripRoadType } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,6 +6,8 @@ import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
+import { buildConsumptionPayload } from './consumption-engine';
+import type { ConsumptionPayload } from './consumption.types';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -40,6 +42,12 @@ export type TripBrowseFilters = {
 export type TripListParams = TripBrowseFilters & {
   page: number;
   pageSize: number;
+};
+
+export type ConsumptionQuery = {
+  from: string;
+  to: string;
+  vehicleIds?: string[];
 };
 
 function parseDayStart(s: string): Date {
@@ -412,6 +420,132 @@ export class TripsService {
 
     await this.prisma.trip.deleteMany({
       where: { id: tripId, tenant: { slug: tenantSlug } },
+    });
+  }
+
+  async getConsumption(tenantSlug: string, query: ConsumptionQuery): Promise<ConsumptionPayload> {
+    const from = parseDayStart(query.from);
+    const to = parseDayEnd(query.to);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) {
+      throw new BadRequestException('Invalid consumption period');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) {
+      return buildConsumptionPayload({
+        periodStart: from,
+        periodEnd: to,
+        vehicleScope: 'all',
+        selectedVehicleCount: 0,
+        trips: [],
+        costs: [],
+        allFuelCostsForSegments: [],
+        odometerReadings: [],
+      });
+    }
+
+    const vehicleIds = [...new Set((query.vehicleIds ?? []).map((id) => id.trim()).filter(Boolean))];
+    const vehicleScope = vehicleIds.length > 0 ? 'selected' : 'all';
+
+    for (const vehicleId of vehicleIds) {
+      await assertVehicleInTenant(this.prisma, tenantSlug, vehicleId);
+    }
+
+    const vehicleFilter: Prisma.VehicleWhereInput =
+      vehicleIds.length > 0 ? { id: { in: vehicleIds } } : { tenantId: tenant.id };
+
+    const tripWhere: Prisma.TripWhereInput = {
+      tenantId: tenant.id,
+      startedAt: { gte: from, lte: to },
+      vehicle: vehicleFilter,
+    };
+
+    const costWhere: Prisma.CostEntryWhereInput = {
+      tenantId: tenant.id,
+      incurredOn: { gte: from, lte: to },
+      vehicle: vehicleFilter,
+      category: { equals: 'Combustibil', mode: 'insensitive' },
+    };
+
+    const segmentCostWhere: Prisma.CostEntryWhereInput = {
+      tenantId: tenant.id,
+      vehicle: vehicleFilter,
+      category: { equals: 'Combustibil', mode: 'insensitive' },
+      fuelLiters: { gt: 0 },
+    };
+
+    const vehicleSelect = {
+      select: { registrationNumber: true, client: { select: { code: true } } },
+    } as const;
+
+    const [trips, costs, allFuelCostsForSegments, odometerReadings] = await Promise.all([
+      this.prisma.trip.findMany({
+        where: tripWhere,
+        include: { vehicle: vehicleSelect },
+        orderBy: { startedAt: 'desc' },
+        take: 2000,
+      }),
+      this.prisma.costEntry.findMany({
+        where: costWhere,
+        include: { vehicle: vehicleSelect },
+        orderBy: { incurredOn: 'desc' },
+        take: 2000,
+      }),
+      this.prisma.costEntry.findMany({
+        where: segmentCostWhere,
+        include: { vehicle: vehicleSelect },
+        orderBy: { incurredOn: 'asc' },
+        take: 5000,
+      }),
+      this.prisma.odometerReading.findMany({
+        where: {
+          recordedAt: { gte: from, lte: to },
+          vehicle: vehicleFilter,
+        },
+        orderBy: { recordedAt: 'asc' },
+        take: 5000,
+      }),
+    ]);
+
+    const mapCost = (c: (typeof costs)[number]) => ({
+      id: c.id,
+      vehicleId: c.vehicleId,
+      registrationNumber: c.vehicle.registrationNumber,
+      clientId: c.vehicle.client.code,
+      category: c.category,
+      incurredOn: c.incurredOn,
+      fuelLiters: c.fuelLiters,
+      fuelProductType: c.fuelProductType,
+      odometerKm: c.odometerKm,
+      amountCents: c.amountCents,
+      provider: c.provider,
+    });
+
+    return buildConsumptionPayload({
+      periodStart: from,
+      periodEnd: to,
+      vehicleScope,
+      selectedVehicleCount: vehicleIds.length,
+      trips: trips.map((t) => ({
+        id: t.id,
+        vehicleId: t.vehicleId,
+        registrationNumber: t.vehicle.registrationNumber,
+        clientId: t.vehicle.client.code,
+        startedAt: t.startedAt,
+        endedAt: t.endedAt,
+        reference: t.reference,
+        originLabel: t.originLabel,
+        destLabel: t.destLabel,
+        distanceKm: t.distanceKm,
+        odometerStartKm: t.odometerStartKm,
+        odometerEndKm: t.odometerEndKm,
+      })),
+      costs: costs.map(mapCost),
+      allFuelCostsForSegments: allFuelCostsForSegments.map(mapCost),
+      odometerReadings: odometerReadings.map((r) => ({
+        recordedAt: r.recordedAt,
+        odometerKm: r.odometerKm,
+      })),
     });
   }
 }

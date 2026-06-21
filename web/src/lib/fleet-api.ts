@@ -34,6 +34,7 @@ export type VehicleRecord = {
   brand: string | null;
   model: string | null;
   type: string;
+  fuelType?: string | null;
   vin: string | null;
   status: string;
   odometerKm: number;

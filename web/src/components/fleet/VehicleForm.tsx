@@ -11,6 +11,7 @@ import {
   type VehicleTypeValue,
   VEHICLE_TYPES,
 } from "@/lib/fleet-api";
+import { FUEL_TYPE_OPTIONS, type FuelTypeValue } from "@/lib/fuel-types";
 
 export function VehicleForm() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export function VehicleForm() {
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [type, setType] = useState<VehicleTypeValue>("car");
+  const [fuelType, setFuelType] = useState<FuelTypeValue>("diesel");
   const [vin, setVin] = useState("");
   const [odometerKm, setOdometerKm] = useState("0");
   const [itpDate, setItpDate] = useState("");
@@ -51,6 +53,7 @@ export function VehicleForm() {
         clientId: clientId.trim(),
         registrationNumber: registrationNumber.trim(),
         type,
+        fuelType,
         odometerKm: odo,
         ...itpPayload,
       };
@@ -145,6 +148,22 @@ export function VehicleForm() {
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
         >
           {VEHICLE_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">Tip carburant</label>
+        <select
+          required
+          value={fuelType}
+          onChange={(e) => setFuelType(e.target.value as FuelTypeValue)}
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+        >
+          {FUEL_TYPE_OPTIONS.map((t) => (
             <option key={t.value} value={t.value}>
               {t.label}
             </option>

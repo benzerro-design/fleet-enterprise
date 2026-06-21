@@ -5,6 +5,7 @@ import { COST_CATEGORY_VALUES, isKnownCostCategory } from "@/lib/cost-categories
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { isItpCostCategory } from "@/lib/itp-ops";
 import { isFuelCostCategory } from "@/lib/fuel-ops";
+import { FUEL_TYPE_OPTIONS, type FuelTypeValue } from "@/lib/fuel-types";
 import {
   defaultDayOffsetsForMode,
   hasConfiguredOpsReminder,
@@ -40,6 +41,7 @@ type CostRecord = {
   incurredOn: string;
   notes: string | null;
   fuelLiters?: number | null;
+  fuelProductType?: FuelTypeValue | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;
@@ -102,6 +104,7 @@ export function CostForm(props: Props) {
         incurredOn: toDateInput(new Date().toISOString()),
         notes: "",
         fuelLiters: "",
+        fuelProductType: "diesel" as FuelTypeValue,
         nextDueOn: "",
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
@@ -121,6 +124,7 @@ export function CostForm(props: Props) {
       incurredOn: toDateInput(r.incurredOn),
       notes: r.notes ?? "",
       fuelLiters: r.fuelLiters != null ? String(r.fuelLiters) : "",
+      fuelProductType: (r.fuelProductType as FuelTypeValue | null) ?? "diesel",
       nextDueOn: toDateInputOrEmpty(r.nextDueOn ?? null),
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
@@ -144,6 +148,7 @@ export function CostForm(props: Props) {
   const [incurredOn, setIncurredOn] = useState(initial.incurredOn);
   const [notes, setNotes] = useState(initial.notes);
   const [fuelLiters, setFuelLiters] = useState(initial.fuelLiters);
+  const [fuelProductType, setFuelProductType] = useState<FuelTypeValue>(initial.fuelProductType);
   const [nextDueOn, setNextDueOn] = useState(initial.nextDueOn);
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
@@ -219,6 +224,11 @@ export function CostForm(props: Props) {
         setPending(false);
         return;
       }
+      if (!fuelProductType) {
+        setError("Alege tipul de carburant alimentat.");
+        setPending(false);
+        return;
+      }
     }
 
     const nextDue = constraintMode !== "km" ? toIsoDate(nextDueOn) : null;
@@ -250,6 +260,7 @@ export function CostForm(props: Props) {
       incurredOn: when,
       notes: notes.trim() || null,
       fuelLiters: isFuelCostCategory(category.trim()) ? liters : null,
+      fuelProductType: isFuelCostCategory(category.trim()) ? fuelProductType : null,
       nextDueOn: nextDue,
       reminderOffsetsDays: dayOffsets,
       dueOdometerKm: kmDue,
@@ -379,18 +390,34 @@ export function CostForm(props: Props) {
         <OpsFormSection number={3} title="Detalii operaționale">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {isFuel ? (
-              <OpsFormField label="Litri alimentați" required hint="Folosit pentru consum L/100km în profilul vehiculului.">
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  required
-                  value={fuelLiters}
-                  onChange={(e) => setFuelLiters(e.target.value)}
-                  placeholder="ex. 42,5"
-                  className={OPS_INPUT_MONO_CLASS}
-                />
-              </OpsFormField>
+              <>
+                <OpsFormField label="Tip carburant" required>
+                  <select
+                    required
+                    value={fuelProductType}
+                    onChange={(e) => setFuelProductType(e.target.value as FuelTypeValue)}
+                    className={OPS_INPUT_CLASS}
+                  >
+                    {FUEL_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </OpsFormField>
+                <OpsFormField label="Litri alimentați" required hint="Cantitate alimentată — nu se alocă pe curse.">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    required
+                    value={fuelLiters}
+                    onChange={(e) => setFuelLiters(e.target.value)}
+                    placeholder="ex. 42,5"
+                    className={OPS_INPUT_MONO_CLASS}
+                  />
+                </OpsFormField>
+              </>
             ) : null}
             <OpsFormField label="Km la eveniment">
               <input
@@ -480,20 +507,37 @@ export function CostForm(props: Props) {
         <input type="text" inputMode="decimal" required value={amountCents} onChange={(e) => setAmountCents(e.target.value)} placeholder="ex. 150.00" className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       {isFuel ? (
-        <div className="space-y-2 rounded-lg border border-amber-900/40 bg-amber-950/20 p-4">
-          <label className="block text-sm font-medium text-amber-200/90">Litri alimentați</label>
-          <input
-            type="number"
-            min={0}
-            step={0.01}
-            required
-            value={fuelLiters}
-            onChange={(e) => setFuelLiters(e.target.value)}
-            placeholder="ex. 45.5"
-            className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2"
-          />
+        <div className="space-y-3 rounded-lg border border-amber-900/40 bg-amber-950/20 p-4">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-amber-200/90">Tip carburant</label>
+            <select
+              required
+              value={fuelProductType}
+              onChange={(e) => setFuelProductType(e.target.value as FuelTypeValue)}
+              className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2"
+            >
+              {FUEL_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-amber-200/90">Litri alimentați</label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              required
+              value={fuelLiters}
+              onChange={(e) => setFuelLiters(e.target.value)}
+              placeholder="ex. 45.5"
+              className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2"
+            />
+          </div>
           <p className="text-xs text-zinc-500">
-            Cantitatea de combustibil — folosită pentru calcul consum (L/100km) în profilul vehiculului.
+            Litrii se înregistrează la alimentare; consumul L/100km se calculează pe segmente între alimentări, nu pe curse.
           </p>
         </div>
       ) : null}

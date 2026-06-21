@@ -34,6 +34,7 @@ import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TenantId } from './tenant-id.decorator';
+import { assertFuelType, parseFuelType } from '../ops/fuel-types';
 
 @Controller('fleet')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -326,6 +327,7 @@ function assertCreateVehicleDto(body: unknown): CreateVehicleDto {
     'registrationNumber',
   );
   const type = asVehicleType(body.type, 'type');
+  const fuelType = assertFuelType(body.fuelType, 'fuelType');
   const vin = optionalString(body.vin);
   const brand = optionalString(body.brand);
   const model = optionalString(body.model);
@@ -341,6 +343,7 @@ function assertCreateVehicleDto(body: unknown): CreateVehicleDto {
     clientId,
     registrationNumber,
     type,
+    fuelType,
     vin,
     brand,
     model,
@@ -367,6 +370,14 @@ function assertPatchVehicleDto(body: unknown): PatchVehicleDto {
     );
   }
   if ('type' in body) dto.type = asVehicleType(body.type, 'type');
+  if ('fuelType' in body) {
+    if (body.fuelType === null) dto.fuelType = null;
+    else {
+      const parsed = parseFuelType(body.fuelType);
+      if (!parsed) throw new BadRequestException('Invalid fuelType');
+      dto.fuelType = parsed;
+    }
+  }
   if ('status' in body) dto.status = asVehicleStatus(body.status, 'status');
   if ('odometerKm' in body) {
     throw new BadRequestException(

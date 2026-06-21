@@ -148,6 +148,8 @@ Cu stimă,
 | **Mentenanță** | Garanție și daune — câmpuri lipsă în flux operațional | `warrantyRepair`, cost potențial, nr. dosar daună, asigurator |
 | **Istoric vehicul (scalare)** | La sute de linii, preview/brief devine limitant | **Neacționat** — de analizat la scalare flotă (nu blocker pilot curent) |
 | **Curse / consum** | Consum derivat pe cursă, nu doar agregare alimentări | Rămâne în backlog §10 roadmap (epic post-pilot) |
+| **Liste ops (scroll + tabele)** | Scroll într-un box mic; header tabel pierdut la derulare; tab-uri remindere se mișcau cu lista | `FleetListPageLayout` — antet + filtre fixe, scroll sub filtre; `FleetDataTable` — header sticky, celule compacte; liste card (documente, mentenanță, remindere) + `.fleet-scroll-pane`; toolbar status remindere fix; eliminat rând debug Vehicule |
+| **Liste ops (antet + filtre)** | Zonă fixă antet + filtre ocupă prea mult viewport | **Neacționat** — variantele compact/ops respinse; layout actual păstrat |
 
 **Util pentru client (feedback pozitiv):** modulele ops sunt utilizabile cap-coadă pe 1 vehicul; formularele sunt mai clare; profil vehicul mai complet.
 

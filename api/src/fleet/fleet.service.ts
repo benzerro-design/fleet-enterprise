@@ -289,6 +289,7 @@ export class FleetService {
           model: dto.model?.trim() || null,
           status: 'active',
           odometerKm: dto.odometerKm ?? 0,
+          fuelType: dto.fuelType,
           itpExpiresOn: dto.itpExpiresOn ? new Date(dto.itpExpiresOn) : null,
           itpStationName: dto.itpStationName ?? null,
           itpReminderOffsetsDays: hasItp
@@ -391,6 +392,12 @@ export class FleetService {
               : dto.model === null
                 ? null
                 : dto.model.trim() || null,
+          fuelType:
+            dto.fuelType === undefined
+              ? undefined
+              : dto.fuelType === null
+                ? null
+                : dto.fuelType,
           itpExpiresOn:
             dto.itpExpiresOn === undefined
               ? undefined
@@ -1107,6 +1114,7 @@ export class FleetService {
       vin: row.vin,
       status: row.status as VehicleStatus,
       odometerKm: row.odometerKm,
+      fuelType: row.fuelType ?? null,
       itpExpiresOn: row.itpExpiresOn ? row.itpExpiresOn.toISOString() : null,
       itpStationName: row.itpStationName,
       itpReminderOffsetsDays: normalizeReminderOffsets(row.itpReminderOffsetsDays),

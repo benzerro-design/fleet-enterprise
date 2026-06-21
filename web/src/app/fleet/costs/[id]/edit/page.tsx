@@ -6,6 +6,7 @@ import { CostForm } from "@/components/fleet/CostForm";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
+import type { FuelTypeValue } from "@/lib/fuel-types";
 
 type CostRecord = {
   id: string;
@@ -20,6 +21,7 @@ type CostRecord = {
   incurredOn: string;
   notes: string | null;
   fuelLiters?: number | null;
+  fuelProductType?: FuelTypeValue | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;

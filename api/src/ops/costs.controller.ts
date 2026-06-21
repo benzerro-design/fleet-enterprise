@@ -21,6 +21,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import type { CostBrowseFilters, CreateCostInput, PatchCostInput } from './costs.service';
 import { CostsService } from './costs.service';
+import { parseFuelType } from './fuel-types';
 import { normalizeReminderOffsets } from './document-reminders';
 import { normalizeReminderOffsetsKm } from './reminder-status';
 
@@ -127,6 +128,7 @@ function assertCreateCostDto(body: unknown): CreateCostInput {
     provider: optionalNullableString(body.provider),
     amountCents,
     fuelLiters: optionalNullablePositiveFloat(body.fuelLiters, 'fuelLiters'),
+    fuelProductType: optionalNullableFuelType(body.fuelProductType),
     odometerKm: optionalNullableNonNegativeInt(body.odometerKm, 'odometerKm'),
     invoiceNumber: optionalNullableString(body.invoiceNumber),
     invoiceDate:
@@ -162,6 +164,9 @@ function assertPatchCostDto(body: unknown): PatchCostInput {
   if ('amountCents' in body) dto.amountCents = asNonNegativeInt(body.amountCents, 'amountCents');
   if ('fuelLiters' in body) {
     dto.fuelLiters = optionalNullablePositiveFloat(body.fuelLiters, 'fuelLiters');
+  }
+  if ('fuelProductType' in body) {
+    dto.fuelProductType = optionalNullableFuelType(body.fuelProductType);
   }
   if ('odometerKm' in body) {
     dto.odometerKm = optionalNullableNonNegativeInt(body.odometerKm, 'odometerKm');
@@ -287,6 +292,16 @@ function optionalNullablePositiveFloat(
     throw new BadRequestException(`Field "${field}" must be a positive number`);
   }
   return n;
+}
+
+function optionalNullableFuelType(
+  v: unknown,
+): 'diesel' | 'petrol' | 'hybrid' | 'electric' | 'lpg' | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  const parsed = parseFuelType(v);
+  if (!parsed) throw new BadRequestException('Invalid fuelProductType');
+  return parsed;
 }
 
 function optionalBoolean(v: unknown): boolean | undefined {
