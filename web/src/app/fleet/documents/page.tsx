@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
 import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
@@ -98,125 +99,129 @@ export default async function DocumentsPage({ searchParams }: Props) {
   };
 
   return (
-    <FleetPageMain>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Conformitate</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Documente</h1>
-            <p className="mt-3 text-zinc-400">
-              RCA, CASCO, certificat înmatriculare, CIV și altele — filtrare după vehicul, tip și status expirare.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {write ? (
-              <Link
-                href="/fleet/documents/new"
-                className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+    <FleetPageMain fill>
+      <FleetListPageLayout
+        header={
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Conformitate</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Documente</h1>
+              <p className="mt-3 text-zinc-400">
+                RCA, CASCO, certificat înmatriculare, CIV și altele — filtrare după vehicul, tip și status expirare.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {write ? (
+                <Link
+                  href="/fleet/documents/new"
+                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Document nou
+                </Link>
+              ) : null}
+              <a
+                href={exportHref}
+                className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
               >
-                Document nou
+                Export CSV
+              </a>
+              <Link
+                href="/fleet/vehicles"
+                className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+              >
+                Înapoi la vehicule
               </Link>
-            ) : null}
-            <a
-              href={exportHref}
-              className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-            >
-              Export CSV
-            </a>
-            <Link
-              href="/fleet/vehicles"
-              className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-            >
-              Înapoi la vehicule
-            </Link>
+            </div>
           </div>
-        </div>
-
-        <form
-          key={filterFormKey(sp)}
-          action="/fleet/documents"
-          method="get"
-          className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
-        >
-          <input type="hidden" name="page" value="1" />
-          <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
-            <input
-              name="registrationNumber"
-              defaultValue={sp.registrationNumber ?? ""}
-              placeholder="ex. B 123 ABC"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Client</label>
-            <input
-              name="clientId"
-              defaultValue={sp.clientId ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[11rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Tip document</label>
-            <select
-              name="documentTypeCode"
-              defaultValue={sp.documentTypeCode ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            >
-              <option value="">Toate</option>
-              {DOCUMENT_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex min-w-[11rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Status expirare</label>
-            <select
-              name="expiryStatus"
-              defaultValue={sp.expiryStatus ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            >
-              {DOCUMENT_EXPIRY_STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value || "all"} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Căutare</label>
-            <input
-              name="q"
-              defaultValue={sp.q ?? ""}
-              placeholder="Titlu, tip…"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[9rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Expiră de la</label>
-            <input
-              name="expiresFrom"
-              type="date"
-              defaultValue={sp.expiresFrom ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[9rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Expiră până la</label>
-            <input
-              name="expiresTo"
-              type="date"
-              defaultValue={sp.expiresTo ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
-            Aplică
-          </button>
-          <FilterResetLink href="/fleet/documents" />
-        </form>
-
+        }
+        filters={
+          <form
+            key={filterFormKey(sp)}
+            action="/fleet/documents"
+            method="get"
+            className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
+          >
+            <input type="hidden" name="page" value="1" />
+            <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
+              <input
+                name="registrationNumber"
+                defaultValue={sp.registrationNumber ?? ""}
+                placeholder="ex. B 123 ABC"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Client</label>
+              <input
+                name="clientId"
+                defaultValue={sp.clientId ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[11rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Tip document</label>
+              <select
+                name="documentTypeCode"
+                defaultValue={sp.documentTypeCode ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              >
+                <option value="">Toate</option>
+                {DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex min-w-[11rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Status expirare</label>
+              <select
+                name="expiryStatus"
+                defaultValue={sp.expiryStatus ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              >
+                {DOCUMENT_EXPIRY_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value || "all"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Căutare</label>
+              <input
+                name="q"
+                defaultValue={sp.q ?? ""}
+                placeholder="Titlu, tip…"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[9rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Expiră de la</label>
+              <input
+                name="expiresFrom"
+                type="date"
+                defaultValue={sp.expiresFrom ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[9rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Expiră până la</label>
+              <input
+                name="expiresTo"
+                type="date"
+                defaultValue={sp.expiresTo ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
+              Aplică
+            </button>
+            <FilterResetLink href="/fleet/documents" />
+          </form>
+        }
+      >
         {!data ? (
           <p className="text-amber-400">Nu am putut încărca documentele.</p>
         ) : data.items.length === 0 ? (
@@ -319,6 +324,7 @@ export default async function DocumentsPage({ searchParams }: Props) {
             </div>
           </>
         )}
+      </FleetListPageLayout>
     </FleetPageMain>
   );
 }

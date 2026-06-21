@@ -1,4 +1,5 @@
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -42,76 +43,98 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
   const exportHref = `${remindersBrowserBase}/export${exportQs ? `?${exportQs}` : ""}`;
 
   return (
-    <FleetPageMain>
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Conformitate</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Remindere</h1>
-            <p className="mt-3 max-w-xl text-sm text-zinc-400">
-              Acțiuni pe vehicul — documente, mentenanță sau operațiuni personalizate. Constrângeri pe timp și km.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {write ? (
-              <Link
-                href="/fleet/reminders/new"
-                className="inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
+    <FleetPageMain fill>
+      <FleetListPageLayout
+        header={
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Conformitate</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Remindere</h1>
+              <p className="mt-3 max-w-xl text-sm text-zinc-400">
+                Acțiuni pe vehicul — documente, mentenanță sau operațiuni personalizate. Constrângeri pe timp și km.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {write ? (
+                <Link
+                  href="/fleet/reminders/new"
+                  className="inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500"
+                >
+                  Acțiune nouă
+                </Link>
+              ) : null}
+              <a
+                href={exportHref}
+                className="inline-flex rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
               >
-                Acțiune nouă
+                Export CSV
+              </a>
+              <Link
+                href="/fleet/documents"
+                className="inline-flex rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+              >
+                Documente
               </Link>
-            ) : null}
-            <a
-              href={exportHref}
-              className="inline-flex rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-            >
-              Export CSV
-            </a>
-            <Link
-              href="/fleet/documents"
-              className="inline-flex rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-            >
-              Documente
-            </Link>
+            </div>
           </div>
-        </div>
-
-        <form key={filterFormKey(sp)} method="get" className="mb-8 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-          {sp.status?.trim() ? <input type="hidden" name="status" value={sp.status.trim()} /> : null}
-          <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
-            <input
-              name="registrationNumber"
-              defaultValue={sp.registrationNumber ?? ""}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex min-w-[8rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Client</label>
-            <input name="clientId" defaultValue={sp.clientId ?? ""} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
-          </div>
-          <div className="flex min-w-[9rem] flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Tip</label>
-            <select name="sourceType" defaultValue={sp.sourceType ?? ""} className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm">
-              <option value="">Toate</option>
-              <option value="document">Document</option>
-              <option value="maintenance">Mentenanță</option>
-              <option value="cost">Cost</option>
-              <option value="custom">Personalizat</option>
-            </select>
-          </div>
-          <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
-            <label className="text-xs font-medium text-zinc-500">Căutare</label>
-            <input name="q" defaultValue={sp.q ?? ""} placeholder="Titlu…" className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
-          </div>
-          <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
-            Aplică
-          </button>
-          <FilterResetLink href="/fleet/reminders" />
-        </form>
-
+        }
+        filters={
+          <form
+            key={filterFormKey(sp)}
+            method="get"
+            className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+          >
+            {sp.status?.trim() ? <input type="hidden" name="status" value={sp.status.trim()} /> : null}
+            <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
+              <input
+                name="registrationNumber"
+                defaultValue={sp.registrationNumber ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[8rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Client</label>
+              <input
+                name="clientId"
+                defaultValue={sp.clientId ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[9rem] flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Tip</label>
+              <select
+                name="sourceType"
+                defaultValue={sp.sourceType ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              >
+                <option value="">Toate</option>
+                <option value="document">Document</option>
+                <option value="maintenance">Mentenanță</option>
+                <option value="cost">Cost</option>
+                <option value="custom">Personalizat</option>
+              </select>
+            </div>
+            <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Căutare</label>
+              <input
+                name="q"
+                defaultValue={sp.q ?? ""}
+                placeholder="Titlu…"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              />
+            </div>
+            <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
+              Aplică
+            </button>
+            <FilterResetLink href="/fleet/reminders" />
+          </form>
+        }
+      >
         <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
           <RemindersListView backHref="/fleet/vehicles" write={write} />
         </Suspense>
+      </FleetListPageLayout>
     </FleetPageMain>
   );
 }

@@ -57,7 +57,7 @@ export function FleetShell({
     <div className="flex h-dvh overflow-hidden bg-zinc-950">
       {/* Desktop sidebar */}
       <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
-        <div className="border-b border-zinc-800 px-4 py-4">
+        <div className="shrink-0 border-b border-zinc-800 px-4 py-4">
           <Link href="/fleet/dashboard" className="block">
             <p className="text-sm font-semibold text-zinc-100">Fleet Enterprise</p>
             {tenantSlug ? (
@@ -66,7 +66,7 @@ export function FleetShell({
           </Link>
         </div>
         <FleetSidebarNav groups={groups} admin={admin} variant="desktop" />
-        <div className="border-t border-zinc-800 px-4 py-3">
+        <div className="shrink-0 border-t border-zinc-800 px-4 py-3">
           {userEmail ? <p className="truncate text-xs text-zinc-500">{userEmail}</p> : null}
           {readOnly ? (
             <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-600">Doar citire</p>
@@ -154,7 +154,7 @@ export function FleetShell({
           />
           <div
             id="fleet-mobile-drawer"
-            className="absolute bottom-0 left-0 top-0 flex w-[min(100%,320px)] flex-col border-r border-zinc-800 bg-zinc-950 shadow-xl"
+            className="absolute bottom-0 left-0 top-0 flex w-[min(100%,320px)] min-h-0 flex-col border-r border-zinc-800 bg-zinc-950 shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
               <div>

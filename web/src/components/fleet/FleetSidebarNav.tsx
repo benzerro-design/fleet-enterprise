@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
 import {
   type FleetNavEntry,
   type FleetNavGroup,
@@ -123,7 +124,7 @@ export function FleetSidebarNav({ groups, admin, onNavigate, variant = "desktop"
   const pathname = usePathname() ?? "";
 
   return (
-    <nav className="flex flex-1 flex-col overflow-y-auto px-2 py-3" aria-label="Navigare flotă">
+    <nav className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col px-2 py-3`} aria-label="Navigare flotă">
       <div className="flex-1 space-y-1">
         {groups.map((group) =>
           variant === "drawer" ? (

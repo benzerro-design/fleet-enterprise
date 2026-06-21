@@ -1,3 +1,5 @@
+import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
+
 type FleetPageMainProps = {
   children: React.ReactNode;
   className?: string;
@@ -12,7 +14,7 @@ export function FleetPageMain({ children, className, narrow, fill }: FleetPageMa
   const mainClass = [
     "flex w-full flex-col gap-8",
     narrowClass,
-    fill ? "min-h-0 flex-1" : "min-h-0 flex-1 overflow-auto",
+    fill ? "min-h-0 flex-1" : `min-h-0 flex-1 ${fleetScrollPaneClass}`,
     className,
   ]
     .filter(Boolean)

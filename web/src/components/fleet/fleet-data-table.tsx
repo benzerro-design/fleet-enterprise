@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
 
 /** ~15–20% mai compact decât px-4 py-3; folosit pe toate listele tabel. */
 export const fleetThClass =
@@ -21,7 +22,7 @@ export function FleetDataTable({ children, className = "", contained = false }: 
   if (contained) {
     return (
       <div
-        className={`max-h-[min(24rem,55vh)] overflow-auto rounded-lg border border-zinc-800 ${className}`.trim()}
+        className={`${fleetScrollPaneClass} max-h-[min(24rem,55vh)] rounded-lg border border-zinc-800 ${className}`.trim()}
       >
         {children}
       </div>

@@ -24,3 +24,36 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.fleet-scroll-pane {
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(82 82 91 / 0.5) transparent;
+}
+
+.fleet-scroll-pane::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.fleet-scroll-pane::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.fleet-scroll-pane::-webkit-scrollbar-thumb {
+  background-color: rgb(82 82 91 / 0.45);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.fleet-scroll-pane::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(113 113 122 / 0.7);
+}
+
+.fleet-scroll-pane::-webkit-scrollbar-corner {
+  background: transparent;
+}

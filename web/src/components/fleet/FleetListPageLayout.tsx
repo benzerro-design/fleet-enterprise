@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
 
 type FleetListPageLayoutProps = {
   /** Titlu, acțiuni, tab-uri — fixe, fără scroll. */
@@ -17,7 +18,7 @@ export function FleetListPageLayout({ header, filters, children }: FleetListPage
     <div className="flex min-h-0 flex-1 flex-col gap-6">
       {header ? <div className="shrink-0 space-y-6">{header}</div> : null}
       {filters ? <div className="shrink-0">{filters}</div> : null}
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto overscroll-y-contain">
+      <div className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col`}>
         <div className="flex flex-col gap-4 pb-1">{children}</div>
       </div>
     </div>

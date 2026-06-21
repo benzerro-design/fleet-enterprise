@@ -140,39 +140,28 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
           </form>
         }
       >
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-sm font-medium text-zinc-300">Listă paginată</h2>
-            <p className="font-mono text-xs text-zinc-500 sm:text-sm">
-              <span className="text-zinc-500">GET</span> /api/fleet/vehicles?page&amp;pageSize&amp;q&amp;status
-            </p>
-          </div>
-
-          {!list ? (
-            <p className="mt-4 text-amber-400">
-              Nu am putut încărca vehiculele. Verifică API-ul, Postgres, cookie-ul de sesiune și că în{" "}
-              <code className="rounded bg-zinc-950 px-1.5 py-0.5 text-zinc-200">web/.env.local</code> există{" "}
-              <code className="rounded bg-zinc-950 px-1.5 py-0.5 text-zinc-200">API_URL</code> (server-only,
-              spre Nest).
-            </p>
-          ) : vehicles.length === 0 ? (
-            <p className="mt-4 text-zinc-400">
-              Nu există vehicule pentru filtrele curente.
-              {write ? (
-                <>
-                  {" "}
-                  <Link href="/fleet/vehicles/new" className="text-emerald-400 underline hover:text-emerald-300">
-                    Adaugă vehicul
-                  </Link>
-                  .
-                </>
-              ) : (
-                <> Contul tău are rol de citire; un administrator poate adăuga vehicule.</>
-              )}
-            </p>
-          ) : (
-            <>
-              <FleetDataTable>
+        {!list ? (
+          <p className="text-amber-400">
+            Nu am putut încărca vehiculele. Verifică API-ul și sesiunea.
+          </p>
+        ) : vehicles.length === 0 ? (
+          <p className="text-zinc-400">
+            Nu există vehicule pentru filtrele curente.
+            {write ? (
+              <>
+                {" "}
+                <Link href="/fleet/vehicles/new" className="text-emerald-400 underline hover:text-emerald-300">
+                  Adaugă vehicul
+                </Link>
+                .
+              </>
+            ) : (
+              <> Contul tău are rol de citire; un administrator poate adăuga vehicule.</>
+            )}
+          </p>
+        ) : (
+          <>
+            <FleetDataTable>
                 <table className={fleetTableClass}>
                   <thead className={`${fleetTheadClass} tracking-wide`}>
                     <tr>
@@ -224,7 +213,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                 </table>
               </FleetDataTable>
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
                 <p>
                   Pagina {page} din {totalPages} · {total} vehicule
                 </p>
@@ -249,7 +238,6 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
               </div>
             </>
           )}
-        </section>
       </FleetListPageLayout>
     </FleetPageMain>
   );
