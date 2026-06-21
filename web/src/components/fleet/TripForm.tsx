@@ -317,7 +317,7 @@ export function TripForm(props: Props) {
             <div className="sm:col-span-2">
               <OpsOdometerKmHint
                 odometerKm={tripSyncOdometerKm}
-                vehicleOdometerKm={selectedVehicleLocal?.odometerKm ?? 0}
+                vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
               />
             </div>
           </div>
@@ -421,7 +421,7 @@ export function TripForm(props: Props) {
       </div>
       <OpsOdometerKmHint
         odometerKm={tripSyncOdometerKm}
-        vehicleOdometerKm={selectedVehicleLocal?.odometerKm ?? 0}
+        vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
       />
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">
