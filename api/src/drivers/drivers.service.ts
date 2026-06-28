@@ -33,6 +33,7 @@ export type DriverRecord = {
 export type DriverAssignmentRecord = {
   id: string;
   driverId: string;
+  driverFullName?: string | null;
   vehicleId: string;
   registrationNumber: string;
   assignedAt: string;
@@ -185,6 +186,7 @@ export class DriversService {
       where: { vehicleId },
       include: {
         vehicle: { select: { registrationNumber: true } },
+        driver: { select: { fullName: true } },
         assignedBy: { select: { email: true } },
       },
       orderBy: [{ assignedAt: 'desc' }],
@@ -523,11 +525,13 @@ export class DriversService {
     assignedByUserId: string | null;
     notes: string | null;
     vehicle: { registrationNumber: string };
+    driver?: { fullName: string } | null;
     assignedBy: { email: string } | null;
   }): DriverAssignmentRecord {
     return {
       id: row.id,
       driverId: row.driverId,
+      driverFullName: row.driver?.fullName ?? null,
       vehicleId: row.vehicleId,
       registrationNumber: row.vehicle.registrationNumber,
       assignedAt: row.assignedAt.toISOString(),

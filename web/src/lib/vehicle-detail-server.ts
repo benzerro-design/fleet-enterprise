@@ -8,6 +8,7 @@ import type {
 } from "@/lib/vehicle-profile-types";
 import type { MaintenancePlanPayload } from "@/lib/maintenance-plan-types";
 import type { VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
+import type { DriverAssignmentRecord } from "@/lib/drivers-api";
 
 const OPS_PREVIEW_PAGE_SIZE = 50;
 
@@ -163,6 +164,16 @@ async function getDocumentsForVehicle(registrationNumber: string): Promise<Docum
   return (await res.json()) as DocumentListPayload;
 }
 
+async function getDriverAssignments(id: string): Promise<DriverAssignmentRecord[]> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/driver-assignments`);
+    if (!res?.ok) return [];
+    return (await res.json()) as DriverAssignmentRecord[];
+  } catch {
+    return [];
+  }
+}
+
 async function getVehicleMobility(id: string): Promise<VehicleMobilityPayload | null> {
   try {
     const res = await fleetServerFetch(`/fleet/vehicles/${id}/mobility`);
@@ -214,13 +225,14 @@ export type VehicleDetailData = {
   odometerPayload: OdometerReadingsPayload;
   mobilityPayload: VehicleMobilityPayload | null;
   maintenancePlanPayload: MaintenancePlanPayload;
+  driverAssignments: DriverAssignmentRecord[];
 };
 
 export async function loadVehicleDetail(id: string): Promise<VehicleDetailData | null> {
   const vehicle = await getVehicle(id);
   if (!vehicle) return null;
 
-  const [maintenanceList, costsList, documentsList, civ, acquisition, photos, odometer, mobility, maintenancePlan] =
+  const [maintenanceList, costsList, documentsList, civ, acquisition, photos, odometer, mobility, maintenancePlan, driverAssignments] =
     await Promise.all([
     getMaintenanceForVehicle(vehicle.registrationNumber),
     getCostsForVehicle(vehicle.registrationNumber),
@@ -231,6 +243,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     getOdometerReadings(id),
     getVehicleMobility(id),
     getMaintenancePlan(id),
+    getDriverAssignments(id),
   ]);
 
   return {
@@ -247,5 +260,6 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
       ...EMPTY_MAINTENANCE_PLAN,
       vehicleOdometerKm: vehicle.odometerKm,
     },
+    driverAssignments,
   };
 }

@@ -400,6 +400,7 @@ model TripSheetDocument {
   vehicleIds      String[]
   driverName      String?
   clientIdFilter  String?
+  driverIdFilter  String?
   title           String
   summaryJson     Json
   /// Legacy inline storage; null when `pdfStorageKey` is set (GCS).

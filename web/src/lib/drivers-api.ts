@@ -25,6 +25,7 @@ export type DriverRecord = {
 export type DriverAssignmentRecord = {
   id: string;
   driverId: string;
+  driverFullName?: string | null;
   vehicleId: string;
   registrationNumber: string;
   assignedAt: string;

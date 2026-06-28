@@ -34,6 +34,7 @@ import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TenantId } from './tenant-id.decorator';
+import { DriversService } from '../drivers/drivers.service';
 import { assertFuelType, parseFuelType } from '../ops/fuel-types';
 
 @Controller('fleet')
@@ -44,6 +45,7 @@ export class FleetController {
     private readonly maintenancePlan: MaintenancePlanService,
     private readonly dashboard: DashboardService,
     private readonly formBrief: VehicleFormBriefService,
+    private readonly drivers: DriversService,
   ) {}
 
   @Get('dashboard')
@@ -125,6 +127,15 @@ export class FleetController {
   ) {
     const dto = assertPatchVehicleDto(body);
     return this.fleet.patchVehicle(tenantId, vehicleId, dto, actorUserId);
+  }
+
+  @Get('vehicles/:vehicleId/driver-assignments')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  listVehicleDriverAssignments(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+  ) {
+    return this.drivers.listVehicleAssignments(tenantId, vehicleId);
   }
 
   @Get('vehicles/:vehicleId/mobility')

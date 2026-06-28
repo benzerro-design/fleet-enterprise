@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
+import { DriverSelect } from "@/components/fleet/DriverSelect";
 import { TRIP_SHEET_DOC_TYPES } from "@/lib/trip-ops";
 
 type VehicleOption = {
@@ -34,7 +35,7 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [clientId, setClientId] = useState("");
-  const [driverName, setDriverName] = useState("");
+  const [driverId, setDriverId] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +45,13 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
     if (!c) return vehicles;
     return vehicles.filter((v) => v.clientId.toLowerCase().includes(c));
   }, [vehicles, clientId]);
+
+  const clientForDriver = useMemo(() => {
+    if (clientId.trim()) return clientId.trim();
+    const firstId = [...selectedIds][0];
+    if (!firstId) return "";
+    return vehicles.find((v) => v.id === firstId)?.clientId ?? "";
+  }, [clientId, selectedIds, vehicles]);
 
   function toggleVehicle(id: string) {
     setSelectedIds((prev) => {
@@ -67,7 +75,7 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
     setPeriodStart("");
     setPeriodEnd("");
     setClientId("");
-    setDriverName("");
+    setDriverId("");
     setSelectedIds(new Set());
     setError(null);
   }
@@ -94,7 +102,7 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
           periodStart,
           periodEnd,
           vehicleIds: ids,
-          driverName: driverName.trim() || null,
+          driverId: driverId.trim() || null,
           clientId: clientId.trim() || null,
         }),
       });
@@ -137,9 +145,8 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
               Generează document parcurs
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              Agregă cursele, costurile de combustibil și citirile de odometru din perioada selectată. Conducătorul este
-              text liber (modul Client vine ulterior). După generare, valorile rămân — folosește{" "}
-              <span className="text-zinc-300">Resetează</span> pentru un document nou de la zero.
+              Agregă cursele din perioada selectată. Opțional, filtrează după client și șofer — doar cursele
+              acelui șofer intră în document.
             </p>
 
             <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4">
@@ -191,21 +198,20 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
                 <label className="text-xs font-medium text-zinc-500">Filtru client (opțional)</label>
                 <input
                   value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
+                  onChange={(e) => {
+                    setClientId(e.target.value);
+                    setDriverId("");
+                  }}
                   placeholder="Restrânge lista de vehicule"
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-500">Conducător (text liber)</label>
-                <input
-                  value={driverName}
-                  onChange={(e) => setDriverName(e.target.value)}
-                  placeholder="ex. Popescu Ion"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
-                />
-              </div>
+              <DriverSelect
+                clientCode={clientForDriver}
+                value={driverId}
+                onChange={setDriverId}
+              />
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

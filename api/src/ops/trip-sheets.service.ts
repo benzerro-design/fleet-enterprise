@@ -23,6 +23,7 @@ export type GenerateTripSheetInput = {
   periodStart: string;
   periodEnd: string;
   vehicleIds: string[];
+  driverId?: string | null;
   driverName?: string | null;
   clientId?: string | null;
 };
@@ -79,6 +80,7 @@ function toDocRow(row: {
   vehicleIds: string[];
   driverName: string | null;
   clientIdFilter: string | null;
+  driverIdFilter: string | null;
   title: string;
   summaryJson: Prisma.JsonValue;
   createdAt: Date;
@@ -92,6 +94,7 @@ function toDocRow(row: {
     vehicleIds: row.vehicleIds,
     driverName: row.driverName,
     clientIdFilter: row.clientIdFilter,
+    driverIdFilter: row.driverIdFilter,
     title: row.title,
     summary: row.summaryJson,
     createdAt: row.createdAt.toISOString(),
@@ -199,6 +202,7 @@ export class TripSheetsService {
           vehicleIds: true,
           driverName: true,
           clientIdFilter: true,
+          driverIdFilter: true,
           title: true,
           summaryJson: true,
           createdAt: true,
@@ -219,6 +223,7 @@ export class TripSheetsService {
         vehicleIds: true,
         driverName: true,
         clientIdFilter: true,
+        driverIdFilter: true,
         title: true,
         summaryJson: true,
         createdAt: true,
@@ -288,11 +293,24 @@ export class TripSheetsService {
       throw new BadRequestException('One or more vehicles were not found for this tenant');
     }
 
+    let driverIdFilter: string | null = null;
+    let resolvedDriverName: string | null = input.driverName?.trim() || null;
+    if (input.driverId?.trim()) {
+      const driver = await this.prisma.driver.findFirst({
+        where: { id: input.driverId.trim(), tenantId: tenant.id },
+        select: { id: true, fullName: true },
+      });
+      if (!driver) throw new BadRequestException('driverId invalid');
+      driverIdFilter = driver.id;
+      resolvedDriverName = driver.fullName;
+    }
+
     const trips = await this.prisma.trip.findMany({
       where: {
         tenantId: tenant.id,
         vehicleId: { in: vehicleIds },
         startedAt: { gte: periodStart, lte: periodEnd },
+        ...(driverIdFilter ? { driverId: driverIdFilter } : {}),
       },
       include: {
         vehicle: {
@@ -303,6 +321,7 @@ export class TripSheetsService {
             client: { select: { code: true } },
           },
         },
+        driver: { select: { fullName: true } },
       },
       orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
       take: MAX_TRIPS,
@@ -341,7 +360,7 @@ export class TripSheetsService {
       distanceKm: t.distanceKm,
       purpose: tripPurposeLabel(t.purpose),
       roadType: tripRoadTypeLabel(t.roadType),
-      driverName: t.driverName ?? input.driverName ?? null,
+      driverName: t.driver?.fullName ?? t.driverName ?? resolvedDriverName,
       odometerStartKm: t.odometerStartKm,
       odometerEndKm: t.odometerEndKm,
     }));
@@ -369,7 +388,7 @@ export class TripSheetsService {
     const odometerStartKm = allOdo.length > 0 ? Math.min(...allOdo) : null;
     const odometerEndKm = allOdo.length > 0 ? Math.max(...allOdo) : null;
 
-    const driverName = input.driverName?.trim() || null;
+    const driverName = resolvedDriverName;
     const periodStartIso = periodStart.toISOString();
     const periodEndIso = periodEnd.toISOString();
 
@@ -420,6 +439,7 @@ export class TripSheetsService {
         vehicleIds,
         driverName,
         clientIdFilter: clientCodeFilter,
+        driverIdFilter,
         title,
         summaryJson,
         pdfByteSize,
@@ -459,6 +479,7 @@ export class TripSheetsService {
       vehicleIds: row.vehicleIds,
       driverName: row.driverName,
       clientIdFilter: row.clientIdFilter,
+      driverIdFilter: row.driverIdFilter,
       title: row.title,
       summaryJson: row.summaryJson,
       createdAt: row.createdAt,

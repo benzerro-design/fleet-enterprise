@@ -5,12 +5,14 @@ import { Suspense } from "react";
 import { VehicleSwitcher } from "@/components/fleet/VehicleSwitcher";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
 import type { VehicleRecord } from "@/lib/fleet-api";
+import type { DriverAssignmentRecord } from "@/lib/drivers-api";
 
 type Props = {
   vehicle: VehicleRecord;
   vehicles: OpsVehicleOption[];
   editable: boolean;
   canWrite: boolean;
+  driverAssignments?: DriverAssignmentRecord[];
 };
 
 function modelLabel(vehicle: VehicleRecord): string {
@@ -33,8 +35,9 @@ function VehicleSwitcherSlot(props: Omit<Props, "editable" | "canWrite"> & { mod
   );
 }
 
-export function VehicleDetailHeader({ vehicle, vehicles, editable, canWrite }: Props) {
+export function VehicleDetailHeader({ vehicle, vehicles, editable, canWrite, driverAssignments = [] }: Props) {
   const mode = editable ? "edit" : "view";
+  const activeDriver = driverAssignments.find((a) => !a.unassignedAt) ?? null;
 
   return (
     <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -59,6 +62,20 @@ export function VehicleDetailHeader({ vehicle, vehicles, editable, canWrite }: P
           tenant <span className="font-mono text-zinc-300">{vehicle.tenantId}</span>
           <span className="mx-2 text-zinc-600">·</span>
           <span className="font-mono text-sky-300">{vehicle.odometerKm.toLocaleString("ro-RO")} km</span>
+          {activeDriver ? (
+            <>
+              <span className="mx-2 text-zinc-600">·</span>
+              <span>
+                Șofer{" "}
+                <Link
+                  href={`/fleet/drivers/${activeDriver.driverId}`}
+                  className="text-emerald-400 hover:underline"
+                >
+                  {activeDriver.driverFullName ?? "—"}
+                </Link>
+              </span>
+            </>
+          ) : null}
           {editable ? (
             <>
               <span className="mx-2 text-zinc-600">·</span>

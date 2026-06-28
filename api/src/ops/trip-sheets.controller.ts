@@ -122,6 +122,15 @@ function assertGenerateDto(body: unknown): GenerateTripSheetInput {
     throw new BadRequestException('vehicleIds must be a non-empty array');
   }
 
+  const driverId =
+    body.driverId === undefined || body.driverId === null
+      ? null
+      : typeof body.driverId === 'string'
+        ? body.driverId.trim() || null
+        : (() => {
+            throw new BadRequestException('driverId must be a string or null');
+          })();
+
   const driverName =
     body.driverName === undefined || body.driverName === null
       ? null
@@ -140,7 +149,7 @@ function assertGenerateDto(body: unknown): GenerateTripSheetInput {
             throw new BadRequestException('clientId must be a string or null');
           })();
 
-  return { docType, periodStart, periodEnd, vehicleIds, driverName, clientId };
+  return { docType, periodStart, periodEnd, vehicleIds, driverId, driverName, clientId };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

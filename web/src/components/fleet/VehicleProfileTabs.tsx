@@ -5,6 +5,7 @@ import { useCallback, useMemo } from "react";
 import { VehicleAcquisitionTab } from "@/components/fleet/VehicleAcquisitionTab";
 import { VehicleAdvancedCivTab } from "@/components/fleet/VehicleAdvancedCivTab";
 import { VehicleBasicInfoTab } from "@/components/fleet/VehicleBasicInfoTab";
+import { VehicleDriversPanel } from "@/components/fleet/VehicleDriversPanel";
 import { VehicleMaintenancePlanTab } from "@/components/fleet/VehicleMaintenancePlanTab";
 import { VehicleOdometerTab } from "@/components/fleet/VehicleOdometerTab";
 import { VehiclePhotosTab } from "@/components/fleet/VehiclePhotosTab";
@@ -17,6 +18,7 @@ import type {
   VehiclePhotosPayload,
   VehicleProfileTab,
 } from "@/lib/vehicle-profile-types";
+import type { DriverAssignmentRecord } from "@/lib/drivers-api";
 
 const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "basic", label: "Basic Info" },
@@ -25,6 +27,7 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "photos", label: "Fotografii" },
   { id: "odometer", label: "Odometru" },
   { id: "maintenance_plan", label: "Plan Mentenanță" },
+  { id: "drivers", label: "Șoferi" },
 ];
 
 type Props = {
@@ -35,9 +38,19 @@ type Props = {
   photos: VehiclePhotosPayload;
   odometer: OdometerReadingsPayload;
   maintenancePlan: MaintenancePlanPayload;
+  driverAssignments: DriverAssignmentRecord[];
 };
 
-export function VehicleProfileTabs({ vehicle, write, civ, acquisition, photos, odometer, maintenancePlan }: Props) {
+export function VehicleProfileTabs({
+  vehicle,
+  write,
+  civ,
+  acquisition,
+  photos,
+  odometer,
+  maintenancePlan,
+  driverAssignments,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const active = useMemo((): VehicleProfileTab => {
@@ -48,7 +61,8 @@ export function VehicleProfileTabs({ vehicle, write, civ, acquisition, photos, o
       t === "photos" ||
       t === "odometer" ||
       t === "basic" ||
-      t === "maintenance_plan"
+      t === "maintenance_plan" ||
+      t === "drivers"
     ) {
       return t;
     }
@@ -109,6 +123,15 @@ export function VehicleProfileTabs({ vehicle, write, civ, acquisition, photos, o
             write={write}
             initial={maintenancePlan}
             highlightItemId={planItemHighlight}
+          />
+        ) : null}
+        {active === "drivers" ? (
+          <VehicleDriversPanel
+            vehicleId={vehicle.id}
+            clientCode={vehicle.clientId}
+            registrationNumber={vehicle.registrationNumber}
+            initialAssignments={driverAssignments}
+            canWrite={write}
           />
         ) : null}
       </div>

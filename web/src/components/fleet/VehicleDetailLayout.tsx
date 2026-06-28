@@ -27,6 +27,7 @@ export function VehicleDetailLayout({ data, vehicles, editable, canWrite }: Prop
     odometerPayload,
     mobilityPayload,
     maintenancePlanPayload,
+    driverAssignments,
   } = data;
   const regQs = `registrationNumber=${encodeURIComponent(vehicle.registrationNumber)}`;
   const profileWrite = editable && canWrite;
@@ -38,6 +39,7 @@ export function VehicleDetailLayout({ data, vehicles, editable, canWrite }: Prop
           vehicles={vehicles}
           editable={editable}
           canWrite={canWrite}
+          driverAssignments={driverAssignments}
         />
 
         <Suspense fallback={<p className="mb-10 text-sm text-zinc-500">Se încarcă profilul…</p>}>
@@ -50,6 +52,7 @@ export function VehicleDetailLayout({ data, vehicles, editable, canWrite }: Prop
               photos={photosPayload}
               odometer={odometerPayload}
               maintenancePlan={maintenancePlanPayload}
+              driverAssignments={driverAssignments}
             />
           </div>
         </Suspense>
