@@ -62,6 +62,14 @@ export default async function ReminderDetailPage({ params }: Props) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {write ? (
+              <Link
+                href={`/fleet/tickets/new?reminderActionId=${encodeURIComponent(id)}&vehicleId=${encodeURIComponent(row.vehicleId)}&client=${encodeURIComponent(row.clientId)}&subject=${encodeURIComponent(row.title)}`}
+                className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-4 py-2 text-sm text-emerald-100 hover:bg-emerald-950/50"
+              >
+                Deschide tichet
+              </Link>
+            ) : null}
             {canEdit ? (
               <Link
                 href={`/fleet/reminders/${id}/edit`}

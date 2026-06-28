@@ -31,6 +31,9 @@ model Tenant {
   driverVehicleAssignments DriverVehicleAssignment[]
   reminderActions    ReminderAction[]
   maintenancePlanItems MaintenancePlanItem[]
+  crmTickets         CrmTicket[]
+  crmTicketEvents    CrmTicketEvent[]
+  crmTicketLinks     CrmTicketLink[]
 }
 
 enum ClientStatus {
@@ -60,6 +63,7 @@ model Client {
   documents ClientDocument[]
   planAssignments ClientPlanAssignment[]
   drivers       Driver[]
+  crmTickets    CrmTicket[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -189,6 +193,7 @@ model Driver {
   vehicleAssignments DriverVehicleAssignment[]
   trips              Trip[]
   documents          DriverDocument[]
+  crmTickets         CrmTicket[]
 
   @@index([tenantId])
   @@index([clientId])
@@ -253,6 +258,9 @@ model User {
   odometerReadings OdometerReading[]  @relation("OdometerReadingBy")
   vehiclePhotosUploaded VehiclePhoto[] @relation("VehiclePhotoUploadedBy")
   driverAssignmentsCreated DriverVehicleAssignment[] @relation("DriverAssignmentBy")
+  crmTicketsCreated        CrmTicket[]               @relation("TicketCreatedBy")
+  crmTicketsOwned          CrmTicket[]               @relation("TicketOwner")
+  crmTicketEvents          CrmTicketEvent[]          @relation("TicketEventActor")
 }
 
 model TenantMembership {
@@ -337,6 +345,7 @@ model Vehicle {
   maintenancePlanItems MaintenancePlanItem[]
   photos             VehiclePhoto[]
   driverAssignments  DriverVehicleAssignment[]
+  crmTickets         CrmTicket[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])
@@ -646,6 +655,7 @@ model ReminderAction {
   cost                    CostEntry?         @relation(fields: [costEntryId], references: [id], onDelete: Cascade)
   vehicleItpProfile       Vehicle?           @relation("VehicleItpProfileReminder", fields: [vehicleItpProfileVehicleId], references: [id], onDelete: Cascade)
   maintenancePlan         MaintenancePlanItem? @relation(fields: [maintenancePlanItemId], references: [id], onDelete: Cascade)
+  crmTickets              CrmTicket[]
 
   @@index([tenantId])
   @@index([vehicleId])
@@ -672,4 +682,110 @@ enum VehicleStatus {
   inactive
   in_maintenance
   decommissioned
+}
+
+enum CrmTicketStatus {
+  open
+  in_progress
+  resolved
+  cancelled
+}
+
+enum CrmTicketPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum CrmTicketRoutingLevel {
+  L0
+  L1
+  L1N
+  L_STAR
+}
+
+enum CrmTicketEventKind {
+  comment
+  routing
+  transform
+  status
+}
+
+enum CrmTicketLinkEntityType {
+  maintenance
+  cost
+  trip
+  reminder
+  document
+}
+
+/// Solicitare CRM — inbox ierarhic L0→L1→L★.
+model CrmTicket {
+  id               String                @id @default(cuid())
+  tenantId         String
+  clientId         String
+  subject          String
+  description      String?
+  status           CrmTicketStatus       @default(open)
+  priority         CrmTicketPriority     @default(normal)
+  routingLevel     CrmTicketRoutingLevel @default(L1)
+  assignedQueue    String
+  vehicleId        String?
+  driverId         String?
+  reminderActionId String?
+  createdByUserId  String?
+  ownerUserId      String?
+  resolvedAt       DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client           Client                @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicle          Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driver           Driver?               @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  reminderAction   ReminderAction?       @relation(fields: [reminderActionId], references: [id], onDelete: SetNull)
+  createdBy        User?                 @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
+  owner            User?                 @relation("TicketOwner", fields: [ownerUserId], references: [id])
+  events           CrmTicketEvent[]
+  links            CrmTicketLink[]
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([tenantId, status])
+  @@index([vehicleId])
+  @@index([reminderActionId])
+  @@index([routingLevel])
+  @@index([assignedQueue])
+}
+
+model CrmTicketEvent {
+  id          String             @id @default(cuid())
+  tenantId    String
+  ticketId    String
+  kind        CrmTicketEventKind
+  body        String?
+  payload     Json?
+  actorUserId String?
+  createdAt   DateTime           @default(now())
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket      CrmTicket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor       User?              @relation("TicketEventActor", fields: [actorUserId], references: [id])
+
+  @@index([tenantId])
+  @@index([ticketId, createdAt])
+}
+
+model CrmTicketLink {
+  id         String                  @id @default(cuid())
+  tenantId   String
+  ticketId   String
+  entityType CrmTicketLinkEntityType
+  entityId   String
+  createdAt  DateTime                @default(now())
+  tenant     Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket     CrmTicket               @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([ticketId])
+  @@index([entityType, entityId])
 }

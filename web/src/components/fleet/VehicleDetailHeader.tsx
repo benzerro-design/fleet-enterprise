@@ -99,12 +99,20 @@ export function VehicleDetailHeader({ vehicle, vehicles, editable, canWrite, dri
             Vizualizare
           </Link>
         ) : canWrite ? (
-          <Link
-            href={`/fleet/vehicles/${vehicle.id}/edit`}
-            className="inline-flex w-fit items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
-          >
-            Editare
-          </Link>
+          <>
+            <Link
+              href={`/fleet/tickets/new?vehicleId=${encodeURIComponent(vehicle.id)}&client=${encodeURIComponent(vehicle.clientId)}`}
+              className="inline-flex w-fit items-center justify-center rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-4 py-2 text-sm text-emerald-100 hover:bg-emerald-950/50"
+            >
+              Deschide tichet
+            </Link>
+            <Link
+              href={`/fleet/vehicles/${vehicle.id}/edit`}
+              className="inline-flex w-fit items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+            >
+              Editare
+            </Link>
+          </>
         ) : null}
       </div>
     </div>
