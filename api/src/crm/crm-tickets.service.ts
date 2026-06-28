@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,6 +16,13 @@ import {
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
+import type { AccessContext, ActorContext } from '../iam/access-context.types';
+import {
+  canPerformTicketAction,
+  canReadTicket,
+  routingLevelLabel,
+  ticketListScope,
+} from '../iam/client-access';
 import { PrismaService } from '../prisma/prisma.service';
 
 const MAX_PAGE_SIZE = 200;
@@ -55,6 +63,8 @@ export type TicketEventRecord = {
   payload: unknown;
   actorUserId: string | null;
   actorEmail: string | null;
+  actorRoutingLevel: CrmTicketRoutingLevel | null;
+  actorDisplayName: string | null;
   createdAt: string;
 };
 
@@ -109,7 +119,7 @@ export type RouteTicketInput = {
 export type ReturnTicketInput = { reason: string };
 
 export type ResolveTicketInput = {
-  comment?: string | null;
+  comment: string;
   closeReminder?: boolean;
 };
 
@@ -170,6 +180,7 @@ export class CrmTicketsService {
       ticketType?: CrmTicketType;
       inbox?: 'all' | 'lstar' | 'focus';
     },
+    access?: AccessContext,
   ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
@@ -185,7 +196,7 @@ export class CrmTicketsService {
       resolvedClientUuid = (await resolveClientInTenant(this.prisma, tenant.id, params.clientId)).id;
     }
 
-    const where = this.listWhere(tenant.id, { ...params, clientId: resolvedClientUuid });
+    const where = this.listWhere(tenant.id, { ...params, clientId: resolvedClientUuid }, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.crmTicket.count({ where }),
@@ -206,17 +217,25 @@ export class CrmTicketsService {
     };
   }
 
-  async listBoard(tenantSlug: string, params: { clientId?: string; inbox?: 'all' | 'lstar' }) {
+  async listBoard(
+    tenantSlug: string,
+    params: { clientId?: string; inbox?: 'all' | 'lstar' },
+    access?: AccessContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
     let resolvedClientUuid: string | undefined;
     if (params.clientId?.trim()) {
       resolvedClientUuid = (await resolveClientInTenant(this.prisma, tenant.id, params.clientId)).id;
     }
 
-    const baseWhere = this.listWhere(tenant.id, {
-      clientId: resolvedClientUuid,
-      inbox: params.inbox,
-    });
+    const baseWhere = this.listWhere(
+      tenant.id,
+      {
+        clientId: resolvedClientUuid,
+        inbox: params.inbox,
+      },
+      access,
+    );
 
     const statuses: CrmTicketStatus[] = ['open', 'in_progress', 'resolved'];
     const columns = await Promise.all(
@@ -251,6 +270,7 @@ export class CrmTicketsService {
   async listFocus(
     tenantSlug: string,
     params?: { clientId?: string; page?: number; pageSize?: number },
+    access?: AccessContext,
   ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
@@ -266,11 +286,13 @@ export class CrmTicketsService {
       resolvedClientUuid = (await resolveClientInTenant(this.prisma, tenant.id, params.clientId)).id;
     }
 
+    const scope = access ? ticketListScope(access) : {};
     const where: Prisma.CrmTicketWhereInput = {
       AND: [
         { tenantId: tenant.id },
         { status: { in: ['open', 'in_progress'] } },
         resolvedClientUuid ? { clientId: resolvedClientUuid } : {},
+        scope,
         {
           OR: [
             {
@@ -302,7 +324,11 @@ export class CrmTicketsService {
     };
   }
 
-  async getStats(tenantSlug: string, params?: { clientId?: string }): Promise<TicketStats> {
+  async getStats(
+    tenantSlug: string,
+    params?: { clientId?: string },
+    access?: AccessContext,
+  ): Promise<TicketStats> {
     const tenant = await this.ensureTenant(tenantSlug);
     let resolvedClientUuid: string | undefined;
     if (params?.clientId?.trim()) {
@@ -310,22 +336,24 @@ export class CrmTicketsService {
     }
 
     const clientFilter = resolvedClientUuid ? { clientId: resolvedClientUuid } : {};
+    const scope = access ? ticketListScope(access) : {};
+    const baseFilter = { ...clientFilter, ...scope };
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
 
     const [open, inProgress, lstarQueue, resolvedLast7Days] = await Promise.all([
       this.prisma.crmTicket.count({
-        where: { tenantId: tenant.id, status: 'open', ...clientFilter },
+        where: { tenantId: tenant.id, status: 'open', ...baseFilter },
       }),
       this.prisma.crmTicket.count({
-        where: { tenantId: tenant.id, status: 'in_progress', ...clientFilter },
+        where: { tenantId: tenant.id, status: 'in_progress', ...baseFilter },
       }),
       this.prisma.crmTicket.count({
         where: {
           tenantId: tenant.id,
           routingLevel: CrmTicketRoutingLevel.L_STAR,
           status: { in: ['open', 'in_progress'] },
-          ...clientFilter,
+          ...baseFilter,
         },
       }),
       this.prisma.crmTicket.count({
@@ -333,7 +361,7 @@ export class CrmTicketsService {
           tenantId: tenant.id,
           status: 'resolved',
           resolvedAt: { gte: weekAgo },
-          ...clientFilter,
+          ...baseFilter,
         },
       }),
     ]);
@@ -341,13 +369,20 @@ export class CrmTicketsService {
     return { open, inProgress, lstarQueue, resolvedLast7Days };
   }
 
-  async getDetail(tenantSlug: string, id: string): Promise<TicketDetailPayload> {
+  async getDetail(
+    tenantSlug: string,
+    id: string,
+    access?: AccessContext,
+  ): Promise<TicketDetailPayload> {
     const tenant = await this.ensureTenant(tenantSlug);
     const row = await this.prisma.crmTicket.findFirst({
       where: { id, tenantId: tenant.id },
       include: this.ticketInclude(),
     });
     if (!row) throw new NotFoundException('Ticket not found');
+    if (access && !canReadTicket(access, row)) {
+      throw new ForbiddenException('Ticket not accessible');
+    }
 
     const [events, links] = await Promise.all([
       this.prisma.crmTicketEvent.findMany({
@@ -370,6 +405,8 @@ export class CrmTicketsService {
         payload: e.payload ?? null,
         actorUserId: e.actorUserId,
         actorEmail: e.actor?.email ?? null,
+        actorRoutingLevel: e.actorRoutingLevel,
+        actorDisplayName: e.actorDisplayName,
         createdAt: e.createdAt.toISOString(),
       })),
       links: links.map((l) => ({
@@ -381,9 +418,21 @@ export class CrmTicketsService {
     };
   }
 
-  async create(tenantSlug: string, dto: CreateTicketInput, actorUserId?: string) {
+  async create(
+    tenantSlug: string,
+    dto: CreateTicketInput,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
     const client = await resolveClientInTenant(this.prisma, tenant.id, dto.clientId);
+    if (access && !canPerformTicketAction(access, 'create')) {
+      throw new ForbiddenException('Cannot create ticket');
+    }
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(client.id)) {
+      throw new ForbiddenException('Client not accessible');
+    }
     const subject = dto.subject?.trim();
     if (!subject) throw new BadRequestException('subject is required');
 
@@ -406,7 +455,13 @@ export class CrmTicketsService {
       }
     }
 
-    const routingLevel = dto.routingLevel ?? CrmTicketRoutingLevel.L1;
+    const routingLevel =
+      dto.routingLevel ??
+      (actor?.routingLevel === CrmTicketRoutingLevel.L0
+        ? CrmTicketRoutingLevel.L0
+        : actor?.routingLevel === CrmTicketRoutingLevel.L_STAR
+          ? CrmTicketRoutingLevel.L_STAR
+          : CrmTicketRoutingLevel.L1);
     const assignedQueue =
       routingLevel === CrmTicketRoutingLevel.L_STAR
         ? FLOTAX_OPS_QUEUE
@@ -434,8 +489,10 @@ export class CrmTicketsService {
 
     await this.appendEvent(tenant.id, row.id, {
       kind: CrmTicketEventKind.status,
-      body: 'Tichet creat',
-      actorUserId,
+      body: actor
+        ? `Tichet creat de ${actor.displayName} (${routingLevelLabel(actor.routingLevel)})`
+        : 'Tichet creat',
+      actor,
       payload: { status: 'open', routingLevel, assignedQueue },
     });
 
@@ -451,12 +508,22 @@ export class CrmTicketsService {
     return this.toRecord(row);
   }
 
-  async patch(tenantSlug: string, id: string, dto: PatchTicketInput, actorUserId?: string) {
+  async patch(
+    tenantSlug: string,
+    id: string,
+    dto: PatchTicketInput,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
     const existing = await this.prisma.crmTicket.findFirst({
       where: { id, tenantId: tenant.id },
     });
     if (!existing) throw new NotFoundException('Ticket not found');
+    if (access && !canPerformTicketAction(access, 'patch', existing)) {
+      throw new ForbiddenException('Cannot update ticket');
+    }
 
     const data: Prisma.CrmTicketUpdateInput = {};
     if (dto.subject !== undefined) {
@@ -482,8 +549,10 @@ export class CrmTicketsService {
       }
       await this.appendEvent(tenant.id, id, {
         kind: CrmTicketEventKind.status,
-        body: `Status → ${dto.status}`,
-        actorUserId,
+        body: actor
+          ? `Status → ${dto.status} (${actor.displayName}, ${routingLevelLabel(actor.routingLevel)})`
+          : `Status → ${dto.status}`,
+        actor,
         payload: { from: existing.status, to: dto.status },
       });
       await this.audit.log({
@@ -505,11 +574,20 @@ export class CrmTicketsService {
     return this.toRecord(row);
   }
 
-  async claim(tenantSlug: string, id: string, actorUserId?: string) {
+  async claim(
+    tenantSlug: string,
+    id: string,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
     const ticket = await this.ensureTicket(tenant.id, id);
     if (!actorUserId) {
       throw new BadRequestException('Actor required to claim ticket');
+    }
+    if (access && !canPerformTicketAction(access, 'claim', ticket)) {
+      throw new ForbiddenException('Cannot claim ticket');
     }
 
     const row = await this.prisma.crmTicket.update({
@@ -524,24 +602,38 @@ export class CrmTicketsService {
 
     await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.status,
-      body: 'Tichet preluat',
-      actorUserId,
+      body: actor
+        ? `Tichet preluat de ${actor.displayName} (${routingLevelLabel(actor.routingLevel)})`
+        : 'Tichet preluat',
+      actor,
       payload: { ownerUserId: actorUserId },
     });
 
     return this.toRecord(row);
   }
 
-  async addComment(tenantSlug: string, id: string, dto: CommentTicketInput, actorUserId?: string) {
+  async addComment(
+    tenantSlug: string,
+    id: string,
+    dto: CommentTicketInput,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
-    await this.ensureTicket(tenant.id, id);
+    const ticket = await this.ensureTicket(tenant.id, id);
+    if (access && !canPerformTicketAction(access, 'comment', ticket)) {
+      throw new ForbiddenException('Cannot comment on ticket');
+    }
     const body = dto.body?.trim();
     if (!body) throw new BadRequestException('body is required');
 
     await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.comment,
-      body,
-      actorUserId,
+      body: actor
+        ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}): ${body}`
+        : body,
+      actor,
     });
 
     await this.prisma.crmTicket.update({
@@ -549,12 +641,22 @@ export class CrmTicketsService {
       data: { updatedAt: new Date() },
     });
 
-    return this.getDetail(tenantSlug, id);
+    return this.getDetail(tenantSlug, id, access);
   }
 
-  async route(tenantSlug: string, id: string, dto: RouteTicketInput, actorUserId?: string) {
+  async route(
+    tenantSlug: string,
+    id: string,
+    dto: RouteTicketInput,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
     const ticket = await this.ensureTicket(tenant.id, id);
+    if (access && !canPerformTicketAction(access, 'route', ticket)) {
+      throw new ForbiddenException('Cannot route ticket');
+    }
     const reason = dto.reason?.trim();
     if (!reason) throw new BadRequestException('reason is required');
 
@@ -586,8 +688,10 @@ export class CrmTicketsService {
 
     await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.routing,
-      body: reason,
-      actorUserId,
+      body: actor
+        ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}): ${reason}`
+        : reason,
+      actor,
       payload: {
         fromLevel: ticket.routingLevel,
         toLevel: routingLevel,
@@ -607,9 +711,19 @@ export class CrmTicketsService {
     return this.toRecord(row);
   }
 
-  async returnToClient(tenantSlug: string, id: string, dto: ReturnTicketInput, actorUserId?: string) {
+  async returnToClient(
+    tenantSlug: string,
+    id: string,
+    dto: ReturnTicketInput,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
     const ticket = await this.ensureTicket(tenant.id, id);
+    if (access && !canPerformTicketAction(access, 'return', ticket)) {
+      throw new ForbiddenException('Cannot return ticket');
+    }
     const reason = dto.reason?.trim();
     if (!reason) throw new BadRequestException('reason is required');
     if (ticket.routingLevel !== CrmTicketRoutingLevel.L_STAR) {
@@ -629,17 +743,34 @@ export class CrmTicketsService {
 
     await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.routing,
-      body: reason,
-      actorUserId,
+      body: actor
+        ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}): ${reason}`
+        : reason,
+      actor,
       payload: { action: 'return', toLevel: 'L1', assignedQueue },
     });
 
     return this.toRecord(row);
   }
 
-  async resolve(tenantSlug: string, id: string, dto: ResolveTicketInput, actorUserId?: string) {
+  async resolve(
+    tenantSlug: string,
+    id: string,
+    dto: ResolveTicketInput,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
     const ticket = await this.ensureTicket(tenant.id, id);
+    if (access && !canPerformTicketAction(access, 'resolve', ticket)) {
+      throw new ForbiddenException('Cannot resolve ticket');
+    }
+
+    const comment = dto.comment?.trim();
+    if (!comment) {
+      throw new BadRequestException('comment is required — descrie exact cum s-a rezolvat');
+    }
 
     const row = await this.prisma.crmTicket.update({
       where: { id },
@@ -650,19 +781,21 @@ export class CrmTicketsService {
       include: this.ticketInclude(),
     });
 
-    const comment = dto.comment?.trim();
-    if (comment) {
-      await this.appendEvent(tenant.id, id, {
-        kind: CrmTicketEventKind.comment,
-        body: comment,
-        actorUserId,
-      });
-    }
+    const resolveBody = actor
+      ? `Rezolvat de ${actor.displayName} (${routingLevelLabel(actor.routingLevel)}) — ${comment}`
+      : `Rezolvat — ${comment}`;
+
+    await this.appendEvent(tenant.id, id, {
+      kind: CrmTicketEventKind.comment,
+      body: resolveBody,
+      actor,
+      payload: { resolution: true },
+    });
 
     await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.status,
-      body: 'Rezolvat',
-      actorUserId,
+      body: resolveBody,
+      actor,
       payload: { status: 'resolved' },
     });
 
@@ -673,8 +806,10 @@ export class CrmTicketsService {
       });
       await this.appendEvent(tenant.id, id, {
         kind: CrmTicketEventKind.transform,
-        body: 'Reminder închis la rezolvare',
-        actorUserId,
+        body: actor
+          ? `Reminder închis la rezolvare (${actor.displayName}, ${routingLevelLabel(actor.routingLevel)})`
+          : 'Reminder închis la rezolvare',
+        actor,
         payload: { reminderActionId: ticket.reminderActionId },
       });
     }
@@ -696,9 +831,14 @@ export class CrmTicketsService {
     id: string,
     dto: TransformTicketInput,
     actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
   ) {
     const tenant = await this.ensureTenant(tenantSlug);
     const ticket = await this.ensureTicket(tenant.id, id);
+    if (access && !canPerformTicketAction(access, 'transform', ticket)) {
+      throw new ForbiddenException('Cannot transform ticket');
+    }
 
     if (!ticket.vehicleId) {
       throw new BadRequestException('Ticket has no vehicle — cannot transform');
@@ -772,8 +912,10 @@ export class CrmTicketsService {
 
     await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.transform,
-      body: eventBody,
-      actorUserId,
+      body: actor
+        ? `${eventBody} (${actor.displayName}, ${routingLevelLabel(actor.routingLevel)})`
+        : eventBody,
+      actor,
       payload: { entityType: dto.entityType, entityId },
     });
 
@@ -793,15 +935,23 @@ export class CrmTicketsService {
       meta: { entityType: dto.entityType, entityId },
     });
 
-    return { ticket: await this.getDetail(tenantSlug, id), createdEntityId: entityId };
+    return { ticket: await this.getDetail(tenantSlug, id, access), createdEntityId: entityId };
   }
 
-  async delete(tenantSlug: string, id: string, actorUserId?: string) {
+  async delete(
+    tenantSlug: string,
+    id: string,
+    actorUserId?: string,
+    access?: AccessContext,
+  ) {
     const tenant = await this.ensureTenant(tenantSlug);
     const existing = await this.prisma.crmTicket.findFirst({
       where: { id, tenantId: tenant.id },
     });
     if (!existing) throw new NotFoundException('Ticket not found');
+    if (access && !canPerformTicketAction(access, 'delete', existing)) {
+      throw new ForbiddenException('Cannot delete ticket');
+    }
 
     await this.prisma.crmTicket.delete({ where: { id } });
 
@@ -836,8 +986,14 @@ export class CrmTicketsService {
       ticketType?: CrmTicketType;
       inbox?: 'all' | 'lstar' | 'focus';
     },
+    access?: AccessContext,
   ): Prisma.CrmTicketWhereInput {
     const parts: Prisma.CrmTicketWhereInput[] = [{ tenantId }];
+
+    const scope = access ? ticketListScope(access) : {};
+    if (Object.keys(scope).length > 0) {
+      parts.push(scope);
+    }
 
     if (params.clientId) parts.push({ clientId: params.clientId });
     if (params.status) parts.push({ status: params.status });
@@ -912,7 +1068,7 @@ export class CrmTicketsService {
     input: {
       kind: CrmTicketEventKind;
       body?: string | null;
-      actorUserId?: string;
+      actor?: ActorContext;
       payload?: unknown;
     },
   ) {
@@ -926,7 +1082,9 @@ export class CrmTicketsService {
           input.payload === undefined || input.payload === null
             ? undefined
             : (input.payload as Prisma.InputJsonValue),
-        actorUserId: input.actorUserId ?? null,
+        actorUserId: input.actor?.userId ?? null,
+        actorRoutingLevel: input.actor?.routingLevel ?? null,
+        actorDisplayName: input.actor?.displayName ?? null,
       },
     });
   }

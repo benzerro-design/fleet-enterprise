@@ -52,6 +52,8 @@ export type TicketEventRecord = {
   payload: unknown;
   actorUserId: string | null;
   actorEmail: string | null;
+  actorRoutingLevel: TicketRoutingLevel | null;
+  actorDisplayName: string | null;
   createdAt: string;
 };
 

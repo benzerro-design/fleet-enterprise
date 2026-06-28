@@ -35,6 +35,8 @@ export type FleetNavGroup = {
 export type FleetNavContext = {
   canWrite: boolean;
   authenticated: boolean;
+  /** User client (șofer, manager Alpha) — meniu redus la CRM. */
+  clientUserMode?: boolean;
 };
 
 /** Primary groups (scrollable). */
@@ -159,7 +161,7 @@ export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
   items: [
     {
       kind: "link",
-      label: "Membri & roluri",
+      label: "Membri & useri client",
       href: "/fleet/members",
       phase: "live",
       adminOnly: true,
@@ -222,6 +224,15 @@ function filterEntry(entry: FleetNavEntry, ctx: FleetNavContext): FleetNavEntry 
 }
 
 function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup | null {
+  if (ctx.clientUserMode) {
+    if (group.id !== "clients") return null;
+    const items = group.items.filter(
+      (e) => e.kind === "link" && e.href === "/fleet/tickets",
+    );
+    if (items.length === 0) return null;
+    return { ...group, label: "Solicitări", items };
+  }
+
   const items = group.items.map((e) => filterEntry(e, ctx)).filter((e): e is FleetNavEntry => e !== null);
   if (items.length === 0) return null;
   return { ...group, items };

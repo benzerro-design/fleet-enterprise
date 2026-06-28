@@ -20,7 +20,7 @@ Detaliu complet: [`identity-access-model.md`](identity-access-model.md).
 | # | Task | OK |
 |---|------|-----|
 | 1 | Conturi FlotaX verificate: `npm run db:verify:flotax` pe Neon staging | ☐ |
-| 2 | Login admin + șofer pe URL staging (browser separat pentru șofer) | ☐ |
+| 2 | Login admin pe URL staging | ☐ |
 | 3 | Parolă transmisă **o singură dată** pe canal securizat (nu email clar, nu chat public) | ☐ |
 | 4 | **2.4** — rotire parolă Neon dacă `DATABASE_URL` a fost expusă; update Secret Manager | ☐ |
 | 5 | Client are ≥ 1 client organizație + vehicule de test (sau știe că le introduce el) | ☐ |
@@ -44,13 +44,13 @@ Detaliu complet: [`identity-access-model.md`](identity-access-model.md).
 |---------|---------|
 | **URL aplicație** | https://fleet-web-stg-1096713529891.europe-west1.run.app/login |
 | **Tenant (slug)** | `flotax` |
-| **Administrator** | Email: `flotax_admin@flotax.local` — rol: gestiune completă |
-| **Șofer (citire)** | Email: `flotax_sofer@flotax.local` — rol: vizualizare, fără creare vehicul / FAZ |
-| **Parolă** | *[comunicată separat — aceeași pentru ambele conturi la pilot]* |
+| **Administrator FlotaX (L★)** | Email: `flotax_admin@flotax.local` — rol: `tenant_admin`, gestiune completă tenant |
+| **Useri client** (șofer, manager Alpha etc.) | Creați de admin via `POST /tenant/client-memberships` — rol `client_user` + `ClientMembership` |
+| **Parolă admin** | *[comunicată separat]* |
 | **Mediu** | Staging — posibile reporniri după deploy; prima accesare poate dura câteva secunde |
 | **Browser** | Chrome / Edge recent; mobil = funcțional, liste tip tabel |
 
-**Logout:** meniu flotă → Deconectare (sau ștergere cookie dacă testați mai multe conturi — folosiți **2 browsere** pentru admin + șofer simultan).
+**Logout:** meniu flotă → Deconectare (sau ștergere cookie dacă testați mai multe conturi).
 
 ---
 
@@ -60,7 +60,7 @@ Detaliu complet: [`identity-access-model.md`](identity-access-model.md).
 |---|---|
 | **Contact tehnic** | *[Nume, email, telefon]* |
 | **Program răspuns** | ex. L–V 9–18, răspuns în 24h lucrătoare |
-| **Raportare problemă** | Descriere + captură ecran + ora + cont folosit (admin/șofer) |
+| **Raportare problemă** | Descriere + captură ecran + ora + cont folosit |
 | **Urgențe** | *[telefon]* |
 
 ---
@@ -81,9 +81,10 @@ Aplicația de gestiune flotă este pregătită pentru **pilotul FlotaX** pe medi
 
 - **Link:** https://fleet-web-stg-1096713529891.europe-west1.run.app/login  
 - **Organizație (tenant):** `flotax`  
-- **Administrator flotă:** `flotax_admin@flotax.local`  
-- **Cont șofer (doar vizualizare):** `flotax_sofer@flotax.local`  
+- **Administrator FlotaX (L★):** `flotax_admin@flotax.local`  
 - **Parolă:** *[transmisă separat]*
+
+Userii clienților dumneavoastră (șoferi, manageri de flotă) se creează din aplicație de către administrator — acces doar la datele clientului respectiv.
 
 La primul login veți ajunge la **Panou general (Acasă)** — indicatori flotă și linkuri către listele detaliate.
 
@@ -96,7 +97,7 @@ La primul login veți ajunge la **Panou general (Acasă)** — indicatori flotă
 - **Curse** — trasee; generare **foaie de parcurs** și **FAZ lunar** (PDF descărcabil)  
 - **Export** CSV unde este disponibil în listă  
 
-Contul **șofer** vede datele, dar **nu** poate adăuga vehicule sau genera documente FAZ.
+Userii **client** (șofer, manager) văd doar datele organizației lor și pot deschide **tichete CRM**; nu administrează întreaga flotă FlotaX.
 
 ### Recomandări la început
 
@@ -133,7 +134,7 @@ Cu stimă,
 | 3 | Remindere — verificare filtre „acțiune” |
 | 4 | Curse + cost combustibil pe o perioadă scurtă; tab **Consum** (segmente L/100km, reconciliere km) |
 | 5 | Generare FAZ sau foaie parcurs → descărcare PDF |
-| 6 | Login șofer (alt browser) — confirmare că nu poate modifica |
+| 6 | (Opțional) Creare user client (șofer) via admin — verificare acces scoped la tichete |
 | 7 | Feedback scurt către *[CONTACT]*: ce e util, ce lipsește — ☑ **2026-06**, sinteză §5.1; update **2026-06-21** §5.1 |
 
 ### 5.1 Feedback scurt — sinteză (2026-06)

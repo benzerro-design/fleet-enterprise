@@ -6,7 +6,7 @@
 const { PrismaClient } = require('@prisma/client');
 
 const TENANT_SLUG = 'flotax';
-const EMAILS = ['flotax_admin@flotax.local', 'flotax_sofer@flotax.local'];
+const EMAILS = ['flotax_admin@flotax.local'];
 
 const prisma = new PrismaClient();
 

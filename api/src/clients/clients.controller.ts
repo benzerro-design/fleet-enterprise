@@ -17,6 +17,8 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import type { CreateClientInput, PatchClientInput } from './clients.service';
 import { ClientsService } from './clients.service';
@@ -39,9 +41,10 @@ export class ClientsController {
   ) {}
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   list(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
     @Query('q') q?: string,
@@ -49,12 +52,16 @@ export class ClientsController {
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.clients.listPaged(tenantSlug, {
-      page,
-      pageSize,
-      q: q?.trim(),
-      status: parseClientStatus(status),
-    });
+    return this.clients.listPaged(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        q: q?.trim(),
+        status: parseClientStatus(status),
+      },
+      access,
+    );
   }
 
   @Get('export')
@@ -169,9 +176,13 @@ export class ClientsController {
   }
 
   @Get(':id')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  get(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.clients.getById(tenantSlug, id);
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  get(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.getById(tenantSlug, id, access);
   }
 
   @Post()

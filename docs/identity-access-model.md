@@ -105,25 +105,30 @@ Un abonat = un **tenant**. Nu amestecăm tenant-ul unui abonat cu modulul **Clie
 
 | Rol | Scope | Drepturi |
 |-----|-------|----------|
-| `tenant_admin` | Tot tenant-ul din JWT | CRUD flotă, ops, membri tenant, FAZ; schimbă rol admin↔viewer |
-| `tenant_viewer` | Tot tenant-ul din JWT | Doar GET; UI ascunde acțiuni de scriere |
+| `tenant_admin` | Tot tenant-ul din JWT | CRUD flotă, ops, membri tenant, FAZ; schimbă rol admin↔viewer; L★ CRM |
+| `tenant_viewer` | Tot tenant-ul din JWT (dacă **fără** ClientMembership) | Doar GET; UI ascunde acțiuni de scriere |
+| `client_user` | Restricționat de `ClientMembership` | Portal client — CRM L0/L1, clienți/vehicule scoped |
 
-Implementare: `TenantMembership.role`, JWT `role`, `@Roles()` pe API, `canManageFleet()` în web.
+Implementare: `TenantMembership.role`, JWT `role`, `@Roles()` pe API, `canManageFleet()` / `canWriteTickets()` în web.
 
-### 4.3 Strat client contractual (țintă — neimplementat)
+### 4.3 Strat client contractual (implementat parțial — Post-pilot 2)
 
-Roluri orientative (din `platform-foundation.md`, de validat la epic dedicat):
+| Rol țintă | Scope | Exemplu | Nivel CRM |
+|-----------|-------|---------|-----------|
+| `client_admin` | Unul sau mai mulți `Client` | Managerul flotei Alpha SRL | L1 |
+| `client_dispatcher` | Client alocat | Dispecer | L1 |
+| `client_viewer` | Client alocat | Contabil client | L1 (doar citire) |
+| `driver` (user) | Subset vehicule / client | Șofer cu login | L0 |
 
-| Rol țintă | Scope | Exemplu |
-|-----------|-------|---------|
-| `client_admin` | Unul sau mai mulți `Client` | Managerul flotei Alpha SRL |
-| `client_dispatcher` | Client alocat | Dispecer |
-| `client_viewer` | Client alocat | Contabil client |
-| `driver` (user) | Subset vehicule / client | Șofer cu login |
+**Model de date:** `ClientMembership` (`userId`, `tenantId`, `clientId`, `role`, `driverId?`) + `TenantMembership.role = client_user`.
 
-**Model de date țintă:** `ClientMembership` (sau `allowedClientIds[]` + rol) legat de `User` + `Tenant`.
+**API:** `GET/POST/DELETE /tenant/client-memberships` (doar `tenant_admin`). Filtrare automată pe `clientId` în CRM, clienți, vehicule.
 
-**Azi:** nu există — orice `tenant_admin` vede **toți** clienții din tenant.
+**Decizii produs (2026-05):**
+- L1 (client) și L★ (FlotaX) pot amândoi rezolva tichete; fiecare acțiune în timeline cu actor + nivel (L0/L1/L★).
+- Rezolvare tichet: comentariu obligatoriu („cum s-a rezolvat”).
+- Parteneri/furnizori: scope separat în modul Devize & Comenzi (R1), nu în CRM general.
+- `flotax_sofer` (tenant_viewer pe tot tenant-ul) — **depreciat**; șoferii reali sunt useri `client_user` + `ClientMembership.driver`.
 
 ### 4.4 Parteneri / terți (țintă — planificat Phase 1)
 
@@ -149,7 +154,9 @@ Tenant
         └── Vehicle (clientId FK)
 ```
 
-**Lipsește:** `ClientMembership`, `Permission`, `platform_admin`, invite user, scope client în JWT.
+**Lipsește:** `Permission` matrix configurabilă din Setări, `platform_admin`, invite UI, notificări email/push la comentarii CRM.
+
+**Adăugat (Post-pilot 2 parțial):** `ClientMembership`, `client_user`, scope API CRM + clienți + vehicule, audit actor L0/L1/L★ pe evenimente tichet.
 
 ### Autentificare
 
@@ -213,7 +220,7 @@ Acești admini sunt **pe același nivel tehnic** (`tenant_admin`), în tenant-i 
 |------|------|----------|---------------|
 | **Pilot (acum)** | Tenant RBAC MVP | `tenant_admin` / `tenant_viewer` | ✅ livrat |
 | **Post-pilot 1** | Platform admin | UI + API creare/gestionare tenant | Înainte de al 2-lea abonat plătitor |
-| **Post-pilot 2** | Client scope IAM | `ClientMembership`, roluri client, filtrare API | Înainte de useri invitați per client |
+| **Post-pilot 2** | Client scope IAM | `ClientMembership`, roluri client, filtrare API | ✅ parțial livrat (CRM + core) |
 | **Post-pilot 3** | Invite & self-service | Creare user de `tenant_admin` | Înlocuiește seed manual |
 | **Phase 1 (R1)** | Portal furnizori | Autentificare partener, scope work orders | `phase1-mvp-scope.md` §8 |
 | **Maturitate** | Permission matrix | `Permission` + `@RequirePermission` | `platform-foundation.md` §2 |
@@ -225,9 +232,9 @@ Acești admini sunt **pe același nivel tehnic** (`tenant_admin`), în tenant-i 
 ## 9. Implicații pilot FlotaX
 
 - FlotaX = **abonat SaaS** (tenant `flotax`), **nu** client în `demo`.
-- `flotax_admin` = echivalentul lui `admin@demo` **în propriul workspace** — gestionează clienții **săi** (organizații), vehicule, ops.
-- `flotax_sofer` = `tenant_viewer` — citire întreg tenant FlotaX (nu doar un client).
-- Echipa vendor **nu** administrează datele FlotaX din contul `demo` — suportul se face cu cont dedicat sau proceduri platformă (viitor).
+- `flotax_admin` = echivalentul lui `admin@demo` **în propriul workspace** — gestionează clienții **săi** (organizații), vehicule, ops, coadă L★.
+- Useri ai clienților FlotaX (șofer, manager Alpha): `client_user` + `ClientMembership` — creați de `flotax_admin` via API `/tenant/client-memberships`.
+- ~~`flotax_sofer` = `tenant_viewer`~~ — **eliminat** (model invalid: FlotaX administrează, nu conduce vehicule).
 
 ---
 
@@ -261,6 +268,7 @@ Acești admini sunt **pe același nivel tehnic** (`tenant_admin`), în tenant-i 
 | 2026-06 | Model producție: **SaaS multi-tenant**; abonat = tenant; FlotaX = tenant pilot |
 | 2026-06 | Superadmin platformă: **în afara app** până la epic `platform_admin` |
 | 2026-06 | Useri per client contractual: **țintă**, epic dedicat post-pilot |
+| 2026-05 | Post-pilot 2 parțial: `ClientMembership`, CRM scoped L0/L1/L★, deprecare `flotax_sofer` |
 | 2026-06 | Acest document devine **sursă canonică IAM** |
 
 ---

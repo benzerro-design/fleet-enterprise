@@ -26,12 +26,6 @@ const ADMIN = {
   role: 'tenant_admin',
 };
 
-const SOFER = {
-  email: 'flotax_sofer@flotax.local',
-  displayName: 'FlotaX_Sofer',
-  role: 'tenant_viewer',
-};
-
 const prisma = new PrismaClient();
 
 function databaseHostLabel() {
@@ -74,6 +68,17 @@ async function upsertUserMembership(tenantId, { email, displayName, role }, pass
   return user;
 }
 
+async function removeDeprecatedSofer(tenantId) {
+  const legacyEmail = 'flotax_sofer@flotax.local';
+  const legacy = await prisma.user.findUnique({ where: { email: legacyEmail } });
+  if (!legacy) return;
+  await prisma.clientMembership.deleteMany({ where: { userId: legacy.id, tenantId } });
+  await prisma.tenantMembership.deleteMany({ where: { userId: legacy.id, tenantId } });
+  await prisma.user.delete({ where: { id: legacy.id } });
+  // eslint-disable-next-line no-console
+  console.log(`Eliminat cont depreciat: ${legacyEmail}`);
+}
+
 async function main() {
   const dbHost = databaseHostLabel();
   // eslint-disable-next-line no-console
@@ -93,7 +98,7 @@ async function main() {
   });
 
   await upsertUserMembership(tenant.id, ADMIN, passwordHash);
-  await upsertUserMembership(tenant.id, SOFER, passwordHash);
+  await removeDeprecatedSofer(tenant.id);
 
   const check = await prisma.user.findUnique({ where: { email: ADMIN.email } });
   if (!check) throw new Error('Verificare eșuată: user admin lipsește după seed.');
@@ -105,9 +110,9 @@ async function main() {
   // eslint-disable-next-line no-console
   console.log(`Admin:  ${ADMIN.email}  (${ADMIN.displayName}, ${ADMIN.role})`);
   // eslint-disable-next-line no-console
-  console.log(`Șofer:  ${SOFER.email}  (${SOFER.displayName}, ${SOFER.role})`);
-  // eslint-disable-next-line no-console
   console.log('Parola: cea setată în PILOT_FLOTAX_PASSWORD (nu se afișează).');
+  // eslint-disable-next-line no-console
+  console.log('Useri client (șofer/manager) se creează per Client via POST /tenant/client-memberships.');
   // eslint-disable-next-line no-console
   console.log('Demo tenant (admin@demo.local) — neschimbat.');
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { TicketForm } from "@/components/fleet/TicketForm";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 type Search = {
@@ -16,7 +16,7 @@ type Search = {
 export default async function NewTicketPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
   const auth = await getAuthMeResult();
-  if (!canManageFleet(auth)) redirect("/fleet/tickets");
+  if (!canWriteTickets(auth)) redirect("/fleet/tickets");
   const vehicles = await getVehicleOptions();
 
   return (

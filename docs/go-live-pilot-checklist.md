@@ -142,8 +142,7 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 
 | Rol | Email (login) | Display | Tenant slug |
 |-----|---------------|---------|-------------|
-| Administrator | `flotax_admin@flotax.local` | FlotaX_Admin | `flotax` |
-| Șofer (viewer) | `flotax_sofer@flotax.local` | FlotaX_Sofer | `flotax` |
+| Administrator FlotaX | `flotax_admin@flotax.local` | FlotaX_Admin | `flotax` |
 
 Login: emailul e **lowercase** automat; slug **`flotax`** (nu `FlotaX` — slug-ul din DB e lowercase).
 

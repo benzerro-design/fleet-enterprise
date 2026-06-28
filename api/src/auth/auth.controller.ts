@@ -23,10 +23,21 @@ export class AuthController {
     if (!u?.tenantSlug) {
       throw new UnauthorizedException();
     }
+    const access = req.accessContext;
     return {
       email: u.email,
       tenantSlug: u.tenantSlug,
       role: u.role,
+      access: access
+        ? {
+            isTenantWide: access.isTenantWide,
+            clientMemberships: access.clientMemberships.map((m) => ({
+              clientId: m.clientId,
+              clientCode: m.clientCode,
+              role: m.role,
+            })),
+          }
+        : undefined,
     };
   }
 

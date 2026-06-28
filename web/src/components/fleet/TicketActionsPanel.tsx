@@ -79,8 +79,8 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
           <>
             <button
               type="button"
-              disabled={!!pending}
-              onClick={() => post("/resolve", { comment: comment.trim() || null, closeReminder: true })}
+              disabled={!!pending || !comment.trim()}
+              onClick={() => post("/resolve", { comment: comment.trim(), closeReminder: true })}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
               Tratează (rezolvă)

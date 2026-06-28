@@ -28,6 +28,8 @@ import type {
 } from './vehicle-acquisition.types';
 import { buildVehicleMobilityPayload } from './vehicle-mobility';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
+import type { AccessContext } from '../iam/access-context.types';
+import { vehicleClientScope } from '../iam/client-access';
 import {
   CIV_PROFILE_FIELDS,
   normalizeCivProfile,
@@ -178,6 +180,7 @@ export class FleetService {
   async listVehiclesPaged(
     tenantSlug: string,
     filters: ListVehiclesFilters,
+    access?: AccessContext,
   ): Promise<import('./fleet.types').VehicleListResponse> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { slug: tenantSlug },
@@ -190,11 +193,15 @@ export class FleetService {
     const page = Math.max(1, filters.page);
     const skip = (page - 1) * pageSize;
 
-    const where = await this.vehicleWhere(tenant.id, {
-      q: filters.q,
-      status: filters.status,
-      clientId: filters.clientId,
-    });
+    const where = await this.vehicleWhere(
+      tenant.id,
+      {
+        q: filters.q,
+        status: filters.status,
+        clientId: filters.clientId,
+      },
+      access,
+    );
 
     const [total, rows] = await Promise.all([
       this.prisma.vehicle.count({ where }),
@@ -259,12 +266,19 @@ export class FleetService {
     return `\uFEFF${header}\n${lines.join('\n')}\n`;
   }
 
-  async getVehicle(tenantSlug: string, vehicleId: string): Promise<VehicleRecord> {
+  async getVehicle(
+    tenantSlug: string,
+    vehicleId: string,
+    access?: AccessContext,
+  ): Promise<VehicleRecord> {
     const row = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       include: vehicleInclude,
     });
     if (!row) throw new NotFoundException('Vehicle not found');
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.clientId)) {
+      throw new NotFoundException('Vehicle not found');
+    }
     return this.toRecord(row);
   }
 
@@ -965,6 +979,7 @@ export class FleetService {
   private async vehicleWhere(
     tenantUuid: string,
     browse: VehicleBrowseFilters,
+    access?: AccessContext,
   ): Promise<Prisma.VehicleWhereInput> {
     const q = browse.q?.trim();
     const statusOk =
@@ -972,6 +987,10 @@ export class FleetService {
       ['active', 'inactive', 'in_maintenance', 'decommissioned'].includes(browse.status);
 
     const parts: Prisma.VehicleWhereInput[] = [{ tenantId: tenantUuid }];
+
+    if (access) {
+      parts.push(vehicleClientScope(access));
+    }
 
     if (q && q.length > 0) {
       parts.push({

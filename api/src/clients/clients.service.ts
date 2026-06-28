@@ -19,6 +19,8 @@ import {
   type ClientSubscriptionRow,
 } from './client-subscriptions.service';
 import { DriversService, type DriverRecord } from '../drivers/drivers.service';
+import type { AccessContext } from '../iam/access-context.types';
+import { clientIdsFilter } from '../iam/client-access';
 
 export type { ClientSubscriptionRow, DriverRecord };
 
@@ -141,7 +143,7 @@ export class ClientsService {
     private readonly drivers: DriversService,
   ) {}
 
-  async listPaged(tenantSlug: string, params: ClientListParams) {
+  async listPaged(tenantSlug: string, params: ClientListParams, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -151,7 +153,7 @@ export class ClientsService {
     const page = Math.max(1, params.page);
     const skip = (page - 1) * pageSize;
 
-    const where = this.listWhere(tenant.id, params);
+    const where = this.listWhere(tenant.id, params, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.client.count({ where }),
@@ -180,8 +182,11 @@ export class ClientsService {
     };
   }
 
-  async getById(tenantSlug: string, id: string): Promise<ClientRecord> {
+  async getById(tenantSlug: string, id: string, access?: AccessContext): Promise<ClientRecord> {
     const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
     const count = await this.prisma.vehicle.count({
       where: { clientId: row.id, tenant: { slug: tenantSlug } },
     });
@@ -533,8 +538,15 @@ export class ClientsService {
     return resolveClientInTenant(this.prisma, tenantUuid, clientInput);
   }
 
-  private listWhere(tenantUuid: string, params: ClientListParams): Prisma.ClientWhereInput {
+  private listWhere(
+    tenantUuid: string,
+    params: ClientListParams,
+    access?: AccessContext,
+  ): Prisma.ClientWhereInput {
     const parts: Prisma.ClientWhereInput[] = [{ tenantId: tenantUuid }];
+    if (access) {
+      parts.push(clientIdsFilter(access));
+    }
     if (params.status) {
       parts.push({ status: params.status });
     }

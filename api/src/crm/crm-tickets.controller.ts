@@ -22,6 +22,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
+import { AccessContextService } from '../iam/access-context.service';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import type {
   CommentTicketInput,
   CreateTicketInput,
@@ -33,138 +36,182 @@ import type {
 } from './crm-tickets.service';
 import { CrmTicketsService } from './crm-tickets.service';
 
+const CRM_READ = [
+  MembershipRole.tenant_admin,
+  MembershipRole.tenant_viewer,
+  MembershipRole.client_user,
+] as const;
+
+const CRM_WRITE = [MembershipRole.tenant_admin, MembershipRole.client_user] as const;
+
 @Controller('tickets')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CrmTicketsController {
-  constructor(private readonly tickets: CrmTicketsService) {}
+  constructor(
+    private readonly tickets: CrmTicketsService,
+    private readonly accessContext: AccessContextService,
+  ) {}
 
   @Get('stats')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  stats(@TenantId() tenantSlug: string, @Query('clientId') clientId?: string) {
-    return this.tickets.getStats(tenantSlug, { clientId: clientId?.trim() });
+  @Roles(...CRM_READ)
+  stats(
+    @TenantId() tenantSlug: string,
+    @Query('clientId') clientId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tickets.getStats(tenantSlug, { clientId: clientId?.trim() }, access);
   }
 
   @Get('focus')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...CRM_READ)
   focus(
     @TenantId() tenantSlug: string,
-    @Query('clientId') clientId?: string,
-    @Query('page') pageStr?: string,
-    @Query('pageSize') pageSizeStr?: string,
+    @Query('clientId') clientId: string | undefined,
+    @Query('page') pageStr: string | undefined,
+    @Query('pageSize') pageSizeStr: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.tickets.listFocus(tenantSlug, {
-      clientId: clientId?.trim(),
-      page,
-      pageSize,
-    });
+    return this.tickets.listFocus(
+      tenantSlug,
+      {
+        clientId: clientId?.trim(),
+        page,
+        pageSize,
+      },
+      access,
+    );
   }
 
   @Get('board')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...CRM_READ)
   board(
     @TenantId() tenantSlug: string,
-    @Query('clientId') clientId?: string,
-    @Query('inbox') inbox?: string,
+    @Query('clientId') clientId: string | undefined,
+    @Query('inbox') inbox: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
     const parsed = parseInbox(inbox);
-    return this.tickets.listBoard(tenantSlug, {
-      clientId: clientId?.trim(),
-      inbox: parsed === 'focus' ? undefined : parsed,
-    });
+    return this.tickets.listBoard(
+      tenantSlug,
+      {
+        clientId: clientId?.trim(),
+        inbox: parsed === 'focus' ? undefined : parsed,
+      },
+      access,
+    );
   }
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...CRM_READ)
   list(
     @TenantId() tenantSlug: string,
-    @Query('page') pageStr?: string,
-    @Query('pageSize') pageSizeStr?: string,
-    @Query('q') q?: string,
-    @Query('clientId') clientId?: string,
-    @Query('status') status?: string,
-    @Query('vehicleId') vehicleId?: string,
-    @Query('routingLevel') routingLevel?: string,
-    @Query('ticketType') ticketType?: string,
-    @Query('inbox') inbox?: string,
+    @Query('page') pageStr: string | undefined,
+    @Query('pageSize') pageSizeStr: string | undefined,
+    @Query('q') q: string | undefined,
+    @Query('clientId') clientId: string | undefined,
+    @Query('status') status: string | undefined,
+    @Query('vehicleId') vehicleId: string | undefined,
+    @Query('routingLevel') routingLevel: string | undefined,
+    @Query('ticketType') ticketType: string | undefined,
+    @Query('inbox') inbox: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.tickets.listPaged(tenantSlug, {
-      page,
-      pageSize,
-      q: q?.trim(),
-      clientId: clientId?.trim(),
-      status: parseStatus(status),
-      vehicleId: vehicleId?.trim(),
-      routingLevel: parseRoutingLevel(routingLevel),
-      ticketType: parseTicketType(ticketType),
-      inbox: parseInbox(inbox),
-    });
+    return this.tickets.listPaged(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        q: q?.trim(),
+        clientId: clientId?.trim(),
+        status: parseStatus(status),
+        vehicleId: vehicleId?.trim(),
+        routingLevel: parseRoutingLevel(routingLevel),
+        ticketType: parseTicketType(ticketType),
+        inbox: parseInbox(inbox),
+      },
+      access,
+    );
   }
 
   @Get(':id')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  get(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.tickets.getDetail(tenantSlug, id);
+  @Roles(...CRM_READ)
+  get(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tickets.getDetail(tenantSlug, id, access);
   }
 
   @Post()
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...CRM_WRITE)
   @HttpCode(201)
   create(
     @TenantId() tenantSlug: string,
     @Body() body: CreateTicketInput,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.tickets.create(tenantSlug, body, actorUserId);
+    const actor = this.accessContext.toActor(access, body.clientId);
+    return this.tickets.create(tenantSlug, body, actorUserId, access, actor);
   }
 
   @Patch(':id')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...CRM_WRITE)
   patch(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: PatchTicketInput,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.tickets.patch(tenantSlug, id, body, actorUserId);
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.patch(tenantSlug, id, body, actorUserId, access, actor);
   }
 
   @Post(':id/claim')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...CRM_WRITE)
   @HttpCode(200)
   claim(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.tickets.claim(tenantSlug, id, actorUserId);
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.claim(tenantSlug, id, actorUserId, access, actor);
   }
 
   @Post(':id/comments')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...CRM_WRITE)
   @HttpCode(200)
   comment(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: CommentTicketInput,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.tickets.addComment(tenantSlug, id, body, actorUserId);
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.addComment(tenantSlug, id, body, actorUserId, access, actor);
   }
 
   @Post(':id/route')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...CRM_WRITE)
   @HttpCode(200)
   route(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: RouteTicketInput,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.tickets.route(tenantSlug, id, body, actorUserId);
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.route(tenantSlug, id, body, actorUserId, access, actor);
   }
 
   @Post(':id/return')
@@ -174,21 +221,25 @@ export class CrmTicketsController {
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: ReturnTicketInput,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.tickets.returnToClient(tenantSlug, id, body, actorUserId);
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.returnToClient(tenantSlug, id, body, actorUserId, access, actor);
   }
 
   @Post(':id/resolve')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...CRM_WRITE)
   @HttpCode(200)
   resolve(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: ResolveTicketInput,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.tickets.resolve(tenantSlug, id, body, actorUserId);
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.resolve(tenantSlug, id, body, actorUserId, access, actor);
   }
 
   @Post(':id/transform')
@@ -198,9 +249,11 @@ export class CrmTicketsController {
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: TransformTicketInput,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.tickets.transform(tenantSlug, id, body, actorUserId);
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.transform(tenantSlug, id, body, actorUserId, access, actor);
   }
 
   @Delete(':id')
@@ -209,9 +262,10 @@ export class CrmTicketsController {
   async remove(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
-    @CurrentUserId() actorUserId?: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
   ) {
-    await this.tickets.delete(tenantSlug, id, actorUserId);
+    await this.tickets.delete(tenantSlug, id, actorUserId, access);
   }
 }
 

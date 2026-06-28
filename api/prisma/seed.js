@@ -88,7 +88,73 @@ async function main() {
       `Demo trips: ${tripsSeed.tripCount} curse, ${tripsSeed.fuelCount} alimentări combustibil, ${tripsSeed.vehicleCount} vehicule.`,
     );
   }
+
+  await seedDemoClientUsers(demoTenant.id, passwordHash);
 }
+
+async function seedDemoClientUsers(tenantId, passwordHash) {
+  const alpha = await prisma.client.findFirst({
+    where: { tenantId, code: { equals: 'Client Alpha', mode: 'insensitive' } },
+  });
+  if (!alpha) {
+    // eslint-disable-next-line no-console
+    console.log('Client Alpha lipsește — sărit useri client demo (rulează seed trips).');
+    return;
+  }
+
+  const driverEntity = await prisma.driver.findFirst({
+    where: { tenantId, clientId: alpha.id },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const users = [
+    {
+      email: 'manager.alpha@demo.local',
+      displayName: 'Manager Alpha',
+      role: 'client_admin',
+      driverId: null,
+    },
+    {
+      email: 'sofer.alpha@demo.local',
+      displayName: 'Sofer Alpha',
+      role: 'driver',
+      driverId: driverEntity?.id ?? null,
+    },
+  ];
+
+  for (const u of users) {
+    const user = await prisma.user.upsert({
+      where: { email: u.email },
+      create: { email: u.email, passwordHash, displayName: u.displayName },
+      update: { displayName: u.displayName },
+    });
+    await prisma.tenantMembership.upsert({
+      where: { userId_tenantId: { userId: user.id, tenantId } },
+      create: { userId: user.id, tenantId, role: 'client_user' },
+      update: { role: 'client_user' },
+    });
+    if (u.role === 'driver' && !u.driverId) {
+      // eslint-disable-next-line no-console
+      console.log(`Sărit ${u.email} — lipsește entitate Driver pe Client Alpha.`);
+      continue;
+    }
+    await prisma.clientMembership.upsert({
+      where: {
+        userId_tenantId_clientId: { userId: user.id, tenantId, clientId: alpha.id },
+      },
+      create: {
+        tenantId,
+        clientId: alpha.id,
+        userId: user.id,
+        role: u.role,
+        driverId: u.driverId,
+      },
+      update: { role: u.role, driverId: u.driverId },
+    });
+  }
+
+  // eslint-disable-next-line no-console
+  console.log('Demo client users: manager.alpha@demo.local (L1), sofer.alpha@demo.local (L0)');
 
 main()
   .then(() => {

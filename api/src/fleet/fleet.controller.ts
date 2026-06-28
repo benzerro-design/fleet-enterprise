@@ -18,6 +18,8 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
@@ -73,9 +75,10 @@ export class FleetController {
   }
 
   @Get('vehicles')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   listVehicles(
     @TenantId() tenantId: string,
+    @CurrentAccess() access: AccessContext,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
     @Query('q') q?: string,
@@ -84,19 +87,27 @@ export class FleetController {
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.fleet.listVehiclesPaged(tenantId, {
-      page,
-      pageSize,
-      q: q?.trim(),
-      status: parseOptionalStatus(status),
-      clientId: clientId?.trim(),
-    });
+    return this.fleet.listVehiclesPaged(
+      tenantId,
+      {
+        page,
+        pageSize,
+        q: q?.trim(),
+        status: parseOptionalStatus(status),
+        clientId: clientId?.trim(),
+      },
+      access,
+    );
   }
 
   @Get('vehicles/:vehicleId')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getVehicle(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
-    return this.fleet.getVehicle(tenantId, vehicleId);
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  getVehicle(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.fleet.getVehicle(tenantId, vehicleId, access);
   }
 
   @Get('vehicles/:vehicleId/form-brief')

@@ -13,7 +13,7 @@ import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
 import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
@@ -118,7 +118,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
     loadClientOptions(),
     getAuthMeResult(),
   ]);
-  const write = canManageFleet(auth);
+  const write = canWriteTickets(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const withParams = (overrides: Partial<Search>) => {

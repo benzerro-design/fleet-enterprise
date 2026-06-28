@@ -34,6 +34,7 @@ model Tenant {
   crmTickets         CrmTicket[]
   crmTicketEvents    CrmTicketEvent[]
   crmTicketLinks     CrmTicketLink[]
+  clientMemberships  ClientMembership[]
 }
 
 enum ClientStatus {
@@ -64,6 +65,7 @@ model Client {
   planAssignments ClientPlanAssignment[]
   drivers       Driver[]
   crmTickets    CrmTicket[]
+  memberships   ClientMembership[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -194,6 +196,7 @@ model Driver {
   trips              Trip[]
   documents          DriverDocument[]
   crmTickets         CrmTicket[]
+  clientMemberships  ClientMembership[]        @relation("ClientMembershipDriver")
 
   @@index([tenantId])
   @@index([clientId])
@@ -261,6 +264,7 @@ model User {
   crmTicketsCreated        CrmTicket[]               @relation("TicketCreatedBy")
   crmTicketsOwned          CrmTicket[]               @relation("TicketOwner")
   crmTicketEvents          CrmTicketEvent[]          @relation("TicketEventActor")
+  clientMemberships        ClientMembership[]
 }
 
 model TenantMembership {
@@ -275,6 +279,37 @@ model TenantMembership {
   @@unique([userId, tenantId])
   @@index([tenantId])
   @@index([userId])
+}
+
+/// Rol în organizația clientului (contractuală) — nu confunda cu MembershipRole tenant.
+enum ClientRole {
+  client_admin
+  client_dispatcher
+  client_viewer
+  driver
+}
+
+/// User invitat la un Client din tenant — scope date + drepturi CRM L0/L1.
+model ClientMembership {
+  id        String     @id @default(cuid())
+  tenantId  String
+  clientId  String
+  userId    String
+  role      ClientRole
+  /// Legătură la entitatea Driver când role = driver.
+  driverId  String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  driver    Driver?    @relation("ClientMembershipDriver", fields: [driverId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, tenantId, clientId])
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([userId])
+  @@index([driverId])
 }
 
 enum FuelType {
@@ -666,6 +701,8 @@ model ReminderAction {
 enum MembershipRole {
   tenant_admin
   tenant_viewer
+  /// Angajat al unui Client contractual — acces restricționat prin ClientMembership.
+  client_user
 }
 
 enum VehicleType {
@@ -777,11 +814,13 @@ model CrmTicketEvent {
   kind        CrmTicketEventKind
   body        String?
   payload     Json?
-  actorUserId String?
-  createdAt   DateTime           @default(now())
-  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ticket      CrmTicket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  actor       User?              @relation("TicketEventActor", fields: [actorUserId], references: [id])
+  actorUserId        String?
+  actorRoutingLevel  CrmTicketRoutingLevel?
+  actorDisplayName   String?
+  createdAt          DateTime               @default(now())
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket             CrmTicket              @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor              User?                  @relation("TicketEventActor", fields: [actorUserId], references: [id])
 
   @@index([tenantId])
   @@index([ticketId, createdAt])

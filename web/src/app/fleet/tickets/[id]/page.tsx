@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketActionsPanel } from "@/components/fleet/TicketActionsPanel";
 import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canManageFleet, canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
   ticketEventKindLabel,
@@ -29,7 +29,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
   const { id } = await params;
   const [detail, auth] = await Promise.all([loadDetail(id), getAuthMeResult()]);
   if (!detail) notFound();
-  const write = canManageFleet(auth);
+  const write = canWriteTickets(auth);
   const { ticket, events } = detail;
 
   return (
@@ -118,7 +118,14 @@ export default async function TicketDetailPage({ params }: PageProps) {
                 <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
                   <span>{new Date(ev.createdAt).toLocaleString("ro-RO")}</span>
                   <span className="rounded border border-zinc-700 px-1.5 py-0.5">{ticketEventKindLabel(ev.kind)}</span>
-                  {ev.actorEmail ? <span>{ev.actorEmail}</span> : null}
+                  {ev.actorDisplayName ? (
+                    <span>
+                      {ev.actorDisplayName}
+                      {ev.actorRoutingLevel ? ` (${ev.actorRoutingLevel === "L_STAR" ? "L★" : ev.actorRoutingLevel})` : ""}
+                    </span>
+                  ) : ev.actorEmail ? (
+                    <span>{ev.actorEmail}</span>
+                  ) : null}
                 </div>
                 {ev.body ? <p className="mt-2 text-zinc-200">{ev.body}</p> : null}
               </li>
