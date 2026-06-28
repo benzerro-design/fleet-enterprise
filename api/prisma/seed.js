@@ -155,6 +155,7 @@ async function seedDemoClientUsers(tenantId, passwordHash) {
 
   // eslint-disable-next-line no-console
   console.log('Demo client users: manager.alpha@demo.local (L1), sofer.alpha@demo.local (L0)');
+}
 
 main()
   .then(() => {
