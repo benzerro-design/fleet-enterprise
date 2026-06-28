@@ -9,6 +9,7 @@ import {
   ticketEventKindLabel,
   ticketPriorityLabel,
   ticketRoutingLabel,
+  ticketTypeLabel,
   type TicketDetailPayload,
 } from "@/lib/tickets-api";
 
@@ -71,7 +72,12 @@ export default async function TicketDetailPage({ params }: PageProps) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-sm text-emerald-400">#{ticket.displayId}</p>
-            <h1 className="mt-1 text-2xl font-semibold">{ticket.subject}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold">{ticket.subject}</h1>
+              <span className="rounded-md border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300">
+                {ticketTypeLabel(ticket.ticketType)}
+              </span>
+            </div>
             {ticket.description ? <p className="mt-3 text-sm text-zinc-400">{ticket.description}</p> : null}
             <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
               <div>

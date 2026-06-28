@@ -14,6 +14,7 @@ import {
 import {
   CrmTicketRoutingLevel,
   CrmTicketStatus,
+  CrmTicketType,
   MembershipRole,
 } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
@@ -43,6 +44,23 @@ export class CrmTicketsController {
     return this.tickets.getStats(tenantSlug, { clientId: clientId?.trim() });
   }
 
+  @Get('focus')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  focus(
+    @TenantId() tenantSlug: string,
+    @Query('clientId') clientId?: string,
+    @Query('page') pageStr?: string,
+    @Query('pageSize') pageSizeStr?: string,
+  ) {
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
+    return this.tickets.listFocus(tenantSlug, {
+      clientId: clientId?.trim(),
+      page,
+      pageSize,
+    });
+  }
+
   @Get('board')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
   board(
@@ -50,9 +68,10 @@ export class CrmTicketsController {
     @Query('clientId') clientId?: string,
     @Query('inbox') inbox?: string,
   ) {
+    const parsed = parseInbox(inbox);
     return this.tickets.listBoard(tenantSlug, {
       clientId: clientId?.trim(),
-      inbox: parseInbox(inbox),
+      inbox: parsed === 'focus' ? undefined : parsed,
     });
   }
 
@@ -67,6 +86,7 @@ export class CrmTicketsController {
     @Query('status') status?: string,
     @Query('vehicleId') vehicleId?: string,
     @Query('routingLevel') routingLevel?: string,
+    @Query('ticketType') ticketType?: string,
     @Query('inbox') inbox?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
@@ -79,6 +99,7 @@ export class CrmTicketsController {
       status: parseStatus(status),
       vehicleId: vehicleId?.trim(),
       routingLevel: parseRoutingLevel(routingLevel),
+      ticketType: parseTicketType(ticketType),
       inbox: parseInbox(inbox),
     });
   }
@@ -109,6 +130,17 @@ export class CrmTicketsController {
     @CurrentUserId() actorUserId?: string,
   ) {
     return this.tickets.patch(tenantSlug, id, body, actorUserId);
+  }
+
+  @Post(':id/claim')
+  @Roles(MembershipRole.tenant_admin)
+  @HttpCode(200)
+  claim(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.tickets.claim(tenantSlug, id, actorUserId);
   }
 
   @Post(':id/comments')
@@ -197,10 +229,27 @@ function parseRoutingLevel(raw: string | undefined): CrmTicketRoutingLevel | und
   throw new BadRequestException('Invalid routingLevel');
 }
 
-function parseInbox(raw: string | undefined): 'all' | 'lstar' | undefined {
+function parseInbox(raw: string | undefined): 'all' | 'lstar' | 'focus' | undefined {
   if (!raw?.trim()) return undefined;
   const s = raw.trim();
   if (s === 'all') return 'all';
   if (s === 'lstar') return 'lstar';
-  throw new BadRequestException('inbox must be all or lstar');
+  if (s === 'focus') return 'focus';
+  throw new BadRequestException('inbox must be all, lstar, or focus');
+}
+
+function parseTicketType(raw: string | undefined): CrmTicketType | undefined {
+  if (!raw?.trim()) return undefined;
+  const s = raw.trim();
+  const allowed: CrmTicketType[] = [
+    'itp',
+    'damage',
+    'maintenance',
+    'document',
+    'transport',
+    'technical',
+    'other',
+  ];
+  if (allowed.includes(s as CrmTicketType)) return s as CrmTicketType;
+  throw new BadRequestException('Invalid ticketType');
 }

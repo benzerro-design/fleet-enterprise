@@ -720,11 +720,22 @@ enum CrmTicketLinkEntityType {
   document
 }
 
+enum CrmTicketType {
+  itp
+  damage
+  maintenance
+  document
+  transport
+  technical
+  other
+}
+
 /// Solicitare CRM — inbox ierarhic L0→L1→L★.
 model CrmTicket {
   id               String                @id @default(cuid())
   tenantId         String
   clientId         String
+  ticketType       CrmTicketType         @default(other)
   subject          String
   description      String?
   status           CrmTicketStatus       @default(open)
@@ -756,6 +767,7 @@ model CrmTicket {
   @@index([reminderActionId])
   @@index([routingLevel])
   @@index([assignedQueue])
+  @@index([ticketType])
 }
 
 model CrmTicketEvent {

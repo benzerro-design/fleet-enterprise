@@ -9,7 +9,9 @@ import {
   CrmTicketPriority,
   CrmTicketRoutingLevel,
   CrmTicketStatus,
+  CrmTicketType,
   Prisma,
+  ReminderSourceType,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
@@ -24,6 +26,7 @@ export type TicketRecord = {
   clientId: string;
   clientCode: string;
   clientLegalName: string;
+  ticketType: CrmTicketType;
   subject: string;
   description: string | null;
   status: CrmTicketStatus;
@@ -80,6 +83,7 @@ export type CreateTicketInput = {
   subject: string;
   description?: string | null;
   priority?: CrmTicketPriority;
+  ticketType?: CrmTicketType;
   vehicleId?: string | null;
   driverId?: string | null;
   reminderActionId?: string | null;
@@ -91,6 +95,7 @@ export type PatchTicketInput = {
   description?: string | null;
   status?: CrmTicketStatus;
   priority?: CrmTicketPriority;
+  ticketType?: CrmTicketType;
   ownerUserId?: string | null;
 };
 
@@ -108,11 +113,24 @@ export type ResolveTicketInput = {
   closeReminder?: boolean;
 };
 
-export type TransformTicketInput = {
-  entityType: 'maintenance';
-  title?: string;
-  notes?: string | null;
-};
+export type TransformTicketInput =
+  | {
+      entityType: 'maintenance';
+      title?: string;
+      notes?: string | null;
+    }
+  | {
+      entityType: 'cost';
+      category?: string;
+      amountCents?: number;
+      notes?: string | null;
+    }
+  | {
+      entityType: 'trip';
+      originLabel?: string | null;
+      destLabel?: string | null;
+      notes?: string | null;
+    };
 
 type TicketRow = Prisma.CrmTicketGetPayload<{
   include: {
@@ -149,7 +167,8 @@ export class CrmTicketsService {
       status?: CrmTicketStatus;
       vehicleId?: string;
       routingLevel?: CrmTicketRoutingLevel;
-      inbox?: 'all' | 'lstar';
+      ticketType?: CrmTicketType;
+      inbox?: 'all' | 'lstar' | 'focus';
     },
   ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
@@ -226,6 +245,60 @@ export class CrmTicketsService {
     return {
       columns,
       lstar: lstarRows.map((r) => this.toRecord(r)),
+    };
+  }
+
+  async listFocus(
+    tenantSlug: string,
+    params?: { clientId?: string; page?: number; pageSize?: number },
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) {
+      return { items: [], total: 0, page: params?.page ?? 1, pageSize: params?.pageSize ?? 50 };
+    }
+
+    const pageSize = Math.min(Math.max(1, params?.pageSize ?? 50), MAX_PAGE_SIZE);
+    const page = Math.max(1, params?.page ?? 1);
+    const skip = (page - 1) * pageSize;
+
+    let resolvedClientUuid: string | undefined;
+    if (params?.clientId?.trim()) {
+      resolvedClientUuid = (await resolveClientInTenant(this.prisma, tenant.id, params.clientId)).id;
+    }
+
+    const where: Prisma.CrmTicketWhereInput = {
+      AND: [
+        { tenantId: tenant.id },
+        { status: { in: ['open', 'in_progress'] } },
+        resolvedClientUuid ? { clientId: resolvedClientUuid } : {},
+        {
+          OR: [
+            {
+              routingLevel: CrmTicketRoutingLevel.L_STAR,
+              ownerUserId: null,
+            },
+            { priority: { in: [CrmTicketPriority.urgent, CrmTicketPriority.high] } },
+          ],
+        },
+      ],
+    };
+
+    const [total, rows] = await Promise.all([
+      this.prisma.crmTicket.count({ where }),
+      this.prisma.crmTicket.findMany({
+        where,
+        orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+        skip,
+        take: pageSize,
+        include: this.ticketInclude(),
+      }),
+    ]);
+
+    return {
+      items: rows.map((r) => this.toRecord(r)),
+      total,
+      page,
+      pageSize,
     };
   }
 
@@ -322,6 +395,17 @@ export class CrmTicketsService {
       dto.reminderActionId,
     );
 
+    let ticketType = dto.ticketType ?? CrmTicketType.other;
+    if (reminderActionId && !dto.ticketType) {
+      const reminder = await this.prisma.reminderAction.findFirst({
+        where: { id: reminderActionId, tenantId: tenant.id },
+        select: { sourceType: true, title: true },
+      });
+      if (reminder) {
+        ticketType = this.inferTicketTypeFromReminder(reminder.sourceType, reminder.title);
+      }
+    }
+
     const routingLevel = dto.routingLevel ?? CrmTicketRoutingLevel.L1;
     const assignedQueue =
       routingLevel === CrmTicketRoutingLevel.L_STAR
@@ -332,6 +416,7 @@ export class CrmTicketsService {
       data: {
         tenantId: tenant.id,
         clientId: client.id,
+        ticketType,
         subject,
         description: dto.description?.trim() || null,
         priority: dto.priority ?? CrmTicketPriority.normal,
@@ -381,6 +466,7 @@ export class CrmTicketsService {
     }
     if (dto.description !== undefined) data.description = dto.description?.trim() || null;
     if (dto.priority !== undefined) data.priority = dto.priority;
+    if (dto.ticketType !== undefined) data.ticketType = dto.ticketType;
     if (dto.ownerUserId !== undefined) {
       data.owner = dto.ownerUserId
         ? { connect: { id: dto.ownerUserId } }
@@ -414,6 +500,33 @@ export class CrmTicketsService {
       where: { id },
       data,
       include: this.ticketInclude(),
+    });
+
+    return this.toRecord(row);
+  }
+
+  async claim(tenantSlug: string, id: string, actorUserId?: string) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    const ticket = await this.ensureTicket(tenant.id, id);
+    if (!actorUserId) {
+      throw new BadRequestException('Actor required to claim ticket');
+    }
+
+    const row = await this.prisma.crmTicket.update({
+      where: { id },
+      data: {
+        ownerUserId: actorUserId,
+        status:
+          ticket.status === CrmTicketStatus.open ? CrmTicketStatus.in_progress : ticket.status,
+      },
+      include: this.ticketInclude(),
+    });
+
+    await this.appendEvent(tenant.id, id, {
+      kind: CrmTicketEventKind.status,
+      body: 'Tichet preluat',
+      actorUserId,
+      payload: { ownerUserId: actorUserId },
     });
 
     return this.toRecord(row);
@@ -587,10 +700,15 @@ export class CrmTicketsService {
     const tenant = await this.ensureTenant(tenantSlug);
     const ticket = await this.ensureTicket(tenant.id, id);
 
+    if (!ticket.vehicleId) {
+      throw new BadRequestException('Ticket has no vehicle — cannot transform');
+    }
+
+    let entityType: CrmTicketLinkEntityType;
+    let entityId: string;
+    let eventBody: string;
+
     if (dto.entityType === 'maintenance') {
-      if (!ticket.vehicleId) {
-        throw new BadRequestException('Ticket has no vehicle — cannot create maintenance');
-      }
       const title = dto.title?.trim() || ticket.subject;
       const maint = await this.prisma.maintenanceEntry.create({
         data: {
@@ -600,43 +718,82 @@ export class CrmTicketsService {
           notes: dto.notes?.trim() || ticket.description,
         },
       });
-
-      await this.prisma.crmTicketLink.create({
+      entityType = CrmTicketLinkEntityType.maintenance;
+      entityId = maint.id;
+      eventBody = `Creată mentenanță: ${title}`;
+    } else if (dto.entityType === 'cost') {
+      const cost = await this.prisma.costEntry.create({
         data: {
           tenantId: tenant.id,
-          ticketId: id,
-          entityType: CrmTicketLinkEntityType.maintenance,
-          entityId: maint.id,
+          vehicleId: ticket.vehicleId,
+          category: dto.category?.trim() || 'alte',
+          amountCents: dto.amountCents ?? 0,
+          notes: dto.notes?.trim() || ticket.description,
         },
       });
-
-      await this.appendEvent(tenant.id, id, {
-        kind: CrmTicketEventKind.transform,
-        body: `Creată mentenanță: ${title}`,
-        actorUserId,
-        payload: { entityType: 'maintenance', entityId: maint.id },
-      });
-
-      if (ticket.status === CrmTicketStatus.open) {
-        await this.prisma.crmTicket.update({
-          where: { id },
-          data: { status: CrmTicketStatus.in_progress },
+      entityType = CrmTicketLinkEntityType.cost;
+      entityId = cost.id;
+      eventBody = `Creat cost: ${cost.category}`;
+    } else if (dto.entityType === 'trip') {
+      let driverName: string | null = null;
+      if (ticket.driverId) {
+        const driver = await this.prisma.driver.findUnique({
+          where: { id: ticket.driverId },
+          select: { fullName: true },
         });
+        driverName = driver?.fullName ?? null;
       }
-
-      await this.audit.log({
-        tenantId: tenant.id,
-        actorUserId,
-        action: 'crm_ticket.transform',
-        entityType: 'crm_ticket',
-        entityId: id,
-        meta: { entityType: 'maintenance', entityId: maint.id },
+      const trip = await this.prisma.trip.create({
+        data: {
+          tenantId: tenant.id,
+          vehicleId: ticket.vehicleId,
+          reference: `CRM-${this.displayId(ticket.id)}`,
+          originLabel: dto.originLabel?.trim() || null,
+          destLabel: dto.destLabel?.trim() || null,
+          driverId: ticket.driverId,
+          driverName,
+        },
       });
-
-      return { ticket: await this.getDetail(tenantSlug, id), createdEntityId: maint.id };
+      entityType = CrmTicketLinkEntityType.trip;
+      entityId = trip.id;
+      eventBody = `Creată cursă${dto.destLabel ? `: ${dto.destLabel}` : ''}`;
+    } else {
+      throw new BadRequestException('Unsupported entityType');
     }
 
-    throw new BadRequestException('Unsupported entityType');
+    await this.prisma.crmTicketLink.create({
+      data: {
+        tenantId: tenant.id,
+        ticketId: id,
+        entityType,
+        entityId,
+      },
+    });
+
+    await this.appendEvent(tenant.id, id, {
+      kind: CrmTicketEventKind.transform,
+      body: eventBody,
+      actorUserId,
+      payload: { entityType: dto.entityType, entityId },
+    });
+
+    if (ticket.status === CrmTicketStatus.open) {
+      await this.prisma.crmTicket.update({
+        where: { id },
+        data: { status: CrmTicketStatus.in_progress },
+      });
+    }
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'crm_ticket.transform',
+      entityType: 'crm_ticket',
+      entityId: id,
+      meta: { entityType: dto.entityType, entityId },
+    });
+
+    return { ticket: await this.getDetail(tenantSlug, id), createdEntityId: entityId };
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string) {
@@ -676,7 +833,8 @@ export class CrmTicketsService {
       status?: CrmTicketStatus;
       vehicleId?: string;
       routingLevel?: CrmTicketRoutingLevel;
-      inbox?: 'all' | 'lstar';
+      ticketType?: CrmTicketType;
+      inbox?: 'all' | 'lstar' | 'focus';
     },
   ): Prisma.CrmTicketWhereInput {
     const parts: Prisma.CrmTicketWhereInput[] = [{ tenantId }];
@@ -685,10 +843,23 @@ export class CrmTicketsService {
     if (params.status) parts.push({ status: params.status });
     if (params.vehicleId?.trim()) parts.push({ vehicleId: params.vehicleId.trim() });
     if (params.routingLevel) parts.push({ routingLevel: params.routingLevel });
+    if (params.ticketType) parts.push({ ticketType: params.ticketType });
     if (params.inbox === 'lstar') {
       parts.push({
         routingLevel: CrmTicketRoutingLevel.L_STAR,
         status: { in: ['open', 'in_progress'] },
+      });
+    }
+    if (params.inbox === 'focus') {
+      parts.push({
+        status: { in: ['open', 'in_progress'] },
+        OR: [
+          {
+            routingLevel: CrmTicketRoutingLevel.L_STAR,
+            ownerUserId: null,
+          },
+          { priority: { in: [CrmTicketPriority.urgent, CrmTicketPriority.high] } },
+        ],
       });
     }
 
@@ -712,6 +883,7 @@ export class CrmTicketsService {
       clientId: row.clientId,
       clientCode: row.client.code,
       clientLegalName: row.client.legalName,
+      ticketType: row.ticketType,
       subject: row.subject,
       description: row.description,
       status: row.status,
@@ -816,5 +988,20 @@ export class CrmTicketsService {
       throw new BadRequestException('Reminder does not belong to ticket vehicle');
     }
     return reminder.id;
+  }
+
+  private inferTicketTypeFromReminder(
+    sourceType: ReminderSourceType,
+    title: string,
+  ): CrmTicketType {
+    const t = title.toLowerCase();
+    if (sourceType === 'vehicle_itp' || t.includes('itp')) return CrmTicketType.itp;
+    if (sourceType === 'document') return CrmTicketType.document;
+    if (sourceType === 'maintenance' || sourceType === 'maintenance_plan') {
+      return CrmTicketType.maintenance;
+    }
+    if (t.includes('daun')) return CrmTicketType.damage;
+    if (t.includes('transport') || t.includes('curs')) return CrmTicketType.transport;
+    return CrmTicketType.other;
   }
 }

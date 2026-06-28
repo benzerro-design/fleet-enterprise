@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { TicketDetailPayload } from "@/lib/tickets-api";
-import { fleetJsonHeaders, ticketsBrowserBase } from "@/lib/tickets-api";
+import { fleetJsonHeaders, ticketLinkHref, ticketsBrowserBase } from "@/lib/tickets-api";
 
 type Props = {
   detail: TicketDetailPayload;
@@ -23,6 +23,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
   const [showReturn, setShowReturn] = useState(false);
 
   const closed = ticket.status === "resolved" || ticket.status === "cancelled";
+  const needsClaim = !ticket.ownerUserId && !closed;
 
   async function post(path: string, body?: unknown) {
     setPending(path);
@@ -64,6 +65,16 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
       {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
+        {needsClaim ? (
+          <button
+            type="button"
+            disabled={!!pending}
+            onClick={() => post("/claim")}
+            className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+          >
+            Preia tichetul
+          </button>
+        ) : null}
         {!closed ? (
           <>
             <button
@@ -74,14 +85,34 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
             >
               Tratează (rezolvă)
             </button>
-            <button
-              type="button"
-              disabled={!!pending || !ticket.vehicleId}
-              onClick={() => post("/transform", { entityType: "maintenance" })}
-              className="rounded-lg border border-violet-700/60 bg-violet-950/40 px-3 py-1.5 text-sm text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
-            >
-              Transformă → mentenanță
-            </button>
+            {ticket.vehicleId ? (
+              <>
+                <button
+                  type="button"
+                  disabled={!!pending}
+                  onClick={() => post("/transform", { entityType: "maintenance" })}
+                  className="rounded-lg border border-violet-700/60 bg-violet-950/40 px-3 py-1.5 text-sm text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+                >
+                  → Mentenanță
+                </button>
+                <button
+                  type="button"
+                  disabled={!!pending}
+                  onClick={() => post("/transform", { entityType: "cost", category: "alte", amountCents: 0 })}
+                  className="rounded-lg border border-violet-700/60 bg-violet-950/40 px-3 py-1.5 text-sm text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+                >
+                  → Cost
+                </button>
+                <button
+                  type="button"
+                  disabled={!!pending}
+                  onClick={() => post("/transform", { entityType: "trip" })}
+                  className="rounded-lg border border-violet-700/60 bg-violet-950/40 px-3 py-1.5 text-sm text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+                >
+                  → Cursă
+                </button>
+              </>
+            ) : null}
             {ticket.routingLevel !== "L_STAR" ? (
               <button
                 type="button"
@@ -171,10 +202,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
           <h3 className="text-xs font-medium uppercase text-zinc-500">Legături</h3>
           <ul className="mt-2 space-y-1 text-sm">
             {detail.links.map((link) => {
-              const href =
-                link.entityType === "maintenance"
-                  ? `/fleet/maintenance/${link.entityId}`
-                  : null;
+              const href = ticketLinkHref(link);
               return (
                 <li key={link.id}>
                   {href ? (

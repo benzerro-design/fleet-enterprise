@@ -97,6 +97,7 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-zinc-800 px-4 py-3">
+        <QuickLink href={`/fleet/tickets?${clientQs}`} label="Tichete CRM" />
         <QuickLink href={`/fleet/reminders?${clientQs}`} label="Remindere" />
         <QuickLink href={`/fleet/trips?${clientQs}`} label="Curse" />
         <QuickLink href={`/fleet/costs?${clientQs}`} label="Costuri" />

@@ -6,6 +6,14 @@ export const ticketsBrowserBase = "/api/tickets";
 export type TicketStatus = "open" | "in_progress" | "resolved" | "cancelled";
 export type TicketPriority = "low" | "normal" | "high" | "urgent";
 export type TicketRoutingLevel = "L0" | "L1" | "L1N" | "L_STAR";
+export type TicketType =
+  | "itp"
+  | "damage"
+  | "maintenance"
+  | "document"
+  | "transport"
+  | "technical"
+  | "other";
 export type TicketEventKind = "comment" | "routing" | "transform" | "status";
 export type TicketLinkEntityType = "maintenance" | "cost" | "trip" | "reminder" | "document";
 
@@ -15,6 +23,7 @@ export type TicketRecord = {
   clientId: string;
   clientCode: string;
   clientLegalName: string;
+  ticketType: TicketType;
   subject: string;
   description: string | null;
   status: TicketStatus;
@@ -116,6 +125,35 @@ export function ticketRoutingLabel(level: TicketRoutingLevel): string {
       return "L★";
   }
 }
+
+export function ticketTypeLabel(type: TicketType): string {
+  switch (type) {
+    case "itp":
+      return "ITP";
+    case "damage":
+      return "Daună";
+    case "maintenance":
+      return "Mentenanță";
+    case "document":
+      return "Document";
+    case "transport":
+      return "Transport";
+    case "technical":
+      return "Tehnic";
+    case "other":
+      return "Altele";
+  }
+}
+
+export const TICKET_TYPES: Array<{ value: TicketType; label: string }> = [
+  { value: "technical", label: "Tehnic" },
+  { value: "maintenance", label: "Mentenanță" },
+  { value: "itp", label: "ITP" },
+  { value: "damage", label: "Daună" },
+  { value: "document", label: "Document" },
+  { value: "transport", label: "Transport" },
+  { value: "other", label: "Altele" },
+];
 
 export function ticketEventKindLabel(kind: TicketEventKind): string {
   switch (kind) {

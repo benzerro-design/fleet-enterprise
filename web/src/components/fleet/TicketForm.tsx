@@ -6,9 +6,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ClientSelect } from "@/components/fleet/ClientSelect";
 import {
   fleetJsonHeaders,
+  TICKET_TYPES,
   ticketsBrowserBase,
   type TicketPriority,
   type TicketRecord,
+  type TicketType,
 } from "@/lib/tickets-api";
 
 type VehicleOption = {
@@ -35,6 +37,7 @@ export function TicketForm({ vehicles, initial }: Props) {
   const [vehicleId, setVehicleId] = useState(initial?.vehicleId ?? "");
   const [subject, setSubject] = useState(initial?.subject ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [ticketType, setTicketType] = useState<TicketType>("other");
   const [priority, setPriority] = useState<TicketPriority>("normal");
   const [reminderActionId, setReminderActionId] = useState(initial?.reminderActionId ?? "");
   const [pending, setPending] = useState(false);
@@ -71,6 +74,7 @@ export function TicketForm({ vehicles, initial }: Props) {
       clientId: clientId.trim(),
       subject: subject.trim(),
       description: description.trim() || null,
+      ticketType,
       priority,
       vehicleId: vehicleId.trim() || null,
       reminderActionId: reminderActionId.trim() || null,
@@ -145,6 +149,21 @@ export function TicketForm({ vehicles, initial }: Props) {
           rows={4}
           className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
         />
+      </div>
+
+      <div>
+        <label className="text-xs text-zinc-500">Tip solicitare</label>
+        <select
+          value={ticketType}
+          onChange={(e) => setTicketType(e.target.value as TicketType)}
+          className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+        >
+          {TICKET_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>
