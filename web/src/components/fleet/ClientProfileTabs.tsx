@@ -14,10 +14,12 @@ import { formatRonFromCents } from "@/lib/money";
 import type { ClientProfileTab, ClientSummaryPayload } from "@/lib/clients-api";
 import { clientOpsQuery } from "@/lib/clients-api";
 import { ClientSubscriptionTab } from "@/components/fleet/ClientSubscriptionTab";
+import { ClientDriversTab } from "@/components/fleet/ClientDriversTab";
 
 const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "overview", label: "Prezentare" },
   { id: "vehicles", label: "Vehicule" },
+  { id: "drivers", label: "Șoferi" },
   { id: "subscription", label: "Abonament" },
 ];
 
@@ -51,17 +53,18 @@ function ContactRow({ label, value }: { label: string; value: string | null }) {
 
 type Props = {
   data: ClientSummaryPayload;
+  canWrite?: boolean;
 };
 
-export function ClientProfileTabs({ data }: Props) {
-  const { client, kpis, vehicles, recentActivity, subscriptions } = data;
+export function ClientProfileTabs({ data, canWrite = false }: Props) {
+  const { client, kpis, vehicles, recentActivity, subscriptions, drivers } = data;
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientQs = clientOpsQuery(client.code);
 
   const active = useMemo((): ClientProfileTab => {
     const t = searchParams.get("tab");
-    if (t === "vehicles" || t === "subscription") return t;
+    if (t === "vehicles" || t === "subscription" || t === "drivers") return t;
     return "overview";
   }, [searchParams]);
 
@@ -99,6 +102,7 @@ export function ClientProfileTabs({ data }: Props) {
         <QuickLink href={`/fleet/costs?${clientQs}`} label="Costuri" />
         <QuickLink href={`/fleet/maintenance?${clientQs}`} label="Mentenanță" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=vehicles`} label="Vehicule client" />
+        <QuickLink href={`/fleet/clients/${client.id}?tab=drivers`} label="Șoferi client" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=subscription`} label="Abonament" />
       </div>
 
@@ -173,6 +177,8 @@ export function ClientProfileTabs({ data }: Props) {
           </div>
         ) : active === "subscription" ? (
           <ClientSubscriptionTab subscriptions={subscriptions ?? []} />
+        ) : active === "drivers" ? (
+          <ClientDriversTab clientCode={client.code} drivers={drivers ?? []} canWrite={canWrite} />
         ) : (
           <>
             {vehicles.length === 0 ? (

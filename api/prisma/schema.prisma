@@ -26,6 +26,8 @@ model Tenant {
   clientDocuments    ClientDocument[]
   pricingPlans       PricingPlan[]
   clientPlanAssignments ClientPlanAssignment[]
+  drivers                Driver[]
+  driverVehicleAssignments DriverVehicleAssignment[]
   reminderActions    ReminderAction[]
   maintenancePlanItems MaintenancePlanItem[]
 }
@@ -56,6 +58,7 @@ model Client {
   contacts  ClientContact[]
   documents ClientDocument[]
   planAssignments ClientPlanAssignment[]
+  drivers       Driver[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -158,6 +161,61 @@ model ClientPlanAssignment {
   @@index([clientId, status])
 }
 
+enum DriverStatus {
+  active
+  inactive
+  suspended
+}
+
+/// Șofer — entitate business, aparține unui Client (organizație).
+model Driver {
+  id                 String       @id @default(cuid())
+  tenantId           String
+  clientId           String
+  fullName           String
+  employeeCode       String?
+  phone              String?
+  email              String?
+  licenseNumber      String?
+  licenseCategories  String?
+  licenseExpiresOn   DateTime?
+  status             DriverStatus @default(active)
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client             Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicleAssignments DriverVehicleAssignment[]
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([tenantId, status])
+}
+
+/// Jurnal alocări șofer ↔ vehicul (trasabilitate cine / când).
+model DriverVehicleAssignment {
+  id               String    @id @default(cuid())
+  tenantId         String
+  driverId         String
+  vehicleId        String
+  assignedAt       DateTime  @default(now())
+  unassignedAt     DateTime?
+  assignedByUserId String?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  driver           Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle          Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  assignedBy       User?     @relation("DriverAssignmentBy", fields: [assignedByUserId], references: [id])
+
+  @@index([tenantId])
+  @@index([driverId])
+  @@index([vehicleId])
+  @@index([driverId, unassignedAt])
+  @@index([vehicleId, unassignedAt])
+}
+
 model User {
   id               String             @id @default(cuid())
   email            String             @unique
@@ -171,6 +229,7 @@ model User {
   vehiclesUpdated  Vehicle[]          @relation("VehicleUpdatedBy")
   odometerReadings OdometerReading[]  @relation("OdometerReadingBy")
   vehiclePhotosUploaded VehiclePhoto[] @relation("VehiclePhotoUploadedBy")
+  driverAssignmentsCreated DriverVehicleAssignment[] @relation("DriverAssignmentBy")
 }
 
 model TenantMembership {
@@ -254,6 +313,7 @@ model Vehicle {
   odometerReadings   OdometerReading[]
   maintenancePlanItems MaintenancePlanItem[]
   photos             VehiclePhoto[]
+  driverAssignments  DriverVehicleAssignment[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])

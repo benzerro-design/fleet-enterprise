@@ -53,7 +53,7 @@ export function ClientDetailLayout({ data, canWrite }: Props) {
       </div>
 
       <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă profilul client…</p>}>
-        <ClientProfileTabs data={data} />
+        <ClientProfileTabs data={data} canWrite={canWrite} />
       </Suspense>
     </FleetPageMain>
   );

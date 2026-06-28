@@ -57,9 +57,30 @@ export type ClientSummaryPayload = {
   vehicles: ClientSummaryVehicleRow[];
   recentActivity: ClientSummaryActivityRow[];
   subscriptions: ClientSubscriptionRow[];
+  drivers: DriverRecord[];
 };
 
-export type ClientProfileTab = "overview" | "vehicles" | "subscription";
+export type DriverRecord = {
+  id: string;
+  clientId: string;
+  clientCode: string;
+  clientLegalName: string;
+  fullName: string;
+  employeeCode: string | null;
+  phone: string | null;
+  email: string | null;
+  licenseNumber: string | null;
+  licenseCategories: string | null;
+  licenseExpiresOn: string | null;
+  status: "active" | "inactive" | "suspended";
+  notes: string | null;
+  activeVehicleIds: string[];
+  activeVehicleRegistrations: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClientProfileTab = "overview" | "vehicles" | "drivers" | "subscription";
 
 export type ClientSubscriptionRow = {
   assignmentId: string;

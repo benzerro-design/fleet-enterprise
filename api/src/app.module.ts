@@ -3,13 +3,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { ClientsModule } from './clients/clients.module';
+import { DriversModule } from './drivers/drivers.module';
 import { FleetModule } from './fleet/fleet.module';
 import { OpsModule } from './ops/ops.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenantModule } from './tenant/tenant.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ClientsModule, FleetModule, OpsModule, TenantModule],
+  imports: [PrismaModule, AuthModule, ClientsModule, DriversModule, FleetModule, OpsModule, TenantModule],
   controllers: [AppController],
   providers: [AppService],
 })

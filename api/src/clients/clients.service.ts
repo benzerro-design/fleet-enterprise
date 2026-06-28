@@ -18,8 +18,9 @@ import {
   ClientSubscriptionsService,
   type ClientSubscriptionRow,
 } from './client-subscriptions.service';
+import { DriversService, type DriverRecord } from '../drivers/drivers.service';
 
-export type { ClientSubscriptionRow };
+export type { ClientSubscriptionRow, DriverRecord };
 
 const MAX_PAGE_SIZE = 200;
 const REMINDER_SCAN_LIMIT = 500;
@@ -97,6 +98,7 @@ export type ClientSummaryPayload = {
   vehicles: ClientSummaryVehicleRow[];
   recentActivity: ClientSummaryActivityRow[];
   subscriptions: ClientSubscriptionRow[];
+  drivers: DriverRecord[];
 };
 
 function normalizeCode(code: string): string {
@@ -136,6 +138,7 @@ export class ClientsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly subscriptions: ClientSubscriptionsService,
+    private readonly drivers: DriversService,
   ) {}
 
   async listPaged(tenantSlug: string, params: ClientListParams) {
@@ -334,6 +337,7 @@ export class ClientsService {
       .slice(0, RECENT_ACTIVITY_LIMIT);
 
     const subscriptions = await this.subscriptions.listForClient(tenantSlug, id);
+    const drivers = await this.drivers.listForClient(tenantSlug, id);
 
     return {
       client,
@@ -348,6 +352,7 @@ export class ClientsService {
       vehicles: vehicleRows,
       recentActivity,
       subscriptions,
+      drivers,
     };
   }
 
