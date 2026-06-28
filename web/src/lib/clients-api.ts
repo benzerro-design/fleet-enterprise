@@ -56,9 +56,49 @@ export type ClientSummaryPayload = {
   };
   vehicles: ClientSummaryVehicleRow[];
   recentActivity: ClientSummaryActivityRow[];
+  subscriptions: ClientSubscriptionRow[];
 };
 
-export type ClientProfileTab = "overview" | "vehicles";
+export type ClientProfileTab = "overview" | "vehicles" | "subscription";
+
+export type ClientSubscriptionRow = {
+  assignmentId: string;
+  status: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  notes: string | null;
+  plan: {
+    id: string;
+    code: string;
+    name: string;
+    description: string | null;
+    billingCycle: string;
+    priceCents: number;
+    currency: string;
+  };
+};
+
+export type ClientContactRecord = {
+  id: string;
+  clientId: string;
+  fullName: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+  sortOrder: number;
+};
+
+export type ClientDocumentRecord = {
+  id: string;
+  clientId: string;
+  documentTypeCode: string;
+  title: string;
+  fileUrl: string;
+  fileName: string | null;
+  expiresOn: string | null;
+  notes: string | null;
+};
 
 export function fleetJsonHeaders(): HeadersInit {
   return { "Content-Type": "application/json" };

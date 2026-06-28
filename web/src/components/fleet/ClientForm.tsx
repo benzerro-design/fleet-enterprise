@@ -73,7 +73,7 @@ export function ClientForm({ mode, initial }: Props) {
     mode === "edit" && initial ? `/fleet/clients/${initial.id}` : "/fleet/clients";
 
   return (
-    <form onSubmit={onSubmit} className="flex max-w-lg flex-col gap-6">
+    <form onSubmit={onSubmit} className="flex w-full flex-col gap-6">
       <div>
         <label className="text-sm text-zinc-400">Cod client</label>
         <input

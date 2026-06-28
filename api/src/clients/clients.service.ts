@@ -14,6 +14,12 @@ import {
 } from '../ops/reminder-status';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveClientInTenant } from './client-resolve';
+import {
+  ClientSubscriptionsService,
+  type ClientSubscriptionRow,
+} from './client-subscriptions.service';
+
+export type { ClientSubscriptionRow };
 
 const MAX_PAGE_SIZE = 200;
 const REMINDER_SCAN_LIMIT = 500;
@@ -90,6 +96,7 @@ export type ClientSummaryPayload = {
   };
   vehicles: ClientSummaryVehicleRow[];
   recentActivity: ClientSummaryActivityRow[];
+  subscriptions: ClientSubscriptionRow[];
 };
 
 function normalizeCode(code: string): string {
@@ -128,6 +135,7 @@ export class ClientsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly subscriptions: ClientSubscriptionsService,
   ) {}
 
   async listPaged(tenantSlug: string, params: ClientListParams) {
@@ -325,6 +333,8 @@ export class ClientsService {
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, RECENT_ACTIVITY_LIMIT);
 
+    const subscriptions = await this.subscriptions.listForClient(tenantSlug, id);
+
     return {
       client,
       kpis: {
@@ -337,6 +347,7 @@ export class ClientsService {
       },
       vehicles: vehicleRows,
       recentActivity,
+      subscriptions,
     };
   }
 

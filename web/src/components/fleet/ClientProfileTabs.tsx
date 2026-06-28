@@ -13,10 +13,12 @@ import {
 import { formatRonFromCents } from "@/lib/money";
 import type { ClientProfileTab, ClientSummaryPayload } from "@/lib/clients-api";
 import { clientOpsQuery } from "@/lib/clients-api";
+import { ClientSubscriptionTab } from "@/components/fleet/ClientSubscriptionTab";
 
 const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "overview", label: "Prezentare" },
   { id: "vehicles", label: "Vehicule" },
+  { id: "subscription", label: "Abonament" },
 ];
 
 function formatDate(iso: string): string {
@@ -52,14 +54,15 @@ type Props = {
 };
 
 export function ClientProfileTabs({ data }: Props) {
-  const { client, kpis, vehicles, recentActivity } = data;
+  const { client, kpis, vehicles, recentActivity, subscriptions } = data;
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientQs = clientOpsQuery(client.code);
 
   const active = useMemo((): ClientProfileTab => {
     const t = searchParams.get("tab");
-    return t === "vehicles" ? "vehicles" : "overview";
+    if (t === "vehicles" || t === "subscription") return t;
+    return "overview";
   }, [searchParams]);
 
   const setTab = useCallback(
@@ -96,6 +99,7 @@ export function ClientProfileTabs({ data }: Props) {
         <QuickLink href={`/fleet/costs?${clientQs}`} label="Costuri" />
         <QuickLink href={`/fleet/maintenance?${clientQs}`} label="Mentenanță" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=vehicles`} label="Vehicule client" />
+        <QuickLink href={`/fleet/clients/${client.id}?tab=subscription`} label="Abonament" />
       </div>
 
       <div className="border-b border-zinc-800 px-4 pt-4">
@@ -167,6 +171,8 @@ export function ClientProfileTabs({ data }: Props) {
               )}
             </div>
           </div>
+        ) : active === "subscription" ? (
+          <ClientSubscriptionTab subscriptions={subscriptions ?? []} />
         ) : (
           <>
             {vehicles.length === 0 ? (

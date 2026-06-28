@@ -22,6 +22,10 @@ model Tenant {
   tripSheetDocuments TripSheetDocument[]
   vehicles           Vehicle[]
   clients            Client[]
+  clientContacts     ClientContact[]
+  clientDocuments    ClientDocument[]
+  pricingPlans       PricingPlan[]
+  clientPlanAssignments ClientPlanAssignment[]
   reminderActions    ReminderAction[]
   maintenancePlanItems MaintenancePlanItem[]
 }
@@ -49,10 +53,109 @@ model Client {
   updatedAt DateTime     @updatedAt
   tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicles  Vehicle[]
+  contacts  ClientContact[]
+  documents ClientDocument[]
+  planAssignments ClientPlanAssignment[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([tenantId, status])
+}
+
+/// Persoană de contact din organizația clientului.
+model ClientContact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  clientId  String
+  fullName  String
+  role      String?
+  email     String?
+  phone     String?
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+/// Documente organizație client (CUI, autorizații, contracte).
+model ClientDocument {
+  id               String    @id @default(cuid())
+  tenantId         String
+  clientId         String
+  documentTypeCode String
+  title            String
+  fileUrl          String
+  fileName         String?
+  expiresOn        DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+enum BillingCycle {
+  monthly
+  quarterly
+  yearly
+  custom
+}
+
+enum ClientPlanAssignmentStatus {
+  active
+  scheduled
+  expired
+  cancelled
+}
+
+/// Catalog plan tarifar (tenant) — administrat din Setări (viitor superadmin).
+model PricingPlan {
+  id           String       @id @default(cuid())
+  tenantId     String
+  code         String
+  name         String
+  description  String?
+  billingCycle BillingCycle @default(monthly)
+  priceCents   Int
+  currency     String       @default("RON")
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignments  ClientPlanAssignment[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+/// Plan tarifar aplicat unui client (activ sau programat).
+model ClientPlanAssignment {
+  id            String                     @id @default(cuid())
+  tenantId      String
+  clientId      String
+  planId        String
+  status        ClientPlanAssignmentStatus @default(active)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  notes         String?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client        Client                     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  plan          PricingPlan                @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([planId])
+  @@index([clientId, status])
 }
 
 model User {
