@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { VehicleDetailLayout } from "@/components/fleet/VehicleDetailLayout";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { loadVehicleDetail } from "@/lib/vehicle-detail-server";
+import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 export default async function EditVehiclePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,8 +15,8 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
     redirect(`/fleet/vehicles/${id}`);
   }
 
-  const data = await loadVehicleDetail(id);
+  const [data, vehicles] = await Promise.all([loadVehicleDetail(id), getVehicleOptions()]);
   if (!data) notFound();
 
-  return <VehicleDetailLayout id={id} data={data} editable canWrite />;
+  return <VehicleDetailLayout data={data} vehicles={vehicles} editable canWrite />;
 }
