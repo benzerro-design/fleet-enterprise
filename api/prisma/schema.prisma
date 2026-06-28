@@ -27,6 +27,7 @@ model Tenant {
   pricingPlans       PricingPlan[]
   clientPlanAssignments ClientPlanAssignment[]
   drivers                Driver[]
+  driverDocuments        DriverDocument[]
   driverVehicleAssignments DriverVehicleAssignment[]
   reminderActions    ReminderAction[]
   maintenancePlanItems MaintenancePlanItem[]
@@ -187,10 +188,31 @@ model Driver {
   client             Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   vehicleAssignments DriverVehicleAssignment[]
   trips              Trip[]
+  documents          DriverDocument[]
 
   @@index([tenantId])
   @@index([clientId])
   @@index([tenantId, status])
+}
+
+/// Documente șofer (permis scan, ADR, medicina muncii, etc.).
+model DriverDocument {
+  id               String    @id @default(cuid())
+  tenantId         String
+  driverId         String
+  documentTypeCode String
+  title            String
+  fileUrl          String
+  fileName         String?
+  expiresOn        DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  driver           Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([driverId])
 }
 
 /// Jurnal alocări șofer ↔ vehicul (trasabilitate cine / când).

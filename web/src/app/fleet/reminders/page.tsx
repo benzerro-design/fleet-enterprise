@@ -1,3 +1,4 @@
+import { DriverLicenseAlertsStrip } from "@/components/fleet/DriverLicenseAlertsStrip";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
@@ -8,6 +9,8 @@ import { RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolba
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { remindersBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
+import type { DriverLicenseAlert } from "@/lib/drivers-api";
+import { fleetServerFetch } from "@/lib/fleet-server";
 
 type Search = {
   page?: string;
@@ -36,9 +39,19 @@ function buildExportQuery(sp: Search): string {
 
 type Props = { searchParams: Promise<Search> };
 
+async function loadDriverLicenseAlerts(): Promise<DriverLicenseAlert[]> {
+  try {
+    const res = await fleetServerFetch("/drivers/license-alerts?limit=8");
+    if (!res?.ok) return [];
+    return (await res.json()) as DriverLicenseAlert[];
+  } catch {
+    return [];
+  }
+}
+
 export default async function FleetRemindersPage({ searchParams }: Props) {
   const sp = await searchParams;
-  const auth = await getAuthMeResult();
+  const [auth, licenseAlerts] = await Promise.all([getAuthMeResult(), loadDriverLicenseAlerts()]);
   const write = canManageFleet(auth);
   const exportQs = buildExportQuery(sp);
   const exportHref = `${remindersBrowserBase}/export${exportQs ? `?${exportQs}` : ""}`;
@@ -137,6 +150,7 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
           </Suspense>
         }
       >
+        <DriverLicenseAlertsStrip alerts={licenseAlerts} />
         <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
           <RemindersListView backHref="/fleet/vehicles" write={write} showStatusToolbar={false} />
         </Suspense>

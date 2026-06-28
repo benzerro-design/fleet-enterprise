@@ -7,6 +7,7 @@ import { DriverStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
+import { licenseExpiryStatus, licenseExpiryWhere, type LicenseExpiryStatus } from './license-expiry';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -22,6 +23,7 @@ export type DriverRecord = {
   licenseNumber: string | null;
   licenseCategories: string | null;
   licenseExpiresOn: string | null;
+  licenseExpiryStatus: LicenseExpiryStatus;
   status: DriverStatus;
   notes: string | null;
   activeVehicleIds: string[];
@@ -65,6 +67,16 @@ export type PatchDriverInput = Partial<Omit<CreateDriverInput, 'clientId'>> & {
   clientId?: string;
 };
 
+export type DriverLicenseAlert = {
+  driverId: string;
+  fullName: string;
+  clientId: string;
+  clientCode: string;
+  licenseExpiresOn: string;
+  licenseExpiryStatus: 'expiring' | 'expired';
+  daysUntilExpiry: number;
+};
+
 export type CreateAssignmentInput = {
   vehicleId: string;
   notes?: string | null;
@@ -86,6 +98,7 @@ export class DriversService {
       q?: string;
       clientId?: string;
       status?: DriverStatus;
+      licenseExpiry?: 'expiring' | 'expired';
     },
   ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
@@ -146,6 +159,44 @@ export class DriversService {
     });
 
     return rows.map((r) => this.toRecord(r));
+  }
+
+  async listLicenseAlerts(tenantSlug: string, limit = 20): Promise<DriverLicenseAlert[]> {
+    const tenant = await this.ensureTenant(tenantSlug);
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const rows = await this.prisma.driver.findMany({
+      where: {
+        tenantId: tenant.id,
+        status: DriverStatus.active,
+        licenseExpiresOn: { not: null },
+      },
+      include: { client: { select: { code: true } } },
+      orderBy: [{ licenseExpiresOn: 'asc' }],
+      take: 500,
+    });
+
+    const alerts: DriverLicenseAlert[] = [];
+    for (const row of rows) {
+      if (!row.licenseExpiresOn) continue;
+      const status = licenseExpiryStatus(row.licenseExpiresOn);
+      if (status !== 'expiring' && status !== 'expired') continue;
+      const exp = new Date(row.licenseExpiresOn);
+      exp.setUTCHours(0, 0, 0, 0);
+      const daysUntilExpiry = Math.round((exp.getTime() - today.getTime()) / 86_400_000);
+      alerts.push({
+        driverId: row.id,
+        fullName: row.fullName,
+        clientId: row.clientId,
+        clientCode: row.client.code,
+        licenseExpiresOn: row.licenseExpiresOn.toISOString(),
+        licenseExpiryStatus: status,
+        daysUntilExpiry,
+      });
+    }
+
+    return alerts.slice(0, Math.min(Math.max(1, limit), 100));
   }
 
   async getById(tenantSlug: string, id: string): Promise<DriverRecord> {
@@ -435,11 +486,27 @@ export class DriversService {
 
   private listWhere(
     tenantId: string,
-    params: { q?: string; clientId?: string; status?: DriverStatus },
+    params: {
+      q?: string;
+      clientId?: string;
+      status?: DriverStatus;
+      licenseExpiry?: 'expiring' | 'expired';
+    },
   ): Prisma.DriverWhereInput {
     const parts: Prisma.DriverWhereInput[] = [{ tenantId }];
     if (params.status) parts.push({ status: params.status });
     if (params.clientId) parts.push({ clientId: params.clientId });
+    if (params.licenseExpiry) {
+      const window = licenseExpiryWhere(params.licenseExpiry);
+      parts.push({
+        licenseExpiresOn: {
+          not: null,
+          ...(window.lt ? { lt: window.lt } : {}),
+          ...(window.gte ? { gte: window.gte } : {}),
+          ...(window.lte ? { lte: window.lte } : {}),
+        },
+      });
+    }
     const q = params.q?.trim();
     if (q) {
       parts.push({
@@ -507,6 +574,7 @@ export class DriversService {
       licenseNumber: row.licenseNumber,
       licenseCategories: row.licenseCategories,
       licenseExpiresOn: row.licenseExpiresOn ? row.licenseExpiresOn.toISOString() : null,
+      licenseExpiryStatus: licenseExpiryStatus(row.licenseExpiresOn),
       status: row.status,
       notes: row.notes,
       activeVehicleIds: row.vehicleAssignments.map((a) => a.vehicle.id),

@@ -11,16 +11,18 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
+import { documentExpiryBadge } from "@/lib/document-expiry";
 import { driverStatusLabel, type DriverListPayload } from "@/lib/drivers-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
-type Search = { q?: string; status?: string; clientId?: string; page?: string };
+type Search = { q?: string; status?: string; clientId?: string; licenseExpiry?: string; page?: string };
 
 async function loadDrivers(sp: Search): Promise<DriverListPayload | null> {
   const p = new URLSearchParams();
   if (sp.q?.trim()) p.set("q", sp.q.trim());
   if (sp.status?.trim()) p.set("status", sp.status.trim());
   if (sp.clientId?.trim()) p.set("clientId", sp.clientId.trim());
+  if (sp.licenseExpiry?.trim()) p.set("licenseExpiry", sp.licenseExpiry.trim());
   p.set("page", String(Math.max(1, parseInt(sp.page ?? "1", 10) || 1)));
   p.set("pageSize", "50");
   try {
@@ -60,6 +62,7 @@ export default async function FleetDriversPage({ searchParams }: PageProps) {
     if (sp.q?.trim()) p.set("q", sp.q.trim());
     if (sp.status?.trim()) p.set("status", sp.status.trim());
     if (sp.clientId?.trim()) p.set("clientId", sp.clientId.trim());
+    if (sp.licenseExpiry?.trim()) p.set("licenseExpiry", sp.licenseExpiry.trim());
     p.set("page", String(next));
     return `/fleet/drivers?${p.toString()}`;
   };
@@ -125,6 +128,18 @@ export default async function FleetDriversPage({ searchParams }: PageProps) {
                 <option value="suspended">Suspendat</option>
               </select>
             </div>
+            <div>
+              <label className="text-xs text-zinc-500">Permis</label>
+              <select
+                name="licenseExpiry"
+                defaultValue={sp.licenseExpiry ?? ""}
+                className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="">Toate</option>
+                <option value="expiring">Expiră în 30 zile</option>
+                <option value="expired">Expirate</option>
+              </select>
+            </div>
             <button
               type="submit"
               className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
@@ -179,12 +194,25 @@ export default async function FleetDriversPage({ searchParams }: PageProps) {
                           : "—"}
                       </td>
                       <td className={`${fleetTdClass} text-sm text-zinc-400`}>
-                        {row.licenseNumber ?? "—"}
-                        {row.licenseExpiresOn ? (
-                          <span className="ml-1 text-xs text-zinc-600">
-                            exp. {new Date(row.licenseExpiresOn).toLocaleDateString("ro-RO")}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>
+                            {row.licenseNumber ?? "—"}
+                            {row.licenseExpiresOn ? (
+                              <span className="ml-1 text-xs text-zinc-600">
+                                exp. {new Date(row.licenseExpiresOn).toLocaleDateString("ro-RO")}
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
+                          {row.licenseExpiryStatus === "expiring" || row.licenseExpiryStatus === "expired" ? (
+                            <span
+                              className={`rounded border px-1.5 py-0.5 text-xs font-medium ${
+                                documentExpiryBadge(row.licenseExpiryStatus).className
+                              }`}
+                            >
+                              {documentExpiryBadge(row.licenseExpiryStatus).label}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className={`${fleetTdClass} text-right`}>
                         <Link href={`/fleet/drivers/${row.id}`} className="mr-3 text-zinc-400 hover:text-zinc-200 hover:underline">

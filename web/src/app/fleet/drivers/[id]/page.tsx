@@ -4,7 +4,8 @@ import { Suspense } from "react";
 import { DriverProfileTabs } from "@/components/fleet/DriverProfileTabs";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
-import { driverStatusLabel, type DriverDetailPayload } from "@/lib/drivers-api";
+import { documentExpiryBadge } from "@/lib/document-expiry";
+import { driverStatusLabel, type DriverDetailPayload, type DriverDocumentRecord } from "@/lib/drivers-api";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
@@ -24,6 +25,16 @@ async function loadDriver(id: string): Promise<DriverDetailPayload | null> {
     return (await res.json()) as DriverDetailPayload;
   } catch {
     return null;
+  }
+}
+
+async function loadDriverDocuments(id: string): Promise<DriverDocumentRecord[]> {
+  try {
+    const res = await fleetServerFetch(`/drivers/${id}/documents`);
+    if (!res?.ok) return [];
+    return (await res.json()) as DriverDocumentRecord[];
+  } catch {
+    return [];
   }
 }
 
@@ -53,10 +64,12 @@ export default async function DriverDetailPage({ params, searchParams }: PagePro
   const { id } = await params;
   const sp = await searchParams;
   const showConsumption = sp.tab === "consumption";
-  const [data, auth, consumption] = await Promise.all([
+  const showDocuments = sp.tab === "documents";
+  const [data, auth, consumption, documents] = await Promise.all([
     loadDriver(id),
     getAuthMeResult(),
     showConsumption ? loadDriverConsumption(id, sp.periodFrom, sp.periodTo) : Promise.resolve(null),
+    showDocuments ? loadDriverDocuments(id) : Promise.resolve([] as DriverDocumentRecord[]),
   ]);
   if (!data) notFound();
 
@@ -78,6 +91,18 @@ export default async function DriverDetailPage({ params, searchParams }: PagePro
             </Link>
             <span className="text-zinc-600">·</span>
             <span>{driverStatusLabel(driver.status)}</span>
+            {driver.licenseExpiryStatus === "expiring" || driver.licenseExpiryStatus === "expired" ? (
+              <>
+                <span className="text-zinc-600">·</span>
+                <span
+                  className={`rounded border px-1.5 py-0.5 text-xs font-medium ${
+                    documentExpiryBadge(driver.licenseExpiryStatus).className
+                  }`}
+                >
+                  Permis {documentExpiryBadge(driver.licenseExpiryStatus).label.toLowerCase()}
+                </span>
+              </>
+            ) : null}
             {driver.employeeCode ? (
               <>
                 <span className="text-zinc-600">·</span>
@@ -133,6 +158,7 @@ export default async function DriverDetailPage({ params, searchParams }: PagePro
         <DriverProfileTabs
           driver={driver}
           assignments={assignments}
+          documents={documents}
           consumption={consumption}
           canWrite={canWrite}
         />

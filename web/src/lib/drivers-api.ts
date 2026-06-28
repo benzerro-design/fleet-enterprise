@@ -2,6 +2,8 @@ export const driversBrowserBase = "/api/drivers";
 
 export type DriverStatus = "active" | "inactive" | "suspended";
 
+export type LicenseExpiryStatus = "none" | "valid" | "expiring" | "expired";
+
 export type DriverRecord = {
   id: string;
   clientId: string;
@@ -14,12 +16,36 @@ export type DriverRecord = {
   licenseNumber: string | null;
   licenseCategories: string | null;
   licenseExpiresOn: string | null;
+  licenseExpiryStatus: LicenseExpiryStatus;
   status: DriverStatus;
   notes: string | null;
   activeVehicleIds: string[];
   activeVehicleRegistrations: string[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type DriverDocumentRecord = {
+  id: string;
+  driverId: string;
+  documentTypeCode: string;
+  title: string;
+  fileUrl: string;
+  fileName: string | null;
+  expiresOn: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DriverLicenseAlert = {
+  driverId: string;
+  fullName: string;
+  clientId: string;
+  clientCode: string;
+  licenseExpiresOn: string;
+  licenseExpiryStatus: "expiring" | "expired";
+  daysUntilExpiry: number;
 };
 
 export type DriverAssignmentRecord = {

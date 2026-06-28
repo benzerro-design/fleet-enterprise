@@ -4,15 +4,18 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { DriverAssignmentsPanel } from "@/components/fleet/DriverAssignmentsPanel";
+import { DriverDocumentsPanel } from "@/components/fleet/DriverDocumentsPanel";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
-import { driverStatusLabel, type DriverAssignmentRecord, type DriverRecord } from "@/lib/drivers-api";
+import { documentExpiryBadge } from "@/lib/document-expiry";
+import { driverStatusLabel, type DriverAssignmentRecord, type DriverDocumentRecord, type DriverRecord } from "@/lib/drivers-api";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
 
-export type DriverProfileTab = "overview" | "vehicles" | "consumption";
+export type DriverProfileTab = "overview" | "vehicles" | "documents" | "consumption";
 
 const TABS: { id: DriverProfileTab; label: string }[] = [
   { id: "overview", label: "Profil" },
   { id: "vehicles", label: "Istoric vehicule" },
+  { id: "documents", label: "Documente" },
   { id: "consumption", label: "Consum" },
 ];
 
@@ -26,17 +29,18 @@ function formatDate(iso: string | null): string {
 type Props = {
   driver: DriverRecord;
   assignments: DriverAssignmentRecord[];
+  documents: DriverDocumentRecord[];
   consumption: ConsumptionPayload | null;
   canWrite: boolean;
 };
 
-export function DriverProfileTabs({ driver, assignments, consumption, canWrite }: Props) {
+export function DriverProfileTabs({ driver, assignments, documents, consumption, canWrite }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const active = useMemo((): DriverProfileTab => {
     const t = searchParams.get("tab");
-    if (t === "consumption" || t === "vehicles") return t;
+    if (t === "consumption" || t === "vehicles" || t === "documents") return t;
     return "overview";
   }, [searchParams]);
 
@@ -85,6 +89,8 @@ export function DriverProfileTabs({ driver, assignments, consumption, canWrite }
           initialAssignments={assignments}
           canWrite={canWrite}
         />
+      ) : active === "documents" ? (
+        <DriverDocumentsPanel driverId={driver.id} initialDocuments={documents} canWrite={canWrite} />
       ) : (
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
           <h2 className="text-sm font-medium text-zinc-300">Date contact & permis</h2>
@@ -121,7 +127,18 @@ export function DriverProfileTabs({ driver, assignments, consumption, canWrite }
             </div>
             <div>
               <dt className="text-xs text-zinc-500">Expirare permis</dt>
-              <dd className="mt-0.5 text-sm text-zinc-200">{formatDate(driver.licenseExpiresOn)}</dd>
+              <dd className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-zinc-200">
+                {formatDate(driver.licenseExpiresOn)}
+                {driver.licenseExpiryStatus === "expiring" || driver.licenseExpiryStatus === "expired" ? (
+                  <span
+                    className={`rounded border px-2 py-0.5 text-xs font-medium ${
+                      documentExpiryBadge(driver.licenseExpiryStatus).className
+                    }`}
+                  >
+                    {documentExpiryBadge(driver.licenseExpiryStatus).label}
+                  </span>
+                ) : null}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-zinc-500">Status</dt>
