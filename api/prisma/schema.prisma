@@ -38,6 +38,11 @@ model Client {
   code      String
   legalName String
   taxId     String?
+  contactEmail   String?
+  contactPhone   String?
+  addressLine    String?
+  tradeRegister  String?
+  billingNotes   String?
   status    ClientStatus @default(active)
   notes     String?
   createdAt DateTime     @default(now())

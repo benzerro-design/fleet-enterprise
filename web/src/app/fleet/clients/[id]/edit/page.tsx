@@ -27,8 +27,8 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
   return (
     <FleetPageMain narrow="sm">
       <div className="mb-8">
-        <Link href="/fleet/clients" className="text-sm text-zinc-400 hover:text-zinc-200">
-          ← Clienți
+        <Link href={`/fleet/clients/${client.id}`} className="text-sm text-zinc-400 hover:text-zinc-200">
+          ← Client {client.code}
         </Link>
         <h1 className="mt-4 text-2xl font-semibold">Editare client</h1>
         <p className="mt-1 font-mono text-sm text-zinc-500">{client.code}</p>

@@ -10,11 +10,17 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
-import type { ClientListPayload } from "@/lib/clients-api";
+import { clientsBrowserBase, type ClientListPayload } from "@/lib/clients-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
 type Search = { q?: string; status?: string; page?: string };
+
+function healthBadgeClass(label: string | undefined): string {
+  if (!label || label === "OK") return "text-emerald-400";
+  if (label === "ITP") return "text-amber-400";
+  return "text-rose-400";
+}
 
 async function loadClients(sp: Search): Promise<ClientListPayload | null> {
   const p = new URLSearchParams();
@@ -38,6 +44,10 @@ export default async function FleetClientsPage({ searchParams }: PageProps) {
   const [list, auth] = await Promise.all([loadClients(sp), getAuthMeResult()]);
   const write = canManageFleet(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const exportQs = new URLSearchParams();
+  if (sp.q?.trim()) exportQs.set("q", sp.q.trim());
+  if (sp.status?.trim()) exportQs.set("status", sp.status.trim());
+  const exportHref = `${clientsBrowserBase}/export?${exportQs.toString()}`;
 
   const withPage = (next: number) => {
     const p = new URLSearchParams();
@@ -60,13 +70,28 @@ export default async function FleetClientsPage({ searchParams }: PageProps) {
               </p>
             </div>
             {write ? (
-              <Link
-                href="/fleet/clients/new"
-                className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={exportHref}
+                  className="inline-flex items-center justify-center rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
+                >
+                  Export CSV
+                </a>
+                <Link
+                  href="/fleet/clients/new"
+                  className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Client nou
+                </Link>
+              </div>
+            ) : (
+              <a
+                href={exportHref}
+                className="inline-flex items-center justify-center rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
               >
-                Client nou
-              </Link>
-            ) : null}
+                Export CSV
+              </a>
+            )}
           </div>
         }
         filters={
@@ -117,18 +142,33 @@ export default async function FleetClientsPage({ searchParams }: PageProps) {
                 <th className={fleetThClass}>CUI</th>
                 <th className={fleetThClass}>Status</th>
                 <th className={fleetThClass}>Vehicule</th>
+                <th className={fleetThClass}>Sănătate</th>
                 <th className={fleetThClass} />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/80">
               {list.items.map((row) => (
                 <tr key={row.id} className="text-zinc-200">
-                  <td className={`${fleetTdClass} font-mono text-emerald-300/90`}>{row.code}</td>
-                  <td className={fleetTdClass}>{row.legalName}</td>
+                  <td className={`${fleetTdClass} font-mono`}>
+                    <Link href={`/fleet/clients/${row.id}`} className="text-emerald-300/90 hover:underline">
+                      {row.code}
+                    </Link>
+                  </td>
+                  <td className={fleetTdClass}>
+                    <Link href={`/fleet/clients/${row.id}`} className="hover:text-emerald-200 hover:underline">
+                      {row.legalName}
+                    </Link>
+                  </td>
                   <td className={`${fleetTdClass} font-mono text-zinc-400`}>{row.taxId ?? "—"}</td>
                   <td className={`${fleetTdClass} capitalize`}>{row.status}</td>
                   <td className={fleetTdClass}>{row.vehicleCount}</td>
+                  <td className={`${fleetTdClass} text-sm font-medium ${healthBadgeClass(row.healthLabel)}`}>
+                    {row.healthLabel ?? "OK"}
+                  </td>
                   <td className={`${fleetTdClass} text-right`}>
+                    <Link href={`/fleet/clients/${row.id}`} className="mr-3 text-zinc-400 hover:text-zinc-200 hover:underline">
+                      Detalii
+                    </Link>
                     {write ? (
                       <Link
                         href={`/fleet/clients/${row.id}/edit`}
@@ -136,9 +176,7 @@ export default async function FleetClientsPage({ searchParams }: PageProps) {
                       >
                         Editare
                       </Link>
-                    ) : (
-                      <span className="text-zinc-600">—</span>
-                    )}
+                    ) : null}
                   </td>
                 </tr>
               ))}

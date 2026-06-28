@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
@@ -42,6 +43,27 @@ export class ClientsController {
       q: q?.trim(),
       status: parseClientStatus(status),
     });
+  }
+
+  @Get('export')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="clients.csv"')
+  export(
+    @TenantId() tenantSlug: string,
+    @Query('q') q?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.clients.exportCsv(tenantSlug, {
+      q: q?.trim(),
+      status: parseClientStatus(status),
+    });
+  }
+
+  @Get(':id/summary')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  summary(@TenantId() tenantSlug: string, @Param('id') id: string) {
+    return this.clients.getSummary(tenantSlug, id);
   }
 
   @Get(':id')
