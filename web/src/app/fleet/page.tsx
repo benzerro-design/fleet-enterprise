@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+import { getAuthMeResult, getDefaultFleetHome } from "@/lib/auth-server";
 
-export default function FleetIndexPage() {
-  redirect("/fleet/dashboard");
+export default async function FleetIndexPage() {
+  const auth = await getAuthMeResult();
+  redirect(getDefaultFleetHome(auth));
 }

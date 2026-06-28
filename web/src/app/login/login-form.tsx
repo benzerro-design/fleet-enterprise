@@ -39,8 +39,21 @@ export function LoginForm({ nextPath }: Props) {
         setError(msg);
         return;
       }
-      // replace + refresh: cookie httpOnly vizibil pentru RSC; fără push dublu în istoric
-      router.replace(nextPath);
+
+      let destination = nextPath;
+      try {
+        const meRes = await fetch("/api/auth/me");
+        if (meRes.ok) {
+          const me = (await meRes.json()) as { role?: string };
+          if (me.role === "client_user") {
+            destination = "/fleet/tickets";
+          }
+        }
+      } catch {
+        /* fallback nextPath */
+      }
+
+      router.replace(destination);
       router.refresh();
     } catch {
       setError("Nu m-am putut conecta la server.");

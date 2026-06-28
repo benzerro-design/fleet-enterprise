@@ -15,6 +15,7 @@ type FleetShellProps = {
   userEmail?: string;
   readOnly?: boolean;
   authBanner?: React.ReactNode;
+  homeHref?: string;
 };
 
 function mobileTabActive(pathname: string, prefixes: string[]): boolean {
@@ -30,6 +31,7 @@ export function FleetShell({
   userEmail,
   readOnly,
   authBanner,
+  homeHref = "/fleet/dashboard",
 }: FleetShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "";
@@ -58,7 +60,7 @@ export function FleetShell({
       {/* Desktop sidebar */}
       <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
         <div className="shrink-0 border-b border-zinc-800 px-4 py-4">
-          <Link href="/fleet/dashboard" className="block">
+          <Link href={homeHref} className="block">
             <p className="text-sm font-semibold text-zinc-100">Fleet Enterprise</p>
             {tenantSlug ? (
               <p className="mt-0.5 font-mono text-xs text-zinc-500">tenant: {tenantSlug}</p>

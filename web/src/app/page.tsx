@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { getAuthMeResult } from "@/lib/auth-server";
+import { getAuthMeResult, getDefaultFleetHome } from "@/lib/auth-server";
 
-/** Intrare aplicație: autentificat → dashboard; altfel → login (fără pagină MVP publică). */
+/** Intrare aplicație: autentificat → home pe rol; altfel → login. */
 export default async function Home() {
   const auth = await getAuthMeResult();
   if (auth.ok) {
-    redirect("/fleet/dashboard");
+    redirect(getDefaultFleetHome(auth));
   }
   redirect("/login");
 }

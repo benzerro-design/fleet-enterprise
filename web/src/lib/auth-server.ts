@@ -52,3 +52,9 @@ export function canWriteTickets(auth: AuthMeResult): boolean {
 export function isClientPortalUser(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "client_user";
 }
+
+/** Pagină implicită după login — userii client merg la tichete, nu la panou. */
+export function getDefaultFleetHome(auth: AuthMeResult): string {
+  if (isClientPortalUser(auth)) return "/fleet/tickets";
+  return "/fleet/dashboard";
+}

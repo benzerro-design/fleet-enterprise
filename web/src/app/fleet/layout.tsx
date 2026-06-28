@@ -1,5 +1,5 @@
 import { FleetShell } from "@/components/fleet/FleetShell";
-import { canManageFleet, getAuthMeResult, isClientPortalUser } from "@/lib/auth-server";
+import { canManageFleet, getAuthMeResult, getDefaultFleetHome, isClientPortalUser } from "@/lib/auth-server";
 import { getFleetNavForUser } from "@/lib/fleet-nav";
 
 export default async function FleetLayout({ children }: { children: React.ReactNode }) {
@@ -30,6 +30,7 @@ export default async function FleetLayout({ children }: { children: React.ReactN
       userEmail={auth.ok ? auth.me.email : undefined}
       readOnly={auth.ok && auth.me.role === "tenant_viewer"}
       authBanner={authBanner}
+      homeHref={getDefaultFleetHome(auth)}
     >
       {children}
     </FleetShell>
