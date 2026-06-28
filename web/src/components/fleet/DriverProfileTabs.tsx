@@ -5,17 +5,21 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { DriverAssignmentsPanel } from "@/components/fleet/DriverAssignmentsPanel";
 import { DriverDocumentsPanel } from "@/components/fleet/DriverDocumentsPanel";
+import { DriverTripsPanel, type DriverTripsSearch } from "@/components/fleet/DriverTripsPanel";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { documentExpiryBadge } from "@/lib/document-expiry";
 import { driverStatusLabel, type DriverAssignmentRecord, type DriverDocumentRecord, type DriverRecord } from "@/lib/drivers-api";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
 
-export type DriverProfileTab = "overview" | "vehicles" | "documents" | "consumption";
+import type { DriverTripListPayload } from "@/lib/trips-api";
+
+export type DriverProfileTab = "overview" | "vehicles" | "documents" | "trips" | "consumption";
 
 const TABS: { id: DriverProfileTab; label: string }[] = [
   { id: "overview", label: "Profil" },
   { id: "vehicles", label: "Istoric vehicule" },
   { id: "documents", label: "Documente" },
+  { id: "trips", label: "Curse" },
   { id: "consumption", label: "Consum" },
 ];
 
@@ -30,17 +34,27 @@ type Props = {
   driver: DriverRecord;
   assignments: DriverAssignmentRecord[];
   documents: DriverDocumentRecord[];
+  trips: DriverTripListPayload | null;
+  tripsSearch: DriverTripsSearch;
   consumption: ConsumptionPayload | null;
   canWrite: boolean;
 };
 
-export function DriverProfileTabs({ driver, assignments, documents, consumption, canWrite }: Props) {
+export function DriverProfileTabs({
+  driver,
+  assignments,
+  documents,
+  trips,
+  tripsSearch,
+  consumption,
+  canWrite,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const active = useMemo((): DriverProfileTab => {
     const t = searchParams.get("tab");
-    if (t === "consumption" || t === "vehicles" || t === "documents") return t;
+    if (t === "consumption" || t === "vehicles" || t === "documents" || t === "trips") return t;
     return "overview";
   }, [searchParams]);
 
@@ -91,6 +105,13 @@ export function DriverProfileTabs({ driver, assignments, documents, consumption,
         />
       ) : active === "documents" ? (
         <DriverDocumentsPanel driverId={driver.id} initialDocuments={documents} canWrite={canWrite} />
+      ) : active === "trips" ? (
+        <DriverTripsPanel
+          driverId={driver.id}
+          data={trips}
+          canWrite={canWrite}
+          search={tripsSearch}
+        />
       ) : (
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
           <h2 className="text-sm font-medium text-zinc-300">Date contact & permis</h2>

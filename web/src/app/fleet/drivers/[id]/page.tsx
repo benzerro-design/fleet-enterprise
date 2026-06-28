@@ -7,6 +7,8 @@ import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { documentExpiryBadge } from "@/lib/document-expiry";
 import { driverStatusLabel, type DriverDetailPayload, type DriverDocumentRecord } from "@/lib/drivers-api";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
+import { buildDriverTripsQuery, type DriverTripListPayload } from "@/lib/trips-api";
+import type { DriverTripsSearch } from "@/components/fleet/DriverTripsPanel";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
 function defaultConsumptionPeriod(): { from: string; to: string } {
@@ -55,9 +57,38 @@ async function loadDriverConsumption(
   }
 }
 
+async function loadDriverTrips(
+  driverId: string,
+  search: DriverTripsSearch,
+): Promise<DriverTripListPayload | null> {
+  try {
+    const qs = buildDriverTripsQuery(driverId, {
+      page: search.page,
+      startedFrom: search.startedFrom,
+      startedTo: search.startedTo,
+      q: search.q,
+      ended: search.ended,
+    });
+    const res = await fleetServerFetch(`/trips?${qs}`);
+    if (!res?.ok) return null;
+    return (await res.json()) as DriverTripListPayload;
+  } catch {
+    return null;
+  }
+}
+
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; periodFrom?: string; periodTo?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    periodFrom?: string;
+    periodTo?: string;
+    page?: string;
+    startedFrom?: string;
+    startedTo?: string;
+    q?: string;
+    ended?: string;
+  }>;
 };
 
 export default async function DriverDetailPage({ params, searchParams }: PageProps) {
@@ -65,11 +96,20 @@ export default async function DriverDetailPage({ params, searchParams }: PagePro
   const sp = await searchParams;
   const showConsumption = sp.tab === "consumption";
   const showDocuments = sp.tab === "documents";
-  const [data, auth, consumption, documents] = await Promise.all([
+  const showTrips = sp.tab === "trips";
+  const tripsSearch: DriverTripsSearch = {
+    page: Math.max(1, parseInt(sp.page ?? "1", 10) || 1),
+    startedFrom: sp.startedFrom,
+    startedTo: sp.startedTo,
+    q: sp.q,
+    ended: sp.ended === "open" || sp.ended === "closed" ? sp.ended : undefined,
+  };
+  const [data, auth, consumption, documents, trips] = await Promise.all([
     loadDriver(id),
     getAuthMeResult(),
     showConsumption ? loadDriverConsumption(id, sp.periodFrom, sp.periodTo) : Promise.resolve(null),
     showDocuments ? loadDriverDocuments(id) : Promise.resolve([] as DriverDocumentRecord[]),
+    showTrips ? loadDriverTrips(id, tripsSearch) : Promise.resolve(null),
   ]);
   if (!data) notFound();
 
@@ -159,6 +199,8 @@ export default async function DriverDetailPage({ params, searchParams }: PagePro
           driver={driver}
           assignments={assignments}
           documents={documents}
+          trips={trips}
+          tripsSearch={tripsSearch}
           consumption={consumption}
           canWrite={canWrite}
         />
