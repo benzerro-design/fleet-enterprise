@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toDatetimeLocalInput, toIsoFromDatetimeLocal } from "@/lib/datetime-local";
 import { TRIP_PURPOSE_OPTIONS, TRIP_ROAD_TYPE_OPTIONS } from "@/lib/trip-ops";
+import { DriverSelect } from "@/components/fleet/DriverSelect";
 
 type TripRecord = {
   id: string;
@@ -31,6 +32,7 @@ type TripRecord = {
   roadType?: string | null;
   odometerStartKm?: number | null;
   odometerEndKm?: number | null;
+  driverId?: string | null;
   driverName?: string | null;
 };
 
@@ -90,7 +92,7 @@ export function TripForm(props: Props) {
         roadType: "",
         odometerStartKm: "",
         odometerEndKm: "",
-        driverName: "",
+        driverId: "",
       };
     }
     const t = props.initial;
@@ -106,7 +108,7 @@ export function TripForm(props: Props) {
       roadType: t.roadType ?? "",
       odometerStartKm: t.odometerStartKm != null ? String(t.odometerStartKm) : "",
       odometerEndKm: t.odometerEndKm != null ? String(t.odometerEndKm) : "",
-      driverName: t.driverName ?? "",
+      driverId: t.driverId ?? "",
     };
   }, [props]);
 
@@ -126,7 +128,7 @@ export function TripForm(props: Props) {
   const [roadType, setRoadType] = useState(initial.roadType);
   const [odometerStartKm, setOdometerStartKm] = useState(initial.odometerStartKm);
   const [odometerEndKm, setOdometerEndKm] = useState(initial.odometerEndKm);
-  const [driverName, setDriverName] = useState(initial.driverName);
+  const [driverId, setDriverId] = useState(initial.driverId);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
@@ -138,6 +140,7 @@ export function TripForm(props: Props) {
   const distanceFromOdometer = computedDistanceKm != null;
 
   const tripSyncOdometerKm = odometerEndKm.trim() || odometerStartKm.trim();
+  const clientCode = selectedVehicle?.clientId ?? "";
 
   useEffect(() => {
     if (computedDistanceKm != null) {
@@ -213,7 +216,7 @@ export function TripForm(props: Props) {
       roadType: roadType.trim() ? roadType.trim() : null,
       odometerStartKm: odoStart,
       odometerEndKm: odoEnd,
-      driverName: driverName.trim() || null,
+      driverId: driverId.trim() || null,
     };
 
     try {
@@ -311,8 +314,8 @@ export function TripForm(props: Props) {
                 ))}
               </select>
             </OpsFormField>
-            <OpsFormField label="Conducător">
-              <input value={driverName} onChange={(e) => setDriverName(e.target.value)} className={OPS_INPUT_CLASS} />
+            <OpsFormField label="Șofer">
+              <DriverSelect clientCode={clientCode} value={driverId} onChange={setDriverId} />
             </OpsFormField>
             <div className="sm:col-span-2">
               <OpsOdometerKmHint
@@ -415,10 +418,7 @@ export function TripForm(props: Props) {
           <input type="number" min={0} step={1} value={odometerEndKm} onChange={(e) => setOdometerEndKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
         </div>
       </div>
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Conducător (text liber)</label>
-        <input value={driverName} onChange={(e) => setDriverName(e.target.value)} placeholder="Până la modulul Client" className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
-      </div>
+      <DriverSelect clientCode={clientCode} value={driverId} onChange={setDriverId} />
       <OpsOdometerKmHint
         odometerKm={tripSyncOdometerKm}
         vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}

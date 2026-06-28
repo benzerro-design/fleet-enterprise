@@ -1,10 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { DriverAssignmentsPanel } from "@/components/fleet/DriverAssignmentsPanel";
+import { Suspense } from "react";
+import { DriverProfileTabs } from "@/components/fleet/DriverProfileTabs";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { driverStatusLabel, type DriverDetailPayload } from "@/lib/drivers-api";
+import type { ConsumptionPayload } from "@/lib/consumption-types";
 import { fleetServerFetch } from "@/lib/fleet-server";
+
+function defaultConsumptionPeriod(): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: now.toISOString().slice(0, 10),
+  };
+}
 
 async function loadDriver(id: string): Promise<DriverDetailPayload | null> {
   try {
@@ -16,16 +27,37 @@ async function loadDriver(id: string): Promise<DriverDetailPayload | null> {
   }
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
+async function loadDriverConsumption(
+  id: string,
+  periodFrom?: string,
+  periodTo?: string,
+): Promise<ConsumptionPayload | null> {
+  const defaults = defaultConsumptionPeriod();
+  const from = periodFrom?.trim() || defaults.from;
+  const to = periodTo?.trim() || defaults.to;
+  try {
+    const res = await fleetServerFetch(`/drivers/${id}/consumption?from=${from}&to=${to}`);
+    if (!res?.ok) return null;
+    return (await res.json()) as ConsumptionPayload;
+  } catch {
+    return null;
+  }
 }
 
-export default async function DriverDetailPage({ params }: { params: Promise<{ id: string }> }) {
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; periodFrom?: string; periodTo?: string }>;
+};
+
+export default async function DriverDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const [data, auth] = await Promise.all([loadDriver(id), getAuthMeResult()]);
+  const sp = await searchParams;
+  const showConsumption = sp.tab === "consumption";
+  const [data, auth, consumption] = await Promise.all([
+    loadDriver(id),
+    getAuthMeResult(),
+    showConsumption ? loadDriverConsumption(id, sp.periodFrom, sp.periodTo) : Promise.resolve(null),
+  ]);
   if (!data) notFound();
 
   const { driver, assignments } = data;
@@ -52,6 +84,12 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
                 <span className="font-mono">{driver.employeeCode}</span>
               </>
             ) : null}
+            {driver.activeVehicleRegistrations.length > 0 ? (
+              <>
+                <span className="text-zinc-600">·</span>
+                <span className="font-mono text-zinc-500">{driver.activeVehicleRegistrations.join(", ")}</span>
+              </>
+            ) : null}
           </p>
         </div>
         {canWrite ? (
@@ -64,50 +102,41 @@ export default async function DriverDetailPage({ params }: { params: Promise<{ i
         ) : null}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-          <h2 className="text-sm font-medium text-zinc-300">Date contact & permis</h2>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <dt className="text-xs text-zinc-500">Telefon</dt>
-              <dd className="mt-0.5 text-sm text-zinc-200">{driver.phone ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">Email</dt>
-              <dd className="mt-0.5 text-sm text-zinc-200">{driver.email ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">Nr. permis</dt>
-              <dd className="mt-0.5 text-sm text-zinc-200">{driver.licenseNumber ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">Categorii</dt>
-              <dd className="mt-0.5 text-sm text-zinc-200">{driver.licenseCategories ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">Expirare permis</dt>
-              <dd className="mt-0.5 text-sm text-zinc-200">{formatDate(driver.licenseExpiresOn)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">Client</dt>
-              <dd className="mt-0.5 text-sm text-zinc-200">{driver.clientLegalName}</dd>
-            </div>
-          </dl>
-          {driver.notes?.trim() ? (
-            <div className="mt-4">
-              <p className="text-xs text-zinc-500">Note</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-300">{driver.notes}</p>
-            </div>
-          ) : null}
-        </section>
+      {showConsumption ? (
+        <form method="get" className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+          <input type="hidden" name="tab" value="consumption" />
+          <div>
+            <label className="text-xs text-zinc-500">De la</label>
+            <input
+              name="periodFrom"
+              type="date"
+              defaultValue={sp.periodFrom ?? defaultConsumptionPeriod().from}
+              className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-zinc-500">Până la</label>
+            <input
+              name="periodTo"
+              type="date"
+              defaultValue={sp.periodTo ?? defaultConsumptionPeriod().to}
+              className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+            />
+          </div>
+          <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
+            Aplică
+          </button>
+        </form>
+      ) : null}
 
-        <DriverAssignmentsPanel
-          driverId={driver.id}
-          clientCode={driver.clientCode}
-          initialAssignments={assignments}
+      <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă profilul…</p>}>
+        <DriverProfileTabs
+          driver={driver}
+          assignments={assignments}
+          consumption={consumption}
           canWrite={canWrite}
         />
-      </div>
+      </Suspense>
     </FleetPageMain>
   );
 }

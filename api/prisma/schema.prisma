@@ -186,6 +186,7 @@ model Driver {
   tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client             Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   vehicleAssignments DriverVehicleAssignment[]
+  trips              Trip[]
 
   @@index([tenantId])
   @@index([clientId])
@@ -371,13 +372,17 @@ model Trip {
   roadType         TripRoadType?
   odometerStartKm  Int?
   odometerEndKm    Int?
-  /// Conducător (text liber până la modulul Client).
+  /// Conducător (text liber pentru istoric / fallback).
   driverName       String?
+  /// FK opțional către entitatea Șofer.
+  driverId         String?
   tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle          Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driver           Driver?        @relation(fields: [driverId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([vehicleId])
+  @@index([driverId])
 }
 
 enum TripSheetDocType {

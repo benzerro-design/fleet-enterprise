@@ -67,7 +67,8 @@ export class TripsController {
       ? vehicleIdsRaw.split(',').map((id) => id.trim()).filter(Boolean)
       : undefined;
     const fuelTypes = parseFuelTypesCsv(q['fuelTypes']);
-    return this.trips.getConsumption(tenantSlug, { from, to, vehicleIds, fuelTypes });
+    const driverId = q['driverId']?.trim();
+    return this.trips.getConsumption(tenantSlug, { from, to, vehicleIds, fuelTypes, driverId });
   }
 
   @Get(':tripId')
@@ -119,6 +120,7 @@ function parseTripBrowseQuery(q: Record<string, string | undefined>): TripBrowse
   const startedFrom = q['startedFrom']?.trim();
   const startedTo = q['startedTo']?.trim();
   const endedRaw = q['ended']?.trim();
+  const driverId = q['driverId']?.trim();
   let ended: TripBrowseFilters['ended'];
   if (endedRaw === 'open' || endedRaw === 'closed') {
     ended = endedRaw;
@@ -126,6 +128,7 @@ function parseTripBrowseQuery(q: Record<string, string | undefined>): TripBrowse
   return {
     ...(registrationNumber ? { registrationNumber } : {}),
     ...(clientId ? { clientId } : {}),
+    ...(driverId ? { driverId } : {}),
     ...(searchQ ? { q: searchQ } : {}),
     ...(startedFrom ? { startedFrom } : {}),
     ...(startedTo ? { startedTo } : {}),
@@ -153,6 +156,7 @@ function assertCreateTripDto(body: unknown): CreateTripInput {
     roadType: optionalTripRoadType(body.roadType),
     odometerStartKm: optionalNonNegativeInt(body.odometerStartKm, 'odometerStartKm') ?? null,
     odometerEndKm: optionalNonNegativeInt(body.odometerEndKm, 'odometerEndKm') ?? null,
+    driverId: optionalNullableCuid(body.driverId, 'driverId'),
     driverName: optionalNullableString(body.driverName),
   };
 }
@@ -200,6 +204,7 @@ function assertPatchTripDto(body: unknown): PatchTripInput {
       dto.odometerEndKm = optionalNonNegativeInt(body.odometerEndKm, 'odometerEndKm') ?? null;
     }
   }
+  if ('driverId' in body) dto.driverId = optionalNullableCuid(body.driverId, 'driverId');
   if ('driverName' in body) dto.driverName = optionalNullableString(body.driverName);
 
   if (Object.keys(dto).length === 0) {
@@ -264,6 +269,16 @@ function optionalNonNegativeInt(v: unknown, field: string): number | undefined {
 
 const TRIP_PURPOSES: TripPurpose[] = ['business', 'personal', 'mixed'];
 const TRIP_ROAD_TYPES: TripRoadType[] = ['urban', 'extra_urban', 'highway', 'mixed'];
+
+function optionalNullableCuid(v: unknown, field: string): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== 'string') {
+    throw new BadRequestException(`Field "${field}" must be a string or null`);
+  }
+  const s = v.trim();
+  return s.length === 0 ? null : s;
+}
 
 function optionalTripPurpose(v: unknown): TripPurpose | null | undefined {
   if (v === undefined) return undefined;

@@ -90,6 +90,7 @@ export type ConsumptionPayload = {
   vehicleScope: "all" | "selected";
   selectedVehicleCount: number;
   fuelTypeFilter: FuelTypeValue[] | null;
+  driverIdFilter?: string | null;
   summary: ConsumptionSummary;
   summaryByFuelType: ConsumptionFuelTypeSummary[];
   weekly: ConsumptionWeeklyBucket[];

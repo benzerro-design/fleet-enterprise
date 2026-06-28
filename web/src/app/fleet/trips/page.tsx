@@ -14,6 +14,7 @@ import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { TripSheetDocumentsList } from "@/components/fleet/TripSheetDocumentsList";
 import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
 import { ConsumptionFilterForm } from "@/components/fleet/ConsumptionFilterForm";
+import { DriverFilterSelect } from "@/components/fleet/DriverFilterSelect";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -22,6 +23,7 @@ import { filterFormKey } from "@/lib/filter-form-key";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
+import type { DriverRecord } from "@/lib/drivers-api";
 import { parseFuelTypesCsv } from "@/lib/fuel-types";
 import { TRIP_SHEET_DOC_TYPES } from "@/lib/trip-ops";
 
@@ -40,6 +42,7 @@ type Search = {
   periodTo?: string;
   vehicleIds?: string;
   fuelTypes?: string;
+  driverId?: string;
   createdFrom?: string;
   createdTo?: string;
 };
@@ -56,6 +59,8 @@ type TripRow = {
   originLabel: string | null;
   destLabel: string | null;
   distanceKm: number | null;
+  driverId: string | null;
+  driverName: string | null;
 };
 
 type TripListPayload = { items: TripRow[]; total: number; page: number; pageSize: number };
@@ -130,6 +135,7 @@ function buildQuery(sp: Search): string {
   q.set("pageSize", "20");
   if (sp.registrationNumber?.trim()) q.set("registrationNumber", sp.registrationNumber.trim());
   if (sp.clientId?.trim()) q.set("clientId", sp.clientId.trim());
+  if (sp.driverId?.trim()) q.set("driverId", sp.driverId.trim());
   if (sp.q?.trim()) q.set("q", sp.q.trim());
   if (sp.startedFrom?.trim()) q.set("startedFrom", sp.startedFrom.trim());
   if (sp.startedTo?.trim()) q.set("startedTo", sp.startedTo.trim());
@@ -141,6 +147,7 @@ function buildExportQuery(sp: Search): string {
   const q = new URLSearchParams();
   if (sp.registrationNumber?.trim()) q.set("registrationNumber", sp.registrationNumber.trim());
   if (sp.clientId?.trim()) q.set("clientId", sp.clientId.trim());
+  if (sp.driverId?.trim()) q.set("driverId", sp.driverId.trim());
   if (sp.q?.trim()) q.set("q", sp.q.trim());
   if (sp.startedFrom?.trim()) q.set("startedFrom", sp.startedFrom.trim());
   if (sp.startedTo?.trim()) q.set("startedTo", sp.startedTo.trim());
@@ -161,6 +168,7 @@ function buildTripSheetsQuery(sp: Search): string {
   q.set("pageSize", "20");
   if (sp.registrationNumber?.trim()) q.set("registrationNumber", sp.registrationNumber.trim());
   if (sp.clientId?.trim()) q.set("clientId", sp.clientId.trim());
+  if (sp.driverId?.trim()) q.set("driverId", sp.driverId.trim());
   if (sp.q?.trim()) q.set("q", sp.q.trim());
   if (sp.docType === "trip_sheet" || sp.docType === "faz_monthly") q.set("docType", sp.docType);
   if (sp.periodFrom?.trim()) q.set("periodFrom", sp.periodFrom.trim());
@@ -183,9 +191,17 @@ async function fetchConsumption(sp: Search): Promise<ConsumptionPayload | null> 
   const q = new URLSearchParams({ from, to });
   if (sp.vehicleIds?.trim()) q.set("vehicleIds", sp.vehicleIds.trim());
   if (sp.fuelTypes?.trim()) q.set("fuelTypes", sp.fuelTypes.trim());
+  if (sp.driverId?.trim()) q.set("driverId", sp.driverId.trim());
   const res = await fleetServerFetch(`/trips/consumption?${q}`);
   if (!res?.ok) return null;
   return (await res.json()) as ConsumptionPayload;
+}
+
+async function fetchDriverOptions(): Promise<DriverRecord[]> {
+  const res = await fleetServerFetch("/drivers?status=active&pageSize=200");
+  if (!res?.ok) return [];
+  const data = (await res.json()) as { items: DriverRecord[] };
+  return data.items;
 }
 
 async function fetchVehicleOptions(): Promise<VehicleOption[]> {
@@ -223,11 +239,13 @@ export default async function TripsPage({ searchParams }: Props) {
   const consumptionPeriodTo = sp.periodTo?.trim() || consumptionDefaults.to;
   const selectedVehicleIds = parseSelectedVehicleIds(sp.vehicleIds);
   const selectedFuelTypes = parseFuelTypesCsv(sp.fuelTypes);
-  const [data, auth, documents, vehicles, consumption] = await Promise.all([
+  const selectedDriverId = sp.driverId?.trim() ?? "";
+  const [data, auth, documents, vehicles, drivers, consumption] = await Promise.all([
     showTrips ? fetchTrips(sp) : Promise.resolve(null),
     getAuthMeResult(),
     showDocuments ? fetchTripSheets(sp) : Promise.resolve(null),
     fetchVehicleOptions(),
+    fetchDriverOptions(),
     showConsumption ? fetchConsumption(sp) : Promise.resolve(null),
   ]);
   const write = canManageFleet(auth);
@@ -244,6 +262,7 @@ export default async function TripsPage({ searchParams }: Props) {
     p.set("page", String(nextPage));
     if (sp.registrationNumber?.trim()) p.set("registrationNumber", sp.registrationNumber.trim());
     if (sp.clientId?.trim()) p.set("clientId", sp.clientId.trim());
+    if (sp.driverId?.trim()) p.set("driverId", sp.driverId.trim());
     if (sp.q?.trim()) p.set("q", sp.q.trim());
     if (sp.startedFrom?.trim()) p.set("startedFrom", sp.startedFrom.trim());
     if (sp.startedTo?.trim()) p.set("startedTo", sp.startedTo.trim());
@@ -317,10 +336,12 @@ export default async function TripsPage({ searchParams }: Props) {
           showTachograph ? undefined : showConsumption ? (
             <ConsumptionFilterForm
               vehicles={vehicles}
+              drivers={drivers}
               periodFrom={consumptionPeriodFrom}
               periodTo={consumptionPeriodTo}
               selectedVehicleIds={selectedVehicleIds}
               selectedFuelTypes={selectedFuelTypes}
+              selectedDriverId={selectedDriverId}
             />
           ) : showDocuments ? (
             <form
@@ -440,6 +461,7 @@ export default async function TripsPage({ searchParams }: Props) {
                   className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
                 />
               </div>
+              <DriverFilterSelect drivers={drivers} value={sp.driverId ?? ""} />
               <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
                 <label className="text-xs font-medium text-zinc-500">Căutare text</label>
                 <input
@@ -543,6 +565,7 @@ export default async function TripsPage({ searchParams }: Props) {
                     <th className={fleetThClass}>Ref</th>
                     <th className={fleetThClass}>Nr. auto</th>
                     <th className={fleetThClass}>Client</th>
+                    <th className={fleetThClass}>Șofer</th>
                     <th className={fleetThClass}>Start</th>
                     <th className={fleetThClass}>Stop</th>
                     <th className={fleetThClass}>Km</th>
@@ -556,6 +579,15 @@ export default async function TripsPage({ searchParams }: Props) {
                       <td className={`${fleetTdClass} font-mono`}>{row.reference ?? "—"}</td>
                       <td className={`${fleetTdClass} font-mono`}>{row.registrationNumber}</td>
                       <td className={fleetTdClass}>{row.clientId}</td>
+                      <td className={fleetTdClass}>
+                        {row.driverId ? (
+                          <Link href={`/fleet/drivers/${row.driverId}`} className="text-emerald-400 hover:underline">
+                            {row.driverName ?? "—"}
+                          </Link>
+                        ) : (
+                          (row.driverName ?? "—")
+                        )}
+                      </td>
                       <td className={fleetTdClass}>{formatDateTimeRo(row.startedAt)}</td>
                       <td className={fleetTdClass}>{formatDateTimeRo(row.endedAt)}</td>
                       <td className={`${fleetTdClass} font-mono`}>{row.distanceKm ?? "—"}</td>

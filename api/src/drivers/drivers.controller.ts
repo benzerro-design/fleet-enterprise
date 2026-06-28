@@ -17,6 +17,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
+import { TripsService } from '../ops/trips.service';
+import { parseFuelTypesCsv } from '../ops/fuel-types';
 import type {
   CreateAssignmentInput,
   CreateDriverInput,
@@ -27,7 +29,10 @@ import { DriversService } from './drivers.service';
 @Controller('drivers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DriversController {
-  constructor(private readonly drivers: DriversService) {}
+  constructor(
+    private readonly drivers: DriversService,
+    private readonly trips: TripsService,
+  ) {}
 
   @Get()
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
@@ -47,6 +52,29 @@ export class DriversController {
       q: q?.trim(),
       clientId: clientId?.trim(),
       status: parseDriverStatus(status),
+    });
+  }
+
+  @Get(':id/consumption')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  getConsumption(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('fuelTypes') fuelTypesRaw?: string,
+  ) {
+    const fromTrim = from?.trim();
+    const toTrim = to?.trim();
+    if (!fromTrim || !toTrim) {
+      throw new BadRequestException('from and to are required');
+    }
+    const fuelTypes = parseFuelTypesCsv(fuelTypesRaw);
+    return this.trips.getConsumption(tenantSlug, {
+      from: fromTrim,
+      to: toTrim,
+      driverId: id,
+      fuelTypes,
     });
   }
 

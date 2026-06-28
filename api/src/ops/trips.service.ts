@@ -30,6 +30,7 @@ export type CreateTripInput = {
   roadType?: TripRoadType | null;
   odometerStartKm?: number | null;
   odometerEndKm?: number | null;
+  driverId?: string | null;
   driverName?: string | null;
 };
 
@@ -39,6 +40,7 @@ export type TripBrowseFilters = {
   /** Număr înmatriculare (filtrare în tenant, fără sensibilitate la majuscule). */
   registrationNumber?: string;
   clientId?: string;
+  driverId?: string;
   q?: string;
   startedFrom?: string;
   startedTo?: string;
@@ -56,6 +58,7 @@ export type ConsumptionQuery = {
   to: string;
   vehicleIds?: string[];
   fuelTypes?: FuelType[];
+  driverId?: string;
 };
 
 function parseDayStart(s: string): Date {
@@ -94,6 +97,9 @@ async function tripWhere(
   const clientVehicle = await resolveOptionalClientVehicleFilter(prisma, tenantId, f.clientId);
   if (clientVehicle) {
     parts.push({ vehicle: { tenantId, ...clientVehicle } });
+  }
+  if (f.driverId?.trim()) {
+    parts.push({ driverId: f.driverId.trim() });
   }
   if (f.q?.trim()) {
     const q = f.q.trim();
@@ -147,6 +153,7 @@ function tripPatchFieldKeys(
     roadType: TripRoadType | null;
     odometerStartKm: number | null;
     odometerEndKm: number | null;
+    driverId: string | null;
     driverName: string | null;
   },
   dto: PatchTripInput,
@@ -176,6 +183,7 @@ function tripPatchFieldKeys(
   if (dto.odometerEndKm !== undefined && dto.odometerEndKm !== before.odometerEndKm) {
     keys.push('odometerEndKm');
   }
+  if (dto.driverId !== undefined && dto.driverId !== before.driverId) keys.push('driverId');
   if (dto.driverName !== undefined && dto.driverName !== before.driverName) keys.push('driverName');
   return keys;
 }
@@ -194,7 +202,9 @@ function toTripRow(row: {
   roadType: TripRoadType | null;
   odometerStartKm: number | null;
   odometerEndKm: number | null;
+  driverId: string | null;
   driverName: string | null;
+  driver: { fullName: string } | null;
   vehicle: { registrationNumber: string; client: { code: string } };
   tenant: { slug: string };
 }) {
@@ -214,8 +224,43 @@ function toTripRow(row: {
     roadType: row.roadType,
     odometerStartKm: row.odometerStartKm,
     odometerEndKm: row.odometerEndKm,
-    driverName: row.driverName,
+    driverId: row.driverId,
+    driverName: row.driver?.fullName ?? row.driverName,
   };
+}
+
+const tripInclude = {
+  vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
+  tenant: { select: { slug: true } },
+  driver: { select: { fullName: true } },
+} as const;
+
+async function resolveDriverForTrip(
+  prisma: PrismaService,
+  tenantId: string,
+  vehicleId: string,
+  driverId: string | null | undefined,
+): Promise<{ driverId: string | null; driverName: string | null }> {
+  if (driverId === undefined) {
+    throw new BadRequestException('driverId required');
+  }
+  if (!driverId?.trim()) {
+    return { driverId: null, driverName: null };
+  }
+  const driver = await prisma.driver.findFirst({
+    where: { id: driverId.trim(), tenantId },
+    select: { id: true, fullName: true, clientId: true },
+  });
+  if (!driver) throw new BadRequestException('driverId invalid');
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, tenantId },
+    select: { clientId: true },
+  });
+  if (!vehicle) throw new BadRequestException('vehicle not found');
+  if (vehicle.clientId !== driver.clientId) {
+    throw new BadRequestException('Driver must belong to the same client as the vehicle');
+  }
+  return { driverId: driver.id, driverName: driver.fullName };
 }
 
 @Injectable()
@@ -238,6 +283,7 @@ export class TripsService {
     const where = await tripWhere(this.prisma, tenant.id, {
       registrationNumber: params.registrationNumber,
       clientId: params.clientId,
+      driverId: params.driverId,
       q: params.q,
       startedFrom: params.startedFrom,
       startedTo: params.startedTo,
@@ -248,10 +294,7 @@ export class TripsService {
       this.prisma.trip.count({ where }),
       this.prisma.trip.findMany({
         where,
-        include: {
-          vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
-          tenant: { select: { slug: true } },
-        },
+        include: tripInclude,
         orderBy: { startedAt: 'desc' },
         skip,
         take: pageSize,
@@ -269,17 +312,20 @@ export class TripsService {
   async exportCsv(tenantSlug: string, filters: TripBrowseFilters): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
-      return '\uFEFFid,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm\n';
+      return '\uFEFFid,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm,driverId,driverName\n';
     }
     const where = await tripWhere(this.prisma, tenant.id, filters);
     const rows = await this.prisma.trip.findMany({
       where,
       orderBy: { startedAt: 'desc' },
       take: MAX_EXPORT_ROWS,
-      include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
+      include: {
+        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
+        driver: { select: { fullName: true } },
+      },
     });
     const header =
-      'id,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm,purpose,roadType,odometerStartKm,odometerEndKm,driverName';
+      'id,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm,purpose,roadType,odometerStartKm,odometerEndKm,driverId,driverName';
     const lines = rows.map((r) =>
       [
         r.id,
@@ -296,7 +342,8 @@ export class TripsService {
         r.roadType ?? '',
         r.odometerStartKm != null ? String(r.odometerStartKm) : '',
         r.odometerEndKm != null ? String(r.odometerEndKm) : '',
-        r.driverName ?? '',
+        r.driverId ?? '',
+        r.driver?.fullName ?? r.driverName ?? '',
       ]
         .map((c) => escapeCsvCell(c))
         .join(','),
@@ -307,10 +354,7 @@ export class TripsService {
   async getById(tenantSlug: string, tripId: string) {
     const row = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },
-      include: {
-        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
-        tenant: { select: { slug: true } },
-      },
+      include: tripInclude,
     });
     if (!row) throw new NotFoundException('Trip not found');
     return toTripRow(row);
@@ -320,6 +364,14 @@ export class TripsService {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
+
+    let tripDriverId: string | null = null;
+    let tripDriverName: string | null = dto.driverName ?? null;
+    if (dto.driverId !== undefined) {
+      const resolved = await resolveDriverForTrip(this.prisma, tenant.id, dto.vehicleId, dto.driverId);
+      tripDriverId = resolved.driverId;
+      tripDriverName = resolved.driverName;
+    }
 
     const row = await this.prisma.trip.create({
       data: {
@@ -339,12 +391,10 @@ export class TripsService {
         roadType: dto.roadType ?? null,
         odometerStartKm: dto.odometerStartKm ?? null,
         odometerEndKm: dto.odometerEndKm ?? null,
-        driverName: dto.driverName ?? null,
+        driverId: tripDriverId,
+        driverName: tripDriverName,
       },
-      include: {
-        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
-        tenant: { select: { slug: true } },
-      },
+      include: tripInclude,
     });
 
     await this.audit.log({
@@ -385,6 +435,7 @@ export class TripsService {
       include: {
         vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
         tenant: true,
+        driver: { select: { fullName: true } },
       },
     });
     if (!before) throw new NotFoundException('Trip not found');
@@ -401,6 +452,21 @@ export class TripsService {
       odometerEndKm: nextOdometerEndKm,
     });
 
+    let nextDriverId: string | null | undefined;
+    let nextDriverName: string | null | undefined;
+    if (dto.driverId !== undefined) {
+      const resolved = await resolveDriverForTrip(
+        this.prisma,
+        before.tenantId,
+        before.vehicleId,
+        dto.driverId,
+      );
+      nextDriverId = resolved.driverId;
+      nextDriverName = resolved.driverName;
+    } else if (dto.driverName !== undefined) {
+      nextDriverName = dto.driverName;
+    }
+
     const data: Prisma.TripUncheckedUpdateManyInput = {
       reference: dto.reference,
       startedAt: dto.startedAt !== undefined ? new Date(dto.startedAt) : undefined,
@@ -415,7 +481,8 @@ export class TripsService {
       roadType: dto.roadType,
       odometerStartKm: dto.odometerStartKm,
       odometerEndKm: dto.odometerEndKm,
-      driverName: dto.driverName,
+      ...(nextDriverId !== undefined ? { driverId: nextDriverId } : {}),
+      ...(nextDriverName !== undefined ? { driverName: nextDriverName } : {}),
     };
 
     const r = await this.prisma.trip.updateMany({
@@ -437,7 +504,8 @@ export class TripsService {
         roadType: before.roadType,
         odometerStartKm: before.odometerStartKm,
         odometerEndKm: before.odometerEndKm,
-        driverName: before.driverName,
+        driverId: before.driverId,
+        driverName: before.driver?.fullName ?? before.driverName,
       },
       dto,
     );
@@ -513,7 +581,8 @@ export class TripsService {
 
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
-      return buildConsumptionPayload({
+      return {
+        ...buildConsumptionPayload({
         periodStart: from,
         periodEnd: to,
         vehicleScope: 'all',
@@ -524,12 +593,23 @@ export class TripsService {
         costs: [],
         allFuelCostsForSegments: [],
         odometerReadings: [],
-      });
+      }),
+        driverIdFilter: query.driverId?.trim() ?? null,
+      };
     }
 
     const vehicleIds = [...new Set((query.vehicleIds ?? []).map((id) => id.trim()).filter(Boolean))];
+    const driverId = query.driverId?.trim() || undefined;
     const vehicleScope = vehicleIds.length > 0 ? 'selected' : 'all';
     const fuelTypeFilter = query.fuelTypes?.length ? query.fuelTypes : null;
+
+    if (driverId) {
+      const driver = await this.prisma.driver.findFirst({
+        where: { id: driverId, tenantId: tenant.id },
+        select: { id: true, fullName: true },
+      });
+      if (!driver) throw new NotFoundException('Driver not found');
+    }
 
     for (const vehicleId of vehicleIds) {
       await assertVehicleInTenant(this.prisma, tenantSlug, vehicleId);
@@ -552,6 +632,23 @@ export class TripsService {
     }
 
     let allowedVehicleIds = vehicleIds.length > 0 ? vehicleIds : tenantVehicles.map((v) => v.id);
+
+    if (driverId) {
+      const driverTripVehicles = await this.prisma.trip.findMany({
+        where: {
+          tenantId: tenant.id,
+          driverId,
+          startedAt: { gte: from, lte: to },
+        },
+        select: { vehicleId: true },
+        distinct: ['vehicleId'],
+      });
+      const driverVehicleIds = driverTripVehicles.map((r) => r.vehicleId);
+      allowedVehicleIds =
+        vehicleIds.length > 0
+          ? allowedVehicleIds.filter((id) => driverVehicleIds.includes(id))
+          : driverVehicleIds;
+    }
 
     if (fuelTypeFilter?.length) {
       const fillVehicleRows = await this.prisma.costEntry.findMany({
@@ -576,6 +673,7 @@ export class TripsService {
       tenantId: tenant.id,
       startedAt: { gte: from, lte: to },
       vehicle: vehicleFilter,
+      ...(driverId ? { driverId } : {}),
     };
 
     const costWhere: Prisma.CostEntryWhereInput = {
@@ -641,33 +739,36 @@ export class TripsService {
       provider: c.provider,
     });
 
-    return buildConsumptionPayload({
-      periodStart: from,
-      periodEnd: to,
-      vehicleScope,
-      selectedVehicleCount: vehicleIds.length,
-      fuelTypeFilter,
-      vehicleFuelById,
-      trips: trips.map((t) => ({
-        id: t.id,
-        vehicleId: t.vehicleId,
-        registrationNumber: t.vehicle.registrationNumber,
-        clientId: t.vehicle.client.code,
-        startedAt: t.startedAt,
-        endedAt: t.endedAt,
-        reference: t.reference,
-        originLabel: t.originLabel,
-        destLabel: t.destLabel,
-        distanceKm: t.distanceKm,
-        odometerStartKm: t.odometerStartKm,
-        odometerEndKm: t.odometerEndKm,
-      })),
-      costs: costs.map(mapCost),
-      allFuelCostsForSegments: allFuelCostsForSegments.map(mapCost),
-      odometerReadings: odometerReadings.map((r) => ({
-        recordedAt: r.recordedAt,
-        odometerKm: r.odometerKm,
-      })),
-    });
+    return {
+      ...buildConsumptionPayload({
+        periodStart: from,
+        periodEnd: to,
+        vehicleScope,
+        selectedVehicleCount: vehicleIds.length,
+        fuelTypeFilter,
+        vehicleFuelById,
+        trips: trips.map((t) => ({
+          id: t.id,
+          vehicleId: t.vehicleId,
+          registrationNumber: t.vehicle.registrationNumber,
+          clientId: t.vehicle.client.code,
+          startedAt: t.startedAt,
+          endedAt: t.endedAt,
+          reference: t.reference,
+          originLabel: t.originLabel,
+          destLabel: t.destLabel,
+          distanceKm: t.distanceKm,
+          odometerStartKm: t.odometerStartKm,
+          odometerEndKm: t.odometerEndKm,
+        })),
+        costs: costs.map(mapCost),
+        allFuelCostsForSegments: allFuelCostsForSegments.map(mapCost),
+        odometerReadings: odometerReadings.map((r) => ({
+          recordedAt: r.recordedAt,
+          odometerKm: r.odometerKm,
+        })),
+      }),
+      driverIdFilter: driverId ?? null,
+    };
   }
 }

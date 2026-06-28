@@ -23,6 +23,7 @@ type TripRow = {
   roadType?: string | null;
   odometerStartKm?: number | null;
   odometerEndKm?: number | null;
+  driverId?: string | null;
   driverName?: string | null;
 };
 
@@ -72,7 +73,18 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           <div><dt className="text-xs uppercase text-zinc-500">Tip drum</dt><dd className="mt-1">{tripRoadTypeLabel(trip.roadType)}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Odometru start</dt><dd className="mt-1 font-mono">{trip.odometerStartKm ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Odometru final</dt><dd className="mt-1 font-mono">{trip.odometerEndKm ?? "—"}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Conducător</dt><dd className="mt-1">{trip.driverName ?? "—"}</dd></div>
+          <div>
+            <dt className="text-xs uppercase text-zinc-500">Șofer</dt>
+            <dd className="mt-1">
+              {trip.driverId ? (
+                <Link href={`/fleet/drivers/${trip.driverId}`} className="text-emerald-400 hover:underline">
+                  {trip.driverName ?? "—"}
+                </Link>
+              ) : (
+                (trip.driverName ?? "—")
+              )}
+            </dd>
+          </div>
           <div><dt className="text-xs uppercase text-zinc-500">Vehicle ID</dt><dd className="mt-1 font-mono text-xs text-zinc-400">{trip.vehicleId}</dd></div>
         </dl>
     </FleetPageMain>
