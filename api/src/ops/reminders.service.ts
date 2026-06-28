@@ -4,6 +4,8 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_REMINDER_OFFSETS, normalizeReminderOffsets } from './document-reminders';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
+import type { AccessContext } from '../iam/access-context.types';
+import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -82,8 +84,12 @@ async function reminderWhere(
   prisma: PrismaService,
   tenantId: string,
   f: ReminderBrowseFilters,
+  access?: AccessContext,
 ): Promise<Prisma.ReminderActionWhereInput> {
   const parts: Prisma.ReminderActionWhereInput[] = [{ tenantId, isActive: true }];
+  if (access) {
+    mergeVehicleLinkedScope(parts, access);
+  }
   if (f.vehicleId?.trim()) parts.push({ vehicleId: f.vehicleId.trim() });
   if (f.registrationNumber?.trim()) {
     parts.push({
@@ -213,13 +219,15 @@ export class RemindersService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(tenantSlug: string, params: ReminderListParams) {
+  async list(tenantSlug: string, params: ReminderListParams, access?: AccessContext) {
+    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
+    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
     }
 
-    const where = await reminderWhere(this.prisma, tenant.id, params);
+    const where = await reminderWhere(this.prisma, tenant.id, params, access);
     const rows = await this.prisma.reminderAction.findMany({
       where,
       include: includeRow,
@@ -285,9 +293,13 @@ export class RemindersService {
     return `\uFEFF${header}\n${lines.join('\n')}\n`;
   }
 
-  async getById(tenantSlug: string, id: string) {
+  async getById(tenantSlug: string, id: string, access?: AccessContext) {
+    const clientFilter =
+      access && !access.isTenantWide
+        ? { vehicle: { clientId: { in: access.allowedClientIds } } }
+        : {};
     const row = await this.prisma.reminderAction.findFirst({
-      where: { id, tenant: { slug: tenantSlug } },
+      where: { id, tenant: { slug: tenantSlug }, ...clientFilter },
       include: includeRow,
     });
     if (!row) throw new NotFoundException('Reminder not found');

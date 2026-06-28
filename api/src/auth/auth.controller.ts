@@ -28,6 +28,7 @@ export class AuthController {
       email: u.email,
       tenantSlug: u.tenantSlug,
       role: u.role,
+      clientPortal: u.clientPortal,
       access: access
         ? {
             isTenantWide: access.isTenantWide,

@@ -18,6 +18,9 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import type { CreateTripInput, PatchTripInput, TripBrowseFilters } from './trips.service';
 import { TripsService } from './trips.service';
@@ -29,7 +32,7 @@ export class TripsController {
   constructor(private readonly trips: TripsService) {}
 
   @Get('export')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="trips.csv"')
   async exportTrips(@TenantId() tenantSlug: string, @Query() q: Record<string, string | undefined>) {
@@ -38,24 +41,29 @@ export class TripsController {
   }
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   listTrips(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query() q: Record<string, string | undefined>,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.trips.list(tenantSlug, {
-      page,
-      pageSize,
-      ...parseTripBrowseQuery(q),
-    });
+    return this.trips.list(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        ...parseTripBrowseQuery(q),
+      },
+      access,
+    );
   }
 
   @Get('consumption')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   getConsumption(@TenantId() tenantSlug: string, @Query() q: Record<string, string | undefined>) {
     const from = q['from']?.trim();
     const to = q['to']?.trim();
@@ -72,7 +80,7 @@ export class TripsController {
   }
 
   @Get(':tripId')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   getTrip(@TenantId() tenantSlug: string, @Param('tripId') tripId: string) {
     return this.trips.getById(tenantSlug, tripId);
   }

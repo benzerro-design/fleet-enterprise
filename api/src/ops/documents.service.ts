@@ -11,6 +11,8 @@ import {
 } from './document-reminders';
 import { normalizeReminderOffsetsKm } from './reminder-status';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
+import type { AccessContext } from '../iam/access-context.types';
+import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -81,8 +83,10 @@ async function documentWhere(
   prisma: PrismaService,
   tenantId: string,
   f: DocumentBrowseFilters,
+  access?: AccessContext,
 ): Promise<Prisma.VehicleDocumentWhereInput> {
   const parts: Prisma.VehicleDocumentWhereInput[] = [{ vehicle: { tenantId } }];
+  mergeVehicleLinkedScope(parts, access);
 
   if (f.registrationNumber?.trim()) {
     const reg = f.registrationNumber.trim();
@@ -193,7 +197,9 @@ export class DocumentsService {
     private readonly reminders: RemindersService,
   ) {}
 
-  async list(tenantSlug: string, params: DocumentListParams) {
+  async list(tenantSlug: string, params: DocumentListParams, access?: AccessContext) {
+    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
+    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -210,7 +216,7 @@ export class DocumentsService {
       q: params.q,
       expiresFrom: params.expiresFrom,
       expiresTo: params.expiresTo,
-    });
+    }, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.vehicleDocument.count({ where }),
@@ -239,12 +245,12 @@ export class DocumentsService {
     };
   }
 
-  async exportCsv(tenantSlug: string, filters: DocumentBrowseFilters): Promise<string> {
+  async exportCsv(tenantSlug: string, filters: DocumentBrowseFilters, access?: AccessContext): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return '\uFEFFid,vehicleId,registrationNumber,clientId,documentTypeCode,title,expiresOn,fileUrl,fileName,reminderOffsetsDays,createdAt\n';
     }
-    const where = await documentWhere(this.prisma, tenant.id, filters);
+    const where = await documentWhere(this.prisma, tenant.id, filters, access);
     const rows = await this.prisma.vehicleDocument.findMany({
       where,
       orderBy: [{ expiresOn: 'asc' }, { createdAt: 'desc' }],
@@ -275,9 +281,13 @@ export class DocumentsService {
     return `\uFEFF${header}\n${lines.join('\n')}\n`;
   }
 
-  async getById(tenantSlug: string, id: string) {
+  async getById(tenantSlug: string, id: string, access?: AccessContext) {
+    const clientFilter =
+      access && !access.isTenantWide
+        ? { vehicle: { clientId: { in: access.allowedClientIds } } }
+        : {};
     const row = await this.prisma.vehicleDocument.findFirst({
-      where: { id, vehicle: { tenant: { slug: tenantSlug } } },
+      where: { id, vehicle: { tenant: { slug: tenantSlug } }, ...clientFilter },
       include: {
         vehicle: {
           select: {

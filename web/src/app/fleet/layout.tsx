@@ -1,15 +1,15 @@
 import { FleetShell } from "@/components/fleet/FleetShell";
-import { canManageFleet, getAuthMeResult, getDefaultFleetHome, isClientPortalUser } from "@/lib/auth-server";
+import { canManageFleet, getAuthMeResult, getDefaultFleetHome, isClientFleetPortal, isClientTicketsOnly } from "@/lib/auth-server";
 import { getFleetNavForUser } from "@/lib/fleet-nav";
 
 export default async function FleetLayout({ children }: { children: React.ReactNode }) {
   const auth = await getAuthMeResult();
   const write = canManageFleet(auth);
-  const clientUserMode = isClientPortalUser(auth);
   const { groups, admin } = getFleetNavForUser({
     canWrite: write,
     authenticated: auth.ok,
-    clientUserMode,
+    clientTicketsOnly: isClientTicketsOnly(auth),
+    clientFleetPortal: isClientFleetPortal(auth),
   });
 
   const authBanner =

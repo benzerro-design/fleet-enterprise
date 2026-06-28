@@ -45,6 +45,7 @@ export class JwtAuthGuard implements CanActivate {
         tenantSlug: payload.tenantSlug.trim(),
         role: payload.role ?? MembershipRole.tenant_admin,
         ...(payload.email ? { email: payload.email } : {}),
+        ...(payload.clientPortal ? { clientPortal: payload.clientPortal } : {}),
       };
       return true;
     } catch {

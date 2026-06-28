@@ -6,6 +6,8 @@ import { normalizeReminderOffsets } from './document-reminders';
 import { normalizeReminderOffsetsKm } from './reminder-status';
 import { isItpMaintenanceAllocation, syncItpCertDocument, syncVehicleItpFromOps } from './itp-sync';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
+import type { AccessContext } from '../iam/access-context.types';
+import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -81,8 +83,10 @@ async function maintenanceWhere(
   prisma: PrismaService,
   tenantId: string,
   f: MaintenanceBrowseFilters,
+  access?: AccessContext,
 ): Promise<Prisma.MaintenanceEntryWhereInput> {
   const parts: Prisma.MaintenanceEntryWhereInput[] = [{ tenantId }];
+  mergeVehicleLinkedScope(parts, access);
   if (f.registrationNumber?.trim()) {
     const reg = f.registrationNumber.trim();
     parts.push({
@@ -256,7 +260,9 @@ export class MaintenanceService {
     private readonly odometerSync: VehicleOdometerSyncService,
   ) {}
 
-  async list(tenantSlug: string, params: MaintenanceListParams) {
+  async list(tenantSlug: string, params: MaintenanceListParams, access?: AccessContext) {
+    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
+    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -272,7 +278,7 @@ export class MaintenanceService {
       q: params.q,
       performedFrom: params.performedFrom,
       performedTo: params.performedTo,
-    });
+    }, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.maintenanceEntry.count({ where }),
@@ -296,12 +302,12 @@ export class MaintenanceService {
     };
   }
 
-  async exportCsv(tenantSlug: string, filters: MaintenanceBrowseFilters): Promise<string> {
+  async exportCsv(tenantSlug: string, filters: MaintenanceBrowseFilters, access?: AccessContext): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return '\uFEFFid,vehicleId,registrationNumber,clientId,title,provider,costAllocationCode,invoiceNumber,invoiceDate,invoiceAttachmentUrl,performedAt,odometerKm,costCents,notes\n';
     }
-    const where = await maintenanceWhere(this.prisma, tenant.id, filters);
+    const where = await maintenanceWhere(this.prisma, tenant.id, filters, access);
     const rows = await this.prisma.maintenanceEntry.findMany({
       where,
       orderBy: { id: 'desc' },
@@ -333,9 +339,13 @@ export class MaintenanceService {
     return `\uFEFF${header}\n${lines.join('\n')}\n`;
   }
 
-  async getById(tenantSlug: string, id: string) {
+  async getById(tenantSlug: string, id: string, access?: AccessContext) {
+    const clientFilter =
+      access && !access.isTenantWide
+        ? { vehicle: { clientId: { in: access.allowedClientIds } } }
+        : {};
     const row = await this.prisma.maintenanceEntry.findFirst({
-      where: { id, tenant: { slug: tenantSlug } },
+      where: { id, tenant: { slug: tenantSlug }, ...clientFilter },
       include: {
         vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
         tenant: { select: { slug: true } },

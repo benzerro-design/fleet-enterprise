@@ -11,6 +11,8 @@ import { normalizeCivProfile } from '../fleet/vehicle-civ-fields';
 import { resolveVehicleFuelFromCivP3 } from '../fleet/vehicle-fuel-resolve';
 import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
+import type { AccessContext } from '../iam/access-context.types';
+import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -81,8 +83,10 @@ async function costWhere(
   prisma: PrismaService,
   tenantId: string,
   f: CostBrowseFilters,
+  access?: AccessContext,
 ): Promise<Prisma.CostEntryWhereInput> {
   const parts: Prisma.CostEntryWhereInput[] = [{ tenantId }];
+  mergeVehicleLinkedScope(parts, access);
   if (f.registrationNumber?.trim()) {
     const reg = f.registrationNumber.trim();
     parts.push({
@@ -246,7 +250,9 @@ export class CostsService {
     private readonly odometerSync: VehicleOdometerSyncService,
   ) {}
 
-  async list(tenantSlug: string, params: CostListParams) {
+  async list(tenantSlug: string, params: CostListParams, access?: AccessContext) {
+    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
+    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -263,7 +269,7 @@ export class CostsService {
       q: params.q,
       incurredFrom: params.incurredFrom,
       incurredTo: params.incurredTo,
-    });
+    }, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.costEntry.count({ where }),

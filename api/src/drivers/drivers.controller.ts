@@ -16,6 +16,9 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
+import { FLEET_READ_ROLES } from '../iam/role-sets';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { TripsService } from '../ops/trips.service';
 import { parseFuelTypesCsv } from '../ops/fuel-types';
@@ -41,9 +44,10 @@ export class DriversController {
   ) {}
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
     @Query('q') q?: string,
@@ -53,25 +57,33 @@ export class DriversController {
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.drivers.listPaged(tenantSlug, {
-      page,
-      pageSize,
-      q: q?.trim(),
-      clientId: clientId?.trim(),
-      status: parseDriverStatus(status),
-      licenseExpiry: parseLicenseExpiryFilter(licenseExpiry),
-    });
+    return this.drivers.listPaged(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        q: q?.trim(),
+        clientId: clientId?.trim(),
+        status: parseDriverStatus(status),
+        licenseExpiry: parseLicenseExpiryFilter(licenseExpiry),
+      },
+      access,
+    );
   }
 
   @Get('license-alerts')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  listLicenseAlerts(@TenantId() tenantSlug: string, @Query('limit') limitStr?: string) {
+  @Roles(...FLEET_READ_ROLES)
+  listLicenseAlerts(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('limit') limitStr?: string,
+  ) {
     const limit = Math.min(Math.max(1, parseInt(limitStr ?? '20', 10) || 20), 100);
-    return this.drivers.listLicenseAlerts(tenantSlug, limit);
+    return this.drivers.listLicenseAlerts(tenantSlug, limit, access);
   }
 
   @Get(':id/consumption')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   getConsumption(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
@@ -94,15 +106,23 @@ export class DriversController {
   }
 
   @Get(':id')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  get(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.drivers.getDetail(tenantSlug, id);
+  @Roles(...FLEET_READ_ROLES)
+  get(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.drivers.getDetail(tenantSlug, id, access);
   }
 
   @Get(':id/assignments')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  listAssignments(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.drivers.listAssignments(tenantSlug, id);
+  @Roles(...FLEET_READ_ROLES)
+  listAssignments(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.drivers.listAssignments(tenantSlug, id, access);
   }
 
   @Post()
@@ -162,9 +182,13 @@ export class DriversController {
   }
 
   @Get(':id/documents')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  listDocuments(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.attachments.listDocuments(tenantSlug, id);
+  @Roles(...FLEET_READ_ROLES)
+  listDocuments(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.attachments.listDocuments(tenantSlug, id, access);
   }
 
   @Post(':id/documents')

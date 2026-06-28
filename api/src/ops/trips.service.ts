@@ -3,6 +3,8 @@ import type { Prisma, TripPurpose, TripRoadType } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
+import type { AccessContext } from '../iam/access-context.types';
+import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -83,8 +85,10 @@ async function tripWhere(
   prisma: PrismaService,
   tenantId: string,
   f: TripBrowseFilters,
+  access?: AccessContext,
 ): Promise<Prisma.TripWhereInput> {
   const parts: Prisma.TripWhereInput[] = [{ tenantId }];
+  mergeVehicleLinkedScope(parts, access);
   if (f.registrationNumber?.trim()) {
     const reg = f.registrationNumber.trim();
     parts.push({
@@ -271,7 +275,9 @@ export class TripsService {
     private readonly odometerSync: VehicleOdometerSyncService,
   ) {}
 
-  async list(tenantSlug: string, params: TripListParams) {
+  async list(tenantSlug: string, params: TripListParams, access?: AccessContext) {
+    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
+    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -288,7 +294,7 @@ export class TripsService {
       startedFrom: params.startedFrom,
       startedTo: params.startedTo,
       ended: params.ended,
-    });
+    }, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.trip.count({ where }),

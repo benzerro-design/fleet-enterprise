@@ -26,6 +26,40 @@ export function vehicleClientScope(ctx: AccessContext): Prisma.VehicleWhereInput
   return { clientId: { in: ctx.allowedClientIds } };
 }
 
+/** Filtru pe entități legate de vehicul (remindere, costuri, curse…). */
+export function vehicleLinkedClientScope(ctx: AccessContext): { vehicle: Prisma.VehicleWhereInput } {
+  return { vehicle: vehicleClientScope(ctx) };
+}
+
+export function isDriverOnlyClientUser(ctx: AccessContext): boolean {
+  if (isTenantWideAccess(ctx)) return false;
+  if (ctx.clientMemberships.length === 0) return false;
+  return ctx.clientMemberships.every((m) => m.role === ClientRole.driver);
+}
+
+/** Manager / dispecer / viewer client — acces modul flotă scoped (nu doar tichete). */
+export function canAccessClientFleet(ctx: AccessContext): boolean {
+  if (isTenantWideAccess(ctx)) return true;
+  return ctx.clientMemberships.some(
+    (m) =>
+      m.role === ClientRole.client_admin ||
+      m.role === ClientRole.client_dispatcher ||
+      m.role === ClientRole.client_viewer,
+  );
+}
+
+export function assertClientFleetAccess(ctx: AccessContext): void {
+  if (!canAccessClientFleet(ctx)) {
+    throw new Error('CLIENT_FLEET_ACCESS_DENIED');
+  }
+}
+
+export function driverClientScope(ctx: AccessContext): Prisma.DriverWhereInput {
+  if (isTenantWideAccess(ctx)) return {};
+  if (ctx.allowedClientIds.length === 0) return { clientId: { in: [] } };
+  return { clientId: { in: ctx.allowedClientIds } };
+}
+
 export function ticketListScope(ctx: AccessContext): Prisma.CrmTicketWhereInput {
   if (isTenantWideAccess(ctx)) return {};
 

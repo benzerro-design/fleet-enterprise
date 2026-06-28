@@ -11,6 +11,8 @@ export type AuthMe = {
   email?: string;
   tenantSlug: string;
   role: "tenant_admin" | "tenant_viewer" | "client_user";
+  /** Set for client_user: fleet = manager/dispatcher/viewer; tickets = șofer only. */
+  clientPortal?: "fleet" | "tickets";
   access?: {
     isTenantWide: boolean;
     clientMemberships: ClientMembershipMe[];
@@ -53,8 +55,17 @@ export function isClientPortalUser(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "client_user";
 }
 
-/** Pagină implicită după login — userii client merg la tichete, nu la panou. */
+export function isClientTicketsOnly(auth: AuthMeResult): boolean {
+  return auth.ok && auth.me.role === "client_user" && auth.me.clientPortal !== "fleet";
+}
+
+export function isClientFleetPortal(auth: AuthMeResult): boolean {
+  return auth.ok && auth.me.role === "client_user" && auth.me.clientPortal === "fleet";
+}
+
+/** Pagină implicită după login — șoferi la tichete, manager client la vehicule. */
 export function getDefaultFleetHome(auth: AuthMeResult): string {
+  if (isClientFleetPortal(auth)) return "/fleet/vehicles";
   if (isClientPortalUser(auth)) return "/fleet/tickets";
   return "/fleet/dashboard";
 }

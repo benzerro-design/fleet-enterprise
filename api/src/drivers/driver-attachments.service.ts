@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { AccessContext } from '../iam/access-context.types';
+import { driverClientScope } from '../iam/client-access';
 
 const DRIVER_DOCUMENT_TYPES = new Set([
   'permis',
@@ -64,8 +66,12 @@ export class DriverAttachmentsService {
     private readonly audit: AuditService,
   ) {}
 
-  async listDocuments(tenantSlug: string, driverId: string): Promise<DriverDocumentRecord[]> {
-    await this.ensureDriver(tenantSlug, driverId);
+  async listDocuments(
+    tenantSlug: string,
+    driverId: string,
+    access?: AccessContext,
+  ): Promise<DriverDocumentRecord[]> {
+    await this.ensureDriver(tenantSlug, driverId, access);
     const rows = await this.prisma.driverDocument.findMany({
       where: { driverId },
       orderBy: [{ createdAt: 'desc' }],
@@ -166,11 +172,12 @@ export class DriverAttachmentsService {
     });
   }
 
-  private async ensureDriver(tenantSlug: string, driverId: string) {
+  private async ensureDriver(tenantSlug: string, driverId: string, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+    const clientScope = access && !access.isTenantWide ? driverClientScope(access) : {};
     const driver = await this.prisma.driver.findFirst({
-      where: { id: driverId, tenantId: tenant.id },
+      where: { id: driverId, tenantId: tenant.id, ...clientScope },
     });
     if (!driver) throw new NotFoundException('Driver not found');
     return { tenant, driver };

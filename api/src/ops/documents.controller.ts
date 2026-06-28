@@ -18,6 +18,9 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { isDocumentTypeCode } from './document-types';
 import { normalizeReminderOffsets } from './document-reminders';
@@ -36,18 +39,23 @@ export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 
   @Get('export')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="documents.csv"')
-  async exportCsv(@TenantId() tenantSlug: string, @Query() q: Record<string, string | undefined>) {
-    const csv = await this.documents.exportCsv(tenantSlug, parseDocumentBrowseQuery(q));
+  async exportCsv(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query() q: Record<string, string | undefined>,
+  ) {
+    const csv = await this.documents.exportCsv(tenantSlug, parseDocumentBrowseQuery(q), access);
     return new StreamableFile(Buffer.from(csv, 'utf8'));
   }
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query() q: Record<string, string | undefined>,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
@@ -58,13 +66,17 @@ export class DocumentsController {
       page,
       pageSize,
       ...parseDocumentBrowseQuery(q),
-    });
+    }, access);
   }
 
   @Get(':id')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getById(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.documents.getById(tenantSlug, id);
+  @Roles(...FLEET_READ_ROLES)
+  getById(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.documents.getById(tenantSlug, id, access);
   }
 
   @Post()

@@ -18,6 +18,9 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import type { CostBrowseFilters, CreateCostInput, PatchCostInput } from './costs.service';
 import { CostsService } from './costs.service';
@@ -31,7 +34,7 @@ export class CostsController {
   constructor(private readonly costs: CostsService) {}
 
   @Get('export')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="costs.csv"')
   async exportCsv(@TenantId() tenantSlug: string, @Query() q: Record<string, string | undefined>) {
@@ -40,24 +43,29 @@ export class CostsController {
   }
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   listEntries(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query() q: Record<string, string | undefined>,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.costs.list(tenantSlug, {
-      page,
-      pageSize,
-      ...parseCostBrowseQuery(q),
-    });
+    return this.costs.list(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        ...parseCostBrowseQuery(q),
+      },
+      access,
+    );
   }
 
   @Get(':id')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   getById(@TenantId() tenantSlug: string, @Param('id') id: string) {
     return this.costs.getById(tenantSlug, id);
   }

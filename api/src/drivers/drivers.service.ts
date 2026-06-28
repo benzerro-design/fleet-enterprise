@@ -7,6 +7,12 @@ import { DriverStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
+import type { AccessContext } from '../iam/access-context.types';
+import {
+  canAccessClientFleet,
+  driverClientScope,
+  isDriverOnlyClientUser,
+} from '../iam/client-access';
 import { licenseExpiryStatus, licenseExpiryWhere, type LicenseExpiryStatus } from './license-expiry';
 
 const MAX_PAGE_SIZE = 200;
@@ -100,7 +106,11 @@ export class DriversService {
       status?: DriverStatus;
       licenseExpiry?: 'expiring' | 'expired';
     },
+    access?: AccessContext,
   ) {
+    if (access && isDriverOnlyClientUser(access)) {
+      return { items: [], total: 0, page: params.page ?? 1, pageSize: params.pageSize ?? 50 };
+    }
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page ?? 1, pageSize: params.pageSize ?? 50 };
@@ -112,7 +122,7 @@ export class DriversService {
     const resolvedClientId = params.clientId
       ? (await resolveClientInTenant(this.prisma, tenant.id, params.clientId)).id
       : undefined;
-    const where = this.listWhere(tenant.id, { ...params, clientId: resolvedClientId });
+    const where = this.listWhere(tenant.id, { ...params, clientId: resolvedClientId }, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.driver.count({ where }),
@@ -161,16 +171,24 @@ export class DriversService {
     return rows.map((r) => this.toRecord(r));
   }
 
-  async listLicenseAlerts(tenantSlug: string, limit = 20): Promise<DriverLicenseAlert[]> {
+  async listLicenseAlerts(
+    tenantSlug: string,
+    limit = 20,
+    access?: AccessContext,
+  ): Promise<DriverLicenseAlert[]> {
+    if (access && isDriverOnlyClientUser(access)) return [];
     const tenant = await this.ensureTenant(tenantSlug);
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
+
+    const scope = access ? driverClientScope(access) : {};
 
     const rows = await this.prisma.driver.findMany({
       where: {
         tenantId: tenant.id,
         status: DriverStatus.active,
         licenseExpiresOn: { not: null },
+        ...scope,
       },
       include: { client: { select: { code: true } } },
       orderBy: [{ licenseExpiresOn: 'asc' }],
@@ -204,14 +222,27 @@ export class DriversService {
     return this.toRecord(row);
   }
 
-  async getDetail(tenantSlug: string, id: string): Promise<DriverDetailPayload> {
+  async getDetail(tenantSlug: string, id: string, access?: AccessContext): Promise<DriverDetailPayload> {
     const row = await this.findDriverRow(tenantSlug, id);
-    const assignments = await this.listAssignments(tenantSlug, id);
+    if (access && !canAccessClientFleet(access)) {
+      throw new NotFoundException('Driver not found');
+    }
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.clientId)) {
+      throw new NotFoundException('Driver not found');
+    }
+    const assignments = await this.listAssignments(tenantSlug, id, access);
     return { driver: this.toRecord(row), assignments };
   }
 
-  async listAssignments(tenantSlug: string, driverId: string): Promise<DriverAssignmentRecord[]> {
-    await this.findDriverRow(tenantSlug, driverId);
+  async listAssignments(
+    tenantSlug: string,
+    driverId: string,
+    access?: AccessContext,
+  ): Promise<DriverAssignmentRecord[]> {
+    const row = await this.findDriverRow(tenantSlug, driverId);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.clientId)) {
+      throw new NotFoundException('Driver not found');
+    }
     const rows = await this.prisma.driverVehicleAssignment.findMany({
       where: { driverId },
       include: {
@@ -492,8 +523,12 @@ export class DriversService {
       status?: DriverStatus;
       licenseExpiry?: 'expiring' | 'expired';
     },
+    access?: AccessContext,
   ): Prisma.DriverWhereInput {
     const parts: Prisma.DriverWhereInput[] = [{ tenantId }];
+    if (access) {
+      parts.push(driverClientScope(access));
+    }
     if (params.status) parts.push({ status: params.status });
     if (params.clientId) parts.push({ clientId: params.clientId });
     if (params.licenseExpiry) {

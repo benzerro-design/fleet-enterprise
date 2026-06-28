@@ -18,6 +18,9 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import type { ReminderListFilterStatus } from './document-reminders';
 import { normalizeReminderOffsets } from './document-reminders';
@@ -35,7 +38,7 @@ export class RemindersController {
   constructor(private readonly reminders: RemindersService) {}
 
   @Get('export')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="reminders.csv"')
   async exportCsv(@TenantId() tenantSlug: string, @Query() q: Record<string, string | undefined>) {
@@ -44,32 +47,41 @@ export class RemindersController {
   }
 
   @Get('context/:vehicleId')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   vehicleContext(@TenantId() tenantSlug: string, @Param('vehicleId') vehicleId: string) {
     return this.reminders.vehicleContext(tenantSlug, vehicleId);
   }
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query() q: Record<string, string | undefined>,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.reminders.list(tenantSlug, {
-      page,
-      pageSize,
-      ...parseReminderBrowseQuery(q),
-    });
+    return this.reminders.list(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        ...parseReminderBrowseQuery(q),
+      },
+      access,
+    );
   }
 
   @Get(':id')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getById(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.reminders.getById(tenantSlug, id);
+  @Roles(...FLEET_READ_ROLES)
+  getById(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.reminders.getById(tenantSlug, id, access);
   }
 
   @Post()

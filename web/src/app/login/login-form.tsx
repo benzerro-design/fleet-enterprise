@@ -44,9 +44,9 @@ export function LoginForm({ nextPath }: Props) {
       try {
         const meRes = await fetch("/api/auth/me");
         if (meRes.ok) {
-          const me = (await meRes.json()) as { role?: string };
+          const me = (await meRes.json()) as { role?: string; clientPortal?: "fleet" | "tickets" };
           if (me.role === "client_user") {
-            destination = "/fleet/tickets";
+            destination = me.clientPortal === "fleet" ? "/fleet/vehicles" : "/fleet/tickets";
           }
         }
       } catch {
