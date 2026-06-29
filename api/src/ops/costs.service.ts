@@ -13,6 +13,7 @@ import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
 import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
+import { assertCostOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -341,7 +342,7 @@ export class CostsService {
     return toCostRow(row);
   }
 
-  async create(tenantSlug: string, dto: CreateCostInput, actorUserId?: string) {
+  async create(tenantSlug: string, dto: CreateCostInput, actorUserId?: string, access?: AccessContext) {
     if (!Number.isFinite(dto.amountCents) || dto.amountCents < 0) {
       throw new BadRequestException('amountCents must be a non-negative integer');
     }
@@ -363,6 +364,7 @@ export class CostsService {
     );
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
     const row = await this.prisma.costEntry.create({
@@ -445,7 +447,11 @@ export class CostsService {
     return { ...toCostRow(row), reminderSyncFailed, vehicleOdometerSync };
   }
 
-  async patch(tenantSlug: string, id: string, dto: PatchCostInput, actorUserId?: string) {
+  async patch(tenantSlug: string, id: string, dto: PatchCostInput, actorUserId?: string, access?: AccessContext) {
+    await assertCostOpsWrite(this.prisma, tenantSlug, id, access);
+    if (dto.vehicleId) {
+      await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
+    }
     if (dto.amountCents !== undefined) {
       if (!Number.isFinite(dto.amountCents) || dto.amountCents < 0) {
         throw new BadRequestException('amountCents must be a non-negative integer');
@@ -645,7 +651,8 @@ export class CostsService {
     return false;
   }
 
-  async delete(tenantSlug: string, id: string, actorUserId?: string) {
+  async delete(tenantSlug: string, id: string, actorUserId?: string, access?: AccessContext) {
+    await assertCostOpsWrite(this.prisma, tenantSlug, id, access);
     const row = await this.prisma.costEntry.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
       include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },

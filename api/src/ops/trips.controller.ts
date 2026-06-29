@@ -18,7 +18,7 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
-import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
@@ -86,38 +86,41 @@ export class TripsController {
   }
 
   @Post()
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   createTrip(
     @TenantId() tenantSlug: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertCreateTripDto(body);
-    return this.trips.create(tenantSlug, dto, actorUserId);
+    return this.trips.create(tenantSlug, dto, actorUserId, access);
   }
 
   @Patch(':tripId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patchTrip(
     @TenantId() tenantSlug: string,
     @Param('tripId') tripId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertPatchTripDto(body);
-    return this.trips.patch(tenantSlug, tripId, dto, actorUserId);
+    return this.trips.patch(tenantSlug, tripId, dto, actorUserId, access);
   }
 
   @Delete(':tripId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(204)
   async deleteTrip(
     @TenantId() tenantSlug: string,
     @Param('tripId') tripId: string,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    await this.trips.delete(tenantSlug, tripId, actorUserId);
+    await this.trips.delete(tenantSlug, tripId, actorUserId, access);
   }
 }
 

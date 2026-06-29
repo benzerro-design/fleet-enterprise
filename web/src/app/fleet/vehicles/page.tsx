@@ -11,7 +11,7 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { type VehicleListPayload, VEHICLE_STATUSES, fleetBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -48,7 +48,7 @@ type PageProps = { searchParams: Promise<Search> };
 export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const [list, auth] = await Promise.all([getVehiclesList(sp), getAuthMeResult()]);
-  const write = canManageFleet(auth);
+  const write = canWriteFleetOps(auth);
 
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const pageSize = 20;

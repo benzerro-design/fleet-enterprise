@@ -3,7 +3,7 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { MaintenanceForm } from "@/components/fleet/MaintenanceForm";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
@@ -43,7 +43,7 @@ export default async function EditMaintenancePage({ params }: { params: Promise<
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect(`/login?next=${encodeURIComponent(`/fleet/maintenance/${id}/edit`)}`);
   }
-  if (!canManageFleet(auth)) {
+  if (!canWriteFleetOps(auth)) {
     redirect("/fleet/maintenance");
   }
   const [entry, vehicles] = await Promise.all([getEntry(id), getVehicleOptions()]);

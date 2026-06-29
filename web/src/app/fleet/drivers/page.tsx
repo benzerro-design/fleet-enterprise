@@ -9,7 +9,7 @@ import {
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { documentExpiryBadge } from "@/lib/document-expiry";
 import { driverStatusLabel, type DriverListPayload } from "@/lib/drivers-api";
@@ -54,7 +54,7 @@ export default async function FleetDriversPage({ searchParams }: PageProps) {
     loadClientOptions(),
     getAuthMeResult(),
   ]);
-  const write = canManageFleet(auth);
+  const write = canWriteFleetOps(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const withPage = (next: number) => {

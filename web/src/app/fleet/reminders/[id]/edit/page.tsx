@@ -3,7 +3,7 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ReminderForm } from "@/components/fleet/ReminderForm";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import type { ReminderActionRow } from "@/lib/reminder-actions";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
@@ -22,7 +22,7 @@ export default async function EditReminderPage({ params }: Props) {
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect(`/login?next=${encodeURIComponent(`/fleet/reminders/${id}/edit`)}`);
   }
-  if (!canManageFleet(auth)) redirect(`/fleet/reminders/${id}`);
+  if (!canWriteFleetOps(auth)) redirect(`/fleet/reminders/${id}`);
   if (!row) notFound();
   if (row.sourceType === "document") redirect(`/fleet/reminders/${id}`);
   if (row.sourceType === "maintenance") redirect(`/fleet/reminders/${id}`);

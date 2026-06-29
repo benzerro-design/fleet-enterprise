@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
 import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
+import { assertTripOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -366,9 +367,10 @@ export class TripsService {
     return toTripRow(row);
   }
 
-  async create(tenantSlug: string, dto: CreateTripInput, actorUserId?: string) {
+  async create(tenantSlug: string, dto: CreateTripInput, actorUserId?: string, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
     let tripDriverId: string | null = null;
@@ -435,7 +437,11 @@ export class TripsService {
     return { ...toTripRow(row), vehicleOdometerSync };
   }
 
-  async patch(tenantSlug: string, tripId: string, dto: PatchTripInput, actorUserId?: string) {
+  async patch(tenantSlug: string, tripId: string, dto: PatchTripInput, actorUserId?: string, access?: AccessContext) {
+    await assertTripOpsWrite(this.prisma, tenantSlug, tripId, access);
+    if (dto.vehicleId) {
+      await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
+    }
     const before = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },
       include: {
@@ -553,7 +559,8 @@ export class TripsService {
     return { ...updated, vehicleOdometerSync };
   }
 
-  async delete(tenantSlug: string, tripId: string, actorUserId?: string) {
+  async delete(tenantSlug: string, tripId: string, actorUserId?: string, access?: AccessContext) {
+    await assertTripOpsWrite(this.prisma, tenantSlug, tripId, access);
     const row = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },
       include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },

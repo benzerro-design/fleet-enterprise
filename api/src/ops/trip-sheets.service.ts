@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import type { Prisma, TripSheetDocType } from '@prisma/client';
 import { resolveClientInTenant, resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
+import type { AccessContext } from '../iam/access-context.types';
+import { assertVehicleOpsWrite } from './ops-write-access';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { tripPurposeLabel, tripRoadTypeLabel, tripSheetDocTypeLabel } from './trip-sheet-labels';
@@ -101,12 +103,40 @@ function toDocRow(row: {
   };
 }
 
+async function mergeTripSheetClientScope(
+  prisma: PrismaService,
+  tenantId: string,
+  parts: Prisma.TripSheetDocumentWhereInput[],
+  access?: AccessContext,
+): Promise<void> {
+  if (!access || access.isTenantWide) return;
+  if (access.allowedClientIds.length === 0) {
+    parts.push({ id: { in: [] } });
+    return;
+  }
+  const codes = access.clientMemberships.map((m) => m.clientCode);
+  const vehicles = await prisma.vehicle.findMany({
+    where: { tenantId, clientId: { in: access.allowedClientIds } },
+    select: { id: true },
+  });
+  const vehicleIds = vehicles.map((v) => v.id);
+  const orParts: Prisma.TripSheetDocumentWhereInput[] = codes.map((code) => ({
+    clientIdFilter: { equals: code, mode: 'insensitive' as const },
+  }));
+  if (vehicleIds.length > 0) {
+    orParts.push({ vehicleIds: { hasSome: vehicleIds } });
+  }
+  parts.push({ OR: orParts });
+}
+
 async function buildTripSheetWhere(
   prisma: PrismaService,
   tenantId: string,
   f: TripSheetBrowseFilters,
+  access?: AccessContext,
 ): Promise<Prisma.TripSheetDocumentWhereInput> {
   const parts: Prisma.TripSheetDocumentWhereInput[] = [{ tenantId }];
+  await mergeTripSheetClientScope(prisma, tenantId, parts, access);
 
   if (f.docType) {
     parts.push({ docType: f.docType });
@@ -178,7 +208,7 @@ export class TripSheetsService {
     private readonly pdfStorage: TripSheetPdfStorageService,
   ) {}
 
-  async list(tenantSlug: string, params: TripSheetListParams) {
+  async list(tenantSlug: string, params: TripSheetListParams, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -186,7 +216,7 @@ export class TripSheetsService {
     const take = Math.min(Math.max(1, params.pageSize), 50);
     const page = Math.max(1, params.page);
     const skip = (page - 1) * take;
-    const where = await buildTripSheetWhere(this.prisma, tenant.id, params);
+    const where = await buildTripSheetWhere(this.prisma, tenant.id, params, access);
     const [total, rows] = await Promise.all([
       this.prisma.tripSheetDocument.count({ where }),
       this.prisma.tripSheetDocument.findMany({
@@ -212,9 +242,12 @@ export class TripSheetsService {
     return { items: rows.map(toDocRow), total, page, pageSize: take };
   }
 
-  async getById(tenantSlug: string, docId: string) {
+  async getById(tenantSlug: string, docId: string, access?: AccessContext) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Document not found');
+    const scopeWhere = await buildTripSheetWhere(this.prisma, tenant.id, {}, access);
     const row = await this.prisma.tripSheetDocument.findFirst({
-      where: { id: docId, tenant: { slug: tenantSlug } },
+      where: { AND: [{ id: docId, tenantId: tenant.id }, scopeWhere] },
       select: {
         id: true,
         docType: true,
@@ -233,9 +266,12 @@ export class TripSheetsService {
     return toDocRow(row);
   }
 
-  async getPdfBuffer(tenantSlug: string, docId: string): Promise<Buffer> {
+  async getPdfBuffer(tenantSlug: string, docId: string, access?: AccessContext): Promise<Buffer> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Document not found');
+    const scopeWhere = await buildTripSheetWhere(this.prisma, tenant.id, {}, access);
     const row = await this.prisma.tripSheetDocument.findFirst({
-      where: { id: docId, tenant: { slug: tenantSlug } },
+      where: { AND: [{ id: docId, tenantId: tenant.id }, scopeWhere] },
       select: { pdfData: true, pdfStorageKey: true },
     });
     if (!row) throw new NotFoundException('Document not found');
@@ -248,7 +284,12 @@ export class TripSheetsService {
     throw new NotFoundException('PDF not available for this document');
   }
 
-  async generate(tenantSlug: string, input: GenerateTripSheetInput, actorUserId?: string) {
+  async generate(
+    tenantSlug: string,
+    input: GenerateTripSheetInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
@@ -264,6 +305,10 @@ export class TripSheetsService {
     }
     if (vehicleIds.length > MAX_VEHICLES) {
       throw new BadRequestException(`Maximum ${MAX_VEHICLES} vehicles per document`);
+    }
+
+    for (const vehicleId of vehicleIds) {
+      await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
     }
 
     let clientCodeFilter: string | null = null;

@@ -1,6 +1,6 @@
 import { FleetDashboardView } from "@/components/fleet/FleetDashboardView";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { getAuthMeResult, getDefaultFleetHome, isClientPortalUser } from "@/lib/auth-server";
+import { getAuthMeResult, getDefaultFleetHome, isClientTicketsOnly } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { FleetDashboardSnapshot } from "@/lib/fleet-dashboard";
 import Link from "next/link";
@@ -16,7 +16,7 @@ async function loadDashboard(): Promise<FleetDashboardSnapshot | null> {
 
 export default async function FleetDashboardPage() {
   const auth = await getAuthMeResult();
-  if (isClientPortalUser(auth)) {
+  if (isClientTicketsOnly(auth)) {
     redirect(getDefaultFleetHome(auth));
   }
 

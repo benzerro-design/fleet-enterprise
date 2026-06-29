@@ -18,7 +18,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
-import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { TripsService } from '../ops/trips.service';
 import { parseFuelTypesCsv } from '../ops/fuel-types';
@@ -126,48 +126,52 @@ export class DriversController {
   }
 
   @Post()
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   create(
     @TenantId() tenantSlug: string,
     @Body() body: CreateDriverInput,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.drivers.create(tenantSlug, body, actorUserId);
+    return this.drivers.create(tenantSlug, body, actorUserId, access);
   }
 
   @Patch(':id')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patch(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: PatchDriverInput,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.drivers.patch(tenantSlug, id, body, actorUserId);
+    return this.drivers.patch(tenantSlug, id, body, actorUserId, access);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   async remove(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    await this.drivers.delete(tenantSlug, id, actorUserId);
+    await this.drivers.delete(tenantSlug, id, actorUserId, access);
   }
 
   @Post(':id/assignments')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   createAssignment(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: CreateAssignmentInput,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.drivers.createAssignment(tenantSlug, id, body, actorUserId);
+    return this.drivers.createAssignment(tenantSlug, id, body, actorUserId, access);
   }
 
   @Patch(':id/assignments/:assignmentId/end')
@@ -192,39 +196,42 @@ export class DriversController {
   }
 
   @Post(':id/documents')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   createDocument(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: CreateDriverDocumentInput,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.attachments.createDocument(tenantSlug, id, body, actorUserId);
+    return this.attachments.createDocument(tenantSlug, id, body, actorUserId, access);
   }
 
   @Patch(':id/documents/:documentId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patchDocument(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Param('documentId') documentId: string,
     @Body() body: PatchDriverDocumentInput,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.attachments.patchDocument(tenantSlug, id, documentId, body, actorUserId);
+    return this.attachments.patchDocument(tenantSlug, id, documentId, body, actorUserId, access);
   }
 
   @Delete(':id/documents/:documentId')
   @HttpCode(204)
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   async deleteDocument(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Param('documentId') documentId: string,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    await this.attachments.deleteDocument(tenantSlug, id, documentId, actorUserId);
+    await this.attachments.deleteDocument(tenantSlug, id, documentId, actorUserId, access);
   }
 }
 

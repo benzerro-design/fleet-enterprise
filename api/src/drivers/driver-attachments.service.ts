@@ -7,6 +7,7 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessContext } from '../iam/access-context.types';
 import { driverClientScope } from '../iam/client-access';
+import { assertDriverOpsWrite } from '../ops/ops-write-access';
 
 const DRIVER_DOCUMENT_TYPES = new Set([
   'permis',
@@ -84,8 +85,10 @@ export class DriverAttachmentsService {
     driverId: string,
     input: CreateDriverDocumentInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<DriverDocumentRecord> {
-    const { tenant, driver } = await this.ensureDriver(tenantSlug, driverId);
+    await assertDriverOpsWrite(this.prisma, tenantSlug, driverId, access);
+    const { tenant, driver } = await this.ensureDriver(tenantSlug, driverId, access);
     const documentTypeCode = assertDocumentType(input.documentTypeCode);
     const title = input.title?.trim();
     const fileUrl = input.fileUrl?.trim();
@@ -123,8 +126,10 @@ export class DriverAttachmentsService {
     documentId: string,
     input: PatchDriverDocumentInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<DriverDocumentRecord> {
-    const { tenant } = await this.ensureDriver(tenantSlug, driverId);
+    await assertDriverOpsWrite(this.prisma, tenantSlug, driverId, access);
+    const { tenant } = await this.ensureDriver(tenantSlug, driverId, access);
     const existing = await this.findDocument(driverId, documentId);
 
     const row = await this.prisma.driverDocument.update({
@@ -158,8 +163,10 @@ export class DriverAttachmentsService {
     driverId: string,
     documentId: string,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<void> {
-    const { tenant } = await this.ensureDriver(tenantSlug, driverId);
+    await assertDriverOpsWrite(this.prisma, tenantSlug, driverId, access);
+    const { tenant } = await this.ensureDriver(tenantSlug, driverId, access);
     const existing = await this.findDocument(driverId, documentId);
     await this.prisma.driverDocument.delete({ where: { id: existing.id } });
     await this.audit.log({

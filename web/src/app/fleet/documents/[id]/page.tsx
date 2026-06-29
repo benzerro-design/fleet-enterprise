@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
 import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry";
 import {
   formatOffsetDaysLabel,
@@ -46,7 +46,7 @@ export default async function DocumentDetailPage({
   const [row, auth] = await Promise.all([getDocument(id), getAuthMeResult()]);
   if (!row) notFound();
 
-  const write = canManageFleet(auth);
+  const write = canWriteFleetOps(auth);
   const expiry = documentExpiryStatus(row.expiresOn);
   const badge = documentExpiryBadge(expiry);
 

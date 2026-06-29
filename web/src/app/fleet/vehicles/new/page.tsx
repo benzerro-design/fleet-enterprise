@@ -2,14 +2,14 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { VehicleForm } from "@/components/fleet/VehicleForm";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 
 export default async function NewVehiclePage() {
   const auth = await getAuthMeResult();
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect("/login?next=/fleet/vehicles/new");
   }
-  if (!canManageFleet(auth)) {
+  if (!canWriteFleetOps(auth)) {
     redirect("/fleet/vehicles");
   }
 

@@ -3,11 +3,11 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { DriverForm } from "@/components/fleet/DriverForm";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 
 export default async function NewDriverPage() {
   const auth = await getAuthMeResult();
-  if (!canManageFleet(auth)) redirect("/fleet/drivers");
+  if (!canWriteFleetOps(auth)) redirect("/fleet/drivers");
 
   return (
     <FleetPageMain narrow="sm">

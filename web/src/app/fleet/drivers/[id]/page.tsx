@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DriverProfileTabs } from "@/components/fleet/DriverProfileTabs";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { documentExpiryBadge } from "@/lib/document-expiry";
 import { driverStatusLabel, type DriverDetailPayload, type DriverDocumentRecord } from "@/lib/drivers-api";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
@@ -114,7 +114,7 @@ export default async function DriverDetailPage({ params, searchParams }: PagePro
   if (!data) notFound();
 
   const { driver, assignments } = data;
-  const canWrite = canManageFleet(auth);
+  const canWrite = canWriteFleetOps(auth);
 
   return (
     <FleetPageMain>

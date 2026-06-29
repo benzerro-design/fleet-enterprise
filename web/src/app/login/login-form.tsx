@@ -46,7 +46,7 @@ export function LoginForm({ nextPath }: Props) {
         if (meRes.ok) {
           const me = (await meRes.json()) as { role?: string; clientPortal?: "fleet" | "tickets" };
           if (me.role === "client_user") {
-            destination = me.clientPortal === "fleet" ? "/fleet/vehicles" : "/fleet/tickets";
+            destination = me.clientPortal === "fleet" ? "/fleet/dashboard" : "/fleet/tickets";
           }
         }
       } catch {

@@ -80,9 +80,13 @@ export class ClientsController {
   }
 
   @Get(':id/summary')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  summary(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.clients.getSummary(tenantSlug, id);
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  summary(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.getSummary(tenantSlug, id, access);
   }
 
   @Get(':id/subscriptions')

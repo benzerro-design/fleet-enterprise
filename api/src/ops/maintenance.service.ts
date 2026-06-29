@@ -8,6 +8,7 @@ import { isItpMaintenanceAllocation, syncItpCertDocument, syncVehicleItpFromOps 
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
 import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
+import { assertMaintenanceOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -355,9 +356,10 @@ export class MaintenanceService {
     return toMaintRow(row);
   }
 
-  async create(tenantSlug: string, dto: CreateMaintenanceInput, actorUserId?: string) {
+  async create(tenantSlug: string, dto: CreateMaintenanceInput, actorUserId?: string, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
     const row = await this.prisma.maintenanceEntry.create({
@@ -438,7 +440,11 @@ export class MaintenanceService {
     return { ...toMaintRow(row), reminderSyncFailed, vehicleOdometerSync };
   }
 
-  async patch(tenantSlug: string, id: string, dto: PatchMaintenanceInput, actorUserId?: string) {
+  async patch(tenantSlug: string, id: string, dto: PatchMaintenanceInput, actorUserId?: string, access?: AccessContext) {
+    await assertMaintenanceOpsWrite(this.prisma, tenantSlug, id, access);
+    if (dto.vehicleId) {
+      await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
+    }
     const before = await this.prisma.maintenanceEntry.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
       include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
@@ -633,7 +639,8 @@ export class MaintenanceService {
     return false;
   }
 
-  async delete(tenantSlug: string, id: string, actorUserId?: string) {
+  async delete(tenantSlug: string, id: string, actorUserId?: string, access?: AccessContext) {
+    await assertMaintenanceOpsWrite(this.prisma, tenantSlug, id, access);
     const row = await this.prisma.maintenanceEntry.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
       include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },

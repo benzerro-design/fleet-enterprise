@@ -38,6 +38,7 @@ import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TenantId } from './tenant-id.decorator';
 import { DriversService } from '../drivers/drivers.service';
 import { assertFuelType, parseFuelType } from '../ops/fuel-types';
+import { FLEET_WRITE_ROLES } from '../iam/role-sets';
 
 @Controller('fleet')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -51,9 +52,12 @@ export class FleetController {
   ) {}
 
   @Get('dashboard')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getDashboard(@TenantId() tenantSlug: string) {
-    return this.dashboard.getSnapshot(tenantSlug);
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  getDashboard(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.dashboard.getSnapshot(tenantSlug, access);
   }
 
   @Get('vehicles/export')
@@ -117,27 +121,29 @@ export class FleetController {
   }
 
   @Post('vehicles')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   createVehicle(
     @TenantId() tenantId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertCreateVehicleDto(body);
-    return this.fleet.createVehicle(tenantId, dto, actorUserId);
+    return this.fleet.createVehicle(tenantId, dto, actorUserId, access);
   }
 
   @Patch('vehicles/:vehicleId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patchVehicle(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertPatchVehicleDto(body);
-    return this.fleet.patchVehicle(tenantId, vehicleId, dto, actorUserId);
+    return this.fleet.patchVehicle(tenantId, vehicleId, dto, actorUserId, access);
   }
 
   @Get('vehicles/:vehicleId/driver-assignments')
@@ -308,27 +314,29 @@ export class FleetController {
   }
 
   @Delete('vehicles/:vehicleId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(204)
   deleteVehicle(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.fleet.deleteVehicle(tenantId, vehicleId, actorUserId);
+    return this.fleet.deleteVehicle(tenantId, vehicleId, actorUserId, access);
   }
 
   @Post('vehicles/:vehicleId/documents')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   addVehicleDocument(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertCreateVehicleDocumentDto(body);
-    return this.fleet.addVehicleDocument(tenantId, vehicleId, dto, actorUserId);
+    return this.fleet.addVehicleDocument(tenantId, vehicleId, dto, actorUserId, access);
   }
 }
 

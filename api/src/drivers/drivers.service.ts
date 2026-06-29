@@ -13,6 +13,7 @@ import {
   driverClientScope,
   isDriverOnlyClientUser,
 } from '../iam/client-access';
+import { assertClientCodeOpsWrite, assertDriverOpsWrite, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import { licenseExpiryStatus, licenseExpiryWhere, type LicenseExpiryStatus } from './license-expiry';
 
 const MAX_PAGE_SIZE = 200;
@@ -280,11 +281,13 @@ export class DriversService {
     tenantSlug: string,
     input: CreateDriverInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<DriverRecord> {
     const tenant = await this.ensureTenant(tenantSlug);
     const fullName = input.fullName?.trim();
     if (!fullName) throw new BadRequestException('fullName is required');
 
+    await assertClientCodeOpsWrite(this.prisma, tenant.id, input.clientId, access);
     const client = await resolveClientInTenant(this.prisma, tenant.id, input.clientId);
 
     const row = await this.prisma.driver.create({
@@ -327,12 +330,15 @@ export class DriversService {
     id: string,
     input: PatchDriverInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<DriverRecord> {
+    await assertDriverOpsWrite(this.prisma, tenantSlug, id, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const existing = await this.findDriverRow(tenantSlug, id);
 
     let resolvedClientId: string | undefined;
     if (input.clientId !== undefined) {
+      await assertClientCodeOpsWrite(this.prisma, tenant.id, input.clientId, access);
       const client = await resolveClientInTenant(this.prisma, tenant.id, input.clientId);
       if (client.id !== existing.clientId) {
         const activeAssignments = await this.prisma.driverVehicleAssignment.count({
@@ -388,7 +394,8 @@ export class DriversService {
     return this.toRecord(row);
   }
 
-  async delete(tenantSlug: string, id: string, actorUserId?: string): Promise<void> {
+  async delete(tenantSlug: string, id: string, actorUserId?: string, access?: AccessContext): Promise<void> {
+    await assertDriverOpsWrite(this.prisma, tenantSlug, id, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const existing = await this.findDriverRow(tenantSlug, id);
     const active = await this.prisma.driverVehicleAssignment.count({
@@ -414,7 +421,10 @@ export class DriversService {
     driverId: string,
     input: CreateAssignmentInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<DriverAssignmentRecord> {
+    await assertDriverOpsWrite(this.prisma, tenantSlug, driverId, access);
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, input.vehicleId, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const driver = await this.findDriverRow(tenantSlug, driverId);
 

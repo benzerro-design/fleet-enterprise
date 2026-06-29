@@ -3,7 +3,7 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CostForm } from "@/components/fleet/CostForm";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 import type { FuelTypeValue } from "@/lib/fuel-types";
@@ -41,7 +41,7 @@ export default async function EditCostPage({ params }: { params: Promise<{ id: s
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect(`/login?next=${encodeURIComponent(`/fleet/costs/${id}/edit`)}`);
   }
-  if (!canManageFleet(auth)) {
+  if (!canWriteFleetOps(auth)) {
     redirect("/fleet/costs");
   }
   const [entry, vehicles] = await Promise.all([getEntry(id), getVehicleOptions()]);

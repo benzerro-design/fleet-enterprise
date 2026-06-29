@@ -19,6 +19,7 @@ function jwtPayload(token: string): JwtFleetPayload | undefined {
 
 /** Rute permise managerului/dispecerului client (flotă scoped). */
 const CLIENT_FLEET_PREFIXES = [
+  "/fleet/dashboard",
   "/fleet/vehicles",
   "/fleet/trips",
   "/fleet/documents",
@@ -30,7 +31,7 @@ const CLIENT_FLEET_PREFIXES = [
   "/fleet/tickets",
 ];
 
-const CLIENT_FLEET_HOME = "/fleet/vehicles";
+const CLIENT_FLEET_HOME = "/fleet/dashboard";
 const CLIENT_TICKETS_HOME = "/fleet/tickets";
 
 function pathAllowed(prefixes: string[], pathname: string): boolean {
@@ -64,7 +65,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/fleet/dashboard") || pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit")) {
+  if (pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit")) {
     return NextResponse.redirect(new URL(CLIENT_FLEET_HOME, request.url));
   }
 

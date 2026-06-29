@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { DriverForm } from "@/components/fleet/DriverForm";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import type { DriverRecord } from "@/lib/drivers-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
@@ -20,7 +20,7 @@ async function loadDriver(id: string): Promise<DriverRecord | null> {
 export default async function EditDriverPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const auth = await getAuthMeResult();
-  if (!canManageFleet(auth)) redirect("/fleet/drivers");
+  if (!canWriteFleetOps(auth)) redirect("/fleet/drivers");
 
   const driver = await loadDriver(id);
   if (!driver) notFound();

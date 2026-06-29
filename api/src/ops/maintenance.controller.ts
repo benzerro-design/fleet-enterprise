@@ -18,7 +18,7 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
-import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
@@ -79,38 +79,41 @@ export class MaintenanceController {
   }
 
   @Post()
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   create(
     @TenantId() tenantSlug: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertCreateMaintenanceDto(body);
-    return this.maintenance.create(tenantSlug, dto, actorUserId);
+    return this.maintenance.create(tenantSlug, dto, actorUserId, access);
   }
 
   @Patch(':id')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patch(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertPatchMaintenanceDto(body);
-    return this.maintenance.patch(tenantSlug, id, dto, actorUserId);
+    return this.maintenance.patch(tenantSlug, id, dto, actorUserId, access);
   }
 
   @Delete(':id')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(204)
   async remove(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    await this.maintenance.delete(tenantSlug, id, actorUserId);
+    await this.maintenance.delete(tenantSlug, id, actorUserId, access);
   }
 }
 

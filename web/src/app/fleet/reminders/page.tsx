@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { RemindersListView } from "@/components/fleet/RemindersListView";
 import { RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolbar";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { remindersBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import type { DriverLicenseAlert } from "@/lib/drivers-api";
@@ -52,7 +52,7 @@ async function loadDriverLicenseAlerts(): Promise<DriverLicenseAlert[]> {
 export default async function FleetRemindersPage({ searchParams }: Props) {
   const sp = await searchParams;
   const [auth, licenseAlerts] = await Promise.all([getAuthMeResult(), loadDriverLicenseAlerts()]);
-  const write = canManageFleet(auth);
+  const write = canWriteFleetOps(auth);
   const exportQs = buildExportQuery(sp);
   const exportHref = `${remindersBrowserBase}/export${exportQs ? `?${exportQs}` : ""}`;
 

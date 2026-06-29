@@ -4,6 +4,7 @@ import {
   MembershipRole,
   type Prisma,
 } from '@prisma/client';
+import { ForbiddenException } from '@nestjs/common';
 import type { AccessContext, ClientMembershipContext } from './access-context.types';
 
 export function isTenantWideAccess(ctx: AccessContext): boolean {
@@ -213,4 +214,22 @@ export function assertClientAccess(ctx: AccessContext, clientId: string): void {
   if (!ctx.allowedClientIds.includes(clientId)) {
     throw new Error('CLIENT_ACCESS_DENIED');
   }
+}
+
+/** Scriere operațională (vehicule, curse, costuri…) — nu creare organizație client. */
+export function canWriteClientFleet(ctx: AccessContext): boolean {
+  if (isTenantWideAccess(ctx)) {
+    return ctx.membershipRole === MembershipRole.tenant_admin;
+  }
+  return ctx.clientMemberships.some(
+    (m) => m.role === ClientRole.client_admin || m.role === ClientRole.client_dispatcher,
+  );
+}
+
+export function assertClientFleetWrite(ctx: AccessContext, clientId: string): void {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) return;
+  if (!canWriteClientFleet(ctx)) {
+    throw new ForbiddenException('Insufficient permissions for fleet write');
+  }
+  assertClientAccess(ctx, clientId);
 }

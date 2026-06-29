@@ -6,6 +6,7 @@ import { DEFAULT_REMINDER_OFFSETS, normalizeReminderOffsets } from './document-r
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
 import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
+import { assertReminderOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -342,9 +343,10 @@ export class RemindersService {
     };
   }
 
-  async create(tenantSlug: string, dto: CreateReminderInput, actorUserId?: string) {
+  async create(tenantSlug: string, dto: CreateReminderInput, actorUserId?: string, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     const vehicle = await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
     const enriched = await this.enrichDtoFromLinks(tenant.id, dto);
@@ -366,7 +368,11 @@ export class RemindersService {
     return toRow(row);
   }
 
-  async patch(tenantSlug: string, id: string, dto: PatchReminderInput, actorUserId?: string) {
+  async patch(tenantSlug: string, id: string, dto: PatchReminderInput, actorUserId?: string, access?: AccessContext) {
+    await assertReminderOpsWrite(this.prisma, tenantSlug, id, access);
+    if (dto.vehicleId) {
+      await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
+    }
     const before = await this.prisma.reminderAction.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
       include: { vehicle: { select: { registrationNumber: true, tenantId: true } } },
@@ -399,7 +405,8 @@ export class RemindersService {
     return toRow(row);
   }
 
-  async delete(tenantSlug: string, id: string, actorUserId?: string) {
+  async delete(tenantSlug: string, id: string, actorUserId?: string, access?: AccessContext) {
+    await assertReminderOpsWrite(this.prisma, tenantSlug, id, access);
     const row = await this.prisma.reminderAction.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
       include: { vehicle: { select: { registrationNumber: true, tenantId: true } } },

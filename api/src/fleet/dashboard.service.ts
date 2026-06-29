@@ -8,6 +8,8 @@ import {
   normalizeReminderOffsetsKm,
 } from '../ops/reminder-status';
 import { PrismaService } from '../prisma/prisma.service';
+import type { AccessContext } from '../iam/access-context.types';
+import { vehicleClientScope } from '../iam/client-access';
 import type {
   FleetDashboardItpRow,
   FleetDashboardReminderRow,
@@ -97,7 +99,7 @@ const reminderInclude = {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSnapshot(tenantSlug: string): Promise<FleetDashboardSnapshot> {
+  async getSnapshot(tenantSlug: string, access?: AccessContext): Promise<FleetDashboardSnapshot> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return emptySnapshot();
 
@@ -106,7 +108,11 @@ export class DashboardService {
     const in60 = addUtcDays(today, 60);
     const expiringUntil = addUtcDays(today, DOCUMENT_EXPIRING_WITHIN_DAYS);
     const month = currentMonthRangeUtc();
-    const vehicleBase = { tenantId: tenant.id };
+    const clientVehicleScope = access ? vehicleClientScope(access) : {};
+    const vehicleBase = { tenantId: tenant.id, ...clientVehicleScope };
+    const vehicleLinked = access && !access.isTenantWide
+      ? { vehicle: { tenantId: tenant.id, ...clientVehicleScope } }
+      : { vehicle: vehicleBase };
     const activeItpWindow = {
       status: VehicleStatus.active,
       itpExpiresOn: { not: null },
@@ -145,19 +151,20 @@ export class DashboardService {
       }),
       this.prisma.vehicleDocument.count({
         where: {
-          vehicle: vehicleBase,
+          ...vehicleLinked,
           expiresOn: { lt: today },
         },
       }),
       this.prisma.vehicleDocument.count({
         where: {
-          vehicle: vehicleBase,
+          ...vehicleLinked,
           expiresOn: { gte: today, lte: expiringUntil },
         },
       }),
       this.prisma.costEntry.aggregate({
         where: {
           tenantId: tenant.id,
+          ...vehicleLinked,
           incurredOn: { gte: month.start, lte: month.end },
         },
         _sum: { amountCents: true },
@@ -165,6 +172,7 @@ export class DashboardService {
       this.prisma.trip.count({
         where: {
           tenantId: tenant.id,
+          ...vehicleLinked,
           startedAt: { gte: month.start, lte: month.end },
         },
       }),
@@ -184,13 +192,13 @@ export class DashboardService {
         take: ITP_LIST_LIMIT,
       }),
       this.prisma.reminderAction.findMany({
-        where: { tenantId: tenant.id, isActive: true },
+        where: { tenantId: tenant.id, isActive: true, ...vehicleLinked },
         include: reminderInclude,
         orderBy: [{ dueOn: 'asc' }, { createdAt: 'desc' }],
         take: REMINDER_SCAN_LIMIT,
       }),
       this.prisma.reminderAction.count({
-        where: { tenantId: tenant.id, isActive: true },
+        where: { tenantId: tenant.id, isActive: true, ...vehicleLinked },
       }),
     ]);
 

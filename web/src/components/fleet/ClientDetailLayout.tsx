@@ -6,7 +6,8 @@ import type { ClientDetailData } from "@/lib/client-detail-server";
 
 type Props = {
   data: ClientDetailData;
-  canWrite: boolean;
+  canEditClient: boolean;
+  canWriteFleet: boolean;
 };
 
 function healthBadgeClass(label: string | undefined): string {
@@ -15,7 +16,7 @@ function healthBadgeClass(label: string | undefined): string {
   return "border-rose-500/40 bg-rose-500/10 text-rose-300";
 }
 
-export function ClientDetailLayout({ data, canWrite }: Props) {
+export function ClientDetailLayout({ data, canEditClient, canWriteFleet }: Props) {
   const { client } = data;
 
   return (
@@ -42,7 +43,7 @@ export function ClientDetailLayout({ data, canWrite }: Props) {
             ) : null}
           </p>
         </div>
-        {canWrite ? (
+        {canEditClient ? (
           <Link
             href={`/fleet/clients/${client.id}/edit`}
             className="inline-flex shrink-0 items-center justify-center rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
@@ -53,7 +54,7 @@ export function ClientDetailLayout({ data, canWrite }: Props) {
       </div>
 
       <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă profilul client…</p>}>
-        <ClientProfileTabs data={data} canWrite={canWrite} />
+        <ClientProfileTabs data={data} canWrite={canWriteFleet} />
       </Suspense>
     </FleetPageMain>
   );

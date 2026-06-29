@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { TicketForm } from "@/components/fleet/TicketForm";
-import { canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTickets, defaultClientCodeForTickets, getAuthMeResult } from "@/lib/auth-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 type Search = {
@@ -18,6 +18,7 @@ export default async function NewTicketPage({ searchParams }: { searchParams: Pr
   const auth = await getAuthMeResult();
   if (!canWriteTickets(auth)) redirect("/fleet/tickets");
   const vehicles = await getVehicleOptions();
+  const defaultClient = sp.client ?? defaultClientCodeForTickets(auth);
 
   return (
     <FleetPageMain narrow="sm">
@@ -31,7 +32,7 @@ export default async function NewTicketPage({ searchParams }: { searchParams: Pr
         <TicketForm
           vehicles={vehicles}
           initial={{
-            clientId: sp.client,
+            clientId: defaultClient,
             vehicleId: sp.vehicleId,
             reminderActionId: sp.reminderActionId,
             subject: sp.subject,

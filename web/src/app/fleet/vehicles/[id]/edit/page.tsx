@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { VehicleDetailLayout } from "@/components/fleet/VehicleDetailLayout";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { loadVehicleDetail } from "@/lib/vehicle-detail-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
@@ -11,7 +11,7 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect(`/login?next=${encodeURIComponent(`/fleet/vehicles/${id}/edit`)}`);
   }
-  if (!canManageFleet(auth)) {
+  if (!canWriteFleetOps(auth)) {
     redirect(`/fleet/vehicles/${id}`);
   }
 

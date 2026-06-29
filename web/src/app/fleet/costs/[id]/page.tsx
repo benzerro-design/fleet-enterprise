@@ -2,7 +2,7 @@
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { formatRonFromCents } from "@/lib/money";
 
@@ -33,7 +33,7 @@ export default async function CostDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const [row, auth] = await Promise.all([getEntry(id), getAuthMeResult()]);
   if (!row) notFound();
-  const write = canManageFleet(auth);
+  const write = canWriteFleetOps(auth);
 
   return (
     <FleetPageMain narrow="md">

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteReminderButton } from "@/components/fleet/DeleteReminderButton";
 import { ReminderActionStatusBadge } from "@/components/fleet/ReminderActionStatusBadge";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { formatOffsetDaysLabel } from "@/lib/document-reminders";
 import { formatOffsetKmLabel, reminderSourceLabel, type ReminderActionRow } from "@/lib/reminder-actions";
 import { documentTypeLabel } from "@/lib/document-types";
@@ -23,7 +23,7 @@ export default async function ReminderDetailPage({ params }: Props) {
   const { id } = await params;
   const [row, auth] = await Promise.all([getRow(id), getAuthMeResult()]);
   if (!row) notFound();
-  const write = canManageFleet(auth);
+  const write = canWriteFleetOps(auth);
   const canEdit = write && row.sourceType === "custom";
 
   const sourceEdit =

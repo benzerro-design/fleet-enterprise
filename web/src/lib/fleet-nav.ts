@@ -222,7 +222,6 @@ function filterEntry(entry: FleetNavEntry, ctx: FleetNavContext): FleetNavEntry 
   if (entry.kind === "soon") return entry;
   if (entry.adminOnly && !ctx.canWrite) return null;
   if (entry.requireAuth && !ctx.authenticated) return null;
-  if (ctx.clientFleetPortal && entry.kind === "link" && entry.href === "/fleet/dashboard") return null;
   return entry;
 }
 

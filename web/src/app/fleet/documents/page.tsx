@@ -4,7 +4,7 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
 import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry";
 import type { DocumentReminderSummary } from "@/lib/document-reminders";
 import { documentsBrowserBase } from "@/lib/fleet-api";
@@ -78,7 +78,7 @@ type Props = { searchParams: Promise<Search> };
 export default async function DocumentsPage({ searchParams }: Props) {
   const sp = await searchParams;
   const [data, auth] = await Promise.all([fetchRows(sp), getAuthMeResult()]);
-  const write = canManageFleet(auth);
+  const write = canWriteFleetOps(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
 

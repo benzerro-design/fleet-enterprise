@@ -16,6 +16,9 @@ import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import type {
   GenerateTripSheetInput,
@@ -29,9 +32,10 @@ export class TripSheetsController {
   constructor(private readonly tripSheets: TripSheetsService) {}
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query() q: Record<string, string | undefined>,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
@@ -42,14 +46,18 @@ export class TripSheetsController {
       page,
       pageSize,
       ...parseTripSheetBrowseQuery(q),
-    });
+    }, access);
   }
 
   @Get(':docId/pdf')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   @Header('Content-Type', 'application/pdf')
-  async downloadPdf(@TenantId() tenantSlug: string, @Param('docId') docId: string) {
-    const buf = await this.tripSheets.getPdfBuffer(tenantSlug, docId);
+  async downloadPdf(
+    @TenantId() tenantSlug: string,
+    @Param('docId') docId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const buf = await this.tripSheets.getPdfBuffer(tenantSlug, docId, access);
     const safeId = docId.replace(/[^a-zA-Z0-9_-]/g, '');
     return new StreamableFile(buf, {
       disposition: `attachment; filename="trip-sheet-${safeId}.pdf"`,
@@ -57,21 +65,26 @@ export class TripSheetsController {
   }
 
   @Get(':docId')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getOne(@TenantId() tenantSlug: string, @Param('docId') docId: string) {
-    return this.tripSheets.getById(tenantSlug, docId);
+  @Roles(...FLEET_READ_ROLES)
+  getOne(
+    @TenantId() tenantSlug: string,
+    @Param('docId') docId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tripSheets.getById(tenantSlug, docId, access);
   }
 
   @Post('generate')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   generate(
     @TenantId() tenantSlug: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertGenerateDto(body);
-    return this.tripSheets.generate(tenantSlug, dto, actorUserId);
+    return this.tripSheets.generate(tenantSlug, dto, actorUserId, access);
   }
 }
 

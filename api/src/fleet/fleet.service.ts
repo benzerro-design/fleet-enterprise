@@ -30,6 +30,7 @@ import { buildVehicleMobilityPayload } from './vehicle-mobility';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
 import { vehicleClientScope } from '../iam/client-access';
+import { assertClientCodeOpsWrite, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import {
   CIV_PROFILE_FIELDS,
   normalizeCivProfile,
@@ -286,8 +287,10 @@ export class FleetService {
     tenantSlug: string,
     dto: CreateVehicleDto,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<VehicleRecord & { reminderSyncFailed?: boolean }> {
     const tenant = await this.ensureTenant(tenantSlug);
+    await assertClientCodeOpsWrite(this.prisma, tenant.id, dto.clientId, access);
     const hasItp = Boolean(dto.itpExpiresOn);
     const client = await this.clients.resolveForVehicle(tenant.id, dto.clientId);
 
@@ -365,11 +368,17 @@ export class FleetService {
     vehicleId: string,
     dto: PatchVehicleDto,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<VehicleRecord & { reminderSyncFailed?: boolean }> {
     if (dto.odometerKm !== undefined) {
       throw new ConflictException(
         'Odometrul se actualizează doar din tab-ul Odometru al vehiculului.',
       );
+    }
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    if (dto.clientId !== undefined) {
+      const tenant = await this.ensureTenant(tenantSlug);
+      await assertClientCodeOpsWrite(this.prisma, tenant.id, dto.clientId, access);
     }
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
@@ -915,7 +924,9 @@ export class FleetService {
     vehicleId: string,
     dto: CreateVehicleDocumentDto,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<VehicleDocument> {
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: { tenantId: true, registrationNumber: true },
@@ -953,7 +964,9 @@ export class FleetService {
     tenantSlug: string,
     vehicleId: string,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<void> {
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: {

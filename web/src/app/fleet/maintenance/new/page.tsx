@@ -3,7 +3,7 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MaintenanceForm } from "@/components/fleet/MaintenanceForm";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 export default async function NewMaintenancePage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
@@ -12,7 +12,7 @@ export default async function NewMaintenancePage({ searchParams }: { searchParam
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect("/login?next=/fleet/maintenance/new");
   }
-  if (!canManageFleet(auth)) {
+  if (!canWriteFleetOps(auth)) {
     redirect("/fleet/maintenance");
   }
   const vehicles = await getVehicleOptions();

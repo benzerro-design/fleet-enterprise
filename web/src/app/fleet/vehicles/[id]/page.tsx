@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { VehicleDetailLayout } from "@/components/fleet/VehicleDetailLayout";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { loadVehicleDetail } from "@/lib/vehicle-detail-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
@@ -18,7 +18,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       data={data}
       vehicles={vehicles}
       editable={false}
-      canWrite={canManageFleet(auth)}
+      canWrite={canWriteFleetOps(auth)}
     />
   );
 }

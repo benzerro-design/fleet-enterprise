@@ -11,7 +11,7 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { costsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -85,7 +85,7 @@ type Props = { searchParams: Promise<Search> };
 export default async function CostsPage({ searchParams }: Props) {
   const sp = await searchParams;
   const [data, auth] = await Promise.all([fetchRows(sp), getAuthMeResult()]);
-  const write = canManageFleet(auth);
+  const write = canWriteFleetOps(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
 

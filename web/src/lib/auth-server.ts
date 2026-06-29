@@ -40,6 +40,28 @@ export function canManageFleet(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "tenant_admin";
 }
 
+export function canWriteClientFleet(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") return true;
+  if (auth.me.role === "client_user") {
+    const roles = auth.me.access?.clientMemberships.map((m) => m.role) ?? [];
+    return roles.some((r) => r === "client_admin" || r === "client_dispatcher");
+  }
+  return false;
+}
+
+/** Scriere operațională flotă — tenant_admin sau client_admin/dispatcher scoped. */
+export function canWriteFleetOps(auth: AuthMeResult): boolean {
+  return canManageFleet(auth) || canWriteClientFleet(auth);
+}
+
+export function defaultClientCodeForTickets(auth: AuthMeResult): string | undefined {
+  if (!auth.ok || auth.me.role !== "client_user") return undefined;
+  const memberships = auth.me.access?.clientMemberships ?? [];
+  if (memberships.length === 1) return memberships[0].clientCode;
+  return undefined;
+}
+
 /** CRM și acțiuni L0/L1 pentru useri client (nu client_viewer). */
 export function canWriteTickets(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
@@ -63,9 +85,9 @@ export function isClientFleetPortal(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "client_user" && auth.me.clientPortal === "fleet";
 }
 
-/** Pagină implicită după login — șoferi la tichete, manager client la vehicule. */
+/** Pagină implicită după login — șoferi la tichete, manager client la panou scoped. */
 export function getDefaultFleetHome(auth: AuthMeResult): string {
-  if (isClientFleetPortal(auth)) return "/fleet/vehicles";
+  if (isClientFleetPortal(auth)) return "/fleet/dashboard";
   if (isClientPortalUser(auth)) return "/fleet/tickets";
   return "/fleet/dashboard";
 }

@@ -197,9 +197,9 @@ export class ClientsService {
     });
   }
 
-  async getSummary(tenantSlug: string, id: string): Promise<ClientSummaryPayload> {
+  async getSummary(tenantSlug: string, id: string, access?: AccessContext): Promise<ClientSummaryPayload> {
     const row = await this.findRow(tenantSlug, id);
-    const client = await this.getById(tenantSlug, id);
+    const client = await this.getById(tenantSlug, id, access);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const in30 = addDays(today, 30);

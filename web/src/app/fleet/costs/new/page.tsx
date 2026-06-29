@@ -3,7 +3,7 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CostForm } from "@/components/fleet/CostForm";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 export default async function NewCostPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string; category?: string }> }) {
@@ -12,7 +12,7 @@ export default async function NewCostPage({ searchParams }: { searchParams: Prom
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect("/login?next=/fleet/costs/new");
   }
-  if (!canManageFleet(auth)) {
+  if (!canWriteFleetOps(auth)) {
     redirect("/fleet/costs");
   }
   const vehicles = await getVehicleOptions();
