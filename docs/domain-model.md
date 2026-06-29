@@ -28,7 +28,7 @@ Stabilim un set de entitati canonice care vor fi folosite atat in API (NestJS), 
   - `fuelType: 'diesel' | 'petrol' | 'cng' | 'lng' | 'electric' | 'hybrid'`
   - legaturi:
     - `currentDriverId?: string`
-    - `composedWithTrailerId?: string` (pentru ansamblu)
+    - `composedWithTrailerId?: string` (pentru ansamblu — vezi [`todo-vehicle-assemblies.md`](todo-vehicle-assemblies.md))
 
 - `Trailer` / `SemiTrailer` reuseaza acelasi model, diferentiat prin `type`.
 

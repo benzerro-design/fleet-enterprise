@@ -83,12 +83,20 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
 
             <div className="flex flex-wrap gap-2">
               {write ? (
-                <Link
-                  href="/fleet/vehicles/new"
-                  className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
-                >
-                  Vehicul nou
-                </Link>
+                <>
+                  <Link
+                    href="/fleet/vehicles/new"
+                    className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                  >
+                    Vehicul nou
+                  </Link>
+                  <Link
+                    href="/fleet/vehicles/assemblies/new"
+                    className="inline-flex items-center justify-center rounded-lg border border-emerald-600/50 bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-950/50"
+                  >
+                    Ansamblu nou
+                  </Link>
+                </>
               ) : null}
               <a
                 href={exportHref}
