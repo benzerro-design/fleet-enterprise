@@ -23,6 +23,11 @@ export function clientIdsFilter(ctx: AccessContext): Prisma.ClientWhereInput {
 
 export function vehicleClientScope(ctx: AccessContext): Prisma.VehicleWhereInput {
   if (isTenantWideAccess(ctx)) return {};
+  if (isDriverOnlyClientUser(ctx)) {
+    const ids = ctx.assignedVehicleIds ?? [];
+    if (ids.length === 0) return { id: { in: [] } };
+    return { id: { in: ids } };
+  }
   if (ctx.allowedClientIds.length === 0) return { clientId: { in: [] } };
   return { clientId: { in: ctx.allowedClientIds } };
 }

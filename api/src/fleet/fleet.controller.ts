@@ -225,16 +225,17 @@ export class FleetController {
   }
 
   @Post('vehicles/:vehicleId/photos')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   addVehiclePhoto(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertCreateVehiclePhotoDto(body);
-    return this.fleet.addVehiclePhoto(tenantId, vehicleId, dto, actorUserId);
+    return this.fleet.addVehiclePhoto(tenantId, vehicleId, dto, actorUserId, access);
   }
 
   @Delete('vehicles/:vehicleId/photos/:photoId')
@@ -262,16 +263,17 @@ export class FleetController {
   }
 
   @Post('vehicles/:vehicleId/odometer-readings')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   recordOdometerReading(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertRecordOdometerDto(body);
-    return this.fleet.recordOdometerReading(tenantId, vehicleId, dto, actorUserId);
+    return this.fleet.recordOdometerReading(tenantId, vehicleId, dto, actorUserId, access);
   }
 
   @Get('vehicles/:vehicleId/maintenance-plan')
@@ -285,37 +287,40 @@ export class FleetController {
   }
 
   @Post('vehicles/:vehicleId/maintenance-plan')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   createMaintenancePlanItem(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.maintenancePlan.create(tenantId, vehicleId, assertCreateMaintenancePlanDto(body), actorUserId);
+    return this.maintenancePlan.create(tenantId, vehicleId, assertCreateMaintenancePlanDto(body), actorUserId, access);
   }
 
   @Patch('vehicles/:vehicleId/maintenance-plan/:itemId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patchMaintenancePlanItem(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Param('itemId') itemId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.maintenancePlan.patch(tenantId, vehicleId, itemId, assertPatchMaintenancePlanDto(body), actorUserId);
+    return this.maintenancePlan.patch(tenantId, vehicleId, itemId, assertPatchMaintenancePlanDto(body), actorUserId, access);
   }
 
   @Post('vehicles/:vehicleId/maintenance-plan/:itemId/mark-performed')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(200)
   markMaintenancePlanPerformed(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Param('itemId') itemId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     return this.maintenancePlan.markPerformed(
@@ -324,19 +329,21 @@ export class FleetController {
       itemId,
       assertMarkMaintenancePlanPerformedDto(body),
       actorUserId,
+      access,
     );
   }
 
   @Delete('vehicles/:vehicleId/maintenance-plan/:itemId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(204)
   deleteMaintenancePlanItem(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Param('itemId') itemId: string,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
-    return this.maintenancePlan.delete(tenantId, vehicleId, itemId, actorUserId);
+    return this.maintenancePlan.delete(tenantId, vehicleId, itemId, actorUserId, access);
   }
 
   @Delete('vehicles/:vehicleId')

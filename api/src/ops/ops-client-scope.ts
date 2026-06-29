@@ -1,15 +1,5 @@
 import type { AccessContext } from '../iam/access-context.types';
-import {
-  isDriverOnlyClientUser,
-  vehicleLinkedClientScope,
-} from '../iam/client-access';
-
-export function driverOnlyEmptyPage(access: AccessContext | undefined, page: number, pageSize: number) {
-  if (access && isDriverOnlyClientUser(access)) {
-    return { items: [], total: 0, page, pageSize };
-  }
-  return null;
-}
+import { vehicleLinkedClientScope } from '../iam/client-access';
 
 export function mergeVehicleLinkedScope<T extends object>(
   parts: T[],

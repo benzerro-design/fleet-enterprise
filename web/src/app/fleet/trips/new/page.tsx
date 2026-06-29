@@ -3,7 +3,7 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TripForm } from "@/components/fleet/TripForm";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTrips, getAuthMeResult } from "@/lib/auth-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 export default async function NewTripPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
@@ -12,7 +12,7 @@ export default async function NewTripPage({ searchParams }: { searchParams: Prom
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect("/login?next=/fleet/trips/new");
   }
-  if (!canWriteFleetOps(auth)) {
+  if (!canWriteTrips(auth)) {
     redirect("/fleet/trips");
   }
   const vehicles = await getVehicleOptions();

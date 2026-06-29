@@ -30,7 +30,7 @@ import { buildVehicleMobilityPayload } from './vehicle-mobility';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
 import { vehicleClientScope } from '../iam/client-access';
-import { assertClientCodeOpsWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
+import { assertClientCodeOpsWrite, assertDriverMediaWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import {
   CIV_PROFILE_FIELDS,
   normalizeCivProfile,
@@ -752,7 +752,9 @@ export class FleetService {
     vehicleId: string,
     dto: CreateVehiclePhotoDto,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<VehiclePhotoRecord> {
+    await assertDriverMediaWrite(this.prisma, tenantSlug, vehicleId, access);
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: { id: true, tenantId: true, registrationNumber: true },
@@ -856,7 +858,9 @@ export class FleetService {
     vehicleId: string,
     dto: RecordOdometerDto,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<{ reading: OdometerReadingRecord; vehicle: VehicleRecord }> {
+    await assertDriverMediaWrite(this.prisma, tenantSlug, vehicleId, access);
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       include: { tenant: true },

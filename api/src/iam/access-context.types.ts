@@ -18,6 +18,8 @@ export type AccessContext = {
   isTenantWide: boolean;
   clientMemberships: ClientMembershipContext[];
   allowedClientIds: string[];
+  /** Pentru rol driver — vehicule cu alocare activă (șofer ↔ vehicul). */
+  assignedVehicleIds?: string[];
 };
 
 export type ActorContext = {

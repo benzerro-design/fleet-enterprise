@@ -9,14 +9,14 @@ import { ClientRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type ClientPortalMode = 'fleet' | 'tickets';
+export type ClientPortalMode = 'fleet' | 'driver';
 
 export type JwtPayload = {
   sub: string;
   tenantSlug: string;
   email?: string;
   role?: MembershipRole;
-  /** Set for client_user: fleet = manager/dispatcher/viewer; tickets = șofer only. */
+  /** Set for client_user: fleet = manager; driver = șofer cu flotă redusă. */
   clientPortal?: ClientPortalMode;
 };
 
@@ -90,7 +90,7 @@ export class AuthService {
       const driverOnly =
         clientMemberships.length > 0 &&
         clientMemberships.every((m) => m.role === ClientRole.driver);
-      payload.clientPortal = driverOnly ? 'tickets' : 'fleet';
+      payload.clientPortal = driverOnly ? 'driver' : 'fleet';
     }
 
     const accessToken = this.jwt.sign(payload);

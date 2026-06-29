@@ -35,8 +35,8 @@ export type FleetNavGroup = {
 export type FleetNavContext = {
   canWrite: boolean;
   authenticated: boolean;
-  /** Șofer client — meniu redus la CRM. */
-  clientTicketsOnly?: boolean;
+  /** Șofer client — flotă redusă (vehicule alocate). */
+  clientDriverPortal?: boolean;
   /** Manager/dispecer client — flotă scoped, fără panou/admin. */
   clientFleetPortal?: boolean;
 };
@@ -226,13 +226,22 @@ function filterEntry(entry: FleetNavEntry, ctx: FleetNavContext): FleetNavEntry 
 }
 
 function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup | null {
-  if (ctx.clientTicketsOnly) {
-    if (group.id !== "clients") return null;
-    const items = group.items.filter(
-      (e) => e.kind === "link" && e.href === "/fleet/tickets",
-    );
-    if (items.length === 0) return null;
-    return { ...group, label: "Solicitări", items };
+  if (ctx.clientDriverPortal) {
+    if (group.id === "clients") {
+      const items = group.items.filter(
+        (e) => e.kind === "link" && e.href === "/fleet/tickets",
+      );
+      if (items.length === 0) return null;
+      return { ...group, label: "Solicitări", items };
+    }
+    if (group.id === "operations") {
+      const items = group.items.filter(
+        (e) => e.kind === "link" && e.href !== "/fleet/dashboard",
+      );
+      if (items.length === 0) return null;
+      return { ...group, items };
+    }
+    return null;
   }
 
   if (ctx.clientFleetPortal && group.id === "admin") return null;

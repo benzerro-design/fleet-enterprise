@@ -3,7 +3,8 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CostForm } from "@/components/fleet/CostForm";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
+import { isDriverWritableCostCategory } from "@/lib/cost-categories";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 import type { FuelTypeValue } from "@/lib/fuel-types";
@@ -41,11 +42,15 @@ export default async function EditCostPage({ params }: { params: Promise<{ id: s
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
     redirect(`/login?next=${encodeURIComponent(`/fleet/costs/${id}/edit`)}`);
   }
-  if (!canWriteFleetOps(auth)) {
+  if (!canWriteCosts(auth)) {
     redirect("/fleet/costs");
   }
   const [entry, vehicles] = await Promise.all([getEntry(id), getVehicleOptions()]);
   if (!entry) notFound();
+  const driverPortal = auth.ok && isClientDriverPortal(auth);
+  if (driverPortal && !isDriverWritableCostCategory(entry.category)) {
+    redirect(`/fleet/costs/${id}`);
+  }
 
   return (
     <FleetPageMain>
@@ -65,7 +70,7 @@ export default async function EditCostPage({ params }: { params: Promise<{ id: s
         vehicles={vehicles}
         defaultVehicleId={entry.vehicleId}
       >
-        <CostForm mode="edit" entryId={id} initial={entry} vehicles={vehicles} />
+        <CostForm mode="edit" entryId={id} initial={entry} vehicles={vehicles} driverPortal={driverPortal} />
       </OpsFormLayout>
     </FleetPageMain>
   );

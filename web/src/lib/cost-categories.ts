@@ -1,3 +1,15 @@
+export const DRIVER_WRITABLE_COST_CATEGORIES = [
+  "Taxă pod",
+  "Spălătorie",
+  "Combustibil",
+  "Parcare",
+  "Amendă",
+] as const;
+
+export function isDriverWritableCostCategory(v: string): boolean {
+  return (DRIVER_WRITABLE_COST_CATEGORIES as readonly string[]).includes(v.trim());
+}
+
 /** Valori trimise la API ca `category` (string). */
 export const COST_CATEGORY_VALUES = [
   "Taxă pod",

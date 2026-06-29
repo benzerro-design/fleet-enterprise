@@ -15,9 +15,21 @@ type Props = {
   canWrite: boolean;
   /** false pentru user client — clientul vehiculului nu se schimbă */
   canChangeClient?: boolean;
+  /** șofer: scriere doar fotografii + odometru */
+  mediaWrite?: boolean;
+  /** plan mentenanță — doar manager */
+  planWrite?: boolean;
 };
 
-export function VehicleDetailLayout({ data, vehicles, editable, canWrite, canChangeClient = true }: Props) {
+export function VehicleDetailLayout({
+  data,
+  vehicles,
+  editable,
+  canWrite,
+  canChangeClient = true,
+  mediaWrite,
+  planWrite,
+}: Props) {
   const {
     vehicle,
     maintenanceList,
@@ -33,6 +45,9 @@ export function VehicleDetailLayout({ data, vehicles, editable, canWrite, canCha
   } = data;
   const regQs = `registrationNumber=${encodeURIComponent(vehicle.registrationNumber)}`;
   const profileWrite = editable && canWrite;
+  const photosWrite = mediaWrite ?? profileWrite;
+  const odometerWrite = mediaWrite ?? profileWrite;
+  const maintenancePlanWrite = planWrite ?? profileWrite;
 
   return (
     <FleetPageMain>
@@ -49,6 +64,9 @@ export function VehicleDetailLayout({ data, vehicles, editable, canWrite, canCha
             <VehicleProfileTabs
               vehicle={vehicle}
               write={profileWrite}
+              photosWrite={photosWrite}
+              odometerWrite={odometerWrite}
+              planWrite={maintenancePlanWrite}
               lockClient={!canChangeClient}
               civ={civPayload}
               acquisition={acquisitionPayload}

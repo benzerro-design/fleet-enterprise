@@ -18,5 +18,5 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
   const [data, vehicles] = await Promise.all([loadVehicleDetail(id), getVehicleOptions()]);
   if (!data) notFound();
 
-  return <VehicleDetailLayout data={data} vehicles={vehicles} editable canWrite canChangeClient={canManageFleet(auth)} />;
+  return <VehicleDetailLayout data={data} vehicles={vehicles} editable canWrite planWrite canChangeClient={canManageFleet(auth)} />;
 }

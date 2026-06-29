@@ -12,7 +12,7 @@ import {
 import { normalizeReminderOffsetsKm } from './reminder-status';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
-import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
+import { mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertDocumentOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
@@ -199,8 +199,6 @@ export class DocumentsService {
   ) {}
 
   async list(tenantSlug: string, params: DocumentListParams, access?: AccessContext) {
-    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
-    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };

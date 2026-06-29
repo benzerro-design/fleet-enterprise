@@ -17,7 +17,7 @@ import { ConsumptionFilterForm } from "@/components/fleet/ConsumptionFilterForm"
 import { DriverFilterSelect } from "@/components/fleet/DriverFilterSelect";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTrips, getAuthMeResult } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { formatDateTimeRo } from "@/lib/datetime-local";
@@ -248,7 +248,7 @@ export default async function TripsPage({ searchParams }: Props) {
     fetchDriverOptions(),
     showConsumption ? fetchConsumption(sp) : Promise.resolve(null),
   ]);
-  const write = canWriteFleetOps(auth);
+  const write = canWriteTrips(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
   const docsPage = documents?.page ?? page;

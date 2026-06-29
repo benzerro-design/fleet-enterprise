@@ -32,6 +32,7 @@ export class AuthController {
       access: access
         ? {
             isTenantWide: access.isTenantWide,
+            assignedVehicleIds: access.assignedVehicleIds,
             clientMemberships: access.clientMemberships.map((m) => ({
               clientId: m.clientId,
               clientCode: m.clientCode,

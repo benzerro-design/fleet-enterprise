@@ -28,9 +28,10 @@ type Props = {
     subject: string;
     description: string;
   }>;
+  lockClient?: boolean;
 };
 
-export function TicketForm({ vehicles, initial }: Props) {
+export function TicketForm({ vehicles, initial, lockClient = false }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [clientId, setClientId] = useState(initial?.clientId ?? "");
@@ -111,7 +112,7 @@ export function TicketForm({ vehicles, initial }: Props) {
 
       <div>
         <label className="text-xs text-zinc-500">Client *</label>
-        <ClientSelect value={clientId} onChange={setClientId} required />
+        <ClientSelect value={clientId} onChange={setClientId} required disabled={lockClient} />
       </div>
 
       <div>

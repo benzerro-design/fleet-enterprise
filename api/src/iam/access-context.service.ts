@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { MembershipRole } from '@prisma/client';
+import { MembershipRole, ClientRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessContext, ActorContext } from './access-context.types';
 import { actorRoutingLevel } from './client-access';
@@ -39,6 +39,26 @@ export class AccessContextService {
       membership.role === MembershipRole.tenant_admin ||
       (membership.role === MembershipRole.tenant_viewer && clientMemberships.length === 0);
 
+    const driverOnly =
+      clientMemberships.length > 0 &&
+      clientMemberships.every((m) => m.role === ClientRole.driver);
+
+    let assignedVehicleIds: string[] | undefined;
+    if (driverOnly) {
+      const driverIds = clientMemberships
+        .map((m) => m.driverId)
+        .filter((id): id is string => Boolean(id));
+      if (driverIds.length > 0) {
+        const assignments = await this.prisma.driverVehicleAssignment.findMany({
+          where: { driverId: { in: driverIds }, unassignedAt: null },
+          select: { vehicleId: true },
+        });
+        assignedVehicleIds = [...new Set(assignments.map((a) => a.vehicleId))];
+      } else {
+        assignedVehicleIds = [];
+      }
+    }
+
     return {
       userId,
       tenantId: tenant.id,
@@ -49,6 +69,7 @@ export class AccessContextService {
       isTenantWide,
       clientMemberships,
       allowedClientIds: clientMemberships.map((m) => m.clientId),
+      assignedVehicleIds,
     };
   }
 

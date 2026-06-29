@@ -2,7 +2,7 @@
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTrips, getAuthMeResult } from "@/lib/auth-server";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { tripPurposeLabel, tripRoadTypeLabel } from "@/lib/trip-ops";
@@ -37,7 +37,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const [trip, auth] = await Promise.all([getTrip(id), getAuthMeResult()]);
   if (!trip) notFound();
-  const write = canWriteFleetOps(auth);
+  const write = canWriteTrips(auth);
 
   return (
     <FleetPageMain narrow="md">

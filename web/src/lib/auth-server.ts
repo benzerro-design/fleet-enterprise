@@ -11,10 +11,11 @@ export type AuthMe = {
   email?: string;
   tenantSlug: string;
   role: "tenant_admin" | "tenant_viewer" | "client_user";
-  /** Set for client_user: fleet = manager/dispatcher/viewer; tickets = șofer only. */
-  clientPortal?: "fleet" | "tickets";
+  /** Set for client_user: fleet = manager/dispatcher/viewer; driver = șofer cu flotă redusă. */
+  clientPortal?: "fleet" | "driver";
   access?: {
     isTenantWide: boolean;
+    assignedVehicleIds?: string[];
     clientMemberships: ClientMembershipMe[];
   };
 };
@@ -77,17 +78,42 @@ export function isClientPortalUser(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "client_user";
 }
 
-export function isClientTicketsOnly(auth: AuthMeResult): boolean {
-  return auth.ok && auth.me.role === "client_user" && auth.me.clientPortal !== "fleet";
+export function isClientDriverPortal(auth: AuthMeResult): boolean {
+  return auth.ok && auth.me.role === "client_user" && auth.me.clientPortal === "driver";
 }
 
 export function isClientFleetPortal(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "client_user" && auth.me.clientPortal === "fleet";
 }
 
-/** Pagină implicită după login — șoferi la tichete, manager client la panou scoped. */
+export function canDriverWriteTrips(auth: AuthMeResult): boolean {
+  return isClientDriverPortal(auth);
+}
+
+export function canDriverWriteCosts(auth: AuthMeResult): boolean {
+  return isClientDriverPortal(auth);
+}
+
+export function canDriverWriteVehicleMedia(auth: AuthMeResult): boolean {
+  return isClientDriverPortal(auth);
+}
+
+export function canWriteTrips(auth: AuthMeResult): boolean {
+  return canWriteFleetOps(auth) || canDriverWriteTrips(auth);
+}
+
+export function canWriteCosts(auth: AuthMeResult): boolean {
+  return canWriteFleetOps(auth) || canDriverWriteCosts(auth);
+}
+
+export function canWriteVehicleMedia(auth: AuthMeResult): boolean {
+  return canWriteFleetOps(auth) || canDriverWriteVehicleMedia(auth);
+}
+
+/** Pagină implicită după login — șoferi la vehicule, manager client la panou scoped. */
 export function getDefaultFleetHome(auth: AuthMeResult): string {
   if (isClientFleetPortal(auth)) return "/fleet/dashboard";
+  if (isClientDriverPortal(auth)) return "/fleet/vehicles";
   if (isClientPortalUser(auth)) return "/fleet/tickets";
   return "/fleet/dashboard";
 }

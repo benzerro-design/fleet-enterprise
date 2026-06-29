@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_REMINDER_OFFSETS, normalizeReminderOffsets } from './document-reminders';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
-import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
+import { mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertReminderOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
@@ -221,8 +221,6 @@ export class RemindersService {
   ) {}
 
   async list(tenantSlug: string, params: ReminderListParams, access?: AccessContext) {
-    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
-    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };

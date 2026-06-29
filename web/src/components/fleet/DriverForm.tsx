@@ -14,12 +14,14 @@ import {
 type Props = {
   mode: "create" | "edit";
   initial?: DriverRecord;
+  defaultClientCode?: string;
+  lockClient?: boolean;
 };
 
-export function DriverForm({ mode, initial }: Props) {
+export function DriverForm({ mode, initial, defaultClientCode, lockClient = false }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [clientId, setClientId] = useState(initial?.clientCode ?? "");
+  const [clientId, setClientId] = useState(initial?.clientCode ?? defaultClientCode ?? "");
   const [fullName, setFullName] = useState(initial?.fullName ?? "");
   const [employeeCode, setEmployeeCode] = useState(initial?.employeeCode ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
@@ -94,7 +96,7 @@ export function DriverForm({ mode, initial }: Props) {
         value={clientId}
         onChange={setClientId}
         required
-        disabled={mode === "edit" && (initial?.activeVehicleIds.length ?? 0) > 0}
+        disabled={lockClient || (mode === "edit" && (initial?.activeVehicleIds.length ?? 0) > 0)}
       />
       {mode === "edit" && (initial?.activeVehicleIds.length ?? 0) > 0 ? (
         <p className="-mt-4 text-xs text-zinc-500">

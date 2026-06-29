@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 type JwtFleetPayload = {
   role?: string;
-  clientPortal?: "fleet" | "tickets";
+  clientPortal?: "fleet" | "driver" | "tickets";
 };
 
 function jwtPayload(token: string): JwtFleetPayload | undefined {
@@ -31,8 +31,19 @@ const CLIENT_FLEET_PREFIXES = [
   "/fleet/tickets",
 ];
 
+/** Rute permise șoferului client (fără clienți/șoferi/panou). */
+const CLIENT_DRIVER_PREFIXES = [
+  "/fleet/vehicles",
+  "/fleet/trips",
+  "/fleet/documents",
+  "/fleet/reminders",
+  "/fleet/maintenance",
+  "/fleet/costs",
+  "/fleet/tickets",
+];
+
 const CLIENT_FLEET_HOME = "/fleet/dashboard";
-const CLIENT_TICKETS_HOME = "/fleet/tickets";
+const CLIENT_DRIVER_HOME = "/fleet/vehicles";
 
 function pathAllowed(prefixes: string[], pathname: string): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -58,10 +69,22 @@ export function middleware(request: NextRequest) {
 
   const portal = payload.clientPortal ?? "tickets";
 
-  if (portal === "tickets") {
-    if (!pathname.startsWith("/fleet/tickets")) {
-      return NextResponse.redirect(new URL(CLIENT_TICKETS_HOME, request.url));
+  if (portal === "driver" || portal === "tickets") {
+    const home = portal === "driver" ? CLIENT_DRIVER_HOME : "/fleet/tickets";
+    const allowed = portal === "driver" ? CLIENT_DRIVER_PREFIXES : ["/fleet/tickets"];
+
+    if (pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit")) {
+      return NextResponse.redirect(new URL(home, request.url));
     }
+
+    if (pathname === "/fleet" || pathname === "/fleet/") {
+      return NextResponse.redirect(new URL(home, request.url));
+    }
+
+    if (!pathAllowed(allowed, pathname)) {
+      return NextResponse.redirect(new URL(home, request.url));
+    }
+
     return NextResponse.next();
   }
 

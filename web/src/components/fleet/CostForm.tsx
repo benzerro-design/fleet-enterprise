@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { COST_CATEGORY_VALUES, isKnownCostCategory } from "@/lib/cost-categories";
+import { COST_CATEGORY_VALUES, DRIVER_WRITABLE_COST_CATEGORIES, isKnownCostCategory } from "@/lib/cost-categories";
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { isItpCostCategory } from "@/lib/itp-ops";
 import { isFuelCostCategory } from "@/lib/fuel-ops";
@@ -60,9 +60,11 @@ type VehicleOption = {
   civProfile?: Record<string, string | number | null>;
 };
 
+type DriverPortalOpts = { driverPortal?: boolean };
+
 type Props =
-  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string; defaultCategory?: string }
-  | { mode: "edit"; entryId: string; initial: CostRecord; vehicles: VehicleOption[] };
+  | ({ mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string; defaultCategory?: string } & DriverPortalOpts)
+  | ({ mode: "edit"; entryId: string; initial: CostRecord; vehicles: VehicleOption[] } & DriverPortalOpts);
 
 function toDateInput(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10);
@@ -93,6 +95,8 @@ async function readErrorMessage(res: Response): Promise<string> {
 export function CostForm(props: Props) {
   const router = useRouter();
   const isEdit = props.mode === "edit";
+  const driverPortal = props.driverPortal === true;
+  const categoryOptions = driverPortal ? DRIVER_WRITABLE_COST_CATEGORIES : COST_CATEGORY_VALUES;
 
   const initial = useMemo(() => {
     if (props.mode === "create") {
@@ -228,6 +232,12 @@ export function CostForm(props: Props) {
       return;
     }
 
+    if (driverPortal && !notes.trim()) {
+      setError("Câmpul explicații este obligatoriu pentru această categorie.");
+      setPending(false);
+      return;
+    }
+
     let liters: number | null = null;
     if (isFuelCostCategory(category.trim())) {
       const raw = fuelLiters.trim();
@@ -344,7 +354,7 @@ export function CostForm(props: Props) {
       <option value="" disabled>
         Alege categoria…
       </option>
-      {COST_CATEGORY_VALUES.map((c) => (
+      {categoryOptions.map((c) => (
         <option key={c} value={c}>
           {c}
         </option>

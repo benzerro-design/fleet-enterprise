@@ -12,8 +12,8 @@ import { resolveVehicleFuelFromCivP3 } from '../fleet/vehicle-fuel-resolve';
 import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
-import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
-import { assertCostOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
+import { mergeVehicleLinkedScope } from './ops-client-scope';
+import { assertCostCreateWrite, assertCostOpsWrite, assertTripVehicleWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -252,8 +252,6 @@ export class CostsService {
   ) {}
 
   async list(tenantSlug: string, params: CostListParams, access?: AccessContext) {
-    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
-    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -364,7 +362,7 @@ export class CostsService {
     );
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
-    await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
+    await assertCostCreateWrite(this.prisma, tenantSlug, dto.vehicleId, dto.category, dto.notes, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
     const row = await this.prisma.costEntry.create({
@@ -448,9 +446,20 @@ export class CostsService {
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchCostInput, actorUserId?: string, access?: AccessContext) {
-    await assertCostOpsWrite(this.prisma, tenantSlug, id, access);
+    const before = await this.prisma.costEntry.findFirst({
+      where: { id, tenant: { slug: tenantSlug } },
+      include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
+    });
+    if (!before) throw new NotFoundException('Cost entry not found');
+
+    const nextCategory = dto.category !== undefined ? dto.category.trim() : before.category;
+    const nextNotes = dto.notes !== undefined ? dto.notes : before.notes;
+    await assertCostOpsWrite(this.prisma, tenantSlug, id, access, {
+      category: nextCategory,
+      notes: nextNotes,
+    });
     if (dto.vehicleId) {
-      await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
+      await assertCostCreateWrite(this.prisma, tenantSlug, dto.vehicleId, nextCategory, nextNotes, access);
     }
     if (dto.amountCents !== undefined) {
       if (!Number.isFinite(dto.amountCents) || dto.amountCents < 0) {
@@ -463,15 +472,8 @@ export class CostsService {
       }
     }
 
-    const before = await this.prisma.costEntry.findFirst({
-      where: { id, tenant: { slug: tenantSlug } },
-      include: { vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } } },
-    });
-    if (!before) throw new NotFoundException('Cost entry not found');
-
     rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
 
-    const nextCategory = dto.category !== undefined ? dto.category.trim() : before.category;
     let fuelLiters: number | null | undefined = undefined;
     if (dto.fuelLiters !== undefined || dto.category !== undefined) {
       if (isFuelCostCategory(nextCategory)) {

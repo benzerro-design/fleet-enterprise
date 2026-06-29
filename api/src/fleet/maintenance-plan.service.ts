@@ -12,7 +12,7 @@ import {
 } from '../ops/reminder-status';
 import { RemindersService } from '../ops/reminders.service';
 import type { AccessContext } from '../iam/access-context.types';
-import { assertVehicleOpsRead } from '../ops/ops-write-access';
+import { assertMaintenancePlanWrite, assertVehicleOpsRead } from '../ops/ops-write-access';
 import {
   reminderMenuSyncEnabledForCreate,
   reminderMenuSyncEnabledPatchValue,
@@ -227,7 +227,9 @@ export class MaintenancePlanService {
     vehicleId: string,
     dto: CreateMaintenancePlanItemDto,
     actorUserId?: string,
+    access?: AccessContext,
   ) {
+    await assertMaintenancePlanWrite(this.prisma, tenantSlug, vehicleId, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const vehicle = await this.assertVehicle(tenantSlug, vehicleId);
     const title = dto.title?.trim();
@@ -314,7 +316,9 @@ export class MaintenancePlanService {
     itemId: string,
     dto: PatchMaintenancePlanItemDto,
     actorUserId?: string,
+    access?: AccessContext,
   ) {
+    await assertMaintenancePlanWrite(this.prisma, tenantSlug, vehicleId, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const vehicle = await this.assertVehicle(tenantSlug, vehicleId);
     const before = await this.prisma.maintenancePlanItem.findFirst({
@@ -415,7 +419,9 @@ export class MaintenancePlanService {
     itemId: string,
     dto: MarkMaintenancePlanPerformedDto,
     actorUserId?: string,
+    access?: AccessContext,
   ) {
+    await assertMaintenancePlanWrite(this.prisma, tenantSlug, vehicleId, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const vehicle = await this.assertVehicle(tenantSlug, vehicleId);
     const before = await this.prisma.maintenancePlanItem.findFirst({
@@ -469,7 +475,8 @@ export class MaintenancePlanService {
     return { ...toRecord(row), reminderSyncFailed };
   }
 
-  async delete(tenantSlug: string, vehicleId: string, itemId: string, actorUserId?: string) {
+  async delete(tenantSlug: string, vehicleId: string, itemId: string, actorUserId?: string, access?: AccessContext) {
+    await assertMaintenancePlanWrite(this.prisma, tenantSlug, vehicleId, access);
     const tenant = await this.ensureTenant(tenantSlug);
     await this.assertVehicle(tenantSlug, vehicleId);
     const row = await this.prisma.maintenancePlanItem.findFirst({

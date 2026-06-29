@@ -6,8 +6,8 @@ import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
 import { vehicleClientScope } from '../iam/client-access';
 import { assertVehicleOpsRead } from './ops-write-access';
-import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
-import { assertTripOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
+import { mergeVehicleLinkedScope } from './ops-client-scope';
+import { assertTripOpsWrite, assertTripVehicleWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -279,8 +279,6 @@ export class TripsService {
   ) {}
 
   async list(tenantSlug: string, params: TripListParams, access?: AccessContext) {
-    const empty = driverOnlyEmptyPage(access, params.page, params.pageSize);
-    if (empty) return empty;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -372,7 +370,7 @@ export class TripsService {
   async create(tenantSlug: string, dto: CreateTripInput, actorUserId?: string, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
-    await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
+    await assertTripVehicleWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
     let tripDriverId: string | null = null;
@@ -442,7 +440,7 @@ export class TripsService {
   async patch(tenantSlug: string, tripId: string, dto: PatchTripInput, actorUserId?: string, access?: AccessContext) {
     await assertTripOpsWrite(this.prisma, tenantSlug, tripId, access);
     if (dto.vehicleId) {
-      await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
+      await assertTripVehicleWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     }
     const before = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },

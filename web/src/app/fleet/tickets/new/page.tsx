@@ -31,6 +31,7 @@ export default async function NewTicketPage({ searchParams }: { searchParams: Pr
       <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă formularul…</p>}>
         <TicketForm
           vehicles={vehicles}
+          lockClient={Boolean(defaultClient)}
           initial={{
             clientId: defaultClient,
             vehicleId: sp.vehicleId,

@@ -33,6 +33,9 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
 type Props = {
   vehicle: VehicleRecord;
   write: boolean;
+  photosWrite?: boolean;
+  odometerWrite?: boolean;
+  planWrite?: boolean;
   lockClient?: boolean;
   civ: VehicleCivPayload;
   acquisition: VehicleAcquisitionPayload;
@@ -45,6 +48,9 @@ type Props = {
 export function VehicleProfileTabs({
   vehicle,
   write,
+  photosWrite,
+  odometerWrite,
+  planWrite,
   lockClient = false,
   civ,
   acquisition,
@@ -114,15 +120,15 @@ export function VehicleProfileTabs({
           <VehicleAcquisitionTab vehicleId={vehicle.id} write={write} initial={acquisition} />
         ) : null}
         {active === "photos" ? (
-          <VehiclePhotosTab vehicleId={vehicle.id} write={write} initial={photos} />
+          <VehiclePhotosTab vehicleId={vehicle.id} write={photosWrite ?? write} initial={photos} />
         ) : null}
         {active === "odometer" ? (
-          <VehicleOdometerTab vehicleId={vehicle.id} write={write} initial={odometer} />
+          <VehicleOdometerTab vehicleId={vehicle.id} write={odometerWrite ?? write} initial={odometer} />
         ) : null}
         {active === "maintenance_plan" ? (
           <VehicleMaintenancePlanTab
             vehicleId={vehicle.id}
-            write={write}
+            write={planWrite ?? write}
             initial={maintenancePlan}
             highlightItemId={planItemHighlight}
           />
