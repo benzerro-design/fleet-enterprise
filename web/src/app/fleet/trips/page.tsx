@@ -17,7 +17,7 @@ import { ConsumptionFilterForm } from "@/components/fleet/ConsumptionFilterForm"
 import { DriverFilterSelect } from "@/components/fleet/DriverFilterSelect";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
-import { canWriteTrips, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTrips, driverIdFromAuth, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { formatDateTimeRo } from "@/lib/datetime-local";
@@ -204,8 +204,9 @@ async function fetchDriverOptions(): Promise<DriverRecord[]> {
   return data.items;
 }
 
-async function fetchVehicleOptions(): Promise<VehicleOption[]> {
-  const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200");
+async function fetchVehicleOptions(tripOps = false): Promise<VehicleOption[]> {
+  const qs = tripOps ? "page=1&pageSize=200&vehicleScope=trip_ops" : "page=1&pageSize=200";
+  const res = await fleetServerFetch(`/fleet/vehicles?${qs}`);
   if (!res?.ok) return [];
   const data = (await res.json()) as {
     items: Array<{
@@ -240,12 +241,14 @@ export default async function TripsPage({ searchParams }: Props) {
   const selectedVehicleIds = parseSelectedVehicleIds(sp.vehicleIds);
   const selectedFuelTypes = parseFuelTypesCsv(sp.fuelTypes);
   const selectedDriverId = sp.driverId?.trim() ?? "";
-  const [data, auth, documents, vehicles, drivers, consumption] = await Promise.all([
+  const auth = await getAuthMeResult();
+  const driverPortal = isClientDriverPortal(auth);
+  const lockedDriverId = driverIdFromAuth(auth);
+  const [data, documents, vehicles, drivers, consumption] = await Promise.all([
     showTrips ? fetchTrips(sp) : Promise.resolve(null),
-    getAuthMeResult(),
     showDocuments ? fetchTripSheets(sp) : Promise.resolve(null),
-    fetchVehicleOptions(),
-    fetchDriverOptions(),
+    fetchVehicleOptions(driverPortal),
+    driverPortal ? Promise.resolve([]) : fetchDriverOptions(),
     showConsumption ? fetchConsumption(sp) : Promise.resolve(null),
   ]);
   const write = canWriteTrips(auth);
@@ -302,7 +305,13 @@ export default async function TripsPage({ searchParams }: Props) {
                     <Link href="/fleet/trips/new" className={tripActionBtnPrimary}>
                       Cursă nouă
                     </Link>
-                    <TripSheetWizard vehicles={vehicles} triggerClassName={tripActionBtnEmeraldOutline} />
+                    <TripSheetWizard
+                      vehicles={vehicles}
+                      triggerClassName={tripActionBtnEmeraldOutline}
+                      driverPortal={driverPortal}
+                      lockedDriverId={lockedDriverId}
+                      lockedDriverName={auth.ok ? auth.me.email : undefined}
+                    />
                   </>
                 ) : null}
                 <a href={exportHref} className={tripActionBtnOutline}>
@@ -341,9 +350,12 @@ export default async function TripsPage({ searchParams }: Props) {
               periodTo={consumptionPeriodTo}
               selectedVehicleIds={selectedVehicleIds}
               selectedFuelTypes={selectedFuelTypes}
-              selectedDriverId={selectedDriverId}
+              selectedDriverId={driverPortal ? (lockedDriverId ?? "") : selectedDriverId}
+              hideDriverFilter={driverPortal}
+              driverFilterReadOnly={driverPortal ? (auth.ok ? auth.me.email : "Contul tău") : undefined}
             />
           ) : showDocuments ? (
+            driverPortal ? null : (
             <form
               key={`docs-${filterFormKey(sp)}`}
               action="/fleet/trips"
@@ -435,6 +447,7 @@ export default async function TripsPage({ searchParams }: Props) {
               </button>
               <FilterResetLink href="/fleet/trips?view=documents" />
             </form>
+            )
           ) : (
             <form
               key={filterFormKey(sp)}
@@ -452,6 +465,7 @@ export default async function TripsPage({ searchParams }: Props) {
                   className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
                 />
               </div>
+              {!driverPortal ? (
               <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
                 <label className="text-xs font-medium text-zinc-500">Client</label>
                 <input
@@ -461,7 +475,8 @@ export default async function TripsPage({ searchParams }: Props) {
                   className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
                 />
               </div>
-              <DriverFilterSelect drivers={drivers} value={sp.driverId ?? ""} />
+              ) : null}
+              {!driverPortal ? <DriverFilterSelect drivers={drivers} value={sp.driverId ?? ""} /> : null}
               <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
                 <label className="text-xs font-medium text-zinc-500">Căutare text</label>
                 <input
@@ -515,7 +530,7 @@ export default async function TripsPage({ searchParams }: Props) {
           !consumption ? (
             <p className="text-amber-400">Nu am putut încărca datele de consum.</p>
           ) : (
-            <TripsConsumptionView data={consumption} />
+            <TripsConsumptionView data={consumption} showDriverColumn={!driverPortal} />
           )
         ) : showDocuments ? (
           <>

@@ -16,6 +16,8 @@ type Props = {
   selectedVehicleIds: string[];
   selectedFuelTypes: FuelTypeValue[];
   selectedDriverId: string;
+  hideDriverFilter?: boolean;
+  driverFilterReadOnly?: string;
 };
 
 const fieldLabel = "text-[10px] font-medium uppercase tracking-wide text-zinc-500";
@@ -31,6 +33,8 @@ export function ConsumptionFilterForm({
   selectedVehicleIds,
   selectedFuelTypes,
   selectedDriverId,
+  hideDriverFilter = false,
+  driverFilterReadOnly,
 }: Props) {
   return (
     <form action="/fleet/trips" method="get" className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
@@ -58,9 +62,18 @@ export function ConsumptionFilterForm({
             />
           </div>
         </div>
-        <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex xl:min-w-[14rem]">
-          <DriverFilterSelect drivers={drivers} value={selectedDriverId} compact />
-        </div>
+        {hideDriverFilter ? (
+          driverFilterReadOnly ? (
+            <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex xl:min-w-[14rem]">
+              <span className={fieldLabel}>Șofer</span>
+              <p className={`${fieldInput} text-zinc-300`}>{driverFilterReadOnly}</p>
+            </div>
+          ) : null
+        ) : (
+          <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex xl:min-w-[14rem]">
+            <DriverFilterSelect drivers={drivers} value={selectedDriverId} compact />
+          </div>
+        )}
         <div className="min-w-0 flex-1 flex-col gap-0.5 xl:flex xl:min-w-[20rem]">
           <label className={fieldLabel}>Tip energie (alimentări)</label>
           <FuelTypeFilter selected={selectedFuelTypes} compact />

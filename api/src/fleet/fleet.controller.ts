@@ -88,9 +88,11 @@ export class FleetController {
     @Query('q') q?: string,
     @Query('status') status?: string,
     @Query('clientId') clientId?: string,
+    @Query('vehicleScope') vehicleScope?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
+    const scope = vehicleScope?.trim() === 'trip_ops' ? ('trip_ops' as const) : undefined;
     return this.fleet.listVehiclesPaged(
       tenantId,
       {
@@ -99,6 +101,7 @@ export class FleetController {
         q: q?.trim(),
         status: parseOptionalStatus(status),
         clientId: clientId?.trim(),
+        vehicleScope: scope,
       },
       access,
     );

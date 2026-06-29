@@ -5,6 +5,8 @@ export type ConsumptionTripRow = {
   vehicleId: string;
   registrationNumber: string;
   clientId: string;
+  driverId: string | null;
+  driverName: string | null;
   startedAt: string;
   endedAt: string | null;
   reference: string | null;

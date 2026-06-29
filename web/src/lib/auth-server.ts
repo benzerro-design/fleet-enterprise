@@ -5,6 +5,7 @@ export type ClientMembershipMe = {
   clientId: string;
   clientCode: string;
   role: "client_admin" | "client_dispatcher" | "client_viewer" | "driver";
+  driverId?: string | null;
 };
 
 export type AuthMe = {
@@ -108,6 +109,19 @@ export function canWriteCosts(auth: AuthMeResult): boolean {
 
 export function canWriteVehicleMedia(auth: AuthMeResult): boolean {
   return canWriteFleetOps(auth) || canDriverWriteVehicleMedia(auth);
+}
+
+export function driverIdFromAuth(auth: AuthMeResult): string | undefined {
+  if (!auth.ok || auth.me.role !== "client_user") return undefined;
+  for (const m of auth.me.access?.clientMemberships ?? []) {
+    if (m.role === "driver" && m.driverId) return m.driverId;
+  }
+  return undefined;
+}
+
+export function driverNameFromAuth(auth: AuthMeResult): string | undefined {
+  if (!auth.ok) return undefined;
+  return auth.me.email?.split("@")[0];
 }
 
 /** Pagină implicită după login — șoferi la vehicule, manager client la panou scoped. */

@@ -37,6 +37,7 @@ export class AuthController {
               clientId: m.clientId,
               clientCode: m.clientCode,
               role: m.role,
+              driverId: m.driverId,
             })),
           }
         : undefined,

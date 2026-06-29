@@ -35,8 +35,12 @@ export class TripsController {
   @Roles(...FLEET_READ_ROLES)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="trips.csv"')
-  async exportTrips(@TenantId() tenantSlug: string, @Query() q: Record<string, string | undefined>) {
-    const csv = await this.trips.exportCsv(tenantSlug, parseTripBrowseQuery(q));
+  async exportTrips(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query() q: Record<string, string | undefined>,
+  ) {
+    const csv = await this.trips.exportCsv(tenantSlug, parseTripBrowseQuery(q), access);
     return new StreamableFile(Buffer.from(csv, 'utf8'));
   }
 
@@ -85,8 +89,12 @@ export class TripsController {
 
   @Get(':tripId')
   @Roles(...FLEET_READ_ROLES)
-  getTrip(@TenantId() tenantSlug: string, @Param('tripId') tripId: string) {
-    return this.trips.getById(tenantSlug, tripId);
+  getTrip(
+    @TenantId() tenantSlug: string,
+    @Param('tripId') tripId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.trips.getById(tenantSlug, tripId, access);
   }
 
   @Post()

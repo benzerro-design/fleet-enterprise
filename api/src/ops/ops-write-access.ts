@@ -10,6 +10,7 @@ import {
 import {
   assertDriverAssignedVehicle,
   assertDriverCostNotes,
+  driverIdsFromAccess,
   isDriverWritableCostCategory,
 } from '../iam/driver-access';
 import { resolveClientInTenant } from '../clients/client-resolve';
@@ -56,7 +57,19 @@ export async function assertVehicleOpsRead(
   if (!vehicle) throw new NotFoundException('Vehicle not found');
   if (access && !access.isTenantWide) {
     if (isDriverOnlyClientUser(access)) {
-      assertDriverAssignedVehicle(access, vehicleId);
+      if ((access.assignedVehicleIds ?? []).includes(vehicleId)) return;
+      const ownIds = driverIdsFromAccess(access);
+      const drove = await prisma.trip.findFirst({
+        where: {
+          vehicleId,
+          driverId: { in: ownIds },
+          tenant: { slug: tenantSlug },
+        },
+        select: { id: true },
+      });
+      if (!drove) {
+        throw new ForbiddenException('Vehicle not in driver scope');
+      }
       return;
     }
     assertClientAccess(access, vehicle.clientId);
@@ -195,14 +208,95 @@ async function vehicleIdFromDocument(prisma: PrismaService, tenantSlug: string, 
   return row.vehicleId;
 }
 
+export async function assertTripOpsRead(
+  prisma: PrismaService,
+  tenantSlug: string,
+  tripId: string,
+  access?: AccessContext,
+): Promise<void> {
+  const row = await prisma.trip.findFirst({
+    where: { id: tripId, tenant: { slug: tenantSlug } },
+    select: { driverId: true, vehicle: { select: { clientId: true } } },
+  });
+  if (!row) throw new NotFoundException('Trip not found');
+  if (!access || access.isTenantWide) return;
+  if (isDriverOnlyClientUser(access)) {
+    const ownIds = driverIdsFromAccess(access);
+    if (!row.driverId || !ownIds.includes(row.driverId)) {
+      throw new ForbiddenException('Trip not in driver scope');
+    }
+    return;
+  }
+  assertClientAccess(access, row.vehicle.clientId);
+}
+
 export async function assertTripOpsWrite(
   prisma: PrismaService,
   tenantSlug: string,
   tripId: string,
   access?: AccessContext,
 ): Promise<void> {
-  const vehicleId = await vehicleIdFromTrip(prisma, tenantSlug, tripId);
+  const row = await prisma.trip.findFirst({
+    where: { id: tripId, tenant: { slug: tenantSlug } },
+    select: { driverId: true, vehicleId: true, vehicle: { select: { clientId: true } } },
+  });
+  if (!row) throw new NotFoundException('Trip not found');
+  if (access && isDriverOnlyClientUser(access)) {
+    const ownIds = driverIdsFromAccess(access);
+    if (!row.driverId || !ownIds.includes(row.driverId)) {
+      throw new ForbiddenException('Trip not in driver scope');
+    }
+    const assigned = access.assignedVehicleIds ?? [];
+    if (!assigned.includes(row.vehicleId)) {
+      throw new ForbiddenException('Trip on historical vehicle is read-only');
+    }
+    denyViewerWrite(access);
+    return;
+  }
+  const vehicleId = row.vehicleId;
   await assertTripVehicleWrite(prisma, tenantSlug, vehicleId, access);
+}
+
+/** Generare foaie parcurs — șofer doar pentru sine; L≥1 pe client. */
+export async function assertTripSheetGenerate(
+  prisma: PrismaService,
+  tenantSlug: string,
+  vehicleIds: string[],
+  driverIdFilter: string | null | undefined,
+  access?: AccessContext,
+): Promise<string | null> {
+  denyViewerWrite(access);
+  if (!access || access.isTenantWide) return driverIdFilter ?? null;
+
+  if (isDriverOnlyClientUser(access)) {
+    const ownIds = driverIdsFromAccess(access);
+    if (ownIds.length === 0) {
+      throw new ForbiddenException('Driver profile not linked');
+    }
+    const effectiveDriverId = driverIdFilter?.trim() || ownIds[0];
+    if (!ownIds.includes(effectiveDriverId)) {
+      throw new ForbiddenException('Driver can only generate documents for self');
+    }
+    const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const assigned = new Set(access.assignedVehicleIds ?? []);
+    for (const vehicleId of vehicleIds) {
+      if (assigned.has(vehicleId)) continue;
+      const drove = await prisma.trip.findFirst({
+        where: { tenantId: tenant.id, vehicleId, driverId: effectiveDriverId },
+        select: { id: true },
+      });
+      if (!drove) {
+        throw new ForbiddenException('Vehicle not in driver trip history');
+      }
+    }
+    return effectiveDriverId;
+  }
+
+  for (const vehicleId of vehicleIds) {
+    await assertVehicleOpsWrite(prisma, tenantSlug, vehicleId, access);
+  }
+  return driverIdFilter ?? null;
 }
 
 export async function assertCostOpsWrite(

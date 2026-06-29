@@ -4,10 +4,10 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
-import { vehicleClientScope } from '../iam/client-access';
-import { assertVehicleOpsRead } from './ops-write-access';
+import { vehicleClientScope, isDriverOnlyClientUser } from '../iam/client-access';
+import { driverIdsFromAccess, mergeDriverTripListScope } from '../iam/driver-access';
+import { assertTripOpsRead, assertTripOpsWrite, assertTripVehicleWrite, assertVehicleOpsRead } from './ops-write-access';
 import { mergeVehicleLinkedScope } from './ops-client-scope';
-import { assertTripOpsWrite, assertTripVehicleWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
@@ -91,7 +91,11 @@ async function tripWhere(
   access?: AccessContext,
 ): Promise<Prisma.TripWhereInput> {
   const parts: Prisma.TripWhereInput[] = [{ tenantId }];
-  mergeVehicleLinkedScope(parts, access);
+  if (access && isDriverOnlyClientUser(access)) {
+    mergeDriverTripListScope(parts, access);
+  } else {
+    mergeVehicleLinkedScope(parts, access);
+  }
   if (f.registrationNumber?.trim()) {
     const reg = f.registrationNumber.trim();
     parts.push({
@@ -316,12 +320,12 @@ export class TripsService {
     };
   }
 
-  async exportCsv(tenantSlug: string, filters: TripBrowseFilters): Promise<string> {
+  async exportCsv(tenantSlug: string, filters: TripBrowseFilters, access?: AccessContext): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return '\uFEFFid,vehicleId,registrationNumber,clientId,reference,startedAt,endedAt,originLabel,destLabel,distanceKm,driverId,driverName\n';
     }
-    const where = await tripWhere(this.prisma, tenant.id, filters);
+    const where = await tripWhere(this.prisma, tenant.id, filters, access);
     const rows = await this.prisma.trip.findMany({
       where,
       orderBy: { startedAt: 'desc' },
@@ -358,7 +362,8 @@ export class TripsService {
     return `\uFEFF${header}\n${lines.join('\n')}\n`;
   }
 
-  async getById(tenantSlug: string, tripId: string) {
+  async getById(tenantSlug: string, tripId: string, access?: AccessContext) {
+    await assertTripOpsRead(this.prisma, tenantSlug, tripId, access);
     const row = await this.prisma.trip.findFirst({
       where: { id: tripId, tenant: { slug: tenantSlug } },
       include: tripInclude,
@@ -611,8 +616,30 @@ export class TripsService {
       };
     }
 
+    let driverId = query.driverId?.trim() || undefined;
+    if (access && isDriverOnlyClientUser(access)) {
+      const ownIds = driverIdsFromAccess(access);
+      if (ownIds.length === 0) {
+        return {
+          ...buildConsumptionPayload({
+            periodStart: from,
+            periodEnd: to,
+            vehicleScope: 'all',
+            selectedVehicleCount: 0,
+            fuelTypeFilter: query.fuelTypes?.length ? query.fuelTypes : null,
+            vehicleFuelById: new Map(),
+            trips: [],
+            costs: [],
+            allFuelCostsForSegments: [],
+            odometerReadings: [],
+          }),
+          driverIdFilter: null,
+        };
+      }
+      driverId = ownIds[0];
+    }
+
     const vehicleIds = [...new Set((query.vehicleIds ?? []).map((id) => id.trim()).filter(Boolean))];
-    const driverId = query.driverId?.trim() || undefined;
     const vehicleScope = vehicleIds.length > 0 ? 'selected' : 'all';
     const fuelTypeFilter = query.fuelTypes?.length ? query.fuelTypes : null;
 
@@ -628,7 +655,12 @@ export class TripsService {
       await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     }
 
-    const clientScope = access && !access.isTenantWide ? vehicleClientScope(access) : {};
+    let clientScope: Prisma.VehicleWhereInput = {};
+    if (access && !access.isTenantWide) {
+      clientScope = isDriverOnlyClientUser(access)
+        ? { clientId: { in: access.allowedClientIds } }
+        : vehicleClientScope(access);
+    }
     const tenantVehicles = await this.prisma.vehicle.findMany({
       where: { tenantId: tenant.id, ...clientScope },
       select: { id: true, fuelType: true, civProfile: true },
@@ -713,7 +745,10 @@ export class TripsService {
     const [trips, costs, allFuelCostsForSegments, odometerReadings] = await Promise.all([
       this.prisma.trip.findMany({
         where: tripWhere,
-        include: { vehicle: vehicleSelect },
+        include: {
+          vehicle: vehicleSelect,
+          driver: { select: { fullName: true } },
+        },
         orderBy: { startedAt: 'desc' },
         take: 2000,
       }),
@@ -766,6 +801,8 @@ export class TripsService {
           vehicleId: t.vehicleId,
           registrationNumber: t.vehicle.registrationNumber,
           clientId: t.vehicle.client.code,
+          driverId: t.driverId,
+          driverName: t.driver?.fullName ?? null,
           startedAt: t.startedAt,
           endedAt: t.endedAt,
           reference: t.reference,

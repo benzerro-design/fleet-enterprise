@@ -269,6 +269,8 @@ export function buildConsumptionPayload(input: {
     vehicleId: string;
     registrationNumber: string;
     clientId: string;
+    driverId?: string | null;
+    driverName?: string | null;
     startedAt: Date;
     endedAt: Date | null;
     reference: string | null;
@@ -311,6 +313,8 @@ export function buildConsumptionPayload(input: {
     vehicleId: t.vehicleId,
     registrationNumber: t.registrationNumber,
     clientId: t.clientId,
+    driverId: t.driverId ?? null,
+    driverName: t.driverName ?? null,
     startedAt: t.startedAt.toISOString(),
     endedAt: t.endedAt ? t.endedAt.toISOString() : null,
     reference: t.reference,

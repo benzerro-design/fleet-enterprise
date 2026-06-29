@@ -14,6 +14,10 @@ type VehicleOption = {
 type Props = {
   vehicles: VehicleOption[];
   triggerClassName?: string;
+  /** L0 — șofer preselectat, fără listă din API. */
+  lockedDriverId?: string;
+  lockedDriverName?: string;
+  driverPortal?: boolean;
 };
 
 async function readErrorMessage(res: Response): Promise<string> {
@@ -28,14 +32,20 @@ async function readErrorMessage(res: Response): Promise<string> {
   return msg;
 }
 
-export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
+export function TripSheetWizard({
+  vehicles,
+  triggerClassName,
+  lockedDriverId,
+  lockedDriverName,
+  driverPortal = false,
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [docType, setDocType] = useState<"trip_sheet" | "faz_monthly">("trip_sheet");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [clientId, setClientId] = useState("");
-  const [driverId, setDriverId] = useState("");
+  const [driverId, setDriverId] = useState(lockedDriverId ?? "");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +85,7 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
     setPeriodStart("");
     setPeriodEnd("");
     setClientId("");
-    setDriverId("");
+    setDriverId(lockedDriverId ?? "");
     setSelectedIds(new Set());
     setError(null);
   }
@@ -102,7 +112,7 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
           periodStart,
           periodEnd,
           vehicleIds: ids,
-          driverId: driverId.trim() || null,
+          driverId: (lockedDriverId ?? driverId.trim()) || null,
           clientId: clientId.trim() || null,
         }),
       });
@@ -194,24 +204,36 @@ export function TripSheetWizard({ vehicles, triggerClassName }: Props) {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-500">Filtru client (opțional)</label>
-                <input
-                  value={clientId}
-                  onChange={(e) => {
-                    setClientId(e.target.value);
-                    setDriverId("");
-                  }}
-                  placeholder="Restrânge lista de vehicule"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
-                />
-              </div>
+              {!driverPortal ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-zinc-500">Filtru client (opțional)</label>
+                  <input
+                    value={clientId}
+                    onChange={(e) => {
+                      setClientId(e.target.value);
+                      if (!lockedDriverId) setDriverId("");
+                    }}
+                    placeholder="Restrânge lista de vehicule"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                  />
+                </div>
+              ) : null}
 
-              <DriverSelect
-                clientCode={clientForDriver}
-                value={driverId}
-                onChange={setDriverId}
-              />
+              {driverPortal && lockedDriverId ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-zinc-500">Șofer</label>
+                  <p className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-200">
+                    {lockedDriverName ?? "Contul tău"}
+                  </p>
+                  <input type="hidden" name="driverId" value={lockedDriverId} />
+                </div>
+              ) : (
+                <DriverSelect
+                  clientCode={clientForDriver}
+                  value={driverId}
+                  onChange={setDriverId}
+                />
+              )}
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

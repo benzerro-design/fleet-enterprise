@@ -25,3 +25,18 @@ export async function getVehicleOptions(): Promise<OpsVehicleOption[]> {
     civProfile: v.civProfile ?? {},
   }));
 }
+
+/** Vehicule pentru curse/doc parcurs — L0 include istoricul de curse. */
+export async function getTripVehicleOptions(): Promise<OpsVehicleOption[]> {
+  const res = await fleetServerFetch("/fleet/vehicles?page=1&pageSize=200&vehicleScope=trip_ops");
+  if (!res?.ok) return getVehicleOptions();
+  const data = (await res.json()) as VehiclesPayload;
+  return data.items.map((v) => ({
+    id: v.id,
+    registrationNumber: v.registrationNumber,
+    clientId: v.clientId,
+    odometerKm: v.odometerKm,
+    fuelType: v.fuelType ?? null,
+    civProfile: v.civProfile ?? {},
+  }));
+}

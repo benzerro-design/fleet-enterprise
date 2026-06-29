@@ -6,7 +6,9 @@ import {
 import type { Prisma, TripSheetDocType } from '@prisma/client';
 import { resolveClientInTenant, resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
-import { assertVehicleOpsWrite } from './ops-write-access';
+import { isDriverOnlyClientUser } from '../iam/client-access';
+import { mergeDriverTripSheetScope } from '../iam/driver-access';
+import { assertTripSheetGenerate } from './ops-write-access';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { tripPurposeLabel, tripRoadTypeLabel, tripSheetDocTypeLabel } from './trip-sheet-labels';
@@ -110,6 +112,10 @@ async function mergeTripSheetClientScope(
   access?: AccessContext,
 ): Promise<void> {
   if (!access || access.isTenantWide) return;
+
+  mergeDriverTripSheetScope(parts, access);
+  if (access && isDriverOnlyClientUser(access)) return;
+
   if (access.allowedClientIds.length === 0) {
     parts.push({ id: { in: [] } });
     return;
@@ -307,9 +313,13 @@ export class TripSheetsService {
       throw new BadRequestException(`Maximum ${MAX_VEHICLES} vehicles per document`);
     }
 
-    for (const vehicleId of vehicleIds) {
-      await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
-    }
+    const effectiveDriverId = await assertTripSheetGenerate(
+      this.prisma,
+      tenantSlug,
+      vehicleIds,
+      input.driverId,
+      access,
+    );
 
     let clientCodeFilter: string | null = null;
     let clientFkFilter: string | undefined;
@@ -340,9 +350,10 @@ export class TripSheetsService {
 
     let driverIdFilter: string | null = null;
     let resolvedDriverName: string | null = input.driverName?.trim() || null;
-    if (input.driverId?.trim()) {
+    const driverIdToResolve = effectiveDriverId ?? input.driverId?.trim();
+    if (driverIdToResolve) {
       const driver = await this.prisma.driver.findFirst({
-        where: { id: input.driverId.trim(), tenantId: tenant.id },
+        where: { id: driverIdToResolve, tenantId: tenant.id },
         select: { id: true, fullName: true },
       });
       if (!driver) throw new BadRequestException('driverId invalid');

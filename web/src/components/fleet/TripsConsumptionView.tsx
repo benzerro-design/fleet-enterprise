@@ -17,6 +17,7 @@ import { formatRonFromCents } from "@/lib/money";
 
 type Props = {
   data: ConsumptionPayload;
+  showDriverColumn?: boolean;
 };
 
 type Panel = "trips" | "fills" | "segments";
@@ -163,7 +164,7 @@ function FuelMixChart({ fuelMix }: { fuelMix: ConsumptionPayload["fuelMix"] }) {
   );
 }
 
-export function TripsConsumptionView({ data }: Props) {
+export function TripsConsumptionView({ data, showDriverColumn = true }: Props) {
   const [panel, setPanel] = useState<Panel>("trips");
   const { summary } = data;
 
@@ -190,6 +191,12 @@ export function TripsConsumptionView({ data }: Props) {
         {data.vehicleScope === "all"
           ? "Toată flota"
           : `${data.selectedVehicleCount} vehicule selectate`}
+        {data.driverIdFilter ? (
+          <>
+            {" · "}
+            Șofer filtrat
+          </>
+        ) : null}
         {data.fuelTypeFilter?.length ? (
           <>
             {" · "}
@@ -307,6 +314,7 @@ export function TripsConsumptionView({ data }: Props) {
                 <thead className={fleetTheadClass}>
                   <tr>
                     <th className={fleetThClass}>Ref</th>
+                    {showDriverColumn ? <th className={fleetThClass}>Șofer</th> : null}
                     <th className={fleetThClass}>Nr. auto</th>
                     <th className={fleetThClass}>Start</th>
                     <th className={fleetThClass}>Stop</th>
@@ -319,6 +327,9 @@ export function TripsConsumptionView({ data }: Props) {
                   {data.trips.map((row) => (
                     <tr key={row.id} className="bg-zinc-900/30">
                       <td className={`${fleetTdClass} font-mono`}>{row.reference ?? "—"}</td>
+                      {showDriverColumn ? (
+                        <td className={fleetTdClass}>{row.driverName ?? "—"}</td>
+                      ) : null}
                       <td className={`${fleetTdClass} font-mono`}>{row.registrationNumber}</td>
                       <td className={fleetTdClass}>{formatDateTimeRo(row.startedAt)}</td>
                       <td className={fleetTdClass}>{formatDateTimeRo(row.endedAt)}</td>

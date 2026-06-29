@@ -30,6 +30,7 @@ import { buildVehicleMobilityPayload } from './vehicle-mobility';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
 import { vehicleClientScope } from '../iam/client-access';
+import { tripOpsVehicleScope } from '../iam/driver-access';
 import { assertClientCodeOpsWrite, assertDriverMediaWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import {
   CIV_PROFILE_FIELDS,
@@ -154,6 +155,8 @@ export type VehicleBrowseFilters = {
   status?: VehicleStatus;
   /** Cod client sau id Client — filtrează vehiculele. */
   clientId?: string;
+  /** L0 curse: include vehicule din istoricul șoferului. */
+  vehicleScope?: 'trip_ops';
 };
 
 export type ListVehiclesFilters = VehicleBrowseFilters & {
@@ -1012,7 +1015,11 @@ export class FleetService {
     const parts: Prisma.VehicleWhereInput[] = [{ tenantId: tenantUuid }];
 
     if (access) {
-      parts.push(vehicleClientScope(access));
+      if (browse.vehicleScope === 'trip_ops') {
+        parts.push(await tripOpsVehicleScope(this.prisma, tenantUuid, access));
+      } else {
+        parts.push(vehicleClientScope(access));
+      }
     }
 
     if (q && q.length > 0) {
