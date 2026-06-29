@@ -2,7 +2,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { VehicleForm } from "@/components/fleet/VehicleForm";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, defaultClientCodeForTickets, getAuthMeResult } from "@/lib/auth-server";
 
 export default async function NewVehiclePage() {
   const auth = await getAuthMeResult();
@@ -12,6 +12,9 @@ export default async function NewVehiclePage() {
   if (!canWriteFleetOps(auth)) {
     redirect("/fleet/vehicles");
   }
+
+  const defaultClient = defaultClientCodeForTickets(auth);
+  const lockClient = Boolean(defaultClient);
 
   return (
     <FleetPageMain>
@@ -31,7 +34,7 @@ export default async function NewVehiclePage() {
           </Link>
         </div>
 
-        <VehicleForm />
+        <VehicleForm defaultClientCode={defaultClient} lockClient={lockClient} />
     </FleetPageMain>
   );
 }

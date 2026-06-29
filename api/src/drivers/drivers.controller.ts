@@ -87,6 +87,7 @@ export class DriversController {
   getConsumption(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('fuelTypes') fuelTypesRaw?: string,
@@ -102,7 +103,7 @@ export class DriversController {
       to: toTrim,
       driverId: id,
       fuelTypes,
-    });
+    }, access);
   }
 
   @Get(':id')

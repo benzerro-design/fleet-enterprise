@@ -13,9 +13,11 @@ type Props = {
   editable: boolean;
   /** utilizator cu drept de scriere (pentru butoane header) */
   canWrite: boolean;
+  /** false pentru user client — clientul vehiculului nu se schimbă */
+  canChangeClient?: boolean;
 };
 
-export function VehicleDetailLayout({ data, vehicles, editable, canWrite }: Props) {
+export function VehicleDetailLayout({ data, vehicles, editable, canWrite, canChangeClient = true }: Props) {
   const {
     vehicle,
     maintenanceList,
@@ -47,6 +49,7 @@ export function VehicleDetailLayout({ data, vehicles, editable, canWrite }: Prop
             <VehicleProfileTabs
               vehicle={vehicle}
               write={profileWrite}
+              lockClient={!canChangeClient}
               civ={civPayload}
               acquisition={acquisitionPayload}
               photos={photosPayload}

@@ -13,7 +13,7 @@ import {
   driverClientScope,
   isDriverOnlyClientUser,
 } from '../iam/client-access';
-import { assertClientCodeOpsWrite, assertDriverOpsWrite, assertVehicleOpsWrite } from '../ops/ops-write-access';
+import { assertClientCodeOpsWrite, assertDriverOpsWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import { licenseExpiryStatus, licenseExpiryWhere, type LicenseExpiryStatus } from './license-expiry';
 
 const MAX_PAGE_SIZE = 200;
@@ -258,7 +258,9 @@ export class DriversService {
   async listVehicleAssignments(
     tenantSlug: string,
     vehicleId: string,
+    access?: AccessContext,
   ): Promise<DriverAssignmentRecord[]> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenantId: tenant.id },

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { buildVehicleItpPayload, VehicleItpFields } from "@/components/fleet/VehicleItpFields";
 import { ClientSelect } from "@/components/fleet/ClientSelect";
 import {
@@ -13,9 +13,14 @@ import {
 } from "@/lib/fleet-api";
 import { FUEL_TYPE_OPTIONS, type FuelTypeValue } from "@/lib/fuel-types";
 
-export function VehicleForm() {
+type Props = {
+  defaultClientCode?: string;
+  lockClient?: boolean;
+};
+
+export function VehicleForm({ defaultClientCode, lockClient = false }: Props) {
   const router = useRouter();
-  const [clientId, setClientId] = useState("");
+  const [clientId, setClientId] = useState(defaultClientCode ?? "");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -29,6 +34,12 @@ export function VehicleForm() {
   const [syncReminderAction, setSyncReminderAction] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (defaultClientCode && !clientId) {
+      setClientId(defaultClientCode);
+    }
+  }, [defaultClientCode, clientId]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -106,7 +117,7 @@ export function VehicleForm() {
         </p>
       ) : null}
 
-      <ClientSelect value={clientId} onChange={setClientId} required />
+      <ClientSelect value={clientId} onChange={setClientId} required disabled={lockClient} />
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Număr înmatriculare</label>

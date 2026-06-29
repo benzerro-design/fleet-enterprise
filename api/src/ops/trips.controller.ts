@@ -64,7 +64,11 @@ export class TripsController {
 
   @Get('consumption')
   @Roles(...FLEET_READ_ROLES)
-  getConsumption(@TenantId() tenantSlug: string, @Query() q: Record<string, string | undefined>) {
+  getConsumption(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query() q: Record<string, string | undefined>,
+  ) {
     const from = q['from']?.trim();
     const to = q['to']?.trim();
     if (!from || !to) {
@@ -76,7 +80,7 @@ export class TripsController {
       : undefined;
     const fuelTypes = parseFuelTypesCsv(q['fuelTypes']);
     const driverId = q['driverId']?.trim();
-    return this.trips.getConsumption(tenantSlug, { from, to, vehicleIds, fuelTypes, driverId });
+    return this.trips.getConsumption(tenantSlug, { from, to, vehicleIds, fuelTypes, driverId }, access);
   }
 
   @Get(':tripId')

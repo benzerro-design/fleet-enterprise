@@ -11,6 +11,8 @@ import {
   normalizeReminderOffsetsKm,
 } from '../ops/reminder-status';
 import { RemindersService } from '../ops/reminders.service';
+import type { AccessContext } from '../iam/access-context.types';
+import { assertVehicleOpsRead } from '../ops/ops-write-access';
 import {
   reminderMenuSyncEnabledForCreate,
   reminderMenuSyncEnabledPatchValue,
@@ -207,7 +209,8 @@ export class MaintenancePlanService {
     }
   }
 
-  async list(tenantSlug: string, vehicleId: string): Promise<MaintenancePlanPayload> {
+  async list(tenantSlug: string, vehicleId: string, access?: AccessContext): Promise<MaintenancePlanPayload> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const vehicle = await this.assertVehicle(tenantSlug, vehicleId);
     const rows = await this.prisma.maintenancePlanItem.findMany({

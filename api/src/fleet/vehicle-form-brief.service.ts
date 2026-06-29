@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { assertVehicleInTenant } from '../ops/ops-scope';
+import type { AccessContext } from '../iam/access-context.types';
+import { assertVehicleOpsRead } from '../ops/ops-write-access';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type ComplianceStatus = 'valid' | 'expired' | 'missing';
@@ -103,8 +104,8 @@ function vignetteCompliance(
 export class VehicleFormBriefService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getBrief(tenantSlug: string, vehicleId: string): Promise<VehicleFormBriefPayload> {
-    await assertVehicleInTenant(this.prisma, tenantSlug, vehicleId);
+  async getBrief(tenantSlug: string, vehicleId: string, access?: AccessContext): Promise<VehicleFormBriefPayload> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const now = new Date();
 
     const [

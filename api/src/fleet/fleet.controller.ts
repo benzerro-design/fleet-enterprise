@@ -38,7 +38,7 @@ import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TenantId } from './tenant-id.decorator';
 import { DriversService } from '../drivers/drivers.service';
 import { assertFuelType, parseFuelType } from '../ops/fuel-types';
-import { FLEET_WRITE_ROLES } from '../iam/role-sets';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 
 @Controller('fleet')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -115,9 +115,13 @@ export class FleetController {
   }
 
   @Get('vehicles/:vehicleId/form-brief')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getVehicleFormBrief(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
-    return this.formBrief.getBrief(tenantId, vehicleId);
+  @Roles(...FLEET_READ_ROLES)
+  getVehicleFormBrief(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.formBrief.getBrief(tenantId, vehicleId, access);
   }
 
   @Post('vehicles')
@@ -147,24 +151,33 @@ export class FleetController {
   }
 
   @Get('vehicles/:vehicleId/driver-assignments')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   listVehicleDriverAssignments(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.drivers.listVehicleAssignments(tenantId, vehicleId);
+    return this.drivers.listVehicleAssignments(tenantId, vehicleId, access);
   }
 
   @Get('vehicles/:vehicleId/mobility')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getVehicleMobility(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
-    return this.fleet.getVehicleMobility(tenantId, vehicleId);
+  @Roles(...FLEET_READ_ROLES)
+  getVehicleMobility(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.fleet.getVehicleMobility(tenantId, vehicleId, access);
   }
 
   @Get('vehicles/:vehicleId/civ')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getVehicleCiv(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
-    return this.fleet.getVehicleCiv(tenantId, vehicleId);
+  @Roles(...FLEET_READ_ROLES)
+  getVehicleCiv(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.fleet.getVehicleCiv(tenantId, vehicleId, access);
   }
 
   @Patch('vehicles/:vehicleId/civ')
@@ -180,9 +193,13 @@ export class FleetController {
   }
 
   @Get('vehicles/:vehicleId/acquisition')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  getVehicleAcquisition(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
-    return this.fleet.getVehicleAcquisition(tenantId, vehicleId);
+  @Roles(...FLEET_READ_ROLES)
+  getVehicleAcquisition(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.fleet.getVehicleAcquisition(tenantId, vehicleId, access);
   }
 
   @Patch('vehicles/:vehicleId/acquisition')
@@ -198,9 +215,13 @@ export class FleetController {
   }
 
   @Get('vehicles/:vehicleId/photos')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  listVehiclePhotos(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
-    return this.fleet.listVehiclePhotos(tenantId, vehicleId);
+  @Roles(...FLEET_READ_ROLES)
+  listVehiclePhotos(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.fleet.listVehiclePhotos(tenantId, vehicleId, access);
   }
 
   @Post('vehicles/:vehicleId/photos')
@@ -229,14 +250,15 @@ export class FleetController {
   }
 
   @Get('vehicles/:vehicleId/odometer-readings')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   listOdometerReadings(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
     @Query('limit') limitStr?: string,
   ) {
     const limit = Math.min(Math.max(1, parseInt(limitStr ?? '50', 10) || 50), 100);
-    return this.fleet.listOdometerReadings(tenantId, vehicleId, limit);
+    return this.fleet.listOdometerReadings(tenantId, vehicleId, limit, access);
   }
 
   @Post('vehicles/:vehicleId/odometer-readings')
@@ -253,9 +275,13 @@ export class FleetController {
   }
 
   @Get('vehicles/:vehicleId/maintenance-plan')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  listMaintenancePlan(@TenantId() tenantId: string, @Param('vehicleId') vehicleId: string) {
-    return this.maintenancePlan.list(tenantId, vehicleId);
+  @Roles(...FLEET_READ_ROLES)
+  listMaintenancePlan(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.maintenancePlan.list(tenantId, vehicleId, access);
   }
 
   @Post('vehicles/:vehicleId/maintenance-plan')

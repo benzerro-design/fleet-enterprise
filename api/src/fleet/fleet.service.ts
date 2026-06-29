@@ -30,7 +30,7 @@ import { buildVehicleMobilityPayload } from './vehicle-mobility';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
 import { vehicleClientScope } from '../iam/client-access';
-import { assertClientCodeOpsWrite, assertVehicleOpsWrite } from '../ops/ops-write-access';
+import { assertClientCodeOpsWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import {
   CIV_PROFILE_FIELDS,
   normalizeCivProfile,
@@ -484,7 +484,8 @@ export class FleetService {
     }
   }
 
-  async getVehicleCiv(tenantSlug: string, vehicleId: string): Promise<VehicleCivPayload> {
+  async getVehicleCiv(tenantSlug: string, vehicleId: string, access?: AccessContext): Promise<VehicleCivPayload> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const row = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
     });
@@ -582,7 +583,9 @@ export class FleetService {
   async getVehicleAcquisition(
     tenantSlug: string,
     vehicleId: string,
+    access?: AccessContext,
   ): Promise<VehicleAcquisitionPayload> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const row = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: {
@@ -727,7 +730,8 @@ export class FleetService {
     return this.getVehicleAcquisition(tenantSlug, vehicleId);
   }
 
-  async listVehiclePhotos(tenantSlug: string, vehicleId: string): Promise<VehiclePhotosPayload> {
+  async listVehiclePhotos(tenantSlug: string, vehicleId: string, access?: AccessContext): Promise<VehiclePhotosPayload> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: { id: true },
@@ -815,7 +819,9 @@ export class FleetService {
     tenantSlug: string,
     vehicleId: string,
     limit = 50,
+    access?: AccessContext,
   ): Promise<{ items: OdometerReadingRecord[]; vehicleOdometerKm: number }> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: { id: true, odometerKm: true },
@@ -1043,7 +1049,9 @@ export class FleetService {
   async getVehicleMobility(
     tenantSlug: string,
     vehicleId: string,
+    access?: AccessContext,
   ): Promise<VehicleMobilityPayload> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: { id: true, odometerKm: true },

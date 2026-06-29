@@ -4,6 +4,8 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
+import { vehicleClientScope } from '../iam/client-access';
+import { assertVehicleOpsRead } from './ops-write-access';
 import { driverOnlyEmptyPage, mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertTripOpsWrite, assertVehicleOpsWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
@@ -585,7 +587,7 @@ export class TripsService {
     });
   }
 
-  async getConsumption(tenantSlug: string, query: ConsumptionQuery): Promise<ConsumptionPayload> {
+  async getConsumption(tenantSlug: string, query: ConsumptionQuery, access?: AccessContext): Promise<ConsumptionPayload> {
     const from = parseDayStart(query.from);
     const to = parseDayEnd(query.to);
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) {
@@ -625,11 +627,12 @@ export class TripsService {
     }
 
     for (const vehicleId of vehicleIds) {
-      await assertVehicleInTenant(this.prisma, tenantSlug, vehicleId);
+      await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     }
 
+    const clientScope = access && !access.isTenantWide ? vehicleClientScope(access) : {};
     const tenantVehicles = await this.prisma.vehicle.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...clientScope },
       select: { id: true, fuelType: true, civProfile: true },
     });
 

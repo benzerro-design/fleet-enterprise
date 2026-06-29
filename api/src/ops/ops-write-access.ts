@@ -32,6 +32,23 @@ export async function assertVehicleOpsWrite(
   assertClientAccess(access, vehicle.clientId);
 }
 
+/** Citire vehicul — verifică că userul client are acces la clientul vehiculului. */
+export async function assertVehicleOpsRead(
+  prisma: PrismaService,
+  tenantSlug: string,
+  vehicleId: string,
+  access?: AccessContext,
+): Promise<void> {
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, tenant: { slug: tenantSlug } },
+    select: { clientId: true },
+  });
+  if (!vehicle) throw new NotFoundException('Vehicle not found');
+  if (access && !access.isTenantWide) {
+    assertClientAccess(access, vehicle.clientId);
+  }
+}
+
 export async function assertClientCodeOpsWrite(
   prisma: PrismaService,
   tenantId: string,

@@ -18,6 +18,8 @@ import { FUEL_TYPE_OPTIONS, fuelTypeLabel, type FuelTypeValue } from "@/lib/fuel
 type Props = {
   vehicle: VehicleRecord;
   write: boolean;
+  /** User client — nu poate schimba organizația client. */
+  lockClient?: boolean;
 };
 
 function isoDateOnly(iso: string | null): string {
@@ -25,7 +27,7 @@ function isoDateOnly(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
-export function VehicleBasicInfoTab({ vehicle, write }: Props) {
+export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Props) {
   const router = useRouter();
   const [clientId, setClientId] = useState(vehicle.clientId);
   const [registrationNumber, setRegistrationNumber] = useState(vehicle.registrationNumber);
@@ -66,7 +68,7 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
         method: "PATCH",
         headers: fleetJsonHeaders(),
         body: JSON.stringify({
-          clientId: clientId.trim(),
+          ...(lockClient ? {} : { clientId: clientId.trim() }),
           registrationNumber: registrationNumber.trim(),
           type,
           fuelType,
@@ -148,7 +150,15 @@ export function VehicleBasicInfoTab({ vehicle, write }: Props) {
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <ClientSelect value={clientId} onChange={setClientId} required />
+          {lockClient ? (
+            <Field
+              label="Client"
+              value={`${vehicle.clientId}${vehicle.clientLegalName ? ` — ${vehicle.clientLegalName}` : ""}`}
+              mono
+            />
+          ) : (
+            <ClientSelect value={clientId} onChange={setClientId} required />
+          )}
         </div>
         <Input label="Nr. înmatriculare" value={registrationNumber} onChange={setRegistrationNumber} required mono />
         <Input label="Marcă" value={brand} onChange={setBrand} hint="D.1 din CIV — opțional la creare" />

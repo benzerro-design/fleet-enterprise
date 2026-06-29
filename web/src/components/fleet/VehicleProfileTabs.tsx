@@ -33,6 +33,7 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
 type Props = {
   vehicle: VehicleRecord;
   write: boolean;
+  lockClient?: boolean;
   civ: VehicleCivPayload;
   acquisition: VehicleAcquisitionPayload;
   photos: VehiclePhotosPayload;
@@ -44,6 +45,7 @@ type Props = {
 export function VehicleProfileTabs({
   vehicle,
   write,
+  lockClient = false,
   civ,
   acquisition,
   photos,
@@ -103,7 +105,7 @@ export function VehicleProfileTabs({
 
       <div className="p-6">
         {active === "basic" ? (
-          <VehicleBasicInfoTab vehicle={vehicle} write={write} />
+          <VehicleBasicInfoTab vehicle={vehicle} write={write} lockClient={lockClient} />
         ) : null}
         {active === "advanced" ? (
           <VehicleAdvancedCivTab vehicle={vehicle} write={write} initial={civ} />
