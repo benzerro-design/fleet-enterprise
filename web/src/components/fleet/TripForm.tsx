@@ -12,7 +12,9 @@ import {
 } from "@/components/fleet/ops-form-primitives";
 import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
 import { OpsOdometerSyncNotice } from "@/components/fleet/OpsOdometerSyncNotice";
+import { OpsOdometerTimelineConfirm } from "@/components/fleet/OpsOdometerTimelineConfirm";
 import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
+import { useOdometerTimelineConfirm } from "@/lib/use-odometer-timeline-confirm";
 import type { VehicleOdometerSyncPayload } from "@/lib/vehicle-odometer-sync";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
@@ -134,6 +136,13 @@ export function TripForm(props: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [odometerSync, setOdometerSync] = useState<VehicleOdometerSyncPayload | null>(null);
+  const {
+    confirmIfNeeded,
+    timelineConfirmOpen,
+    timelinePreview,
+    cancelTimelineConfirm,
+    acceptTimelineConfirm,
+  } = useOdometerTimelineConfirm();
 
   const computedDistanceKm = useMemo(
     () => distanceFromOdometers(odometerStartKm, odometerEndKm),
@@ -222,6 +231,16 @@ export function TripForm(props: Props) {
       driverId: driverId.trim() || null,
     };
 
+    const syncKm = odoEnd ?? odoStart;
+    const eventIso = endIso ?? startIso;
+    if (boundVehicleId && syncKm != null && eventIso) {
+      const confirmed = await confirmIfNeeded(boundVehicleId, syncKm, eventIso);
+      if (!confirmed) {
+        setPending(false);
+        return;
+      }
+    }
+
     try {
       const url = isEdit ? `/api/trips/${props.tripId}` : "/api/trips";
       const method = isEdit ? "PATCH" : "POST";
@@ -252,6 +271,14 @@ export function TripForm(props: Props) {
 
   if (useP1Layout) {
     return (
+      <>
+        <OpsOdometerTimelineConfirm
+          open={timelineConfirmOpen}
+          preview={timelinePreview}
+          onCancel={cancelTimelineConfirm}
+          onConfirm={() => void acceptTimelineConfirm()}
+          pending={pending}
+        />
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
         <OpsOdometerSyncNotice sync={odometerSync} />
@@ -323,6 +350,7 @@ export function TripForm(props: Props) {
                 odometerKm={tripSyncOdometerKm}
                 vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
                 eventDate={tripEventDate}
+                vehicleId={boundVehicleId}
               />
             </div>
           </div>
@@ -334,10 +362,19 @@ export function TripForm(props: Props) {
           pending={pending}
         />
       </form>
+      </>
     );
   }
 
   return (
+    <>
+      <OpsOdometerTimelineConfirm
+        open={timelineConfirmOpen}
+        preview={timelinePreview}
+        onCancel={cancelTimelineConfirm}
+        onConfirm={() => void acceptTimelineConfirm()}
+        pending={pending}
+      />
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
       <OpsOdometerSyncNotice sync={odometerSync} />
@@ -423,6 +460,7 @@ export function TripForm(props: Props) {
         odometerKm={tripSyncOdometerKm}
         vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
         eventDate={tripEventDate}
+        vehicleId={boundVehicleId}
       />
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">
@@ -433,5 +471,6 @@ export function TripForm(props: Props) {
         </Link>
       </div>
     </form>
+    </>
   );
 }

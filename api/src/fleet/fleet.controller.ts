@@ -265,6 +265,22 @@ export class FleetController {
     return this.fleet.listOdometerReadings(tenantId, vehicleId, limit, access);
   }
 
+  @Get('vehicles/:vehicleId/odometer-preview')
+  @Roles(...FLEET_READ_ROLES)
+  previewOdometerEntry(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('odometerKm') odometerKmStr?: string,
+    @Query('recordedAt') recordedAt?: string,
+  ) {
+    const odometerKm = parseInt(odometerKmStr ?? '', 10);
+    if (!recordedAt?.trim() || !Number.isFinite(odometerKm) || odometerKm < 0) {
+      throw new BadRequestException('Query params odometerKm and recordedAt are required');
+    }
+    return this.fleet.previewOdometerEntry(tenantId, vehicleId, odometerKm, recordedAt.trim(), access);
+  }
+
   @Post('vehicles/:vehicleId/odometer-readings')
   @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)

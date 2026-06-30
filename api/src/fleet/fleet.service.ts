@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -37,7 +38,7 @@ import {
   validateNewOdometerEntry,
 } from '../ops/vehicle-odometer-timeline';
 import { VehicleOdometerSyncService } from '../ops/vehicle-odometer-sync.service';
-import type { OdometerTimelineAnalysis } from '../ops/vehicle-odometer-sync.types';
+import type { OdometerTimelineAnalysis, OdometerPreviewPayload } from '../ops/vehicle-odometer-sync.types';
 import {
   CIV_PROFILE_FIELDS,
   normalizeCivProfile,
@@ -890,6 +891,53 @@ export class FleetService {
         recordedAt: r.recordedAt.toISOString(),
         recordedByEmail: r.recordedBy?.email ?? null,
       })),
+    };
+  }
+
+  async previewOdometerEntry(
+    tenantSlug: string,
+    vehicleId: string,
+    odometerKm: number,
+    recordedAtIso: string,
+    access?: AccessContext,
+  ): Promise<OdometerPreviewPayload> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, odometerKm: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    if (!Number.isFinite(odometerKm) || odometerKm < 0) {
+      throw new BadRequestException('odometerKm must be a non-negative integer');
+    }
+
+    const recordedAt = new Date(recordedAtIso);
+    if (Number.isNaN(recordedAt.getTime())) {
+      throw new BadRequestException('recordedAt must be a valid ISO date string');
+    }
+
+    const existingRows = await this.prisma.odometerReading.findMany({
+      where: { vehicleId },
+      select: { odometerKm: true, recordedAt: true },
+      orderBy: { recordedAt: 'asc' },
+    });
+
+    const validation = validateNewOdometerEntry(
+      existingRows.map((r) => ({ odometerKm: r.odometerKm, recordedAt: r.recordedAt })),
+      { odometerKm: Math.round(odometerKm), recordedAt },
+      vehicle.odometerKm,
+    );
+
+    return {
+      severity: validation.severity,
+      messages: validation.messages,
+      message: buildOdometerSyncPrimaryMessage(validation, vehicle.odometerKm),
+      willUpdateCurrentKm: validation.willUpdateCurrentKm,
+      newCurrentKm: validation.newCurrentKm,
+      vehicleOdometerKm: vehicle.odometerKm,
+      timelineConsistent: validation.timelineAnalysis.isConsistent,
+      requiresConfirmation: validation.severity === 'critical',
     };
   }
 

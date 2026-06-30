@@ -26,7 +26,9 @@ import {
 } from "@/components/fleet/ops-form-primitives";
 import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
 import { OpsOdometerSyncNotice } from "@/components/fleet/OpsOdometerSyncNotice";
+import { OpsOdometerTimelineConfirm } from "@/components/fleet/OpsOdometerTimelineConfirm";
 import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
+import { useOdometerTimelineConfirm } from "@/lib/use-odometer-timeline-confirm";
 import type { VehicleOdometerSyncPayload } from "@/lib/vehicle-odometer-sync";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
@@ -173,6 +175,13 @@ export function CostForm(props: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [odometerSync, setOdometerSync] = useState<VehicleOdometerSyncPayload | null>(null);
+  const {
+    confirmIfNeeded,
+    timelineConfirmOpen,
+    timelinePreview,
+    cancelTimelineConfirm,
+    acceptTimelineConfirm,
+  } = useOdometerTimelineConfirm();
 
   const isItp = isItpCostCategory(category);
   const isFuel = isFuelCostCategory(category);
@@ -298,6 +307,15 @@ export function CostForm(props: Props) {
       syncReminderAction: configured ? syncReminderAction : false,
     };
 
+    const activeVehicleId = isEdit ? initial.vehicleId : boundVehicleId;
+    if (odo != null && when && activeVehicleId) {
+      const confirmed = await confirmIfNeeded(activeVehicleId, odo, when);
+      if (!confirmed) {
+        setPending(false);
+        return;
+      }
+    }
+
     try {
       const url = isEdit ? `/api/costs/${props.entryId}` : "/api/costs";
       const method = isEdit ? "PATCH" : "POST";
@@ -415,6 +433,14 @@ export function CostForm(props: Props) {
 
   if (useP1Layout) {
     return (
+      <>
+        <OpsOdometerTimelineConfirm
+          open={timelineConfirmOpen}
+          preview={timelinePreview}
+          onCancel={cancelTimelineConfirm}
+          onConfirm={() => void acceptTimelineConfirm()}
+          pending={pending}
+        />
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? (
           <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p>
@@ -487,6 +513,7 @@ export function CostForm(props: Props) {
                 odometerKm={odometerKm}
                 vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
                 eventDate={incurredOn}
+                vehicleId={boundVehicleId}
               />
             </div>
           </div>
@@ -540,10 +567,19 @@ export function CostForm(props: Props) {
           pending={pending}
         />
       </form>
+      </>
     );
   }
 
   return (
+    <>
+      <OpsOdometerTimelineConfirm
+        open={timelineConfirmOpen}
+        preview={timelinePreview}
+        onCancel={cancelTimelineConfirm}
+        onConfirm={() => void acceptTimelineConfirm()}
+        pending={pending}
+      />
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
       <OpsOdometerSyncNotice sync={odometerSync} />
@@ -605,6 +641,7 @@ export function CostForm(props: Props) {
           odometerKm={odometerKm}
           vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
           eventDate={incurredOn}
+          vehicleId={boundVehicleId}
         />
       </div>
       <div className="space-y-2">
@@ -656,5 +693,6 @@ export function CostForm(props: Props) {
         </Link>
       </div>
     </form>
+    </>
   );
 }

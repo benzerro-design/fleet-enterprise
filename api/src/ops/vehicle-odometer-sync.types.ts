@@ -27,3 +27,14 @@ export type OdometerTimelineAnalysis = {
   hasCriticalViolations: boolean;
   isConsistent: boolean;
 };
+
+export type OdometerPreviewPayload = {
+  severity: 'ok' | 'info' | 'warning' | 'critical';
+  messages: string[];
+  message: string;
+  willUpdateCurrentKm: boolean;
+  newCurrentKm: number;
+  vehicleOdometerKm: number;
+  timelineConsistent: boolean;
+  requiresConfirmation: boolean;
+};
