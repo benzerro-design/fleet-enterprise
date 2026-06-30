@@ -112,13 +112,14 @@ export function VehicleOdometerTab({ vehicleId, write, initial }: Props) {
         <p className="text-xs uppercase tracking-wide text-sky-400/80">Km curent vehicul</p>
         <p className="mt-1 font-mono text-3xl font-semibold text-sky-100">{currentKm.toLocaleString("ro-RO")} km</p>
         <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-          Km curent = valoarea din <span className="text-zinc-400">cea mai recentă citire cronologic</span> (dată +
-          km), nu neapărat cel mai mare număr din istoric. Citirile se adaugă automat la cost, mentenanță sau cursă
-          (cu analiză dată/km). Înregistrările manuale apar în istoricul de mai jos.
+          Km curent = valoarea din <span className="text-zinc-400">ultima citire validă</span> (dată + km în ordine
+          crescătoare). Citirile care încalcă ordinea apar în istoric dar{" "}
+          <span className="text-zinc-400">nu modifică</span> km curent. Actualizări automate la cost, mentenanță sau
+          cursă.
         </p>
         {timeline?.latestRecordedAt ? (
           <p className="mt-2 text-xs text-zinc-600">
-            Ultima citire cronologic:{" "}
+            Ultima citire validă:{" "}
             {new Date(timeline.latestRecordedAt).toLocaleString("ro-RO")}
             {timeline.currentKmFromTimeline != null
               ? ` · ${timeline.currentKmFromTimeline.toLocaleString("ro-RO")} km`
@@ -127,7 +128,7 @@ export function VehicleOdometerTab({ vehicleId, write, initial }: Props) {
         ) : null}
         {initial.reconciled ? (
           <p className="mt-2 rounded border border-sky-900/30 bg-sky-950/30 px-2 py-1 text-xs text-sky-300">
-            Km curent a fost reconciliat automat cu istoricul (corecție față de vechea regulă „maxim numeric”).
+            Km curent a fost reconciliat la ultima citire validă din istoric (citiri inconsistente ignorate).
           </p>
         ) : null}
       </div>

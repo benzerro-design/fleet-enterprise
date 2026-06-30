@@ -86,7 +86,7 @@ export class VehicleOdometerSyncService {
     });
 
     const newKm = validation.newCurrentKm;
-    const updated = newKm !== previousKm;
+    const updated = validation.willUpdateCurrentKm && newKm !== previousKm;
 
     if (updated) {
       await this.prisma.vehicle.update({
