@@ -9,6 +9,7 @@ export type ClientMembershipMe = {
 };
 
 export type AuthMe = {
+  userId?: string;
   email?: string;
   tenantSlug: string;
   role: "tenant_admin" | "tenant_viewer" | "client_user";

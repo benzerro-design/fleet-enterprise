@@ -57,11 +57,31 @@ export type TicketEventRecord = {
   kind: TicketEventKind;
   body: string | null;
   payload: unknown;
+  parentEventId: string | null;
+  editedAt: string | null;
   actorUserId: string | null;
   actorEmail: string | null;
   actorRoutingLevel: TicketRoutingLevel | null;
   actorDisplayName: string | null;
   createdAt: string;
+};
+
+export type TicketEventReaction = {
+  emoji: string;
+  userId: string;
+  displayName: string;
+};
+
+export type TicketNotificationRecord = {
+  id: string;
+  ticketId: string;
+  eventId: string | null;
+  kind: "mention";
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+  ticketDisplayId: string;
+  ticketSubject: string;
 };
 
 export type TicketLinkRecord = {
@@ -194,6 +214,59 @@ export function ticketEventAttachments(ev: TicketEventRecord): TicketCommentAtta
     out.push({ url, name, mimeType: mimeType || undefined });
   }
   return out;
+}
+
+export function ticketEventRawBody(ev: TicketEventRecord): string | null {
+  if (!ev.payload || typeof ev.payload !== "object") return null;
+  const raw = (ev.payload as { rawBody?: unknown }).rawBody;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+export function ticketEventReactions(ev: TicketEventRecord): TicketEventReaction[] {
+  if (!ev.payload || typeof ev.payload !== "object") return [];
+  const raw = (ev.payload as { reactions?: unknown }).reactions;
+  if (!Array.isArray(raw)) return [];
+  const out: TicketEventReaction[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const emoji = "emoji" in item && typeof item.emoji === "string" ? item.emoji : "";
+    const userId = "userId" in item && typeof item.userId === "string" ? item.userId : "";
+    const displayName =
+      "displayName" in item && typeof item.displayName === "string" ? item.displayName : "";
+    if (!emoji || !userId) continue;
+    out.push({ emoji, userId, displayName: displayName || "?" });
+  }
+  return out;
+}
+
+export function ticketEventForwardMeta(ev: TicketEventRecord): {
+  ticketId: string;
+  displayId: string;
+} | null {
+  if (!ev.payload || typeof ev.payload !== "object") return null;
+  const p = ev.payload as { forwardedFromTicketId?: unknown; forwardedFromDisplayId?: unknown };
+  const ticketId =
+    typeof p.forwardedFromTicketId === "string" ? p.forwardedFromTicketId.trim() : "";
+  const displayId =
+    typeof p.forwardedFromDisplayId === "string" ? p.forwardedFromDisplayId.trim() : "";
+  if (!ticketId) return null;
+  return { ticketId, displayId: displayId || ticketId.slice(-6).toUpperCase() };
+}
+
+/** Prefer rawBody; fallback to stripping actor prefix from display body. */
+export function ticketCommentText(ev: TicketEventRecord): string | null {
+  const raw = ticketEventRawBody(ev);
+  if (raw) return raw;
+  const body = ev.body?.trim();
+  if (!body) return null;
+  const name = ev.actorDisplayName;
+  if (!name) return body;
+  const prefix = `${name} (`;
+  if (body.startsWith(prefix)) {
+    const close = body.indexOf("): ");
+    if (close > 0) return body.slice(close + 3).trim() || null;
+  }
+  return body;
 }
 
 export function ticketLinkHref(link: TicketLinkRecord): string | null {

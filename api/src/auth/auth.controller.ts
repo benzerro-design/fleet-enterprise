@@ -25,6 +25,7 @@ export class AuthController {
     }
     const access = req.accessContext;
     return {
+      userId: u.sub,
       email: u.email,
       tenantSlug: u.tenantSlug,
       role: u.role,

@@ -30,10 +30,12 @@ import type { AccessContext } from '../iam/access-context.types';
 import type {
   CommentTicketInput,
   CreateTicketInput,
+  EditCommentInput,
   PatchTicketInput,
   ResolveTicketInput,
   ReturnTicketInput,
   RouteTicketInput,
+  ToggleReactionInput,
   TransformTicketInput,
 } from './crm-tickets.service';
 import { CrmTicketsService } from './crm-tickets.service';
@@ -170,6 +172,39 @@ export class CrmTicketsController {
     return new StreamableFile(Buffer.from(csv, 'utf8'));
   }
 
+  @Get('notifications')
+  @Roles(...CRM_READ)
+  notifications(
+    @TenantId() tenantSlug: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @Query('unread') unread?: string,
+  ) {
+    return this.tickets.listNotifications(tenantSlug, actorUserId, {
+      unreadOnly: unread === '1' || unread === 'true',
+    });
+  }
+
+  @Patch('notifications/read-all')
+  @Roles(...CRM_READ)
+  @HttpCode(204)
+  async markAllNotificationsRead(
+    @TenantId() tenantSlug: string,
+    @CurrentUserId() actorUserId: string | undefined,
+  ) {
+    await this.tickets.markAllNotificationsRead(tenantSlug, actorUserId);
+  }
+
+  @Patch('notifications/:notificationId/read')
+  @Roles(...CRM_READ)
+  @HttpCode(204)
+  async markNotificationRead(
+    @TenantId() tenantSlug: string,
+    @Param('notificationId') notificationId: string,
+    @CurrentUserId() actorUserId: string | undefined,
+  ) {
+    await this.tickets.markNotificationRead(tenantSlug, notificationId, actorUserId);
+  }
+
   @Get(':id')
   @Roles(...CRM_READ)
   get(
@@ -231,6 +266,35 @@ export class CrmTicketsController {
   ) {
     const actor = this.accessContext.toActor(access);
     return this.tickets.addComment(tenantSlug, id, body, actorUserId, access, actor);
+  }
+
+  @Post(':id/events/:eventId/reactions')
+  @Roles(...CRM_WRITE)
+  @HttpCode(200)
+  toggleReaction(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Param('eventId') eventId: string,
+    @Body() body: ToggleReactionInput,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.toggleReaction(tenantSlug, id, eventId, body, actorUserId, access, actor);
+  }
+
+  @Patch(':id/events/:eventId')
+  @Roles(...CRM_WRITE)
+  editComment(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Param('eventId') eventId: string,
+    @Body() body: EditCommentInput,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const actor = this.accessContext.toActor(access);
+    return this.tickets.editComment(tenantSlug, id, eventId, body, actorUserId, access, actor);
   }
 
   @Post(':id/route')

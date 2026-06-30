@@ -3,11 +3,9 @@ import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketActionsPanel } from "@/components/fleet/TicketActionsPanel";
 import { TicketActionTimeline } from "@/components/fleet/tickets/TicketActionTimeline";
-import { TicketAttachmentGallery } from "@/components/fleet/tickets/TicketAttachmentGallery";
-import { TicketComposer } from "@/components/fleet/tickets/TicketComposer";
+import { TicketConversation } from "@/components/fleet/tickets/TicketConversation";
 import { TicketEditPanel } from "@/components/fleet/tickets/TicketEditPanel";
 import { FleetAvatar } from "@/components/fleet/tickets/TicketListGlyphs";
-import { TicketThread } from "@/components/fleet/tickets/TicketThread";
 import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
 import { canPatchTickets, canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -36,8 +34,9 @@ export default async function TicketDetailPage({ params }: PageProps) {
   if (!detail) notFound();
   const write = canWriteTickets(auth);
   const patch = canPatchTickets(auth);
-  const { ticket, events } = detail;
+  const { ticket } = detail;
   const closed = ticket.status === "resolved" || ticket.status === "cancelled";
+  const currentUserId = auth.ok ? auth.me.userId : undefined;
 
   return (
     <FleetPageMain>
@@ -132,11 +131,12 @@ export default async function TicketDetailPage({ params }: PageProps) {
           <div>
             <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Conversație</h2>
             <div className="mt-4">
-              <TicketAttachmentGallery events={events} />
-              <TicketThread events={events} />
-            </div>
-            <div className="mt-4">
-              <TicketComposer ticketId={ticket.id} canWrite={write} closed={closed} />
+              <TicketConversation
+                initial={detail}
+                canWrite={write}
+                closed={closed}
+                currentUserId={currentUserId}
+              />
             </div>
           </div>
         </section>
@@ -145,7 +145,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
           <div>
             <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Timeline acțiuni</h2>
             <div className="mt-4">
-              <TicketActionTimeline events={events} />
+              <TicketActionTimeline events={detail.events} />
             </div>
           </div>
           <TicketActionsPanel detail={detail} canWrite={write} />

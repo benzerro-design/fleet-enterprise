@@ -7,6 +7,7 @@ import {
 import {
   CrmTicketEventKind,
   CrmTicketLinkEntityType,
+  CrmTicketNotificationKind,
   CrmTicketPriority,
   CrmTicketRoutingLevel,
   CrmTicketStatus,
@@ -63,6 +64,8 @@ export type TicketEventRecord = {
   kind: CrmTicketEventKind;
   body: string | null;
   payload: unknown;
+  parentEventId: string | null;
+  editedAt: string | null;
   actorUserId: string | null;
   actorEmail: string | null;
   actorRoutingLevel: CrmTicketRoutingLevel | null;
@@ -122,6 +125,25 @@ export type TicketCommentAttachment = {
 export type CommentTicketInput = {
   body?: string;
   attachments?: TicketCommentAttachment[];
+  parentEventId?: string | null;
+  forwardedFromTicketId?: string | null;
+  mentions?: string[];
+};
+
+export type ToggleReactionInput = { emoji: string };
+
+export type EditCommentInput = { body: string };
+
+export type TicketNotificationRecord = {
+  id: string;
+  ticketId: string;
+  eventId: string | null;
+  kind: 'mention';
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+  ticketDisplayId: string;
+  ticketSubject: string;
 };
 
 export type RouteTicketInput = {
@@ -411,17 +433,7 @@ export class CrmTicketsService {
 
     return {
       ticket: this.toRecord(row),
-      events: events.map((e) => ({
-        id: e.id,
-        kind: e.kind,
-        body: e.body,
-        payload: e.payload ?? null,
-        actorUserId: e.actorUserId,
-        actorEmail: e.actor?.email ?? null,
-        actorRoutingLevel: e.actorRoutingLevel,
-        actorDisplayName: e.actorDisplayName,
-        createdAt: e.createdAt.toISOString(),
-      })),
+      events: events.map((e) => this.mapEventRecord(e)),
       links: links.map((l) => ({
         id: l.id,
         entityType: l.entityType,
@@ -672,6 +684,33 @@ export class CrmTicketsService {
       throw new BadRequestException('body or attachments required');
     }
 
+    if (dto.parentEventId?.trim()) {
+      const parent = await this.prisma.crmTicketEvent.findFirst({
+        where: { id: dto.parentEventId.trim(), ticketId: id, tenantId: tenant.id },
+      });
+      if (!parent) throw new BadRequestException('parentEventId not found on ticket');
+    }
+
+    let forwardedFromDisplayId: string | null = null;
+    if (dto.forwardedFromTicketId?.trim()) {
+      const source = await this.prisma.crmTicket.findFirst({
+        where: { id: dto.forwardedFromTicketId.trim(), tenantId: tenant.id },
+        select: { id: true },
+      });
+      if (!source) throw new BadRequestException('forwardedFromTicketId not found');
+      forwardedFromDisplayId = this.displayId(source.id);
+    }
+
+    const mentionUserIds = await this.normalizeMentionUserIds(tenant.id, dto.mentions);
+
+    const payload = this.buildCommentPayload({
+      rawBody: body || undefined,
+      attachments,
+      mentions: mentionUserIds,
+      forwardedFromTicketId: dto.forwardedFromTicketId?.trim() || undefined,
+      forwardedFromDisplayId: forwardedFromDisplayId ?? undefined,
+    });
+
     const displayBody = body
       ? actor
         ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}): ${body}`
@@ -680,12 +719,26 @@ export class CrmTicketsService {
         ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}) a atașat ${attachments.length} fișier(e)`
         : `Atașat ${attachments.length} fișier(e)`;
 
-    await this.appendEvent(tenant.id, id, {
+    const created = await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.comment,
       body: displayBody,
       actor,
-      payload: attachments.length > 0 ? { attachments } : undefined,
+      payload,
+      parentEventId: dto.parentEventId?.trim() || undefined,
     });
+
+    if (mentionUserIds.length > 0 && actorUserId) {
+      await this.notifyMentions({
+        tenantId: tenant.id,
+        ticketId: id,
+        eventId: created.id,
+        mentionUserIds,
+        actorUserId,
+        actorDisplayName: actor?.displayName ?? 'Cineva',
+        ticketSubject: ticket.subject,
+        excerpt: body.slice(0, 160),
+      });
+    }
 
     await this.prisma.crmTicket.update({
       where: { id },
@@ -693,6 +746,172 @@ export class CrmTicketsService {
     });
 
     return this.getDetail(tenantSlug, id, access);
+  }
+
+  async toggleReaction(
+    tenantSlug: string,
+    ticketId: string,
+    eventId: string,
+    dto: ToggleReactionInput,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
+    if (!actorUserId || !actor) {
+      throw new BadRequestException('Actor required');
+    }
+    const tenant = await this.ensureTenant(tenantSlug);
+    const ticket = await this.ensureTicket(tenant.id, ticketId);
+    if (access && !canPerformTicketAction(access, 'comment', ticket)) {
+      throw new ForbiddenException('Cannot react on ticket');
+    }
+    const emoji = dto.emoji?.trim();
+    if (!emoji || !this.isAllowedReaction(emoji)) {
+      throw new BadRequestException('Invalid reaction emoji');
+    }
+
+    const event = await this.prisma.crmTicketEvent.findFirst({
+      where: { id: eventId, ticketId, tenantId: tenant.id, kind: CrmTicketEventKind.comment },
+    });
+    if (!event) throw new NotFoundException('Comment not found');
+
+    const payload =
+      event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+        ? ({ ...(event.payload as Record<string, unknown>) } as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+    const reactions = Array.isArray(payload.reactions)
+      ? [...(payload.reactions as Array<{ emoji: string; userId: string; displayName: string }>)]
+      : [];
+    const idx = reactions.findIndex((r) => r.userId === actorUserId && r.emoji === emoji);
+    if (idx >= 0) {
+      reactions.splice(idx, 1);
+    } else {
+      reactions.push({ emoji, userId: actorUserId, displayName: actor.displayName });
+    }
+    payload.reactions = reactions;
+
+    await this.prisma.crmTicketEvent.update({
+      where: { id: eventId },
+      data: { payload: payload as Prisma.InputJsonValue },
+    });
+
+    return this.getDetail(tenantSlug, ticketId, access);
+  }
+
+  async editComment(
+    tenantSlug: string,
+    ticketId: string,
+    eventId: string,
+    dto: EditCommentInput,
+    actorUserId?: string,
+    access?: AccessContext,
+    actor?: ActorContext,
+  ) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    const ticket = await this.ensureTicket(tenant.id, ticketId);
+    if (access && !canPerformTicketAction(access, 'comment', ticket)) {
+      throw new ForbiddenException('Cannot edit comment');
+    }
+    const text = dto.body?.trim();
+    if (!text) throw new BadRequestException('body is required');
+
+    const event = await this.prisma.crmTicketEvent.findFirst({
+      where: { id: eventId, ticketId, tenantId: tenant.id, kind: CrmTicketEventKind.comment },
+    });
+    if (!event) throw new NotFoundException('Comment not found');
+    if (event.actorUserId !== actorUserId) {
+      throw new ForbiddenException('Only the author can edit this comment');
+    }
+    const ageMs = Date.now() - event.createdAt.getTime();
+    if (ageMs > 15 * 60 * 1000) {
+      throw new BadRequestException('Edit window expired (15 minutes)');
+    }
+
+    const payload =
+      event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+        ? ({ ...(event.payload as Record<string, unknown>) } as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+    payload.rawBody = text;
+
+    const displayBody = actor
+      ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}): ${text}`
+      : text;
+
+    await this.prisma.crmTicketEvent.update({
+      where: { id: eventId },
+      data: {
+        body: displayBody,
+        editedAt: new Date(),
+        payload: payload as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.prisma.crmTicket.update({
+      where: { id: ticketId },
+      data: { updatedAt: new Date() },
+    });
+
+    return this.getDetail(tenantSlug, ticketId, access);
+  }
+
+  async listNotifications(
+    tenantSlug: string,
+    actorUserId: string | undefined,
+    params?: { unreadOnly?: boolean },
+  ): Promise<{ items: TicketNotificationRecord[] }> {
+    if (!actorUserId) return { items: [] };
+    const tenant = await this.ensureTenant(tenantSlug);
+    const rows = await this.prisma.crmTicketNotification.findMany({
+      where: {
+        tenantId: tenant.id,
+        userId: actorUserId,
+        ...(params?.unreadOnly ? { readAt: null } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { ticket: { select: { subject: true } } },
+    });
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        ticketId: r.ticketId,
+        eventId: r.eventId,
+        kind: 'mention' as const,
+        body: r.body,
+        readAt: r.readAt?.toISOString() ?? null,
+        createdAt: r.createdAt.toISOString(),
+        ticketDisplayId: this.displayId(r.ticketId),
+        ticketSubject: r.ticket.subject,
+      })),
+    };
+  }
+
+  async markNotificationRead(
+    tenantSlug: string,
+    notificationId: string,
+    actorUserId?: string,
+  ): Promise<void> {
+    if (!actorUserId) throw new BadRequestException('Actor required');
+    const tenant = await this.ensureTenant(tenantSlug);
+    const row = await this.prisma.crmTicketNotification.findFirst({
+      where: { id: notificationId, tenantId: tenant.id, userId: actorUserId },
+    });
+    if (!row) throw new NotFoundException('Notification not found');
+    if (!row.readAt) {
+      await this.prisma.crmTicketNotification.update({
+        where: { id: notificationId },
+        data: { readAt: new Date() },
+      });
+    }
+  }
+
+  async markAllNotificationsRead(tenantSlug: string, actorUserId?: string): Promise<void> {
+    if (!actorUserId) return;
+    const tenant = await this.ensureTenant(tenantSlug);
+    await this.prisma.crmTicketNotification.updateMany({
+      where: { tenantId: tenant.id, userId: actorUserId, readAt: null },
+      data: { readAt: new Date() },
+    });
   }
 
   async route(
@@ -1251,6 +1470,98 @@ export class CrmTicketsService {
     });
   }
 
+  private mapEventRecord(
+    e: {
+      id: string;
+      kind: CrmTicketEventKind;
+      body: string | null;
+      payload: unknown;
+      parentEventId: string | null;
+      editedAt: Date | null;
+      actorUserId: string | null;
+      actorRoutingLevel: CrmTicketRoutingLevel | null;
+      actorDisplayName: string | null;
+      createdAt: Date;
+      actor?: { email: string } | null;
+    },
+  ): TicketEventRecord {
+    return {
+      id: e.id,
+      kind: e.kind,
+      body: e.body,
+      payload: e.payload ?? null,
+      parentEventId: e.parentEventId,
+      editedAt: e.editedAt?.toISOString() ?? null,
+      actorUserId: e.actorUserId,
+      actorEmail: e.actor?.email ?? null,
+      actorRoutingLevel: e.actorRoutingLevel,
+      actorDisplayName: e.actorDisplayName,
+      createdAt: e.createdAt.toISOString(),
+    };
+  }
+
+  private buildCommentPayload(input: {
+    rawBody?: string;
+    attachments: TicketCommentAttachment[];
+    mentions: string[];
+    forwardedFromTicketId?: string;
+    forwardedFromDisplayId?: string;
+  }): Prisma.InputJsonValue | undefined {
+    const payload: Record<string, unknown> = {};
+    if (input.rawBody) payload.rawBody = input.rawBody;
+    if (input.attachments.length > 0) payload.attachments = input.attachments;
+    if (input.mentions.length > 0) payload.mentions = input.mentions;
+    if (input.forwardedFromTicketId) {
+      payload.forwardedFromTicketId = input.forwardedFromTicketId;
+      if (input.forwardedFromDisplayId) {
+        payload.forwardedFromDisplayId = input.forwardedFromDisplayId;
+      }
+    }
+    return Object.keys(payload).length > 0 ? (payload as Prisma.InputJsonValue) : undefined;
+  }
+
+  private async normalizeMentionUserIds(tenantId: string, raw?: string[]): Promise<string[]> {
+    if (!raw?.length) return [];
+    const ids = [...new Set(raw.map((id) => id.trim()).filter(Boolean))].slice(0, 10);
+    if (ids.length === 0) return [];
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: ids },
+        memberships: { some: { tenantId } },
+      },
+      select: { id: true },
+    });
+    return users.map((u) => u.id);
+  }
+
+  private async notifyMentions(input: {
+    tenantId: string;
+    ticketId: string;
+    eventId: string;
+    mentionUserIds: string[];
+    actorUserId: string;
+    actorDisplayName: string;
+    ticketSubject: string;
+    excerpt: string;
+  }) {
+    const targets = input.mentionUserIds.filter((id) => id !== input.actorUserId);
+    if (targets.length === 0) return;
+    await this.prisma.crmTicketNotification.createMany({
+      data: targets.map((userId) => ({
+        tenantId: input.tenantId,
+        userId,
+        ticketId: input.ticketId,
+        eventId: input.eventId,
+        kind: CrmTicketNotificationKind.mention,
+        body: `${input.actorDisplayName} te-a menționat pe „${input.ticketSubject}”: ${input.excerpt || '—'}`,
+      })),
+    });
+  }
+
+  private isAllowedReaction(emoji: string): boolean {
+    return ['👍', '✅', '❓', '👀'].includes(emoji);
+  }
+
   private async appendEvent(
     tenantId: string,
     ticketId: string,
@@ -1259,9 +1570,10 @@ export class CrmTicketsService {
       body?: string | null;
       actor?: ActorContext;
       payload?: unknown;
+      parentEventId?: string;
     },
   ) {
-    await this.prisma.crmTicketEvent.create({
+    return this.prisma.crmTicketEvent.create({
       data: {
         tenantId,
         ticketId,
@@ -1271,6 +1583,7 @@ export class CrmTicketsService {
           input.payload === undefined || input.payload === null
             ? undefined
             : (input.payload as Prisma.InputJsonValue),
+        parentEventId: input.parentEventId ?? null,
         actorUserId: input.actor?.userId ?? null,
         actorRoutingLevel: input.actor?.routingLevel ?? null,
         actorDisplayName: input.actor?.displayName ?? null,

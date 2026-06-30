@@ -11,6 +11,7 @@ import {
 } from "@/components/fleet/fleet-data-table";
 import { TicketColumnPicker } from "@/components/fleet/tickets/TicketColumnPicker";
 import { TicketGlyphLegendPanel } from "@/components/fleet/tickets/TicketGlyphLegendPanel";
+import { TicketGridViewsPanel } from "@/components/fleet/tickets/TicketGridViewsPanel";
 import { TicketInlinePatchCell } from "@/components/fleet/tickets/TicketInlinePatchCell";
 import {
   FleetAvatar,
@@ -52,9 +53,10 @@ type Props = {
   canWrite: boolean;
   canPatch?: boolean;
   exportHref?: string;
+  filterParams?: Record<string, string>;
 };
 
-export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref }: Props) {
+export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, filterParams = {} }: Props) {
   const [layout, setLayout] = useState<TicketGridLayout>(() => readTicketGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
@@ -171,6 +173,7 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref }
         >
           Coloane…
         </button>
+        <TicketGridViewsPanel currentParams={filterParams} />
         <button
           type="button"
           onClick={() => {

@@ -4,6 +4,7 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
+import { TicketNotificationBell } from "@/components/fleet/tickets/TicketNotificationBell";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
 import { canPatchTickets, canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
@@ -152,6 +153,15 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
     ? vehicles.filter((v) => v.clientId.toLowerCase() === sp.clientId!.trim().toLowerCase())
     : vehicles;
 
+  const filterParams: Record<string, string> = {};
+  if (sp.q?.trim()) filterParams.q = sp.q.trim();
+  if (sp.status?.trim()) filterParams.status = sp.status.trim();
+  if (sp.clientId?.trim()) filterParams.clientId = sp.clientId.trim();
+  if (sp.ticketType?.trim()) filterParams.ticketType = sp.ticketType.trim();
+  if (sp.vehicleId?.trim()) filterParams.vehicleId = sp.vehicleId.trim();
+  if (sp.routingLevel?.trim()) filterParams.routingLevel = sp.routingLevel.trim();
+  if (sp.inbox?.trim()) filterParams.inbox = sp.inbox.trim();
+
   return (
     <FleetPageMain fill>
       <FleetListPageLayout
@@ -172,6 +182,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
                 Solicitare nouă
               </Link>
             ) : null}
+            <TicketNotificationBell />
           </div>
         }
         filters={
@@ -324,7 +335,13 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
           <TicketBoardView board={board} />
         ) : list ? (
           <>
-            <TicketDataGrid items={list.items} canWrite={write} canPatch={patch} exportHref={exportHref} />
+            <TicketDataGrid
+              items={list.items}
+              canWrite={write}
+              canPatch={patch}
+              exportHref={exportHref}
+              filterParams={filterParams}
+            />
             {list.total > list.pageSize ? (
               <div className="mt-4 flex items-center justify-between text-sm text-zinc-500">
                 <span>
