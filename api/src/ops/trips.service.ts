@@ -20,6 +20,7 @@ import {
   resolveTripOdometerKmForSync,
   VehicleOdometerSyncService,
 } from './vehicle-odometer-sync.service';
+import { assertUniqueTripReference, assertValidTripOdometer } from './trips-validation';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -386,6 +387,12 @@ export class TripsService {
       tripDriverName = resolved.driverName;
     }
 
+    assertValidTripOdometer({
+      odometerStartKm: dto.odometerStartKm,
+      odometerEndKm: dto.odometerEndKm,
+    });
+    await assertUniqueTripReference(this.prisma, tenant.id, dto.reference);
+
     const row = await this.prisma.trip.create({
       data: {
         tenantId: tenant.id,
@@ -463,6 +470,15 @@ export class TripsService {
       dto.odometerStartKm !== undefined ? dto.odometerStartKm : before.odometerStartKm;
     const nextOdometerEndKm =
       dto.odometerEndKm !== undefined ? dto.odometerEndKm : before.odometerEndKm;
+
+    assertValidTripOdometer({
+      odometerStartKm: nextOdometerStartKm,
+      odometerEndKm: nextOdometerEndKm,
+    });
+    if (dto.reference !== undefined) {
+      await assertUniqueTripReference(this.prisma, before.tenantId, dto.reference, tripId);
+    }
+
     const nextDistanceKm = resolveDistanceKm({
       distanceKm: dto.distanceKm !== undefined ? dto.distanceKm : before.distanceKm,
       odometerStartKm: nextOdometerStartKm,
