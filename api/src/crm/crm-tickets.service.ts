@@ -24,6 +24,7 @@ import {
   ticketListScope,
 } from '../iam/client-access';
 import { PrismaService } from '../prisma/prisma.service';
+import { escapeCsvCell, MAX_EXPORT_ROWS } from '../ops/ops-csv';
 
 const MAX_PAGE_SIZE = 200;
 export const FLOTAX_OPS_QUEUE = 'flotax:ops';
@@ -112,7 +113,16 @@ export type PatchTicketInput = {
   ownerUserId?: string | null;
 };
 
-export type CommentTicketInput = { body: string };
+export type TicketCommentAttachment = {
+  url: string;
+  name: string;
+  mimeType?: string;
+};
+
+export type CommentTicketInput = {
+  body?: string;
+  attachments?: TicketCommentAttachment[];
+};
 
 export type RouteTicketInput = {
   targetLevel: 'L_STAR' | 'L1';
@@ -656,15 +666,25 @@ export class CrmTicketsService {
     if (access && !canPerformTicketAction(access, 'comment', ticket)) {
       throw new ForbiddenException('Cannot comment on ticket');
     }
-    const body = dto.body?.trim();
-    if (!body) throw new BadRequestException('body is required');
+    const body = dto.body?.trim() ?? '';
+    const attachments = this.normalizeCommentAttachments(dto.attachments);
+    if (!body && attachments.length === 0) {
+      throw new BadRequestException('body or attachments required');
+    }
+
+    const displayBody = body
+      ? actor
+        ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}): ${body}`
+        : body
+      : actor
+        ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}) a atașat ${attachments.length} fișier(e)`
+        : `Atașat ${attachments.length} fișier(e)`;
 
     await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.comment,
-      body: actor
-        ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}): ${body}`
-        : body,
+      body: displayBody,
       actor,
+      payload: attachments.length > 0 ? { attachments } : undefined,
     });
 
     await this.prisma.crmTicket.update({
@@ -969,6 +989,58 @@ export class CrmTicketsService {
     return { ticket: await this.getDetail(tenantSlug, id, access), createdEntityId: entityId };
   }
 
+  async exportCsv(
+    tenantSlug: string,
+    params: {
+      q?: string;
+      clientId?: string;
+      status?: CrmTicketStatus;
+      vehicleId?: string;
+      routingLevel?: CrmTicketRoutingLevel;
+      ticketType?: CrmTicketType;
+      inbox?: 'all' | 'lstar' | 'focus';
+    },
+    access?: AccessContext,
+  ): Promise<string> {
+    const tenant = await this.ensureTenant(tenantSlug);
+    let resolvedClientUuid: string | undefined;
+    if (params.clientId?.trim()) {
+      resolvedClientUuid = (await resolveClientInTenant(this.prisma, tenant.id, params.clientId)).id;
+    }
+    const where = this.listWhere(tenant.id, { ...params, clientId: resolvedClientUuid }, access);
+    const rows = await this.prisma.crmTicket.findMany({
+      where,
+      orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+      take: MAX_EXPORT_ROWS,
+      include: this.ticketInclude(),
+    });
+
+    const header =
+      'id,displayId,status,priority,type,subject,client,vehicle,driver,routing,owner,createdAt,updatedAt,resolvedAt';
+    const lines = rows.map((row) => {
+      const r = this.toRecord(row);
+      return [
+        r.id,
+        r.displayId,
+        r.status,
+        r.priority,
+        r.ticketType,
+        r.subject,
+        r.clientCode,
+        r.registrationNumber ?? '',
+        r.driverFullName ?? '',
+        r.routingLevel,
+        r.ownerEmail ?? '',
+        r.createdAt,
+        r.updatedAt,
+        r.resolvedAt ?? '',
+      ]
+        .map((c) => escapeCsvCell(String(c)))
+        .join(',');
+    });
+    return `\uFEFF${header}\n${lines.join('\n')}\n`;
+  }
+
   async delete(
     tenantSlug: string,
     id: string,
@@ -1092,6 +1164,30 @@ export class CrmTicketsService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  private normalizeCommentAttachments(
+    raw: TicketCommentAttachment[] | undefined,
+  ): TicketCommentAttachment[] {
+    if (!raw?.length) return [];
+    if (raw.length > 8) {
+      throw new BadRequestException('Maximum 8 attachments per comment');
+    }
+    const out: TicketCommentAttachment[] = [];
+    for (const item of raw) {
+      const url = item.url?.trim();
+      const name = item.name?.trim();
+      if (!url || !name) continue;
+      if (url.length > 2048 || name.length > 255) {
+        throw new BadRequestException('Invalid attachment metadata');
+      }
+      out.push({
+        url,
+        name,
+        mimeType: item.mimeType?.trim() || undefined,
+      });
+    }
+    return out;
   }
 
   private async syncTicketOdometer(

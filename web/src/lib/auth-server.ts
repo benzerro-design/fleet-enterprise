@@ -75,6 +75,11 @@ export function canWriteTickets(auth: AuthMeResult): boolean {
   return false;
 }
 
+/** Manager CRM — patch status/prioritate, nu doar comentarii L0. */
+export function canPatchTickets(auth: AuthMeResult): boolean {
+  return canWriteClientFleet(auth);
+}
+
 export function isClientPortalUser(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "client_user";
 }

@@ -3,11 +3,13 @@ import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketActionsPanel } from "@/components/fleet/TicketActionsPanel";
 import { TicketActionTimeline } from "@/components/fleet/tickets/TicketActionTimeline";
+import { TicketAttachmentGallery } from "@/components/fleet/tickets/TicketAttachmentGallery";
 import { TicketComposer } from "@/components/fleet/tickets/TicketComposer";
+import { TicketEditPanel } from "@/components/fleet/tickets/TicketEditPanel";
 import { FleetAvatar } from "@/components/fleet/tickets/TicketListGlyphs";
 import { TicketThread } from "@/components/fleet/tickets/TicketThread";
 import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
-import { canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
+import { canPatchTickets, canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
   ticketPriorityLabel,
@@ -33,6 +35,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
   const [detail, auth] = await Promise.all([loadDetail(id), getAuthMeResult()]);
   if (!detail) notFound();
   const write = canWriteTickets(auth);
+  const patch = canPatchTickets(auth);
   const { ticket, events } = detail;
   const closed = ticket.status === "resolved" || ticket.status === "cancelled";
 
@@ -129,6 +132,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
           <div>
             <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Conversație</h2>
             <div className="mt-4">
+              <TicketAttachmentGallery events={events} />
               <TicketThread events={events} />
             </div>
             <div className="mt-4">
@@ -145,6 +149,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
             </div>
           </div>
           <TicketActionsPanel detail={detail} canWrite={write} />
+          <TicketEditPanel ticket={ticket} canPatch={patch} />
         </section>
       </div>
     </FleetPageMain>

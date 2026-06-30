@@ -11,6 +11,7 @@ import {
 } from "@/components/fleet/fleet-data-table";
 import { TicketColumnPicker } from "@/components/fleet/tickets/TicketColumnPicker";
 import { TicketGlyphLegendPanel } from "@/components/fleet/tickets/TicketGlyphLegendPanel";
+import { TicketInlinePatchCell } from "@/components/fleet/tickets/TicketInlinePatchCell";
 import {
   FleetAvatar,
   TicketPriorityGlyph,
@@ -49,9 +50,11 @@ function formatRelative(iso: string): string {
 type Props = {
   items: TicketRecord[];
   canWrite: boolean;
+  canPatch?: boolean;
+  exportHref?: string;
 };
 
-export function TicketDataGrid({ items, canWrite }: Props) {
+export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref }: Props) {
   const [layout, setLayout] = useState<TicketGridLayout>(() => readTicketGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
@@ -68,14 +71,18 @@ export function TicketDataGrid({ items, canWrite }: Props) {
           </Link>
         );
       case "status":
-        return (
+        return canPatch ? (
+          <TicketInlinePatchCell ticket={row} field="status" />
+        ) : (
           <span className="inline-flex items-center gap-1.5">
             <TicketStatusGlyph status={row.status} />
             <TicketStatusBadge status={row.status} compact />
           </span>
         );
       case "priority":
-        return (
+        return canPatch ? (
+          <TicketInlinePatchCell ticket={row} field="priority" />
+        ) : (
           <span className="inline-flex items-center gap-1.5" title={ticketPriorityLabel(row.priority)}>
             <TicketPriorityGlyph priority={row.priority} />
             <span className="text-xs">{ticketPriorityLabel(row.priority)}</span>
@@ -174,6 +181,14 @@ export function TicketDataGrid({ items, canWrite }: Props) {
         >
           Legendă iconițe
         </button>
+        {exportHref ? (
+          <a
+            href={exportHref}
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
+          >
+            Export CSV
+          </a>
+        ) : null}
       </div>
 
       {showColumns ? (

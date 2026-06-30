@@ -14,6 +14,12 @@ export type TicketType =
   | "transport"
   | "technical"
   | "other";
+export type TicketCommentAttachment = {
+  url: string;
+  name: string;
+  mimeType?: string;
+};
+
 export type TicketEventKind = "comment" | "routing" | "transform" | "status" | "odometer";
 export type TicketLinkEntityType = "maintenance" | "cost" | "trip" | "reminder" | "document";
 
@@ -171,6 +177,23 @@ export function ticketEventKindLabel(kind: TicketEventKind): string {
     case "odometer":
       return "Odometru";
   }
+}
+
+export function ticketEventAttachments(ev: TicketEventRecord): TicketCommentAttachment[] {
+  if (!ev.payload || typeof ev.payload !== "object") return [];
+  const raw = (ev.payload as { attachments?: unknown }).attachments;
+  if (!Array.isArray(raw)) return [];
+  const out: TicketCommentAttachment[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const url = "url" in item && typeof item.url === "string" ? item.url.trim() : "";
+    const name = "name" in item && typeof item.name === "string" ? item.name.trim() : "";
+    if (!url || !name) continue;
+    const mimeType =
+      "mimeType" in item && typeof item.mimeType === "string" ? item.mimeType.trim() : undefined;
+    out.push({ url, name, mimeType: mimeType || undefined });
+  }
+  return out;
 }
 
 export function ticketLinkHref(link: TicketLinkRecord): string | null {

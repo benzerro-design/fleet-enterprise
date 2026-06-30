@@ -6,9 +6,11 @@ import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
-import { canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
+import { canPatchTickets, canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { ticketsBrowserBase } from "@/lib/tickets-api";
+import { getVehicleOptions } from "@/lib/vehicle-options-server";
 import {
   TICKET_TYPES,
   type TicketBoardPayload,
@@ -21,6 +23,8 @@ type Search = {
   status?: string;
   clientId?: string;
   ticketType?: string;
+  vehicleId?: string;
+  routingLevel?: string;
   inbox?: string;
   view?: string;
   page?: string;
@@ -32,6 +36,8 @@ async function loadTickets(sp: Search): Promise<TicketListPayload | null> {
   if (sp.status?.trim()) p.set("status", sp.status.trim());
   if (sp.clientId?.trim()) p.set("clientId", sp.clientId.trim());
   if (sp.ticketType?.trim()) p.set("ticketType", sp.ticketType.trim());
+  if (sp.vehicleId?.trim()) p.set("vehicleId", sp.vehicleId.trim());
+  if (sp.routingLevel?.trim()) p.set("routingLevel", sp.routingLevel.trim());
   if (sp.inbox?.trim()) p.set("inbox", sp.inbox.trim());
   p.set("page", String(Math.max(1, parseInt(sp.page ?? "1", 10) || 1)));
   p.set("pageSize", "50");
@@ -100,15 +106,17 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const viewBoard = sp.view === "board";
   const viewFocus = sp.view === "focus";
-  const [list, focus, stats, board, clients, auth] = await Promise.all([
+  const [list, focus, stats, board, clients, vehicles, auth] = await Promise.all([
     viewBoard || viewFocus ? Promise.resolve(null) : loadTickets(sp),
     viewFocus ? loadFocus(sp) : Promise.resolve(null),
     loadStats(sp.clientId),
     viewBoard ? loadBoard(sp) : Promise.resolve(null),
     loadClientOptions(),
+    getVehicleOptions(),
     getAuthMeResult(),
   ]);
   const write = canWriteTickets(auth);
+  const patch = canPatchTickets(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const withParams = (overrides: Partial<Search>) => {
@@ -118,6 +126,8 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
     if (merged.status?.trim()) p.set("status", merged.status.trim());
     if (merged.clientId?.trim()) p.set("clientId", merged.clientId.trim());
     if (merged.ticketType?.trim()) p.set("ticketType", merged.ticketType.trim());
+    if (merged.vehicleId?.trim()) p.set("vehicleId", merged.vehicleId.trim());
+    if (merged.routingLevel?.trim()) p.set("routingLevel", merged.routingLevel.trim());
     if (merged.inbox?.trim()) p.set("inbox", merged.inbox.trim());
     if (merged.view?.trim()) p.set("view", merged.view.trim());
     if (merged.page && merged.page !== "1") p.set("page", merged.page);
@@ -126,6 +136,21 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
   };
 
   const withPage = (next: number) => withParams({ page: String(next) });
+
+  const exportParams = new URLSearchParams();
+  if (sp.q?.trim()) exportParams.set("q", sp.q.trim());
+  if (sp.status?.trim()) exportParams.set("status", sp.status.trim());
+  if (sp.clientId?.trim()) exportParams.set("clientId", sp.clientId.trim());
+  if (sp.ticketType?.trim()) exportParams.set("ticketType", sp.ticketType.trim());
+  if (sp.vehicleId?.trim()) exportParams.set("vehicleId", sp.vehicleId.trim());
+  if (sp.routingLevel?.trim()) exportParams.set("routingLevel", sp.routingLevel.trim());
+  if (sp.inbox?.trim()) exportParams.set("inbox", sp.inbox.trim());
+  const exportQs = exportParams.toString();
+  const exportHref = `${ticketsBrowserBase}/export${exportQs ? `?${exportQs}` : ""}`;
+
+  const vehicleOptions = sp.clientId?.trim()
+    ? vehicles.filter((v) => v.clientId.toLowerCase() === sp.clientId!.trim().toLowerCase())
+    : vehicles;
 
   return (
     <FleetPageMain fill>
@@ -222,6 +247,39 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
                 <option value="lstar">Doar L★</option>
               </select>
             </div>
+            {!viewBoard && !viewFocus ? (
+              <>
+                <div>
+                  <label className="text-xs text-zinc-500">Vehicul</label>
+                  <select
+                    name="vehicleId"
+                    defaultValue={sp.vehicleId ?? ""}
+                    className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                  >
+                    <option value="">Toate</option>
+                    {vehicleOptions.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.registrationNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-500">Nivel rutare</label>
+                  <select
+                    name="routingLevel"
+                    defaultValue={sp.routingLevel ?? ""}
+                    className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                  >
+                    <option value="">Toate</option>
+                    <option value="L0">L0</option>
+                    <option value="L1">L1</option>
+                    <option value="L1N">L1+N</option>
+                    <option value="L_STAR">L★</option>
+                  </select>
+                </div>
+              </>
+            ) : null}
             <button
               type="submit"
               className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
@@ -266,7 +324,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
           <TicketBoardView board={board} />
         ) : list ? (
           <>
-            <TicketDataGrid items={list.items} canWrite={write} />
+            <TicketDataGrid items={list.items} canWrite={write} canPatch={patch} exportHref={exportHref} />
             {list.total > list.pageSize ? (
               <div className="mt-4 flex items-center justify-between text-sm text-zinc-500">
                 <span>

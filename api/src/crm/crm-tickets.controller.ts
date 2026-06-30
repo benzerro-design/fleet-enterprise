@@ -4,11 +4,13 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
   Post,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -135,6 +137,37 @@ export class CrmTicketsController {
       },
       access,
     );
+  }
+
+  @Get('export')
+  @Roles(...CRM_READ)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="tickets.csv"')
+  async exportCsv(
+    @TenantId() tenantSlug: string,
+    @Query('q') q: string | undefined,
+    @Query('clientId') clientId: string | undefined,
+    @Query('status') status: string | undefined,
+    @Query('vehicleId') vehicleId: string | undefined,
+    @Query('routingLevel') routingLevel: string | undefined,
+    @Query('ticketType') ticketType: string | undefined,
+    @Query('inbox') inbox: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const csv = await this.tickets.exportCsv(
+      tenantSlug,
+      {
+        q: q?.trim(),
+        clientId: clientId?.trim(),
+        status: parseStatus(status),
+        vehicleId: vehicleId?.trim(),
+        routingLevel: parseRoutingLevel(routingLevel),
+        ticketType: parseTicketType(ticketType),
+        inbox: parseInbox(inbox),
+      },
+      access,
+    );
+    return new StreamableFile(Buffer.from(csv, 'utf8'));
   }
 
   @Get(':id')
