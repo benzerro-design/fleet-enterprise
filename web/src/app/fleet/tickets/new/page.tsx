@@ -21,7 +21,7 @@ export default async function NewTicketPage({ searchParams }: { searchParams: Pr
   const defaultClient = sp.client ?? defaultClientCodeForTickets(auth);
 
   return (
-    <FleetPageMain narrow="sm">
+    <FleetPageMain>
       <div className="mb-8">
         <Link href="/fleet/tickets" className="text-sm text-zinc-400 hover:text-zinc-200">
           ← Tichete CRM

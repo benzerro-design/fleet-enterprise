@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketActionsPanel } from "@/components/fleet/TicketActionsPanel";
+import { TicketActionTimeline } from "@/components/fleet/tickets/TicketActionTimeline";
+import { TicketComposer } from "@/components/fleet/tickets/TicketComposer";
+import { FleetAvatar } from "@/components/fleet/tickets/TicketListGlyphs";
+import { TicketThread } from "@/components/fleet/tickets/TicketThread";
 import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
-import { canManageFleet, canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
-  ticketEventKindLabel,
   ticketPriorityLabel,
   ticketRoutingLabel,
   ticketTypeLabel,
@@ -31,6 +34,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
   if (!detail) notFound();
   const write = canWriteTickets(auth);
   const { ticket, events } = detail;
+  const closed = ticket.status === "resolved" || ticket.status === "cancelled";
 
   return (
     <FleetPageMain>
@@ -54,7 +58,10 @@ export default async function TicketDetailPage({ params }: PageProps) {
                   {ticket.vehicleOdometerKm != null ? (
                     <>
                       {" "}
-                      · <span className="font-mono text-sky-300">{ticket.vehicleOdometerKm.toLocaleString("ro-RO")} km</span>
+                      ·{" "}
+                      <span className="font-mono text-sky-300">
+                        {ticket.vehicleOdometerKm.toLocaleString("ro-RO")} km
+                      </span>
                     </>
                   ) : null}
                 </p>
@@ -82,7 +89,9 @@ export default async function TicketDetailPage({ params }: PageProps) {
             <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs uppercase text-zinc-500">Client</dt>
-                <dd className="mt-1">{ticket.clientCode} — {ticket.clientLegalName}</dd>
+                <dd className="mt-1">
+                  {ticket.clientCode} — {ticket.clientLegalName}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase text-zinc-500">Prioritate</dt>
@@ -91,14 +100,20 @@ export default async function TicketDetailPage({ params }: PageProps) {
               {ticket.driverFullName ? (
                 <div>
                   <dt className="text-xs uppercase text-zinc-500">Șofer</dt>
-                  <dd className="mt-1">{ticket.driverFullName}</dd>
+                  <dd className="mt-1 inline-flex items-center gap-2">
+                    <FleetAvatar name={ticket.driverFullName} size={28} />
+                    {ticket.driverFullName}
+                  </dd>
                 </div>
               ) : null}
               {ticket.reminderActionId ? (
                 <div>
                   <dt className="text-xs uppercase text-zinc-500">Reminder</dt>
                   <dd className="mt-1">
-                    <Link href={`/fleet/reminders/${ticket.reminderActionId}`} className="text-violet-400 hover:underline">
+                    <Link
+                      href={`/fleet/reminders/${ticket.reminderActionId}`}
+                      className="text-violet-400 hover:underline"
+                    >
                       Vezi reminder
                     </Link>
                   </dd>
@@ -110,30 +125,27 @@ export default async function TicketDetailPage({ params }: PageProps) {
       </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
-        <section>
-          <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Timeline</h2>
-          <ul className="mt-4 space-y-3">
-            {events.map((ev) => (
-              <li key={ev.id} className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 text-sm">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                  <span>{new Date(ev.createdAt).toLocaleString("ro-RO")}</span>
-                  <span className="rounded border border-zinc-700 px-1.5 py-0.5">{ticketEventKindLabel(ev.kind)}</span>
-                  {ev.actorDisplayName ? (
-                    <span>
-                      {ev.actorDisplayName}
-                      {ev.actorRoutingLevel ? ` (${ev.actorRoutingLevel === "L_STAR" ? "L★" : ev.actorRoutingLevel})` : ""}
-                    </span>
-                  ) : ev.actorEmail ? (
-                    <span>{ev.actorEmail}</span>
-                  ) : null}
-                </div>
-                {ev.body ? <p className="mt-2 text-zinc-200">{ev.body}</p> : null}
-              </li>
-            ))}
-          </ul>
+        <section className="space-y-6">
+          <div>
+            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Conversație</h2>
+            <div className="mt-4">
+              <TicketThread events={events} />
+            </div>
+            <div className="mt-4">
+              <TicketComposer ticketId={ticket.id} canWrite={write} closed={closed} />
+            </div>
+          </div>
         </section>
 
-        <TicketActionsPanel detail={detail} canWrite={write} />
+        <section className="space-y-6">
+          <div>
+            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Timeline acțiuni</h2>
+            <div className="mt-4">
+              <TicketActionTimeline events={events} />
+            </div>
+          </div>
+          <TicketActionsPanel detail={detail} canWrite={write} />
+        </section>
       </div>
     </FleetPageMain>
   );

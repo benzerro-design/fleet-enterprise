@@ -138,22 +138,14 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
 
       {!closed ? (
         <div className="mt-4">
-          <label className="text-xs text-zinc-500">Comentariu (opțional la rezolvare)</label>
+          <label className="text-xs text-zinc-500">Comentariu rezolvare (obligatoriu la „Tratează”)</label>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={2}
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-            placeholder="Notă rezolvare…"
+            placeholder="Descrie cum s-a rezolvat…"
           />
-          <button
-            type="button"
-            disabled={!!pending || !comment.trim()}
-            onClick={() => post("/comments", { body: comment.trim() })}
-            className="mt-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800 disabled:opacity-50"
-          >
-            Adaugă comentariu
-          </button>
         </div>
       ) : null}
 

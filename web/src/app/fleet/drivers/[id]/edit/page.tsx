@@ -26,12 +26,11 @@ export default async function EditDriverPage({ params }: { params: Promise<{ id:
   if (!driver) notFound();
 
   return (
-    <FleetPageMain narrow="sm">
+    <FleetPageMain>
       <div className="mb-8">
         <Link href={`/fleet/drivers/${driver.id}`} className="text-sm text-zinc-400 hover:text-zinc-200">
           ← {driver.fullName}
         </Link>
-        <h1 className="mt-4 text-2xl font-semibold">Editare șofer</h1>
       </div>
       <DriverForm mode="edit" initial={driver} />
     </FleetPageMain>

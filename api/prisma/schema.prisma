@@ -747,6 +747,7 @@ enum CrmTicketEventKind {
   routing
   transform
   status
+  odometer
 }
 
 enum CrmTicketLinkEntityType {
@@ -782,6 +783,7 @@ model CrmTicket {
   vehicleId        String?
   driverId         String?
   reminderActionId String?
+  eventOdometerKm  Int?
   createdByUserId  String?
   ownerUserId      String?
   resolvedAt       DateTime?

@@ -1,26 +1,16 @@
 import Link from "next/link";
-import {
-  FleetDataTable,
-  fleetTableClass,
-  fleetTdClass,
-  fleetThClass,
-  fleetTheadClass,
-} from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketBoardView } from "@/components/fleet/TicketBoardView";
+import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
-import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
 import { canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
   TICKET_TYPES,
-  ticketPriorityLabel,
-  ticketRoutingLabel,
-  ticketTypeLabel,
   type TicketBoardPayload,
   type TicketListPayload,
   type TicketStats,
@@ -276,50 +266,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
           <TicketBoardView board={board} />
         ) : list ? (
           <>
-            <div className="fleet-scroll-pane overflow-auto">
-              <table className={fleetTableClass}>
-                <thead className={fleetTheadClass}>
-                  <tr>
-                    <th className={fleetThClass}>ID</th>
-                    <th className={fleetThClass}>Subiect</th>
-                    <th className={fleetThClass}>Tip</th>
-                    <th className={fleetThClass}>Client</th>
-                    <th className={fleetThClass}>Vehicul</th>
-                    <th className={fleetThClass}>Nivel</th>
-                    <th className={fleetThClass}>Status</th>
-                    <th className={fleetThClass}>Prioritate</th>
-                    <th className={fleetThClass}>Owner</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.items.map((row) => (
-                    <tr key={row.id} className="border-t border-zinc-800/80 hover:bg-zinc-900/40">
-                      <td className={fleetTdClass}>
-                        <Link href={`/fleet/tickets/${row.id}`} className="font-mono text-emerald-400 hover:underline">
-                          #{row.displayId}
-                        </Link>
-                      </td>
-                      <td className={fleetTdClass}>
-                        <Link href={`/fleet/tickets/${row.id}`} className="font-medium text-zinc-100 hover:text-white">
-                          {row.subject}
-                        </Link>
-                      </td>
-                      <td className={fleetTdClass}>{ticketTypeLabel(row.ticketType)}</td>
-                      <td className={fleetTdClass}>{row.clientCode}</td>
-                      <td className={`${fleetTdClass} font-mono text-zinc-400`}>
-                        {row.registrationNumber ?? "—"}
-                      </td>
-                      <td className={fleetTdClass}>{ticketRoutingLabel(row.routingLevel)}</td>
-                      <td className={fleetTdClass}>
-                        <TicketStatusBadge status={row.status} compact />
-                      </td>
-                      <td className={fleetTdClass}>{ticketPriorityLabel(row.priority)}</td>
-                      <td className={`${fleetTdClass} text-zinc-500`}>{row.ownerEmail ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <TicketDataGrid items={list.items} canWrite={write} />
             {list.total > list.pageSize ? (
               <div className="mt-4 flex items-center justify-between text-sm text-zinc-500">
                 <span>

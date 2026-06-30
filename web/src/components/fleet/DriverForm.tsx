@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { ClientSelect } from "@/components/fleet/ClientSelect";
+import { DriverFormLayout } from "@/components/fleet/DriverFormLayout";
 import {
   driversBrowserBase,
   fleetJsonHeaders,
@@ -90,8 +91,45 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
   const cancelHref =
     mode === "edit" && initial ? `/fleet/drivers/${initial.id}` : "/fleet/drivers";
 
+  const previewDriver: DriverRecord | null =
+    mode === "edit" && initial
+      ? {
+          ...initial,
+          fullName: fullName || initial.fullName,
+          clientCode: clientId || initial.clientCode,
+          licenseExpiresOn: licenseExpiresOn || initial.licenseExpiresOn,
+        }
+      : fullName.trim() && clientId.trim()
+        ? {
+            id: "",
+            clientId: "",
+            clientCode: clientId,
+            clientLegalName: "",
+            fullName,
+            employeeCode: null,
+            phone: null,
+            email: null,
+            licenseNumber: null,
+            licenseCategories: null,
+            licenseExpiresOn: licenseExpiresOn || null,
+            licenseExpiryStatus: "none",
+            status,
+            notes: null,
+            activeVehicleIds: [],
+            activeVehicleRegistrations: [],
+            createdAt: "",
+            updatedAt: "",
+          }
+        : null;
+
   return (
-    <form onSubmit={onSubmit} className="flex w-full flex-col gap-6">
+    <DriverFormLayout
+      mode={mode}
+      formTitle={mode === "create" ? "Șofer nou" : "Editare șofer"}
+      driver={previewDriver}
+      clientCode={clientId}
+    >
+      <form onSubmit={onSubmit} className="flex w-full flex-col gap-6">
       <ClientSelect
         value={clientId}
         onChange={setClientId}
@@ -205,5 +243,6 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
         </Link>
       </div>
     </form>
+    </DriverFormLayout>
   );
 }

@@ -14,7 +14,7 @@ export type TicketType =
   | "transport"
   | "technical"
   | "other";
-export type TicketEventKind = "comment" | "routing" | "transform" | "status";
+export type TicketEventKind = "comment" | "routing" | "transform" | "status" | "odometer";
 export type TicketLinkEntityType = "maintenance" | "cost" | "trip" | "reminder" | "document";
 
 export type TicketRecord = {
@@ -41,6 +41,7 @@ export type TicketRecord = {
   ownerUserId: string | null;
   ownerEmail: string | null;
   resolvedAt: string | null;
+  eventOdometerKm: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -167,6 +168,8 @@ export function ticketEventKindLabel(kind: TicketEventKind): string {
       return "Transformare";
     case "status":
       return "Status";
+    case "odometer":
+      return "Odometru";
   }
 }
 

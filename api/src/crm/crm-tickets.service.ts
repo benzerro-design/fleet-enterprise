@@ -51,6 +51,7 @@ export type TicketRecord = {
   createdByEmail: string | null;
   ownerUserId: string | null;
   ownerEmail: string | null;
+  eventOdometerKm: number | null;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -98,6 +99,8 @@ export type CreateTicketInput = {
   driverId?: string | null;
   reminderActionId?: string | null;
   routingLevel?: CrmTicketRoutingLevel;
+  eventOdometerKm?: number | null;
+  updateVehicleOdometer?: boolean;
 };
 
 export type PatchTicketInput = {
@@ -467,6 +470,17 @@ export class CrmTicketsService {
         ? FLOTAX_OPS_QUEUE
         : this.clientQueue(client.id);
 
+    let eventOdometerKm: number | null = null;
+    if (dto.eventOdometerKm != null) {
+      if (!Number.isFinite(dto.eventOdometerKm) || dto.eventOdometerKm < 0) {
+        throw new BadRequestException('eventOdometerKm must be a non-negative integer');
+      }
+      if (!vehicleId) {
+        throw new BadRequestException('eventOdometerKm requires a vehicle');
+      }
+      eventOdometerKm = Math.round(dto.eventOdometerKm);
+    }
+
     const row = await this.prisma.crmTicket.create({
       data: {
         tenantId: tenant.id,
@@ -480,6 +494,7 @@ export class CrmTicketsService {
         vehicleId,
         driverId,
         reminderActionId,
+        eventOdometerKm,
         createdByUserId: actorUserId ?? null,
         ownerUserId: actorUserId ?? null,
         status: CrmTicketStatus.open,
@@ -496,6 +511,18 @@ export class CrmTicketsService {
       payload: { status: 'open', routingLevel, assignedQueue },
     });
 
+    if (eventOdometerKm != null && vehicleId) {
+      await this.syncTicketOdometer(
+        tenant.id,
+        row.id,
+        vehicleId,
+        eventOdometerKm,
+        dto.updateVehicleOdometer !== false,
+        actorUserId,
+        actor,
+      );
+    }
+
     await this.audit.log({
       tenantId: tenant.id,
       actorUserId,
@@ -505,7 +532,11 @@ export class CrmTicketsService {
       meta: { subject, clientId: client.code },
     });
 
-    return this.toRecord(row);
+    const fresh = await this.prisma.crmTicket.findFirstOrThrow({
+      where: { id: row.id },
+      include: this.ticketInclude(),
+    });
+    return this.toRecord(fresh);
   }
 
   async patch(
@@ -1056,10 +1087,72 @@ export class CrmTicketsService {
       createdByEmail: row.createdBy?.email ?? null,
       ownerUserId: row.ownerUserId,
       ownerEmail: row.owner?.email ?? null,
+      eventOdometerKm: row.eventOdometerKm,
       resolvedAt: row.resolvedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  private async syncTicketOdometer(
+    tenantId: string,
+    ticketId: string,
+    vehicleId: string,
+    odometerKm: number,
+    updateVehicle: boolean,
+    actorUserId?: string,
+    actor?: ActorContext,
+  ) {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenantId },
+      select: { odometerKm: true, registrationNumber: true },
+    });
+    if (!vehicle) return;
+
+    const willUpdateVehicle = updateVehicle && odometerKm >= vehicle.odometerKm;
+    if (willUpdateVehicle) {
+      await this.prisma.odometerReading.create({
+        data: {
+          vehicleId,
+          odometerKm,
+          source: 'ops',
+          sourceRef: `crm_ticket:${ticketId}`,
+          notes: 'Km eveniment la creare tichet CRM',
+          recordedByUserId: actorUserId ?? null,
+        },
+      });
+      await this.prisma.vehicle.update({
+        where: { id: vehicleId },
+        data: {
+          odometerKm,
+          updatedByUserId: actorUserId ?? undefined,
+        },
+      });
+    }
+
+    const body = actor
+      ? `Km eveniment: ${odometerKm.toLocaleString('ro-RO')}${willUpdateVehicle ? ' — vehicul actualizat' : ''} (${actor.displayName}, ${routingLevelLabel(actor.routingLevel)})`
+      : `Km eveniment: ${odometerKm.toLocaleString('ro-RO')}${willUpdateVehicle ? ' — vehicul actualizat' : ''}`;
+
+    await this.appendEvent(tenantId, ticketId, {
+      kind: CrmTicketEventKind.odometer,
+      body,
+      actor,
+      payload: {
+        odometerKm,
+        vehicleUpdated: willUpdateVehicle,
+        previousVehicleKm: vehicle.odometerKm,
+      },
+    });
+
+    await this.audit.log({
+      tenantId,
+      actorUserId,
+      action: 'crm_ticket.odometer',
+      entityType: 'crm_ticket',
+      entityId: ticketId,
+      meta: { odometerKm, vehicleUpdated: willUpdateVehicle },
+    });
   }
 
   private async appendEvent(
