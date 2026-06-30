@@ -58,6 +58,8 @@ export type BotCatalogPayload = {
     multiUserNote: string;
     mobileNote: string;
   };
+  enabled: boolean;
+  enabledHint: string | null;
 };
 
 export type BotFindingLink = {

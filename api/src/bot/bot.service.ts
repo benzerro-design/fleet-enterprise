@@ -57,6 +57,10 @@ export class BotService {
           'concurrentUsers este stocat pentru simulări viitoare multi-user / mobile.',
         mobileNote: 'Modulele cu supportsMobile vor primi scenarii viewport în faza următoare.',
       },
+      enabled: this.guard.isBotEnabled(),
+      enabledHint: this.guard.isBotEnabled()
+        ? null
+        : 'Pe Cloud Run (NODE_ENV=production) setează BOT_ENABLED=true. Local funcționează fără flag.',
     };
   }
 

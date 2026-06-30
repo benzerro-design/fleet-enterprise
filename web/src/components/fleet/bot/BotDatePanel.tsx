@@ -150,6 +150,16 @@ export function BotDatePanel() {
         <span className="font-mono">{catalog.constraints.minRole}</span>. Date coerente, seed reproductibil.
       </div>
 
+      {!catalog.enabled ? (
+        <div className="rounded-xl border border-rose-900/50 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
+          <p className="font-medium">BOT dezactivat pe API-ul curent</p>
+          <p className="mt-1 text-xs text-rose-200/80">
+            {catalog.enabledHint ??
+              "Pe mediul deployed (NODE_ENV=production) trebuie BOT_ENABLED=true pe serviciul fleet-api."}
+          </p>
+        </div>
+      ) : null}
+
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="flex flex-col gap-1 text-xs text-zinc-500">
           Diviziune demo
@@ -206,7 +216,7 @@ export function BotDatePanel() {
             <button
               key={s.id}
               type="button"
-              disabled={pending}
+              disabled={pending || !catalog.enabled}
               onClick={() => void runSession(s)}
               className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-left text-sm hover:bg-zinc-900 disabled:opacity-50"
             >
@@ -337,7 +347,7 @@ export function BotDatePanel() {
       <div className="sticky bottom-0 flex flex-wrap gap-3 border-t border-zinc-800 bg-zinc-950/95 py-4 backdrop-blur-sm">
         <button
           type="button"
-          disabled={pending}
+          disabled={pending || !catalog.enabled}
           onClick={() => void runSession()}
           className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
         >
