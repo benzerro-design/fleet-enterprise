@@ -5,8 +5,32 @@ export type BotOdometerPoint = {
   odometerKm: number;
 };
 
+export type BotTripOdometerPlan = {
+  odoStart: number;
+  odoEnd: number | null;
+  eventAt: Date;
+  /** Poate fi înregistrat fără încălcare timeline (inclusiv citiri viitoare). */
+  feasible: boolean;
+  capped: boolean;
+};
+
 export function tripOdometerEventAt(startedAt: Date, endedAt: Date | null): Date {
   return endedAt ?? startedAt;
+}
+
+/** Cel mai mic km dintre citirile strict după momentul T. */
+export function minKmAfterTime(
+  existing: BotOdometerPoint[],
+  planned: BotOdometerPoint[],
+  after: Date,
+): number | null {
+  let min: number | null = null;
+  for (const p of [...existing, ...planned]) {
+    if (p.recordedAt.getTime() > after.getTime()) {
+      if (min === null || p.odometerKm < min) min = p.odometerKm;
+    }
+  }
+  return min;
 }
 
 /** Km de încredere la momentul T (monoton pe timeline existent + planificat). */
@@ -33,11 +57,43 @@ export function planBotTripOdometer(input: {
   endedAt: Date | null;
   distanceKm: number;
   floorKm: number;
-}): { odoStart: number; odoEnd: number | null; eventAt: Date } {
+}): BotTripOdometerPlan {
   const eventAt = tripOdometerEventAt(input.startedAt, input.endedAt);
-  const odoStart = trustedKmAtTime(input.existing, input.planned, eventAt, input.floorKm);
-  const odoEnd = input.endedAt != null ? odoStart + input.distanceKm : null;
-  return { odoStart, odoEnd, eventAt };
+  let odoStart = trustedKmAtTime(input.existing, input.planned, eventAt, input.floorKm);
+
+  if (input.endedAt == null) {
+    return { odoStart, odoEnd: null, eventAt, feasible: true, capped: false };
+  }
+
+  const ceiling = minKmAfterTime(input.existing, input.planned, eventAt);
+  const distance = Math.max(1, input.distanceKm);
+  let capped = false;
+
+  if (ceiling != null) {
+    const maxStart = ceiling - distance;
+    if (maxStart < 0) {
+      return { odoStart, odoEnd: null, eventAt, feasible: false, capped: false };
+    }
+    if (odoStart > maxStart) {
+      odoStart = maxStart;
+      capped = true;
+    }
+  }
+
+  let odoEnd = odoStart + distance;
+  if (ceiling != null && odoEnd > ceiling) {
+    odoEnd = ceiling;
+    capped = true;
+  }
+
+  const feasible = odoEnd > odoStart;
+  return {
+    odoStart,
+    odoEnd: feasible ? odoEnd : null,
+    eventAt,
+    feasible,
+    capped,
+  };
 }
 
 export async function loadBotOdometerBaselines(

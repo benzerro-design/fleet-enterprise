@@ -172,7 +172,7 @@ export async function runTripsBotModule(
     const existing = odometerBaselines.get(p.vehicle.id) ?? [];
     const plannedSoFar = sessionOdometerPlanned.get(p.vehicle.id) ?? [];
     const distance = p.tpl.distanceKm ?? 50;
-    const { odoStart, odoEnd, eventAt } = planBotTripOdometer({
+    const { odoStart, odoEnd, eventAt, feasible, capped } = planBotTripOdometer({
       existing,
       planned: plannedSoFar,
       startedAt: p.startedAt,
@@ -180,6 +180,23 @@ export async function runTripsBotModule(
       distanceKm: distance,
       floorKm: p.vehicle.odometerKm,
     });
+
+    if (!feasible && p.endedAt != null) {
+      onFinding({
+        moduleId: 'trips',
+        severity: 'info',
+        message: `Cursă ${p.ref}: km omis — nu încape în istoricul existent fără inconsistență (citiri viitoare cu km mai mic).`,
+        links: [{ label: 'Vehicul', href: `/fleet/vehicles/${p.vehicle.id}` }],
+        remediation: 'Ștergeți citiri conflictuale sau reduceți numărul de curse BOT pe vehicul.',
+      });
+    } else if (capped) {
+      onFinding({
+        moduleId: 'trips',
+        severity: 'info',
+        message: `Cursă ${p.ref}: km ajustat sub plafonul citirilor viitoare (${odoEnd?.toLocaleString('ro-RO')} km).`,
+        links: [{ label: 'Vehicul', href: `/fleet/vehicles/${p.vehicle.id}` }],
+      });
+    }
 
     let driverId: string | undefined;
     if (linkDrivers && driverIndex) {
@@ -239,32 +256,17 @@ export async function runTripsBotModule(
           distanceKm: p.tpl.distanceKm,
           purpose: 'business',
           roadType: 'mixed',
-          odometerStartKm: odoStart,
-          odometerEndKm: odoEnd,
+          ...(feasible && odoEnd != null
+            ? { odometerStartKm: odoStart, odometerEndKm: odoEnd }
+            : {}),
           ...(driverId ? { driverId } : { driverName: p.tpl.driverName }),
         },
         access.userId,
         access,
       );
       result.created++;
-      if (odoEnd != null) {
+      if (feasible && odoEnd != null) {
         plannedSoFar.push({ recordedAt: eventAt, odometerKm: odoEnd });
-      }
-      if (row.vehicleOdometerSync?.severity === 'critical') {
-        onFinding({
-          moduleId: 'trips',
-          severity: 'warning',
-          message: `Atenție: cursă ${p.ref} a produs inconsistență dată/km neașteptată — ${row.vehicleOdometerSync.message}`,
-          links: [
-            { label: 'Cursă', href: `/fleet/trips/${row.id}` },
-            { label: 'Vehicul', href: `/fleet/vehicles/${p.vehicle.id}` },
-          ],
-          entityRefs: [
-            { type: 'trip', id: row.id, label: p.ref },
-            { type: 'vehicle', id: p.vehicle.id, label: p.vehicle.registrationNumber },
-          ],
-          remediation: 'Corectați km sau data cursei; verificați tab Odometru pe vehicul.',
-        });
       }
     } catch (e) {
       result.failed++;
