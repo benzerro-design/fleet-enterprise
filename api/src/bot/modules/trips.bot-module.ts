@@ -14,6 +14,12 @@ import {
   loadBotDriverIndex,
   resolveBotDriverForTrip,
 } from '../bot-driver-resolve';
+import {
+  loadBotOdometerBaselines,
+  planBotTripOdometer,
+  tripOdometerEventAt,
+  type BotOdometerPoint,
+} from '../bot-trip-odometer';
 
 type TripTemplate = {
   reg: string;
@@ -149,15 +155,31 @@ export async function runTripsBotModule(
     planned.push({ ref, tpl, vehicle, startedAt, endedAt, index: i });
   }
 
-  planned.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime() || a.index - b.index);
+  planned.sort(
+    (a, b) =>
+      tripOdometerEventAt(a.startedAt, a.endedAt).getTime() -
+        tripOdometerEventAt(b.startedAt, b.endedAt).getTime() || a.index - b.index,
+  );
 
-  const vehicleOdoCursor = new Map(vehicles.map((v) => [v.id, v.odometerKm]));
+  const vehicleIds = [...new Set(planned.map((p) => p.vehicle.id))];
+  const odometerBaselines = await loadBotOdometerBaselines(prisma, ctx.tenantId, vehicleIds);
+  const sessionOdometerPlanned = new Map<string, BotOdometerPoint[]>();
+  for (const id of vehicleIds) {
+    sessionOdometerPlanned.set(id, []);
+  }
 
   for (const p of planned) {
-    const cursor = vehicleOdoCursor.get(p.vehicle.id) ?? p.vehicle.odometerKm;
+    const existing = odometerBaselines.get(p.vehicle.id) ?? [];
+    const plannedSoFar = sessionOdometerPlanned.get(p.vehicle.id) ?? [];
     const distance = p.tpl.distanceKm ?? 50;
-    const odoStart = cursor;
-    const odoEnd = p.endedAt != null ? odoStart + distance : null;
+    const { odoStart, odoEnd, eventAt } = planBotTripOdometer({
+      existing,
+      planned: plannedSoFar,
+      startedAt: p.startedAt,
+      endedAt: p.endedAt,
+      distanceKm: distance,
+      floorKm: p.vehicle.odometerKm,
+    });
 
     let driverId: string | undefined;
     if (linkDrivers && driverIndex) {
@@ -226,13 +248,13 @@ export async function runTripsBotModule(
       );
       result.created++;
       if (odoEnd != null) {
-        vehicleOdoCursor.set(p.vehicle.id, odoEnd);
+        plannedSoFar.push({ recordedAt: eventAt, odometerKm: odoEnd });
       }
       if (row.vehicleOdometerSync?.severity === 'critical') {
         onFinding({
           moduleId: 'trips',
-          severity: 'error',
-          message: `Inconsistență majoră dată/km la cursă ${p.ref}: ${row.vehicleOdometerSync.message}`,
+          severity: 'warning',
+          message: `Atenție: cursă ${p.ref} a produs inconsistență dată/km neașteptată — ${row.vehicleOdometerSync.message}`,
           links: [
             { label: 'Cursă', href: `/fleet/trips/${row.id}` },
             { label: 'Vehicul', href: `/fleet/vehicles/${p.vehicle.id}` },
