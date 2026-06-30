@@ -3,6 +3,27 @@ export type VehicleOdometerSyncPayload = {
   previousKm: number;
   newKm: number;
   message: string;
+  severity: 'ok' | 'info' | 'warning' | 'critical';
+  messages: string[];
+  timelineConsistent: boolean;
+  readingCreated: boolean;
 };
 
 export type OpsOdometerEntity = 'cost' | 'maintenance' | 'trip';
+
+export type OdometerTimelineViolation = {
+  severity: 'critical';
+  message: string;
+  earlierRecordedAt: string;
+  earlierKm: number;
+  laterRecordedAt: string;
+  laterKm: number;
+};
+
+export type OdometerTimelineAnalysis = {
+  currentKmFromTimeline: number | null;
+  latestRecordedAt: string | null;
+  violations: OdometerTimelineViolation[];
+  hasCriticalViolations: boolean;
+  isConsistent: boolean;
+};

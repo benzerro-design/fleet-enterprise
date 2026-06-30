@@ -9,6 +9,11 @@ import { BOT_REF_PREFIX } from '../bot.types';
 import { addHours, botRef, daysAgoFromSeed, divisionClientCodes, seededRandom } from '../bot-scenarios';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TripsService } from '../../ops/trips.service';
+import { DriversService } from '../../drivers/drivers.service';
+import {
+  loadBotDriverIndex,
+  resolveBotDriverForTrip,
+} from '../bot-driver-resolve';
 
 type TripTemplate = {
   reg: string;
@@ -89,6 +94,7 @@ const TRIP_TEMPLATES: TripTemplate[] = [
 export async function runTripsBotModule(
   prisma: PrismaService,
   trips: TripsService,
+  drivers: DriversService,
   ctx: BotRunContext,
   ops: BotModuleOperations,
   access: AccessContext,
@@ -101,11 +107,27 @@ export async function runTripsBotModule(
 
   const vehicles = await prisma.vehicle.findMany({
     where: { tenantId: ctx.tenantId },
-    select: { id: true, registrationNumber: true, odometerKm: true },
+    select: { id: true, registrationNumber: true, odometerKm: true, clientId: true },
   });
   const byReg = new Map(vehicles.map((v) => [v.registrationNumber, v]));
 
+  const linkDrivers = ops.options?.linkDrivers !== false;
+  const createMissingDrivers = ops.options?.createMissingDrivers !== false;
+  const driverIndex = linkDrivers ? await loadBotDriverIndex(prisma, ctx.tenantId) : null;
+  const createdDriverNames = new Set<string>();
+
+  type PlannedTrip = {
+    ref: string;
+    tpl: TripTemplate;
+    vehicle: (typeof vehicles)[0];
+    startedAt: Date;
+    endedAt: Date | null;
+    index: number;
+  };
+
   const createN = Math.max(0, ops.create ?? 0);
+  const planned: PlannedTrip[] = [];
+
   for (let i = 0; i < createN; i++) {
     const tpl = templates[i % templates.length];
     const vehicle = byReg.get(tpl.reg);
@@ -124,44 +146,102 @@ export async function runTripsBotModule(
     const daysBack = tpl.daysAgo + Math.floor(rng() * 3);
     const startedAt = daysAgoFromSeed(ctx.seed + i, daysBack, 7 + (i % 4));
     const endedAt = tpl.hours != null ? addHours(startedAt, tpl.hours) : null;
-    const odoStart = tpl.odometerStart + i * 20;
-    const odoEnd = tpl.odometerEnd != null ? tpl.odometerEnd + i * 20 : null;
+    planned.push({ ref, tpl, vehicle, startedAt, endedAt, index: i });
+  }
+
+  planned.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime() || a.index - b.index);
+
+  const vehicleOdoCursor = new Map(vehicles.map((v) => [v.id, v.odometerKm]));
+
+  for (const p of planned) {
+    const cursor = vehicleOdoCursor.get(p.vehicle.id) ?? p.vehicle.odometerKm;
+    const distance = p.tpl.distanceKm ?? 50;
+    const odoStart = cursor;
+    const odoEnd = p.endedAt != null ? odoStart + distance : null;
+
+    let driverId: string | undefined;
+    if (linkDrivers && driverIndex) {
+      const resolved = await resolveBotDriverForTrip({
+        prisma,
+        drivers,
+        tenantId: ctx.tenantId,
+        tenantSlug: ctx.tenantSlug,
+        clientId: p.vehicle.clientId,
+        driverName: p.tpl.driverName,
+        index: driverIndex,
+        createIfMissing: createMissingDrivers,
+        actorUserId: access.userId,
+        access,
+      });
+      if (resolved.driverId) {
+        driverId = resolved.driverId;
+        if (resolved.created) {
+          const createdKey = `${p.vehicle.clientId}:${resolved.driverFullName}`;
+          if (!createdDriverNames.has(createdKey)) {
+            createdDriverNames.add(createdKey);
+            onFinding({
+              moduleId: 'trips',
+              severity: 'info',
+              message: `Șofer creat pentru curse BOT: ${resolved.driverFullName}`,
+              links: [
+                { label: 'Șoferi', href: '/fleet/drivers' },
+                { label: 'Șofer', href: `/fleet/drivers/${resolved.driverId}` },
+              ],
+              entityRefs: [{ type: 'driver', id: resolved.driverId, label: resolved.driverFullName }],
+            });
+          }
+        }
+      } else {
+        onFinding({
+          moduleId: 'trips',
+          severity: 'warning',
+          message: `Cursă ${p.ref}: șofer „${p.tpl.driverName}” nelinkat — lipsește pe clientul vehiculului`,
+          links: [{ label: 'Șoferi', href: '/fleet/drivers' }],
+          remediation: createMissingDrivers
+            ? 'Verifică permisiunile modulului Șoferi.'
+            : 'Activează „Creează șoferi lipsă” sau rulează modulul Șoferi înainte de curse.',
+        });
+      }
+    }
 
     try {
       const row = await trips.create(
         ctx.tenantSlug,
         {
-          vehicleId: vehicle.id,
-          reference: ref,
-          startedAt: startedAt.toISOString(),
-          endedAt: endedAt?.toISOString() ?? null,
-          originLabel: tpl.origin,
-          destLabel: tpl.dest,
-          distanceKm: tpl.distanceKm,
+          vehicleId: p.vehicle.id,
+          reference: p.ref,
+          startedAt: p.startedAt.toISOString(),
+          endedAt: p.endedAt?.toISOString() ?? null,
+          originLabel: p.tpl.origin,
+          destLabel: p.tpl.dest,
+          distanceKm: p.tpl.distanceKm,
           purpose: 'business',
           roadType: 'mixed',
           odometerStartKm: odoStart,
           odometerEndKm: odoEnd,
-          driverName: tpl.driverName,
+          ...(driverId ? { driverId } : { driverName: p.tpl.driverName }),
         },
         access.userId,
         access,
       );
       result.created++;
-      if (odoEnd != null && vehicle.odometerKm != null && odoEnd < vehicle.odometerKm) {
+      if (odoEnd != null) {
+        vehicleOdoCursor.set(p.vehicle.id, odoEnd);
+      }
+      if (row.vehicleOdometerSync?.severity === 'critical') {
         onFinding({
           moduleId: 'trips',
-          severity: 'warning',
-          message: `Km cursă ${ref} sub odometru vehicul`,
+          severity: 'error',
+          message: `Inconsistență majoră dată/km la cursă ${p.ref}: ${row.vehicleOdometerSync.message}`,
           links: [
             { label: 'Cursă', href: `/fleet/trips/${row.id}` },
-            { label: 'Vehicul', href: `/fleet/vehicles/${vehicle.id}` },
+            { label: 'Vehicul', href: `/fleet/vehicles/${p.vehicle.id}` },
           ],
           entityRefs: [
-            { type: 'trip', id: row.id, label: ref },
-            { type: 'vehicle', id: vehicle.id, label: vehicle.registrationNumber },
+            { type: 'trip', id: row.id, label: p.ref },
+            { type: 'vehicle', id: p.vehicle.id, label: p.vehicle.registrationNumber },
           ],
-          remediation: 'Verifică sincronizarea odometru în detaliu vehicul.',
+          remediation: 'Corectați km sau data cursei; verificați tab Odometru pe vehicul.',
         });
       }
     } catch (e) {

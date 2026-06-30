@@ -11,7 +11,9 @@ import {
   OpsFormVehicleField,
 } from "@/components/fleet/ops-form-primitives";
 import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
+import { OpsOdometerSyncNotice } from "@/components/fleet/OpsOdometerSyncNotice";
 import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
+import type { VehicleOdometerSyncPayload } from "@/lib/vehicle-odometer-sync";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -131,7 +133,7 @@ export function TripForm(props: Props) {
   const [driverId, setDriverId] = useState(initial.driverId);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [odometerSync, setOdometerSync] = useState<VehicleOdometerSyncPayload | null>(null);
 
   const computedDistanceKm = useMemo(
     () => distanceFromOdometers(odometerStartKm, odometerEndKm),
@@ -140,6 +142,7 @@ export function TripForm(props: Props) {
   const distanceFromOdometer = computedDistanceKm != null;
 
   const tripSyncOdometerKm = odometerEndKm.trim() || odometerStartKm.trim();
+  const tripEventDate = endedAt.trim() || startedAt;
   const clientCode = selectedVehicle?.clientId ?? "";
 
   useEffect(() => {
@@ -152,7 +155,7 @@ export function TripForm(props: Props) {
     e.preventDefault();
     setPending(true);
     setError(null);
-    setSyncNotice(null);
+    setOdometerSync(null);
 
     if (!isEdit && !boundVehicleId) {
       setError("Selectează vehiculul.");
@@ -233,8 +236,8 @@ export function TripForm(props: Props) {
         return;
       }
       if (parsed.vehicleOdometerSync?.message) {
-        setSyncNotice(parsed.vehicleOdometerSync.message);
-        await new Promise((r) => setTimeout(r, 2200));
+        setOdometerSync(parsed.vehicleOdometerSync);
+        await new Promise((r) => setTimeout(r, parsed.vehicleOdometerSync?.severity === "critical" ? 3500 : 2200));
       }
       router.push("/fleet/trips");
       router.refresh();
@@ -251,9 +254,7 @@ export function TripForm(props: Props) {
     return (
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-        {syncNotice ? (
-          <p className="rounded-lg border border-sky-900/40 bg-sky-950/25 px-4 py-3 text-sm text-sky-200">{syncNotice}</p>
-        ) : null}
+        <OpsOdometerSyncNotice sync={odometerSync} />
         <OpsFormPrimaryBand module="trips" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <OpsFormField label="Start" required>
@@ -321,6 +322,7 @@ export function TripForm(props: Props) {
               <OpsOdometerKmHint
                 odometerKm={tripSyncOdometerKm}
                 vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+                eventDate={tripEventDate}
               />
             </div>
           </div>
@@ -338,9 +340,7 @@ export function TripForm(props: Props) {
   return (
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-      {syncNotice ? (
-        <p className="rounded-lg border border-sky-900/40 bg-sky-950/25 px-4 py-3 text-sm text-sky-200">{syncNotice}</p>
-      ) : null}
+      <OpsOdometerSyncNotice sync={odometerSync} />
       {!embedded ? (
         <OpsFormVehicleField
           vehicles={props.vehicles}
@@ -422,6 +422,7 @@ export function TripForm(props: Props) {
       <OpsOdometerKmHint
         odometerKm={tripSyncOdometerKm}
         vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+        eventDate={tripEventDate}
       />
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">

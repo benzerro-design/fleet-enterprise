@@ -6,6 +6,7 @@ import { BotSessionStatus, BotFindingSeverity } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessContextService } from '../iam/access-context.service';
 import { TripsService } from '../ops/trips.service';
+import { DriversService } from '../drivers/drivers.service';
 import { BotGuardService } from './bot-guard.service';
 import {
   BOT_FAULT_CATALOG,
@@ -43,6 +44,7 @@ export class BotService {
     private readonly guard: BotGuardService,
     private readonly accessCtx: AccessContextService,
     private readonly trips: TripsService,
+    private readonly drivers: DriversService,
   ) {}
 
   getModules() {
@@ -180,7 +182,15 @@ export class BotService {
           if (moduleId === 'vehicles') {
             stepResult = await runVehiclesBotModule(this.prisma, ctx, ops, access, onFinding);
           } else if (moduleId === 'trips') {
-            stepResult = await runTripsBotModule(this.prisma, this.trips, ctx, ops, access, onFinding);
+            stepResult = await runTripsBotModule(
+              this.prisma,
+              this.trips,
+              this.drivers,
+              ctx,
+              ops,
+              access,
+              onFinding,
+            );
           }
         } catch (e) {
           stepResult.failed++;

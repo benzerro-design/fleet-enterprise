@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  analyzeOdometerTimeline,
+  buildOdometerSyncPrimaryMessage,
+  computeCurrentKmFromTimeline,
+  validateNewOdometerEntry,
+} from './vehicle-odometer-timeline';
 import type { OpsOdometerEntity, VehicleOdometerSyncPayload } from './vehicle-odometer-sync.types';
 
 export function resolveTripOdometerKmForSync(input: {
@@ -46,65 +52,133 @@ export class VehicleOdometerSyncService {
     if (!vehicle) return null;
 
     const previousKm = vehicle.odometerKm;
+    const sourceRef = `${input.entity}:${input.entityId}`;
 
-    if (km < previousKm) {
-      return {
-        updated: false,
-        previousKm,
-        newKm: previousKm,
-        message: `Km introdus (${km.toLocaleString('ro-RO')}) este sub km curent vehicul (${previousKm.toLocaleString('ro-RO')}). Km vehicul rămas neschimbat.`,
-      };
-    }
+    const existingRows = await this.prisma.odometerReading.findMany({
+      where: { vehicleId: input.vehicleId },
+      select: { odometerKm: true, recordedAt: true, sourceRef: true },
+    });
 
-    if (km === previousKm) {
-      return {
-        updated: false,
-        previousKm,
-        newKm: previousKm,
-        message: `Km introdus este egal cu km curent vehicul (${previousKm.toLocaleString('ro-RO')}). Nicio actualizare.`,
-      };
-    }
+    const existingForTimeline = existingRows
+      .filter((r) => r.sourceRef !== sourceRef)
+      .map((r) => ({ odometerKm: r.odometerKm, recordedAt: r.recordedAt }));
+
+    const validation = validateNewOdometerEntry(
+      existingForTimeline,
+      { odometerKm: km, recordedAt: input.recordedAt },
+      previousKm,
+    );
+
+    await this.prisma.odometerReading.deleteMany({
+      where: { vehicleId: input.vehicleId, sourceRef },
+    });
 
     await this.prisma.odometerReading.create({
       data: {
         vehicleId: input.vehicleId,
         odometerKm: km,
         source: 'ops',
-        sourceRef: `${input.entity}:${input.entityId}`,
+        sourceRef,
         notes: `Actualizare din ${input.entityLabel}`,
         recordedAt: input.recordedAt,
         recordedByUserId: input.actorUserId ?? null,
       },
     });
 
+    const newKm = validation.newCurrentKm;
+    const updated = newKm !== previousKm;
+
+    if (updated) {
+      await this.prisma.vehicle.update({
+        where: { id: input.vehicleId },
+        data: {
+          odometerKm: newKm,
+          updatedByUserId: input.actorUserId ?? undefined,
+        },
+      });
+
+      await this.audit.logVehicle({
+        tenantUuid: input.tenantId,
+        actorUserId: input.actorUserId ?? undefined,
+        action: 'odometer_update',
+        vehicleId: input.vehicleId,
+        meta: {
+          registrationNumber: input.registrationNumber,
+          odometerKm: newKm,
+          source: 'ops',
+          previousKm,
+          opsEntity: input.entity,
+          opsEntityId: input.entityId,
+          timelineSeverity: validation.severity,
+        },
+      });
+    }
+
+    return {
+      updated,
+      previousKm,
+      newKm,
+      message: buildOdometerSyncPrimaryMessage(validation, previousKm),
+      severity: validation.severity,
+      messages: validation.messages,
+      timelineConsistent: validation.timelineAnalysis.isConsistent,
+      readingCreated: true,
+    };
+  }
+
+  async reconcileVehicleOdometerKm(
+    vehicleId: string,
+    tenantId: string,
+    actorUserId?: string,
+  ): Promise<{ previousKm: number; newKm: number; reconciled: boolean }> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenantId },
+      select: { id: true, odometerKm: true, registrationNumber: true },
+    });
+    if (!vehicle) {
+      return { previousKm: 0, newKm: 0, reconciled: false };
+    }
+
+    const rows = await this.prisma.odometerReading.findMany({
+      where: { vehicleId },
+      select: { odometerKm: true, recordedAt: true },
+    });
+
+    const timelineKm = computeCurrentKmFromTimeline(rows);
+    if (timelineKm == null || timelineKm === vehicle.odometerKm) {
+      return { previousKm: vehicle.odometerKm, newKm: vehicle.odometerKm, reconciled: false };
+    }
+
     await this.prisma.vehicle.update({
-      where: { id: input.vehicleId },
+      where: { id: vehicleId },
       data: {
-        odometerKm: km,
-        updatedByUserId: input.actorUserId ?? undefined,
+        odometerKm: timelineKm,
+        updatedByUserId: actorUserId ?? undefined,
       },
     });
 
     await this.audit.logVehicle({
-      tenantUuid: input.tenantId,
-      actorUserId: input.actorUserId ?? undefined,
+      tenantUuid: tenantId,
+      actorUserId: actorUserId ?? undefined,
       action: 'odometer_update',
-      vehicleId: input.vehicleId,
+      vehicleId,
       meta: {
-        registrationNumber: input.registrationNumber,
-        odometerKm: km,
-        source: 'ops',
-        previousKm,
-        opsEntity: input.entity,
-        opsEntityId: input.entityId,
+        registrationNumber: vehicle.registrationNumber,
+        odometerKm: timelineKm,
+        source: 'reconcile',
+        previousKm: vehicle.odometerKm,
       },
     });
 
-    return {
-      updated: true,
-      previousKm,
-      newKm: km,
-      message: `Km curent vehicul actualizat: ${previousKm.toLocaleString('ro-RO')} → ${km.toLocaleString('ro-RO')} (din ${input.entityLabel}).`,
-    };
+    return { previousKm: vehicle.odometerKm, newKm: timelineKm, reconciled: true };
+  }
+
+  async analyzeVehicleTimeline(vehicleId: string) {
+    const rows = await this.prisma.odometerReading.findMany({
+      where: { vehicleId },
+      select: { id: true, odometerKm: true, recordedAt: true },
+      orderBy: { recordedAt: 'asc' },
+    });
+    return analyzeOdometerTimeline(rows);
   }
 }

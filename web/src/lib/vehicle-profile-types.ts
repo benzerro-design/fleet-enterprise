@@ -21,11 +21,13 @@ export type VehicleCivPayload = {
   importSource: CivImportSource;
 };
 
+import type { OdometerTimelineAnalysis } from "@/lib/vehicle-odometer-sync";
+
 export type OdometerReadingRow = {
   id: string;
   vehicleId: string;
   odometerKm: number;
-  source: "manual" | "tracking" | "import";
+  source: "manual" | "tracking" | "import" | "ops";
   sourceRef: string | null;
   notes: string | null;
   recordedAt: string;
@@ -35,6 +37,8 @@ export type OdometerReadingRow = {
 export type OdometerReadingsPayload = {
   items: OdometerReadingRow[];
   vehicleOdometerKm: number;
+  timeline?: OdometerTimelineAnalysis;
+  reconciled?: boolean;
 };
 
 export type AcquisitionType = "cash" | "financial_leasing" | "operational_leasing";

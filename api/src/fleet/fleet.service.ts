@@ -33,6 +33,12 @@ import { vehicleClientScope } from '../iam/client-access';
 import { tripOpsVehicleScope } from '../iam/driver-access';
 import { assertClientCodeOpsWrite, assertDriverMediaWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import {
+  buildOdometerSyncPrimaryMessage,
+  validateNewOdometerEntry,
+} from '../ops/vehicle-odometer-timeline';
+import { VehicleOdometerSyncService } from '../ops/vehicle-odometer-sync.service';
+import type { OdometerTimelineAnalysis } from '../ops/vehicle-odometer-sync.types';
+import {
   CIV_PROFILE_FIELDS,
   normalizeCivProfile,
   civProfileFilledCount,
@@ -179,6 +185,7 @@ export class FleetService {
     private readonly audit: AuditService,
     private readonly reminders: RemindersService,
     private readonly clients: ClientsService,
+    private readonly odometerSync: VehicleOdometerSyncService,
   ) {}
 
   async listVehiclesPaged(
@@ -825,11 +832,16 @@ export class FleetService {
     vehicleId: string,
     limit = 50,
     access?: AccessContext,
-  ): Promise<{ items: OdometerReadingRecord[]; vehicleOdometerKm: number }> {
+  ): Promise<{
+    items: OdometerReadingRecord[];
+    vehicleOdometerKm: number;
+    timeline: OdometerTimelineAnalysis;
+    reconciled: boolean;
+  }> {
     await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      select: { id: true, odometerKm: true },
+      select: { id: true, odometerKm: true, tenantId: true },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
@@ -841,8 +853,33 @@ export class FleetService {
       include: { recordedBy: { select: { email: true } } },
     });
 
+    const timeline = await this.odometerSync.analyzeVehicleTimeline(vehicleId);
+    const needsReconcile =
+      timeline.currentKmFromTimeline != null && timeline.currentKmFromTimeline !== vehicle.odometerKm;
+    let vehicleOdometerKm = vehicle.odometerKm;
+    let reconciled = false;
+    if (needsReconcile) {
+      const result = await this.odometerSync.reconcileVehicleOdometerKm(
+        vehicleId,
+        vehicle.tenantId,
+        access?.userId,
+      );
+      if (result.reconciled) {
+        vehicleOdometerKm = result.newKm;
+        reconciled = true;
+      }
+    }
+
     return {
-      vehicleOdometerKm: vehicle.odometerKm,
+      vehicleOdometerKm,
+      reconciled,
+      timeline: {
+        currentKmFromTimeline: timeline.currentKmFromTimeline,
+        latestRecordedAt: timeline.latestRecordedAt,
+        violations: timeline.violations,
+        hasCriticalViolations: timeline.hasCriticalViolations,
+        isConsistent: timeline.isConsistent,
+      },
       items: rows.map((r) => ({
         id: r.id,
         vehicleId: r.vehicleId,
@@ -862,7 +899,16 @@ export class FleetService {
     dto: RecordOdometerDto,
     actorUserId?: string,
     access?: AccessContext,
-  ): Promise<{ reading: OdometerReadingRecord; vehicle: VehicleRecord }> {
+  ): Promise<{
+    reading: OdometerReadingRecord;
+    vehicle: VehicleRecord;
+    odometerValidation: {
+      severity: import('../ops/vehicle-odometer-timeline').OdometerSyncSeverity;
+      messages: string[];
+      message: string;
+      timelineConsistent: boolean;
+    };
+  }> {
     await assertDriverMediaWrite(this.prisma, tenantSlug, vehicleId, access);
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
@@ -875,29 +921,44 @@ export class FleetService {
     }
 
     const source = dto.source ?? 'manual';
-    if (source === 'tracking' && dto.odometerKm < existing.odometerKm) {
+    const km = Math.round(dto.odometerKm);
+    const recordedAt = new Date();
+
+    if (source === 'tracking' && km < existing.odometerKm) {
       throw new ConflictException(
         'Citirea din tracking nu poate fi sub km-ul curent al vehiculului. Verificați sincronizarea.',
       );
     }
 
+    const existingRows = await this.prisma.odometerReading.findMany({
+      where: { vehicleId },
+      select: { odometerKm: true, recordedAt: true },
+    });
+
+    const validation = validateNewOdometerEntry(
+      existingRows.map((r) => ({ odometerKm: r.odometerKm, recordedAt: r.recordedAt })),
+      { odometerKm: km, recordedAt },
+      existing.odometerKm,
+    );
+
     const reading = await this.prisma.odometerReading.create({
       data: {
         vehicleId,
-        odometerKm: Math.round(dto.odometerKm),
+        odometerKm: km,
         source,
         sourceRef: dto.sourceRef?.trim() || null,
         notes: dto.notes?.trim() || null,
+        recordedAt,
         recordedByUserId: actorUserId ?? null,
       },
       include: { recordedBy: { select: { email: true } } },
     });
 
-    if (dto.odometerKm >= existing.odometerKm) {
+    if (validation.willUpdateCurrentKm) {
       await this.prisma.vehicle.update({
         where: { id: vehicleId },
         data: {
-          odometerKm: Math.round(dto.odometerKm),
+          odometerKm: validation.newCurrentKm,
           updatedByUserId: actorUserId ?? undefined,
         },
       });
@@ -910,9 +971,10 @@ export class FleetService {
       vehicleId,
       meta: {
         registrationNumber: existing.registrationNumber,
-        odometerKm: Math.round(dto.odometerKm),
+        odometerKm: validation.newCurrentKm,
         source,
         previousKm: existing.odometerKm,
+        timelineSeverity: validation.severity,
       },
     });
 
@@ -929,6 +991,12 @@ export class FleetService {
         recordedByEmail: reading.recordedBy?.email ?? null,
       },
       vehicle,
+      odometerValidation: {
+        severity: validation.severity,
+        messages: validation.messages,
+        message: buildOdometerSyncPrimaryMessage(validation, existing.odometerKm),
+        timelineConsistent: validation.timelineAnalysis.isConsistent,
+      },
     };
   }
 

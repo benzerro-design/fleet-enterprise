@@ -36,6 +36,6 @@ import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
     RemindersService,
     VehicleOdometerSyncService,
   ],
-  exports: [RemindersService, TripsService],
+  exports: [RemindersService, TripsService, VehicleOdometerSyncService],
 })
 export class OpsModule {}

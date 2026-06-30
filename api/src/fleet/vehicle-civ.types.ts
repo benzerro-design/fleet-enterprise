@@ -4,7 +4,7 @@ export type OdometerReadingRecord = {
   id: string;
   vehicleId: string;
   odometerKm: number;
-  source: 'manual' | 'tracking' | 'import';
+  source: 'manual' | 'tracking' | 'import' | 'ops';
   sourceRef: string | null;
   notes: string | null;
   recordedAt: string;

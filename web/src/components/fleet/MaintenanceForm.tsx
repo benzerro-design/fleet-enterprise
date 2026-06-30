@@ -27,7 +27,9 @@ import {
   OpsFormVehicleField,
 } from "@/components/fleet/ops-form-primitives";
 import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
+import { OpsOdometerSyncNotice } from "@/components/fleet/OpsOdometerSyncNotice";
 import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
+import type { VehicleOdometerSyncPayload } from "@/lib/vehicle-odometer-sync";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
 
 type MaintenanceRecord = {
@@ -173,7 +175,7 @@ export function MaintenanceForm(props: Props) {
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [odometerSync, setOdometerSync] = useState<VehicleOdometerSyncPayload | null>(null);
 
   const isItp = isItpMaintenanceAllocation(costAllocationCode);
   const isDauna = isDamageClaimAllocation(costAllocationCode);
@@ -200,7 +202,7 @@ export function MaintenanceForm(props: Props) {
     e.preventDefault();
     setPending(true);
     setError(null);
-    setSyncNotice(null);
+    setOdometerSync(null);
 
     if (!isEdit && !boundVehicleId) {
       setError("Selectează vehiculul.");
@@ -300,8 +302,8 @@ export function MaintenanceForm(props: Props) {
         return;
       }
       if (parsed.vehicleOdometerSync?.message) {
-        setSyncNotice(parsed.vehicleOdometerSync.message);
-        await new Promise((r) => setTimeout(r, 2200));
+        setOdometerSync(parsed.vehicleOdometerSync);
+        await new Promise((r) => setTimeout(r, parsed.vehicleOdometerSync?.severity === "critical" ? 3500 : 2200));
       }
       router.push("/fleet/maintenance");
       router.refresh();
@@ -358,9 +360,7 @@ export function MaintenanceForm(props: Props) {
     return (
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-        {syncNotice ? (
-          <p className="rounded-lg border border-sky-900/40 bg-sky-950/25 px-4 py-3 text-sm text-sky-200">{syncNotice}</p>
-        ) : null}
+        <OpsOdometerSyncNotice sync={odometerSync} />
         <OpsFormPrimaryBand module="maintenance" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <OpsFormField label="Titlu" required>
@@ -409,7 +409,11 @@ export function MaintenanceForm(props: Props) {
               <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
             </OpsFormField>
             <div className="sm:col-span-2">
-              <OpsOdometerKmHint odometerKm={odometerKm} vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0} />
+              <OpsOdometerKmHint
+                odometerKm={odometerKm}
+                vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+                eventDate={performedAt}
+              />
             </div>
             <div className="space-y-3 sm:col-span-2">
               <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
@@ -489,9 +493,7 @@ export function MaintenanceForm(props: Props) {
   return (
     <form onSubmit={(e) => void onSubmit(e)} className={formClassName}>
       {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
-      {syncNotice ? (
-        <p className="rounded-lg border border-sky-900/40 bg-sky-950/25 px-4 py-3 text-sm text-sky-200">{syncNotice}</p>
-      ) : null}
+      <OpsOdometerSyncNotice sync={odometerSync} />
       {!embedded ? (
         <OpsFormVehicleField
           vehicles={props.vehicles}
@@ -581,7 +583,11 @@ export function MaintenanceForm(props: Props) {
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Odometru km (opțional)</label>
         <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
-        <OpsOdometerKmHint odometerKm={odometerKm} vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0} />
+        <OpsOdometerKmHint
+          odometerKm={odometerKm}
+          vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}
+          eventDate={performedAt}
+        />
       </div>
       <div className="space-y-3">
         <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-300">
