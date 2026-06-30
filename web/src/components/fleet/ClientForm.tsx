@@ -1,8 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { ClientFormLayout } from "@/components/fleet/ClientFormLayout";
+import {
+  OPS_INPUT_CLASS,
+  OpsFormField,
+  OpsFormSection,
+  OpsFormStickyActions,
+} from "@/components/fleet/ops-form-primitives";
 import { clientsBrowserBase, fleetJsonHeaders, type ClientRecord, type ClientStatus } from "@/lib/clients-api";
 
 type Props = {
@@ -22,6 +28,8 @@ export function ClientForm({ mode, initial }: Props) {
   const [billingNotes, setBillingNotes] = useState(initial?.billingNotes ?? "");
   const [status, setStatus] = useState<ClientStatus>(initial?.status ?? "active");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [codeBlurred, setCodeBlurred] = useState(false);
+  const [taxIdBlurred, setTaxIdBlurred] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,117 +80,147 @@ export function ClientForm({ mode, initial }: Props) {
   const cancelHref =
     mode === "edit" && initial ? `/fleet/clients/${initial.id}` : "/fleet/clients";
 
+  const previewClient: ClientRecord | null =
+    mode === "edit" && initial
+      ? {
+          ...initial,
+          code: code || initial.code,
+          legalName: legalName || initial.legalName,
+          taxId: taxId || initial.taxId,
+        }
+      : null;
+
   return (
-    <form onSubmit={onSubmit} className="flex w-full flex-col gap-6">
-      <div>
-        <label className="text-sm text-zinc-400">Cod client</label>
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          required
-          disabled={mode === "edit"}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 disabled:opacity-60"
-          placeholder="ex. ALPHA"
+    <ClientFormLayout
+      mode={mode}
+      formTitle={mode === "create" ? "Client nou" : "Editare client"}
+      client={previewClient}
+      draftCode={code}
+      draftTaxId={taxId}
+      draftLegalName={legalName}
+      codeBlurred={codeBlurred}
+      taxIdBlurred={taxIdBlurred}
+    >
+      <form
+        onSubmit={onSubmit}
+        className="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-6"
+      >
+        {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+
+        <OpsFormSection number={1} title="Identificare">
+          <div className="space-y-4">
+            <OpsFormField
+              label="Cod client"
+              required
+              hint={mode === "edit" ? "Codul nu se poate modifica după creare." : undefined}
+            >
+              <input
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                  setCodeBlurred(false);
+                }}
+                onBlur={() => setCodeBlurred(true)}
+                required
+                disabled={mode === "edit"}
+                className={`${OPS_INPUT_CLASS} font-mono uppercase disabled:opacity-60`}
+                placeholder="ex. ALPHA"
+              />
+            </OpsFormField>
+            <OpsFormField label="Denumire legală" required>
+              <input
+                value={legalName}
+                onChange={(e) => setLegalName(e.target.value)}
+                required
+                className={OPS_INPUT_CLASS}
+              />
+            </OpsFormField>
+            <OpsFormField label="CUI">
+              <input
+                value={taxId}
+                onChange={(e) => {
+                  setTaxId(e.target.value);
+                  setTaxIdBlurred(false);
+                }}
+                onBlur={() => setTaxIdBlurred(true)}
+                className={OPS_INPUT_CLASS}
+              />
+            </OpsFormField>
+            <OpsFormField label="Reg. Comerțului">
+              <input
+                value={tradeRegister}
+                onChange={(e) => setTradeRegister(e.target.value)}
+                className={OPS_INPUT_CLASS}
+              />
+            </OpsFormField>
+            <OpsFormField label="Status">
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as ClientStatus)}
+                className={OPS_INPUT_CLASS}
+              >
+                <option value="active">Activ</option>
+                <option value="inactive">Inactiv</option>
+              </select>
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+
+        <OpsFormSection number={2} title="Contact">
+          <div className="space-y-4">
+            <OpsFormField label="Email contact">
+              <input
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                className={OPS_INPUT_CLASS}
+              />
+            </OpsFormField>
+            <OpsFormField label="Telefon contact">
+              <input
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                className={OPS_INPUT_CLASS}
+              />
+            </OpsFormField>
+            <OpsFormField label="Adresă">
+              <input
+                value={addressLine}
+                onChange={(e) => setAddressLine(e.target.value)}
+                className={OPS_INPUT_CLASS}
+              />
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+
+        <OpsFormSection number={3} title="Facturare">
+          <div className="space-y-4">
+            <OpsFormField label="Note facturare">
+              <textarea
+                value={billingNotes}
+                onChange={(e) => setBillingNotes(e.target.value)}
+                rows={2}
+                className={OPS_INPUT_CLASS}
+              />
+            </OpsFormField>
+            <OpsFormField label="Note interne">
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className={OPS_INPUT_CLASS}
+              />
+            </OpsFormField>
+          </div>
+        </OpsFormSection>
+
+        <OpsFormStickyActions
+          submitLabel={mode === "create" ? "Creează client" : "Salvează"}
+          pendingLabel="Se salvează…"
+          cancelHref={cancelHref}
+          pending={pending}
         />
-        {mode === "edit" ? (
-          <p className="mt-1 text-xs text-zinc-500">Codul nu se poate modifica după creare.</p>
-        ) : null}
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">Denumire legală</label>
-        <input
-          value={legalName}
-          onChange={(e) => setLegalName(e.target.value)}
-          required
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">CUI (opțional)</label>
-        <input
-          value={taxId}
-          onChange={(e) => setTaxId(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">Email contact</label>
-        <input
-          type="email"
-          value={contactEmail}
-          onChange={(e) => setContactEmail(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">Telefon contact</label>
-        <input
-          value={contactPhone}
-          onChange={(e) => setContactPhone(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">Adresă</label>
-        <input
-          value={addressLine}
-          onChange={(e) => setAddressLine(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">Reg. Comerțului</label>
-        <input
-          value={tradeRegister}
-          onChange={(e) => setTradeRegister(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">Status</label>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as ClientStatus)}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        >
-          <option value="active">Activ</option>
-          <option value="inactive">Inactiv</option>
-        </select>
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">Note facturare</label>
-        <textarea
-          value={billingNotes}
-          onChange={(e) => setBillingNotes(e.target.value)}
-          rows={2}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-zinc-400">Note interne</label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        />
-      </div>
-      {error ? <p className="text-sm text-rose-400">{error}</p> : null}
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-60"
-        >
-          {pending ? "Se salvează…" : mode === "create" ? "Creează client" : "Salvează"}
-        </button>
-        <Link
-          href={cancelHref}
-          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
-        >
-          Anulează
-        </Link>
-      </div>
-    </form>
+      </form>
+    </ClientFormLayout>
   );
 }

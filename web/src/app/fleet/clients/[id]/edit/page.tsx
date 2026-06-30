@@ -51,20 +51,17 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
   if (!client) notFound();
 
   return (
-    <FleetPageMain className="max-w-6xl">
+    <FleetPageMain>
       <div className="mb-8">
         <Link href={`/fleet/clients/${client.id}`} className="text-sm text-zinc-400 hover:text-zinc-200">
           ← Client {client.code}
         </Link>
-        <h1 className="mt-4 text-2xl font-semibold">Editare client</h1>
-        <p className="mt-1 font-mono text-sm text-zinc-500">{client.code}</p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-        <div className="flex flex-col gap-8">
-          <ClientForm mode="edit" initial={client} />
-          <ClientDocumentsPanel clientId={client.id} initialDocuments={documents} />
-        </div>
+      <ClientForm mode="edit" initial={client} />
+
+      <div className="mt-10 grid gap-8 border-t border-zinc-800 pt-10 lg:grid-cols-2 lg:items-start">
+        <ClientDocumentsPanel clientId={client.id} initialDocuments={documents} />
         <ClientContactsPanel clientId={client.id} initialContacts={contacts} />
       </div>
     </FleetPageMain>
