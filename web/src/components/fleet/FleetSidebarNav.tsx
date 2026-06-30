@@ -115,12 +115,13 @@ function NavGroupItems({
 type FleetSidebarNavProps = {
   groups: FleetNavGroup[];
   admin: FleetNavGroup | null;
+  bot?: FleetNavGroup | null;
   onNavigate?: () => void;
   /** Mobile drawer: collapsible groups. Desktop: flat group headers. */
   variant?: "desktop" | "drawer";
 };
 
-export function FleetSidebarNav({ groups, admin, onNavigate, variant = "desktop" }: FleetSidebarNavProps) {
+export function FleetSidebarNav({ groups, admin, bot, onNavigate, variant = "desktop" }: FleetSidebarNavProps) {
   const pathname = usePathname() ?? "";
 
   return (
@@ -136,6 +137,15 @@ export function FleetSidebarNav({ groups, admin, onNavigate, variant = "desktop"
           ),
         )}
       </div>
+      {bot ? (
+        <div className="mt-2 border-t border-zinc-800 pt-2">
+          {variant === "drawer" ? (
+            <NavGroupBlock group={bot} pathname={pathname} onNavigate={onNavigate} defaultOpen />
+          ) : (
+            <NavGroupItems group={bot} pathname={pathname} onNavigate={onNavigate} />
+          )}
+        </div>
+      ) : null}
       {admin ? (
         <div className="mt-2 border-t border-zinc-800 pt-2">
           {variant === "drawer" ? (

@@ -1,13 +1,14 @@
 import { FleetShell } from "@/components/fleet/FleetShell";
-import { canManageFleet, getAuthMeResult, getDefaultFleetHome, isClientDriverPortal, isClientFleetPortal } from "@/lib/auth-server";
+import { canManageFleet, canUseBot, getAuthMeResult, getDefaultFleetHome, isClientDriverPortal, isClientFleetPortal } from "@/lib/auth-server";
 import { getFleetNavForUser } from "@/lib/fleet-nav";
 
 export default async function FleetLayout({ children }: { children: React.ReactNode }) {
   const auth = await getAuthMeResult();
   const write = canManageFleet(auth);
-  const { groups, admin } = getFleetNavForUser({
+  const { groups, admin, bot } = getFleetNavForUser({
     canWrite: write,
     authenticated: auth.ok,
+    demoBot: canUseBot(auth),
     clientDriverPortal: isClientDriverPortal(auth),
     clientFleetPortal: isClientFleetPortal(auth),
   });
@@ -26,6 +27,7 @@ export default async function FleetLayout({ children }: { children: React.ReactN
     <FleetShell
       groups={groups}
       admin={admin}
+      bot={bot}
       tenantSlug={auth.ok ? auth.me.tenantSlug : undefined}
       userEmail={auth.ok ? auth.me.email : undefined}
       readOnly={auth.ok && auth.me.role === "tenant_viewer"}

@@ -36,6 +36,7 @@ model Tenant {
   crmTicketLinks     CrmTicketLink[]
   crmTicketNotifications CrmTicketNotification[]
   clientMemberships  ClientMembership[]
+  botPopulationSessions BotPopulationSession[]
 }
 
 enum ClientStatus {
@@ -267,6 +268,80 @@ model User {
   crmTicketEvents          CrmTicketEvent[]          @relation("TicketEventActor")
   crmTicketNotifications   CrmTicketNotification[]
   clientMemberships        ClientMembership[]
+  botPopulationSessions    BotPopulationSession[]    @relation("BotSessionActor")
+}
+
+enum BotSessionStatus {
+  running
+  success
+  partial
+  failed
+}
+
+enum BotFindingSeverity {
+  error
+  warning
+  info
+  expected
+}
+
+model BotPopulationSession {
+  id              String             @id @default(cuid())
+  tenantId        String
+  actorUserId     String
+  scenarioId      String
+  division        String
+  seed            Int                @default(1)
+  mode            String             @default("populate")
+  status          BotSessionStatus   @default(running)
+  config          Json
+  concurrentUsers Int                @default(1)
+  impersonatedAs  String?
+  summary         String?
+  startedAt       DateTime           @default(now())
+  finishedAt      DateTime?
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor           User               @relation("BotSessionActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+  steps           BotPopulationStep[]
+  findings        BotPopulationFinding[]
+
+  @@index([tenantId, startedAt])
+  @@index([actorUserId])
+}
+
+model BotPopulationStep {
+  id         String               @id @default(cuid())
+  sessionId  String
+  moduleId   String
+  requested  Json
+  created    Int                  @default(0)
+  edited     Int                  @default(0)
+  deleted    Int                  @default(0)
+  failed     Int                  @default(0)
+  skipped    Int                  @default(0)
+  durationMs Int                  @default(0)
+  meta       Json?
+  session    BotPopulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model BotPopulationFinding {
+  id          String               @id @default(cuid())
+  sessionId   String
+  stepId      String?
+  moduleId    String
+  severity    BotFindingSeverity
+  faultId     String?
+  expected    Boolean              @default(false)
+  message     String
+  links       Json                 @default("[]")
+  remediation String?
+  entityRefs  Json?
+  session     BotPopulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, severity])
 }
 
 model TenantMembership {

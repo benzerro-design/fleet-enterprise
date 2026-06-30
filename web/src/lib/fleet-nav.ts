@@ -35,6 +35,8 @@ export type FleetNavGroup = {
 export type FleetNavContext = {
   canWrite: boolean;
   authenticated: boolean;
+  /** Tenant demo — afișează meniul BOT (doar non-prod / BOT_ENABLED). */
+  demoBot?: boolean;
   /** Șofer client — flotă redusă (vehicule alocate). */
   clientDriverPortal?: boolean;
   /** Manager/dispecer client — flotă scoped, fără panou/admin. */
@@ -156,6 +158,30 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
   },
 ];
 
+export const FLEET_NAV_BOT_GROUP: FleetNavGroup = {
+  id: "bot",
+  label: "BOT",
+  footer: true,
+  items: [
+    {
+      kind: "link",
+      label: "Date",
+      href: "/fleet/bot/date",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/bot/date"],
+    },
+    {
+      kind: "link",
+      label: "Raportare",
+      href: "/fleet/bot/raportare",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/bot/raportare"],
+    },
+  ],
+};
+
 export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
   id: "admin",
   label: "Administrare",
@@ -254,10 +280,12 @@ function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup 
 export function getFleetNavForUser(ctx: FleetNavContext): {
   groups: FleetNavGroup[];
   admin: FleetNavGroup | null;
+  bot: FleetNavGroup | null;
 } {
   const groups = FLEET_NAV_GROUPS.map((g) => filterGroup(g, ctx)).filter((g): g is FleetNavGroup => g !== null);
   const admin = filterGroup(FLEET_NAV_ADMIN_GROUP, ctx);
-  return { groups, admin };
+  const bot = ctx.demoBot ? filterGroup(FLEET_NAV_BOT_GROUP, ctx) : null;
+  return { groups, admin, bot };
 }
 
 export function navEntryIsActive(pathname: string, entry: FleetNavLink): boolean {

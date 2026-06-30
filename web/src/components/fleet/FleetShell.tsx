@@ -11,6 +11,7 @@ type FleetShellProps = {
   children: React.ReactNode;
   groups: FleetNavGroup[];
   admin: FleetNavGroup | null;
+  bot?: FleetNavGroup | null;
   tenantSlug?: string;
   userEmail?: string;
   readOnly?: boolean;
@@ -27,6 +28,7 @@ export function FleetShell({
   children,
   groups,
   admin,
+  bot,
   tenantSlug,
   userEmail,
   readOnly,
@@ -67,7 +69,7 @@ export function FleetShell({
             ) : null}
           </Link>
         </div>
-        <FleetSidebarNav groups={groups} admin={admin} variant="desktop" />
+        <FleetSidebarNav groups={groups} admin={admin} bot={bot} variant="desktop" />
         <div className="shrink-0 border-t border-zinc-800 px-4 py-3">
           {userEmail ? <p className="truncate text-xs text-zinc-500">{userEmail}</p> : null}
           {readOnly ? (
@@ -173,7 +175,7 @@ export function FleetShell({
                 Închide
               </button>
             </div>
-            <FleetSidebarNav groups={groups} admin={admin} variant="drawer" onNavigate={closeMenu} />
+            <FleetSidebarNav groups={groups} admin={admin} bot={bot} variant="drawer" onNavigate={closeMenu} />
             <div className="border-t border-zinc-800 px-4 py-3">
               {userEmail ? <p className="truncate text-xs text-zinc-500">{userEmail}</p> : null}
               {readOnly ? (
