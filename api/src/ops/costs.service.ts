@@ -18,6 +18,7 @@ import { assertVehicleInTenant } from './ops-scope';
 import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import { RemindersService } from './reminders.service';
+import { providerLabelForSupplier } from '../suppliers/supplier-resolve';
 import {
   reminderMenuSyncEnabledForCreate,
   reminderMenuSyncEnabledPatchValue,
@@ -30,6 +31,7 @@ export type CreateCostInput = {
   vehicleId: string;
   category: string;
   provider?: string | null;
+  supplierId?: string | null;
   amountCents: number;
   fuelLiters?: number | null;
   fuelProductType?: 'diesel' | 'petrol' | 'hybrid' | 'electric' | 'lpg' | null;
@@ -200,6 +202,7 @@ function toCostRow(row: {
   vehicleId: string;
   category: string;
   provider: string | null;
+  supplierId: string | null;
   amountCents: number;
   fuelLiters: number | null;
   fuelProductType: string | null;
@@ -225,6 +228,7 @@ function toCostRow(row: {
     clientId: row.vehicle.client.code,
     category: row.category,
     provider: row.provider,
+    supplierId: row.supplierId,
     amountCents: row.amountCents,
     fuelLiters: row.fuelLiters,
     fuelProductType: row.fuelProductType,
@@ -365,12 +369,20 @@ export class CostsService {
     await assertCostCreateWrite(this.prisma, tenantSlug, dto.vehicleId, dto.category, dto.notes, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
+    const provider = await providerLabelForSupplier(
+      this.prisma,
+      tenant.id,
+      dto.supplierId,
+      dto.provider,
+    );
+
     const row = await this.prisma.costEntry.create({
       data: {
         tenantId: tenant.id,
         vehicleId: dto.vehicleId,
         category: dto.category.trim(),
-        provider: dto.provider ?? null,
+        provider,
+        supplierId: dto.supplierId?.trim() || null,
         amountCents: Math.round(dto.amountCents),
         fuelLiters,
         fuelProductType,
@@ -498,9 +510,22 @@ export class CostsService {
       }
     }
 
+    let providerPatch: string | null | undefined = undefined;
+    let supplierIdPatch: string | null | undefined = undefined;
+    if (dto.supplierId !== undefined || dto.provider !== undefined) {
+      supplierIdPatch = dto.supplierId !== undefined ? dto.supplierId?.trim() || null : before.supplierId;
+      providerPatch = await providerLabelForSupplier(
+        this.prisma,
+        before.tenantId,
+        supplierIdPatch,
+        dto.provider !== undefined ? dto.provider : before.provider,
+      );
+    }
+
     const data: Prisma.CostEntryUncheckedUpdateManyInput = {
       category: dto.category !== undefined ? dto.category.trim() : undefined,
-      provider: dto.provider,
+      provider: providerPatch !== undefined ? providerPatch : dto.provider,
+      supplierId: supplierIdPatch,
       amountCents: dto.amountCents !== undefined ? Math.round(dto.amountCents) : undefined,
       fuelLiters,
       fuelProductType,

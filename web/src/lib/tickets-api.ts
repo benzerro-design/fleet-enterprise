@@ -20,8 +20,15 @@ export type TicketCommentAttachment = {
   mimeType?: string;
 };
 
-export type TicketEventKind = "comment" | "routing" | "transform" | "status" | "odometer";
-export type TicketLinkEntityType = "maintenance" | "cost" | "trip" | "reminder" | "document";
+export type TicketEventKind = "comment" | "routing" | "transform" | "status" | "odometer" | "workflow_advance";
+export type TicketLinkEntityType =
+  | "maintenance"
+  | "cost"
+  | "trip"
+  | "reminder"
+  | "document"
+  | "service_case"
+  | "work_order";
 
 export type TicketRecord = {
   id: string;
@@ -196,6 +203,8 @@ export function ticketEventKindLabel(kind: TicketEventKind): string {
       return "Status";
     case "odometer":
       return "Odometru";
+    case "workflow_advance":
+      return "Flux operațional";
   }
 }
 

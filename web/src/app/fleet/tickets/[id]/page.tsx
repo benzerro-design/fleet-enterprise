@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketActionsPanel } from "@/components/fleet/TicketActionsPanel";
+import { TicketWorkflowStepper } from "@/components/fleet/tickets/TicketWorkflowStepper";
 import { TicketActionTimeline } from "@/components/fleet/tickets/TicketActionTimeline";
 import { TicketConversation } from "@/components/fleet/tickets/TicketConversation";
 import { TicketEditPanel } from "@/components/fleet/tickets/TicketEditPanel";
@@ -148,6 +149,12 @@ export default async function TicketDetailPage({ params }: PageProps) {
               <TicketActionTimeline events={detail.events} />
             </div>
           </div>
+          <TicketWorkflowStepper
+            ticketId={ticket.id}
+            canWrite={write}
+            closed={closed}
+            hasVehicle={!!ticket.vehicleId}
+          />
           <TicketActionsPanel detail={detail} canWrite={write} />
           <TicketEditPanel ticket={ticket} canPatch={patch} />
         </section>

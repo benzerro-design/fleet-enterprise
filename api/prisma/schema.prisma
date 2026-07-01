@@ -37,6 +37,9 @@ model Tenant {
   crmTicketNotifications CrmTicketNotification[]
   clientMemberships  ClientMembership[]
   botPopulationSessions BotPopulationSession[]
+  suppliers              Supplier[]
+  serviceCases           ServiceCase[]
+  maintenanceWorkOrders  MaintenanceWorkOrder[]
 }
 
 enum ClientStatus {
@@ -68,6 +71,7 @@ model Client {
   drivers       Driver[]
   crmTickets    CrmTicket[]
   memberships   ClientMembership[]
+  serviceCases  ServiceCase[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -458,6 +462,8 @@ model Vehicle {
   photos             VehiclePhoto[]
   driverAssignments  DriverVehicleAssignment[]
   crmTickets         CrmTicket[]
+  serviceCases       ServiceCase[]
+  maintenanceWorkOrders MaintenanceWorkOrder[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])
@@ -579,6 +585,7 @@ model MaintenanceEntry {
   invoiceDate          DateTime?
   invoiceAttachmentUrl String?
   provider             String?
+  supplierId           String?
   /** Termen / dată următoare acțiune (ex. ITP valabil până la). */
   nextDueOn            DateTime?
   reminderOffsetsDays  Json?
@@ -588,10 +595,12 @@ model MaintenanceEntry {
   reminderMenuSyncEnabled Boolean @default(true)
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  supplier             Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   reminderAction       ReminderAction?
 
   @@index([tenantId])
   @@index([vehicleId])
+  @@index([supplierId])
 }
 
 /// Costuri alocate vehiculului (MVP).
@@ -612,6 +621,7 @@ model CostEntry {
   invoiceDate          DateTime?
   invoiceAttachmentUrl String?
   provider             String?
+  supplierId           String?
   /** Termen / dată următoare (ex. ITP valabil până la). */
   nextDueOn            DateTime?
   reminderOffsetsDays  Json?
@@ -621,10 +631,12 @@ model CostEntry {
   reminderMenuSyncEnabled Boolean @default(true)
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  supplier             Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   reminderAction       ReminderAction?
 
   @@index([tenantId])
   @@index([vehicleId])
+  @@index([supplierId])
 }
 
 model AuditLog {
@@ -825,6 +837,7 @@ enum CrmTicketEventKind {
   transform
   status
   odometer
+  workflow_advance
 }
 
 enum CrmTicketLinkEntityType {
@@ -833,6 +846,8 @@ enum CrmTicketLinkEntityType {
   trip
   reminder
   document
+  service_case
+  work_order
 }
 
 enum CrmTicketType {
@@ -876,6 +891,7 @@ model CrmTicket {
   events           CrmTicketEvent[]
   links            CrmTicketLink[]
   notifications    CrmTicketNotification[]
+  serviceCase      ServiceCase?
 
   @@index([tenantId])
   @@index([clientId])
@@ -947,4 +963,150 @@ model CrmTicketLink {
   @@index([tenantId])
   @@index([ticketId])
   @@index([entityType, entityId])
+}
+
+enum SupplierStatus {
+  active
+  inactive
+  blocked
+}
+
+enum SupplierCategory {
+  service_auto
+  itp
+  fuel
+  tires
+  insurer
+  broker
+  dealer
+  other
+}
+
+/// Furnizor / partener service (atelier, ITP, broker, asigurator).
+model Supplier {
+  id           String           @id @default(cuid())
+  tenantId     String
+  code         String
+  legalName    String
+  taxId        String?
+  category     SupplierCategory @default(other)
+  status       SupplierStatus   @default(active)
+  contactEmail String?
+  contactPhone String?
+  addressLine  String?
+  city         String?
+  county       String?
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  costEntries        CostEntry[]
+  maintenanceEntries MaintenanceEntry[]
+  serviceCases       ServiceCase[]
+  workOrders           MaintenanceWorkOrder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+}
+
+enum ServiceCaseWorkflowType {
+  repair
+  damage
+  itp
+  tires
+  insurance_rca
+  insurance_casco
+}
+
+enum ServiceCaseSourceType {
+  ticket
+  reminder
+  direct
+}
+
+enum ServiceCaseStage {
+  intake
+  scheduled
+  work_order
+  quote
+  approval
+  cost
+  invoiced
+  closed
+}
+
+enum ServiceCaseStatus {
+  active
+  on_hold
+  completed
+  cancelled
+}
+
+enum MaintenanceWorkOrderStatus {
+  draft
+  sent
+  in_progress
+  waiting_parts
+  done
+  cancelled
+}
+
+/// Dosar operațional — orchestrator flux tichet → programare → WO → deviz → cost.
+model ServiceCase {
+  id                     String                  @id @default(cuid())
+  tenantId               String
+  clientId               String
+  vehicleId              String?
+  workflowType           ServiceCaseWorkflowType
+  sourceType             ServiceCaseSourceType
+  sourceTicketId         String?                 @unique
+  sourceTicket           CrmTicket?              @relation(fields: [sourceTicketId], references: [id], onDelete: SetNull)
+  sourceReminderActionId String?
+  currentStage           ServiceCaseStage        @default(intake)
+  status                 ServiceCaseStatus       @default(active)
+  supplierId             String?
+  title                  String
+  notes                  String?
+  closedAt               DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client                 Client                  @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicle                Vehicle?                @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  supplier               Supplier?               @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  workOrders             MaintenanceWorkOrder[]
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([vehicleId])
+  @@index([sourceTicketId])
+  @@index([tenantId, status])
+  @@index([tenantId, currentStage])
+}
+
+/// Comandă de lucru service (WO) legată de dosar.
+model MaintenanceWorkOrder {
+  id            String                     @id @default(cuid())
+  tenantId      String
+  serviceCaseId String
+  vehicleId     String
+  supplierId    String?
+  title         String
+  status        MaintenanceWorkOrderStatus @default(draft)
+  plannedAt     DateTime?
+  completedAt   DateTime?
+  notes         String?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceCase   ServiceCase                @relation(fields: [serviceCaseId], references: [id], onDelete: Cascade)
+  vehicle       Vehicle                    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  supplier      Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([serviceCaseId])
+  @@index([vehicleId])
+  @@index([supplierId])
 }

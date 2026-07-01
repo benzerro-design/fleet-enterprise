@@ -27,6 +27,7 @@ import {
 import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
 import { OpsOdometerSyncNotice } from "@/components/fleet/OpsOdometerSyncNotice";
 import { OpsOdometerTimelineConfirm } from "@/components/fleet/OpsOdometerTimelineConfirm";
+import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
 import { useOdometerTimelineConfirm } from "@/lib/use-odometer-timeline-confirm";
 import type { VehicleOdometerSyncPayload } from "@/lib/vehicle-odometer-sync";
@@ -39,6 +40,7 @@ type CostRecord = {
   vehicleId: string;
   category: string;
   provider: string | null;
+  supplierId?: string | null;
   amountCents: number;
   odometerKm: number | null;
   invoiceNumber: string | null;
@@ -108,6 +110,7 @@ export function CostForm(props: Props) {
         vehicleId: props.defaultVehicleId ?? "",
         category: props.defaultCategory ?? "",
         provider: "",
+        supplierId: "",
         amountCents: "",
         odometerKm: "",
         invoiceNumber: "",
@@ -128,6 +131,7 @@ export function CostForm(props: Props) {
       vehicleId: r.vehicleId,
       category: r.category,
       provider: r.provider ?? "",
+      supplierId: r.supplierId ?? "",
       amountCents: formatRonFromCents(r.amountCents),
       odometerKm: r.odometerKm != null ? String(r.odometerKm) : "",
       invoiceNumber: r.invoiceNumber ?? "",
@@ -152,6 +156,7 @@ export function CostForm(props: Props) {
   });
   const [category, setCategory] = useState(initial.category);
   const [provider, setProvider] = useState(initial.provider);
+  const [supplierId, setSupplierId] = useState(initial.supplierId);
   const [amountCents, setAmountCents] = useState(initial.amountCents);
   const [odometerKm, setOdometerKm] = useState(initial.odometerKm);
   const [invoiceNumber, setInvoiceNumber] = useState(initial.invoiceNumber);
@@ -291,6 +296,7 @@ export function CostForm(props: Props) {
       ...(isEdit ? {} : { vehicleId: boundVehicleId }),
       category: category.trim(),
       provider: provider.trim() || null,
+      supplierId: supplierId.trim() || null,
       amountCents: amount,
       odometerKm: odo,
       invoiceNumber: invoiceNumber.trim() || null,
@@ -522,7 +528,14 @@ export function CostForm(props: Props) {
         <OpsFormSection number={4} title="Financiar & atașamente">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpsFormField label="Furnizor">
-              <input value={provider} onChange={(e) => setProvider(e.target.value)} className={OPS_INPUT_CLASS} />
+              <SupplierCombobox
+                value={supplierId}
+                onChange={(id, row) => {
+                  setSupplierId(id);
+                  if (row) setProvider(row.legalName);
+                }}
+                category={isItp ? "itp" : isFuel ? "fuel" : "service_auto"}
+              />
             </OpsFormField>
             <OpsFormField label="Nr. factură">
               <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className={OPS_INPUT_CLASS} />
@@ -597,7 +610,14 @@ export function CostForm(props: Props) {
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Furnizor (opțional)</label>
-        <input value={provider} onChange={(e) => setProvider(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
+        <SupplierCombobox
+          value={supplierId}
+          onChange={(id, row) => {
+            setSupplierId(id);
+            if (row) setProvider(row.legalName);
+          }}
+          category={isItp ? "itp" : isFuel ? "fuel" : "service_auto"}
+        />
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Suma (RON fără TVA)</label>

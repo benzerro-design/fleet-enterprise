@@ -14,6 +14,7 @@ import { rejectOpsEntryVehicleIdChange } from './ops-patch-guards';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from './ops-csv';
 import type { MaintenanceCostAllocationCode } from './maintenance-cost-allocation';
 import { RemindersService } from './reminders.service';
+import { providerLabelForSupplier } from '../suppliers/supplier-resolve';
 import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
 import {
   reminderMenuSyncEnabledForCreate,
@@ -27,6 +28,7 @@ export type CreateMaintenanceInput = {
   vehicleId: string;
   title: string;
   provider?: string | null;
+  supplierId?: string | null;
   /** Cod predefinit (revizie, reparatie_mecanica, …). Obligatoriu la creare. */
   costAllocationCode: MaintenanceCostAllocationCode;
   invoiceNumber?: string | null;
@@ -204,6 +206,7 @@ function toMaintRow(row: {
   vehicleId: string;
   title: string;
   provider: string | null;
+  supplierId: string | null;
   costAllocationCode: string | null;
   invoiceNumber: string | null;
   invoiceDate: Date | null;
@@ -232,6 +235,7 @@ function toMaintRow(row: {
     clientId: row.vehicle.client.code,
     title: row.title,
     provider: row.provider,
+    supplierId: row.supplierId,
     costAllocationCode: row.costAllocationCode,
     invoiceNumber: row.invoiceNumber,
     invoiceDate: row.invoiceDate ? row.invoiceDate.toISOString() : null,
@@ -360,12 +364,20 @@ export class MaintenanceService {
     await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
+    const provider = await providerLabelForSupplier(
+      this.prisma,
+      tenant.id,
+      dto.supplierId,
+      dto.provider,
+    );
+
     const row = await this.prisma.maintenanceEntry.create({
       data: {
         tenantId: tenant.id,
         vehicleId: dto.vehicleId,
         title: dto.title,
-        provider: dto.provider ?? null,
+        provider,
+        supplierId: dto.supplierId?.trim() || null,
         costAllocationCode: dto.costAllocationCode,
         invoiceNumber: dto.invoiceNumber ?? null,
         invoiceDate:
@@ -462,9 +474,23 @@ export class MaintenanceService {
       return value === null ? null : value.trim() || null;
     };
 
+    let providerPatch: string | null | undefined = undefined;
+    let supplierIdPatch: string | null | undefined = undefined;
+    if (dto.supplierId !== undefined || dto.provider !== undefined) {
+      supplierIdPatch =
+        dto.supplierId !== undefined ? dto.supplierId?.trim() || null : before.supplierId;
+      providerPatch = await providerLabelForSupplier(
+        this.prisma,
+        before.tenantId,
+        supplierIdPatch,
+        dto.provider !== undefined ? dto.provider : before.provider,
+      );
+    }
+
     const data: Prisma.MaintenanceEntryUncheckedUpdateManyInput = {
       title: dto.title,
-      provider: dto.provider,
+      provider: providerPatch !== undefined ? providerPatch : dto.provider,
+      supplierId: supplierIdPatch,
       costAllocationCode: dto.costAllocationCode,
       invoiceNumber: dto.invoiceNumber,
       invoiceDate:
