@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
 import { WorkOrderStatusBadge } from "@/components/fleet/work-orders/WorkOrderStatusBadge";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
   serviceCaseStageLabel,
@@ -30,8 +32,9 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function WorkOrderDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const wo = await load(id);
+  const [wo, auth] = await Promise.all([load(id), getAuthMeResult()]);
   if (!wo) notFound();
+  const canWrite = canWriteFleetOps(auth);
 
   return (
     <FleetPageMain narrow="md">
@@ -117,19 +120,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
         ) : null}
       </dl>
 
-      <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-400">
-        <p>
-          Deviz structurat și aprobare vor fi disponibile în următoarea etapă (F2b). Continuați fluxul din{" "}
-          {wo.sourceTicketId ? (
-            <Link href={`/fleet/tickets/${wo.sourceTicketId}`} className="text-emerald-400 hover:underline">
-              tichetul CRM
-            </Link>
-          ) : (
-            "dosarul operațional"
-          )}
-          .
-        </p>
-      </div>
+      <WorkOrderQuotePanel workOrderId={wo.id} canWrite={canWrite} />
     </FleetPageMain>
   );
 }

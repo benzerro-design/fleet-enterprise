@@ -40,6 +40,75 @@ export type WorkOrderDetail = WorkOrderListRow & {
   serviceCaseStatus: string;
 };
 
+export type QuoteLineType = "labor" | "parts" | "other";
+
+export type QuoteLineRecord = {
+  id: string;
+  sortOrder: number;
+  lineType: QuoteLineType;
+  description: string;
+  quantity: number;
+  unitNetCents: number;
+  vatRatePercent: number;
+  partNumber: string | null;
+  lineNetCents: number;
+  lineVatCents: number;
+};
+
+export type WorkOrderQuoteStatus = "draft" | "submitted" | "approved" | "rejected";
+
+export type WorkOrderQuoteRecord = {
+  id: string;
+  workOrderId: string;
+  version: number;
+  status: WorkOrderQuoteStatus;
+  currency: string;
+  totalNetCents: number;
+  totalVatCents: number;
+  totalGrossCents: number;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lines: QuoteLineRecord[];
+};
+
+export type QuoteLineInput = {
+  lineType?: QuoteLineType;
+  description: string;
+  quantity?: number;
+  unitNetCents: number;
+  vatRatePercent?: number;
+  partNumber?: string | null;
+  sortOrder?: number;
+};
+
+export function formatMoneyCents(cents: number, currency = "RON"): string {
+  return `${(cents / 100).toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+export function quoteStatusLabel(status: WorkOrderQuoteStatus | string): string {
+  const map: Record<string, string> = {
+    draft: "Ciornă",
+    submitted: "Trimis spre aprobare",
+    approved: "Aprobat",
+    rejected: "Respins",
+  };
+  return map[status] ?? status;
+}
+
+export function quoteLineTypeLabel(type: QuoteLineType | string): string {
+  const map: Record<string, string> = {
+    labor: "Manoperă",
+    parts: "Piese",
+    other: "Altele",
+  };
+  return map[type] ?? type;
+}
+
 export type WorkOrderListPayload = {
   items: WorkOrderListRow[];
   total: number;

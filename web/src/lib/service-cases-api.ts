@@ -34,6 +34,27 @@ export type WorkOrderRecord = {
   createdAt: string;
 };
 
+export type ServiceAppointmentStatus =
+  | "scheduled"
+  | "confirmed"
+  | "completed"
+  | "cancelled"
+  | "no_show";
+
+export type ServiceAppointmentRecord = {
+  id: string;
+  serviceCaseId: string;
+  vehicleId: string;
+  supplierId: string | null;
+  supplierLegalName: string | null;
+  scheduledAt: string;
+  location: string | null;
+  status: ServiceAppointmentStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ServiceCaseRecord = {
   id: string;
   clientId: string;
@@ -51,6 +72,7 @@ export type ServiceCaseRecord = {
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
+  appointments: ServiceAppointmentRecord[];
 };
 
 export const SERVICE_CASE_STAGES: ServiceCaseStage[] = [
@@ -76,4 +98,15 @@ export function serviceCaseStageLabel(stage: ServiceCaseStage): string {
     closed: "Închis",
   };
   return map[stage] ?? stage;
+}
+
+export function appointmentStatusLabel(status: ServiceAppointmentStatus | string): string {
+  const map: Record<string, string> = {
+    scheduled: "Programat",
+    confirmed: "Confirmat",
+    completed: "Finalizat",
+    cancelled: "Anulat",
+    no_show: "Neprezentare",
+  };
+  return map[status] ?? status;
 }

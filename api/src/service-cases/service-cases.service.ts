@@ -10,6 +10,8 @@ import {
   CrmTicketStatus,
   CrmTicketType,
   MaintenanceWorkOrderStatus,
+  Prisma,
+  ServiceAppointmentStatus,
   ServiceCaseSourceType,
   ServiceCaseStage,
   ServiceCaseStatus,
@@ -45,6 +47,36 @@ export type WorkOrderRecord = {
   createdAt: string;
 };
 
+export type ServiceAppointmentRecord = {
+  id: string;
+  serviceCaseId: string;
+  vehicleId: string;
+  supplierId: string | null;
+  supplierLegalName: string | null;
+  scheduledAt: string;
+  location: string | null;
+  status: ServiceAppointmentStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateServiceAppointmentInput = {
+  scheduledAt: string;
+  supplierId?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  status?: ServiceAppointmentStatus;
+};
+
+export type UpdateServiceAppointmentInput = {
+  scheduledAt?: string;
+  supplierId?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  status?: ServiceAppointmentStatus;
+};
+
 export type ServiceCaseRecord = {
   id: string;
   clientId: string;
@@ -62,6 +94,7 @@ export type ServiceCaseRecord = {
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
+  appointments: ServiceAppointmentRecord[];
 };
 
 export type AdvanceServiceCaseInput = {
@@ -314,6 +347,196 @@ export class ServiceCasesService {
     return this.toRecord(reloaded!);
   }
 
+  async createAppointment(
+    tenantSlug: string,
+    caseId: string,
+    dto: CreateServiceAppointmentInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceAppointmentRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const serviceCase = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+      include: { sourceTicket: true },
+    });
+    if (!serviceCase) throw new NotFoundException('Service case not found');
+    if (!serviceCase.vehicleId) {
+      throw new BadRequestException('Service case has no vehicle — cannot schedule');
+    }
+    if (serviceCase.sourceTicket && access && !canPerformTicketAction(access, 'transform', serviceCase.sourceTicket)) {
+      throw new ForbiddenException('Cannot schedule appointment');
+    }
+
+    const scheduledAt = new Date(dto.scheduledAt);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new BadRequestException('Invalid scheduledAt');
+    }
+
+    let supplierId = serviceCase.supplierId;
+    if (dto.supplierId !== undefined) {
+      if (dto.supplierId) {
+        await resolveSupplierInTenant(this.prisma, tenant.id, dto.supplierId);
+        supplierId = dto.supplierId;
+      } else {
+        supplierId = null;
+      }
+    }
+
+    const appointment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.serviceAppointment.create({
+        data: {
+          tenantId: tenant.id,
+          serviceCaseId: caseId,
+          vehicleId: serviceCase.vehicleId!,
+          supplierId,
+          scheduledAt,
+          location: dto.location?.trim() || null,
+          notes: dto.notes?.trim() || null,
+          status: dto.status ?? ServiceAppointmentStatus.scheduled,
+        },
+        include: { supplier: { select: { legalName: true } } },
+      });
+
+      const currentIdx = SERVICE_CASE_STAGE_ORDER.indexOf(serviceCase.currentStage);
+      const scheduledIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.scheduled);
+      if (currentIdx < scheduledIdx) {
+        await tx.serviceCase.update({
+          where: { id: caseId },
+          data: { currentStage: ServiceCaseStage.scheduled, supplierId },
+        });
+        if (serviceCase.sourceTicketId) {
+          await tx.crmTicketEvent.create({
+            data: {
+              tenantId: tenant.id,
+              ticketId: serviceCase.sourceTicketId,
+              kind: CrmTicketEventKind.workflow_advance,
+              body: `Programare stabilită: ${scheduledAt.toLocaleString('ro-RO')}.`,
+              payload: {
+                fromStage: serviceCase.currentStage,
+                toStage: ServiceCaseStage.scheduled,
+                serviceCaseId: caseId,
+                appointmentId: created.id,
+              },
+              actorUserId: actorUserId ?? null,
+            },
+          });
+        }
+      } else if (supplierId !== serviceCase.supplierId) {
+        await tx.serviceCase.update({
+          where: { id: caseId },
+          data: { supplierId },
+        });
+      }
+
+      await tx.maintenanceWorkOrder.updateMany({
+        where: { serviceCaseId: caseId },
+        data: { plannedAt: scheduledAt, supplierId },
+      });
+
+      return created;
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_appointment.create',
+      entityType: 'service_appointment',
+      entityId: appointment.id,
+      meta: { serviceCaseId: caseId },
+    });
+
+    return this.toAppointmentRecord(appointment);
+  }
+
+  async updateAppointment(
+    tenantSlug: string,
+    appointmentId: string,
+    dto: UpdateServiceAppointmentInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceAppointmentRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const existing = await this.prisma.serviceAppointment.findFirst({
+      where: { id: appointmentId, tenantId: tenant.id },
+      include: { serviceCase: { include: { sourceTicket: true } } },
+    });
+    if (!existing) throw new NotFoundException('Appointment not found');
+
+    if (
+      existing.serviceCase.sourceTicket &&
+      access &&
+      !canPerformTicketAction(access, 'transform', existing.serviceCase.sourceTicket)
+    ) {
+      throw new ForbiddenException('Cannot update appointment');
+    }
+
+    let supplierId = existing.supplierId;
+    if (dto.supplierId !== undefined) {
+      if (dto.supplierId) {
+        await resolveSupplierInTenant(this.prisma, tenant.id, dto.supplierId);
+        supplierId = dto.supplierId;
+      } else {
+        supplierId = null;
+      }
+    }
+
+    const data: Prisma.ServiceAppointmentUpdateInput = {};
+    if (dto.scheduledAt !== undefined) {
+      const scheduledAt = new Date(dto.scheduledAt);
+      if (Number.isNaN(scheduledAt.getTime())) throw new BadRequestException('Invalid scheduledAt');
+      data.scheduledAt = scheduledAt;
+    }
+    if (dto.location !== undefined) data.location = dto.location?.trim() || null;
+    if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
+    if (dto.status !== undefined) data.status = dto.status;
+    if (dto.supplierId !== undefined) {
+      data.supplier = supplierId
+        ? { connect: { id: supplierId } }
+        : { disconnect: true };
+    }
+
+    const appointment = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.serviceAppointment.update({
+        where: { id: appointmentId },
+        data,
+        include: { supplier: { select: { legalName: true } } },
+      });
+
+      if (dto.scheduledAt !== undefined || dto.supplierId !== undefined) {
+        await tx.maintenanceWorkOrder.updateMany({
+          where: { serviceCaseId: existing.serviceCaseId },
+          data: {
+            ...(dto.scheduledAt !== undefined ? { plannedAt: updated.scheduledAt } : {}),
+            ...(dto.supplierId !== undefined ? { supplierId } : {}),
+          },
+        });
+        if (dto.supplierId !== undefined) {
+          await tx.serviceCase.update({
+            where: { id: existing.serviceCaseId },
+            data: { supplierId },
+          });
+        }
+      }
+
+      return updated;
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_appointment.update',
+      entityType: 'service_appointment',
+      entityId: appointmentId,
+      meta: { serviceCaseId: existing.serviceCaseId },
+    });
+
+    return this.toAppointmentRecord(appointment);
+  }
+
   private async ensureWorkOrder(
     tenantId: string,
     serviceCase: { id: string; vehicleId: string | null; title: string; sourceTicketId: string | null },
@@ -369,6 +592,38 @@ export class ServiceCasesService {
         orderBy: { createdAt: 'asc' as const },
         include: { supplier: { select: { legalName: true } } },
       },
+      appointments: {
+        orderBy: { scheduledAt: 'asc' as const },
+        include: { supplier: { select: { legalName: true } } },
+      },
+    };
+  }
+
+  private toAppointmentRecord(row: {
+    id: string;
+    serviceCaseId: string;
+    vehicleId: string;
+    supplierId: string | null;
+    scheduledAt: Date;
+    location: string | null;
+    status: ServiceAppointmentStatus;
+    notes: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    supplier?: { legalName: string } | null;
+  }): ServiceAppointmentRecord {
+    return {
+      id: row.id,
+      serviceCaseId: row.serviceCaseId,
+      vehicleId: row.vehicleId,
+      supplierId: row.supplierId,
+      supplierLegalName: row.supplier?.legalName ?? null,
+      scheduledAt: row.scheduledAt.toISOString(),
+      location: row.location,
+      status: row.status,
+      notes: row.notes,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     };
   }
 
@@ -401,6 +656,19 @@ export class ServiceCasesService {
         createdAt: Date;
         supplier?: { legalName: string } | null;
       }>;
+      appointments?: Array<{
+        id: string;
+        serviceCaseId: string;
+        vehicleId: string;
+        supplierId: string | null;
+        scheduledAt: Date;
+        location: string | null;
+        status: ServiceAppointmentStatus;
+        notes: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        supplier?: { legalName: string } | null;
+      }>;
     },
   ): ServiceCaseRecord {
     return {
@@ -431,6 +699,7 @@ export class ServiceCasesService {
         completedAt: wo.completedAt?.toISOString() ?? null,
         createdAt: wo.createdAt.toISOString(),
       })),
+      appointments: (row.appointments ?? []).map((a) => this.toAppointmentRecord(a)),
     };
   }
 }

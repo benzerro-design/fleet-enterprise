@@ -40,6 +40,9 @@ model Tenant {
   suppliers              Supplier[]
   serviceCases           ServiceCase[]
   maintenanceWorkOrders  MaintenanceWorkOrder[]
+  serviceAppointments    ServiceAppointment[]
+  workOrderQuotes        WorkOrderQuote[]
+  workOrderQuoteLines    WorkOrderQuoteLine[]
 }
 
 enum ClientStatus {
@@ -464,6 +467,7 @@ model Vehicle {
   crmTickets         CrmTicket[]
   serviceCases       ServiceCase[]
   maintenanceWorkOrders MaintenanceWorkOrder[]
+  serviceAppointments ServiceAppointment[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])
@@ -1004,6 +1008,7 @@ model Supplier {
   maintenanceEntries MaintenanceEntry[]
   serviceCases       ServiceCase[]
   workOrders           MaintenanceWorkOrder[]
+  serviceAppointments  ServiceAppointment[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1077,6 +1082,7 @@ model ServiceCase {
   vehicle                Vehicle?                @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   supplier               Supplier?               @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   workOrders             MaintenanceWorkOrder[]
+  appointments           ServiceAppointment[]
 
   @@index([tenantId])
   @@index([clientId])
@@ -1104,9 +1110,105 @@ model MaintenanceWorkOrder {
   serviceCase   ServiceCase                @relation(fields: [serviceCaseId], references: [id], onDelete: Cascade)
   vehicle       Vehicle                    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   supplier      Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  quotes        WorkOrderQuote[]
 
   @@index([tenantId])
   @@index([serviceCaseId])
   @@index([vehicleId])
   @@index([supplierId])
+}
+
+enum ServiceAppointmentStatus {
+  scheduled
+  confirmed
+  completed
+  cancelled
+  no_show
+}
+
+/// Programare service legată de dosar lucrare.
+model ServiceAppointment {
+  id            String                   @id @default(cuid())
+  tenantId      String
+  serviceCaseId String
+  vehicleId     String
+  supplierId    String?
+  scheduledAt   DateTime
+  location      String?
+  status        ServiceAppointmentStatus @default(scheduled)
+  notes         String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  tenant        Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceCase   ServiceCase              @relation(fields: [serviceCaseId], references: [id], onDelete: Cascade)
+  vehicle       Vehicle                  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  supplier      Supplier?                @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([serviceCaseId])
+  @@index([vehicleId])
+  @@index([supplierId])
+  @@index([scheduledAt])
+}
+
+enum WorkOrderQuoteStatus {
+  draft
+  submitted
+  approved
+  rejected
+}
+
+enum WorkOrderQuoteLineType {
+  labor
+  parts
+  other
+}
+
+/// Deviz structurat pe comandă service (versiuni).
+model WorkOrderQuote {
+  id               String               @id @default(cuid())
+  tenantId         String
+  workOrderId      String
+  version          Int                  @default(1)
+  status           WorkOrderQuoteStatus @default(draft)
+  currency         String               @default("RON")
+  totalNetCents    Int                  @default(0)
+  totalVatCents    Int                  @default(0)
+  submittedAt      DateTime?
+  approvedAt       DateTime?
+  approvedByUserId String?
+  rejectedAt       DateTime?
+  rejectionReason  String?
+  notes            String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder        MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  lines            WorkOrderQuoteLine[]
+
+  @@unique([workOrderId, version])
+  @@index([tenantId])
+  @@index([workOrderId])
+  @@index([workOrderId, status])
+}
+
+/// Linie deviz (piese, manoperă).
+model WorkOrderQuoteLine {
+  id             String                 @id @default(cuid())
+  tenantId       String
+  quoteId        String
+  sortOrder      Int                    @default(0)
+  lineType       WorkOrderQuoteLineType @default(parts)
+  description    String
+  quantity       Float                  @default(1)
+  unitNetCents   Int
+  vatRatePercent Int                    @default(19)
+  partNumber     String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quote          WorkOrderQuote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([quoteId])
 }

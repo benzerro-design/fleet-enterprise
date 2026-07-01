@@ -5,12 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import {
   SERVICE_CASE_STAGES,
+  appointmentStatusLabel,
   serviceCaseStageLabel,
   serviceCasesBrowserBase,
   fleetJsonHeaders,
   type ServiceCaseRecord,
   type ServiceCaseStage,
 } from "@/lib/service-cases-api";
+import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 
 type Props = {
   ticketId: string;
@@ -25,6 +27,9 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [supplierId, setSupplierId] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [appointmentLocation, setAppointmentLocation] = useState("");
+  const [appointmentNotes, setAppointmentNotes] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +79,45 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
     } finally {
       setPending(false);
     }
+  }
+
+  async function createAppointment() {
+    if (!serviceCase || !scheduledAt) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${serviceCasesBrowserBase}/${serviceCase.id}/appointments`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({
+          scheduledAt: new Date(scheduledAt).toISOString(),
+          supplierId: supplierId || null,
+          location: appointmentLocation || null,
+          notes: appointmentNotes || null,
+        }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      await load();
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function formatAppointmentWhen(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("ro-RO");
   }
 
   async function advance(targetStage?: ServiceCaseStage) {
@@ -172,6 +216,65 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
             })}
           </ol>
 
+          {serviceCase.appointments?.length ? (
+            <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
+              <p className="text-xs uppercase text-zinc-500">Programări</p>
+              <ul className="mt-2 space-y-2">
+                {serviceCase.appointments.map((appt) => (
+                  <li key={appt.id} className="text-zinc-300">
+                    <span className="font-medium text-zinc-100">{formatAppointmentWhen(appt.scheduledAt)}</span>
+                    {" · "}
+                    {appointmentStatusLabel(appt.status)}
+                    {appt.supplierLegalName ? ` · ${appt.supplierLegalName}` : ""}
+                    {appt.location ? ` · ${appt.location}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {canWrite && !closed && serviceCase.status === "active" && !(serviceCase.appointments?.length) ? (
+            <div className="mt-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+              <p className="text-xs uppercase text-zinc-500">Programare service</p>
+              <div>
+                <label className={OPS_LABEL_CLASS}>Data și ora</label>
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                  className={OPS_INPUT_CLASS}
+                />
+              </div>
+              <div>
+                <label className={OPS_LABEL_CLASS}>Furnizor / service</label>
+                <div className="mt-1">
+                  <SupplierCombobox
+                    value={supplierId}
+                    onChange={(id) => setSupplierId(id)}
+                    category={serviceCase.workflowType === "itp" ? "itp" : "service_auto"}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={OPS_LABEL_CLASS}>Locație</label>
+                <input
+                  value={appointmentLocation}
+                  onChange={(e) => setAppointmentLocation(e.target.value)}
+                  className={OPS_INPUT_CLASS}
+                  placeholder="Adresă service"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={pending || !scheduledAt}
+                onClick={() => void createAppointment()}
+                className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+              >
+                Salvează programarea
+              </button>
+            </div>
+          ) : null}
+
           {serviceCase.workOrders.length > 0 ? (
             <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
               <p className="text-xs uppercase text-zinc-500">Comenzi service</p>
@@ -190,7 +293,9 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
 
           {canWrite && !closed && serviceCase.status === "active" && nextStage ? (
             <div className="mt-4 space-y-3">
-              {nextStage === "work_order" || serviceCase.currentStage === "scheduled" ? (
+              {nextStage === "work_order" ||
+              serviceCase.currentStage === "scheduled" ||
+              nextStage === "scheduled" ? (
                 <div>
                   <label className="text-xs text-zinc-500">Furnizor / service</label>
                   <div className="mt-1">

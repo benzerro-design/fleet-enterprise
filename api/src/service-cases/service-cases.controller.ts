@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { MembershipRole } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -7,7 +7,11 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
 import { TenantId } from '../fleet/tenant-id.decorator';
-import type { AdvanceServiceCaseInput } from './service-cases.service';
+import type {
+  AdvanceServiceCaseInput,
+  CreateServiceAppointmentInput,
+  UpdateServiceAppointmentInput,
+} from './service-cases.service';
 import { ServiceCasesService } from './service-cases.service';
 
 @Controller('service-cases')
@@ -46,5 +50,29 @@ export class ServiceCasesController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.serviceCases.advance(tenantSlug, id, body, actorUserId, access);
+  }
+
+  @Post(':id/appointments')
+  @Roles(MembershipRole.tenant_admin)
+  createAppointment(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: CreateServiceAppointmentInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.createAppointment(tenantSlug, id, body, actorUserId, access);
+  }
+
+  @Patch('appointments/:appointmentId')
+  @Roles(MembershipRole.tenant_admin)
+  updateAppointment(
+    @TenantId() tenantSlug: string,
+    @Param('appointmentId') appointmentId: string,
+    @Body() body: UpdateServiceAppointmentInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.updateAppointment(tenantSlug, appointmentId, body, actorUserId, access);
   }
 }
