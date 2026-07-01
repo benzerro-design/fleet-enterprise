@@ -3,8 +3,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MaintenanceWorkOrderStatus, Prisma } from '@prisma/client';
+import {
+  CrmTicketEventKind,
+  MaintenanceWorkOrderStatus,
+  Prisma,
+  ServiceCaseStage,
+  ServiceCaseStatus,
+} from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -61,7 +69,10 @@ function ticketDisplayId(ticketId: string | null | undefined): string | null {
 
 @Injectable()
 export class WorkOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   private listInclude() {
     return {
@@ -263,5 +274,85 @@ export class WorkOrdersService {
       serviceCaseTitle: row.serviceCase.title,
       serviceCaseStatus: row.serviceCase.status,
     };
+  }
+
+  async complete(tenantSlug: string, id: string, actorUserId?: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: {
+        serviceCase: true,
+        quotes: {
+          where: { status: 'approved' },
+          orderBy: { version: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    if (!wo) throw new NotFoundException('Work order not found');
+    if (wo.status === MaintenanceWorkOrderStatus.done) {
+      throw new BadRequestException('Work order is already completed');
+    }
+
+    const approvedQuote = wo.quotes[0];
+    if (!approvedQuote?.invoicedAt) {
+      throw new BadRequestException('Record invoice on approved quote before completing');
+    }
+
+    const stageIdx = SERVICE_CASE_STAGE_ORDER.indexOf(wo.serviceCase.currentStage);
+    const invoicedIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.invoiced);
+    if (stageIdx < invoicedIdx) {
+      throw new BadRequestException('Service case must reach invoiced stage before completion');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.maintenanceWorkOrder.update({
+        where: { id },
+        data: {
+          status: MaintenanceWorkOrderStatus.done,
+          completedAt: new Date(),
+        },
+      });
+
+      await tx.serviceCase.update({
+        where: { id: wo.serviceCaseId },
+        data: {
+          currentStage: ServiceCaseStage.closed,
+          status: ServiceCaseStatus.completed,
+          closedAt: new Date(),
+        },
+      });
+
+      if (wo.serviceCase.sourceTicketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: wo.serviceCase.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: 'Comandă service finalizată — dosar închis.',
+            payload: {
+              fromStage: wo.serviceCase.currentStage,
+              toStage: ServiceCaseStage.closed,
+              serviceCaseId: wo.serviceCaseId,
+              workOrderId: id,
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order.complete',
+      entityType: 'maintenance_work_order',
+      entityId: id,
+      meta: { serviceCaseId: wo.serviceCaseId },
+    });
+
+    return this.getById(tenantSlug, id);
   }
 }

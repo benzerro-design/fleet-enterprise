@@ -36,17 +36,29 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
       const res = await fetch(`${serviceCasesBrowserBase}/by-ticket/${ticketId}`);
       if (res.status === 404) {
         setServiceCase(null);
+        setError(null);
         return;
       }
       if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+          else if (Array.isArray(j.message)) msg = j.message.join(", ");
+        } catch {
+          /* ignore */
+        }
         setServiceCase(null);
+        setError(msg);
         return;
       }
       const data = (await res.json()) as ServiceCaseRecord | null;
       setServiceCase(data);
+      setError(null);
       if (data?.supplierId) setSupplierId(data.supplierId);
     } catch {
       setServiceCase(null);
+      setError("Nu s-a putut încărca dosarul lucrare.");
     }
   }, [ticketId]);
 
@@ -174,11 +186,28 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
       <p className="mt-1 text-xs text-zinc-500">
         Tichet → programare → comandă service → deviz → aprobare → cost → factură → închidere
       </p>
-      {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
+      {error && serviceCase ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
 
       {!serviceCase ? (
         <div className="mt-4">
-          {!hasVehicle ? (
+          {error ? (
+            <div className="space-y-2">
+              <p className="text-sm text-red-400">{error}</p>
+              <p className="text-xs text-zinc-500">
+                Dacă mesajul persistă după deploy, rulează migrările DB:{" "}
+                <code className="font-mono text-zinc-400">npx prisma migrate deploy</code> în folderul{" "}
+                <code className="font-mono text-zinc-400">api</code>.
+              </p>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void load()}
+                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Reîncearcă
+              </button>
+            </div>
+          ) : !hasVehicle ? (
             <p className="text-sm text-amber-300">Atașează un vehicul la tichet pentru a porni fluxul.</p>
           ) : canWrite && !closed ? (
             <button

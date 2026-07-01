@@ -71,6 +71,10 @@ export type WorkOrderQuoteRecord = {
   rejectedAt: string | null;
   rejectionReason: string | null;
   notes: string | null;
+  costEntryId: string | null;
+  invoicedAt: string | null;
+  costInvoiceNumber: string | null;
+  costInvoiceDate: string | null;
   createdAt: string;
   updatedAt: string;
   lines: QuoteLineRecord[];

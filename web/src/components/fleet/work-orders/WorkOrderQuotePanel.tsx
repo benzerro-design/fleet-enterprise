@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import {
@@ -95,6 +96,8 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lines, setLines] = useState<EditableLine[]>([newLine()]);
   const [notes, setNotes] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +116,10 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite }: Props) {
       if (selected?.status === "draft") {
         setLines(linesFromQuote(selected));
         setNotes(selected.notes ?? "");
+      }
+      if (selected?.costInvoiceNumber) setInvoiceNumber(selected.costInvoiceNumber);
+      if (selected?.costInvoiceDate) {
+        setInvoiceDate(selected.costInvoiceDate.slice(0, 10));
       }
     } catch {
       setQuotes([]);
@@ -171,6 +178,62 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite }: Props) {
         headers: fleetJsonHeaders(),
         body: JSON.stringify(payload),
       });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      await load();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function postCost() {
+    if (!activeQuote) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/post-cost`,
+        { method: "POST", headers: fleetJsonHeaders() },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      await load();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function recordInvoice() {
+    if (!activeQuote || !invoiceNumber.trim() || !invoiceDate) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/record-invoice`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({ invoiceNumber: invoiceNumber.trim(), invoiceDate }),
+        },
+      );
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
         try {
@@ -269,6 +332,8 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite }: Props) {
                   setLines(linesFromQuote(q));
                   setNotes(q.notes ?? "");
                 }
+                if (q.costInvoiceNumber) setInvoiceNumber(q.costInvoiceNumber);
+                if (q.costInvoiceDate) setInvoiceDate(q.costInvoiceDate.slice(0, 10));
               }}
               className={`rounded-full border px-2.5 py-1 text-xs ${
                 activeId === q.id ? "border-sky-500/60 bg-sky-950/40" : "border-zinc-700"
@@ -338,6 +403,72 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite }: Props) {
               >
                 Respinge
               </button>
+            </div>
+          ) : null}
+
+          {activeQuote.status === "approved" ? (
+            <div className="mt-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+              <p className="text-xs uppercase text-zinc-500">Cost & factură</p>
+              {activeQuote.costEntryId ? (
+                <p className="text-sm">
+                  Cost înregistrat:{" "}
+                  <Link href={`/fleet/costs/${activeQuote.costEntryId}`} className="text-sky-300 hover:underline">
+                    deschide costul
+                  </Link>
+                  {" · "}
+                  {formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}
+                </p>
+              ) : canWrite ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void postCost()}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
+                >
+                  Generează cost din deviz
+                </button>
+              ) : (
+                <p className="text-sm text-zinc-500">Costul nu a fost încă generat.</p>
+              )}
+
+              {activeQuote.invoicedAt ? (
+                <p className="text-sm text-emerald-300">
+                  Factură: {activeQuote.costInvoiceNumber ?? "—"}
+                  {activeQuote.costInvoiceDate
+                    ? ` · ${new Date(activeQuote.costInvoiceDate).toLocaleDateString("ro-RO")}`
+                    : ""}
+                </p>
+              ) : activeQuote.costEntryId && canWrite ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className={OPS_LABEL_CLASS}>Nr. factură</label>
+                    <input
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      className={OPS_INPUT_CLASS}
+                    />
+                  </div>
+                  <div>
+                    <label className={OPS_LABEL_CLASS}>Data facturii</label>
+                    <input
+                      type="date"
+                      value={invoiceDate}
+                      onChange={(e) => setInvoiceDate(e.target.value)}
+                      className={OPS_INPUT_CLASS}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <button
+                      type="button"
+                      disabled={pending || !invoiceNumber.trim() || !invoiceDate}
+                      onClick={() => void recordInvoice()}
+                      className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-500 disabled:opacity-50"
+                    >
+                      Înregistrează factura
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

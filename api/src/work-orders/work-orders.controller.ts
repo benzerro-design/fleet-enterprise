@@ -1,12 +1,15 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Param,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { MaintenanceWorkOrderStatus, MembershipRole } from '@prisma/client';
+import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -69,5 +72,15 @@ export class WorkOrdersController {
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   get(@TenantId() tenantSlug: string, @Param('id') id: string) {
     return this.workOrders.getById(tenantSlug, id);
+  }
+
+  @Post(':id/complete')
+  @Roles(MembershipRole.tenant_admin)
+  complete(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentUserId() actorUserId: string,
+  ) {
+    return this.workOrders.complete(tenantSlug, id, actorUserId);
   }
 }

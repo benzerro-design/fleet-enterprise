@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
 import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
 import { WorkOrderStatusBadge } from "@/components/fleet/work-orders/WorkOrderStatusBadge";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
@@ -9,7 +10,18 @@ import {
   serviceCaseStageLabel,
   workflowTypeLabel,
   type WorkOrderDetail,
+  type WorkOrderQuoteRecord,
 } from "@/lib/work-orders-api";
+
+async function loadQuotes(id: string): Promise<WorkOrderQuoteRecord[]> {
+  try {
+    const res = await fleetServerFetch(`/work-orders/${id}/quotes`);
+    if (!res?.ok) return [];
+    return (await res.json()) as WorkOrderQuoteRecord[];
+  } catch {
+    return [];
+  }
+}
 
 async function load(id: string): Promise<WorkOrderDetail | null> {
   try {
@@ -32,9 +44,10 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function WorkOrderDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [wo, auth] = await Promise.all([load(id), getAuthMeResult()]);
+  const [wo, auth, quotes] = await Promise.all([load(id), getAuthMeResult(), loadQuotes(id)]);
   if (!wo) notFound();
   const canWrite = canWriteFleetOps(auth);
+  const hasInvoicedQuote = quotes.some((q) => q.status === "approved" && q.invoicedAt);
 
   return (
     <FleetPageMain narrow="md">
@@ -121,6 +134,12 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
       </dl>
 
       <WorkOrderQuotePanel workOrderId={wo.id} canWrite={canWrite} />
+      <WorkOrderCompleteButton
+        workOrderId={wo.id}
+        canWrite={canWrite}
+        status={wo.status}
+        hasInvoicedQuote={hasInvoicedQuote}
+      />
     </FleetPageMain>
   );
 }

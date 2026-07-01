@@ -77,4 +77,27 @@ export class WorkOrderQuotesController {
   ) {
     return this.quotes.reject(tenantSlug, workOrderId, quoteId, body?.reason, actorUserId);
   }
+
+  @Post(':quoteId/post-cost')
+  @Roles(MembershipRole.tenant_admin)
+  postCost(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Param('quoteId') quoteId: string,
+    @CurrentUserId() actorUserId: string,
+  ) {
+    return this.quotes.postCost(tenantSlug, workOrderId, quoteId, actorUserId);
+  }
+
+  @Post(':quoteId/record-invoice')
+  @Roles(MembershipRole.tenant_admin)
+  recordInvoice(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Param('quoteId') quoteId: string,
+    @Body() body: { invoiceNumber: string; invoiceDate: string; invoiceAttachmentUrl?: string | null },
+    @CurrentUserId() actorUserId: string,
+  ) {
+    return this.quotes.recordInvoice(tenantSlug, workOrderId, quoteId, body, actorUserId);
+  }
 }

@@ -637,6 +637,7 @@ model CostEntry {
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   supplier             Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   reminderAction       ReminderAction?
+  workOrderQuote       WorkOrderQuote?
 
   @@index([tenantId])
   @@index([vehicleId])
@@ -1180,10 +1181,13 @@ model WorkOrderQuote {
   rejectedAt       DateTime?
   rejectionReason  String?
   notes            String?
+  costEntryId      String?              @unique
+  invoicedAt       DateTime?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workOrder        MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  costEntry        CostEntry?           @relation(fields: [costEntryId], references: [id], onDelete: SetNull)
   lines            WorkOrderQuoteLine[]
 
   @@unique([workOrderId, version])

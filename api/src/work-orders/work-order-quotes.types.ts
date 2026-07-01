@@ -40,6 +40,10 @@ export type WorkOrderQuoteRecord = {
   rejectedAt: string | null;
   rejectionReason: string | null;
   notes: string | null;
+  costEntryId: string | null;
+  invoicedAt: string | null;
+  costInvoiceNumber: string | null;
+  costInvoiceDate: string | null;
   createdAt: string;
   updatedAt: string;
   lines: QuoteLineRecord[];
@@ -106,8 +110,14 @@ export function toQuoteRecord(quote: {
   rejectedAt: Date | null;
   rejectionReason: string | null;
   notes: string | null;
+  costEntryId: string | null;
+  invoicedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  costEntry?: {
+    invoiceNumber: string | null;
+    invoiceDate: Date | null;
+  } | null;
   lines: Array<{
     id: string;
     sortOrder: number;
@@ -133,6 +143,10 @@ export function toQuoteRecord(quote: {
     rejectedAt: quote.rejectedAt?.toISOString() ?? null,
     rejectionReason: quote.rejectionReason,
     notes: quote.notes,
+    costEntryId: quote.costEntryId,
+    invoicedAt: quote.invoicedAt?.toISOString() ?? null,
+    costInvoiceNumber: quote.costEntry?.invoiceNumber ?? null,
+    costInvoiceDate: quote.costEntry?.invoiceDate?.toISOString() ?? null,
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
     lines: quote.lines.map(toQuoteLineRecord),
