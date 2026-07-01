@@ -177,9 +177,11 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
               <p className="text-xs uppercase text-zinc-500">Comenzi service</p>
               <ul className="mt-2 space-y-1">
                 {serviceCase.workOrders.map((wo) => (
-                  <li key={wo.id} className="text-zinc-300">
-                    {wo.title} — {wo.status}
-                    {wo.supplierLegalName ? ` · ${wo.supplierLegalName}` : ""}
+                  <li key={wo.id}>
+                    <a href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
+                      {wo.title} — {wo.status}
+                      {wo.supplierLegalName ? ` · ${wo.supplierLegalName}` : ""}
+                    </a>
                   </li>
                 ))}
               </ul>

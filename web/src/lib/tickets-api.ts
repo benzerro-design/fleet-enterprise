@@ -290,6 +290,10 @@ export function ticketLinkHref(link: TicketLinkRecord): string | null {
       return `/fleet/reminders/${link.entityId}`;
     case "document":
       return `/fleet/documents/${link.entityId}`;
+    case "work_order":
+      return `/fleet/work-orders/${link.entityId}`;
+    case "service_case":
+      return null;
     default:
       return null;
   }

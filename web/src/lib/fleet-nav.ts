@@ -141,7 +141,13 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
         activePrefixes: ["/fleet/suppliers"],
       },
       { kind: "soon", label: "Portal furnizori", phase: "phase1" },
-      { kind: "soon", label: "Devize & comenzi", phase: "later" },
+      {
+        kind: "link",
+        label: "Devize & comenzi",
+        href: "/fleet/work-orders",
+        phase: "live",
+        activePrefixes: ["/fleet/work-orders"],
+      },
     ],
   },
   {
