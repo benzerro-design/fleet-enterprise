@@ -126,6 +126,13 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
         phase: "live",
         activePrefixes: ["/fleet/tickets"],
       },
+      {
+        kind: "link",
+        label: "Programator",
+        href: "/fleet/scheduler",
+        phase: "live",
+        activePrefixes: ["/fleet/scheduler"],
+      },
       { kind: "soon", label: "Contracte / SLA", phase: "later" },
     ],
   },

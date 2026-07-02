@@ -1,0 +1,79 @@
+import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
+import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { SchedulerKpiStrip } from "@/components/fleet/scheduler/SchedulerKpiStrip";
+import { SchedulerShell } from "@/components/fleet/scheduler/SchedulerShell";
+import type { AppointmentStats } from "@/lib/appointments-api";
+import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { fleetServerFetch } from "@/lib/fleet-server";
+import type { SupplierListPayload } from "@/lib/suppliers-api";
+import { getVehicleOptions } from "@/lib/vehicle-options-server";
+
+async function loadStats(): Promise<AppointmentStats | null> {
+  try {
+    const res = await fleetServerFetch("/appointments/stats");
+    if (!res?.ok) return null;
+    return (await res.json()) as AppointmentStats;
+  } catch {
+    return null;
+  }
+}
+
+async function loadSuppliers() {
+  try {
+    const res = await fleetServerFetch("/suppliers?status=active&pageSize=200");
+    if (!res?.ok) return [];
+    const data = (await res.json()) as SupplierListPayload;
+    return data.items.map((s) => ({
+      id: s.id,
+      code: s.code,
+      legalName: s.legalName,
+      category: s.category,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export default async function SchedulerPage() {
+  const [auth, stats, suppliers, vehicles] = await Promise.all([
+    getAuthMeResult(),
+    loadStats(),
+    loadSuppliers(),
+    getVehicleOptions(),
+  ]);
+  const canWrite = canWriteFleetOps(auth);
+
+  const vehicleOptions = vehicles.map((v) => ({
+    id: v.id,
+    registrationNumber: v.registrationNumber,
+    clientId: v.clientId,
+  }));
+
+  return (
+    <FleetPageMain fill>
+      <FleetListPageLayout
+        header={
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-widest text-sky-400">Clienți & CRM</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Programator</h1>
+              <p className="mt-3 max-w-2xl text-zinc-400">
+                Programări service — săptămână pe desktop, agendă pe mobil. Furnizorii sunt filtre și culori în calendar.
+              </p>
+            </div>
+            <SchedulerKpiStrip stats={stats} />
+          </div>
+        }
+      >
+        <div className="flex min-h-[calc(100vh-16rem)] flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/30">
+          <SchedulerShell
+            canWrite={canWrite}
+            initialStats={stats}
+            suppliers={suppliers}
+            vehicles={vehicleOptions}
+          />
+        </div>
+      </FleetListPageLayout>
+    </FleetPageMain>
+  );
+}

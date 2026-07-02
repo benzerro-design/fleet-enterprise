@@ -47,7 +47,10 @@ export type ServiceAppointmentRecord = {
   vehicleId: string;
   supplierId: string | null;
   supplierLegalName: string | null;
+  title: string;
   scheduledAt: string;
+  endAt: string;
+  durationMin: number;
   location: string | null;
   status: ServiceAppointmentStatus;
   notes: string | null;

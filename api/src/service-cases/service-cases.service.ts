@@ -53,7 +53,10 @@ export type ServiceAppointmentRecord = {
   vehicleId: string;
   supplierId: string | null;
   supplierLegalName: string | null;
+  title: string;
   scheduledAt: string;
+  endAt: string;
+  durationMin: number;
   location: string | null;
   status: ServiceAppointmentStatus;
   notes: string | null;
@@ -67,6 +70,8 @@ export type CreateServiceAppointmentInput = {
   location?: string | null;
   notes?: string | null;
   status?: ServiceAppointmentStatus;
+  title?: string | null;
+  durationMin?: number;
 };
 
 export type UpdateServiceAppointmentInput = {
@@ -384,6 +389,11 @@ export class ServiceCasesService {
       }
     }
 
+    const durationMin = dto.durationMin ?? 60;
+    if (!Number.isInteger(durationMin) || durationMin < 15) {
+      throw new BadRequestException('Invalid durationMin');
+    }
+
     const appointment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.serviceAppointment.create({
         data: {
@@ -391,7 +401,9 @@ export class ServiceCasesService {
           serviceCaseId: caseId,
           vehicleId: serviceCase.vehicleId!,
           supplierId,
+          title: dto.title?.trim() || serviceCase.title,
           scheduledAt,
+          durationMin,
           location: dto.location?.trim() || null,
           notes: dto.notes?.trim() || null,
           status: dto.status ?? ServiceAppointmentStatus.scheduled,
@@ -594,7 +606,7 @@ export class ServiceCasesService {
       },
       appointments: {
         orderBy: { scheduledAt: 'asc' as const },
-        include: { supplier: { select: { legalName: true } } },
+        include: { supplier: { select: { legalName: true } }, serviceCase: { select: { title: true } } },
       },
     };
   }
@@ -604,21 +616,29 @@ export class ServiceCasesService {
     serviceCaseId: string;
     vehicleId: string;
     supplierId: string | null;
+    title: string | null;
     scheduledAt: Date;
+    durationMin: number;
     location: string | null;
     status: ServiceAppointmentStatus;
     notes: string | null;
     createdAt: Date;
     updatedAt: Date;
     supplier?: { legalName: string } | null;
+    serviceCase?: { title: string };
   }): ServiceAppointmentRecord {
+    const durationMin = row.durationMin ?? 60;
+    const title = row.title?.trim() || row.serviceCase?.title || 'Programare';
     return {
       id: row.id,
       serviceCaseId: row.serviceCaseId,
       vehicleId: row.vehicleId,
       supplierId: row.supplierId,
       supplierLegalName: row.supplier?.legalName ?? null,
+      title,
       scheduledAt: row.scheduledAt.toISOString(),
+      endAt: new Date(row.scheduledAt.getTime() + durationMin * 60_000).toISOString(),
+      durationMin,
       location: row.location,
       status: row.status,
       notes: row.notes,
@@ -661,7 +681,9 @@ export class ServiceCasesService {
         serviceCaseId: string;
         vehicleId: string;
         supplierId: string | null;
+        title: string | null;
         scheduledAt: Date;
+        durationMin: number;
         location: string | null;
         status: ServiceAppointmentStatus;
         notes: string | null;

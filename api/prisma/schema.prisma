@@ -1134,7 +1134,9 @@ model ServiceAppointment {
   serviceCaseId String
   vehicleId     String
   supplierId    String?
+  title         String?
   scheduledAt   DateTime
+  durationMin   Int                      @default(60)
   location      String?
   status        ServiceAppointmentStatus @default(scheduled)
   notes         String?
