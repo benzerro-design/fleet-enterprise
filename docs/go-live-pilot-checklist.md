@@ -96,6 +96,30 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 | 4.13 | `tenant_viewer` — nu poate POST vehicul / generate FAZ | [x] |
 | 4.14 | Fără `X-Tenant-Id` / JWT invalid → 401 pe API | [x] |
 
+### CRM & flux service (tichet → programator → deviz → închidere)
+
+Rulează cu **tenant_admin** (`admin@demo.local`). Apoi repetă pașii **4.20–4.21** cu **manager client** (`manager.alpha@demo.local`).
+
+**Smoke API automat** (din `api/`):
+
+```bash
+node scripts/smoke-staging-service-flow.mjs
+node scripts/smoke-staging-service-flow.mjs --write   # creează tichet+WO pe demo
+```
+
+| # | Pas | OK |
+|---|-----|-----|
+| 4.15 | `GET /health` + login admin + `GET /appointments/stats` | ☐ |
+| 4.16 | **Programator** `/fleet/scheduler` — KPI + calendar (desktop sau mobil) | ☐ |
+| 4.17 | Tichet nou (reparație) cu vehicul → **Pornește dosar lucrare** în stepper | ☐ |
+| 4.18 | Programare (din stepper sau Programator) → apare în calendar | ☐ |
+| 4.19 | **Devize & comenzi** — deviz draft → trimite → aprobă → post-cost → factură → finalizează WO | ☐ |
+| 4.20 | Dosar tichet = etapa **Închis**; stepper fără erori | ☐ |
+| 4.21 | `manager.alpha@demo.local` — Programator se încarcă (nu redirect panou); calendar doar client Alpha | ☐ |
+| 4.22 | Manager poate confirma/anula programare proprie; `client_viewer` doar citire | ☐ |
+
+**Legături de verificat (B light):** din Programator → tichet sursă; din tichet → WO; din WO → furnizor.
+
 ---
 
 ## Continuare pilot — rundă curentă (ordine)
@@ -135,6 +159,13 @@ Rulează cu cont **tenant_admin** al tenantului pilot.
 1. Logout → login `viewer@demo.local` / `demo` / `demo12345`
 2. Încearcă **Vehicul nou** sau **Generează foaie** → trebuie refuz (403 sau buton ascuns)
 3. Bifează 4.13
+
+### Pas F — Flux service CRM (≈ 20 min) → 4.15–4.22
+
+1. `cd api` → `node scripts/smoke-staging-service-flow.mjs` (toate ✓)
+2. Login **admin@demo.local** → parcurge 4.16–4.20 în browser (vezi tabel §4)
+3. Login **manager.alpha@demo.local** → 4.21–4.22
+4. (Opțional) `node scripts/smoke-staging-service-flow.mjs --write` — verifică tichetul generat în UI
 
 ### Pas E — Conturi pilot reali (când ai clientul) → secțiunea 2 + 3
 

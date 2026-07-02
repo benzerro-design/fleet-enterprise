@@ -57,6 +57,8 @@ Clears `pdfData` after successful upload.
 | `npm run db:seed:flotax` | Tenant pilot **FlotaX** (admin + șofer viewer); needs `PILOT_FLOTAX_PASSWORD` (CMD: `set VAR=val` **fără spații**) |
 | `npm run db:verify:flotax` | Verifică tenant/useri FlotaX în DB-ul din `DATABASE_URL` |
 | `npm run auth:hash-password -- "secret"` | Bcrypt hash for manual user insert |
+| `node scripts/smoke-staging-service-flow.mjs` | Smoke staging: health, programator API, manager scoped |
+| `node scripts/smoke-staging-service-flow.mjs --write` | Flux API cap-coadă pe tenant demo (creează date) |
 
 ## Tests
 
