@@ -29,6 +29,7 @@ const CLIENT_FLEET_PREFIXES = [
   "/fleet/drivers",
   "/fleet/clients",
   "/fleet/tickets",
+  "/fleet/scheduler",
 ];
 
 /** Rute permise șoferului client (fără clienți/șoferi/panou). */

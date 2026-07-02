@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,6 +14,8 @@ import {
   ServiceCaseWorkflowType,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { assertClientFleetWrite } from '../iam/client-access';
+import type { AccessContext } from '../iam/access-context.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
@@ -127,9 +130,25 @@ export class AppointmentsService {
     };
   }
 
+  private appointmentClientScope(access?: AccessContext): Prisma.ServiceAppointmentWhereInput {
+    if (!access || access.isTenantWide) return {};
+    if (access.allowedClientIds.length === 0) {
+      return { vehicle: { clientId: { in: [] } } };
+    }
+    return { vehicle: { clientId: { in: access.allowedClientIds } } };
+  }
+
+  private assertClientIdFilter(access: AccessContext | undefined, clientId?: string): void {
+    if (!access || access.isTenantWide || !clientId?.trim()) return;
+    if (!access.allowedClientIds.includes(clientId.trim())) {
+      throw new ForbiddenException('Client access denied');
+    }
+  }
+
   private calendarWhere(
     tenantId: string,
     params: CalendarListParams,
+    access?: AccessContext,
   ): Prisma.ServiceAppointmentWhereInput {
     const from = new Date(params.from);
     const to = new Date(params.to);
@@ -142,6 +161,11 @@ export class AppointmentsService {
       { scheduledAt: { gte: from, lt: to } },
     ];
 
+    const scope = this.appointmentClientScope(access);
+    if (Object.keys(scope).length > 0) {
+      parts.push(scope);
+    }
+
     if (params.supplierIds?.length) {
       parts.push({ supplierId: { in: params.supplierIds } });
     }
@@ -149,6 +173,7 @@ export class AppointmentsService {
       parts.push({ vehicleId: params.vehicleId.trim() });
     }
     if (params.clientId?.trim()) {
+      this.assertClientIdFilter(access, params.clientId);
       parts.push({ vehicle: { clientId: params.clientId.trim() } });
     }
     if (params.status) {
@@ -158,12 +183,16 @@ export class AppointmentsService {
     return { AND: parts };
   }
 
-  async listCalendar(tenantSlug: string, params: CalendarListParams): Promise<CalendarAppointmentRecord[]> {
+  async listCalendar(
+    tenantSlug: string,
+    params: CalendarListParams,
+    access?: AccessContext,
+  ): Promise<CalendarAppointmentRecord[]> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return [];
 
     const rows = await this.prisma.serviceAppointment.findMany({
-      where: this.calendarWhere(tenant.id, params),
+      where: this.calendarWhere(tenant.id, params, access),
       orderBy: { scheduledAt: 'asc' },
       include: this.calendarInclude(),
     });
@@ -171,9 +200,11 @@ export class AppointmentsService {
     return rows.map((r) => this.toCalendarRecord(r));
   }
 
-  async getStats(tenantSlug: string, clientId?: string): Promise<AppointmentStats> {
+  async getStats(tenantSlug: string, clientId?: string, access?: AccessContext): Promise<AppointmentStats> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return { today: 0, thisWeek: 0, confirmed: 0, scheduled: 0 };
+
+    this.assertClientIdFilter(access, clientId);
 
     const now = new Date();
     const todayStart = startOfDay(now);
@@ -185,10 +216,12 @@ export class AppointmentsService {
       ? { vehicle: { clientId: clientId.trim() } }
       : undefined;
 
-    const base: Prisma.ServiceAppointmentWhereInput = {
-      tenantId: tenant.id,
-      ...(clientFilter ? { AND: [clientFilter] } : {}),
-    };
+    const scope = this.appointmentClientScope(access);
+
+    const baseParts: Prisma.ServiceAppointmentWhereInput[] = [{ tenantId: tenant.id }];
+    if (Object.keys(scope).length > 0) baseParts.push(scope);
+    if (clientFilter) baseParts.push(clientFilter);
+    const base: Prisma.ServiceAppointmentWhereInput = { AND: baseParts };
 
     const [today, thisWeek, confirmed, scheduled] = await Promise.all([
       this.prisma.serviceAppointment.count({
@@ -216,9 +249,14 @@ export class AppointmentsService {
     return { today, thisWeek, confirmed, scheduled };
   }
 
-  async getById(tenantSlug: string, id: string): Promise<CalendarAppointmentRecord> {
+  async getById(tenantSlug: string, id: string, access?: AccessContext): Promise<CalendarAppointmentRecord> {
+    const scope = this.appointmentClientScope(access);
     const row = await this.prisma.serviceAppointment.findFirst({
-      where: { id, tenant: { slug: tenantSlug } },
+      where: {
+        id,
+        tenant: { slug: tenantSlug },
+        ...(Object.keys(scope).length > 0 ? scope : {}),
+      },
       include: this.calendarInclude(),
     });
     if (!row) throw new NotFoundException('Appointment not found');
@@ -229,6 +267,7 @@ export class AppointmentsService {
     tenantSlug: string,
     dto: CreateCalendarAppointmentInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<CalendarAppointmentRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -237,6 +276,9 @@ export class AppointmentsService {
       where: { id: dto.vehicleId, tenantId: tenant.id },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
+    if (access) {
+      assertClientFleetWrite(access, vehicle.clientId);
+    }
 
     const scheduledAt = new Date(dto.scheduledAt);
     if (Number.isNaN(scheduledAt.getTime())) {
@@ -350,15 +392,19 @@ export class AppointmentsService {
     id: string,
     dto: UpdateCalendarAppointmentInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<CalendarAppointmentRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     const existing = await this.prisma.serviceAppointment.findFirst({
       where: { id, tenantId: tenant.id },
-      include: { serviceCase: true },
+      include: { serviceCase: true, vehicle: { select: { clientId: true } } },
     });
     if (!existing) throw new NotFoundException('Appointment not found');
+    if (access) {
+      assertClientFleetWrite(access, existing.vehicle.clientId);
+    }
 
     const data: Prisma.ServiceAppointmentUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title?.trim() || null;

@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
+import { FLEET_READ_ROLES } from '../iam/role-sets';
 import type { CreateSupplierInput, PatchSupplierInput } from './suppliers.service';
 import { SuppliersService } from './suppliers.service';
 
@@ -50,7 +51,7 @@ export class SuppliersController {
   constructor(private readonly suppliers: SuppliersService) {}
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
     @Query('page') pageStr?: string,
