@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { SchedulerKpiStrip } from "@/components/fleet/scheduler/SchedulerKpiStrip";
@@ -5,6 +6,7 @@ import { SchedulerShell } from "@/components/fleet/scheduler/SchedulerShell";
 import type { AppointmentStats } from "@/lib/appointments-api";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import type { SchedulerViewMode } from "@/lib/scheduler-deep-link";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
@@ -34,7 +36,14 @@ async function loadSuppliers() {
   }
 }
 
-export default async function SchedulerPage() {
+type PageProps = {
+  searchParams: Promise<{ week?: string; select?: string; view?: string }>;
+};
+
+export default async function SchedulerPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const initialViewMode: SchedulerViewMode = sp.view === "bands" ? "bands" : "grid";
+
   const [auth, stats, suppliers, vehicles] = await Promise.all([
     getAuthMeResult(),
     loadStats(),
@@ -58,7 +67,7 @@ export default async function SchedulerPage() {
               <p className="text-sm font-medium uppercase tracking-widest text-sky-400">Clienți & CRM</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Programator</h1>
               <p className="mt-3 max-w-2xl text-zinc-400">
-                Programări service — săptămână pe desktop, agendă pe mobil. Furnizorii sunt filtre și culori în calendar.
+                Programări service — grilă sau benzi furnizor, drag-and-drop reprogramare, legături tichet și WO.
               </p>
             </div>
             <SchedulerKpiStrip stats={stats} />
@@ -66,12 +75,17 @@ export default async function SchedulerPage() {
         }
       >
         <div className="flex min-h-[calc(100vh-16rem)] flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/30">
-          <SchedulerShell
-            canWrite={canWrite}
-            initialStats={stats}
-            suppliers={suppliers}
-            vehicles={vehicleOptions}
-          />
+          <Suspense fallback={<p className="p-6 text-sm text-zinc-500">Se încarcă programatorul…</p>}>
+            <SchedulerShell
+              canWrite={canWrite}
+              initialStats={stats}
+              suppliers={suppliers}
+              vehicles={vehicleOptions}
+              initialWeekIso={sp.week}
+              initialSelectId={sp.select}
+              initialViewMode={initialViewMode}
+            />
+          </Suspense>
         </div>
       </FleetListPageLayout>
     </FleetPageMain>

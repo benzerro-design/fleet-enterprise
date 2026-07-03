@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   appointmentStatusLabel,
   type CalendarAppointment,
@@ -41,10 +42,17 @@ export function SchedulerAgendaView({ weekStart, appointments, selectedId, onSel
                 const selected = a.id === selectedId;
                 return (
                   <li key={a.id}>
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onSelect(a.id)}
-                      className={`w-full rounded-xl border px-3 py-3 text-left transition-colors ${
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onSelect(a.id);
+                        }
+                      }}
+                      className={`w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition-colors ${
                         selected
                           ? "border-emerald-500/50 bg-emerald-950/30"
                           : "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700"
@@ -66,10 +74,16 @@ export function SchedulerAgendaView({ weekStart, appointments, selectedId, onSel
                         <span className={`inline-block h-1.5 w-1.5 rounded-full ${supplierDotClass(a.supplierCategory)}`} />
                         {a.supplierCode ?? "—"} · {appointmentStatusLabel(a.status)}
                       </div>
-                      {a.ticketDisplayId ? (
-                        <p className="mt-1 text-xs text-sky-400">Tichet #{a.ticketDisplayId}</p>
+                      {a.ticketDisplayId && a.sourceTicketId ? (
+                        <Link
+                          href={`/fleet/tickets/${a.sourceTicketId}`}
+                          className="mt-1 inline-block text-xs text-sky-400 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Tichet #{a.ticketDisplayId}
+                        </Link>
                       ) : null}
-                    </button>
+                    </div>
                   </li>
                 );
               })}

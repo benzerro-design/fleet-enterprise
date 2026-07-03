@@ -1129,6 +1129,13 @@ enum ServiceAppointmentStatus {
   no_show
 }
 
+enum ServiceAppointmentRecurrence {
+  none
+  weekly
+  biweekly
+  monthly
+}
+
 /// Programare service legată de dosar lucrare.
 model ServiceAppointment {
   id            String                   @id @default(cuid())
@@ -1140,20 +1147,23 @@ model ServiceAppointment {
   scheduledAt   DateTime
   durationMin   Int                      @default(60)
   location      String?
-  status        ServiceAppointmentStatus @default(scheduled)
-  notes         String?
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
-  tenant        Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  serviceCase   ServiceCase              @relation(fields: [serviceCaseId], references: [id], onDelete: Cascade)
-  vehicle       Vehicle                  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  supplier      Supplier?                @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  status               ServiceAppointmentStatus     @default(scheduled)
+  notes                String?
+  recurrenceRule       ServiceAppointmentRecurrence @default(none)
+  recurrenceSeriesId   String?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  tenant               Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceCase          ServiceCase                  @relation(fields: [serviceCaseId], references: [id], onDelete: Cascade)
+  vehicle              Vehicle                      @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  supplier             Supplier?                    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([serviceCaseId])
   @@index([vehicleId])
   @@index([supplierId])
   @@index([scheduledAt])
+  @@index([recurrenceSeriesId])
 }
 
 enum WorkOrderQuoteStatus {

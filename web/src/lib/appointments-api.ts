@@ -7,6 +7,14 @@ export type AppointmentStatus =
   | "cancelled"
   | "no_show";
 
+export type AppointmentRecurrence = "none" | "weekly" | "biweekly" | "monthly";
+
+export type CalendarWorkOrderSummary = {
+  id: string;
+  title: string;
+  status: string;
+};
+
 export type CalendarAppointment = {
   id: string;
   title: string;
@@ -29,6 +37,9 @@ export type CalendarAppointment = {
   workflowType: string;
   sourceTicketId: string | null;
   ticketDisplayId: string | null;
+  workOrders: CalendarWorkOrderSummary[];
+  recurrenceRule: AppointmentRecurrence;
+  recurrenceSeriesId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -62,4 +73,15 @@ export function workflowTypeLabel(type: string): string {
     insurance_casco: "CASCO",
   };
   return map[type] ?? type;
+}
+
+export const APPOINTMENT_RECURRENCE: { value: AppointmentRecurrence; label: string }[] = [
+  { value: "none", label: "Fără recurență" },
+  { value: "weekly", label: "Săptămânal" },
+  { value: "biweekly", label: "La 2 săptămâni" },
+  { value: "monthly", label: "Lunar" },
+];
+
+export function recurrenceLabel(rule: AppointmentRecurrence | string): string {
+  return APPOINTMENT_RECURRENCE.find((r) => r.value === rule)?.label ?? rule;
 }

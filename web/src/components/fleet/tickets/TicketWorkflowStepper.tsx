@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
@@ -12,6 +13,7 @@ import {
   type ServiceCaseRecord,
   type ServiceCaseStage,
 } from "@/lib/service-cases-api";
+import { schedulerHref } from "@/lib/scheduler-deep-link";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 
 type Props = {
@@ -247,11 +249,27 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
 
           {serviceCase.appointments?.length ? (
             <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
-              <p className="text-xs uppercase text-zinc-500">Programări</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs uppercase text-zinc-500">Programări</p>
+                <Link
+                  href={schedulerHref({
+                    week: new Date(serviceCase.appointments[0]!.scheduledAt),
+                    select: serviceCase.appointments[0]!.id,
+                  })}
+                  className="text-[10px] font-medium text-emerald-400 hover:underline"
+                >
+                  Deschide în programator →
+                </Link>
+              </div>
               <ul className="mt-2 space-y-2">
                 {serviceCase.appointments.map((appt) => (
                   <li key={appt.id} className="text-zinc-300">
-                    <span className="font-medium text-zinc-100">{formatAppointmentWhen(appt.scheduledAt)}</span>
+                    <Link
+                      href={schedulerHref({ week: new Date(appt.scheduledAt), select: appt.id })}
+                      className="font-medium text-zinc-100 hover:text-emerald-300"
+                    >
+                      {formatAppointmentWhen(appt.scheduledAt)}
+                    </Link>
                     {" · "}
                     {appointmentStatusLabel(appt.status)}
                     {appt.supplierLegalName ? ` · ${appt.supplierLegalName}` : ""}

@@ -1,4 +1,10 @@
-import { ServiceAppointmentStatus, SupplierCategory } from '@prisma/client';
+import { ServiceAppointmentRecurrence, ServiceAppointmentStatus, SupplierCategory } from '@prisma/client';
+
+export type CalendarWorkOrderSummary = {
+  id: string;
+  title: string;
+  status: string;
+};
 
 export type CalendarAppointmentRecord = {
   id: string;
@@ -22,6 +28,9 @@ export type CalendarAppointmentRecord = {
   workflowType: string;
   sourceTicketId: string | null;
   ticketDisplayId: string | null;
+  workOrders: CalendarWorkOrderSummary[];
+  recurrenceRule: ServiceAppointmentRecurrence;
+  recurrenceSeriesId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -52,6 +61,7 @@ export type CreateCalendarAppointmentInput = {
   notes?: string | null;
   serviceCaseId?: string;
   sourceTicketId?: string;
+  recurrenceRule?: ServiceAppointmentRecurrence;
 };
 
 export type UpdateCalendarAppointmentInput = {
@@ -71,4 +81,24 @@ export function ticketDisplayId(ticketId: string | null | undefined): string | n
 
 export function endAtIso(scheduledAt: Date, durationMin: number): string {
   return new Date(scheduledAt.getTime() + durationMin * 60_000).toISOString();
+}
+
+const RECURRENCE_OCCURRENCES = 8;
+
+export function recurrenceOccurrenceDates(
+  base: Date,
+  rule: ServiceAppointmentRecurrence,
+): Date[] {
+  if (rule === ServiceAppointmentRecurrence.none) return [base];
+  return Array.from({ length: RECURRENCE_OCCURRENCES }, (_, i) => {
+    const d = new Date(base);
+    if (rule === ServiceAppointmentRecurrence.weekly) {
+      d.setDate(d.getDate() + i * 7);
+    } else if (rule === ServiceAppointmentRecurrence.biweekly) {
+      d.setDate(d.getDate() + i * 14);
+    } else {
+      d.setMonth(d.getMonth() + i);
+    }
+    return d;
+  });
 }

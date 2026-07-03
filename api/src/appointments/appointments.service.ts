@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   CrmTicketEventKind,
   Prisma,
+  ServiceAppointmentRecurrence,
   ServiceAppointmentStatus,
   ServiceCaseSourceType,
   ServiceCaseStage,
@@ -25,6 +27,7 @@ import {
   type CalendarListParams,
   type CreateCalendarAppointmentInput,
   endAtIso,
+  recurrenceOccurrenceDates,
   ticketDisplayId,
   type UpdateCalendarAppointmentInput,
 } from './appointments.types';
@@ -72,7 +75,18 @@ export class AppointmentsService {
         },
       },
       supplier: { select: { id: true, code: true, legalName: true, category: true } },
-      serviceCase: { select: { id: true, title: true, workflowType: true, sourceTicketId: true } },
+      serviceCase: {
+        select: {
+          id: true,
+          title: true,
+          workflowType: true,
+          sourceTicketId: true,
+          workOrders: {
+            orderBy: { createdAt: 'asc' as const },
+            select: { id: true, title: true, status: true },
+          },
+        },
+      },
     } as const;
   }
 
@@ -84,6 +98,8 @@ export class AppointmentsService {
     status: ServiceAppointmentStatus;
     location: string | null;
     notes: string | null;
+    recurrenceRule: ServiceAppointmentRecurrence;
+    recurrenceSeriesId: string | null;
     vehicleId: string;
     supplierId: string | null;
     serviceCaseId: string;
@@ -100,6 +116,7 @@ export class AppointmentsService {
       title: string;
       workflowType: string;
       sourceTicketId: string | null;
+      workOrders: { id: string; title: string; status: string }[];
     };
   }): CalendarAppointmentRecord {
     const title = row.title?.trim() || row.serviceCase.title;
@@ -125,6 +142,13 @@ export class AppointmentsService {
       workflowType: row.serviceCase.workflowType,
       sourceTicketId: row.serviceCase.sourceTicketId,
       ticketDisplayId: ticketDisplayId(row.serviceCase.sourceTicketId),
+      workOrders: row.serviceCase.workOrders.map((wo) => ({
+        id: wo.id,
+        title: wo.title,
+        status: wo.status,
+      })),
+      recurrenceRule: row.recurrenceRule,
+      recurrenceSeriesId: row.recurrenceSeriesId,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -296,6 +320,8 @@ export class AppointmentsService {
       supplierId = dto.supplierId;
     }
 
+    const recurrenceRule = dto.recurrenceRule ?? ServiceAppointmentRecurrence.none;
+
     const row = await this.prisma.$transaction(async (tx) => {
       let serviceCase = dto.serviceCaseId
         ? await tx.serviceCase.findFirst({
@@ -325,7 +351,11 @@ export class AppointmentsService {
       }
 
       const title = dto.title?.trim() || serviceCase.title;
+      const seriesId =
+        recurrenceRule !== ServiceAppointmentRecurrence.none ? randomUUID() : null;
+      const occurrenceDates = recurrenceOccurrenceDates(scheduledAt, recurrenceRule);
 
+      const [firstDate, ...restDates] = occurrenceDates;
       const created = await tx.serviceAppointment.create({
         data: {
           tenantId: tenant.id,
@@ -333,14 +363,35 @@ export class AppointmentsService {
           vehicleId: vehicle.id,
           supplierId: supplierId ?? serviceCase.supplierId,
           title,
-          scheduledAt,
+          scheduledAt: firstDate,
           durationMin,
           location: dto.location?.trim() || null,
           notes: dto.notes?.trim() || null,
           status: ServiceAppointmentStatus.scheduled,
+          recurrenceRule,
+          recurrenceSeriesId: seriesId,
         },
         include: this.calendarInclude(),
       });
+
+      for (const occAt of restDates) {
+        await tx.serviceAppointment.create({
+          data: {
+            tenantId: tenant.id,
+            serviceCaseId: serviceCase.id,
+            vehicleId: vehicle.id,
+            supplierId: supplierId ?? serviceCase.supplierId,
+            title,
+            scheduledAt: occAt,
+            durationMin,
+            location: dto.location?.trim() || null,
+            notes: dto.notes?.trim() || null,
+            status: ServiceAppointmentStatus.scheduled,
+            recurrenceRule,
+            recurrenceSeriesId: seriesId,
+          },
+        });
+      }
 
       const currentIdx = SERVICE_CASE_STAGE_ORDER.indexOf(serviceCase.currentStage);
       const scheduledIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.scheduled);

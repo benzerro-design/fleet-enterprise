@@ -64,3 +64,21 @@ export const SCHEDULER_HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 },
 export function gridHeightPx(): number {
   return (HOUR_END - HOUR_START) * PX_PER_HOUR;
 }
+
+export function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Snap Y offset inside day column to a Date on that calendar day. */
+export function snapTimeFromOffsetY(offsetY: number, dayDate: Date): Date {
+  const rawHour = HOUR_START + offsetY / PX_PER_HOUR;
+  const totalMinutes = Math.round((rawHour * 60) / 15) * 15;
+  const clamped = Math.max(HOUR_START * 60, Math.min(HOUR_END * 60, totalMinutes));
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  const d = new Date(dayDate);
+  d.setHours(h, m, 0, 0);
+  return d;
+}

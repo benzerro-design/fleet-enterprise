@@ -1,16 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
-import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  appointmentStatusLabel,
+  APPOINTMENT_RECURRENCE,
   appointmentsBrowserBase,
+  appointmentStatusLabel,
+  recurrenceLabel,
   workflowTypeLabel,
   type CalendarAppointment,
 } from "@/lib/appointments-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
+import { serviceCasesBrowserBase } from "@/lib/service-cases-api";
+import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
+import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
+import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import { supplierDotClass } from "./supplier-colors";
 
 type VehicleOption = { id: string; registrationNumber: string; clientId: string };
@@ -36,14 +41,26 @@ export function SchedulerInspector({
   onCancelCreate,
   vehicles,
 }: Props) {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [vehicleId, setVehicleId] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [title, setTitle] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [durationMin, setDurationMin] = useState("60");
   const [location, setLocation] = useState("");
+  const [recurrenceRule, setRecurrenceRule] = useState("none");
+  const [editScheduledAt, setEditScheduledAt] = useState("");
+  const [editDurationMin, setEditDurationMin] = useState("60");
+
+  useEffect(() => {
+    if (!appointment) return;
+    setEditScheduledAt(toDatetimeLocalValue(appointment.scheduledAt));
+    setEditDurationMin(String(appointment.durationMin));
+    setEditing(false);
+  }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin]);
 
   async function submitCreate() {
     setPending(true);
@@ -59,6 +76,7 @@ export function SchedulerInspector({
           scheduledAt: new Date(scheduledAt).toISOString(),
           durationMin: parseInt(durationMin, 10) || 60,
           location: location || null,
+          recurrenceRule: recurrenceRule !== "none" ? recurrenceRule : undefined,
         }),
       });
       if (!res.ok) {
@@ -73,7 +91,7 @@ export function SchedulerInspector({
     }
   }
 
-  async function setStatus(status: string) {
+  async function patchAppointment(body: Record<string, unknown>) {
     if (!appointment) return;
     setPending(true);
     setError(null);
@@ -81,7 +99,7 @@ export function SchedulerInspector({
       const res = await fetch(`${appointmentsBrowserBase}/${appointment.id}`, {
         method: "PATCH",
         headers: fleetJsonHeaders(),
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const j = (await res.json()) as { message?: string };
@@ -89,6 +107,44 @@ export function SchedulerInspector({
         return;
       }
       onUpdated();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function saveReschedule() {
+    if (!editScheduledAt) return;
+    await patchAppointment({
+      scheduledAt: new Date(editScheduledAt).toISOString(),
+      durationMin: parseInt(editDurationMin, 10) || 60,
+    });
+    setEditing(false);
+  }
+
+  async function setStatus(status: string) {
+    await patchAppointment({ status });
+  }
+
+  async function ensureWorkOrder() {
+    if (!appointment) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${serviceCasesBrowserBase}/${appointment.serviceCaseId}/advance`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({
+          targetStage: "work_order",
+          supplierId: appointment.supplierId,
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json()) as { message?: string };
+        setError(j.message ?? `HTTP ${res.status}`);
+        return;
+      }
+      onUpdated();
+      router.refresh();
     } finally {
       setPending(false);
     }
@@ -144,6 +200,19 @@ export function SchedulerInspector({
             <label className={OPS_LABEL_CLASS}>Locație</label>
             <input value={location} onChange={(e) => setLocation(e.target.value)} className={OPS_INPUT_CLASS} />
           </div>
+          <div>
+            <label className={OPS_LABEL_CLASS}>Recurență</label>
+            <select value={recurrenceRule} onChange={(e) => setRecurrenceRule(e.target.value)} className={OPS_INPUT_CLASS}>
+              {APPOINTMENT_RECURRENCE.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            {recurrenceRule !== "none" ? (
+              <p className="mt-1 text-[10px] text-zinc-500">Se generează 8 apariții viitoare în serie.</p>
+            ) : null}
+          </div>
         </div>
         <button
           type="button"
@@ -166,6 +235,7 @@ export function SchedulerInspector({
   }
 
   const start = new Date(appointment.scheduledAt);
+  const editable = canWrite && appointment.status !== "cancelled" && appointment.status !== "completed";
 
   const panel = (
     <>
@@ -183,18 +253,90 @@ export function SchedulerInspector({
           </button>
         ) : null}
       </div>
+
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {appointment.sourceTicketId && appointment.ticketDisplayId ? (
+          <Link
+            href={`/fleet/tickets/${appointment.sourceTicketId}`}
+            className="rounded-md border border-zinc-700 px-2 py-1 text-[10px] font-medium text-emerald-400 hover:bg-zinc-900"
+          >
+            Tichet #{appointment.ticketDisplayId}
+          </Link>
+        ) : null}
+        {appointment.workOrders.map((wo) => (
+          <Link
+            key={wo.id}
+            href={`/fleet/work-orders/${wo.id}`}
+            className="rounded-md border border-zinc-700 px-2 py-1 text-[10px] font-medium text-sky-300 hover:bg-zinc-900"
+          >
+            WO · {wo.title}
+          </Link>
+        ))}
+        <Link
+          href={`/fleet/vehicles/${appointment.vehicleId}`}
+          className="rounded-md border border-zinc-700 px-2 py-1 font-mono text-[10px] text-zinc-300 hover:bg-zinc-900"
+        >
+          {appointment.registrationNumber}
+        </Link>
+      </div>
+
       {error ? <p className="mb-2 text-sm text-red-400">{error}</p> : null}
+
+      {editing && editable ? (
+        <div className="mb-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+          <p className="text-xs font-semibold uppercase text-zinc-500">Reprogramare</p>
+          <div>
+            <label className={OPS_LABEL_CLASS}>Data și ora</label>
+            <input type="datetime-local" value={editScheduledAt} onChange={(e) => setEditScheduledAt(e.target.value)} className={OPS_INPUT_CLASS} />
+          </div>
+          <div>
+            <label className={OPS_LABEL_CLASS}>Durată (min)</label>
+            <input type="number" min={15} step={15} value={editDurationMin} onChange={(e) => setEditDurationMin(e.target.value)} className={OPS_INPUT_CLASS} />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={pending || !editScheduledAt}
+              onClick={() => void saveReschedule()}
+              className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Salvează
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900"
+            >
+              Anulează
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <dl className="space-y-3 text-sm">
         <div>
           <dt className="text-xs uppercase text-zinc-500">Interval</dt>
-          <dd className="mt-0.5">
-            {start.toLocaleString("ro-RO")} · {appointment.durationMin} min
+          <dd className="mt-0.5 flex items-center gap-2">
+            <span>
+              {start.toLocaleString("ro-RO")} · {appointment.durationMin} min
+            </span>
+            {editable && !editing ? (
+              <button type="button" onClick={() => setEditing(true)} className="text-[10px] text-sky-400 hover:underline">
+                Editează
+              </button>
+            ) : null}
           </dd>
         </div>
         <div>
           <dt className="text-xs uppercase text-zinc-500">Status</dt>
           <dd className="mt-0.5">{appointmentStatusLabel(appointment.status)}</dd>
         </div>
+        {appointment.recurrenceRule !== "none" ? (
+          <div>
+            <dt className="text-xs uppercase text-zinc-500">Recurență</dt>
+            <dd className="mt-0.5">{recurrenceLabel(appointment.recurrenceRule)}</dd>
+          </div>
+        ) : null}
         <div>
           <dt className="text-xs uppercase text-zinc-500">Vehicul</dt>
           <dd className="mt-0.5">
@@ -223,17 +365,8 @@ export function SchedulerInspector({
             <dd className="mt-0.5">{appointment.location}</dd>
           </div>
         ) : null}
-        {appointment.ticketDisplayId ? (
-          <div>
-            <dt className="text-xs uppercase text-zinc-500">Tichet</dt>
-            <dd className="mt-0.5">
-              <Link href={`/fleet/tickets/${appointment.sourceTicketId}`} className="font-mono text-emerald-400 hover:underline">
-                #{appointment.ticketDisplayId}
-              </Link>
-            </dd>
-          </div>
-        ) : null}
       </dl>
+
       {canWrite ? (
         <div className="mt-4 flex flex-wrap gap-2">
           {appointment.status === "scheduled" ? (
@@ -254,6 +387,16 @@ export function SchedulerInspector({
               className="rounded-lg border border-red-500/40 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
             >
               Anulează
+            </button>
+          ) : null}
+          {appointment.workOrders.length === 0 && editable ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void ensureWorkOrder()}
+              className="rounded-lg border border-sky-500/40 px-2.5 py-1.5 text-xs text-sky-300 hover:bg-sky-950/40 disabled:opacity-50"
+            >
+              Creează WO
             </button>
           ) : null}
         </div>
