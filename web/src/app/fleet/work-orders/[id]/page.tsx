@@ -6,6 +6,7 @@ import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuo
 import { WorkOrderStatusBadge } from "@/components/fleet/work-orders/WorkOrderStatusBadge";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { schedulerHref } from "@/lib/scheduler-deep-link";
 import {
   serviceCaseStageLabel,
   workflowTypeLabel,
@@ -48,6 +49,13 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
   if (!wo) notFound();
   const canWrite = canWriteFleetOps(auth);
   const hasInvoicedQuote = quotes.some((q) => q.status === "approved" && q.invoicedAt);
+  const schedulerLink =
+    wo.linkedAppointmentScheduledAt || wo.plannedAt
+      ? schedulerHref({
+          week: new Date(wo.linkedAppointmentScheduledAt ?? wo.plannedAt!),
+          select: wo.linkedAppointmentId ?? undefined,
+        })
+      : null;
 
   return (
     <FleetPageMain narrow="md">
@@ -111,7 +119,17 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
         </div>
         <div>
           <dt className="text-xs uppercase text-zinc-500">Planificat</dt>
-          <dd className="mt-1 text-sm">{formatDateTime(wo.plannedAt)}</dd>
+          <dd className="mt-1 text-sm">
+            {formatDateTime(wo.plannedAt)}
+            {schedulerLink ? (
+              <>
+                {" · "}
+                <Link href={schedulerLink} className="text-emerald-400 hover:underline">
+                  Deschide în programator
+                </Link>
+              </>
+            ) : null}
+          </dd>
         </div>
         <div>
           <dt className="text-xs uppercase text-zinc-500">Finalizat</dt>

@@ -38,6 +38,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
   serviceCaseTitle: string;
   serviceCaseStatus: string;
+  linkedAppointmentId: string | null;
+  linkedAppointmentScheduledAt: string | null;
 };
 
 export type QuoteLineType = "labor" | "parts" | "other";

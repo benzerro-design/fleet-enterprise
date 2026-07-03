@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   APPOINTMENT_RECURRENCE,
   appointmentsBrowserBase,
@@ -29,6 +29,7 @@ type Props = {
   createMode?: boolean;
   onCancelCreate?: () => void;
   vehicles: VehicleOption[];
+  initialCreateScheduledAt?: string;
 };
 
 export function SchedulerInspector({
@@ -40,6 +41,7 @@ export function SchedulerInspector({
   createMode,
   onCancelCreate,
   vehicles,
+  initialCreateScheduledAt,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -61,6 +63,12 @@ export function SchedulerInspector({
     setEditDurationMin(String(appointment.durationMin));
     setEditing(false);
   }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin]);
+
+  useEffect(() => {
+    if (createMode && initialCreateScheduledAt) {
+      setScheduledAt(initialCreateScheduledAt);
+    }
+  }, [createMode, initialCreateScheduledAt]);
 
   async function submitCreate() {
     setPending(true);

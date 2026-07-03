@@ -43,6 +43,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
   serviceCaseTitle: string;
   serviceCaseStatus: string;
+  linkedAppointmentId: string | null;
+  linkedAppointmentScheduledAt: string | null;
 };
 
 export type WorkOrderListParams = {
@@ -267,13 +269,47 @@ export class WorkOrdersService {
     });
     if (!row) throw new NotFoundException('Work order not found');
 
+    const linked = await this.resolveLinkedAppointment(row.tenantId, row.serviceCaseId, row.plannedAt);
+
     const list = this.toListRow(row);
     return {
       ...list,
       notes: row.notes,
       serviceCaseTitle: row.serviceCase.title,
       serviceCaseStatus: row.serviceCase.status,
+      linkedAppointmentId: linked?.id ?? null,
+      linkedAppointmentScheduledAt: linked?.scheduledAt.toISOString() ?? null,
     };
+  }
+
+  private async resolveLinkedAppointment(
+    tenantId: string,
+    serviceCaseId: string,
+    plannedAt: Date | null,
+  ): Promise<{ id: string; scheduledAt: Date } | null> {
+    if (plannedAt) {
+      const exact = await this.prisma.serviceAppointment.findFirst({
+        where: {
+          tenantId,
+          serviceCaseId,
+          scheduledAt: plannedAt,
+          status: { not: 'cancelled' },
+        },
+        select: { id: true, scheduledAt: true },
+      });
+      if (exact) return exact;
+    }
+
+    return this.prisma.serviceAppointment.findFirst({
+      where: {
+        tenantId,
+        serviceCaseId,
+        status: { not: 'cancelled' },
+        ...(plannedAt ? { scheduledAt: { gte: new Date(plannedAt.getTime() - 86_400_000) } } : {}),
+      },
+      orderBy: { scheduledAt: 'asc' },
+      select: { id: true, scheduledAt: true },
+    });
   }
 
   async complete(tenantSlug: string, id: string, actorUserId?: string) {

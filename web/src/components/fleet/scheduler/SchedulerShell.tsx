@@ -18,6 +18,7 @@ import {
   calendarRangeIso,
   formatWeekRange,
   startOfWeekMonday,
+  toDatetimeLocalValue,
 } from "@/lib/scheduler-date-utils";
 import { SchedulerAgendaView } from "./SchedulerAgendaView";
 import { SchedulerInspector } from "./SchedulerInspector";
@@ -62,6 +63,7 @@ export function SchedulerShell({
   const [mobileDetail, setMobileDetail] = useState(!!initialSelectId);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<SchedulerViewMode>(initialViewMode);
+  const [createPrefillAt, setCreatePrefillAt] = useState<string | undefined>();
 
   const weekLabel = useMemo(() => formatWeekRange(weekStart), [weekStart]);
   const range = useMemo(() => calendarRangeIso(weekStart), [weekStart]);
@@ -166,6 +168,13 @@ export function SchedulerShell({
     syncUrl({ view: mode, select: selectedId });
   }
 
+  function openCreateAt(when: Date) {
+    setCreatePrefillAt(toDatetimeLocalValue(when.toISOString()));
+    setCreateMode(true);
+    setSelectedId(null);
+    setMobileDetail(true);
+  }
+
   const showMobileInspector = mobileDetail && (selected || createMode);
 
   return (
@@ -215,6 +224,7 @@ export function SchedulerShell({
             <button
               type="button"
               onClick={() => {
+                setCreatePrefillAt(undefined);
                 setCreateMode(true);
                 setSelectedId(null);
                 setMobileDetail(true);
@@ -248,6 +258,7 @@ export function SchedulerShell({
                   canWrite={canWrite}
                   onSelect={selectAppointment}
                   onReschedule={canWrite ? reschedule : undefined}
+                  onSlotClick={canWrite ? openCreateAt : undefined}
                 />
               ) : (
                 <SchedulerSupplierBandView
@@ -280,6 +291,7 @@ export function SchedulerShell({
             }}
             onUpdated={() => void load()}
             vehicles={vehicles}
+            initialCreateScheduledAt={createPrefillAt}
           />
         ) : null}
       </div>
@@ -293,13 +305,16 @@ export function SchedulerShell({
           onClose={() => {
             setMobileDetail(false);
             setCreateMode(false);
+            setCreatePrefillAt(undefined);
           }}
           onCancelCreate={() => {
             setCreateMode(false);
             setMobileDetail(false);
+            setCreatePrefillAt(undefined);
           }}
           onUpdated={() => void load()}
           vehicles={vehicles}
+          initialCreateScheduledAt={createPrefillAt}
         />
       ) : null}
     </div>
