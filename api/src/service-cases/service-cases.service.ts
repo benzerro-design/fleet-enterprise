@@ -811,7 +811,8 @@ export class ServiceCasesService {
               workOrderId: true,
               version: true,
               status: true,
-              totalGrossCents: true,
+              totalNetCents: true,
+              totalVatCents: true,
               currency: true,
             },
           },
@@ -899,7 +900,8 @@ export class ServiceCasesService {
           workOrderId: string;
           version: number;
           status: WorkOrderQuoteStatus;
-          totalGrossCents: number;
+          totalNetCents: number;
+          totalVatCents: number;
           currency: string;
         }>;
       }>;
@@ -957,7 +959,7 @@ export class ServiceCasesService {
                 workOrderId: q.workOrderId,
                 version: q.version,
                 status: q.status,
-                totalGrossCents: q.totalGrossCents,
+                totalGrossCents: q.totalNetCents + q.totalVatCents,
                 currency: q.currency,
               }
             : null,
