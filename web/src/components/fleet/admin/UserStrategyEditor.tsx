@@ -2,6 +2,13 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
+  StrategyMapViewport,
+  clampZoom,
+  defaultMapView,
+  type MapViewState,
+} from "@/components/fleet/admin/StrategyMapViewport";
+import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
+import {
   addChildNode,
   addRootNode,
   addSiblingAfter,
@@ -28,7 +35,7 @@ export function UserStrategyEditor({ initial }: Props) {
   const [dirty, setDirty] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [view, setView] = useState<MapViewState>(defaultMapView);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<{ id: string; pos: DragPosition } | null>(null);
 
@@ -196,21 +203,31 @@ export function UserStrategyEditor({ initial }: Props) {
         >
           ↓
         </button>
-        <div className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
+        <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-zinc-500">
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.max(0.6, z - 0.1))}
+            onClick={() => setView((v) => ({ ...v, zoom: clampZoom(v.zoom - 0.1) }))}
             className="rounded border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800"
+            title="Zoom out"
           >
             −
           </button>
-          <span>{Math.round(zoom * 100)}%</span>
+          <span>{Math.round(view.zoom * 100)}%</span>
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.min(1.4, z + 0.1))}
+            onClick={() => setView((v) => ({ ...v, zoom: clampZoom(v.zoom + 0.1) }))}
             className="rounded border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800"
+            title="Zoom in"
           >
             +
+          </button>
+          <button
+            type="button"
+            onClick={() => setView(defaultMapView())}
+            className="rounded border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800"
+            title="Resetează zoom și poziție"
+          >
+            Centrare
           </button>
           <span className="hidden sm:inline">
             · {countNodes(nodes)} noduri
@@ -222,47 +239,43 @@ export function UserStrategyEditor({ initial }: Props) {
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
       <p className="text-xs text-zinc-500">
-        Trage nodurile cu mouse-ul (⋮⋮) pentru reordonare. Plasează deasupra / dedesubt un nod sau în centru pentru
-        copil. Click = selectare · panoul din dreapta = editare câmpuri.
+        <strong className="font-medium text-zinc-400">Hartă:</strong> rotiță = zoom · trage fundalul = deplasare ·
+        scroll = navigare (bară ca în restul app) · ⋮⋮ pe nod = reordonare ierarhie · click = selectare.
       </p>
 
       <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_min(100%,18rem)]">
-        {/* Canvas */}
-        <div className="min-h-[420px] overflow-auto rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-          <div
-            className="mx-auto origin-top transition-transform duration-150"
-            style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%` }}
-          >
-            <div className="mx-auto flex max-w-lg flex-col items-stretch gap-0">
-              {nodes.map((node, idx) => (
-                <RootNodeBlock
-                  key={node.id}
-                  node={node}
-                  isLast={idx === nodes.length - 1}
-                  selectedId={selectedId}
-                  dragId={dragId}
-                  dropHint={dropHint}
-                  onSelect={setSelectedId}
-                  onDragStart={setDragId}
-                  onDragEnd={() => {
-                    setDragId(null);
-                    setDropHint(null);
-                  }}
-                  onDropHint={setDropHint}
-                  onDrop={onDrop}
-                />
-              ))}
-              {nodes.length === 0 ? (
-                <p className="py-12 text-center text-sm text-zinc-500">
-                  Hartă goală — adaugă un nod principal sau resetează la șablonul canonic.
-                </p>
-              ) : null}
-            </div>
+        <StrategyMapViewport view={view} onViewChange={setView}>
+          <div className="flex flex-col items-stretch gap-0">
+            {nodes.map((node, idx) => (
+              <RootNodeBlock
+                key={node.id}
+                node={node}
+                isLast={idx === nodes.length - 1}
+                selectedId={selectedId}
+                dragId={dragId}
+                dropHint={dropHint}
+                onSelect={setSelectedId}
+                onDragStart={setDragId}
+                onDragEnd={() => {
+                  setDragId(null);
+                  setDropHint(null);
+                }}
+                onDropHint={setDropHint}
+                onDrop={onDrop}
+              />
+            ))}
+            {nodes.length === 0 ? (
+              <p className="py-12 text-center text-sm text-zinc-500">
+                Hartă goală — adaugă un nod principal sau resetează la șablonul canonic.
+              </p>
+            ) : null}
           </div>
-        </div>
+        </StrategyMapViewport>
 
         {/* Inspector */}
-        <aside className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 lg:sticky lg:top-4">
+        <aside
+          className={`rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-10rem)] ${fleetScrollPaneClass} overflow-y-auto`}
+        >
           <h3 className="text-sm font-medium text-zinc-200">Proprietăți nod</h3>
           {!selected ? (
             <p className="mt-3 text-xs text-zinc-500">Selectează un nod din hartă.</p>
@@ -273,6 +286,14 @@ export function UserStrategyEditor({ initial }: Props) {
             <p className="font-medium text-zinc-400">Legendă</p>
             <p className="mt-1">F/T/G = profile funcționale (financiar, tehnic, logistică) — aceeași treaptă L.</p>
             <p className="mt-1">Axa R = parteneri furnizori — separat de ierarhia L.</p>
+          </div>
+          <div className="mt-4 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/50 p-3 text-[11px] text-zinc-500">
+            <p className="font-medium text-zinc-400">Drepturi (viitor)</p>
+            <p className="mt-1">
+              Matricea de permisiuni (cine poate aproba deviz, edita km etc.) va fi în{" "}
+              <span className="text-zinc-300">Administrare → Setări tenant</span>. Aici rămâne doar{" "}
+              <strong className="font-medium text-zinc-400">structura</strong> ierarhică și etichetele de rol.
+            </p>
           </div>
         </aside>
       </div>
@@ -350,7 +371,7 @@ function NodeBlock({
   const hint = dropHint?.id === node.id ? dropHint.pos : null;
 
   return (
-    <div className="w-full">
+    <div className="w-full" data-strategy-node>
       <div
         className={`relative rounded-lg transition-opacity ${isDragging ? "opacity-40" : ""} ${
           hint === "before" ? "ring-2 ring-sky-400 ring-offset-2 ring-offset-zinc-950" : ""

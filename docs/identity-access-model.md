@@ -92,7 +92,9 @@ Un abonat = un **tenant**. Nu amestecăm tenant-ul unui abonat cu modulul **Clie
 
 ## 3.5 Niveluri L, profile F/T/G și axa R (canonic — 2026-07)
 
-**UI:** hartă vizuală editabilă în **Administrare → Strategie useri** (`/fleet/user-strategy`, `UserStrategyEditor`); persistată în `Tenant.iamStrategyMap`.
+**UI:** hartă vizuală editabilă în **Administrare → Strategie useri** (`/fleet/user-strategy`, `UserStrategyEditor`); persistată în `Tenant.iamStrategyMap`. Pan/zoom mouse + scroll `fleet-scroll-pane`.
+
+**Drepturi (viitor):** matricea de permisiuni (F/T/G × module) → **Administrare → Setări tenant** — nu pe harta de strategie (separare structură vs. policy).
 
 ### 3.5.1 Ierarhia L (linie de comandă)
 
