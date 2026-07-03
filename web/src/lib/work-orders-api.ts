@@ -149,8 +149,8 @@ export function serviceCaseStageLabel(stage: string): string {
     work_order: "Comandă service",
     quote: "Deviz",
     approval: "Aprobare deviz",
-    cost: "Cost",
     invoiced: "Facturat",
+    cost: "Cost",
     closed: "Închis",
   };
   return map[stage] ?? stage;

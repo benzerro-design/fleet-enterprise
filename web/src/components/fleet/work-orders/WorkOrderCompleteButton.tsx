@@ -9,6 +9,7 @@ type Props = {
   canWrite: boolean;
   status: string;
   hasInvoicedQuote: boolean;
+  hasCostFromQuote: boolean;
 };
 
 export function WorkOrderCompleteButton({
@@ -16,12 +17,13 @@ export function WorkOrderCompleteButton({
   canWrite,
   status,
   hasInvoicedQuote,
+  hasCostFromQuote,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!canWrite || status === "done" || status === "cancelled" || !hasInvoicedQuote) {
+  if (!canWrite || status === "done" || status === "cancelled" || !hasInvoicedQuote || !hasCostFromQuote) {
     return null;
   }
 

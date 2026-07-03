@@ -112,6 +112,9 @@ export function toQuoteRecord(quote: {
   notes: string | null;
   costEntryId: string | null;
   invoicedAt: Date | null;
+  invoiceNumber?: string | null;
+  invoiceDate?: Date | null;
+  invoiceAttachmentUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
   costEntry?: {
@@ -145,8 +148,8 @@ export function toQuoteRecord(quote: {
     notes: quote.notes,
     costEntryId: quote.costEntryId,
     invoicedAt: quote.invoicedAt?.toISOString() ?? null,
-    costInvoiceNumber: quote.costEntry?.invoiceNumber ?? null,
-    costInvoiceDate: quote.costEntry?.invoiceDate?.toISOString() ?? null,
+    costInvoiceNumber: quote.invoiceNumber ?? quote.costEntry?.invoiceNumber ?? null,
+    costInvoiceDate: quote.invoiceDate?.toISOString() ?? quote.costEntry?.invoiceDate?.toISOString() ?? null,
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
     lines: quote.lines.map(toQuoteLineRecord),

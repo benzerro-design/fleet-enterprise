@@ -50,6 +50,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
   const canWrite = canWriteFleetOps(auth);
   const canApprove = canApproveQuotes(auth);
   const hasInvoicedQuote = quotes.some((q) => q.status === "approved" && q.invoicedAt);
+  const hasCostFromQuote = quotes.some((q) => q.status === "approved" && q.costEntryId);
   const schedulerLink =
     wo.linkedAppointmentScheduledAt || wo.plannedAt
       ? schedulerHref({
@@ -158,6 +159,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
         canWrite={canWrite}
         status={wo.status}
         hasInvoicedQuote={hasInvoicedQuote}
+        hasCostFromQuote={hasCostFromQuote}
       />
     </FleetPageMain>
   );

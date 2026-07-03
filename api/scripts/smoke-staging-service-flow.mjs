@@ -298,16 +298,16 @@ async function smokeWriteFlow(adminToken) {
   }
   pass('Deviz aprobat', quoteId);
 
-  const costRes = await api(`/work-orders/${woId}/quotes/${quoteId}/post-cost`, {
+  const postAppr = await api(`/service-cases/${caseId}/post-approval`, {
     method: 'POST',
     token: adminToken,
-    body: {},
+    body: { path: 'immediate' },
   });
-  if (!costRes.res.ok) {
-    fail('post-cost', `HTTP ${costRes.res.status} ${JSON.stringify(costRes.json)}`);
+  if (!postAppr.res.ok) {
+    fail('post-approval immediate', `HTTP ${postAppr.res.status} ${JSON.stringify(postAppr.json)}`);
     return;
   }
-  pass('Cost din deviz', costRes.json.costEntryId ?? 'ok');
+  pass('Post-aprobare execută acum', postAppr.json.currentStage ?? 'ok');
 
   const invRes = await api(`/work-orders/${woId}/quotes/${quoteId}/record-invoice`, {
     method: 'POST',
@@ -322,6 +322,17 @@ async function smokeWriteFlow(adminToken) {
     return;
   }
   pass('Factură înregistrată', invRes.json.costInvoiceNumber ?? 'ok');
+
+  const costRes = await api(`/work-orders/${woId}/quotes/${quoteId}/post-cost`, {
+    method: 'POST',
+    token: adminToken,
+    body: {},
+  });
+  if (!costRes.res.ok) {
+    fail('post-cost', `HTTP ${costRes.res.status} ${JSON.stringify(costRes.json)}`);
+    return;
+  }
+  pass('Cost din deviz', costRes.json.costEntryId ?? 'ok');
 
   const doneRes = await api(`/work-orders/${woId}/complete`, {
     method: 'POST',

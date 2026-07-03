@@ -406,6 +406,9 @@ export class WorkOrderQuotesService {
     if (existing.status !== WorkOrderQuoteStatus.approved) {
       throw new BadRequestException('Only approved quotes can be posted to costs');
     }
+    if (!existing.invoicedAt) {
+      throw new BadRequestException('Record invoice before posting cost');
+    }
     if (existing.costEntryId) {
       throw new BadRequestException('Cost already created for this quote');
     }
@@ -431,8 +434,11 @@ export class WorkOrderQuotesService {
           amountCents: grossCents,
           provider,
           supplierId: existing.workOrder.supplierId,
-          incurredOn: new Date(),
+          incurredOn: existing.invoiceDate ?? new Date(),
           notes,
+          invoiceNumber: existing.invoiceNumber,
+          invoiceDate: existing.invoiceDate,
+          invoiceAttachmentUrl: existing.invoiceAttachmentUrl,
         },
       });
 
@@ -524,26 +530,22 @@ export class WorkOrderQuotesService {
       },
     });
     if (!existing) throw new NotFoundException('Quote not found');
-    if (!existing.costEntryId) {
-      throw new BadRequestException('Post cost before recording invoice');
+    if (existing.status !== WorkOrderQuoteStatus.approved) {
+      throw new BadRequestException('Only approved quotes can be invoiced');
     }
     if (existing.invoicedAt) {
       throw new BadRequestException('Invoice already recorded for this quote');
     }
 
     const quote = await this.prisma.$transaction(async (tx) => {
-      await tx.costEntry.update({
-        where: { id: existing.costEntryId! },
+      const updated = await tx.workOrderQuote.update({
+        where: { id: quoteId },
         data: {
           invoiceNumber,
           invoiceDate,
           invoiceAttachmentUrl: dto.invoiceAttachmentUrl?.trim() || null,
+          invoicedAt: new Date(),
         },
-      });
-
-      const updated = await tx.workOrderQuote.update({
-        where: { id: quoteId },
-        data: { invoicedAt: new Date() },
         include: this.quoteInclude(),
       });
 
@@ -555,7 +557,7 @@ export class WorkOrderQuotesService {
             ticketId,
             kind: CrmTicketEventKind.workflow_advance,
             body: `Factură înregistrată: ${invoiceNumber}.`,
-            payload: { quoteId, costEntryId: existing.costEntryId, invoiceNumber },
+            payload: { quoteId, invoiceNumber },
             actorUserId: actorUserId ?? null,
           },
         });

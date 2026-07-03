@@ -409,28 +409,7 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
 
           {activeQuote.status === "approved" ? (
             <div className="mt-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-              <p className="text-xs uppercase text-zinc-500">Cost & factură</p>
-              {activeQuote.costEntryId ? (
-                <p className="text-sm">
-                  Cost înregistrat:{" "}
-                  <Link href={`/fleet/costs/${activeQuote.costEntryId}`} className="text-sky-300 hover:underline">
-                    deschide costul
-                  </Link>
-                  {" · "}
-                  {formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}
-                </p>
-              ) : canWrite ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => void postCost()}
-                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
-                >
-                  Generează cost din deviz
-                </button>
-              ) : (
-                <p className="text-sm text-zinc-500">Costul nu a fost încă generat.</p>
-              )}
+              <p className="text-xs uppercase text-zinc-500">Factură & cost</p>
 
               {activeQuote.invoicedAt ? (
                 <p className="text-sm text-emerald-300">
@@ -439,7 +418,7 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
                     ? ` · ${new Date(activeQuote.costInvoiceDate).toLocaleDateString("ro-RO")}`
                     : ""}
                 </p>
-              ) : activeQuote.costEntryId && canWrite ? (
+              ) : canWrite ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className={OPS_LABEL_CLASS}>Nr. factură</label>
@@ -469,6 +448,30 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
                     </button>
                   </div>
                 </div>
+              ) : (
+                <p className="text-sm text-zinc-500">Factura nu a fost încă înregistrată.</p>
+              )}
+
+              {activeQuote.costEntryId ? (
+                <p className="text-sm">
+                  Cost înregistrat:{" "}
+                  <Link href={`/fleet/costs/${activeQuote.costEntryId}`} className="text-sky-300 hover:underline">
+                    deschide costul
+                  </Link>
+                  {" · "}
+                  {formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}
+                </p>
+              ) : activeQuote.invoicedAt && canWrite ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void postCost()}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
+                >
+                  Generează cost din deviz
+                </button>
+              ) : !activeQuote.invoicedAt ? (
+                <p className="text-sm text-zinc-500">Înregistrează factura înainte de cost.</p>
               ) : null}
             </div>
           ) : null}

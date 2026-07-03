@@ -38,8 +38,8 @@ export const SERVICE_CASE_STAGE_ORDER: ServiceCaseStage[] = [
   ServiceCaseStage.work_order,
   ServiceCaseStage.quote,
   ServiceCaseStage.approval,
-  ServiceCaseStage.cost,
   ServiceCaseStage.invoiced,
+  ServiceCaseStage.cost,
   ServiceCaseStage.closed,
 ];
 
@@ -158,8 +158,8 @@ function stageLabel(stage: ServiceCaseStage): string {
     work_order: 'Comandă service',
     quote: 'Deviz',
     approval: 'Aprobare deviz',
-    cost: 'Cost',
     invoiced: 'Facturat',
+    cost: 'Cost',
     closed: 'Închis',
   };
   return labels[stage];
@@ -697,7 +697,7 @@ export class ServiceCasesService {
           data: {
             awaitingPostApproval: false,
             postApprovalPath: PostApprovalPath.immediate,
-            currentStage: ServiceCaseStage.cost,
+            currentStage: ServiceCaseStage.work_order,
           },
         });
       } else {
@@ -719,8 +719,8 @@ export class ServiceCasesService {
             kind: CrmTicketEventKind.workflow_advance,
             body:
               path === PostApprovalPath.immediate
-                ? 'Deviz aprobat — continuare spre cost/factură.'
-                : 'Deviz aprobat — reprogramare service.',
+                ? 'Deviz aprobat — execuție reparație (factură apoi cost).'
+                : 'Deviz aprobat — reprogramare service (fără deviz nou).',
             payload: { serviceCaseId: caseId, postApprovalPath: path },
             actorUserId: actorUserId ?? null,
           },

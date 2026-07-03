@@ -284,6 +284,16 @@ export function TicketWorkflowStepper({
   }
 
   const currentIdx = serviceCase ? SERVICE_CASE_STAGES.indexOf(serviceCase.currentStage) : -1;
+  const hasPendingAppointment =
+    serviceCase?.appointments?.some((a) => a.status === "scheduled") ?? false;
+  const inRescheduleLoop =
+    serviceCase?.postApprovalPath === "reschedule" && serviceCase.currentStage === "scheduled";
+  const canScheduleNew =
+    canOperate &&
+    !closed &&
+    serviceCase?.status === "active" &&
+    serviceCase.currentStage === "scheduled" &&
+    !hasPendingAppointment;
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -291,7 +301,8 @@ export function TicketWorkflowStepper({
         <div>
           <h2 className="text-sm font-medium text-zinc-200">Flux operațional</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Tichet → programare → comandă service → deviz → aprobare → cost → factură → închidere
+            Tichet → programare → comandă service → deviz → aprobare → factură → cost → închidere
+            {inRescheduleLoop ? " · buclă reprogramare activă" : ""}
           </p>
         </div>
         {serviceCase ? (
@@ -425,9 +436,21 @@ export function TicketWorkflowStepper({
             </div>
           ) : null}
 
-          {canOperate && !closed && serviceCase.status === "active" && !serviceCase.appointments?.length ? (
+          {inRescheduleLoop ? (
+            <div className="mt-4 rounded-lg border border-sky-500/30 bg-sky-950/20 p-3 text-sm text-sky-100">
+              <p className="font-medium">Reprogramare după deviz aprobat</p>
+              <p className="mt-1 text-xs text-sky-200/80">
+                Devizul rămâne valid — adaugă o programare nouă, confirmă, apoi factură și cost (fără deviz
+                nou).
+              </p>
+            </div>
+          ) : null}
+
+          {canScheduleNew ? (
             <div className="mt-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-              <p className="text-xs uppercase text-zinc-500">Programare service</p>
+              <p className="text-xs uppercase text-zinc-500">
+                {inRescheduleLoop ? "Programare nouă (reparație)" : "Programare service"}
+              </p>
               <div>
                 <label className={OPS_LABEL_CLASS}>Data și ora</label>
                 <input
@@ -575,6 +598,10 @@ function WorkOrderStepCard({
                 Respinge
               </button>
             </div>
+          ) : q.status === "approved" ? (
+            <p className="mt-2 text-xs text-emerald-400/90">
+              Deviz aprobat — după reparație: factură apoi cost.
+            </p>
           ) : null}
         </div>
       ) : (

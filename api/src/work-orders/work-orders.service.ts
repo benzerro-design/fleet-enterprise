@@ -347,11 +347,14 @@ export class WorkOrdersService {
     if (!approvedQuote?.invoicedAt) {
       throw new BadRequestException('Record invoice on approved quote before completing');
     }
+    if (!approvedQuote?.costEntryId) {
+      throw new BadRequestException('Post cost from quote before completing');
+    }
 
     const stageIdx = SERVICE_CASE_STAGE_ORDER.indexOf(wo.serviceCase.currentStage);
-    const invoicedIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.invoiced);
-    if (stageIdx < invoicedIdx) {
-      throw new BadRequestException('Service case must reach invoiced stage before completion');
+    const costIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.cost);
+    if (stageIdx < costIdx) {
+      throw new BadRequestException('Service case must reach cost stage before completion');
     }
 
     await this.prisma.$transaction(async (tx) => {

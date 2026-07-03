@@ -102,8 +102,8 @@ export const SERVICE_CASE_STAGES: ServiceCaseStage[] = [
   "work_order",
   "quote",
   "approval",
-  "cost",
   "invoiced",
+  "cost",
   "closed",
 ];
 
@@ -114,8 +114,8 @@ export function serviceCaseStageLabel(stage: ServiceCaseStage): string {
     work_order: "Comandă service",
     quote: "Deviz",
     approval: "Aprobare deviz",
-    cost: "Cost",
     invoiced: "Facturat",
+    cost: "Cost",
     closed: "Închis",
   };
   return map[stage] ?? stage;
