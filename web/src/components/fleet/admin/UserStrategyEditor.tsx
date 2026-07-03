@@ -239,9 +239,10 @@ export function UserStrategyEditor({ initial }: Props) {
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
       <p className="text-xs text-zinc-500">
-        <strong className="font-medium text-zinc-400">Hartă:</strong> rotiță = zoom · trage fundalul sau{" "}
-        <kbd className="rounded border border-zinc-700 px-1 text-zinc-400">Space</kbd> + drag = deplasare · click
-        pe rotiță middle = pan · Shift+scroll = scroll · ⋮⋮ = reordonare nod.
+        <strong className="font-medium text-zinc-400">Hartă:</strong> rotiță pe <strong className="font-normal text-zinc-400">casetă</strong> = zoom
+        · rotiță pe <strong className="font-normal text-zinc-400">fundal</strong> = scroll · trage fundalul sau{" "}
+        <kbd className="rounded border border-zinc-700 px-1 text-zinc-400">Space</kbd> + drag = deplasare · ⋮⋮ =
+        reordonare nod.
       </p>
 
       <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_min(100%,18rem)]">

@@ -25,7 +25,7 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   return !!target.closest("[data-strategy-node], [data-strategy-drag-handle]");
 }
 
-/** Viewport hartă: scroll fleet-scroll-pane + pan (fundal / Space / rotiță middle) + zoom (rotiță). */
+/** Viewport hartă: scroll pe fundal · zoom rotiță doar pe casete · pan Space/drag fundal. */
 export function StrategyMapViewport({ children, view, onViewChange, className }: Props) {
   const [panning, setPanning] = useState(false);
   const [spaceDown, setSpaceDown] = useState(false);
@@ -67,8 +67,11 @@ export function StrategyMapViewport({ children, view, onViewChange, className }:
 
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
-      if (e.shiftKey) return;
+      // Zoom doar deasupra casetelor; pe fundal = scroll nativ al viewport-ului.
+      if (!isInteractiveTarget(e.target)) return;
+
       e.preventDefault();
+      e.stopPropagation();
       const el = viewportRef.current;
       if (!el) return;
 
