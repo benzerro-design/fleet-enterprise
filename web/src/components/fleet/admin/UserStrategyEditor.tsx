@@ -239,8 +239,9 @@ export function UserStrategyEditor({ initial }: Props) {
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
       <p className="text-xs text-zinc-500">
-        <strong className="font-medium text-zinc-400">Hartă:</strong> rotiță = zoom · trage fundalul = deplasare ·
-        scroll = navigare (bară ca în restul app) · ⋮⋮ pe nod = reordonare ierarhie · click = selectare.
+        <strong className="font-medium text-zinc-400">Hartă:</strong> rotiță = zoom · trage fundalul sau{" "}
+        <kbd className="rounded border border-zinc-700 px-1 text-zinc-400">Space</kbd> + drag = deplasare · click
+        pe rotiță middle = pan · Shift+scroll = scroll · ⋮⋮ = reordonare nod.
       </p>
 
       <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_min(100%,18rem)]">
@@ -371,7 +372,7 @@ function NodeBlock({
   const hint = dropHint?.id === node.id ? dropHint.pos : null;
 
   return (
-    <div className="w-full" data-strategy-node>
+    <div className="pointer-events-auto w-full" data-strategy-node>
       <div
         className={`relative rounded-lg transition-opacity ${isDragging ? "opacity-40" : ""} ${
           hint === "before" ? "ring-2 ring-sky-400 ring-offset-2 ring-offset-zinc-950" : ""
@@ -407,6 +408,7 @@ function NodeBlock({
         >
           <span
             draggable
+            data-strategy-drag-handle
             onDragStart={(e) => {
               e.stopPropagation();
               onDragStart(node.id);

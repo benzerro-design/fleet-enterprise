@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type ReactNode, type WheelEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type WheelEvent } from "react";
 import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
 
 const ZOOM_MIN = 0.35;
@@ -20,11 +20,50 @@ type Props = {
   className?: string;
 };
 
-/** Viewport hartă: scroll fleet-scroll-pane + pan (fundal) + zoom (rotiță). */
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return !!target.closest("[data-strategy-node], [data-strategy-drag-handle]");
+}
+
+/** Viewport hartă: scroll fleet-scroll-pane + pan (fundal / Space / rotiță middle) + zoom (rotiță). */
 export function StrategyMapViewport({ children, view, onViewChange, className }: Props) {
   const [panning, setPanning] = useState(false);
+  const [spaceDown, setSpaceDown] = useState(false);
+  const spacePressed = useRef(false);
   const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.code === "Space" &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement) &&
+        !(e.target instanceof HTMLSelectElement)
+      ) {
+        spacePressed.current = true;
+        setSpaceDown(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        spacePressed.current = false;
+        setSpaceDown(false);
+      }
+    };
+    const onBlur = () => {
+      spacePressed.current = false;
+      setSpaceDown(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
 
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
@@ -42,76 +81,83 @@ export function StrategyMapViewport({ children, view, onViewChange, className }:
       if (nextZoom === view.zoom) return;
 
       const ratio = nextZoom / view.zoom;
-      const nextPanX = cursorX - (cursorX - view.panX) * ratio;
-      const nextPanY = cursorY - (cursorY - view.panY) * ratio;
-
-      onViewChange({ zoom: nextZoom, panX: nextPanX, panY: nextPanY });
+      onViewChange({
+        zoom: nextZoom,
+        panX: cursorX - (cursorX - view.panX) * ratio,
+        panY: cursorY - (cursorY - view.panY) * ratio,
+      });
     },
     [view, onViewChange],
   );
 
-  const startPan = useCallback(
-    (clientX: number, clientY: number) => {
-      panStart.current = { x: clientX, y: clientY, panX: view.panX, panY: view.panY };
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0 && e.button !== 1) return;
+
+      const interactive = isInteractiveTarget(e.target);
+      const panMode = e.button === 1 || spacePressed.current || !interactive;
+      if (!panMode) return;
+
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      panStart.current = { x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY };
       setPanning(true);
     },
     [view.panX, view.panY],
   );
 
   const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (!panning || !panStart.current) return;
+      e.preventDefault();
       const dx = e.clientX - panStart.current.x;
       const dy = e.clientY - panStart.current.y;
       onViewChange({
-        ...view,
+        zoom: view.zoom,
         panX: panStart.current.panX + dx,
         panY: panStart.current.panY + dy,
       });
     },
-    [panning, view, onViewChange],
+    [panning, view.zoom, onViewChange],
   );
 
-  const endPan = useCallback(() => {
+  const endPan = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (panStart.current) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
     panStart.current = null;
     setPanning(false);
   }, []);
 
+  const cursorClass = panning ? "cursor-grabbing" : spaceDown ? "cursor-grab" : "";
+
   return (
     <div
       ref={viewportRef}
-      className={`relative min-h-[min(520px,calc(100dvh-18rem))] flex-1 rounded-xl border border-zinc-800 bg-zinc-950/60 ${fleetScrollPaneClass} overflow-auto ${className ?? ""}`}
+      className={`relative min-h-[min(520px,calc(100dvh-18rem))] flex-1 rounded-xl border border-zinc-800 bg-zinc-950/60 ${fleetScrollPaneClass} overflow-auto ${cursorClass} ${className ?? ""}`}
       onWheel={onWheel}
+      onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endPan}
-      onPointerLeave={endPan}
       onPointerCancel={endPan}
+      style={{
+        backgroundImage: "radial-gradient(circle, rgb(63 63 70 / 0.35) 1px, transparent 1px)",
+        backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`,
+        backgroundPosition: `${view.panX}px ${view.panY}px`,
+      }}
     >
       <div
-        className={`absolute inset-0 min-h-full min-w-full ${panning ? "cursor-grabbing" : "cursor-grab"}`}
-        style={{
-          backgroundImage: "radial-gradient(circle, rgb(63 63 70 / 0.35) 1px, transparent 1px)",
-          backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`,
-          backgroundPosition: `${view.panX}px ${view.panY}px`,
-        }}
-        data-strategy-pan-surface
-        onPointerDown={(e) => {
-          if (e.button !== 0 && e.button !== 1) return;
-          if ((e.target as HTMLElement).closest("[data-strategy-node]")) return;
-          e.currentTarget.setPointerCapture(e.pointerId);
-          startPan(e.clientX, e.clientY);
-        }}
-        aria-hidden
-      />
-
-      <div
-        className="relative z-[1] inline-block min-w-full p-8"
+        className="pointer-events-none relative inline-block min-w-full p-8"
         style={{
           transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`,
           transformOrigin: "0 0",
         }}
       >
-        <div className="mx-auto w-full max-w-lg" data-strategy-map-content>
+        <div className="pointer-events-none mx-auto w-full max-w-lg" data-strategy-map-content>
           {children}
         </div>
       </div>
