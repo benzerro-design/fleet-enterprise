@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { MembershipRole } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,12 +21,14 @@ export class ServiceCasesController {
 
   @Get('by-ticket/:ticketId')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
-  getByTicket(
+  async getByTicket(
     @TenantId() tenantSlug: string,
     @Param('ticketId') ticketId: string,
     @CurrentAccess() access: AccessContext,
   ) {
-    return this.serviceCases.getByTicketId(tenantSlug, ticketId, access);
+    const row = await this.serviceCases.getByTicketId(tenantSlug, ticketId, access);
+    if (!row) throw new NotFoundException('Service case not found for ticket');
+    return row;
   }
 
   @Post('from-ticket/:ticketId')

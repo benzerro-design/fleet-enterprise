@@ -41,20 +41,28 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
         setError(null);
         return;
       }
+      const raw = await res.text();
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
-        try {
-          const j = (await res.json()) as { message?: string | string[] };
-          if (typeof j.message === "string") msg = j.message;
-          else if (Array.isArray(j.message)) msg = j.message.join(", ");
-        } catch {
-          /* ignore */
+        if (raw.trim()) {
+          try {
+            const j = JSON.parse(raw) as { message?: string | string[] };
+            if (typeof j.message === "string") msg = j.message;
+            else if (Array.isArray(j.message)) msg = j.message.join(", ");
+          } catch {
+            /* ignore */
+          }
         }
         setServiceCase(null);
         setError(msg);
         return;
       }
-      const data = (await res.json()) as ServiceCaseRecord | null;
+      if (!raw.trim()) {
+        setServiceCase(null);
+        setError(null);
+        return;
+      }
+      const data = JSON.parse(raw) as ServiceCaseRecord | null;
       setServiceCase(data);
       setError(null);
       if (data?.supplierId) setSupplierId(data.supplierId);
