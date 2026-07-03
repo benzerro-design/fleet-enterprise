@@ -74,7 +74,7 @@ export function middleware(request: NextRequest) {
     const home = portal === "driver" ? CLIENT_DRIVER_HOME : "/fleet/tickets";
     const allowed = portal === "driver" ? CLIENT_DRIVER_PREFIXES : ["/fleet/tickets"];
 
-    if (pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit")) {
+    if (pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit") || pathname.startsWith("/fleet/user-strategy")) {
       return NextResponse.redirect(new URL(home, request.url));
     }
 
@@ -89,7 +89,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit")) {
+  if (pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit") || pathname.startsWith("/fleet/user-strategy")) {
     return NextResponse.redirect(new URL(CLIENT_FLEET_HOME, request.url));
   }
 

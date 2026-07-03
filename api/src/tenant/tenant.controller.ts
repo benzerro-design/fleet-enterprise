@@ -5,6 +5,8 @@ import {
   Get,
   Param,
   Patch,
+  Put,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -53,6 +55,30 @@ export class TenantController {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
     return this.tenant.listAuditLog(tenantSlug, page, pageSize, entityType, action);
+  }
+
+  @Get('iam-strategy')
+  @Roles(MembershipRole.tenant_admin)
+  getIamStrategy(@TenantId() tenantSlug: string) {
+    return this.tenant.getIamStrategy(tenantSlug);
+  }
+
+  @Put('iam-strategy')
+  @Roles(MembershipRole.tenant_admin)
+  putIamStrategy(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setIamStrategy(tenantSlug, body, actorUserId);
+  }
+
+  @Post('iam-strategy/reset')
+  @Roles(MembershipRole.tenant_admin)
+  resetIamStrategy(@TenantId() tenantSlug: string, @CurrentUserId() actorUserId?: string) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.resetIamStrategy(tenantSlug, actorUserId);
   }
 }
 

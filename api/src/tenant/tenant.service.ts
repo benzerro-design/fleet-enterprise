@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { MembershipRole, type Prisma } from '@prisma/client';
+import { MembershipRole, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { cloneDefaultIamStrategyNodes } from './iam-strategy-default';
+import type { IamStrategyPayload } from './iam-strategy.types';
+import { parseIamStrategyPayload, parseStoredIamStrategy } from './iam-strategy.validate';
 
 @Injectable()
 export class TenantService {
@@ -96,4 +99,78 @@ export class TenantService {
       pageSize: take,
     };
   }
+
+  async getIamStrategy(tenantSlug: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, iamStrategyMap: true, updatedAt: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const stored = parseStoredIamStrategy(tenant.iamStrategyMap);
+    const isDefault = stored == null;
+    const nodes = stored ?? cloneDefaultIamStrategyNodes();
+
+    return {
+      version: 1 as const,
+      nodes,
+      isDefault,
+      updatedAt: isDefault ? null : tenant.updatedAt.toISOString(),
+    };
+  }
+
+  async setIamStrategy(tenantSlug: string, body: unknown, actorUserId: string) {
+    const payload: IamStrategyPayload = parseIamStrategyPayload(body);
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const toStore = { version: 1, nodes: payload.nodes };
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { iamStrategyMap: toStore as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'iam_strategy_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: { nodeCount: countIamNodes(payload.nodes) },
+    });
+
+    return this.getIamStrategy(tenantSlug);
+  }
+
+  async resetIamStrategy(tenantSlug: string, actorUserId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { iamStrategyMap: Prisma.DbNull },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'iam_strategy_reset',
+      entityType: 'tenant',
+      entityId: tenant.id,
+    });
+
+    return this.getIamStrategy(tenantSlug);
+  }
+}
+
+function countIamNodes(nodes: IamStrategyPayload['nodes']): number {
+  let n = 0;
+  function walk(list: IamStrategyPayload['nodes']) {
+    for (const node of list) {
+      n += 1;
+      if (node.children?.length) walk(node.children);
+    }
+  }
+  walk(nodes);
+  return n;
 }

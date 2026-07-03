@@ -8,7 +8,7 @@
 **Context implementare la data redactării:** F0–F4 live (furnizori, dosar lucrare, programări, devize/cost/factură, Programator). Staging OK, smoke 23/23.
 
 **Ierarhie useri (canonic):** `identity-access-model.md` **§3.5** — L**, L*, L1, L0, profile **F/T/G**, axa **R**.  
-**Hartă vizuală în app:** Administrare → **Membri & useri client** → panou dreapta (`UserHierarchyMap`).
+**Hartă vizuală în app:** Administrare → **Strategie useri** (`/fleet/user-strategy`) → panou editabil, salvat per tenant.
 
 ---
 

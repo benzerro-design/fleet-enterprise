@@ -216,6 +216,14 @@ export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
     },
     {
       kind: "link",
+      label: "Strategie useri",
+      href: "/fleet/user-strategy",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/user-strategy"],
+    },
+    {
+      kind: "link",
       label: "Audit",
       href: "/fleet/audit",
       phase: "live",

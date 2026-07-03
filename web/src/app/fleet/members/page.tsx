@@ -6,7 +6,6 @@ import {
   type ClientMembershipRow,
   type ClientOption,
 } from "@/components/fleet/ClientMembershipsPanel";
-import { UserHierarchyMap } from "@/components/fleet/admin/UserHierarchyMap";
 import { MembersAdminPanel } from "@/components/fleet/MembersAdminPanel";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
@@ -60,14 +59,18 @@ export default async function FleetMembersPage() {
   const currentUserEmail = auth.ok ? auth.me.email : undefined;
 
   return (
-    <FleetPageMain>
+    <FleetPageMain narrow="md">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Membri & useri client</h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-            Echipa FlotaX (tenant) și angajații clienților contractuali — scope separat. Hartă ierarhie L
-            &amp; profile F/T/G → panoul din dreapta.
+            Echipa FlotaX (tenant) și angajații clienților contractuali — scope separat. Hartă ierarhie L &amp;
+            profile F/T/G:{" "}
+            <Link href="/fleet/user-strategy" className="text-emerald-400 hover:underline">
+              Strategie useri
+            </Link>
+            .
           </p>
         </div>
         <Link
@@ -78,24 +81,20 @@ export default async function FleetMembersPage() {
         </Link>
       </div>
 
-      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_min(100%,22rem)]">
-        <div className="min-w-0 space-y-12">
-          <section>
-            <h2 className="mb-4 text-lg font-medium text-zinc-200">Echipa FlotaX (tenant)</h2>
-            {!data ? (
-              <p className="text-amber-400">Nu am putut încărca membrii. Verifică API-ul.</p>
-            ) : (
-              <MembersAdminPanel members={data.members} currentUserEmail={currentUserEmail} />
-            )}
-          </section>
+      <div className="space-y-12">
+        <section>
+          <h2 className="mb-4 text-lg font-medium text-zinc-200">Echipa FlotaX (tenant)</h2>
+          {!data ? (
+            <p className="text-amber-400">Nu am putut încărca membrii. Verifică API-ul.</p>
+          ) : (
+            <MembersAdminPanel members={data.members} currentUserEmail={currentUserEmail} />
+          )}
+        </section>
 
-          <section>
-            <h2 className="mb-4 text-lg font-medium text-zinc-200">Useri client (organizații)</h2>
-            <ClientMembershipsPanel memberships={clientMemberships} clients={clients} />
-          </section>
-        </div>
-
-        <UserHierarchyMap />
+        <section>
+          <h2 className="mb-4 text-lg font-medium text-zinc-200">Useri client (organizații)</h2>
+          <ClientMembershipsPanel memberships={clientMemberships} clients={clients} />
+        </section>
       </div>
     </FleetPageMain>
   );

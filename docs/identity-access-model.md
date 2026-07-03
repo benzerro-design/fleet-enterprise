@@ -92,7 +92,7 @@ Un abonat = un **tenant**. Nu amestecăm tenant-ul unui abonat cu modulul **Clie
 
 ## 3.5 Niveluri L, profile F/T/G și axa R (canonic — 2026-07)
 
-**UI:** hartă vizuală în **Administrare → Membri & useri client** (`/fleet/members`, componentă `UserHierarchyMap`).
+**UI:** hartă vizuală editabilă în **Administrare → Strategie useri** (`/fleet/user-strategy`, `UserStrategyEditor`); persistată în `Tenant.iamStrategyMap`.
 
 ### 3.5.1 Ierarhia L (linie de comandă)
 
@@ -249,7 +249,8 @@ Tenant
 ### UI
 
 - `canManageFleet()` ≡ `role === "tenant_admin"`.
-- `/fleet/members` — listă membri, PATCH rol (doar admin); **hartă ierarhie L / F·T·G** în panoul dreapta (`UserHierarchyMap`); **fără** creare user din UI.
+- `/fleet/members` — listă membri, PATCH rol (doar admin); **fără** creare user din UI.
+- `/fleet/user-strategy` — hartă IAM editabilă (drag, add/delete noduri), salvată per tenant.
 - Useri noi: seed / SQL / Prisma Studio (`go-live-pilot-checklist.md` §2).
 
 ### Tenanți de referință (staging)
@@ -341,6 +342,7 @@ Acești admini sunt **pe același nivel tehnic** (`tenant_admin`), în tenant-i 
 
 | Data | Decizie |
 |------|---------|
+| 2026-07 | Pagină **Strategie useri** (`/fleet/user-strategy`) — hartă IAM editabilă, `Tenant.iamStrategyMap` |
 | 2026-07 | Ierarhie L**, L*, L1, L0, profile F/T/G, axa R — §3.5; hartă UI `/fleet/members` |
 | 2026-06 | Model producție: **SaaS multi-tenant**; abonat = tenant; FlotaX = tenant pilot |
 | 2026-06 | Superadmin platformă: **în afara app** până la epic `platform_admin` |
