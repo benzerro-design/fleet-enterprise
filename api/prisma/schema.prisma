@@ -1052,6 +1052,11 @@ enum ServiceCaseStatus {
   cancelled
 }
 
+enum PostApprovalPath {
+  immediate
+  reschedule
+}
+
 enum MaintenanceWorkOrderStatus {
   draft
   sent
@@ -1077,6 +1082,8 @@ model ServiceCase {
   supplierId             String?
   title                  String
   notes                  String?
+  awaitingPostApproval   Boolean                 @default(false)
+  postApprovalPath       PostApprovalPath?
   closedAt               DateTime?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
@@ -1149,6 +1156,8 @@ model ServiceAppointment {
   location      String?
   status               ServiceAppointmentStatus     @default(scheduled)
   notes                String?
+  managerConfirmedAt   DateTime?
+  driverAcknowledgedAt DateTime?
   recurrenceRule       ServiceAppointmentRecurrence @default(none)
   recurrenceSeriesId   String?
   createdAt            DateTime                     @default(now())

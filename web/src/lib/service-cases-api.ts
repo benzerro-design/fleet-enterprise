@@ -21,6 +21,19 @@ export type ServiceCaseWorkflowType =
   | "insurance_rca"
   | "insurance_casco";
 
+export type PostApprovalPath = "immediate" | "reschedule";
+
+export type WorkOrderQuoteStatus = "draft" | "submitted" | "approved" | "rejected";
+
+export type QuoteSummary = {
+  id: string;
+  workOrderId: string;
+  version: number;
+  status: WorkOrderQuoteStatus;
+  totalGrossCents: number;
+  currency: string;
+};
+
 export type WorkOrderRecord = {
   id: string;
   serviceCaseId: string;
@@ -32,6 +45,7 @@ export type WorkOrderRecord = {
   plannedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  latestQuote: QuoteSummary | null;
 };
 
 export type ServiceAppointmentStatus =
@@ -54,6 +68,8 @@ export type ServiceAppointmentRecord = {
   location: string | null;
   status: ServiceAppointmentStatus;
   notes: string | null;
+  managerConfirmedAt: string | null;
+  driverAcknowledgedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -72,6 +88,8 @@ export type ServiceCaseRecord = {
   title: string;
   notes: string | null;
   closedAt: string | null;
+  awaitingPostApproval: boolean;
+  postApprovalPath: PostApprovalPath | null;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
@@ -112,4 +130,18 @@ export function appointmentStatusLabel(status: ServiceAppointmentStatus | string
     no_show: "Neprezentare",
   };
   return map[status] ?? status;
+}
+
+export function quoteStatusLabel(status: WorkOrderQuoteStatus | string): string {
+  const map: Record<string, string> = {
+    draft: "Ciornă",
+    submitted: "Trimis",
+    approved: "Aprobat",
+    rejected: "Respins",
+  };
+  return map[status] ?? status;
+}
+
+export function formatQuoteMoney(cents: number, currency = "RON"): string {
+  return `${(cents / 100).toFixed(2)} ${currency}`;
 }

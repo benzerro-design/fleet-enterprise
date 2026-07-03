@@ -7,23 +7,38 @@ import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import {
   SERVICE_CASE_STAGES,
   appointmentStatusLabel,
+  formatQuoteMoney,
+  quoteStatusLabel,
   serviceCaseStageLabel,
   serviceCasesBrowserBase,
   fleetJsonHeaders,
+  type PostApprovalPath,
   type ServiceCaseRecord,
-  type ServiceCaseStage,
+  type WorkOrderRecord,
 } from "@/lib/service-cases-api";
+import { workOrdersBrowserBase } from "@/lib/work-orders-api";
 import { schedulerHref } from "@/lib/scheduler-deep-link";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 
 type Props = {
   ticketId: string;
-  canWrite: boolean;
+  canOperate: boolean;
+  canApproveQuote: boolean;
+  canConfirmAppointment: boolean;
+  canAckAppointment: boolean;
   closed: boolean;
   hasVehicle: boolean;
 };
 
-export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }: Props) {
+export function TicketWorkflowStepper({
+  ticketId,
+  canOperate,
+  canApproveQuote,
+  canConfirmAppointment,
+  canAckAppointment,
+  closed,
+  hasVehicle,
+}: Props) {
   const router = useRouter();
   const [serviceCase, setServiceCase] = useState<ServiceCaseRecord | null | undefined>(undefined);
   const [pending, setPending] = useState(false);
@@ -136,24 +151,69 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
     }
   }
 
-  function formatAppointmentWhen(iso: string): string {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString("ro-RO");
+  async function confirmAppointment(appointmentId: string) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/appointments/${appointmentId}/confirm`,
+        { method: "POST", headers: fleetJsonHeaders() },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const data = (await res.json()) as ServiceCaseRecord;
+      setServiceCase(data);
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
   }
 
-  async function advance(targetStage?: ServiceCaseStage) {
+  async function acknowledgeAppointment(appointmentId: string) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/appointments/${appointmentId}/acknowledge`,
+        { method: "POST", headers: fleetJsonHeaders() },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const data = (await res.json()) as ServiceCaseRecord;
+      setServiceCase(data);
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function applyPostApproval(path: PostApprovalPath) {
     if (!serviceCase) return;
     setPending(true);
     setError(null);
     try {
-      const res = await fetch(`${serviceCasesBrowserBase}/${serviceCase.id}/advance`, {
+      const res = await fetch(`${serviceCasesBrowserBase}/${serviceCase.id}/post-approval`, {
         method: "POST",
         headers: fleetJsonHeaders(),
-        body: JSON.stringify({
-          targetStage,
-          supplierId: supplierId || null,
-        }),
+        body: JSON.stringify({ path }),
       });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
@@ -174,6 +234,47 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
     }
   }
 
+  async function quoteAction(
+    workOrderId: string,
+    quoteId: string,
+    action: "approve" | "reject",
+  ) {
+    setPending(true);
+    setError(null);
+    try {
+      let body: string | undefined;
+      if (action === "reject") {
+        const reason = window.prompt("Motiv respingere (opțional):") ?? "";
+        body = JSON.stringify({ reason });
+      }
+      const res = await fetch(
+        `${workOrdersBrowserBase}/${workOrderId}/quotes/${quoteId}/${action}`,
+        { method: "POST", headers: fleetJsonHeaders(), body },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      await load();
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function formatAppointmentWhen(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("ro-RO");
+  }
+
   if (serviceCase === undefined) {
     return (
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -182,32 +283,30 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
     );
   }
 
-  const currentIdx = serviceCase
-    ? SERVICE_CASE_STAGES.indexOf(serviceCase.currentStage)
-    : -1;
-  const nextStage =
-    serviceCase && currentIdx >= 0 && currentIdx < SERVICE_CASE_STAGES.length - 1
-      ? SERVICE_CASE_STAGES[currentIdx + 1]
-      : null;
+  const currentIdx = serviceCase ? SERVICE_CASE_STAGES.indexOf(serviceCase.currentStage) : -1;
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-      <h2 className="text-sm font-medium text-zinc-200">Flux operațional</h2>
-      <p className="mt-1 text-xs text-zinc-500">
-        Tichet → programare → comandă service → deviz → aprobare → cost → factură → închidere
-      </p>
-      {error && serviceCase ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium text-zinc-200">Flux operațional</h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Tichet → programare → comandă service → deviz → aprobare → cost → factură → închidere
+          </p>
+        </div>
+        {serviceCase ? (
+          <span className="rounded-full border border-emerald-500/40 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200">
+            {serviceCaseStageLabel(serviceCase.currentStage)}
+          </span>
+        ) : null}
+      </div>
+      {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
 
       {!serviceCase ? (
         <div className="mt-4">
           {error ? (
             <div className="space-y-2">
               <p className="text-sm text-red-400">{error}</p>
-              <p className="text-xs text-zinc-500">
-                Dacă mesajul persistă după deploy, rulează migrările DB:{" "}
-                <code className="font-mono text-zinc-400">npx prisma migrate deploy</code> în folderul{" "}
-                <code className="font-mono text-zinc-400">api</code>.
-              </p>
               <button
                 type="button"
                 disabled={pending}
@@ -219,7 +318,7 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
             </div>
           ) : !hasVehicle ? (
             <p className="text-sm text-amber-300">Atașează un vehicul la tichet pentru a porni fluxul.</p>
-          ) : canWrite && !closed ? (
+          ) : canOperate && !closed ? (
             <button
               type="button"
               disabled={pending}
@@ -234,14 +333,14 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
         </div>
       ) : (
         <>
-          <ol className="mt-4 flex flex-wrap gap-2">
+          <ol className="mt-4 flex flex-wrap gap-1.5" aria-label="Etape dosar">
             {SERVICE_CASE_STAGES.map((stage, idx) => {
               const done = idx < currentIdx;
               const active = idx === currentIdx;
               return (
                 <li
                   key={stage}
-                  className={`rounded-full border px-2.5 py-1 text-xs ${
+                  className={`rounded-full border px-2 py-0.5 text-[10px] sm:text-xs ${
                     active
                       ? "border-emerald-500/60 bg-emerald-950/40 text-emerald-200"
                       : done
@@ -269,26 +368,64 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
                   Deschide în programator →
                 </Link>
               </div>
-              <ul className="mt-2 space-y-2">
+              <ul className="mt-2 space-y-3">
                 {serviceCase.appointments.map((appt) => (
-                  <li key={appt.id} className="text-zinc-300">
-                    <Link
-                      href={schedulerHref({ week: new Date(appt.scheduledAt), select: appt.id })}
-                      className="font-medium text-zinc-100 hover:text-emerald-300"
-                    >
-                      {formatAppointmentWhen(appt.scheduledAt)}
-                    </Link>
-                    {" · "}
-                    {appointmentStatusLabel(appt.status)}
-                    {appt.supplierLegalName ? ` · ${appt.supplierLegalName}` : ""}
-                    {appt.location ? ` · ${appt.location}` : ""}
+                  <li key={appt.id} className="rounded-md border border-zinc-800/80 bg-zinc-900/40 p-2.5">
+                    <div className="text-zinc-300">
+                      <Link
+                        href={schedulerHref({ week: new Date(appt.scheduledAt), select: appt.id })}
+                        className="font-medium text-zinc-100 hover:text-emerald-300"
+                      >
+                        {formatAppointmentWhen(appt.scheduledAt)}
+                      </Link>
+                      {" · "}
+                      {appointmentStatusLabel(appt.status)}
+                      {appt.supplierLegalName ? ` · ${appt.supplierLegalName}` : ""}
+                      {appt.location ? ` · ${appt.location}` : ""}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500">
+                      {appt.managerConfirmedAt ? (
+                        <span className="text-emerald-400/90">Confirmat manager</span>
+                      ) : (
+                        <span>Neconfirmat manager</span>
+                      )}
+                      {appt.driverAcknowledgedAt ? (
+                        <span className="text-sky-400/90">Confirmat șofer</span>
+                      ) : (
+                        <span>Fără confirmare șofer</span>
+                      )}
+                    </div>
+                    {!closed && appt.status !== "cancelled" ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {canConfirmAppointment && !appt.managerConfirmedAt ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => void confirmAppointment(appt.id)}
+                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                          >
+                            Confirmă programarea
+                          </button>
+                        ) : null}
+                        {canAckAppointment && appt.managerConfirmedAt && !appt.driverAcknowledgedAt ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => void acknowledgeAppointment(appt.id)}
+                            className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                          >
+                            Confirmă primire (șofer)
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             </div>
           ) : null}
 
-          {canWrite && !closed && serviceCase.status === "active" && !(serviceCase.appointments?.length) ? (
+          {canOperate && !closed && serviceCase.status === "active" && !serviceCase.appointments?.length ? (
             <div className="mt-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
               <p className="text-xs uppercase text-zinc-500">Programare service</p>
               <div>
@@ -331,45 +468,44 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
           ) : null}
 
           {serviceCase.workOrders.length > 0 ? (
-            <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
-              <p className="text-xs uppercase text-zinc-500">Comenzi service</p>
-              <ul className="mt-2 space-y-1">
-                {serviceCase.workOrders.map((wo) => (
-                  <li key={wo.id}>
-                    <a href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
-                      {wo.title} — {wo.status}
-                      {wo.supplierLegalName ? ` · ${wo.supplierLegalName}` : ""}
-                    </a>
-                  </li>
-                ))}
-              </ul>
+            <div className="mt-4 space-y-2">
+              <p className="text-xs uppercase text-zinc-500">Comenzi service & devize</p>
+              {serviceCase.workOrders.map((wo) => (
+                <WorkOrderStepCard
+                  key={wo.id}
+                  wo={wo}
+                  pending={pending}
+                  canApproveQuote={canApproveQuote}
+                  onQuoteAction={quoteAction}
+                />
+              ))}
             </div>
           ) : null}
 
-          {canWrite && !closed && serviceCase.status === "active" && nextStage ? (
-            <div className="mt-4 space-y-3">
-              {nextStage === "work_order" ||
-              serviceCase.currentStage === "scheduled" ||
-              nextStage === "scheduled" ? (
-                <div>
-                  <label className="text-xs text-zinc-500">Furnizor / service</label>
-                  <div className="mt-1">
-                    <SupplierCombobox
-                      value={supplierId}
-                      onChange={(id) => setSupplierId(id)}
-                      category={serviceCase.workflowType === "itp" ? "itp" : "service_auto"}
-                    />
-                  </div>
-                </div>
-              ) : null}
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void advance()}
-                className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-              >
-                Avansează la: {serviceCaseStageLabel(nextStage)}
-              </button>
+          {serviceCase.awaitingPostApproval && canOperate && !closed ? (
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3">
+              <p className="text-sm font-medium text-amber-100">Deviz aprobat — alege următorul pas</p>
+              <p className="mt-1 text-xs text-amber-200/70">
+                Execută imediat sau reprogramează service-ul în programator.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void applyPostApproval("immediate")}
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  Execută acum
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void applyPostApproval("reschedule")}
+                  className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
+                >
+                  Programează din nou
+                </button>
+              </div>
             </div>
           ) : null}
 
@@ -379,5 +515,71 @@ export function TicketWorkflowStepper({ ticketId, canWrite, closed, hasVehicle }
         </>
       )}
     </section>
+  );
+}
+
+function WorkOrderStepCard({
+  wo,
+  pending,
+  canApproveQuote,
+  onQuoteAction,
+}: {
+  wo: WorkOrderRecord;
+  pending: boolean;
+  canApproveQuote: boolean;
+  onQuoteAction: (workOrderId: string, quoteId: string, action: "approve" | "reject") => void;
+}) {
+  const q = wo.latestQuote;
+
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <Link href={`/fleet/work-orders/${wo.id}`} className="font-medium text-sky-300 hover:underline">
+            {wo.title}
+          </Link>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {wo.status}
+            {wo.supplierLegalName ? ` · ${wo.supplierLegalName}` : ""}
+          </p>
+        </div>
+        <Link
+          href={`/fleet/work-orders/${wo.id}`}
+          className="text-[10px] text-zinc-400 hover:text-zinc-200"
+        >
+          Deschide →
+        </Link>
+      </div>
+      {q ? (
+        <div className="mt-2 rounded-md border border-zinc-800/80 bg-zinc-900/30 p-2">
+          <p className="text-xs text-zinc-400">
+            Deviz v{q.version} · {quoteStatusLabel(q.status)} ·{" "}
+            {formatQuoteMoney(q.totalGrossCents, q.currency)}
+          </p>
+          {canApproveQuote && q.status === "submitted" ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onQuoteAction(wo.id, q.id, "approve")}
+                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                Aprobă deviz
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onQuoteAction(wo.id, q.id, "reject")}
+                className="rounded-lg border border-red-500/50 px-2.5 py-1 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+              >
+                Respinge
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-zinc-500">Fără deviz încă — adaugă din pagina comenzii.</p>
+      )}
+    </div>
   );
 }

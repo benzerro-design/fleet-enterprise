@@ -4,7 +4,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
 import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
 import { WorkOrderStatusBadge } from "@/components/fleet/work-orders/WorkOrderStatusBadge";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canApproveQuotes, canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { schedulerHref } from "@/lib/scheduler-deep-link";
 import {
@@ -48,6 +48,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
   const [wo, auth, quotes] = await Promise.all([load(id), getAuthMeResult(), loadQuotes(id)]);
   if (!wo) notFound();
   const canWrite = canWriteFleetOps(auth);
+  const canApprove = canApproveQuotes(auth);
   const hasInvoicedQuote = quotes.some((q) => q.status === "approved" && q.invoicedAt);
   const schedulerLink =
     wo.linkedAppointmentScheduledAt || wo.plannedAt
@@ -151,7 +152,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
         ) : null}
       </dl>
 
-      <WorkOrderQuotePanel workOrderId={wo.id} canWrite={canWrite} />
+      <WorkOrderQuotePanel workOrderId={wo.id} canWrite={canWrite} canApprove={canApprove} />
       <WorkOrderCompleteButton
         workOrderId={wo.id}
         canWrite={canWrite}

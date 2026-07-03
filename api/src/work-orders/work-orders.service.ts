@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,8 @@ import {
   ServiceCaseStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { assertClientFleetWrite } from '../iam/client-access';
+import type { AccessContext } from '../iam/access-context.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 
@@ -312,13 +315,14 @@ export class WorkOrdersService {
     });
   }
 
-  async complete(tenantSlug: string, id: string, actorUserId?: string) {
+  async complete(tenantSlug: string, id: string, actorUserId?: string, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     const wo = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id, tenantId: tenant.id },
       include: {
+        vehicle: { select: { clientId: true } },
         serviceCase: true,
         quotes: {
           where: { status: 'approved' },
@@ -328,6 +332,13 @@ export class WorkOrdersService {
       },
     });
     if (!wo) throw new NotFoundException('Work order not found');
+    if (access) {
+      try {
+        assertClientFleetWrite(access, wo.vehicle.clientId);
+      } catch {
+        throw new ForbiddenException('Cannot complete work order');
+      }
+    }
     if (wo.status === MaintenanceWorkOrderStatus.done) {
       throw new BadRequestException('Work order is already completed');
     }

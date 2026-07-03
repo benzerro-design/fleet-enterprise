@@ -89,9 +89,10 @@ function statusBadgeClass(status: WorkOrderQuoteStatus): string {
 type Props = {
   workOrderId: string;
   canWrite: boolean;
+  canApprove?: boolean;
 };
 
-export function WorkOrderQuotePanel({ workOrderId, canWrite }: Props) {
+export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false }: Props) {
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lines, setLines] = useState<EditableLine[]>([newLine()]);
@@ -385,7 +386,7 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite }: Props) {
               ))}
             </tbody>
           </table>
-          {canWrite && activeQuote.status === "submitted" ? (
+          {canApprove && activeQuote.status === "submitted" ? (
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"

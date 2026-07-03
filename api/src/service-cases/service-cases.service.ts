@@ -16,10 +16,19 @@ import {
   ServiceCaseStage,
   ServiceCaseStatus,
   ServiceCaseWorkflowType,
+  PostApprovalPath,
+  WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
-import { canPerformTicketAction, canReadTicket } from '../iam/client-access';
+import {
+  assertClientAccess,
+  assertServiceCaseWrite,
+  canAckAppointmentAsDriver,
+  canConfirmAppointment,
+  canReadTicket,
+  isTenantWideAccess,
+} from '../iam/client-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 
@@ -45,6 +54,16 @@ export type WorkOrderRecord = {
   plannedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  latestQuote: QuoteSummary | null;
+};
+
+export type QuoteSummary = {
+  id: string;
+  workOrderId: string;
+  version: number;
+  status: WorkOrderQuoteStatus;
+  totalGrossCents: number;
+  currency: string;
 };
 
 export type ServiceAppointmentRecord = {
@@ -60,6 +79,8 @@ export type ServiceAppointmentRecord = {
   location: string | null;
   status: ServiceAppointmentStatus;
   notes: string | null;
+  managerConfirmedAt: string | null;
+  driverAcknowledgedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -96,10 +117,16 @@ export type ServiceCaseRecord = {
   title: string;
   notes: string | null;
   closedAt: string | null;
+  awaitingPostApproval: boolean;
+  postApprovalPath: PostApprovalPath | null;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
   appointments: ServiceAppointmentRecord[];
+};
+
+export type PostApprovalInput = {
+  path: 'immediate' | 'reschedule';
 };
 
 export type AdvanceServiceCaseInput = {
@@ -164,6 +191,8 @@ export class ServiceCasesService {
       if (ticket && !canReadTicket(access, ticket)) {
         throw new ForbiddenException('Service case not accessible');
       }
+    } else if (access && !isTenantWideAccess(access)) {
+      assertClientAccess(access, row.clientId);
     }
     return this.toRecord(row);
   }
@@ -181,9 +210,7 @@ export class ServiceCasesService {
       where: { id: ticketId, tenantId: tenant.id },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
-    if (access && !canPerformTicketAction(access, 'transform', ticket)) {
-      throw new ForbiddenException('Cannot start service case');
-    }
+    if (access) assertServiceCaseWrite(access, ticket.clientId);
 
     const existing = await this.prisma.serviceCase.findFirst({
       where: { sourceTicketId: ticketId },
@@ -267,9 +294,7 @@ export class ServiceCasesService {
       throw new BadRequestException('Service case is already closed');
     }
 
-    if (row.sourceTicket && access && !canPerformTicketAction(access, 'transform', row.sourceTicket)) {
-      throw new ForbiddenException('Cannot advance service case');
-    }
+    if (access) assertServiceCaseWrite(access, row.clientId);
 
     const currentIdx = SERVICE_CASE_STAGE_ORDER.indexOf(row.currentStage);
     const nextStage =
@@ -314,10 +339,6 @@ export class ServiceCasesService {
       data,
       include: this.caseInclude(),
     });
-
-    if (nextStage === ServiceCaseStage.work_order && row.vehicleId) {
-      await this.ensureWorkOrder(tenant.id, updated, supplierId, actorUserId);
-    }
 
     if (row.sourceTicketId) {
       await this.prisma.crmTicketEvent.create({
@@ -370,9 +391,7 @@ export class ServiceCasesService {
     if (!serviceCase.vehicleId) {
       throw new BadRequestException('Service case has no vehicle — cannot schedule');
     }
-    if (serviceCase.sourceTicket && access && !canPerformTicketAction(access, 'transform', serviceCase.sourceTicket)) {
-      throw new ForbiddenException('Cannot schedule appointment');
-    }
+    if (access) assertServiceCaseWrite(access, serviceCase.clientId);
 
     const scheduledAt = new Date(dto.scheduledAt);
     if (Number.isNaN(scheduledAt.getTime())) {
@@ -478,13 +497,7 @@ export class ServiceCasesService {
     });
     if (!existing) throw new NotFoundException('Appointment not found');
 
-    if (
-      existing.serviceCase.sourceTicket &&
-      access &&
-      !canPerformTicketAction(access, 'transform', existing.serviceCase.sourceTicket)
-    ) {
-      throw new ForbiddenException('Cannot update appointment');
-    }
+    if (access) assertServiceCaseWrite(access, existing.serviceCase.clientId);
 
     let supplierId = existing.supplierId;
     if (dto.supplierId !== undefined) {
@@ -549,6 +562,179 @@ export class ServiceCasesService {
     return this.toAppointmentRecord(appointment);
   }
 
+  async confirmAppointment(
+    tenantSlug: string,
+    appointmentId: string,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const existing = await this.prisma.serviceAppointment.findFirst({
+      where: { id: appointmentId, tenantId: tenant.id },
+      include: { serviceCase: true },
+    });
+    if (!existing) throw new NotFoundException('Appointment not found');
+    if (existing.status === ServiceAppointmentStatus.cancelled) {
+      throw new BadRequestException('Cannot confirm cancelled appointment');
+    }
+    if (access && !canConfirmAppointment(access, existing.serviceCase.clientId)) {
+      throw new ForbiddenException('Cannot confirm appointment');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.serviceAppointment.update({
+        where: { id: appointmentId },
+        data: {
+          status: ServiceAppointmentStatus.confirmed,
+          managerConfirmedAt: new Date(),
+        },
+      });
+
+      const serviceCase = await tx.serviceCase.findFirst({ where: { id: existing.serviceCaseId } });
+      if (!serviceCase?.vehicleId) return;
+
+      await this.ensureWorkOrderTx(
+        tx,
+        tenant.id,
+        serviceCase,
+        existing.supplierId ?? serviceCase.supplierId,
+        actorUserId,
+      );
+
+      const workOrderIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.work_order);
+      const currentIdx = SERVICE_CASE_STAGE_ORDER.indexOf(serviceCase.currentStage);
+      if (currentIdx < workOrderIdx) {
+        await tx.serviceCase.update({
+          where: { id: serviceCase.id },
+          data: { currentStage: ServiceCaseStage.work_order },
+        });
+      }
+
+      await tx.maintenanceWorkOrder.updateMany({
+        where: { serviceCaseId: serviceCase.id },
+        data: { plannedAt: existing.scheduledAt, supplierId: existing.supplierId ?? serviceCase.supplierId },
+      });
+
+      if (serviceCase.sourceTicketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: serviceCase.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Programare confirmată: ${existing.scheduledAt.toLocaleString('ro-RO')}.`,
+            payload: { appointmentId, serviceCaseId: serviceCase.id },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: existing.serviceCaseId },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded!);
+  }
+
+  async acknowledgeAppointment(
+    tenantSlug: string,
+    appointmentId: string,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const existing = await this.prisma.serviceAppointment.findFirst({
+      where: { id: appointmentId, tenantId: tenant.id },
+      include: { serviceCase: true },
+    });
+    if (!existing) throw new NotFoundException('Appointment not found');
+    if (access && !canAckAppointmentAsDriver(access, existing.serviceCase.clientId)) {
+      throw new ForbiddenException('Cannot acknowledge appointment');
+    }
+
+    await this.prisma.serviceAppointment.update({
+      where: { id: appointmentId },
+      data: { driverAcknowledgedAt: new Date() },
+    });
+
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: existing.serviceCaseId },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded!);
+  }
+
+  async applyPostApproval(
+    tenantSlug: string,
+    caseId: string,
+    dto: PostApprovalInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const row = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+      include: { sourceTicket: true },
+    });
+    if (!row) throw new NotFoundException('Service case not found');
+    if (access) assertServiceCaseWrite(access, row.clientId);
+    if (!row.awaitingPostApproval) {
+      throw new BadRequestException('Service case is not awaiting post-approval decision');
+    }
+
+    const path = dto.path === 'reschedule' ? PostApprovalPath.reschedule : PostApprovalPath.immediate;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (path === PostApprovalPath.immediate) {
+        await tx.serviceCase.update({
+          where: { id: caseId },
+          data: {
+            awaitingPostApproval: false,
+            postApprovalPath: PostApprovalPath.immediate,
+            currentStage: ServiceCaseStage.cost,
+          },
+        });
+      } else {
+        await tx.serviceCase.update({
+          where: { id: caseId },
+          data: {
+            awaitingPostApproval: false,
+            postApprovalPath: PostApprovalPath.reschedule,
+            currentStage: ServiceCaseStage.scheduled,
+          },
+        });
+      }
+
+      if (row.sourceTicketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: row.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body:
+              path === PostApprovalPath.immediate
+                ? 'Deviz aprobat — continuare spre cost/factură.'
+                : 'Deviz aprobat — reprogramare service.',
+            payload: { serviceCaseId: caseId, postApprovalPath: path },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded!);
+  }
+
   private async ensureWorkOrder(
     tenantId: string,
     serviceCase: { id: string; vehicleId: string | null; title: string; sourceTicketId: string | null },
@@ -558,12 +744,25 @@ export class ServiceCasesService {
     if (!serviceCase.vehicleId) {
       throw new BadRequestException('Service case has no vehicle — cannot create work order');
     }
-    const existing = await this.prisma.maintenanceWorkOrder.findFirst({
+    return this.ensureWorkOrderTx(this.prisma, tenantId, serviceCase, supplierId, actorUserId);
+  }
+
+  private async ensureWorkOrderTx(
+    tx: Prisma.TransactionClient | PrismaService,
+    tenantId: string,
+    serviceCase: { id: string; vehicleId: string | null; title: string; sourceTicketId: string | null },
+    supplierId: string | null,
+    actorUserId?: string,
+  ) {
+    if (!serviceCase.vehicleId) {
+      throw new BadRequestException('Service case has no vehicle — cannot create work order');
+    }
+    const existing = await tx.maintenanceWorkOrder.findFirst({
       where: { serviceCaseId: serviceCase.id },
     });
     if (existing) return existing;
 
-    const wo = await this.prisma.maintenanceWorkOrder.create({
+    const wo = await tx.maintenanceWorkOrder.create({
       data: {
         tenantId,
         serviceCaseId: serviceCase.id,
@@ -575,7 +774,7 @@ export class ServiceCasesService {
     });
 
     if (serviceCase.sourceTicketId) {
-      await this.prisma.crmTicketLink.create({
+      await tx.crmTicketLink.create({
         data: {
           tenantId,
           ticketId: serviceCase.sourceTicketId,
@@ -602,7 +801,21 @@ export class ServiceCasesService {
       supplier: { select: { legalName: true } },
       workOrders: {
         orderBy: { createdAt: 'asc' as const },
-        include: { supplier: { select: { legalName: true } } },
+        include: {
+          supplier: { select: { legalName: true } },
+          quotes: {
+            orderBy: { version: 'desc' as const },
+            take: 1,
+            select: {
+              id: true,
+              workOrderId: true,
+              version: true,
+              status: true,
+              totalGrossCents: true,
+              currency: true,
+            },
+          },
+        },
       },
       appointments: {
         orderBy: { scheduledAt: 'asc' as const },
@@ -622,6 +835,8 @@ export class ServiceCasesService {
     location: string | null;
     status: ServiceAppointmentStatus;
     notes: string | null;
+    managerConfirmedAt?: Date | null;
+    driverAcknowledgedAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
     supplier?: { legalName: string } | null;
@@ -642,6 +857,8 @@ export class ServiceCasesService {
       location: row.location,
       status: row.status,
       notes: row.notes,
+      managerConfirmedAt: row.managerConfirmedAt?.toISOString() ?? null,
+      driverAcknowledgedAt: row.driverAcknowledgedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -660,6 +877,8 @@ export class ServiceCasesService {
       supplierId: string | null;
       title: string;
       notes: string | null;
+      awaitingPostApproval?: boolean;
+      postApprovalPath?: PostApprovalPath | null;
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
@@ -675,6 +894,14 @@ export class ServiceCasesService {
         completedAt: Date | null;
         createdAt: Date;
         supplier?: { legalName: string } | null;
+        quotes?: Array<{
+          id: string;
+          workOrderId: string;
+          version: number;
+          status: WorkOrderQuoteStatus;
+          totalGrossCents: number;
+          currency: string;
+        }>;
       }>;
       appointments?: Array<{
         id: string;
@@ -707,20 +934,35 @@ export class ServiceCasesService {
       title: row.title,
       notes: row.notes,
       closedAt: row.closedAt?.toISOString() ?? null,
+      awaitingPostApproval: row.awaitingPostApproval ?? false,
+      postApprovalPath: row.postApprovalPath ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-      workOrders: (row.workOrders ?? []).map((wo) => ({
-        id: wo.id,
-        serviceCaseId: wo.serviceCaseId,
-        vehicleId: wo.vehicleId,
-        supplierId: wo.supplierId,
-        supplierLegalName: wo.supplier?.legalName ?? null,
-        title: wo.title,
-        status: wo.status,
-        plannedAt: wo.plannedAt?.toISOString() ?? null,
-        completedAt: wo.completedAt?.toISOString() ?? null,
-        createdAt: wo.createdAt.toISOString(),
-      })),
+      workOrders: (row.workOrders ?? []).map((wo) => {
+        const q = wo.quotes?.[0];
+        return {
+          id: wo.id,
+          serviceCaseId: wo.serviceCaseId,
+          vehicleId: wo.vehicleId,
+          supplierId: wo.supplierId,
+          supplierLegalName: wo.supplier?.legalName ?? null,
+          title: wo.title,
+          status: wo.status,
+          plannedAt: wo.plannedAt?.toISOString() ?? null,
+          completedAt: wo.completedAt?.toISOString() ?? null,
+          createdAt: wo.createdAt.toISOString(),
+          latestQuote: q
+            ? {
+                id: q.id,
+                workOrderId: q.workOrderId,
+                version: q.version,
+                status: q.status,
+                totalGrossCents: q.totalGrossCents,
+                currency: q.currency,
+              }
+            : null,
+        };
+      }),
       appointments: (row.appointments ?? []).map((a) => this.toAppointmentRecord(a)),
     };
   }

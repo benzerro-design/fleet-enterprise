@@ -1,15 +1,16 @@
 import { Body, Controller, Get, NotFoundException, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { MembershipRole } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import type {
   AdvanceServiceCaseInput,
   CreateServiceAppointmentInput,
+  PostApprovalInput,
   UpdateServiceAppointmentInput,
 } from './service-cases.service';
 import { ServiceCasesService } from './service-cases.service';
@@ -20,7 +21,7 @@ export class ServiceCasesController {
   constructor(private readonly serviceCases: ServiceCasesService) {}
 
   @Get('by-ticket/:ticketId')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  @Roles(...FLEET_READ_ROLES)
   async getByTicket(
     @TenantId() tenantSlug: string,
     @Param('ticketId') ticketId: string,
@@ -32,7 +33,7 @@ export class ServiceCasesController {
   }
 
   @Post('from-ticket/:ticketId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   startFromTicket(
     @TenantId() tenantSlug: string,
     @Param('ticketId') ticketId: string,
@@ -43,7 +44,7 @@ export class ServiceCasesController {
   }
 
   @Post(':id/advance')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   advance(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
@@ -54,8 +55,20 @@ export class ServiceCasesController {
     return this.serviceCases.advance(tenantSlug, id, body, actorUserId, access);
   }
 
+  @Post(':id/post-approval')
+  @Roles(...FLEET_WRITE_ROLES)
+  postApproval(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: PostApprovalInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.applyPostApproval(tenantSlug, id, body, actorUserId, access);
+  }
+
   @Post(':id/appointments')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   createAppointment(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
@@ -66,8 +79,30 @@ export class ServiceCasesController {
     return this.serviceCases.createAppointment(tenantSlug, id, body, actorUserId, access);
   }
 
+  @Post('appointments/:appointmentId/confirm')
+  @Roles(...FLEET_WRITE_ROLES)
+  confirmAppointment(
+    @TenantId() tenantSlug: string,
+    @Param('appointmentId') appointmentId: string,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.confirmAppointment(tenantSlug, appointmentId, actorUserId, access);
+  }
+
+  @Post('appointments/:appointmentId/acknowledge')
+  @Roles(...FLEET_WRITE_ROLES)
+  acknowledgeAppointment(
+    @TenantId() tenantSlug: string,
+    @Param('appointmentId') appointmentId: string,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.acknowledgeAppointment(tenantSlug, appointmentId, actorUserId, access);
+  }
+
   @Patch('appointments/:appointmentId')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   updateAppointment(
     @TenantId() tenantSlug: string,
     @Param('appointmentId') appointmentId: string,

@@ -11,6 +11,11 @@ import {
   WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import {
+  assertApproveServiceQuote,
+  assertClientFleetWrite,
+} from '../iam/client-access';
+import type { AccessContext } from '../iam/access-context.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { providerLabelForSupplier } from '../suppliers/supplier-resolve';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
@@ -46,6 +51,24 @@ export class WorkOrderQuotesService {
     };
   }
 
+  private async assertWoAccess(
+    tenantSlug: string,
+    workOrderId: string,
+    access?: AccessContext,
+    mode: 'write' | 'approve' = 'write',
+  ) {
+    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
+      where: { id: workOrderId, tenant: { slug: tenantSlug } },
+      include: { vehicle: { select: { clientId: true } }, serviceCase: true },
+    });
+    if (!wo) throw new NotFoundException('Work order not found');
+    if (access) {
+      if (mode === 'approve') assertApproveServiceQuote(access, wo.vehicle.clientId);
+      else assertClientFleetWrite(access, wo.vehicle.clientId);
+    }
+    return wo;
+  }
+
   async listByWorkOrder(tenantSlug: string, workOrderId: string): Promise<WorkOrderQuoteRecord[]> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return [];
@@ -72,15 +95,12 @@ export class WorkOrderQuotesService {
     workOrderId: string,
     dto: UpsertQuoteInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
-      where: { id: workOrderId, tenantId: tenant.id },
-      include: { serviceCase: true },
-    });
-    if (!wo) throw new NotFoundException('Work order not found');
+    const wo = await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const existingDraft = await this.prisma.workOrderQuote.findFirst({
       where: { workOrderId, status: WorkOrderQuoteStatus.draft },
@@ -153,9 +173,12 @@ export class WorkOrderQuotesService {
     quoteId: string,
     dto: UpsertQuoteInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
@@ -211,9 +234,12 @@ export class WorkOrderQuotesService {
     workOrderId: string,
     quoteId: string,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
@@ -266,9 +292,12 @@ export class WorkOrderQuotesService {
     workOrderId: string,
     quoteId: string,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'approve');
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
@@ -290,14 +319,10 @@ export class WorkOrderQuotesService {
         include: this.quoteInclude(),
       });
 
-      await this.ensureCaseStageAtLeast(
-        tx,
-        tenant.id,
-        existing.workOrder.serviceCaseId,
-        ServiceCaseStage.cost,
-        existing.workOrder.serviceCase.sourceTicketId,
-        actorUserId,
-      );
+      await tx.serviceCase.update({
+        where: { id: existing.workOrder.serviceCaseId },
+        data: { awaitingPostApproval: true },
+      });
 
       return updated;
     });
@@ -320,9 +345,12 @@ export class WorkOrderQuotesService {
     quoteId: string,
     reason: string | null | undefined,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'approve');
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
@@ -360,9 +388,12 @@ export class WorkOrderQuotesService {
     workOrderId: string,
     quoteId: string,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
@@ -473,9 +504,12 @@ export class WorkOrderQuotesService {
     quoteId: string,
     dto: { invoiceNumber: string; invoiceDate: string; invoiceAttachmentUrl?: string | null },
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const invoiceNumber = dto.invoiceNumber?.trim();
     if (!invoiceNumber) throw new BadRequestException('invoiceNumber is required');

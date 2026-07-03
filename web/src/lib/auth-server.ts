@@ -81,6 +81,39 @@ export function canWriteTickets(auth: AuthMeResult): boolean {
   return false;
 }
 
+/** Dosar lucrare, programator, devize — manager client sau tenant_admin. */
+export function canOperateServiceCase(auth: AuthMeResult): boolean {
+  return canWriteClientFleet(auth) || canManageFleet(auth);
+}
+
+/** Aprobare deviz — client_admin sau tenant_admin. */
+export function canApproveQuotes(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") return true;
+  const roles = auth.me.access?.clientMemberships.map((m) => m.role) ?? [];
+  return roles.some((r) => r === "client_admin");
+}
+
+/** Confirmare programare — manager, dispecer sau șofer scoped. */
+export function canConfirmAppointment(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") return true;
+  if (auth.me.role === "client_user") {
+    const roles = auth.me.access?.clientMemberships.map((m) => m.role) ?? [];
+    return roles.some(
+      (r) => r === "client_admin" || r === "client_dispatcher" || r === "driver",
+    );
+  }
+  return false;
+}
+
+/** Confirmare primire programare — șofer. */
+export function canAckAppointment(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") return true;
+  return isClientDriverPortal(auth);
+}
+
 /** Manager CRM — patch status/prioritate, nu doar comentarii L0. */
 export function canPatchTickets(auth: AuthMeResult): boolean {
   return canWriteClientFleet(auth);

@@ -8,7 +8,15 @@ import { TicketConversation } from "@/components/fleet/tickets/TicketConversatio
 import { TicketEditPanel } from "@/components/fleet/tickets/TicketEditPanel";
 import { FleetAvatar } from "@/components/fleet/tickets/TicketListGlyphs";
 import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
-import { canPatchTickets, canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
+import {
+  canAckAppointment,
+  canApproveQuotes,
+  canConfirmAppointment,
+  canOperateServiceCase,
+  canPatchTickets,
+  canWriteTickets,
+  getAuthMeResult,
+} from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
   ticketPriorityLabel,
@@ -35,6 +43,10 @@ export default async function TicketDetailPage({ params }: PageProps) {
   if (!detail) notFound();
   const write = canWriteTickets(auth);
   const patch = canPatchTickets(auth);
+  const canOperate = canOperateServiceCase(auth);
+  const canApproveQuote = canApproveQuotes(auth);
+  const canConfirmAppt = canConfirmAppointment(auth);
+  const canAckAppt = canAckAppointment(auth);
   const { ticket } = detail;
   const closed = ticket.status === "resolved" || ticket.status === "cancelled";
   const currentUserId = auth.ok ? auth.me.userId : undefined;
@@ -100,6 +112,19 @@ export default async function TicketDetailPage({ params }: PageProps) {
                 <dt className="text-xs uppercase text-zinc-500">Prioritate</dt>
                 <dd className="mt-1">{ticketPriorityLabel(ticket.priority)}</dd>
               </div>
+              <div>
+                <dt className="text-xs uppercase text-zinc-500">Responsabil</dt>
+                <dd className="mt-1">
+                  {ticket.ownerEmail ? (
+                    <span className="inline-flex items-center gap-2">
+                      <FleetAvatar name={ticket.ownerEmail.split("@")[0]} size={24} />
+                      {ticket.ownerEmail}
+                    </span>
+                  ) : (
+                    <span className="text-amber-300">Neasignat</span>
+                  )}
+                </dd>
+              </div>
               {ticket.driverFullName ? (
                 <div>
                   <dt className="text-xs uppercase text-zinc-500">Șofer</dt>
@@ -151,7 +176,10 @@ export default async function TicketDetailPage({ params }: PageProps) {
           </div>
           <TicketWorkflowStepper
             ticketId={ticket.id}
-            canWrite={write}
+            canOperate={canOperate}
+            canApproveQuote={canApproveQuote}
+            canConfirmAppointment={canConfirmAppt}
+            canAckAppointment={canAckAppt}
             closed={closed}
             hasVehicle={!!ticket.vehicleId}
           />

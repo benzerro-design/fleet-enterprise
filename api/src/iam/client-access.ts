@@ -75,10 +75,14 @@ export function ticketListScope(ctx: AccessContext): Prisma.CrmTicketWhereInput 
 
   const orClauses: Prisma.CrmTicketWhereInput[] = [];
   for (const m of ctx.clientMemberships) {
-    if (m.role === ClientRole.driver) {
+      if (m.role === ClientRole.driver) {
       const driverParts: Prisma.CrmTicketWhereInput[] = [{ createdByUserId: ctx.userId }];
       if (m.driverId) {
         driverParts.push({ driverId: m.driverId });
+      }
+      const vehicleIds = ctx.assignedVehicleIds ?? [];
+      if (vehicleIds.length > 0) {
+        driverParts.push({ vehicleId: { in: vehicleIds } });
       }
       orClauses.push({
         clientId: m.clientId,
@@ -101,7 +105,12 @@ export function membershipForClient(
 
 export function canReadTicket(
   ctx: AccessContext,
-  ticket: { clientId: string; createdByUserId: string | null; driverId: string | null },
+  ticket: {
+    clientId: string;
+    createdByUserId: string | null;
+    driverId: string | null;
+    vehicleId?: string | null;
+  },
 ): boolean {
   if (isTenantWideAccess(ctx)) return true;
 
@@ -111,6 +120,7 @@ export function canReadTicket(
   if (membership.role === ClientRole.driver) {
     if (ticket.createdByUserId === ctx.userId) return true;
     if (membership.driverId && ticket.driverId === membership.driverId) return true;
+    if (ticket.vehicleId && ctx.assignedVehicleIds?.includes(ticket.vehicleId)) return true;
     return false;
   }
 
@@ -135,8 +145,20 @@ export function canPerformTicketAction(
 ): boolean {
   if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
 
-  if (action === 'delete' || action === 'transform' || action === 'return') {
+  if (action === 'delete' || action === 'return') {
     return false;
+  }
+
+  if (action === 'transform') {
+    if (!ticket) return false;
+    if (!canReadTicket(ctx, ticket)) return false;
+    const membership = membershipForClient(ctx, ticket.clientId);
+    if (!membership) return false;
+    return (
+      membership.role === ClientRole.driver ||
+      membership.role === ClientRole.client_admin ||
+      membership.role === ClientRole.client_dispatcher
+    );
   }
 
   if (action === 'create') {
@@ -237,4 +259,50 @@ export function assertClientFleetWrite(ctx: AccessContext, clientId: string): vo
     throw new ForbiddenException('Insufficient permissions for fleet write');
   }
   assertClientAccess(ctx, clientId);
+}
+
+/** Dosar lucrare / programator / devize — manager client sau tenant_admin. */
+export function canOperateServiceCase(ctx: AccessContext, clientId: string): boolean {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
+  if (!canWriteClientFleet(ctx)) return false;
+  return !!membershipForClient(ctx, clientId);
+}
+
+export function assertServiceCaseWrite(ctx: AccessContext, clientId: string): void {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) return;
+  if (!canOperateServiceCase(ctx, clientId)) {
+    throw new ForbiddenException('Cannot operate service case');
+  }
+  assertClientAccess(ctx, clientId);
+}
+
+/** Aprobare deviz — manager client (client_admin) sau tenant_admin. */
+export function canApproveServiceQuote(ctx: AccessContext, clientId: string): boolean {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
+  const m = membershipForClient(ctx, clientId);
+  return !!m && m.role === ClientRole.client_admin;
+}
+
+export function assertApproveServiceQuote(ctx: AccessContext, clientId: string): void {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) return;
+  if (!canApproveServiceQuote(ctx, clientId)) {
+    throw new ForbiddenException('Cannot approve quote');
+  }
+  assertClientAccess(ctx, clientId);
+}
+
+/** Confirmare programare — manager sau șofer scoped. */
+export function canConfirmAppointment(ctx: AccessContext, clientId: string): boolean {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
+  const m = membershipForClient(ctx, clientId);
+  if (!m) return false;
+  if (m.role === ClientRole.client_admin || m.role === ClientRole.client_dispatcher) return true;
+  if (m.role === ClientRole.driver) return true;
+  return false;
+}
+
+export function canAckAppointmentAsDriver(ctx: AccessContext, clientId: string): boolean {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
+  const m = membershipForClient(ctx, clientId);
+  return !!m && m.role === ClientRole.driver;
 }

@@ -8,11 +8,14 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { MaintenanceWorkOrderStatus, MembershipRole } from '@prisma/client';
+import { MaintenanceWorkOrderStatus } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { WorkOrdersService } from './work-orders.service';
 
@@ -38,7 +41,7 @@ export class WorkOrdersController {
   constructor(private readonly workOrders: WorkOrdersService) {}
 
   @Get()
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
     @Query('page') pageStr?: string,
@@ -63,24 +66,25 @@ export class WorkOrdersController {
   }
 
   @Get('stats')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  @Roles(...FLEET_READ_ROLES)
   stats(@TenantId() tenantSlug: string, @Query('clientId') clientId?: string) {
     return this.workOrders.getStats(tenantSlug, clientId?.trim());
   }
 
   @Get(':id')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  @Roles(...FLEET_READ_ROLES)
   get(@TenantId() tenantSlug: string, @Param('id') id: string) {
     return this.workOrders.getById(tenantSlug, id);
   }
 
   @Post(':id/complete')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   complete(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
   ) {
-    return this.workOrders.complete(tenantSlug, id, actorUserId);
+    return this.workOrders.complete(tenantSlug, id, actorUserId, access);
   }
 }
