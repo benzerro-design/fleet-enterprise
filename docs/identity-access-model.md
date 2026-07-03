@@ -90,6 +90,82 @@ Un abonat = un **tenant**. Nu amestecăm tenant-ul unui abonat cu modulul **Clie
 
 ---
 
+## 3.5 Niveluri L, profile F/T/G și axa R (canonic — 2026-07)
+
+**UI:** hartă vizuală în **Administrare → Membri & useri client** (`/fleet/members`, componentă `UserHierarchyMap`).
+
+### 3.5.1 Ierarhia L (linie de comandă)
+
+| Nivel | Cine | Scope | Rol DB azi | Stare |
+|-------|------|-------|------------|-------|
+| **L\*\*** | Owner platformă / vendor (business + app) | Cross-tenant; corecții tot (parole, km, useri) | `platform_admin` — **în afara app** | Planificat |
+| **L\*** | Admin abonat (FlotaX) — administrare clienți Alpha, Beta, Client_1… | Tot tenant-ul | `tenant_admin` / `tenant_viewer` | Live |
+| **L1** | Manager / angajat al **clientului contractual** | Unul sau mai mulți `Client` | `client_user` + `client_admin` / `client_dispatcher` / `client_viewer` | Live |
+| **L0** | Utilizator mașină / șofer (angajat client) | Vehicule asignate + tichete scoped | `client_user` + `driver` | Live |
+
+**Notă CRM:** în cod, nivelul L* apare ca `L_STAR` / „L★” pe evenimente tichet — **același lucru** cu **L\*** din documentație.
+
+**L1+N** = etichetă de **rutare tichet** (escaladare la FlotaX), **nu** tip de user.
+
+### 3.5.2 Profile funcționale F · T · G (pe L* și L1)
+
+Financiar (**F**), Tehnic (**T**), Logistică (**G**) **nu** sunt trepte ierarhice noi — sunt **job-uri** pe aceeași treaptă L:
+
+| Profil | Misiune | Exemple acțiuni |
+|--------|---------|-----------------|
+| **F** | Bani, buget, conformitate | Aprobă deviz, post-cost, factură, rapoarte cost |
+| **T** | Mașini, service, conformitate tehnică | Tichete, dosar, deviz edit (fără aprobare), ITP |
+| **G** | Mișcare, timp, coordonare | Programator, curse, șoferi, disponibilitate vehicule |
+| **full** | Toate capabilitățile nivelului | `tenant_admin`, `manager.alpha` (pilot F5) |
+
+**Separare deviz (separation of duties):** T editează → F aprobă → F (sau L* full) înregistrează cost/factură.
+
+**Implementare:** profile F/T/G = epic IAM post-pilot; **F5** livrează L* full + L1 full + L0.
+
+### 3.5.3 Axa R — parteneri furnizori (separat de L)
+
+Furnizorii **nu** sunt sub L0/L1 — sunt **parteneri externi** pe modul Devize & comenzi:
+
+| Nivel R | Cine | Scope |
+|---------|------|-------|
+| **R\*** | Admin organizație furnizor | Service auto, distribuitor piese, depozit anvelope… |
+| **R1** | Operator furnizor | Deviz, programare WO, status reparație, factură |
+| **R0** | Utilizator limitat furnizor | Vizualizare comenzi alocate |
+
+Tipuri partener: `R-service`, `R-parts`, `R-tires`, `R-fuel`, `R-insurer` (mapate pe `Supplier.category`).
+
+### 3.5.4 Useri de referință (demo vs pilot)
+
+| Nivel | Tenant `demo` | Tenant `flotax` |
+|-------|---------------|-----------------|
+| L\*\* | — (manual) | — (manual) |
+| L\* | `admin@demo.local` | `flotax_admin@flotax.local` |
+| L1·full | `manager.alpha@demo.local` | `client1flotax@flotax.local` * |
+| L0 | `sofer.alpha@demo.local` | `client1flotaxsofer@flotax.local` * |
+
+\* Useri client FlotaX: creați manual via `/tenant/client-memberships` (seed FlotaX = doar admin).
+
+### 3.5.5 Diagramă compactă
+
+```
+L**  owner platformă (vendor)
+  │
+L*   admin tenant ──┬── F financiar
+  │                 ├── T tehnic
+  │                 ├── G logistică
+  │                 └── full
+  │
+L1   angajat client ─┬── F · T · G · full  (scope: un Client)
+  │
+L0   șofer / user mașină
+  │
+R*   partener furnizor (axă separată, viitor)
+```
+
+**Referință flux service:** `docs/crm-service-flow-spec.md` (F5 — tichete, programator, devize & comenzi).
+
+---
+
 ## 4. Roluri — țintă vs. implementat
 
 ### 4.1 Strat platformă (țintă — neimplementat)
@@ -105,7 +181,7 @@ Un abonat = un **tenant**. Nu amestecăm tenant-ul unui abonat cu modulul **Clie
 
 | Rol | Scope | Drepturi |
 |-----|-------|----------|
-| `tenant_admin` | Tot tenant-ul din JWT | CRUD flotă, ops, membri tenant, FAZ; schimbă rol admin↔viewer; L★ CRM |
+| `tenant_admin` | Tot tenant-ul din JWT | CRUD flotă, ops, membri tenant, FAZ; schimbă rol admin↔viewer; L* CRM |
 | `tenant_viewer` | Tot tenant-ul din JWT (dacă **fără** ClientMembership) | Doar GET; UI ascunde acțiuni de scriere |
 | `client_user` | Restricționat de `ClientMembership` | Portal client — CRM L0/L1, clienți/vehicule scoped |
 
@@ -125,7 +201,7 @@ Implementare: `TenantMembership.role`, JWT `role`, `@Roles()` pe API, `canManage
 **API:** `GET/POST/DELETE /tenant/client-memberships` (doar `tenant_admin`). Filtrare automată pe `clientId` în CRM, clienți, vehicule.
 
 **Decizii produs (2026-05):**
-- L1 (client) și L★ (FlotaX) pot amândoi rezolva tichete; fiecare acțiune în timeline cu actor + nivel (L0/L1/L★).
+- L1 (client) și L* (FlotaX) pot amândoi rezolva tichete; fiecare acțiune în timeline cu actor + nivel (L0/L1/L*).
 - Rezolvare tichet: comentariu obligatoriu („cum s-a rezolvat”).
 - Parteneri/furnizori: scope separat în modul Devize & Comenzi (R1), nu în CRM general.
 - `flotax_sofer` (tenant_viewer pe tot tenant-ul) — **depreciat**; șoferii reali sunt useri `client_user` + `ClientMembership.driver`.
@@ -173,7 +249,7 @@ Tenant
 ### UI
 
 - `canManageFleet()` ≡ `role === "tenant_admin"`.
-- `/fleet/members` — listă membri, PATCH rol (doar admin); **fără** creare user din UI.
+- `/fleet/members` — listă membri, PATCH rol (doar admin); **hartă ierarhie L / F·T·G** în panoul dreapta (`UserHierarchyMap`); **fără** creare user din UI.
 - Useri noi: seed / SQL / Prisma Studio (`go-live-pilot-checklist.md` §2).
 
 ### Tenanți de referință (staging)
@@ -265,6 +341,7 @@ Acești admini sunt **pe același nivel tehnic** (`tenant_admin`), în tenant-i 
 
 | Data | Decizie |
 |------|---------|
+| 2026-07 | Ierarhie L**, L*, L1, L0, profile F/T/G, axa R — §3.5; hartă UI `/fleet/members` |
 | 2026-06 | Model producție: **SaaS multi-tenant**; abonat = tenant; FlotaX = tenant pilot |
 | 2026-06 | Superadmin platformă: **în afara app** până la epic `platform_admin` |
 | 2026-06 | Useri per client contractual: **țintă**, epic dedicat post-pilot |
