@@ -14,6 +14,7 @@ export type WorkOrderStatus =
 export type WorkOrderListRow = {
   id: string;
   title: string;
+  displayNumber: string | null;
   status: WorkOrderStatus;
   createdAt: string;
   updatedAt: string;
@@ -42,6 +43,9 @@ export type WorkOrderDetail = WorkOrderListRow & {
   linkedAppointmentScheduledAt: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
+  odometerKmIn: number | null;
+  odometerKmOut: number | null;
+  repairPathNote: string | null;
 };
 
 export type QuoteLineType = "labor" | "parts" | "other";

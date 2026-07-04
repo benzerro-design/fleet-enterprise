@@ -83,7 +83,13 @@ export class WorkOrdersController {
   recordServiceTimes(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
-    @Body() body: { inServiceAt?: string | null; outServiceAt?: string | null },
+    @Body()
+    body: {
+      inServiceAt?: string | null;
+      outServiceAt?: string | null;
+      odometerKmIn?: number | null;
+      odometerKmOut?: number | null;
+    },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {

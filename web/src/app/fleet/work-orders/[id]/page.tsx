@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
 import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
+import { WorkOrderServiceIntake } from "@/components/fleet/work-orders/WorkOrderServiceIntake";
 import { WorkOrderStatusBadge } from "@/components/fleet/work-orders/WorkOrderStatusBadge";
 import { canApproveQuotes, canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -73,7 +74,18 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
               {workflowTypeLabel(wo.workflowType)}
             </span>
           </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight">{wo.title}</h1>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight">
+            {wo.displayNumber ? (
+              <>
+                <span className="font-mono text-violet-300">{wo.displayNumber}</span>
+                <span className="mx-2 text-zinc-600">·</span>
+              </>
+            ) : null}
+            {wo.title}
+          </h1>
+          {wo.repairPathNote ? (
+            <p className="mt-1 text-sm text-amber-200/80">{wo.repairPathNote}</p>
+          ) : null}
           <p className="mt-2 text-sm text-zinc-500">
             Dosar: {wo.serviceCaseTitle} · etapă {serviceCaseStageLabel(wo.serviceCaseStage)}
           </p>
@@ -135,11 +147,21 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
         </div>
         <div>
           <dt className="text-xs uppercase text-zinc-500">In service</dt>
-          <dd className="mt-1 text-sm">{formatDateTime(wo.inServiceAt ?? null)}</dd>
+          <dd className="mt-1 text-sm">
+            {formatDateTime(wo.inServiceAt ?? null)}
+            {wo.odometerKmIn != null ? (
+              <span className="text-zinc-500"> · {wo.odometerKmIn.toLocaleString("ro-RO")} km</span>
+            ) : null}
+          </dd>
         </div>
         <div>
           <dt className="text-xs uppercase text-zinc-500">Out service</dt>
-          <dd className="mt-1 text-sm">{formatDateTime(wo.outServiceAt ?? null)}</dd>
+          <dd className="mt-1 text-sm">
+            {formatDateTime(wo.outServiceAt ?? null)}
+            {wo.odometerKmOut != null ? (
+              <span className="text-zinc-500"> · {wo.odometerKmOut.toLocaleString("ro-RO")} km</span>
+            ) : null}
+          </dd>
         </div>
         <div>
           <dt className="text-xs uppercase text-zinc-500">Finalizat</dt>
@@ -160,6 +182,15 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
           </div>
         ) : null}
       </dl>
+
+      <WorkOrderServiceIntake
+        workOrderId={wo.id}
+        canWrite={canWrite}
+        inServiceAt={wo.inServiceAt}
+        outServiceAt={wo.outServiceAt}
+        odometerKmIn={wo.odometerKmIn}
+        odometerKmOut={wo.odometerKmOut}
+      />
 
       <WorkOrderQuotePanel workOrderId={wo.id} canWrite={canWrite} canApprove={canApprove} />
       <WorkOrderCompleteButton

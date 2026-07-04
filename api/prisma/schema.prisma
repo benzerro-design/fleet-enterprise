@@ -1117,6 +1117,10 @@ model MaintenanceWorkOrder {
   completedAt   DateTime?
   inServiceAt   DateTime?
   outServiceAt  DateTime?
+  displayNumber String?
+  odometerKmIn  Int?
+  odometerKmOut Int?
+  repairPathNote String?
   notes         String?
   createdAt     DateTime                   @default(now())
   updatedAt     DateTime                   @updatedAt
@@ -1126,6 +1130,7 @@ model MaintenanceWorkOrder {
   supplier      Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   quotes        WorkOrderQuote[]
 
+  @@unique([tenantId, displayNumber])
   @@index([tenantId])
   @@index([serviceCaseId])
   @@index([vehicleId])

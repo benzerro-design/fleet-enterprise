@@ -243,7 +243,14 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
                     <tr key={row.id} className="text-zinc-200">
                       <td className={fleetTdClass}>
                         <Link href={`/fleet/work-orders/${row.id}`} className="font-medium hover:text-emerald-200 hover:underline">
-                          {row.title}
+                          {row.displayNumber ? (
+                            <>
+                              <span className="font-mono text-violet-300">{row.displayNumber}</span>
+                              <span className="mt-0.5 block text-sm text-zinc-300">{row.title}</span>
+                            </>
+                          ) : (
+                            row.title
+                          )}
                         </Link>
                       </td>
                       <td className={fleetTdClass}>

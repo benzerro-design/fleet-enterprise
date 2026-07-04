@@ -22,6 +22,7 @@ const MAX_PAGE_SIZE = 200;
 export type WorkOrderListRow = {
   id: string;
   title: string;
+  displayNumber: string | null;
   status: MaintenanceWorkOrderStatus;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +51,9 @@ export type WorkOrderDetail = WorkOrderListRow & {
   linkedAppointmentScheduledAt: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
+  odometerKmIn: number | null;
+  odometerKmOut: number | null;
+  repairPathNote: string | null;
 };
 
 export type WorkOrderListParams = {
@@ -108,6 +112,7 @@ export class WorkOrdersService {
   private toListRow(row: {
     id: string;
     title: string;
+    displayNumber: string | null;
     status: MaintenanceWorkOrderStatus;
     createdAt: Date;
     updatedAt: Date;
@@ -131,6 +136,7 @@ export class WorkOrdersService {
     return {
       id: row.id,
       title: row.title,
+      displayNumber: row.displayNumber ?? null,
       status: row.status,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -286,13 +292,21 @@ export class WorkOrdersService {
       linkedAppointmentScheduledAt: linked?.scheduledAt.toISOString() ?? null,
       inServiceAt: row.inServiceAt?.toISOString() ?? null,
       outServiceAt: row.outServiceAt?.toISOString() ?? null,
+      odometerKmIn: row.odometerKmIn ?? null,
+      odometerKmOut: row.odometerKmOut ?? null,
+      repairPathNote: row.repairPathNote ?? null,
     };
   }
 
   async recordServiceTimes(
     tenantSlug: string,
     id: string,
-    dto: { inServiceAt?: string | null; outServiceAt?: string | null },
+    dto: {
+      inServiceAt?: string | null;
+      outServiceAt?: string | null;
+      odometerKmIn?: number | null;
+      odometerKmOut?: number | null;
+    },
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<WorkOrderDetail> {
@@ -315,8 +329,13 @@ export class WorkOrdersService {
       }
     }
 
-    const data: { inServiceAt?: Date | null; outServiceAt?: Date | null; status?: MaintenanceWorkOrderStatus } =
-      {};
+    const data: {
+      inServiceAt?: Date | null;
+      outServiceAt?: Date | null;
+      odometerKmIn?: number | null;
+      odometerKmOut?: number | null;
+      status?: MaintenanceWorkOrderStatus;
+    } = {};
 
     if (dto.inServiceAt !== undefined) {
       if (dto.inServiceAt === null || dto.inServiceAt === '') {
@@ -338,8 +357,28 @@ export class WorkOrdersService {
       }
     }
 
+    if (dto.odometerKmIn !== undefined) {
+      if (dto.odometerKmIn === null) {
+        data.odometerKmIn = null;
+      } else if (!Number.isFinite(dto.odometerKmIn) || dto.odometerKmIn < 0) {
+        throw new BadRequestException('odometerKmIn must be a non-negative integer');
+      } else {
+        data.odometerKmIn = Math.round(dto.odometerKmIn);
+      }
+    }
+
+    if (dto.odometerKmOut !== undefined) {
+      if (dto.odometerKmOut === null) {
+        data.odometerKmOut = null;
+      } else if (!Number.isFinite(dto.odometerKmOut) || dto.odometerKmOut < 0) {
+        throw new BadRequestException('odometerKmOut must be a non-negative integer');
+      } else {
+        data.odometerKmOut = Math.round(dto.odometerKmOut);
+      }
+    }
+
     if (Object.keys(data).length === 0) {
-      throw new BadRequestException('Provide inServiceAt and/or outServiceAt');
+      throw new BadRequestException('Provide inServiceAt, outServiceAt, and/or odometer fields');
     }
 
     const nextIn = data.inServiceAt !== undefined ? data.inServiceAt : wo.inServiceAt;
@@ -386,7 +425,12 @@ export class WorkOrdersService {
       action: 'work_order.service_times',
       entityType: 'maintenance_work_order',
       entityId: id,
-      meta: { inServiceAt: nextIn?.toISOString(), outServiceAt: nextOut?.toISOString() },
+      meta: {
+        inServiceAt: nextIn?.toISOString(),
+        outServiceAt: nextOut?.toISOString(),
+        odometerKmIn: data.odometerKmIn ?? wo.odometerKmIn,
+        odometerKmOut: data.odometerKmOut ?? wo.odometerKmOut,
+      },
     });
 
     return this.getById(tenantSlug, id);

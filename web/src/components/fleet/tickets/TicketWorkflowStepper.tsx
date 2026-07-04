@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import {
-  SERVICE_CASE_STAGES,
   appointmentStatusLabel,
   formatQuoteMoney,
   quoteStatusLabel,
-  serviceCaseStageLabel,
   serviceCasesBrowserBase,
   fleetJsonHeaders,
   type PostApprovalPath,
@@ -20,6 +18,8 @@ import { workOrdersBrowserBase } from "@/lib/work-orders-api";
 import { schedulerHref } from "@/lib/scheduler-deep-link";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import { OperationalFlowFork } from "@/components/fleet/tickets/OperationalFlowFork";
+import { OperationalStoryTimeline } from "@/components/fleet/tickets/OperationalStoryTimeline";
+import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 
 type Props = {
   ticketId: string;
@@ -29,6 +29,8 @@ type Props = {
   canAckAppointment: boolean;
   closed: boolean;
   hasVehicle: boolean;
+  onServiceCaseChange?: (record: ServiceCaseRecord | null | undefined) => void;
+  compact?: boolean;
 };
 
 export function TicketWorkflowStepper({
@@ -39,6 +41,8 @@ export function TicketWorkflowStepper({
   canAckAppointment,
   closed,
   hasVehicle,
+  onServiceCaseChange,
+  compact = false,
 }: Props) {
   const router = useRouter();
   const [serviceCase, setServiceCase] = useState<ServiceCaseRecord | null | undefined>(undefined);
@@ -82,11 +86,12 @@ export function TicketWorkflowStepper({
       setServiceCase(data);
       setError(null);
       if (data?.supplierId) setSupplierId(data.supplierId);
+      onServiceCaseChange?.(data);
     } catch {
       setServiceCase(null);
       setError("Nu s-a putut încărca dosarul lucrare.");
     }
-  }, [ticketId]);
+  }, [ticketId, onServiceCaseChange]);
 
   useEffect(() => {
     void load();
@@ -277,41 +282,51 @@ export function TicketWorkflowStepper({
   }
 
   if (serviceCase === undefined) {
-    return (
+    return compact ? (
+      <p className="text-sm text-zinc-500">Se încarcă situația service…</p>
+    ) : (
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-        <p className="text-sm text-zinc-500">Se încarcă fluxul operațional…</p>
+        <p className="text-sm text-zinc-500">Se încarcă situația service…</p>
       </section>
     );
   }
 
-  const currentIdx = serviceCase ? SERVICE_CASE_STAGES.indexOf(serviceCase.currentStage) : -1;
+  const chapters = buildOperationalChapters(serviceCase, closed);
+  const shell = compact ? "space-y-4" : "rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-4";
   const hasPendingAppointment =
     serviceCase?.appointments?.some((a) => a.status === "scheduled") ?? false;
   const inRescheduleLoop =
     serviceCase?.postApprovalPath === "reschedule" &&
-    (serviceCase.currentStage === "scheduled" || serviceCase.currentStage === "work_order");
-  const hasApprovedQuote = serviceCase?.workOrders.some((wo) => wo.approvedQuote ?? wo.latestQuote?.status === "approved");
+    (serviceCase?.currentStage === "scheduled" || serviceCase?.currentStage === "work_order");
+  const hasApprovedQuote = serviceCase?.workOrders.some(
+    (wo) => wo.approvedQuote ?? wo.latestQuote?.status === "approved",
+  );
   const canScheduleNew =
     canOperate &&
     !closed &&
     serviceCase?.status === "active" &&
-    serviceCase.currentStage === "scheduled" &&
+    serviceCase?.currentStage === "scheduled" &&
     !hasPendingAppointment;
-
-  const primaryWo = serviceCase?.workOrders[0];
 
   async function recordServiceTime(
     workOrderId: string,
     field: "inServiceAt" | "outServiceAt",
     at?: string,
+    odometerKm?: number,
   ) {
     setPending(true);
     setError(null);
     try {
+      const body: Record<string, string | number> = {
+        [field]: at ?? new Date().toISOString(),
+      };
+      if (field === "inServiceAt" && odometerKm != null) body.odometerKmIn = odometerKm;
+      if (field === "outServiceAt" && odometerKm != null) body.odometerKmOut = odometerKm;
+
       const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/service-times`, {
         method: "PATCH",
         headers: fleetJsonHeaders(),
-        body: JSON.stringify({ [field]: at ?? new Date().toISOString() }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
@@ -331,99 +346,50 @@ export function TicketWorkflowStepper({
     }
   }
 
-  return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-medium text-zinc-200">Flux operațional</h2>
-          <p className="mt-1 text-xs text-zinc-500">
-            Tichet → programare → comandă service → in/out service → deviz → aprobare → factură → cost → închidere
-            {inRescheduleLoop ? " · buclă reprogramare activă" : ""}
+  function errorBlock() {
+    if (!error) return null;
+    return (
+      <div className="space-y-1">
+        <p className="text-sm text-red-400">{error}</p>
+        {error.toLowerCase().includes("internal server") ? (
+          <p className="text-xs text-amber-300/90">
+            Pe staging rulează migrările:{" "}
+            <code className="font-mono text-zinc-300">cd api && npx prisma migrate deploy</code>
           </p>
-        </div>
-        {serviceCase ? (
-          <span className="rounded-full border border-emerald-500/40 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200">
-            {serviceCaseStageLabel(serviceCase.currentStage)}
-          </span>
         ) : null}
       </div>
-      {error ? (
-        <div className="mt-2 space-y-1">
-          <p className="text-sm text-red-400">{error}</p>
-          {error.toLowerCase().includes("internal server") ? (
-            <p className="text-xs text-amber-300/90">
-              Pe staging rulează migrările:{" "}
-              <code className="font-mono text-zinc-300">cd api && npx prisma migrate deploy</code> (F5 flow +
-              quote invoice).
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+    );
+  }
 
-      {!serviceCase ? (
-        <div className="mt-4">
-          {error ? (
-            <div className="space-y-2">
-              <p className="text-sm text-red-400">{error}</p>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void load()}
-                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                Reîncearcă
-              </button>
-            </div>
-          ) : !hasVehicle ? (
-            <p className="text-sm text-amber-300">Atașează un vehicul la tichet pentru a porni fluxul.</p>
-          ) : canOperate && !closed ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => void startCase()}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              Pornește dosar lucrare
-            </button>
-          ) : (
-            <p className="text-sm text-zinc-500">Dosarul nu a fost pornit.</p>
-          )}
-        </div>
-      ) : (
-        <>
-          <ol className="mt-4 flex flex-wrap gap-1.5" aria-label="Etape dosar">
-            {SERVICE_CASE_STAGES.map((stage, idx) => {
-              const done = idx < currentIdx;
-              const active = idx === currentIdx;
-              const tip =
-                stage === "in_service" && primaryWo?.inServiceAt
-                  ? `Intrare: ${formatAppointmentWhen(primaryWo.inServiceAt)}`
-                  : stage === "out_service" && primaryWo?.outServiceAt
-                    ? `Ieșire: ${formatAppointmentWhen(primaryWo.outServiceAt)}`
-                    : stage === "in_service"
-                      ? "Intrare în service — marchează pe comandă"
-                      : stage === "out_service"
-                        ? "Ieșire din service — marchează pe comandă"
-                        : undefined;
-              return (
-                <li
-                  key={stage}
-                  title={tip}
-                  className={`rounded-full border px-2 py-0.5 text-[10px] sm:text-xs ${
-                    active
-                      ? "border-emerald-500/60 bg-emerald-950/40 text-emerald-200"
-                      : done
-                        ? "border-zinc-600 bg-zinc-800/60 text-zinc-300"
-                        : "border-zinc-800 text-zinc-500"
-                  } ${stage === "in_service" || stage === "out_service" ? "cursor-help" : ""}`}
-                >
-                  {serviceCaseStageLabel(stage)}
-                </li>
-              );
-            })}
-          </ol>
+  if (!serviceCase) {
+    return (
+      <div className={shell}>
+        {errorBlock()}
+        {!hasVehicle ? (
+          <p className="text-sm text-amber-300">Atașează un vehicul la tichet pentru a porni fluxul service.</p>
+        ) : canOperate && !closed ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void startCase()}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            Deschide dosar service
+          </button>
+        ) : (
+          <p className="text-sm text-zinc-500">Dosarul service nu a fost deschis.</p>
+        )}
+      </div>
+    );
+  }
 
-          <OperationalFlowFork
+  return (
+    <div className={shell}>
+      {errorBlock()}
+
+      <OperationalStoryTimeline chapters={chapters} />
+
+      <OperationalFlowFork
             serviceCase={serviceCase}
             awaitingDecision={serviceCase.awaitingPostApproval}
             canOperate={canOperate}
@@ -577,12 +543,10 @@ export function TicketWorkflowStepper({
             </div>
           ) : null}
 
-          {serviceCase.status === "completed" ? (
-            <p className="mt-3 text-sm text-emerald-400">Dosar închis.</p>
-          ) : null}
-        </>
-      )}
-    </section>
+      {serviceCase.status === "completed" ? (
+        <p className="text-sm text-emerald-400">Dosar închis.</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -600,7 +564,12 @@ function WorkOrderStepCard({
   canOperate: boolean;
   canApproveQuote: boolean;
   onQuoteAction: (workOrderId: string, quoteId: string, action: "approve" | "reject") => void;
-  onRecordServiceTime: (workOrderId: string, field: "inServiceAt" | "outServiceAt") => void;
+  onRecordServiceTime: (
+    workOrderId: string,
+    field: "inServiceAt" | "outServiceAt",
+    at?: string,
+    odometerKm?: number,
+  ) => void;
   repairPath?: "immediate" | "reschedule" | null;
 }) {
   const approved = wo.approvedQuote ?? (wo.latestQuote?.status === "approved" ? wo.latestQuote : null);
@@ -611,12 +580,19 @@ function WorkOrderStepCard({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <Link href={`/fleet/work-orders/${wo.id}`} className="font-medium text-sky-300 hover:underline">
+            {wo.displayNumber ? (
+              <>
+                <span className="font-mono text-violet-200">{wo.displayNumber}</span>
+                {" · "}
+              </>
+            ) : null}
             {wo.title}
           </Link>
           <p className="mt-0.5 text-xs text-zinc-500">
             {wo.status}
             {wo.supplierLegalName ? ` · ${wo.supplierLegalName}` : ""}
             {repairPath === "reschedule" ? " · reprogramare" : repairPath === "immediate" ? " · reparație directă" : ""}
+            {wo.repairPathNote ? ` · ${wo.repairPathNote}` : ""}
           </p>
         </div>
         <Link href={`/fleet/work-orders/${wo.id}`} className="text-[10px] text-zinc-400 hover:text-zinc-200">
@@ -634,6 +610,9 @@ function WorkOrderStepCard({
             ) : (
               <span className="text-zinc-500">—</span>
             )}
+            {wo.odometerKmIn != null ? (
+              <span className="text-zinc-500"> · {wo.odometerKmIn.toLocaleString("ro-RO")} km</span>
+            ) : null}
           </span>
           <span title="Data ieșirii din service">
             Out:{" "}
@@ -642,6 +621,9 @@ function WorkOrderStepCard({
             ) : (
               <span className="text-zinc-500">—</span>
             )}
+            {wo.odometerKmOut != null ? (
+              <span className="text-zinc-500"> · {wo.odometerKmOut.toLocaleString("ro-RO")} km</span>
+            ) : null}
           </span>
         </div>
         {canOperate ? (
@@ -650,20 +632,30 @@ function WorkOrderStepCard({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => onRecordServiceTime(wo.id, "inServiceAt")}
+                onClick={() => {
+                  const raw = window.prompt("Km la intrare (opțional, lasă gol dacă nu știi):");
+                  const km = raw?.trim() ? parseInt(raw, 10) : undefined;
+                  if (raw?.trim() && (!Number.isFinite(km) || km! < 0)) return;
+                  void onRecordServiceTime(wo.id, "inServiceAt", undefined, km);
+                }}
                 className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs text-white hover:bg-violet-500 disabled:opacity-50"
               >
-                Marchează intrare (In)
+                Mașina a intrat
               </button>
             ) : null}
             {wo.inServiceAt && !wo.outServiceAt ? (
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => onRecordServiceTime(wo.id, "outServiceAt")}
+                onClick={() => {
+                  const raw = window.prompt("Km la ieșire (opțional):");
+                  const km = raw?.trim() ? parseInt(raw, 10) : undefined;
+                  if (raw?.trim() && (!Number.isFinite(km) || km! < 0)) return;
+                  void onRecordServiceTime(wo.id, "outServiceAt", undefined, km);
+                }}
                 className="rounded-lg border border-violet-500/50 px-2.5 py-1 text-xs text-violet-100 hover:bg-violet-950/40 disabled:opacity-50"
               >
-                Marchează ieșire (Out)
+                Mașina a ieșit
               </button>
             ) : null}
           </div>

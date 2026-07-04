@@ -44,6 +44,10 @@ export type WorkOrderRecord = {
   supplierLegalName: string | null;
   title: string;
   status: string;
+  displayNumber: string | null;
+  odometerKmIn: number | null;
+  odometerKmOut: number | null;
+  repairPathNote: string | null;
   plannedAt: string | null;
   completedAt: string | null;
   inServiceAt: string | null;

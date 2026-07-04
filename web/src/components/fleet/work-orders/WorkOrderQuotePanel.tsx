@@ -358,6 +358,16 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
             <span>
               Total: <strong>{formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}</strong>
             </span>
+            {activeQuote.status !== "draft" ? (
+              <a
+                href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sky-400 hover:underline"
+              >
+                PDF deviz
+              </a>
+            ) : null}
           </div>
           {activeQuote.rejectionReason ? (
             <p className="text-sm text-red-300">Motiv respingere: {activeQuote.rejectionReason}</p>

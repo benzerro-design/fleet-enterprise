@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, StreamableFile, UseGuards } from '@nestjs/common';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -21,6 +21,20 @@ export class WorkOrderQuotesController {
   @Roles(...FLEET_READ_ROLES)
   list(@TenantId() tenantSlug: string, @Param('workOrderId') workOrderId: string) {
     return this.quotes.listByWorkOrder(tenantSlug, workOrderId);
+  }
+
+  @Get(':quoteId/pdf')
+  @Roles(...FLEET_READ_ROLES)
+  async pdf(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Param('quoteId') quoteId: string,
+  ) {
+    const { buffer, filename } = await this.quotes.exportPdf(tenantSlug, workOrderId, quoteId);
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${filename}"`,
+    });
   }
 
   @Post()

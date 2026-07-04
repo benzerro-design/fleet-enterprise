@@ -57,6 +57,10 @@ export type WorkOrderRecord = {
   completedAt: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
+  displayNumber: string | null;
+  odometerKmIn: number | null;
+  odometerKmOut: number | null;
+  repairPathNote: string | null;
   createdAt: string;
   latestQuote: QuoteSummary | null;
   approvedQuote: QuoteSummary | null;
@@ -734,6 +738,19 @@ export class ServiceCasesService {
           },
         });
       }
+
+      const wo = await tx.maintenanceWorkOrder.findFirst({ where: { serviceCaseId: caseId } });
+      if (wo) {
+        await tx.maintenanceWorkOrder.update({
+          where: { id: wo.id },
+          data: {
+            repairPathNote:
+              path === PostApprovalPath.immediate
+                ? 'Reparație directă după aprobare deviz'
+                : 'Reparație cu reprogramare după aprobare deviz',
+          },
+        });
+      }
     });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
@@ -770,6 +787,14 @@ export class ServiceCasesService {
     });
     if (existing) return existing;
 
+    const year = new Date().getFullYear();
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const seq =
+      (await tx.maintenanceWorkOrder.count({
+        where: { tenantId, createdAt: { gte: yearStart } },
+      })) + 1;
+    const displayNumber = `WO-${year}-${String(seq).padStart(4, '0')}`;
+
     const wo = await tx.maintenanceWorkOrder.create({
       data: {
         tenantId,
@@ -777,6 +802,7 @@ export class ServiceCasesService {
         vehicleId: serviceCase.vehicleId,
         supplierId,
         title: serviceCase.title,
+        displayNumber,
         status: supplierId ? MaintenanceWorkOrderStatus.sent : MaintenanceWorkOrderStatus.draft,
       },
     });
@@ -903,6 +929,10 @@ export class ServiceCasesService {
         completedAt: Date | null;
         inServiceAt: Date | null;
         outServiceAt: Date | null;
+        displayNumber: string | null;
+        odometerKmIn: number | null;
+        odometerKmOut: number | null;
+        repairPathNote: string | null;
         createdAt: Date;
         supplier?: { legalName: string } | null;
         quotes?: Array<{
@@ -980,6 +1010,10 @@ export class ServiceCasesService {
           completedAt: wo.completedAt?.toISOString() ?? null,
           inServiceAt: wo.inServiceAt?.toISOString() ?? null,
           outServiceAt: wo.outServiceAt?.toISOString() ?? null,
+          displayNumber: wo.displayNumber ?? null,
+          odometerKmIn: wo.odometerKmIn ?? null,
+          odometerKmOut: wo.odometerKmOut ?? null,
+          repairPathNote: wo.repairPathNote ?? null,
           createdAt: wo.createdAt.toISOString(),
           latestQuote: toSummary(display),
           approvedQuote: toSummary(approved ?? null),

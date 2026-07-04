@@ -26,6 +26,7 @@ import {
   toQuoteRecord,
   type WorkOrderQuoteRecord,
 } from './work-order-quotes.types';
+import { buildQuotePdfBuffer } from './work-order-quote-pdf';
 
 function formatMoney(cents: number): string {
   return `${(cents / 100).toFixed(2)} RON`;
@@ -588,6 +589,33 @@ export class WorkOrderQuotesService {
     });
 
     return toQuoteRecord(quote);
+  }
+
+  async exportPdf(
+    tenantSlug: string,
+    workOrderId: string,
+    quoteId: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const row = await this.prisma.workOrderQuote.findFirst({
+      where: { id: quoteId, workOrderId, tenantId: tenant.id },
+      include: {
+        lines: { orderBy: { sortOrder: 'asc' } },
+        workOrder: { include: { supplier: { select: { legalName: true } } } },
+      },
+    });
+    if (!row) throw new NotFoundException('Quote not found');
+
+    const quote = toQuoteRecord(row);
+    const buffer = await buildQuotePdfBuffer({
+      workOrderTitle: row.workOrder.title,
+      displayNumber: row.workOrder.displayNumber,
+      supplierName: row.workOrder.supplier?.legalName ?? null,
+      quote,
+    });
+    return { buffer, filename: `deviz-v${row.version}.pdf` };
   }
 
   private normalizeLines(lines: QuoteLineInput[]) {
