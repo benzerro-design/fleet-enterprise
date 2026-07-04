@@ -64,7 +64,7 @@ export function TicketDetailShell({
         claimPending={claimPending}
       />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[2fr_3fr]">
         <section aria-label="Conversație tichet">
           <TicketConversation
             initial={detail}

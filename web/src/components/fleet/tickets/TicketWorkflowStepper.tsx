@@ -19,6 +19,7 @@ import { schedulerHref } from "@/lib/scheduler-deep-link";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import { OperationalFlowFork } from "@/components/fleet/tickets/OperationalFlowFork";
 import { OperationalStoryTimeline } from "@/components/fleet/tickets/OperationalStoryTimeline";
+import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/WorkOrderQuoteBillingActions";
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 
 type Props = {
@@ -416,6 +417,10 @@ export function TicketWorkflowStepper({
                   canApproveQuote={canApproveQuote}
                   onQuoteAction={quoteAction}
                   onRecordServiceTime={recordServiceTime}
+                  onRefresh={() => {
+                    void load();
+                    router.refresh();
+                  }}
                   repairPath={serviceCase.postApprovalPath}
                 />
               ))}
@@ -557,6 +562,7 @@ function WorkOrderStepCard({
   canApproveQuote,
   onQuoteAction,
   onRecordServiceTime,
+  onRefresh,
   repairPath,
 }: {
   wo: WorkOrderRecord;
@@ -570,6 +576,7 @@ function WorkOrderStepCard({
     at?: string,
     odometerKm?: number,
   ) => void;
+  onRefresh: () => void;
   repairPath?: "immediate" | "reschedule" | null;
 }) {
   const approved = wo.approvedQuote ?? (wo.latestQuote?.status === "approved" ? wo.latestQuote : null);
@@ -663,14 +670,25 @@ function WorkOrderStepCard({
       </div>
 
       {approved ? (
-        <div className="mt-2 rounded-md border border-emerald-800/50 bg-emerald-950/20 p-2">
-          <p className="text-xs font-medium text-emerald-200">
-            Deviz v{approved.version} aprobat · {formatQuoteMoney(approved.totalGrossCents, approved.currency)}
-          </p>
-          <p className="mt-1 text-[10px] text-emerald-300/70">
-            Rămâne pe comandă — după reparație: factură apoi cost.
-          </p>
-        </div>
+        <>
+          <div className="mt-2 rounded-md border border-emerald-800/50 bg-emerald-950/20 p-2">
+            <p className="text-xs font-medium text-emerald-200">
+              Deviz v{approved.version} aprobat · {formatQuoteMoney(approved.totalGrossCents, approved.currency)}
+            </p>
+            {!approved.invoicedAt ? (
+              <p className="mt-1 text-[10px] text-emerald-300/70">După reparație: factură, cost, apoi închidere.</p>
+            ) : null}
+          </div>
+          <WorkOrderQuoteBillingActions
+            key={`${approved.id}-${approved.invoicedAt ?? ""}-${approved.costEntryId ?? ""}`}
+            workOrderId={wo.id}
+            workOrderStatus={wo.status}
+            quote={approved}
+            canWrite={canOperate}
+            compact
+            onUpdated={onRefresh}
+          />
+        </>
       ) : null}
 
       {pendingQuote ? (

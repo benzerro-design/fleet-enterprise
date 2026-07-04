@@ -34,6 +34,10 @@ export type QuoteSummary = {
   status: WorkOrderQuoteStatus;
   totalGrossCents: number;
   currency: string;
+  invoicedAt: string | null;
+  invoiceNumber: string | null;
+  invoiceDate: string | null;
+  costEntryId: string | null;
 };
 
 export type WorkOrderRecord = {

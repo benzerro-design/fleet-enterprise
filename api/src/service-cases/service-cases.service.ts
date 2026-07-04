@@ -74,6 +74,10 @@ export type QuoteSummary = {
   status: WorkOrderQuoteStatus;
   totalGrossCents: number;
   currency: string;
+  invoicedAt: string | null;
+  invoiceNumber: string | null;
+  invoiceDate: string | null;
+  costEntryId: string | null;
 };
 
 export type ServiceAppointmentRecord = {
@@ -848,6 +852,10 @@ export class ServiceCasesService {
               totalNetCents: true,
               totalVatCents: true,
               currency: true,
+              invoicedAt: true,
+              invoiceNumber: true,
+              invoiceDate: true,
+              costEntryId: true,
             },
           },
         },
@@ -943,6 +951,10 @@ export class ServiceCasesService {
           totalNetCents: number;
           totalVatCents: number;
           currency: string;
+          invoicedAt: Date | null;
+          invoiceNumber: string | null;
+          invoiceDate: Date | null;
+          costEntryId: string | null;
         }>;
       }>;
       appointments?: Array<{
@@ -996,6 +1008,10 @@ export class ServiceCasesService {
                 status: q.status,
                 totalGrossCents: q.totalNetCents + q.totalVatCents,
                 currency: q.currency,
+                invoicedAt: q.invoicedAt?.toISOString() ?? null,
+                invoiceNumber: q.invoiceNumber ?? null,
+                invoiceDate: q.invoiceDate?.toISOString() ?? null,
+                costEntryId: q.costEntryId ?? null,
               }
             : null;
         return {
