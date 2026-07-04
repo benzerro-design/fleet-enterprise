@@ -78,6 +78,29 @@ export class WorkOrdersController {
     return this.workOrders.getById(tenantSlug, id);
   }
 
+  @Patch(':id')
+  @Roles(...FLEET_WRITE_ROLES)
+  patch(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: { serviceOrderType?: 'M' | 'E' | 'D' | 'TV' },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.workOrders.patch(tenantSlug, id, body, actorUserId, access);
+  }
+
+  @Post(':id/mark-ready')
+  @Roles(...FLEET_WRITE_ROLES)
+  markReady(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.workOrders.markReady(tenantSlug, id, actorUserId, access);
+  }
+
   @Patch(':id/service-times')
   @Roles(...FLEET_WRITE_ROLES)
   recordServiceTimes(

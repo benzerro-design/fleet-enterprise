@@ -131,7 +131,16 @@ export function WorkOrderQuoteBillingActions({
 
       {quote.invoicedAt ? (
         <p className="text-xs text-emerald-300">
-          Factură: {quote.invoiceNumber ?? "—"}
+          Factură:{" "}
+          {quote.costEntryId ? (
+            <Link href={`/fleet/costs/${quote.costEntryId}`} className="text-sky-300 hover:underline">
+              {quote.invoiceNumber ?? "—"}
+            </Link>
+          ) : (
+            <Link href={`/fleet/work-orders/${workOrderId}`} className="text-sky-300 hover:underline">
+              {quote.invoiceNumber ?? "—"}
+            </Link>
+          )}
           {quote.invoiceDate
             ? ` · ${new Date(quote.invoiceDate).toLocaleDateString("ro-RO")}`
             : ""}

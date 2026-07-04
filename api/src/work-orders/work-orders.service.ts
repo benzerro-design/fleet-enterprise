@@ -6,10 +6,12 @@ import {
 } from '@nestjs/common';
 import {
   CrmTicketEventKind,
+  CrmTicketStatus,
   MaintenanceWorkOrderStatus,
   Prisma,
   ServiceCaseStage,
   ServiceCaseStatus,
+  ServiceOrderType,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { assertClientFleetWrite } from '../iam/client-access';
@@ -19,11 +21,39 @@ import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service
 
 const MAX_PAGE_SIZE = 200;
 
+export type WorkOrderVehicleSnapshot = {
+  registrationNumber: string;
+  brand: string | null;
+  model: string | null;
+  vin: string | null;
+  odometerKm: number;
+  itpExpiresOn: string | null;
+};
+
+export type WorkOrderClientSnapshot = {
+  legalName: string;
+  taxId: string | null;
+  addressLine: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  billingNotes: string | null;
+};
+
+export type WorkOrderSupplierSnapshot = {
+  legalName: string;
+  taxId: string | null;
+  addressLine: string | null;
+  city: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+};
+
 export type WorkOrderListRow = {
   id: string;
   title: string;
   displayNumber: string | null;
   status: MaintenanceWorkOrderStatus;
+  serviceOrderType: ServiceOrderType;
   createdAt: string;
   updatedAt: string;
   plannedAt: string | null;
@@ -54,6 +84,22 @@ export type WorkOrderDetail = WorkOrderListRow & {
   odometerKmIn: number | null;
   odometerKmOut: number | null;
   repairPathNote: string | null;
+  readyAt: string | null;
+  vehicle: WorkOrderVehicleSnapshot;
+  client: WorkOrderClientSnapshot;
+  supplier: WorkOrderSupplierSnapshot | null;
+  ticketSubject: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  quoteSummary: {
+    status: string | null;
+    version: number | null;
+    totalGrossCents: number | null;
+    currency: string | null;
+    submittedAt: string | null;
+    approvedAt: string | null;
+    invoicedAt: string | null;
+  };
 };
 
 export type WorkOrderListParams = {
@@ -114,6 +160,7 @@ export class WorkOrdersService {
     title: string;
     displayNumber: string | null;
     status: MaintenanceWorkOrderStatus;
+    serviceOrderType: ServiceOrderType;
     createdAt: Date;
     updatedAt: Date;
     plannedAt: Date | null;
@@ -138,6 +185,7 @@ export class WorkOrdersService {
       title: row.title,
       displayNumber: row.displayNumber ?? null,
       status: row.status,
+      serviceOrderType: row.serviceOrderType,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       plannedAt: row.plannedAt?.toISOString() ?? null,
@@ -265,6 +313,40 @@ export class WorkOrdersService {
       where: { id, tenant: { slug: tenantSlug } },
       include: {
         ...this.listInclude(),
+        vehicle: {
+          select: {
+            registrationNumber: true,
+            clientId: true,
+            brand: true,
+            model: true,
+            vin: true,
+            odometerKm: true,
+            itpExpiresOn: true,
+            client: {
+              select: {
+                code: true,
+                legalName: true,
+                taxId: true,
+                addressLine: true,
+                contactPhone: true,
+                contactEmail: true,
+                billingNotes: true,
+              },
+            },
+          },
+        },
+        supplier: {
+          select: {
+            id: true,
+            code: true,
+            legalName: true,
+            taxId: true,
+            addressLine: true,
+            city: true,
+            contactPhone: true,
+            contactEmail: true,
+          },
+        },
         serviceCase: {
           select: {
             id: true,
@@ -274,6 +356,27 @@ export class WorkOrdersService {
             workflowType: true,
             sourceTicketId: true,
             clientId: true,
+            sourceTicket: {
+              select: {
+                subject: true,
+                driver: { select: { fullName: true, phone: true } },
+              },
+            },
+          },
+        },
+        quotes: {
+          orderBy: { version: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            version: true,
+            status: true,
+            currency: true,
+            totalNetCents: true,
+            totalVatCents: true,
+            submittedAt: true,
+            approvedAt: true,
+            invoicedAt: true,
           },
         },
       },
@@ -283,6 +386,11 @@ export class WorkOrdersService {
     const linked = await this.resolveLinkedAppointment(row.tenantId, row.serviceCaseId, row.plannedAt);
 
     const list = this.toListRow(row);
+    const approved = row.quotes.find((q) => q.status === 'approved');
+    const submitted = row.quotes.find((q) => q.status === 'submitted');
+    const draft = row.quotes.find((q) => q.status === 'draft');
+    const primary = approved ?? submitted ?? draft ?? row.quotes[0];
+
     return {
       ...list,
       notes: row.notes,
@@ -295,7 +403,179 @@ export class WorkOrdersService {
       odometerKmIn: row.odometerKmIn ?? null,
       odometerKmOut: row.odometerKmOut ?? null,
       repairPathNote: row.repairPathNote ?? null,
+      readyAt: row.readyAt?.toISOString() ?? null,
+      vehicle: {
+        registrationNumber: row.vehicle.registrationNumber,
+        brand: row.vehicle.brand,
+        model: row.vehicle.model,
+        vin: row.vehicle.vin,
+        odometerKm: row.vehicle.odometerKm,
+        itpExpiresOn: row.vehicle.itpExpiresOn?.toISOString() ?? null,
+      },
+      client: {
+        legalName: row.vehicle.client.legalName,
+        taxId: row.vehicle.client.taxId,
+        addressLine: row.vehicle.client.addressLine,
+        contactPhone: row.vehicle.client.contactPhone,
+        contactEmail: row.vehicle.client.contactEmail,
+        billingNotes: row.vehicle.client.billingNotes,
+      },
+      supplier: row.supplier
+        ? {
+            legalName: row.supplier.legalName,
+            taxId: row.supplier.taxId,
+            addressLine: row.supplier.addressLine,
+            city: row.supplier.city,
+            contactPhone: row.supplier.contactPhone,
+            contactEmail: row.supplier.contactEmail,
+          }
+        : null,
+      ticketSubject: row.serviceCase.sourceTicket?.subject ?? null,
+      driverName: row.serviceCase.sourceTicket?.driver?.fullName ?? null,
+      driverPhone: row.serviceCase.sourceTicket?.driver?.phone ?? null,
+      quoteSummary: primary
+        ? {
+            status: primary.status,
+            version: primary.version,
+            totalGrossCents: primary.totalNetCents + primary.totalVatCents,
+            currency: primary.currency,
+            submittedAt: primary.submittedAt?.toISOString() ?? null,
+            approvedAt: primary.approvedAt?.toISOString() ?? null,
+            invoicedAt: primary.invoicedAt?.toISOString() ?? null,
+          }
+        : {
+            status: null,
+            version: null,
+            totalGrossCents: null,
+            currency: null,
+            submittedAt: null,
+            approvedAt: null,
+            invoicedAt: null,
+          },
     };
+  }
+
+  async patch(
+    tenantSlug: string,
+    id: string,
+    dto: { serviceOrderType?: ServiceOrderType },
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderDetail> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: { vehicle: { select: { clientId: true } } },
+    });
+    if (!wo) throw new NotFoundException('Work order not found');
+    if (access) {
+      try {
+        assertClientFleetWrite(access, wo.vehicle.clientId);
+      } catch {
+        throw new ForbiddenException('Cannot update work order');
+      }
+    }
+
+    if (dto.serviceOrderType !== undefined) {
+      const locked = await this.prisma.workOrderQuote.findFirst({
+        where: {
+          workOrderId: id,
+          status: { in: ['submitted', 'approved'] },
+        },
+      });
+      if (locked) {
+        throw new BadRequestException('Cannot change service order type after quote is submitted');
+      }
+    }
+
+    const data: Prisma.MaintenanceWorkOrderUpdateInput = {};
+    if (dto.serviceOrderType !== undefined) {
+      data.serviceOrderType = dto.serviceOrderType;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No fields to update');
+    }
+
+    await this.prisma.maintenanceWorkOrder.update({ where: { id }, data });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order.patch',
+      entityType: 'maintenance_work_order',
+      entityId: id,
+      meta: dto,
+    });
+
+    return this.getById(tenantSlug, id);
+  }
+
+  async markReady(
+    tenantSlug: string,
+    id: string,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderDetail> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: {
+        vehicle: { select: { clientId: true } },
+        serviceCase: { select: { sourceTicketId: true } },
+        quotes: { where: { status: 'approved' }, take: 1 },
+      },
+    });
+    if (!wo) throw new NotFoundException('Work order not found');
+    if (access) {
+      try {
+        assertClientFleetWrite(access, wo.vehicle.clientId);
+      } catch {
+        throw new ForbiddenException('Cannot mark work ready');
+      }
+    }
+    if (wo.readyAt) {
+      throw new BadRequestException('Work is already marked ready');
+    }
+    if (!wo.quotes[0]) {
+      throw new BadRequestException('Approved quote required before marking work ready');
+    }
+
+    const readyAt = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.maintenanceWorkOrder.update({
+        where: { id },
+        data: { readyAt },
+      });
+
+      const ticketId = wo.serviceCase.sourceTicketId;
+      if (ticketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Lucrare gata — reparație finalizată (${readyAt.toLocaleString('ro-RO')}).`,
+            payload: { workOrderId: id, readyAt: readyAt.toISOString(), milestone: 'work_ready' },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order.mark_ready',
+      entityType: 'maintenance_work_order',
+      entityId: id,
+      meta: { readyAt: readyAt.toISOString() },
+    });
+
+    return this.getById(tenantSlug, id);
   }
 
   async recordServiceTimes(
@@ -562,6 +842,32 @@ export class WorkOrdersService {
       });
 
       if (wo.serviceCase.sourceTicketId) {
+        const ticket = await tx.crmTicket.findFirst({
+          where: { id: wo.serviceCase.sourceTicketId, tenantId: tenant.id },
+        });
+        if (
+          ticket &&
+          ticket.status !== CrmTicketStatus.resolved &&
+          ticket.status !== CrmTicketStatus.cancelled
+        ) {
+          await tx.crmTicket.update({
+            where: { id: ticket.id },
+            data: {
+              status: CrmTicketStatus.resolved,
+              resolvedAt: new Date(),
+            },
+          });
+          await tx.crmTicketEvent.create({
+            data: {
+              tenantId: tenant.id,
+              ticketId: ticket.id,
+              kind: CrmTicketEventKind.status,
+              body: 'Tichet rezolvat automat — comandă service finalizată.',
+              payload: { status: 'resolved', auto: true, workOrderId: id },
+              actorUserId: actorUserId ?? null,
+            },
+          });
+        }
         await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,

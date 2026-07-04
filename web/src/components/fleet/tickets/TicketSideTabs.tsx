@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 
-type Tab = "situation" | "actions" | "history" | "details";
+type Tab = "flow" | "actions" | "history" | "details";
 
 type Props = {
-  situation: React.ReactNode;
+  flow: React.ReactNode;
   actions: React.ReactNode;
   history: React.ReactNode;
   details: React.ReactNode;
@@ -13,16 +13,15 @@ type Props = {
 };
 
 const tabs: { id: Tab; label: string }[] = [
-  { id: "situation", label: "Situație" },
+  { id: "flow", label: "Flux operațional" },
   { id: "actions", label: "Acțiuni" },
   { id: "history", label: "Istoric" },
   { id: "details", label: "Detalii" },
 ];
 
-export function TicketSideTabs({ situation, actions, history, details, defaultTab = "situation" }: Props) {
+export function TicketSideTabs({ flow, actions, history, details, defaultTab = "flow" }: Props) {
   const [tab, setTab] = useState<Tab>(defaultTab);
-  const panel =
-    tab === "situation" ? situation : tab === "actions" ? actions : tab === "history" ? history : details;
+  const panel = tab === "flow" ? flow : tab === "actions" ? actions : tab === "history" ? history : details;
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/30">

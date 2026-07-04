@@ -52,6 +52,8 @@ export type WorkOrderRecord = {
   odometerKmIn: number | null;
   odometerKmOut: number | null;
   repairPathNote: string | null;
+  serviceOrderType?: string;
+  readyAt?: string | null;
   plannedAt: string | null;
   completedAt: string | null;
   inServiceAt: string | null;

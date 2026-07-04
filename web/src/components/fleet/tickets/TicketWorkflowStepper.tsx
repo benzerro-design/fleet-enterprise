@@ -24,6 +24,7 @@ import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 
 type Props = {
   ticketId: string;
+  ticketCreatedAt?: string;
   canOperate: boolean;
   canApproveQuote: boolean;
   canConfirmAppointment: boolean;
@@ -36,6 +37,7 @@ type Props = {
 
 export function TicketWorkflowStepper({
   ticketId,
+  ticketCreatedAt,
   canOperate,
   canApproveQuote,
   canConfirmAppointment,
@@ -292,7 +294,11 @@ export function TicketWorkflowStepper({
     );
   }
 
-  const chapters = buildOperationalChapters(serviceCase, closed);
+  const chapters = buildOperationalChapters({
+    serviceCase,
+    closed,
+    ticketCreatedAt,
+  });
   const shell = compact ? "space-y-4" : "rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-4";
   const hasPendingAppointment =
     serviceCase?.appointments?.some((a) => a.status === "scheduled") ?? false;
@@ -375,7 +381,7 @@ export function TicketWorkflowStepper({
             onClick={() => void startCase()}
             className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
-            Deschide dosar service
+            Deschide flux service
           </button>
         ) : (
           <p className="text-sm text-zinc-500">Dosarul service nu a fost deschis.</p>
@@ -673,7 +679,12 @@ function WorkOrderStepCard({
         <>
           <div className="mt-2 rounded-md border border-emerald-800/50 bg-emerald-950/20 p-2">
             <p className="text-xs font-medium text-emerald-200">
-              Deviz v{approved.version} aprobat · {formatQuoteMoney(approved.totalGrossCents, approved.currency)}
+              Deviz{" "}
+              <Link href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
+                v{approved.version}
+              </Link>
+              {" aprobat · "}
+              {formatQuoteMoney(approved.totalGrossCents, approved.currency)}
             </p>
             {!approved.invoicedAt ? (
               <p className="mt-1 text-[10px] text-emerald-300/70">După reparație: factură, cost, apoi închidere.</p>

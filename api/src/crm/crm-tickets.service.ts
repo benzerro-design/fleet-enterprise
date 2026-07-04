@@ -149,6 +149,8 @@ export type TicketNotificationRecord = {
 export type RouteTicketInput = {
   targetLevel: 'L_STAR' | 'L1';
   reason: string;
+  /** Profil funcțional pe coadă L1: F financiar, T tehnic, G logistică */
+  profile?: 'F' | 'T' | 'G';
 };
 
 export type ReturnTicketInput = { reason: string };
@@ -937,7 +939,11 @@ export class CrmTicketsService {
       assignedQueue = FLOTAX_OPS_QUEUE;
     } else if (dto.targetLevel === 'L1') {
       routingLevel = CrmTicketRoutingLevel.L1;
-      assignedQueue = this.clientQueue(ticket.clientId);
+      const base = this.clientQueue(ticket.clientId);
+      assignedQueue =
+        dto.profile === 'F' || dto.profile === 'T' || dto.profile === 'G'
+          ? `${base}:${dto.profile}`
+          : base;
     } else {
       throw new BadRequestException('targetLevel must be L_STAR or L1');
     }
@@ -966,6 +972,7 @@ export class CrmTicketsService {
         fromLevel: ticket.routingLevel,
         toLevel: routingLevel,
         assignedQueue,
+        profile: dto.profile ?? null,
       },
     });
 

@@ -31,7 +31,7 @@ function newLine(): EditableLine {
     description: "",
     quantity: "1",
     unitNetLei: "",
-    vatRatePercent: "19",
+    vatRatePercent: "21",
     partNumber: "",
   };
 }
@@ -71,6 +71,68 @@ function toPayload(lines: EditableLine[]): QuoteLineInput[] {
   }));
 }
 
+function quoteSubtotalsFromLines(lines: WorkOrderQuoteRecord["lines"]) {
+  let labor = 0;
+  let parts = 0;
+  let other = 0;
+  let vat = 0;
+  for (const line of lines) {
+    if (line.lineType === "labor") labor += line.lineNetCents;
+    else if (line.lineType === "parts") parts += line.lineNetCents;
+    else other += line.lineNetCents;
+    vat += line.lineVatCents;
+  }
+  return { labor, parts, other, vat, gross: labor + parts + other + vat };
+}
+
+function QuoteSubtotals({
+  labor,
+  parts,
+  other,
+  vat,
+  gross,
+  currency = "RON",
+}: {
+  labor: number;
+  parts: number;
+  other: number;
+  vat: number;
+  gross: number;
+  currency?: string;
+}) {
+  return (
+    <div className="ml-auto w-full max-w-xs space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-sm">
+      <SubtotalRow label="Subtotal manoperă" cents={labor} currency={currency} />
+      <SubtotalRow label="Subtotal piese" cents={parts} currency={currency} />
+      <SubtotalRow label="Subtotal altele" cents={other} currency={currency} />
+      <SubtotalRow label="TVA (21%)" cents={vat} currency={currency} />
+      <SubtotalRow label="Total brut" cents={gross} currency={currency} bold />
+    </div>
+  );
+}
+
+function SubtotalRow({
+  label,
+  cents,
+  currency,
+  bold,
+}: {
+  label: string;
+  cents: number;
+  currency: string;
+  bold?: boolean;
+}) {
+  return (
+    <div className={`flex justify-between gap-4 ${bold ? "font-semibold text-zinc-100" : "text-zinc-400"}`}>
+      <span>{label}</span>
+      <span className="font-mono">{formatMoneyCents(cents, currency)}</span>
+    </div>
+  );
+}
+
+const sheetBtnClass =
+  "inline-flex h-7 items-center justify-center rounded border px-2.5 text-xs whitespace-nowrap disabled:opacity-50";
+
 function statusBadgeClass(status: WorkOrderQuoteStatus): string {
   switch (status) {
     case "draft":
@@ -90,9 +152,10 @@ type Props = {
   workOrderId: string;
   canWrite: boolean;
   canApprove?: boolean;
+  sheetLayout?: boolean;
 };
 
-export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false }: Props) {
+export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false, sheetLayout = false }: Props) {
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lines, setLines] = useState<EditableLine[]>([newLine()]);
@@ -142,6 +205,9 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
   const previewTotals = useMemo(() => {
     let net = 0;
     let vat = 0;
+    let labor = 0;
+    let parts = 0;
+    let other = 0;
     for (const line of lines) {
       const unit = leiToCents(line.unitNetLei);
       const qty = parseFloat(line.quantity.replace(",", ".")) || 0;
@@ -151,8 +217,11 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
       const lineVat = Math.round((lineNet * rate) / 100);
       net += lineNet;
       vat += lineVat;
+      if (line.lineType === "labor") labor += lineNet;
+      else if (line.lineType === "parts") parts += lineNet;
+      else other += lineNet;
     }
-    return { net, vat, gross: net + vat };
+    return { net, vat, gross: net + vat, labor, parts, other };
   }, [lines]);
 
   async function saveDraft() {
@@ -295,29 +364,87 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
 
   if (quotes === undefined) {
     return (
-      <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <section className={sheetLayout ? "border-t border-zinc-800 p-4" : "mt-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"}>
         <p className="text-sm text-zinc-500">Se încarcă devizele…</p>
       </section>
     );
   }
 
+  const sectionClass = sheetLayout
+    ? "border-t-2 border-zinc-700 bg-zinc-950/40 p-4"
+    : "mt-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4";
+
   return (
-    <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-medium text-zinc-200">Deviz</h2>
-          <p className="mt-1 text-xs text-zinc-500">Linii structurate, trimitere și aprobare</p>
+    <section className={sectionClass}>
+      {sheetLayout ? (
+        <div className="mb-4 flex flex-nowrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+          <span className="shrink-0 text-sm font-semibold text-zinc-200">Deviz</span>
+          {activeQuote ? (
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
+              v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">Ciornă</span>
+          )}
+          {canWrite && (isEditingDraft || quotes.length === 0 || !draftQuote) ? (
+            <>
+              <span className="h-5 w-px shrink-0 bg-zinc-700" />
+              <button
+                type="button"
+                onClick={() => setLines([...lines, newLine()])}
+                className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
+              >
+                + Linie
+              </button>
+              <button
+                type="button"
+                disabled={lines.length <= 1}
+                onClick={() => setLines(lines.slice(0, -1))}
+                className={`${sheetBtnClass} border-zinc-700 bg-zinc-900 text-zinc-200`}
+              >
+                Șterge linie
+              </button>
+            </>
+          ) : null}
+          <span className="min-w-2 flex-1" />
+          {canWrite ? (
+            <button
+              type="button"
+              disabled
+              title="Import deviz PDF — F5e (în curând)"
+              className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
+            >
+              Import deviz PDF
+            </button>
+          ) : null}
+          {activeQuote && activeQuote.status !== "draft" ? (
+            <a
+              href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${sheetBtnClass} border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800`}
+            >
+              Export PDF
+            </a>
+          ) : null}
         </div>
-        {canWrite && !draftQuote ? (
-          <button
-            type="button"
-            onClick={startNewDraft}
-            className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
-          >
-            Deviz nou
-          </button>
-        ) : null}
-      </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium text-zinc-200">Deviz</h2>
+            <p className="mt-1 text-xs text-zinc-500">Linii structurate, trimitere și aprobare</p>
+          </div>
+          {canWrite && !draftQuote ? (
+            <button
+              type="button"
+              onClick={startNewDraft}
+              className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+            >
+              Deviz nou
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
 
@@ -396,6 +523,9 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
               ))}
             </tbody>
           </table>
+          <div className="mt-3 flex justify-end">
+            <QuoteSubtotals {...quoteSubtotalsFromLines(activeQuote.lines)} currency={activeQuote.currency} />
+          </div>
           {canApprove && activeQuote.status === "submitted" ? (
             <div className="flex flex-wrap gap-2">
               <button
@@ -581,13 +711,15 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
               </tbody>
             </table>
           </div>
-          <button
-            type="button"
-            onClick={() => setLines([...lines, newLine()])}
-            className="text-xs text-sky-300 hover:underline"
-          >
-            + Linie
-          </button>
+          {!sheetLayout ? (
+            <button
+              type="button"
+              onClick={() => setLines([...lines, newLine()])}
+              className="text-xs text-sky-300 hover:underline"
+            >
+              + Linie
+            </button>
+          ) : null}
           <div>
             <label className={OPS_LABEL_CLASS}>Notițe deviz</label>
             <textarea
@@ -597,28 +729,34 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false 
               className={OPS_INPUT_CLASS}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-400">
-            <span>Previzualizare: {formatMoneyCents(previewTotals.net)} + TVA {formatMoneyCents(previewTotals.vat)}</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => void saveDraft()}
-              className="rounded-lg bg-zinc-700 px-3 py-1.5 text-sm text-white hover:bg-zinc-600 disabled:opacity-50"
-            >
-              Salvează ciornă
-            </button>
-            {draftQuote ? (
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => void quoteAction("submit")}
-                className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
+                onClick={() => void saveDraft()}
+                className="rounded-lg bg-zinc-700 px-3 py-1.5 text-sm text-white hover:bg-zinc-600 disabled:opacity-50"
               >
-                Trimite spre aprobare
+                Salvează ciornă
               </button>
-            ) : null}
+              {draftQuote ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void quoteAction("submit")}
+                  className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
+                >
+                  Trimite spre aprobare
+                </button>
+              ) : null}
+            </div>
+            <QuoteSubtotals
+              labor={previewTotals.labor}
+              parts={previewTotals.parts}
+              other={previewTotals.other}
+              vat={previewTotals.vat}
+              gross={previewTotals.gross}
+            />
           </div>
         </div>
       ) : null}

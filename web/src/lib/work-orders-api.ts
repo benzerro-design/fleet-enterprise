@@ -11,11 +11,41 @@ export type WorkOrderStatus =
   | "done"
   | "cancelled";
 
+export type ServiceOrderType = "M" | "E" | "D" | "TV";
+
+export type WorkOrderVehicleSnapshot = {
+  registrationNumber: string;
+  brand: string | null;
+  model: string | null;
+  vin: string | null;
+  odometerKm: number;
+  itpExpiresOn: string | null;
+};
+
+export type WorkOrderClientSnapshot = {
+  legalName: string;
+  taxId: string | null;
+  addressLine: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  billingNotes: string | null;
+};
+
+export type WorkOrderSupplierSnapshot = {
+  legalName: string;
+  taxId: string | null;
+  addressLine: string | null;
+  city: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+};
+
 export type WorkOrderListRow = {
   id: string;
   title: string;
   displayNumber: string | null;
   status: WorkOrderStatus;
+  serviceOrderType: ServiceOrderType;
   createdAt: string;
   updatedAt: string;
   plannedAt: string | null;
@@ -46,6 +76,22 @@ export type WorkOrderDetail = WorkOrderListRow & {
   odometerKmIn: number | null;
   odometerKmOut: number | null;
   repairPathNote: string | null;
+  readyAt: string | null;
+  vehicle: WorkOrderVehicleSnapshot;
+  client: WorkOrderClientSnapshot;
+  supplier: WorkOrderSupplierSnapshot | null;
+  ticketSubject: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  quoteSummary: {
+    status: string | null;
+    version: number | null;
+    totalGrossCents: number | null;
+    currency: string | null;
+    submittedAt: string | null;
+    approvedAt: string | null;
+    invoicedAt: string | null;
+  };
 };
 
 export type QuoteLineType = "labor" | "parts" | "other";

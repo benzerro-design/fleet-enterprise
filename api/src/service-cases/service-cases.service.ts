@@ -61,6 +61,8 @@ export type WorkOrderRecord = {
   odometerKmIn: number | null;
   odometerKmOut: number | null;
   repairPathNote: string | null;
+  serviceOrderType: string;
+  readyAt: string | null;
   createdAt: string;
   latestQuote: QuoteSummary | null;
   approvedQuote: QuoteSummary | null;
@@ -941,6 +943,8 @@ export class ServiceCasesService {
         odometerKmIn: number | null;
         odometerKmOut: number | null;
         repairPathNote: string | null;
+        serviceOrderType: string;
+        readyAt: Date | null;
         createdAt: Date;
         supplier?: { legalName: string } | null;
         quotes?: Array<{
@@ -1030,6 +1034,8 @@ export class ServiceCasesService {
           odometerKmIn: wo.odometerKmIn ?? null,
           odometerKmOut: wo.odometerKmOut ?? null,
           repairPathNote: wo.repairPathNote ?? null,
+          serviceOrderType: wo.serviceOrderType,
+          readyAt: wo.readyAt?.toISOString() ?? null,
           createdAt: wo.createdAt.toISOString(),
           latestQuote: toSummary(display),
           approvedQuote: toSummary(approved ?? null),

@@ -19,6 +19,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
   const [comment, setComment] = useState("");
   const [routeReason, setRouteReason] = useState("");
   const [returnReason, setReturnReason] = useState("");
+  const [showForward, setShowForward] = useState(false);
   const [showRoute, setShowRoute] = useState(false);
   const [showReturn, setShowReturn] = useState(false);
 
@@ -47,6 +48,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
         return;
       }
       router.refresh();
+      setShowForward(false);
       setShowRoute(false);
       setShowReturn(false);
       setRouteReason("");
@@ -87,6 +89,12 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
             </button>
             {ticket.vehicleId ? (
               <>
+                <Link
+                  href={`/fleet/documents/new?vehicleId=${ticket.vehicleId}`}
+                  className="rounded-lg border border-sky-700/50 bg-sky-950/30 px-3 py-1.5 text-sm text-sky-100 hover:bg-sky-950/50"
+                >
+                  Documente
+                </Link>
                 <button
                   type="button"
                   disabled={!!pending}
@@ -117,7 +125,11 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
               <button
                 type="button"
                 disabled={!!pending}
-                onClick={() => setShowRoute((v) => !v)}
+                onClick={() => {
+                  setShowForward(false);
+                  setShowReturn(false);
+                  setShowRoute((v) => !v);
+                }}
                 className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800"
               >
                 Direcționează L★
@@ -126,12 +138,28 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
               <button
                 type="button"
                 disabled={!!pending}
-                onClick={() => setShowReturn((v) => !v)}
+                onClick={() => {
+                  setShowForward(false);
+                  setShowRoute(false);
+                  setShowReturn((v) => !v);
+                }}
                 className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800"
               >
                 Returnează L1
               </button>
             )}
+            <button
+              type="button"
+              disabled={!!pending}
+              onClick={() => {
+                setShowRoute(false);
+                setShowReturn(false);
+                setShowForward((v) => !v);
+              }}
+              className="rounded-lg border border-amber-700/50 bg-amber-950/20 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-950/40"
+            >
+              Redirecționează
+            </button>
           </>
         ) : null}
       </div>
@@ -146,6 +174,58 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
             placeholder="Descrie cum s-a rezolvat…"
           />
+        </div>
+      ) : null}
+
+      {showForward ? (
+        <div className="mt-4 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
+          <p className="text-xs font-medium text-amber-200">Redirecționează tichetul</p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            Alege coada țintă. Profilurile F/T/G orientează către financiar, tehnic sau logistică (L1).
+          </p>
+          <label className="mt-3 block text-xs text-amber-200">Motiv (obligatoriu)</label>
+          <textarea
+            value={routeReason}
+            onChange={(e) => setRouteReason(e.target.value)}
+            rows={2}
+            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+            placeholder="De ce redirecționezi…"
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!!pending || routeReason.trim().length < 3}
+              onClick={() => post("/route", { targetLevel: "L_STAR", reason: routeReason.trim() })}
+              className="rounded-lg bg-amber-700 px-3 py-1.5 text-xs text-white hover:bg-amber-600 disabled:opacity-50"
+            >
+              → L★ FlotaX
+            </button>
+            <button
+              type="button"
+              disabled={!!pending || routeReason.trim().length < 3}
+              onClick={() => post("/route", { targetLevel: "L1", reason: routeReason.trim() })}
+              className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+            >
+              → L1 client
+            </button>
+            {(["F", "T", "G"] as const).map((profile) => (
+              <button
+                key={profile}
+                type="button"
+                disabled={!!pending || routeReason.trim().length < 3}
+                onClick={() =>
+                  post("/route", {
+                    targetLevel: "L1",
+                    profile,
+                    reason: `${routeReason.trim()} [${profile}]`,
+                  })
+                }
+                className="rounded-lg border border-violet-600/40 bg-violet-950/30 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/50 disabled:opacity-50"
+              >
+                → L1 · {profile}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 
