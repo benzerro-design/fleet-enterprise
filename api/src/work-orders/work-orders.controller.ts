@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -75,6 +76,18 @@ export class WorkOrdersController {
   @Roles(...FLEET_READ_ROLES)
   get(@TenantId() tenantSlug: string, @Param('id') id: string) {
     return this.workOrders.getById(tenantSlug, id);
+  }
+
+  @Patch(':id/service-times')
+  @Roles(...FLEET_WRITE_ROLES)
+  recordServiceTimes(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: { inServiceAt?: string | null; outServiceAt?: string | null },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.workOrders.recordServiceTimes(tenantSlug, id, body, actorUserId, access);
   }
 
   @Post(':id/complete')

@@ -19,6 +19,7 @@ import {
 import { workOrdersBrowserBase } from "@/lib/work-orders-api";
 import { schedulerHref } from "@/lib/scheduler-deep-link";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import { OperationalFlowFork } from "@/components/fleet/tickets/OperationalFlowFork";
 
 type Props = {
   ticketId: string;
@@ -287,7 +288,9 @@ export function TicketWorkflowStepper({
   const hasPendingAppointment =
     serviceCase?.appointments?.some((a) => a.status === "scheduled") ?? false;
   const inRescheduleLoop =
-    serviceCase?.postApprovalPath === "reschedule" && serviceCase.currentStage === "scheduled";
+    serviceCase?.postApprovalPath === "reschedule" &&
+    (serviceCase.currentStage === "scheduled" || serviceCase.currentStage === "work_order");
+  const hasApprovedQuote = serviceCase?.workOrders.some((wo) => wo.approvedQuote ?? wo.latestQuote?.status === "approved");
   const canScheduleNew =
     canOperate &&
     !closed &&
@@ -295,13 +298,46 @@ export function TicketWorkflowStepper({
     serviceCase.currentStage === "scheduled" &&
     !hasPendingAppointment;
 
+  const primaryWo = serviceCase?.workOrders[0];
+
+  async function recordServiceTime(
+    workOrderId: string,
+    field: "inServiceAt" | "outServiceAt",
+    at?: string,
+  ) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/service-times`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ [field]: at ?? new Date().toISOString() }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      await load();
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-zinc-200">Flux operațional</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Tichet → programare → comandă service → deviz → aprobare → factură → cost → închidere
+            Tichet → programare → comandă service → in/out service → deviz → aprobare → factură → cost → închidere
             {inRescheduleLoop ? " · buclă reprogramare activă" : ""}
           </p>
         </div>
@@ -311,7 +347,18 @@ export function TicketWorkflowStepper({
           </span>
         ) : null}
       </div>
-      {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
+      {error ? (
+        <div className="mt-2 space-y-1">
+          <p className="text-sm text-red-400">{error}</p>
+          {error.toLowerCase().includes("internal server") ? (
+            <p className="text-xs text-amber-300/90">
+              Pe staging rulează migrările:{" "}
+              <code className="font-mono text-zinc-300">cd api && npx prisma migrate deploy</code> (F5 flow +
+              quote invoice).
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {!serviceCase ? (
         <div className="mt-4">
@@ -348,22 +395,66 @@ export function TicketWorkflowStepper({
             {SERVICE_CASE_STAGES.map((stage, idx) => {
               const done = idx < currentIdx;
               const active = idx === currentIdx;
+              const tip =
+                stage === "in_service" && primaryWo?.inServiceAt
+                  ? `Intrare: ${formatAppointmentWhen(primaryWo.inServiceAt)}`
+                  : stage === "out_service" && primaryWo?.outServiceAt
+                    ? `Ieșire: ${formatAppointmentWhen(primaryWo.outServiceAt)}`
+                    : stage === "in_service"
+                      ? "Intrare în service — marchează pe comandă"
+                      : stage === "out_service"
+                        ? "Ieșire din service — marchează pe comandă"
+                        : undefined;
               return (
                 <li
                   key={stage}
+                  title={tip}
                   className={`rounded-full border px-2 py-0.5 text-[10px] sm:text-xs ${
                     active
                       ? "border-emerald-500/60 bg-emerald-950/40 text-emerald-200"
                       : done
                         ? "border-zinc-600 bg-zinc-800/60 text-zinc-300"
                         : "border-zinc-800 text-zinc-500"
-                  }`}
+                  } ${stage === "in_service" || stage === "out_service" ? "cursor-help" : ""}`}
                 >
                   {serviceCaseStageLabel(stage)}
                 </li>
               );
             })}
           </ol>
+
+          <OperationalFlowFork
+            serviceCase={serviceCase}
+            awaitingDecision={serviceCase.awaitingPostApproval}
+            canOperate={canOperate}
+            closed={closed}
+            pending={pending}
+            onImmediate={() => void applyPostApproval("immediate")}
+            onReschedule={() => void applyPostApproval("reschedule")}
+          />
+
+          {serviceCase.workOrders.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs uppercase text-zinc-500">Comandă service</p>
+              {serviceCase.postApprovalPath === "reschedule" ? (
+                <p className="text-xs text-amber-200/80">
+                  Reparație planificată cu reprogramare — devizul aprobat rămâne atașat comenzii.
+                </p>
+              ) : null}
+              {serviceCase.workOrders.map((wo) => (
+                <WorkOrderStepCard
+                  key={wo.id}
+                  wo={wo}
+                  pending={pending}
+                  canOperate={canOperate && !closed}
+                  canApproveQuote={canApproveQuote}
+                  onQuoteAction={quoteAction}
+                  onRecordServiceTime={recordServiceTime}
+                  repairPath={serviceCase.postApprovalPath}
+                />
+              ))}
+            </div>
+          ) : null}
 
           {serviceCase.appointments?.length ? (
             <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
@@ -436,14 +527,10 @@ export function TicketWorkflowStepper({
             </div>
           ) : null}
 
-          {inRescheduleLoop ? (
-            <div className="mt-4 rounded-lg border border-sky-500/30 bg-sky-950/20 p-3 text-sm text-sky-100">
-              <p className="font-medium">Reprogramare după deviz aprobat</p>
-              <p className="mt-1 text-xs text-sky-200/80">
-                Devizul rămâne valid — adaugă o programare nouă, confirmă, apoi factură și cost (fără deviz
-                nou).
-              </p>
-            </div>
+          {inRescheduleLoop && hasApprovedQuote ? (
+            <p className="mt-3 text-xs text-sky-300/90">
+              Confirmă noua programare; nu este nevoie de deviz nou — folosește devizul aprobat de pe comandă.
+            </p>
           ) : null}
 
           {canScheduleNew ? (
@@ -490,48 +577,6 @@ export function TicketWorkflowStepper({
             </div>
           ) : null}
 
-          {serviceCase.workOrders.length > 0 ? (
-            <div className="mt-4 space-y-2">
-              <p className="text-xs uppercase text-zinc-500">Comenzi service & devize</p>
-              {serviceCase.workOrders.map((wo) => (
-                <WorkOrderStepCard
-                  key={wo.id}
-                  wo={wo}
-                  pending={pending}
-                  canApproveQuote={canApproveQuote}
-                  onQuoteAction={quoteAction}
-                />
-              ))}
-            </div>
-          ) : null}
-
-          {serviceCase.awaitingPostApproval && canOperate && !closed ? (
-            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-950/20 p-3">
-              <p className="text-sm font-medium text-amber-100">Deviz aprobat — alege următorul pas</p>
-              <p className="mt-1 text-xs text-amber-200/70">
-                Execută imediat sau reprogramează service-ul în programator.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => void applyPostApproval("immediate")}
-                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
-                >
-                  Execută acum
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => void applyPostApproval("reschedule")}
-                  className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
-                >
-                  Programează din nou
-                </button>
-              </div>
-            </div>
-          ) : null}
-
           {serviceCase.status === "completed" ? (
             <p className="mt-3 text-sm text-emerald-400">Dosar închis.</p>
           ) : null}
@@ -544,15 +589,22 @@ export function TicketWorkflowStepper({
 function WorkOrderStepCard({
   wo,
   pending,
+  canOperate,
   canApproveQuote,
   onQuoteAction,
+  onRecordServiceTime,
+  repairPath,
 }: {
   wo: WorkOrderRecord;
   pending: boolean;
+  canOperate: boolean;
   canApproveQuote: boolean;
   onQuoteAction: (workOrderId: string, quoteId: string, action: "approve" | "reject") => void;
+  onRecordServiceTime: (workOrderId: string, field: "inServiceAt" | "outServiceAt") => void;
+  repairPath?: "immediate" | "reschedule" | null;
 }) {
-  const q = wo.latestQuote;
+  const approved = wo.approvedQuote ?? (wo.latestQuote?.status === "approved" ? wo.latestQuote : null);
+  const pendingQuote = wo.pendingQuote ?? (wo.latestQuote?.status === "submitted" ? wo.latestQuote : null);
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
@@ -564,27 +616,83 @@ function WorkOrderStepCard({
           <p className="mt-0.5 text-xs text-zinc-500">
             {wo.status}
             {wo.supplierLegalName ? ` · ${wo.supplierLegalName}` : ""}
+            {repairPath === "reschedule" ? " · reprogramare" : repairPath === "immediate" ? " · reparație directă" : ""}
           </p>
         </div>
-        <Link
-          href={`/fleet/work-orders/${wo.id}`}
-          className="text-[10px] text-zinc-400 hover:text-zinc-200"
-        >
-          Deschide →
+        <Link href={`/fleet/work-orders/${wo.id}`} className="text-[10px] text-zinc-400 hover:text-zinc-200">
+          Deschide comandă →
         </Link>
       </div>
-      {q ? (
+
+      <div className="mt-2 rounded-md border border-violet-800/40 bg-violet-950/20 p-2">
+        <p className="text-[10px] uppercase text-violet-300/80">In / Out service</p>
+        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-300">
+          <span title="Data intrării în service">
+            In:{" "}
+            {wo.inServiceAt ? (
+              <strong className="text-violet-200">{new Date(wo.inServiceAt).toLocaleString("ro-RO")}</strong>
+            ) : (
+              <span className="text-zinc-500">—</span>
+            )}
+          </span>
+          <span title="Data ieșirii din service">
+            Out:{" "}
+            {wo.outServiceAt ? (
+              <strong className="text-violet-200">{new Date(wo.outServiceAt).toLocaleString("ro-RO")}</strong>
+            ) : (
+              <span className="text-zinc-500">—</span>
+            )}
+          </span>
+        </div>
+        {canOperate ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {!wo.inServiceAt ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onRecordServiceTime(wo.id, "inServiceAt")}
+                className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs text-white hover:bg-violet-500 disabled:opacity-50"
+              >
+                Marchează intrare (In)
+              </button>
+            ) : null}
+            {wo.inServiceAt && !wo.outServiceAt ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onRecordServiceTime(wo.id, "outServiceAt")}
+                className="rounded-lg border border-violet-500/50 px-2.5 py-1 text-xs text-violet-100 hover:bg-violet-950/40 disabled:opacity-50"
+              >
+                Marchează ieșire (Out)
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {approved ? (
+        <div className="mt-2 rounded-md border border-emerald-800/50 bg-emerald-950/20 p-2">
+          <p className="text-xs font-medium text-emerald-200">
+            Deviz v{approved.version} aprobat · {formatQuoteMoney(approved.totalGrossCents, approved.currency)}
+          </p>
+          <p className="mt-1 text-[10px] text-emerald-300/70">
+            Rămâne pe comandă — după reparație: factură apoi cost.
+          </p>
+        </div>
+      ) : null}
+
+      {pendingQuote ? (
         <div className="mt-2 rounded-md border border-zinc-800/80 bg-zinc-900/30 p-2">
           <p className="text-xs text-zinc-400">
-            Deviz v{q.version} · {quoteStatusLabel(q.status)} ·{" "}
-            {formatQuoteMoney(q.totalGrossCents, q.currency)}
+            Deviz v{pendingQuote.version} · {quoteStatusLabel(pendingQuote.status)} ·{" "}
+            {formatQuoteMoney(pendingQuote.totalGrossCents, pendingQuote.currency)}
           </p>
-          {canApproveQuote && q.status === "submitted" ? (
+          {canApproveQuote ? (
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => onQuoteAction(wo.id, q.id, "approve")}
+                onClick={() => onQuoteAction(wo.id, pendingQuote.id, "approve")}
                 className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
               >
                 Aprobă deviz
@@ -592,21 +700,17 @@ function WorkOrderStepCard({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => onQuoteAction(wo.id, q.id, "reject")}
+                onClick={() => onQuoteAction(wo.id, pendingQuote.id, "reject")}
                 className="rounded-lg border border-red-500/50 px-2.5 py-1 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50"
               >
                 Respinge
               </button>
             </div>
-          ) : q.status === "approved" ? (
-            <p className="mt-2 text-xs text-emerald-400/90">
-              Deviz aprobat — după reparație: factură apoi cost.
-            </p>
           ) : null}
         </div>
-      ) : (
-        <p className="mt-2 text-xs text-zinc-500">Fără deviz încă — adaugă din pagina comenzii.</p>
-      )}
+      ) : !approved ? (
+        <p className="mt-2 text-xs text-zinc-500">Fără deviz — adaugă din pagina comenzii.</p>
+      ) : null}
     </div>
   );
 }

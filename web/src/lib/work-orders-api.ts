@@ -40,6 +40,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   serviceCaseStatus: string;
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;
+  inServiceAt: string | null;
+  outServiceAt: string | null;
 };
 
 export type QuoteLineType = "labor" | "parts" | "other";
@@ -147,6 +149,8 @@ export function serviceCaseStageLabel(stage: string): string {
     intake: "Intake",
     scheduled: "Programare",
     work_order: "Comandă service",
+    in_service: "In service",
+    out_service: "Out service",
     quote: "Deviz",
     approval: "Aprobare deviz",
     invoiced: "Facturat",

@@ -48,6 +48,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   serviceCaseStatus: string;
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;
+  inServiceAt: string | null;
+  outServiceAt: string | null;
 };
 
 export type WorkOrderListParams = {
@@ -282,7 +284,147 @@ export class WorkOrdersService {
       serviceCaseStatus: row.serviceCase.status,
       linkedAppointmentId: linked?.id ?? null,
       linkedAppointmentScheduledAt: linked?.scheduledAt.toISOString() ?? null,
+      inServiceAt: row.inServiceAt?.toISOString() ?? null,
+      outServiceAt: row.outServiceAt?.toISOString() ?? null,
     };
+  }
+
+  async recordServiceTimes(
+    tenantSlug: string,
+    id: string,
+    dto: { inServiceAt?: string | null; outServiceAt?: string | null },
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderDetail> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: {
+        vehicle: { select: { clientId: true } },
+        serviceCase: { select: { id: true, currentStage: true, sourceTicketId: true, clientId: true } },
+      },
+    });
+    if (!wo) throw new NotFoundException('Work order not found');
+    if (access) {
+      try {
+        assertClientFleetWrite(access, wo.vehicle.clientId);
+      } catch {
+        throw new ForbiddenException('Cannot update service times');
+      }
+    }
+
+    const data: { inServiceAt?: Date | null; outServiceAt?: Date | null; status?: MaintenanceWorkOrderStatus } =
+      {};
+
+    if (dto.inServiceAt !== undefined) {
+      if (dto.inServiceAt === null || dto.inServiceAt === '') {
+        data.inServiceAt = null;
+      } else {
+        const d = new Date(dto.inServiceAt);
+        if (Number.isNaN(d.getTime())) throw new BadRequestException('Invalid inServiceAt');
+        data.inServiceAt = d;
+      }
+    }
+
+    if (dto.outServiceAt !== undefined) {
+      if (dto.outServiceAt === null || dto.outServiceAt === '') {
+        data.outServiceAt = null;
+      } else {
+        const d = new Date(dto.outServiceAt);
+        if (Number.isNaN(d.getTime())) throw new BadRequestException('Invalid outServiceAt');
+        data.outServiceAt = d;
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Provide inServiceAt and/or outServiceAt');
+    }
+
+    const nextIn = data.inServiceAt !== undefined ? data.inServiceAt : wo.inServiceAt;
+    const nextOut = data.outServiceAt !== undefined ? data.outServiceAt : wo.outServiceAt;
+    if (nextIn && nextOut && nextOut.getTime() < nextIn.getTime()) {
+      throw new BadRequestException('outServiceAt must be after inServiceAt');
+    }
+
+    if (data.inServiceAt && wo.status === MaintenanceWorkOrderStatus.draft) {
+      data.status = MaintenanceWorkOrderStatus.in_progress;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.maintenanceWorkOrder.update({ where: { id }, data });
+
+      const ticketId = wo.serviceCase.sourceTicketId;
+      if (data.inServiceAt) {
+        await this.ensureCaseStageAtLeast(
+          tx,
+          tenant.id,
+          wo.serviceCaseId,
+          ServiceCaseStage.in_service,
+          ticketId,
+          actorUserId,
+          `Intrare service: ${data.inServiceAt.toLocaleString('ro-RO')}.`,
+        );
+      }
+      if (data.outServiceAt) {
+        await this.ensureCaseStageAtLeast(
+          tx,
+          tenant.id,
+          wo.serviceCaseId,
+          ServiceCaseStage.out_service,
+          ticketId,
+          actorUserId,
+          `Ieșire service: ${data.outServiceAt.toLocaleString('ro-RO')}.`,
+        );
+      }
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order.service_times',
+      entityType: 'maintenance_work_order',
+      entityId: id,
+      meta: { inServiceAt: nextIn?.toISOString(), outServiceAt: nextOut?.toISOString() },
+    });
+
+    return this.getById(tenantSlug, id);
+  }
+
+  private async ensureCaseStageAtLeast(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    serviceCaseId: string,
+    targetStage: ServiceCaseStage,
+    sourceTicketId: string | null,
+    actorUserId?: string,
+    eventBody?: string,
+  ) {
+    const serviceCase = await tx.serviceCase.findFirst({ where: { id: serviceCaseId, tenantId } });
+    if (!serviceCase) return;
+
+    const currentIdx = SERVICE_CASE_STAGE_ORDER.indexOf(serviceCase.currentStage);
+    const targetIdx = SERVICE_CASE_STAGE_ORDER.indexOf(targetStage);
+    if (targetIdx <= currentIdx) return;
+
+    await tx.serviceCase.update({
+      where: { id: serviceCaseId },
+      data: { currentStage: targetStage },
+    });
+
+    if (sourceTicketId) {
+      await tx.crmTicketEvent.create({
+        data: {
+          tenantId,
+          ticketId: sourceTicketId,
+          kind: CrmTicketEventKind.workflow_advance,
+          body: eventBody ?? `Dosar avansat la etapa ${targetStage}.`,
+          payload: { fromStage: serviceCase.currentStage, toStage: targetStage, serviceCaseId },
+          actorUserId: actorUserId ?? null,
+        },
+      });
+    }
   }
 
   private async resolveLinkedAppointment(

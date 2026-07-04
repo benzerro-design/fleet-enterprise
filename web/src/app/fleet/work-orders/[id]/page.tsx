@@ -134,6 +134,14 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
           </dd>
         </div>
         <div>
+          <dt className="text-xs uppercase text-zinc-500">In service</dt>
+          <dd className="mt-1 text-sm">{formatDateTime(wo.inServiceAt ?? null)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Out service</dt>
+          <dd className="mt-1 text-sm">{formatDateTime(wo.outServiceAt ?? null)}</dd>
+        </div>
+        <div>
           <dt className="text-xs uppercase text-zinc-500">Finalizat</dt>
           <dd className="mt-1 text-sm">{formatDateTime(wo.completedAt)}</dd>
         </div>

@@ -36,6 +36,8 @@ export const SERVICE_CASE_STAGE_ORDER: ServiceCaseStage[] = [
   ServiceCaseStage.intake,
   ServiceCaseStage.scheduled,
   ServiceCaseStage.work_order,
+  ServiceCaseStage.in_service,
+  ServiceCaseStage.out_service,
   ServiceCaseStage.quote,
   ServiceCaseStage.approval,
   ServiceCaseStage.invoiced,
@@ -53,8 +55,12 @@ export type WorkOrderRecord = {
   status: MaintenanceWorkOrderStatus;
   plannedAt: string | null;
   completedAt: string | null;
+  inServiceAt: string | null;
+  outServiceAt: string | null;
   createdAt: string;
   latestQuote: QuoteSummary | null;
+  approvedQuote: QuoteSummary | null;
+  pendingQuote: QuoteSummary | null;
 };
 
 export type QuoteSummary = {
@@ -156,6 +162,8 @@ function stageLabel(stage: ServiceCaseStage): string {
     intake: 'Intake',
     scheduled: 'Programare',
     work_order: 'Comandă service',
+    in_service: 'In service',
+    out_service: 'Out service',
     quote: 'Deviz',
     approval: 'Aprobare deviz',
     invoiced: 'Facturat',
@@ -805,7 +813,7 @@ export class ServiceCasesService {
           supplier: { select: { legalName: true } },
           quotes: {
             orderBy: { version: 'desc' as const },
-            take: 1,
+            take: 5,
             select: {
               id: true,
               workOrderId: true,
@@ -893,6 +901,8 @@ export class ServiceCasesService {
         status: MaintenanceWorkOrderStatus;
         plannedAt: Date | null;
         completedAt: Date | null;
+        inServiceAt: Date | null;
+        outServiceAt: Date | null;
         createdAt: Date;
         supplier?: { legalName: string } | null;
         quotes?: Array<{
@@ -941,7 +951,23 @@ export class ServiceCasesService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       workOrders: (row.workOrders ?? []).map((wo) => {
-        const q = wo.quotes?.[0];
+        const quotes = wo.quotes ?? [];
+        const approved = quotes.find((q) => q.status === WorkOrderQuoteStatus.approved);
+        const submitted = quotes.find((q) => q.status === WorkOrderQuoteStatus.submitted);
+        const display = approved ?? submitted ?? quotes[0];
+        const toSummary = (
+          q: (typeof quotes)[number] | null | undefined,
+        ): QuoteSummary | null =>
+          q
+            ? {
+                id: q.id,
+                workOrderId: q.workOrderId,
+                version: q.version,
+                status: q.status,
+                totalGrossCents: q.totalNetCents + q.totalVatCents,
+                currency: q.currency,
+              }
+            : null;
         return {
           id: wo.id,
           serviceCaseId: wo.serviceCaseId,
@@ -952,17 +978,12 @@ export class ServiceCasesService {
           status: wo.status,
           plannedAt: wo.plannedAt?.toISOString() ?? null,
           completedAt: wo.completedAt?.toISOString() ?? null,
+          inServiceAt: wo.inServiceAt?.toISOString() ?? null,
+          outServiceAt: wo.outServiceAt?.toISOString() ?? null,
           createdAt: wo.createdAt.toISOString(),
-          latestQuote: q
-            ? {
-                id: q.id,
-                workOrderId: q.workOrderId,
-                version: q.version,
-                status: q.status,
-                totalGrossCents: q.totalNetCents + q.totalVatCents,
-                currency: q.currency,
-              }
-            : null,
+          latestQuote: toSummary(display),
+          approvedQuote: toSummary(approved ?? null),
+          pendingQuote: toSummary(submitted ?? null),
         };
       }),
       appointments: (row.appointments ?? []).map((a) => this.toAppointmentRecord(a)),

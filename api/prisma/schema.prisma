@@ -1038,6 +1038,8 @@ enum ServiceCaseStage {
   intake
   scheduled
   work_order
+  in_service
+  out_service
   quote
   approval
   cost
@@ -1113,6 +1115,8 @@ model MaintenanceWorkOrder {
   status        MaintenanceWorkOrderStatus @default(draft)
   plannedAt     DateTime?
   completedAt   DateTime?
+  inServiceAt   DateTime?
+  outServiceAt  DateTime?
   notes         String?
   createdAt     DateTime                   @default(now())
   updatedAt     DateTime                   @updatedAt

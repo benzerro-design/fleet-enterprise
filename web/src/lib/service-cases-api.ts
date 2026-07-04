@@ -7,6 +7,8 @@ export type ServiceCaseStage =
   | "intake"
   | "scheduled"
   | "work_order"
+  | "in_service"
+  | "out_service"
   | "quote"
   | "approval"
   | "cost"
@@ -44,8 +46,12 @@ export type WorkOrderRecord = {
   status: string;
   plannedAt: string | null;
   completedAt: string | null;
+  inServiceAt: string | null;
+  outServiceAt: string | null;
   createdAt: string;
   latestQuote: QuoteSummary | null;
+  approvedQuote?: QuoteSummary | null;
+  pendingQuote?: QuoteSummary | null;
 };
 
 export type ServiceAppointmentStatus =
@@ -100,6 +106,8 @@ export const SERVICE_CASE_STAGES: ServiceCaseStage[] = [
   "intake",
   "scheduled",
   "work_order",
+  "in_service",
+  "out_service",
   "quote",
   "approval",
   "invoiced",
@@ -112,6 +120,8 @@ export function serviceCaseStageLabel(stage: ServiceCaseStage): string {
     intake: "Intake",
     scheduled: "Programare",
     work_order: "Comandă service",
+    in_service: "In service",
+    out_service: "Out service",
     quote: "Deviz",
     approval: "Aprobare deviz",
     invoiced: "Facturat",

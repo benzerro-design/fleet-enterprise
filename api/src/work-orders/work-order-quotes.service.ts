@@ -321,7 +321,10 @@ export class WorkOrderQuotesService {
 
       await tx.serviceCase.update({
         where: { id: existing.workOrder.serviceCaseId },
-        data: { awaitingPostApproval: true },
+        data: {
+          awaitingPostApproval: true,
+          currentStage: ServiceCaseStage.approval,
+        },
       });
 
       return updated;
