@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import { formatDateRo, toDateInput, toIsoFromDateInput } from "@/lib/datetime-local";
 import {
   fleetJsonHeaders,
   formatMoneyCents,
@@ -153,9 +155,19 @@ type Props = {
   canWrite: boolean;
   canApprove?: boolean;
   sheetLayout?: boolean;
+  estimatedRepairAt?: string | null;
+  quoteLocked?: boolean;
 };
 
-export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false, sheetLayout = false }: Props) {
+export function WorkOrderQuotePanel({
+  workOrderId,
+  canWrite,
+  canApprove = false,
+  sheetLayout = false,
+  estimatedRepairAt = null,
+  quoteLocked = false,
+}: Props) {
+  const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [lines, setLines] = useState<EditableLine[]>([newLine()]);
@@ -164,6 +176,43 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false,
   const [invoiceDate, setInvoiceDate] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [estimatedDate, setEstimatedDate] = useState(() => toDateInput(estimatedRepairAt));
+
+  useEffect(() => {
+    setEstimatedDate(toDateInput(estimatedRepairAt));
+  }, [estimatedRepairAt]);
+
+  const hasEstimatedRepair = Boolean(estimatedRepairAt || toIsoFromDateInput(estimatedDate));
+
+  const saveEstimatedRepair = useCallback(async (): Promise<boolean> => {
+    if (quoteLocked) return true;
+    const iso = toIsoFromDateInput(estimatedDate);
+    if (!iso) {
+      setError("Completați data estimativă de finalizare reparație.");
+      return false;
+    }
+    if (estimatedRepairAt && toDateInput(estimatedRepairAt) === estimatedDate) return true;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ estimatedRepairAt: iso }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Eroare la salvarea estimării");
+      return false;
+    } finally {
+      setPending(false);
+    }
+  }, [estimatedDate, estimatedRepairAt, quoteLocked, workOrderId, router]);
 
   const load = useCallback(async () => {
     try {
@@ -323,6 +372,10 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false,
 
   async function quoteAction(action: "submit" | "approve" | "reject") {
     if (!activeQuote) return;
+    if (action === "submit") {
+      const ok = await saveEstimatedRepair();
+      if (!ok) return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -729,6 +782,31 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false,
               className={OPS_INPUT_CLASS}
             />
           </div>
+          {canWrite && draftQuote && !quoteLocked ? (
+            <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
+              <label className={OPS_LABEL_CLASS}>
+                Estimare finalizare reparație <span className="text-amber-300">*</span>
+              </label>
+              <input
+                type="date"
+                value={estimatedDate}
+                disabled={pending}
+                onChange={(e) => setEstimatedDate(e.target.value)}
+                onBlur={() => {
+                  if (toIsoFromDateInput(estimatedDate)) void saveEstimatedRepair();
+                }}
+                className={`${OPS_INPUT_CLASS} max-w-xs`}
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Completată de partener — obligatorie înainte de „Trimite spre aprobare”. Vizibilă și pe tichet.
+              </p>
+            </div>
+          ) : estimatedRepairAt ? (
+            <p className="text-sm text-zinc-400">
+              Estimare finalizare reparație:{" "}
+              <span className="font-medium text-zinc-200">{formatDateRo(estimatedRepairAt)}</span>
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="flex flex-wrap gap-2">
               <button
@@ -742,7 +820,8 @@ export function WorkOrderQuotePanel({ workOrderId, canWrite, canApprove = false,
               {draftQuote ? (
                 <button
                   type="button"
-                  disabled={pending}
+                  disabled={pending || !hasEstimatedRepair}
+                  title={!hasEstimatedRepair ? "Completați estimarea finalizării reparației" : undefined}
                   onClick={() => void quoteAction("submit")}
                   className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
                 >

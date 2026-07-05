@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
 import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
 import { schedulerHref } from "@/lib/scheduler-deep-link";
+import { formatDateRo } from "@/lib/datetime-local";
 import {
   SERVICE_ORDER_TYPES,
   buildWorkOrderMilestones,
@@ -271,6 +272,14 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
               </div>
             ) : null}
             <div>Programare: {fmtDate(wo.plannedAt ?? wo.linkedAppointmentScheduledAt)}</div>
+            <div>
+              Estimare finalizare:{" "}
+              {wo.estimatedRepairAt ? (
+                <span className="text-zinc-100">{formatDateRo(wo.estimatedRepairAt)}</span>
+              ) : (
+                <span className="text-amber-400/90">necompletată</span>
+              )}
+            </div>
             <div className="pt-1 font-semibold text-zinc-100">Total: {totalDisplay}</div>
           </div>
         </div>
@@ -392,7 +401,16 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
         </div>
       </div>
 
-      <WorkOrderQuotePanel workOrderId={wo.id} canWrite={canWrite} canApprove={canApprove} sheetLayout />
+      <WorkOrderQuotePanel
+        workOrderId={wo.id}
+        canWrite={canWrite}
+        canApprove={canApprove}
+        sheetLayout
+        estimatedRepairAt={wo.estimatedRepairAt}
+        quoteLocked={
+          wo.quoteSummary.status === "submitted" || wo.quoteSummary.status === "approved"
+        }
+      />
 
       <div className="border-t border-zinc-800 px-4 py-3">
         <WorkOrderCompleteButton

@@ -1,4 +1,5 @@
 import type { ServiceCaseRecord } from "@/lib/service-cases-api";
+import { formatDateRo } from "@/lib/datetime-local";
 
 export type StoryChapterState = "done" | "now" | "next" | "later";
 
@@ -166,6 +167,13 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
           : wo?.inServiceAt || wo?.outServiceAt
             ? "Așteptăm devizul de la service."
             : "După constatare la service.",
+      detail: wo?.estimatedRepairAt
+        ? `Estimare finalizare reparație: ${formatDateRo(wo.estimatedRepairAt)}`
+        : pendingQ || approved
+          ? undefined
+          : wo?.inServiceAt
+            ? "Partenerul completează estimarea odată cu devizul."
+            : undefined,
       links: quoteLinks.length ? quoteLinks : undefined,
     },
     {
@@ -176,6 +184,13 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
         : pendingQ
           ? "Așteaptă decizia ta (aprobă sau respinge)."
           : "După primirea devizului de la furnizor.",
+      detail: pendingQ
+        ? wo?.estimatedRepairAt
+          ? `Estimare finalizare: ${formatDateRo(wo.estimatedRepairAt)}`
+          : "Lipsește estimarea partenerului — devizul nu poate fi trimis spre aprobare."
+        : approved && wo?.estimatedRepairAt
+          ? `Estimare finalizare: ${formatDateRo(wo.estimatedRepairAt)}`
+          : undefined,
       links: approved && wo ? [{ href: `/fleet/work-orders/${wo.id}`, label: `Deviz v${approved.version}` }] : undefined,
     },
     {

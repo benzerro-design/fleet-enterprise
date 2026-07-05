@@ -54,6 +54,7 @@ export type WorkOrderRecord = {
   repairPathNote: string | null;
   serviceOrderType?: string;
   readyAt?: string | null;
+  estimatedRepairAt?: string | null;
   plannedAt: string | null;
   completedAt: string | null;
   inServiceAt: string | null;

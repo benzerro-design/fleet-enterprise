@@ -1,27 +1,21 @@
 import Link from "next/link";
-import {
-  FleetDataTable,
-  fleetTableClass,
-  fleetTdClass,
-  fleetThClass,
-  fleetTheadClass,
-} from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { WorkOrderDataGrid } from "@/components/fleet/work-orders/WorkOrderDataGrid";
 import { WorkOrderKpiStrip } from "@/components/fleet/work-orders/WorkOrderKpiStrip";
-import { WorkOrderStatusBadge } from "@/components/fleet/work-orders/WorkOrderStatusBadge";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
+import { SERVICE_ORDER_TYPES } from "@/lib/work-order-sheet";
 import {
-  serviceCaseStageLabel,
   WORK_ORDER_STATUSES,
-  workflowTypeLabel,
+  type WorkOrderInbox,
   type WorkOrderListPayload,
   type WorkOrderStats,
+  serviceCaseStageLabel,
 } from "@/lib/work-orders-api";
 
 type Search = {
@@ -30,8 +24,21 @@ type Search = {
   supplierId?: string;
   vehicleId?: string;
   clientId?: string;
+  inbox?: string;
+  serviceCaseStage?: string;
+  serviceOrderType?: string;
   page?: string;
 };
+
+const SERVICE_CASE_STAGES = [
+  "work_order",
+  "in_service",
+  "out_service",
+  "quote",
+  "approval",
+  "cost",
+  "invoiced",
+] as const;
 
 async function loadWorkOrders(sp: Search): Promise<WorkOrderListPayload | null> {
   const p = new URLSearchParams();
@@ -40,6 +47,10 @@ async function loadWorkOrders(sp: Search): Promise<WorkOrderListPayload | null> 
   if (sp.supplierId?.trim()) p.set("supplierId", sp.supplierId.trim());
   if (sp.vehicleId?.trim()) p.set("vehicleId", sp.vehicleId.trim());
   if (sp.clientId?.trim()) p.set("clientId", sp.clientId.trim());
+  if (sp.serviceCaseStage?.trim()) p.set("serviceCaseStage", sp.serviceCaseStage.trim());
+  if (sp.serviceOrderType?.trim()) p.set("serviceOrderType", sp.serviceOrderType.trim());
+  const inbox = sp.inbox?.trim() || "open";
+  if (inbox !== "all") p.set("inbox", inbox);
   p.set("page", String(Math.max(1, parseInt(sp.page ?? "1", 10) || 1)));
   p.set("pageSize", "50");
   try {
@@ -85,13 +96,13 @@ async function loadSuppliers(): Promise<Array<{ id: string; code: string; legalN
   }
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
-}
-
 type PageProps = { searchParams: Promise<Search> };
+
+function quickTabClass(active: boolean): string {
+  return `rounded-lg px-3 py-1.5 text-sm ${
+    active ? "bg-sky-600 text-white" : "border border-zinc-700 text-zinc-300 hover:bg-zinc-900"
+  }`;
+}
 
 export default async function WorkOrdersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
@@ -103,31 +114,60 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
     getVehicleOptions(),
   ]);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const activeInbox = (sp.inbox?.trim() || "open") as WorkOrderInbox | "all";
 
-  const withPage = (next: number) => {
+  const withParams = (overrides: Partial<Search>) => {
     const p = new URLSearchParams();
-    if (sp.q?.trim()) p.set("q", sp.q.trim());
-    if (sp.status?.trim()) p.set("status", sp.status.trim());
-    if (sp.supplierId?.trim()) p.set("supplierId", sp.supplierId.trim());
-    if (sp.vehicleId?.trim()) p.set("vehicleId", sp.vehicleId.trim());
-    if (sp.clientId?.trim()) p.set("clientId", sp.clientId.trim());
-    p.set("page", String(next));
-    return `/fleet/work-orders?${p.toString()}`;
+    const merged = { ...sp, ...overrides };
+    if (merged.q?.trim()) p.set("q", merged.q.trim());
+    if (merged.status?.trim()) p.set("status", merged.status.trim());
+    if (merged.supplierId?.trim()) p.set("supplierId", merged.supplierId.trim());
+    if (merged.vehicleId?.trim()) p.set("vehicleId", merged.vehicleId.trim());
+    if (merged.clientId?.trim()) p.set("clientId", merged.clientId.trim());
+    if (merged.serviceCaseStage?.trim()) p.set("serviceCaseStage", merged.serviceCaseStage.trim());
+    if (merged.serviceOrderType?.trim()) p.set("serviceOrderType", merged.serviceOrderType.trim());
+    if (merged.inbox?.trim()) p.set("inbox", merged.inbox.trim());
+    if (merged.page && merged.page !== "1") p.set("page", merged.page);
+    const qs = p.toString();
+    return `/fleet/work-orders${qs ? `?${qs}` : ""}`;
   };
+
+  const withPage = (next: number) => withParams({ page: String(next) });
+
+  const filterParams: Record<string, string> = {};
+  if (sp.q?.trim()) filterParams.q = sp.q.trim();
+  if (sp.status?.trim()) filterParams.status = sp.status.trim();
+  if (sp.clientId?.trim()) filterParams.clientId = sp.clientId.trim();
+  if (sp.supplierId?.trim()) filterParams.supplierId = sp.supplierId.trim();
+  if (sp.vehicleId?.trim()) filterParams.vehicleId = sp.vehicleId.trim();
+  if (sp.serviceCaseStage?.trim()) filterParams.serviceCaseStage = sp.serviceCaseStage.trim();
+  if (sp.serviceOrderType?.trim()) filterParams.serviceOrderType = sp.serviceOrderType.trim();
+  if (sp.inbox?.trim()) filterParams.inbox = sp.inbox.trim();
+
+  const vehicleOptions = sp.clientId?.trim()
+    ? vehicles.filter((v) => v.clientId.toLowerCase() === sp.clientId!.trim().toLowerCase())
+    : vehicles;
+
+  const quickTabs: { label: string; inbox?: WorkOrderInbox | "all" }[] = [
+    { label: "Deschise", inbox: "open" },
+    { label: "Așteaptă aprobare", inbox: "pending_approval" },
+    { label: "In service", inbox: "in_service" },
+    { label: "Lucrare gata", inbox: "ready" },
+    { label: "Facturate", inbox: "invoiced" },
+    { label: "Toate", inbox: "all" },
+  ];
 
   return (
     <FleetPageMain fill>
       <FleetListPageLayout
         header={
-          <div className="flex flex-col gap-4">
-            <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-sky-400">Furnizori & Parteneri</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Devize & comenzi</h1>
-              <p className="mt-3 max-w-2xl text-zinc-400">
-                Comenzi de lucru service legate de dosarele operaționale — flux tichet → programare → deviz.
-              </p>
-            </div>
-            {stats ? <WorkOrderKpiStrip stats={stats} /> : null}
+          <div>
+            <p className="text-sm font-medium uppercase tracking-widest text-sky-400">Furnizori & Parteneri</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Devize & comenzi</h1>
+            <p className="mt-3 max-w-2xl text-zinc-400">
+              Comenzi de lucru service — flux tichet → programare → deviz → aprobare. Estimarea finalizării e
+              obligatorie înainte de trimiterea devizului.
+            </p>
           </div>
         }
         filters={
@@ -136,6 +176,11 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
             method="get"
             className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4"
           >
+            {activeInbox !== "all" && activeInbox !== "open" ? (
+              <input type="hidden" name="inbox" value={activeInbox} />
+            ) : activeInbox === "open" ? (
+              <input type="hidden" name="inbox" value="open" />
+            ) : null}
             <div>
               <label className="text-xs text-zinc-500">Căutare</label>
               <input
@@ -146,7 +191,7 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
               />
             </div>
             <div>
-              <label className="text-xs text-zinc-500">Status</label>
+              <label className="text-xs text-zinc-500">Status WO</label>
               <select
                 name="status"
                 defaultValue={sp.status ?? ""}
@@ -156,6 +201,36 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
                 {WORK_ORDER_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-zinc-500">Etapă dosar</label>
+              <select
+                name="serviceCaseStage"
+                defaultValue={sp.serviceCaseStage ?? ""}
+                className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="">Toate</option>
+                {SERVICE_CASE_STAGES.map((s) => (
+                  <option key={s} value={s}>
+                    {serviceCaseStageLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-zinc-500">Tip</label>
+              <select
+                name="serviceOrderType"
+                defaultValue={sp.serviceOrderType ?? ""}
+                className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="">Toate</option>
+                {SERVICE_ORDER_TYPES.map((t) => (
+                  <option key={t.code} value={t.code}>
+                    {t.code} — {t.label}
                   </option>
                 ))}
               </select>
@@ -176,7 +251,7 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
               </select>
             </div>
             <div>
-              <label className="text-xs text-zinc-500">Furnizor</label>
+              <label className="text-xs text-zinc-500">Partener</label>
               <select
                 name="supplierId"
                 defaultValue={sp.supplierId ?? ""}
@@ -195,10 +270,10 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
               <select
                 name="vehicleId"
                 defaultValue={sp.vehicleId ?? ""}
-                className="mt-1 block max-w-[10rem] rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100"
+                className="mt-1 block max-w-[10rem] rounded-lg border border-zinc-700 bg-zinc-950 font-mono text-sm text-zinc-100"
               >
                 <option value="">Toate</option>
-                {vehicles.map((v) => (
+                {vehicleOptions.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.registrationNumber}
                   </option>
@@ -211,100 +286,59 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
             >
               Filtrează
             </button>
-            <FilterResetLink href="/fleet/work-orders" />
+            <FilterResetLink href="/fleet/work-orders?inbox=open" />
           </form>
         }
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            {quickTabs.map((tab) => (
+              <Link
+                key={tab.label}
+                href={withParams({
+                  inbox: tab.inbox === "all" ? "all" : tab.inbox === "open" ? "open" : tab.inbox,
+                  page: "1",
+                })}
+                className={quickTabClass(activeInbox === (tab.inbox ?? "all"))}
+              >
+                {tab.label}
+              </Link>
+            ))}
+          </div>
+        }
       >
+        {stats ? (
+          <div className="mb-6">
+            <WorkOrderKpiStrip stats={stats} />
+          </div>
+        ) : null}
+
         {!list ? (
           <p className="text-amber-400">Nu am putut încărca comenzile. Verifică API-ul și migrarea.</p>
         ) : list.items.length === 0 ? (
           <p className="text-zinc-500">
-            Nicio comandă service. Pornește un dosar dintr-un tichet CRM și avansează la etapa „Comandă service”.
+            Nicio comandă pentru filtrele curente. Pornește un dosar dintr-un tichet CRM și avansează la etapa
+            „Comandă service”.
           </p>
         ) : (
           <>
-            <FleetDataTable>
-              <table className={fleetTableClass}>
-                <thead className={`${fleetTheadClass} tracking-wide`}>
-                  <tr>
-                    <th className={fleetThClass}>Titlu</th>
-                    <th className={fleetThClass}>Status</th>
-                    <th className={fleetThClass}>Vehicul</th>
-                    <th className={fleetThClass}>Client</th>
-                    <th className={fleetThClass}>Furnizor</th>
-                    <th className={fleetThClass}>Flux</th>
-                    <th className={fleetThClass}>Tichet</th>
-                    <th className={fleetThClass}>Actualizat</th>
-                    <th className={fleetThClass} />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/80">
-                  {list.items.map((row) => (
-                    <tr key={row.id} className="text-zinc-200">
-                      <td className={fleetTdClass}>
-                        <Link href={`/fleet/work-orders/${row.id}`} className="font-medium hover:text-emerald-200 hover:underline">
-                          {row.displayNumber ? (
-                            <>
-                              <span className="font-mono text-violet-300">{row.displayNumber}</span>
-                              <span className="mt-0.5 block text-sm text-zinc-300">{row.title}</span>
-                            </>
-                          ) : (
-                            row.title
-                          )}
-                        </Link>
-                      </td>
-                      <td className={fleetTdClass}>
-                        <WorkOrderStatusBadge status={row.status} />
-                      </td>
-                      <td className={`${fleetTdClass} font-mono text-sm`}>
-                        <Link href={`/fleet/vehicles/${row.vehicleId}`} className="text-sky-300/90 hover:underline">
-                          {row.registrationNumber}
-                        </Link>
-                      </td>
-                      <td className={`${fleetTdClass} text-sm`}>
-                        {row.clientCode}
-                        <span className="block text-xs text-zinc-500">{row.clientLegalName}</span>
-                      </td>
-                      <td className={fleetTdClass}>{row.supplierLegalName ?? "—"}</td>
-                      <td className={`${fleetTdClass} text-xs text-zinc-400`}>
-                        {workflowTypeLabel(row.workflowType)}
-                        <span className="block">{serviceCaseStageLabel(row.serviceCaseStage)}</span>
-                      </td>
-                      <td className={`${fleetTdClass} font-mono text-sm`}>
-                        {row.sourceTicketId && row.ticketDisplayId ? (
-                          <Link href={`/fleet/tickets/${row.sourceTicketId}`} className="text-emerald-400 hover:underline">
-                            #{row.ticketDisplayId}
-                          </Link>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className={`${fleetTdClass} text-sm text-zinc-400`}>{formatDate(row.updatedAt)}</td>
-                      <td className={`${fleetTdClass} text-right`}>
-                        <Link href={`/fleet/work-orders/${row.id}`} className="text-zinc-400 hover:text-zinc-200 hover:underline">
-                          Detalii
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </FleetDataTable>
+            <WorkOrderDataGrid items={list.items} filterParams={filterParams} />
             {list.total > list.pageSize ? (
-              <div className="mt-4 flex gap-2 text-sm">
-                {page > 1 ? (
-                  <Link href={withPage(page - 1)} className="text-emerald-400 hover:underline">
-                    ← Anterior
-                  </Link>
-                ) : null}
-                <span className="text-zinc-500">
+              <div className="mt-4 flex items-center justify-between text-sm text-zinc-500">
+                <span>
                   Pagina {page} · {list.total} comenzi
                 </span>
-                {page * list.pageSize < list.total ? (
-                  <Link href={withPage(page + 1)} className="text-emerald-400 hover:underline">
-                    Următor →
-                  </Link>
-                ) : null}
+                <div className="flex gap-2">
+                  {page > 1 ? (
+                    <Link href={withPage(page - 1)} className="rounded border border-zinc-700 px-3 py-1 hover:bg-zinc-900">
+                      Înapoi
+                    </Link>
+                  ) : null}
+                  {page * list.pageSize < list.total ? (
+                    <Link href={withPage(page + 1)} className="rounded border border-zinc-700 px-3 py-1 hover:bg-zinc-900">
+                      Înainte
+                    </Link>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </>

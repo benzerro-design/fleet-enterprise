@@ -253,6 +253,11 @@ export class WorkOrderQuotesService {
     if (existing.lines.length === 0) {
       throw new BadRequestException('Quote must have at least one line');
     }
+    if (!existing.workOrder.estimatedRepairAt) {
+      throw new BadRequestException(
+        'Estimated repair completion date is required before submitting quote for approval',
+      );
+    }
 
     const quote = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.workOrderQuote.update({

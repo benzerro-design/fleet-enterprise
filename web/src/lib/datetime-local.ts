@@ -34,3 +34,29 @@ export function toIsoFromDatetimeLocal(v: string): string | undefined {
   if (Number.isNaN(d.getTime())) return undefined;
   return d.toISOString();
 }
+
+/** Citește `<input type="date">` și trimite ISO UTC (miezul zilei locale). */
+export function toIsoFromDateInput(v: string): string | undefined {
+  const t = v.trim();
+  if (!t) return undefined;
+  const d = new Date(`${t}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString();
+}
+
+/** ISO → valoare pentru `<input type="date">`. */
+export function toDateInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Dată scurtă ro-RO (fără oră). */
+export function formatDateRo(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
+}

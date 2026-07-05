@@ -63,6 +63,7 @@ export type WorkOrderRecord = {
   repairPathNote: string | null;
   serviceOrderType: string;
   readyAt: string | null;
+  estimatedRepairAt: string | null;
   createdAt: string;
   latestQuote: QuoteSummary | null;
   approvedQuote: QuoteSummary | null;
@@ -945,6 +946,7 @@ export class ServiceCasesService {
         repairPathNote: string | null;
         serviceOrderType: string;
         readyAt: Date | null;
+        estimatedRepairAt: Date | null;
         createdAt: Date;
         supplier?: { legalName: string } | null;
         quotes?: Array<{
@@ -1036,6 +1038,7 @@ export class ServiceCasesService {
           repairPathNote: wo.repairPathNote ?? null,
           serviceOrderType: wo.serviceOrderType,
           readyAt: wo.readyAt?.toISOString() ?? null,
+          estimatedRepairAt: wo.estimatedRepairAt?.toISOString() ?? null,
           createdAt: wo.createdAt.toISOString(),
           latestQuote: toSummary(display),
           approvedQuote: toSummary(approved ?? null),

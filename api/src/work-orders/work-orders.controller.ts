@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { MaintenanceWorkOrderStatus } from '@prisma/client';
+import { MaintenanceWorkOrderStatus, ServiceCaseStage, ServiceOrderType } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -18,7 +18,7 @@ import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TenantId } from '../fleet/tenant-id.decorator';
-import { WorkOrdersService } from './work-orders.service';
+import { WorkOrdersService, type WorkOrderInbox } from './work-orders.service';
 
 function parseStatus(raw?: string): MaintenanceWorkOrderStatus | undefined {
   if (!raw?.trim()) return undefined;
@@ -34,6 +34,48 @@ function parseStatus(raw?: string): MaintenanceWorkOrderStatus | undefined {
     return v;
   }
   throw new BadRequestException('Invalid status');
+}
+
+function parseInbox(raw?: string): WorkOrderInbox | undefined {
+  if (!raw?.trim()) return undefined;
+  const v = raw.trim();
+  if (
+    v === 'open' ||
+    v === 'pending_approval' ||
+    v === 'in_service' ||
+    v === 'ready' ||
+    v === 'invoiced'
+  ) {
+    return v;
+  }
+  throw new BadRequestException('Invalid inbox');
+}
+
+function parseServiceCaseStage(raw?: string): ServiceCaseStage | undefined {
+  if (!raw?.trim()) return undefined;
+  const v = raw.trim() as ServiceCaseStage;
+  if (
+    v === 'intake' ||
+    v === 'scheduled' ||
+    v === 'work_order' ||
+    v === 'in_service' ||
+    v === 'out_service' ||
+    v === 'quote' ||
+    v === 'approval' ||
+    v === 'cost' ||
+    v === 'invoiced' ||
+    v === 'closed'
+  ) {
+    return v;
+  }
+  throw new BadRequestException('Invalid service case stage');
+}
+
+function parseServiceOrderType(raw?: string): ServiceOrderType | undefined {
+  if (!raw?.trim()) return undefined;
+  const v = raw.trim() as ServiceOrderType;
+  if (v === 'M' || v === 'E' || v === 'D' || v === 'TV') return v;
+  throw new BadRequestException('Invalid service order type');
 }
 
 @Controller('work-orders')
@@ -52,6 +94,9 @@ export class WorkOrdersController {
     @Query('supplierId') supplierId?: string,
     @Query('vehicleId') vehicleId?: string,
     @Query('clientId') clientId?: string,
+    @Query('inbox') inbox?: string,
+    @Query('serviceCaseStage') serviceCaseStage?: string,
+    @Query('serviceOrderType') serviceOrderType?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
@@ -63,6 +108,9 @@ export class WorkOrdersController {
       supplierId: supplierId?.trim(),
       vehicleId: vehicleId?.trim(),
       clientId: clientId?.trim(),
+      inbox: parseInbox(inbox),
+      serviceCaseStage: parseServiceCaseStage(serviceCaseStage),
+      serviceOrderType: parseServiceOrderType(serviceOrderType),
     });
   }
 
@@ -83,7 +131,7 @@ export class WorkOrdersController {
   patch(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
-    @Body() body: { serviceOrderType?: 'M' | 'E' | 'D' | 'TV' },
+    @Body() body: { serviceOrderType?: 'M' | 'E' | 'D' | 'TV'; estimatedRepairAt?: string | null },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {

@@ -7,8 +7,10 @@ type Props = {
 export function WorkOrderKpiStrip({ stats }: Props) {
   const items = [
     { label: "Deschise", value: stats.open, warn: false },
+    { label: "Așteaptă aprobare", value: stats.pendingApproval, warn: stats.pendingApproval > 0 },
     { label: "În lucru", value: stats.inProgress, warn: false },
     { label: "Așteaptă piese", value: stats.waitingParts, warn: stats.waitingParts > 0 },
+    { label: "Gata, nefacturat", value: stats.readyUninvoiced, warn: stats.readyUninvoiced > 0 },
     { label: "Finalizate", value: stats.done, warn: false },
   ];
 

@@ -1131,6 +1131,8 @@ model MaintenanceWorkOrder {
   repairPathNote String?
   serviceOrderType ServiceOrderType       @default(M)
   readyAt          DateTime?
+  /// Dată estimativă finalizare reparație — obligatorie înainte de trimitere deviz spre aprobare (partener).
+  estimatedRepairAt DateTime?
   notes         String?
   createdAt     DateTime                   @default(now())
   updatedAt     DateTime                   @updatedAt

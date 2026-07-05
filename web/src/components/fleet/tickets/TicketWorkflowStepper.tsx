@@ -21,6 +21,7 @@ import { OperationalFlowFork } from "@/components/fleet/tickets/OperationalFlowF
 import { OperationalStoryTimeline } from "@/components/fleet/tickets/OperationalStoryTimeline";
 import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/WorkOrderQuoteBillingActions";
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
+import { formatDateRo } from "@/lib/datetime-local";
 
 type Props = {
   ticketId: string;
@@ -708,6 +709,11 @@ function WorkOrderStepCard({
             Deviz v{pendingQuote.version} · {quoteStatusLabel(pendingQuote.status)} ·{" "}
             {formatQuoteMoney(pendingQuote.totalGrossCents, pendingQuote.currency)}
           </p>
+          {wo.estimatedRepairAt ? (
+            <p className="mt-1 text-xs text-zinc-300">
+              Estimare finalizare reparație: {formatDateRo(wo.estimatedRepairAt)}
+            </p>
+          ) : null}
           {canApproveQuote ? (
             <div className="mt-2 flex flex-wrap gap-2">
               <button

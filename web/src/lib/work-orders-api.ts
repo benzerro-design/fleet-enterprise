@@ -60,15 +60,31 @@ export type WorkOrderListRow = {
   supplierLegalName: string | null;
   serviceCaseId: string;
   serviceCaseStage: string;
+  serviceCaseStatus: string;
   workflowType: string;
   sourceTicketId: string | null;
   ticketDisplayId: string | null;
+  ticketSubject: string | null;
+  readyAt: string | null;
+  estimatedRepairAt: string | null;
+  quoteSummary: WorkOrderQuoteSummary;
 };
+
+export type WorkOrderQuoteSummary = {
+  status: string | null;
+  version: number | null;
+  totalGrossCents: number | null;
+  currency: string | null;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  invoicedAt: string | null;
+};
+
+export type WorkOrderInbox = "open" | "pending_approval" | "in_service" | "ready" | "invoiced";
 
 export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
   serviceCaseTitle: string;
-  serviceCaseStatus: string;
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;
   inServiceAt: string | null;
@@ -76,22 +92,12 @@ export type WorkOrderDetail = WorkOrderListRow & {
   odometerKmIn: number | null;
   odometerKmOut: number | null;
   repairPathNote: string | null;
-  readyAt: string | null;
   vehicle: WorkOrderVehicleSnapshot;
   client: WorkOrderClientSnapshot;
   supplier: WorkOrderSupplierSnapshot | null;
   ticketSubject: string | null;
   driverName: string | null;
   driverPhone: string | null;
-  quoteSummary: {
-    status: string | null;
-    version: number | null;
-    totalGrossCents: number | null;
-    currency: string | null;
-    submittedAt: string | null;
-    approvedAt: string | null;
-    invoicedAt: string | null;
-  };
 };
 
 export type QuoteLineType = "labor" | "parts" | "other";
@@ -179,6 +185,8 @@ export type WorkOrderStats = {
   inProgress: number;
   waitingParts: number;
   done: number;
+  pendingApproval: number;
+  readyUninvoiced: number;
 };
 
 export const WORK_ORDER_STATUSES: { value: WorkOrderStatus; label: string }[] = [

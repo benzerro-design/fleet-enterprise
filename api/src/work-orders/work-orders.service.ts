@@ -12,6 +12,7 @@ import {
   ServiceCaseStage,
   ServiceCaseStatus,
   ServiceOrderType,
+  WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { assertClientFleetWrite } from '../iam/client-access';
@@ -68,9 +69,22 @@ export type WorkOrderListRow = {
   supplierLegalName: string | null;
   serviceCaseId: string;
   serviceCaseStage: string;
+  serviceCaseStatus: string;
   workflowType: string;
   sourceTicketId: string | null;
   ticketDisplayId: string | null;
+  ticketSubject: string | null;
+  readyAt: string | null;
+  estimatedRepairAt: string | null;
+  quoteSummary: {
+    status: string | null;
+    version: number | null;
+    totalGrossCents: number | null;
+    currency: string | null;
+    submittedAt: string | null;
+    approvedAt: string | null;
+    invoicedAt: string | null;
+  };
 };
 
 export type WorkOrderDetail = WorkOrderListRow & {
@@ -102,6 +116,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   };
 };
 
+export type WorkOrderInbox = 'open' | 'pending_approval' | 'in_service' | 'ready' | 'invoiced';
+
 export type WorkOrderListParams = {
   page: number;
   pageSize: number;
@@ -110,6 +126,9 @@ export type WorkOrderListParams = {
   supplierId?: string;
   vehicleId?: string;
   clientId?: string;
+  serviceCaseStage?: ServiceCaseStage;
+  serviceOrderType?: ServiceOrderType;
+  inbox?: WorkOrderInbox;
 };
 
 export type WorkOrderStats = {
@@ -117,6 +136,8 @@ export type WorkOrderStats = {
   inProgress: number;
   waitingParts: number;
   done: number;
+  pendingApproval: number;
+  readyUninvoiced: number;
 };
 
 function ticketDisplayId(ticketId: string | null | undefined): string | null {
@@ -150,9 +171,60 @@ export class WorkOrdersService {
           workflowType: true,
           sourceTicketId: true,
           clientId: true,
+          sourceTicket: { select: { subject: true } },
+        },
+      },
+      quotes: {
+        orderBy: { version: 'desc' },
+        take: 1,
+        select: {
+          status: true,
+          version: true,
+          totalNetCents: true,
+          totalVatCents: true,
+          currency: true,
+          submittedAt: true,
+          approvedAt: true,
+          invoicedAt: true,
         },
       },
     } as const;
+  }
+
+  private quoteSummaryFromRow(
+    quote:
+      | {
+          status: WorkOrderQuoteStatus;
+          version: number;
+          totalNetCents: number;
+          totalVatCents: number;
+          currency: string;
+          submittedAt: Date | null;
+          approvedAt: Date | null;
+          invoicedAt: Date | null;
+        }
+      | undefined,
+  ) {
+    if (!quote) {
+      return {
+        status: null,
+        version: null,
+        totalGrossCents: null,
+        currency: null,
+        submittedAt: null,
+        approvedAt: null,
+        invoicedAt: null,
+      };
+    }
+    return {
+      status: quote.status,
+      version: quote.version,
+      totalGrossCents: quote.totalNetCents + quote.totalVatCents,
+      currency: quote.currency,
+      submittedAt: quote.submittedAt?.toISOString() ?? null,
+      approvedAt: quote.approvedAt?.toISOString() ?? null,
+      invoicedAt: quote.invoicedAt?.toISOString() ?? null,
+    };
   }
 
   private toListRow(row: {
@@ -165,6 +237,8 @@ export class WorkOrdersService {
     updatedAt: Date;
     plannedAt: Date | null;
     completedAt: Date | null;
+    readyAt: Date | null;
+    estimatedRepairAt: Date | null;
     vehicleId: string;
     supplierId: string | null;
     serviceCaseId: string;
@@ -175,10 +249,22 @@ export class WorkOrdersService {
     };
     supplier: { code: string; legalName: string } | null;
     serviceCase: {
+      status: ServiceCaseStatus;
       currentStage: string;
       workflowType: string;
       sourceTicketId: string | null;
+      sourceTicket?: { subject: string } | null;
     };
+    quotes?: Array<{
+      status: WorkOrderQuoteStatus;
+      version: number;
+      totalNetCents: number;
+      totalVatCents: number;
+      currency: string;
+      submittedAt: Date | null;
+      approvedAt: Date | null;
+      invoicedAt: Date | null;
+    }>;
   }): WorkOrderListRow {
     return {
       id: row.id,
@@ -200,9 +286,14 @@ export class WorkOrdersService {
       supplierLegalName: row.supplier?.legalName ?? null,
       serviceCaseId: row.serviceCaseId,
       serviceCaseStage: row.serviceCase.currentStage,
+      serviceCaseStatus: row.serviceCase.status,
       workflowType: row.serviceCase.workflowType,
       sourceTicketId: row.serviceCase.sourceTicketId,
       ticketDisplayId: ticketDisplayId(row.serviceCase.sourceTicketId),
+      ticketSubject: row.serviceCase.sourceTicket?.subject ?? null,
+      readyAt: row.readyAt?.toISOString() ?? null,
+      estimatedRepairAt: row.estimatedRepairAt?.toISOString() ?? null,
+      quoteSummary: this.quoteSummaryFromRow(row.quotes?.[0]),
     };
   }
 
@@ -218,6 +309,31 @@ export class WorkOrdersService {
           { serviceCase: { clientId: params.clientId.trim() } },
         ],
       });
+    }
+    if (params.serviceCaseStage) {
+      parts.push({ serviceCase: { currentStage: params.serviceCaseStage } });
+    }
+    if (params.serviceOrderType) {
+      parts.push({ serviceOrderType: params.serviceOrderType });
+    }
+    if (params.inbox === 'open') {
+      parts.push({
+        status: {
+          notIn: [MaintenanceWorkOrderStatus.done, MaintenanceWorkOrderStatus.cancelled],
+        },
+        serviceCase: { status: ServiceCaseStatus.active },
+      });
+    } else if (params.inbox === 'pending_approval') {
+      parts.push({ quotes: { some: { status: WorkOrderQuoteStatus.submitted } } });
+    } else if (params.inbox === 'in_service') {
+      parts.push({ serviceCase: { currentStage: ServiceCaseStage.in_service } });
+    } else if (params.inbox === 'ready') {
+      parts.push({
+        readyAt: { not: null },
+        NOT: { quotes: { some: { invoicedAt: { not: null } } } },
+      });
+    } else if (params.inbox === 'invoiced') {
+      parts.push({ quotes: { some: { invoicedAt: { not: null } } } });
     }
     const q = params.q?.trim();
     if (q) {
@@ -264,7 +380,7 @@ export class WorkOrdersService {
 
   async getStats(tenantSlug: string, clientId?: string): Promise<WorkOrderStats> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) return { open: 0, inProgress: 0, waitingParts: 0, done: 0 };
+    if (!tenant) return { open: 0, inProgress: 0, waitingParts: 0, done: 0, pendingApproval: 0, readyUninvoiced: 0 };
 
     const clientFilter: Prisma.MaintenanceWorkOrderWhereInput | undefined = clientId?.trim()
       ? {
@@ -280,18 +396,14 @@ export class WorkOrdersService {
       ...(clientFilter ? { AND: [clientFilter] } : {}),
     };
 
-    const [open, inProgress, waitingParts, done] = await Promise.all([
+    const [open, inProgress, waitingParts, done, pendingApproval, readyUninvoiced] = await Promise.all([
       this.prisma.maintenanceWorkOrder.count({
         where: {
           ...base,
           status: {
-            in: [
-              MaintenanceWorkOrderStatus.draft,
-              MaintenanceWorkOrderStatus.sent,
-              MaintenanceWorkOrderStatus.in_progress,
-              MaintenanceWorkOrderStatus.waiting_parts,
-            ],
+            notIn: [MaintenanceWorkOrderStatus.done, MaintenanceWorkOrderStatus.cancelled],
           },
+          serviceCase: { status: ServiceCaseStatus.active },
         },
       }),
       this.prisma.maintenanceWorkOrder.count({
@@ -303,9 +415,19 @@ export class WorkOrdersService {
       this.prisma.maintenanceWorkOrder.count({
         where: { ...base, status: MaintenanceWorkOrderStatus.done },
       }),
+      this.prisma.maintenanceWorkOrder.count({
+        where: { ...base, quotes: { some: { status: WorkOrderQuoteStatus.submitted } } },
+      }),
+      this.prisma.maintenanceWorkOrder.count({
+        where: {
+          ...base,
+          readyAt: { not: null },
+          NOT: { quotes: { some: { invoicedAt: { not: null } } } },
+        },
+      }),
     ]);
 
-    return { open, inProgress, waitingParts, done };
+    return { open, inProgress, waitingParts, done, pendingApproval, readyUninvoiced };
   }
 
   async getById(tenantSlug: string, id: string): Promise<WorkOrderDetail> {
@@ -404,6 +526,7 @@ export class WorkOrdersService {
       odometerKmOut: row.odometerKmOut ?? null,
       repairPathNote: row.repairPathNote ?? null,
       readyAt: row.readyAt?.toISOString() ?? null,
+      estimatedRepairAt: row.estimatedRepairAt?.toISOString() ?? null,
       vehicle: {
         registrationNumber: row.vehicle.registrationNumber,
         brand: row.vehicle.brand,
@@ -458,7 +581,7 @@ export class WorkOrdersService {
   async patch(
     tenantSlug: string,
     id: string,
-    dto: { serviceOrderType?: ServiceOrderType },
+    dto: { serviceOrderType?: ServiceOrderType; estimatedRepairAt?: string | null },
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<WorkOrderDetail> {
@@ -467,7 +590,10 @@ export class WorkOrdersService {
 
     const wo = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id, tenantId: tenant.id },
-      include: { vehicle: { select: { clientId: true } } },
+      include: {
+        vehicle: { select: { clientId: true } },
+        serviceCase: { select: { sourceTicketId: true } },
+      },
     });
     if (!wo) throw new NotFoundException('Work order not found');
     if (access) {
@@ -478,15 +604,22 @@ export class WorkOrdersService {
       }
     }
 
+    const quoteLocked = await this.prisma.workOrderQuote.findFirst({
+      where: {
+        workOrderId: id,
+        status: { in: [WorkOrderQuoteStatus.submitted, WorkOrderQuoteStatus.approved] },
+      },
+    });
+
     if (dto.serviceOrderType !== undefined) {
-      const locked = await this.prisma.workOrderQuote.findFirst({
-        where: {
-          workOrderId: id,
-          status: { in: ['submitted', 'approved'] },
-        },
-      });
-      if (locked) {
+      if (quoteLocked) {
         throw new BadRequestException('Cannot change service order type after quote is submitted');
+      }
+    }
+
+    if (dto.estimatedRepairAt !== undefined) {
+      if (quoteLocked) {
+        throw new BadRequestException('Cannot change estimated repair date after quote is submitted');
       }
     }
 
@@ -494,11 +627,52 @@ export class WorkOrdersService {
     if (dto.serviceOrderType !== undefined) {
       data.serviceOrderType = dto.serviceOrderType;
     }
+    if (dto.estimatedRepairAt !== undefined) {
+      if (dto.estimatedRepairAt === null || dto.estimatedRepairAt === '') {
+        data.estimatedRepairAt = null;
+      } else {
+        const parsed = new Date(dto.estimatedRepairAt);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new BadRequestException('Invalid estimated repair date');
+        }
+        data.estimatedRepairAt = parsed;
+      }
+    }
     if (Object.keys(data).length === 0) {
       throw new BadRequestException('No fields to update');
     }
 
-    await this.prisma.maintenanceWorkOrder.update({ where: { id }, data });
+    const estimatedChanged =
+      dto.estimatedRepairAt !== undefined &&
+      (dto.estimatedRepairAt
+        ? new Date(dto.estimatedRepairAt).getTime()
+        : null) !== (wo.estimatedRepairAt?.getTime() ?? null);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.maintenanceWorkOrder.update({ where: { id }, data });
+
+      if (estimatedChanged && dto.estimatedRepairAt && wo.serviceCase.sourceTicketId) {
+        const parsed = new Date(dto.estimatedRepairAt);
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: wo.serviceCase.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Estimare finalizare reparație: ${parsed.toLocaleDateString('ro-RO', {
+              day: '2-digit',
+              month: 'long',
+              year: 'numeric',
+            })}.`,
+            payload: {
+              workOrderId: id,
+              estimatedRepairAt: parsed.toISOString(),
+              milestone: 'estimated_repair',
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
 
     await this.audit.log({
       tenantId: tenant.id,
