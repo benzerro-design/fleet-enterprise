@@ -14,10 +14,11 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ServiceCasesModule } from './service-cases/service-cases.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { WorkOrdersModule } from './work-orders/work-orders.module';
+import { MobilityModule } from './mobility/mobility.module';
 import { TenantModule } from './tenant/tenant.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, IamModule, BotModule, ClientsModule, CrmModule, DriversModule, FleetModule, OpsModule, ServiceCasesModule, SuppliersModule, WorkOrdersModule, AppointmentsModule, TenantModule],
+  imports: [PrismaModule, AuthModule, IamModule, BotModule, ClientsModule, CrmModule, DriversModule, FleetModule, OpsModule, ServiceCasesModule, SuppliersModule, WorkOrdersModule, AppointmentsModule, MobilityModule, TenantModule],
   controllers: [AppController],
   providers: [AppService],
 })

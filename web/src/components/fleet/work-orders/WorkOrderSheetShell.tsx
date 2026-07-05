@@ -21,6 +21,7 @@ import {
   type WorkOrderDetail,
 } from "@/lib/work-orders-api";
 import { workOrderDisplayLabel } from "@/lib/work-order-display";
+import { MobilityWoBanner } from "@/components/fleet/MobilityWoBanner";
 
 type Props = {
   wo: WorkOrderDetail;
@@ -266,6 +267,8 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
           </span>
         </div>
       </div>
+
+      <MobilityWoBanner workOrderId={wo.id} canWrite={canWrite} />
 
       {error ? <p className="border-b border-red-900/40 bg-red-950/20 px-4 py-2 text-sm text-red-400">{error}</p> : null}
 

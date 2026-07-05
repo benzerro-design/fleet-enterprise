@@ -1,5 +1,12 @@
 import type { ServiceCaseRecord } from "@/lib/service-cases-api";
 import { formatDateRo } from "@/lib/datetime-local";
+import {
+  computeImmobilizationHours,
+  isMobilityEligible,
+  mobilityStatusLabel,
+  MOBILITY_ELIGIBILITY_HOURS,
+  type MobilityAssignmentRecord,
+} from "@/lib/mobility-api";
 
 export type StoryChapterState = "done" | "now" | "next" | "later";
 
@@ -21,6 +28,9 @@ export type OperationalStoryInput = {
   serviceCase: ServiceCaseRecord | null;
   closed: boolean;
   ticketCreatedAt?: string;
+  mobility?: MobilityAssignmentRecord | null;
+  mobilityEligible?: boolean;
+  mobilityImmobilizationHours?: number | null;
 };
 
 function fmt(iso: string): string {
@@ -84,7 +94,7 @@ export function operationalHeadline(
 }
 
 export function buildOperationalChapters(input: OperationalStoryInput): OperationalChapter[] {
-  const { serviceCase, closed, ticketCreatedAt } = input;
+  const { serviceCase, closed, ticketCreatedAt, mobility, mobilityEligible, mobilityImmobilizationHours } = input;
   const wo = serviceCase?.workOrders[0];
   const approved = wo?.approvedQuote ?? null;
   const pendingQ = wo?.pendingQuote ?? null;
@@ -105,6 +115,26 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
   }
 
   const billingLinks: OperationalChapterLink[] = [];
+  const eligible =
+    mobilityEligible ??
+    (wo ? isMobilityEligible(wo.inServiceAt, wo.estimatedRepairAt, wo.outServiceAt) : false);
+  const immHours =
+    mobilityImmobilizationHours ??
+    (wo ? computeImmobilizationHours(wo.inServiceAt, wo.estimatedRepairAt, wo.outServiceAt) : null);
+
+  const mobilityLinks: OperationalChapterLink[] = [];
+  if (mobility) {
+    mobilityLinks.push({
+      href: `/fleet/mobility/replacement-cars/${mobility.id}`,
+      label: mobility.displayNumber ?? "Alocare",
+    });
+  } else if (wo && eligible) {
+    mobilityLinks.push({
+      href: `/fleet/mobility/replacement-cars/new?wo=${wo.id}`,
+      label: "Alocă mașină schimb",
+    });
+  }
+
   if (approved?.invoiceNumber && wo) {
     billingLinks.push({
       href: approved.costEntryId
@@ -156,6 +186,26 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
           ? "Marchează intrarea când mașina ajunge."
           : "După confirmarea programării.",
       detail: wo?.odometerKmIn != null ? `Km intrare: ${wo.odometerKmIn.toLocaleString("ro-RO")}` : undefined,
+    },
+    {
+      id: "mobility",
+      title: "Mașină la schimb",
+      situation: mobility
+        ? mobility.status === "waived"
+          ? `Client a renunțat la mobilitate · ${mobilityStatusLabel(mobility.status)}`
+          : mobility.status === "returned"
+            ? `Returnat · ${mobility.replacementRegistration ?? mobility.displayNumber ?? "—"}`
+            : mobility.status === "active" || mobility.status === "reserved"
+              ? `${mobilityStatusLabel(mobility.status)} · ${mobility.replacementRegistration ?? "—"} — beneficiați de mașină la schimb pe durata reparației.`
+              : `${mobilityStatusLabel(mobility.status)} · ${mobility.displayNumber ?? "—"}`
+        : eligible && wo?.inServiceAt && !wo.outServiceAt
+          ? `Eligibil mobilitate (${immHours?.toFixed(1) ?? "—"}h > ${MOBILITY_ELIGIBILITY_HOURS}h) — alocă mașină la schimb.`
+          : wo?.inServiceAt
+            ? immHours != null && immHours <= MOBILITY_ELIGIBILITY_HOURS
+              ? `Sub prag ${MOBILITY_ELIGIBILITY_HOURS}h imobilizare (${immHours.toFixed(1)}h).`
+              : "Verifică eligibilitatea după estimarea reparației."
+            : "Dacă imobilizarea depășește 72h, clientul are dreptul la mașină la schimb.",
+      links: mobilityLinks.length ? mobilityLinks : undefined,
     },
     {
       id: "quote",
@@ -259,17 +309,21 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
     return chapters.map((c) => ({ ...c, state: "done" as const }));
   }
 
+  const mobilityPending =
+    eligible && !mobility && !!wo?.inServiceAt && !wo.outServiceAt;
+
   const nowIndex = (() => {
-    if (caseClosed || woDone) return 9;
-    if (approved?.costEntryId && approved.invoicedAt) return 9;
-    if (stage === "invoiced" || stage === "cost" || approved?.invoicedAt) return 8;
-    if (wo?.readyAt) return 7;
-    if (serviceCase!.awaitingPostApproval) return 6;
-    if (serviceCase!.postApprovalPath) return wo?.readyAt ? 7 : 6;
-    if (pendingQ) return 5;
-    if (approved) return wo?.readyAt ? 8 : 6;
-    if (stage === "quote" || stage === "approval") return 4;
-    if (stage === "out_service" || (wo?.inServiceAt && wo.outServiceAt)) return 4;
+    if (caseClosed || woDone) return 10;
+    if (approved?.costEntryId && approved.invoicedAt) return 10;
+    if (stage === "invoiced" || stage === "cost" || approved?.invoicedAt) return 9;
+    if (wo?.readyAt) return 8;
+    if (serviceCase!.awaitingPostApproval) return 7;
+    if (serviceCase!.postApprovalPath) return wo?.readyAt ? 8 : 7;
+    if (pendingQ) return 6;
+    if (approved) return wo?.readyAt ? 9 : 7;
+    if (stage === "quote" || stage === "approval") return 5;
+    if (stage === "out_service" || (wo?.inServiceAt && wo.outServiceAt)) return 5;
+    if (mobilityPending) return 4;
     if (stage === "in_service" || wo?.inServiceAt) return 3;
     if (stage === "work_order" || wo) return 2;
     if (stage === "scheduled" || appt) return 1;

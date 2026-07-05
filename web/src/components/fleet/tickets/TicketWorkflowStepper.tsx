@@ -22,6 +22,7 @@ import { OperationalStoryTimeline } from "@/components/fleet/tickets/Operational
 import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/WorkOrderQuoteBillingActions";
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 import { formatDateRo } from "@/lib/datetime-local";
+import { mobilityBrowserBase, type MobilityEligibilityRecord } from "@/lib/mobility-api";
 
 type Props = {
   ticketId: string;
@@ -56,6 +57,20 @@ export function TicketWorkflowStepper({
   const [scheduledAt, setScheduledAt] = useState("");
   const [appointmentLocation, setAppointmentLocation] = useState("");
   const [appointmentNotes, setAppointmentNotes] = useState("");
+  const [mobilityEligibility, setMobilityEligibility] = useState<MobilityEligibilityRecord | null>(null);
+
+  const loadMobility = useCallback(async (workOrderId: string) => {
+    try {
+      const res = await fetch(`${mobilityBrowserBase}/eligibility/${workOrderId}`);
+      if (res.ok) {
+        setMobilityEligibility((await res.json()) as MobilityEligibilityRecord);
+      } else {
+        setMobilityEligibility(null);
+      }
+    } catch {
+      setMobilityEligibility(null);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -90,12 +105,15 @@ export function TicketWorkflowStepper({
       setServiceCase(data);
       setError(null);
       if (data?.supplierId) setSupplierId(data.supplierId);
+      const woId = data?.workOrders[0]?.id;
+      if (woId) void loadMobility(woId);
+      else setMobilityEligibility(null);
       onServiceCaseChange?.(data);
     } catch {
       setServiceCase(null);
       setError("Nu s-a putut încărca dosarul lucrare.");
     }
-  }, [ticketId, onServiceCaseChange]);
+  }, [ticketId, onServiceCaseChange, loadMobility]);
 
   useEffect(() => {
     void load();
@@ -155,6 +173,8 @@ export function TicketWorkflowStepper({
         return;
       }
       await load();
+      const woId = serviceCase?.workOrders[0]?.id;
+      if (woId) await loadMobility(woId);
       router.refresh();
     } finally {
       setPending(false);
@@ -273,6 +293,8 @@ export function TicketWorkflowStepper({
         return;
       }
       await load();
+      const woId = serviceCase?.workOrders[0]?.id;
+      if (woId) await loadMobility(woId);
       router.refresh();
     } finally {
       setPending(false);
@@ -299,6 +321,9 @@ export function TicketWorkflowStepper({
     serviceCase,
     closed,
     ticketCreatedAt,
+    mobility: mobilityEligibility?.activeAssignment ?? null,
+    mobilityEligible: mobilityEligibility?.eligible,
+    mobilityImmobilizationHours: mobilityEligibility?.immobilizationHours ?? null,
   });
   const shell = compact ? "space-y-4" : "rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-4";
   const hasPendingAppointment =
@@ -348,6 +373,8 @@ export function TicketWorkflowStepper({
         return;
       }
       await load();
+      const woId = serviceCase?.workOrders[0]?.id;
+      if (woId) await loadMobility(woId);
       router.refresh();
     } finally {
       setPending(false);

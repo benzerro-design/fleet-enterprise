@@ -170,9 +170,30 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
     id: "compliance",
     label: "Conformitate",
     items: [
-      { kind: "soon", label: "Asistență rutieră", phase: "phase2" },
       { kind: "soon", label: "Vignete / eTransport", phase: "phase2" },
       { kind: "soon", label: "RAR / DRPCIV", phase: "phase2" },
+    ],
+  },
+  {
+    id: "mobility",
+    label: "Mobilitate",
+    items: [
+      {
+        kind: "link",
+        label: "Panou mobilitate",
+        href: "/fleet/mobility",
+        phase: "live",
+        activePrefixes: ["/fleet/mobility"],
+      },
+      {
+        kind: "link",
+        label: "Mașină de schimb",
+        href: "/fleet/mobility/replacement-cars",
+        phase: "live",
+        activePrefixes: ["/fleet/mobility/replacement-cars"],
+      },
+      { kind: "soon", label: "Asistență rutieră", phase: "phase2" },
+      { kind: "soon", label: "Flotă pool", phase: "phase2" },
     ],
   },
 ];
