@@ -12,7 +12,22 @@ export type SupplierCategory =
   | "insurer"
   | "broker"
   | "dealer"
+  | "roadside_assistance"
+  | "rent"
   | "other";
+
+export const SUPPLIER_CATEGORIES: SupplierCategory[] = [
+  "service_auto",
+  "itp",
+  "fuel",
+  "tires",
+  "insurer",
+  "broker",
+  "dealer",
+  "roadside_assistance",
+  "rent",
+  "other",
+];
 
 export type SupplierRecord = {
   id: string;
@@ -48,6 +63,8 @@ export function supplierCategoryLabel(c: SupplierCategory): string {
     insurer: "Asigurator",
     broker: "Broker",
     dealer: "Dealer",
+    roadside_assistance: "Asistență rutieră",
+    rent: "Rent",
     other: "Altele",
   };
   return map[c] ?? c;

@@ -13,6 +13,7 @@ import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
+  SUPPLIER_CATEGORIES,
   supplierCategoryLabel,
   supplierStatusLabel,
   suppliersBrowserBase,
@@ -125,13 +126,11 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
                 className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               >
                 <option value="">Toate</option>
-                <option value="service_auto">Service auto</option>
-                <option value="itp">ITP</option>
-                <option value="fuel">Carburant</option>
-                <option value="tires">Anvelope</option>
-                <option value="insurer">Asigurator</option>
-                <option value="broker">Broker</option>
-                <option value="dealer">Dealer</option>
+                {SUPPLIER_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {supplierCategoryLabel(c)}
+                  </option>
+                ))}
               </select>
             </div>
             <button

@@ -986,6 +986,8 @@ enum SupplierCategory {
   insurer
   broker
   dealer
+  roadside_assistance
+  rent
   other
 }
 

@@ -38,6 +38,8 @@ function parseCategory(raw?: string): SupplierCategory | undefined {
     v === 'insurer' ||
     v === 'broker' ||
     v === 'dealer' ||
+    v === 'roadside_assistance' ||
+    v === 'rent' ||
     v === 'other'
   ) {
     return v;

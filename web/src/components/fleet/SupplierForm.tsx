@@ -10,22 +10,13 @@ import {
 } from "@/components/fleet/ops-form-primitives";
 import {
   fleetJsonHeaders,
+  SUPPLIER_CATEGORIES,
+  supplierCategoryLabel,
   suppliersBrowserBase,
   type SupplierCategory,
   type SupplierRecord,
   type SupplierStatus,
 } from "@/lib/suppliers-api";
-
-const CATEGORIES: SupplierCategory[] = [
-  "service_auto",
-  "itp",
-  "fuel",
-  "tires",
-  "insurer",
-  "broker",
-  "dealer",
-  "other",
-];
 
 type Props = {
   mode: "create" | "edit";
@@ -113,9 +104,9 @@ export function SupplierForm({ mode, initial }: Props) {
           </OpsFormField>
           <OpsFormField label="Categorie">
             <select value={category} onChange={(e) => setCategory(e.target.value as SupplierCategory)} className={OPS_INPUT_CLASS}>
-              {CATEGORIES.map((c) => (
+              {SUPPLIER_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {supplierCategoryLabel(c)}
                 </option>
               ))}
             </select>
