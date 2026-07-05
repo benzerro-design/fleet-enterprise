@@ -18,6 +18,7 @@ import { AuditService } from '../audit/audit.service';
 import { assertClientFleetWrite } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { ensureWorkOrderDisplayNumber } from './work-order-display-number';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 
 const MAX_PAGE_SIZE = 200;
@@ -504,6 +505,12 @@ export class WorkOrdersService {
       },
     });
     if (!row) throw new NotFoundException('Work order not found');
+
+    if (!row.displayNumber) {
+      row.displayNumber = await this.prisma.$transaction((tx) =>
+        ensureWorkOrderDisplayNumber(tx, row.tenantId, row.id, row.createdAt, row.displayNumber),
+      );
+    }
 
     const linked = await this.resolveLinkedAppointment(row.tenantId, row.serviceCaseId, row.plannedAt);
 

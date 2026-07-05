@@ -20,6 +20,7 @@ import {
   type ServiceOrderType,
   type WorkOrderDetail,
 } from "@/lib/work-orders-api";
+import { workOrderDisplayLabel } from "@/lib/work-order-display";
 
 type Props = {
   wo: WorkOrderDetail;
@@ -230,11 +231,20 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
       </div>
 
       <div className="border-b-2 border-zinc-700 bg-zinc-900/80 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold">
-          <span>
-            {wo.displayNumber ?? wo.title} · {wo.registrationNumber} · {wo.supplierLegalName ?? "—"} · Total deviz{" "}
-            {totalDisplay}
-          </span>
+        <div className="flex flex-col gap-1">
+          <div className="font-mono text-lg font-semibold tracking-tight text-violet-300">
+            {workOrderDisplayLabel(wo)}
+          </div>
+          <div className="text-sm font-medium text-zinc-200">{wo.title}</div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+            <span>{wo.registrationNumber}</span>
+            <span>·</span>
+            <span>{wo.supplierLegalName ?? "—"}</span>
+            <span>·</span>
+            <span>
+              Total deviz <span className="font-mono text-zinc-200">{totalDisplay}</span>
+            </span>
+          </div>
           <span className="flex items-center gap-1 text-xs font-normal text-zinc-400">
             Tip:
             {SERVICE_ORDER_TYPES.map((st) => (
@@ -263,6 +273,10 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
         <div className={panelClass()}>
           {panelTitle("Tranzacție")}
           <div className="space-y-1 text-xs text-zinc-300">
+            <div>
+              Comandă:{" "}
+              <span className="font-mono font-medium text-violet-300">{workOrderDisplayLabel(wo)}</span>
+            </div>
             {wo.sourceTicketId ? (
               <div>
                 Referință{" "}

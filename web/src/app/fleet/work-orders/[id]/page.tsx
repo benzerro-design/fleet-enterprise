@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { WorkOrderSheetShell } from "@/components/fleet/work-orders/WorkOrderSheetShell";
 import { canApproveQuotes, canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { workOrderPageTitle } from "@/lib/work-order-display";
 import { type WorkOrderDetail, type WorkOrderQuoteRecord } from "@/lib/work-orders-api";
 
 async function loadQuotes(id: string): Promise<WorkOrderQuoteRecord[]> {
@@ -27,6 +29,13 @@ async function load(id: string): Promise<WorkOrderDetail | null> {
 }
 
 type PageProps = { params: Promise<{ id: string }> };
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const wo = await load(id);
+  if (!wo) return { title: "Comandă de lucru" };
+  return { title: workOrderPageTitle(wo) };
+}
 
 export default async function WorkOrderDetailPage({ params }: PageProps) {
   const { id } = await params;

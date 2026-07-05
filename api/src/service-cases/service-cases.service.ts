@@ -30,6 +30,7 @@ import {
   isTenantWideAccess,
 } from '../iam/client-access';
 import { PrismaService } from '../prisma/prisma.service';
+import { nextWorkOrderDisplayNumber } from '../work-orders/work-order-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 
 export const SERVICE_CASE_STAGE_ORDER: ServiceCaseStage[] = [
@@ -792,15 +793,18 @@ export class ServiceCasesService {
     const existing = await tx.maintenanceWorkOrder.findFirst({
       where: { serviceCaseId: serviceCase.id },
     });
-    if (existing) return existing;
+    if (existing) {
+      if (!existing.displayNumber) {
+        const displayNumber = await nextWorkOrderDisplayNumber(tx, tenantId, existing.createdAt);
+        return tx.maintenanceWorkOrder.update({
+          where: { id: existing.id },
+          data: { displayNumber },
+        });
+      }
+      return existing;
+    }
 
-    const year = new Date().getFullYear();
-    const yearStart = new Date(Date.UTC(year, 0, 1));
-    const seq =
-      (await tx.maintenanceWorkOrder.count({
-        where: { tenantId, createdAt: { gte: yearStart } },
-      })) + 1;
-    const displayNumber = `WO-${year}-${String(seq).padStart(4, '0')}`;
+    const displayNumber = await nextWorkOrderDisplayNumber(tx, tenantId, new Date());
 
     const wo = await tx.maintenanceWorkOrder.create({
       data: {
