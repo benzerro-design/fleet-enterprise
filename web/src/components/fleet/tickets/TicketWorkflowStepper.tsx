@@ -26,6 +26,7 @@ import { mobilityBrowserBase, type MobilityEligibilityRecord } from "@/lib/mobil
 
 type Props = {
   ticketId: string;
+  vehicleId?: string | null;
   ticketCreatedAt?: string;
   canOperate: boolean;
   canApproveQuote: boolean;
@@ -39,6 +40,7 @@ type Props = {
 
 export function TicketWorkflowStepper({
   ticketId,
+  vehicleId,
   ticketCreatedAt,
   canOperate,
   canApproveQuote,
@@ -338,7 +340,9 @@ export function TicketWorkflowStepper({
     canOperate &&
     !closed &&
     serviceCase?.status === "active" &&
-    serviceCase?.currentStage === "scheduled" &&
+    (serviceCase?.currentStage === "intake" ||
+      serviceCase?.currentStage === "scheduled" ||
+      inRescheduleLoop) &&
     !hasPendingAppointment;
 
   async function recordServiceTime(
@@ -423,6 +427,12 @@ export function TicketWorkflowStepper({
       {errorBlock()}
 
       <OperationalStoryTimeline chapters={chapters} />
+
+      {canScheduleNew && !serviceCase.appointments?.length ? (
+        <p className="text-xs text-violet-300/90">
+          ↓ Stabilește programarea mai jos (dată, furnizor, locație).
+        </p>
+      ) : null}
 
       <OperationalFlowFork
             serviceCase={serviceCase}
@@ -540,9 +550,24 @@ export function TicketWorkflowStepper({
 
           {canScheduleNew ? (
             <div className="mt-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-              <p className="text-xs uppercase text-zinc-500">
-                {inRescheduleLoop ? "Programare nouă (reparație)" : "Programare service"}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs uppercase text-zinc-500">
+                  {inRescheduleLoop ? "Programare nouă (reparație)" : "Programare service"}
+                </p>
+                {vehicleId ? (
+                  <Link
+                    href={schedulerHref({
+                      ticket: ticketId,
+                      vehicle: vehicleId,
+                      create: true,
+                      week: scheduledAt ? new Date(scheduledAt) : undefined,
+                    })}
+                    className="text-[11px] font-medium text-sky-400 hover:underline"
+                  >
+                    Programează în calendar →
+                  </Link>
+                ) : null}
+              </div>
               <div>
                 <label className={OPS_LABEL_CLASS}>Data și ora</label>
                 <input

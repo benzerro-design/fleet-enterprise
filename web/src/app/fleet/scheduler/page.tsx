@@ -37,7 +37,7 @@ async function loadSuppliers() {
 }
 
 type PageProps = {
-  searchParams: Promise<{ week?: string; select?: string; view?: string }>;
+  searchParams: Promise<{ week?: string; select?: string; view?: string; ticket?: string; vehicle?: string; create?: string }>;
 };
 
 export default async function SchedulerPage({ searchParams }: PageProps) {
@@ -84,6 +84,9 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               initialWeekIso={sp.week}
               initialSelectId={sp.select}
               initialViewMode={initialViewMode}
+              initialTicketId={sp.ticket?.trim()}
+              initialVehicleId={sp.vehicle?.trim()}
+              initialCreate={sp.create === "1"}
             />
           </Suspense>
         </div>

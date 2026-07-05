@@ -14,6 +14,7 @@ import {
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import { serviceCasesBrowserBase } from "@/lib/service-cases-api";
 import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
+import { ticketDisplayIdFromTicketId } from "@/lib/scheduler-deep-link";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import { supplierDotClass } from "./supplier-colors";
@@ -30,6 +31,8 @@ type Props = {
   onCancelCreate?: () => void;
   vehicles: VehicleOption[];
   initialCreateScheduledAt?: string;
+  linkTicketId?: string | null;
+  initialVehicleId?: string;
 };
 
 export function SchedulerInspector({
@@ -42,6 +45,8 @@ export function SchedulerInspector({
   onCancelCreate,
   vehicles,
   initialCreateScheduledAt,
+  linkTicketId,
+  initialVehicleId,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -70,6 +75,12 @@ export function SchedulerInspector({
     }
   }, [createMode, initialCreateScheduledAt]);
 
+  useEffect(() => {
+    if (createMode && initialVehicleId) {
+      setVehicleId(initialVehicleId);
+    }
+  }, [createMode, initialVehicleId]);
+
   async function submitCreate() {
     setPending(true);
     setError(null);
@@ -85,6 +96,7 @@ export function SchedulerInspector({
           durationMin: parseInt(durationMin, 10) || 60,
           location: location || null,
           recurrenceRule: recurrenceRule !== "none" ? recurrenceRule : undefined,
+          ...(linkTicketId ? { sourceTicketId: linkTicketId } : {}),
         }),
       });
       if (!res.ok) {
@@ -176,10 +188,25 @@ export function SchedulerInspector({
           ) : null}
         </div>
         {error ? <p className="mb-2 text-sm text-red-400">{error}</p> : null}
+        {linkTicketId ? (
+          <p className="mb-3 rounded-lg border border-sky-800/50 bg-sky-950/30 px-3 py-2 text-xs text-sky-200">
+            Legat de tichet{" "}
+            <Link href={`/fleet/tickets/${linkTicketId}`} className="font-mono font-semibold text-sky-300 hover:underline">
+              #{ticketDisplayIdFromTicketId(linkTicketId)}
+            </Link>
+            {" — "}
+            programarea se atașează dosarului service al tichetului.
+          </p>
+        ) : null}
         <div className="space-y-3 overflow-y-auto">
           <div>
             <label className={OPS_LABEL_CLASS}>Vehicul</label>
-            <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className={OPS_INPUT_CLASS}>
+            <select
+              value={vehicleId}
+              onChange={(e) => setVehicleId(e.target.value)}
+              disabled={!!linkTicketId && !!initialVehicleId}
+              className={OPS_INPUT_CLASS}
+            >
               <option value="">Selectează…</option>
               {vehicles.map((v) => (
                 <option key={v.id} value={v.id}>

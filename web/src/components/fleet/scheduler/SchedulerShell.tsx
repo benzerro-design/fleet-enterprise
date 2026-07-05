@@ -37,6 +37,9 @@ type Props = {
   initialWeekIso?: string;
   initialSelectId?: string;
   initialViewMode?: SchedulerViewMode;
+  initialTicketId?: string;
+  initialVehicleId?: string;
+  initialCreate?: boolean;
 };
 
 export function SchedulerShell({
@@ -47,6 +50,9 @@ export function SchedulerShell({
   initialWeekIso,
   initialSelectId,
   initialViewMode = "grid",
+  initialTicketId,
+  initialVehicleId,
+  initialCreate = false,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,25 +65,36 @@ export function SchedulerShell({
   const [stats, setStats] = useState<AppointmentStats | null>(initialStats);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectId ?? null);
   const [supplierFilter, setSupplierFilter] = useState<string[]>(() => suppliers.map((s) => s.id));
-  const [createMode, setCreateMode] = useState(false);
-  const [mobileDetail, setMobileDetail] = useState(!!initialSelectId);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<SchedulerViewMode>(initialViewMode);
   const [createPrefillAt, setCreatePrefillAt] = useState<string | undefined>();
+  const [linkTicketId] = useState(initialTicketId ?? null);
+  const [linkVehicleId] = useState(initialVehicleId ?? null);
+  const [createMode, setCreateMode] = useState(() => !!(initialCreate && initialTicketId && canWrite));
+  const [mobileDetail, setMobileDetail] = useState(() => !!(initialSelectId || (initialCreate && initialTicketId)));
 
   const weekLabel = useMemo(() => formatWeekRange(weekStart), [weekStart]);
   const range = useMemo(() => calendarRangeIso(weekStart), [weekStart]);
 
   const syncUrl = useCallback(
-    (opts: { week?: Date; select?: string | null; view?: SchedulerViewMode }) => {
+    (opts: {
+      week?: Date;
+      select?: string | null;
+      view?: SchedulerViewMode;
+      clearTicketLink?: boolean;
+    }) => {
       const href = schedulerHref({
         week: opts.week ?? weekStart,
         select: opts.select ?? undefined,
         view: opts.view ?? viewMode,
+        ticket: opts.clearTicketLink ? undefined : linkTicketId ?? undefined,
+        vehicle: opts.clearTicketLink ? undefined : linkVehicleId ?? undefined,
+        create:
+          !opts.clearTicketLink && createMode && linkTicketId ? true : undefined,
       });
       router.replace(href, { scroll: false });
     },
-    [router, viewMode, weekStart],
+    [router, viewMode, weekStart, linkTicketId, linkVehicleId, createMode],
   );
 
   const load = useCallback(async () => {
@@ -146,7 +163,7 @@ export function SchedulerShell({
     setSelectedId(id);
     setCreateMode(false);
     setMobileDetail(true);
-    syncUrl({ select: id });
+    syncUrl({ select: id, clearTicketLink: true });
   }
 
   function goToday() {
@@ -288,10 +305,19 @@ export function SchedulerShell({
             onCancelCreate={() => {
               setCreateMode(false);
               setMobileDetail(false);
+              if (linkTicketId) syncUrl({ clearTicketLink: true });
             }}
-            onUpdated={() => void load()}
+            onUpdated={() => {
+              void load();
+              if (linkTicketId) {
+                setCreateMode(false);
+                syncUrl({ clearTicketLink: true });
+              }
+            }}
             vehicles={vehicles}
             initialCreateScheduledAt={createPrefillAt}
+            linkTicketId={linkTicketId}
+            initialVehicleId={linkVehicleId ?? undefined}
           />
         ) : null}
       </div>
@@ -306,15 +332,26 @@ export function SchedulerShell({
             setMobileDetail(false);
             setCreateMode(false);
             setCreatePrefillAt(undefined);
+            if (linkTicketId) syncUrl({ clearTicketLink: true });
           }}
           onCancelCreate={() => {
             setCreateMode(false);
             setMobileDetail(false);
             setCreatePrefillAt(undefined);
+            if (linkTicketId) syncUrl({ clearTicketLink: true });
           }}
-          onUpdated={() => void load()}
+          onUpdated={() => {
+            void load();
+            if (linkTicketId) {
+              setCreateMode(false);
+              setCreatePrefillAt(undefined);
+              syncUrl({ clearTicketLink: true });
+            }
+          }}
           vehicles={vehicles}
           initialCreateScheduledAt={createPrefillAt}
+          linkTicketId={linkTicketId}
+          initialVehicleId={linkVehicleId ?? undefined}
         />
       ) : null}
     </div>
