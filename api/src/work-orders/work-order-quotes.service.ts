@@ -445,6 +445,7 @@ export class WorkOrderQuotesService {
           supplierId: existing.workOrder.supplierId,
           incurredOn: existing.invoiceDate ?? new Date(),
           notes,
+          odometerKm: existing.workOrder.odometerKmOut ?? existing.workOrder.odometerKmIn ?? null,
           invoiceNumber: existing.invoiceNumber,
           invoiceDate: existing.invoiceDate,
           invoiceAttachmentUrl: existing.invoiceAttachmentUrl,

@@ -128,10 +128,11 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       href: `/fleet/mobility/replacement-cars/${mobility.id}`,
       label: mobility.displayNumber ?? "Alocare",
     });
-  } else if (wo && eligible) {
+  }
+  if (wo && wo.inServiceAt && !wo.outServiceAt && !mobility) {
     mobilityLinks.push({
       href: `/fleet/mobility/replacement-cars/new?wo=${wo.id}`,
-      label: "Alocă mașină schimb",
+      label: eligible ? "Alocă mașină schimb" : "Mobilitate (opțional)",
     });
   }
 
@@ -181,31 +182,11 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       id: "at-service",
       title: "Mașina la service",
       situation: wo?.inServiceAt
-        ? `Intrare ${fmt(wo.inServiceAt)}${wo.outServiceAt ? ` · ieșire ${fmt(wo.outServiceAt)}` : " · încă în service"}`
+        ? `Intrare ${fmt(wo.inServiceAt)}${wo.outServiceAt ? "" : " · încă în service"}`
         : wo
           ? "Marchează intrarea când mașina ajunge."
           : "După confirmarea programării.",
       detail: wo?.odometerKmIn != null ? `Km intrare: ${wo.odometerKmIn.toLocaleString("ro-RO")}` : undefined,
-    },
-    {
-      id: "mobility",
-      title: "Mașină la schimb",
-      situation: mobility
-        ? mobility.status === "waived"
-          ? `Client a renunțat la mobilitate · ${mobilityStatusLabel(mobility.status)}`
-          : mobility.status === "returned"
-            ? `Returnat · ${mobility.replacementRegistration ?? mobility.displayNumber ?? "—"}`
-            : mobility.status === "active" || mobility.status === "reserved"
-              ? `${mobilityStatusLabel(mobility.status)} · ${mobility.replacementRegistration ?? "—"} — beneficiați de mașină la schimb pe durata reparației.`
-              : `${mobilityStatusLabel(mobility.status)} · ${mobility.displayNumber ?? "—"}`
-        : eligible && wo?.inServiceAt && !wo.outServiceAt
-          ? `Eligibil mobilitate (${immHours?.toFixed(1) ?? "—"}h > ${MOBILITY_ELIGIBILITY_HOURS}h) — alocă mașină la schimb.`
-          : wo?.inServiceAt
-            ? immHours != null && immHours <= MOBILITY_ELIGIBILITY_HOURS
-              ? `Sub prag ${MOBILITY_ELIGIBILITY_HOURS}h imobilizare (${immHours.toFixed(1)}h).`
-              : "Verifică eligibilitatea după estimarea reparației."
-            : "Dacă imobilizarea depășește 72h, clientul are dreptul la mașină la schimb.",
-      links: mobilityLinks.length ? mobilityLinks : undefined,
     },
     {
       id: "quote",
@@ -257,6 +238,28 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
               : "După aprobarea devizului.",
     },
     {
+      id: "mobility",
+      title: "Mașină la schimb (opțional)",
+      situation: mobility
+        ? mobility.status === "waived"
+          ? `Client a renunțat la mobilitate · ${mobilityStatusLabel(mobility.status)}`
+          : mobility.status === "returned"
+            ? `Returnat · ${mobility.replacementRegistration ?? mobility.displayNumber ?? "—"}`
+            : mobility.status === "active" || mobility.status === "reserved"
+              ? `${mobilityStatusLabel(mobility.status)} · ${mobility.replacementRegistration ?? "—"} — beneficiați de mașină la schimb pe durata reparației.`
+              : `${mobilityStatusLabel(mobility.status)} · ${mobility.displayNumber ?? "—"}`
+        : !wo?.estimatedRepairAt && wo?.inServiceAt
+          ? "Opțional — eligibilitatea se calculează după estimarea finalizării reparației (pe deviz)."
+          : eligible && wo?.inServiceAt && !wo.outServiceAt
+            ? `Eligibil mobilitate (${immHours?.toFixed(1) ?? "—"}h > ${MOBILITY_ELIGIBILITY_HOURS}h).`
+            : wo?.inServiceAt && !wo.outServiceAt
+              ? immHours != null
+                ? `Sub prag ${MOBILITY_ELIGIBILITY_HOURS}h (${immHours.toFixed(1)}h) — poți înregistra renunțare sau alocare excepție.`
+                : "Opțional — disponibil după estimare reparație."
+              : "Opțional — dacă imobilizarea depășește 72h.",
+      links: mobilityLinks.length ? mobilityLinks : undefined,
+    },
+    {
       id: "work-ready",
       title: "Lucrare gata",
       situation: wo?.readyAt
@@ -279,6 +282,24 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
               ? "Marchează lucrare gata, apoi factură."
               : "După finalizarea reparației.",
       links: billingLinks.length ? billingLinks : undefined,
+    },
+    {
+      id: "vehicle-out",
+      title: "Mașina out service",
+      situation: wo?.outServiceAt
+        ? `Ieșire ${fmt(wo.outServiceAt)}${wo.odometerKmOut != null ? ` · ${wo.odometerKmOut.toLocaleString("ro-RO")} km` : ""}`
+        : approved?.costEntryId
+          ? "Marchează ieșirea din service după factură și cost."
+          : approved?.invoicedAt
+            ? "Generează costul, apoi marchează ieșirea vehiculului."
+            : "După factură, cost și predare către client.",
+      detail:
+        wo?.inServiceAt && !wo.outServiceAt && approved?.costEntryId
+          ? "Predare mașină reparată — înregistrează km ieșire pe comandă."
+          : undefined,
+      links: wo
+        ? [{ href: `/fleet/work-orders/${wo.id}`, label: wo.displayNumber ?? "Comandă" }]
+        : undefined,
     },
     {
       id: "closure",
@@ -309,21 +330,17 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
     return chapters.map((c) => ({ ...c, state: "done" as const }));
   }
 
-  const mobilityPending =
-    eligible && !mobility && !!wo?.inServiceAt && !wo.outServiceAt;
-
   const nowIndex = (() => {
-    if (caseClosed || woDone) return 10;
+    if (caseClosed || woDone) return 11;
+    if (wo?.outServiceAt && approved?.costEntryId) return 11;
     if (approved?.costEntryId && approved.invoicedAt) return 10;
     if (stage === "invoiced" || stage === "cost" || approved?.invoicedAt) return 9;
     if (wo?.readyAt) return 8;
-    if (serviceCase!.awaitingPostApproval) return 7;
-    if (serviceCase!.postApprovalPath) return wo?.readyAt ? 8 : 7;
-    if (pendingQ) return 6;
+    if (serviceCase!.awaitingPostApproval) return 6;
+    if (serviceCase!.postApprovalPath && !wo?.readyAt) return 7;
+    if (pendingQ) return 5;
     if (approved) return wo?.readyAt ? 9 : 7;
-    if (stage === "quote" || stage === "approval") return 5;
-    if (stage === "out_service" || (wo?.inServiceAt && wo.outServiceAt)) return 5;
-    if (mobilityPending) return 4;
+    if (stage === "quote" || stage === "approval") return 4;
     if (stage === "in_service" || wo?.inServiceAt) return 3;
     if (stage === "work_order" || wo) return 2;
     if (stage === "scheduled" || appt) return 1;

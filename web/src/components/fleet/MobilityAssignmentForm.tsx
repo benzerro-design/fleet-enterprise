@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   OPS_INPUT_CLASS,
   OpsFormField,
@@ -29,9 +29,13 @@ type Props = {
 
 export function MobilityAssignmentForm({ workOrderId: initialWoId, prefill }: Props) {
   const router = useRouter();
-  const [workOrderId] = useState(initialWoId ?? "");
+  const searchParams = useSearchParams();
+  const workOrderId = useMemo(() => {
+    const fromUrl = searchParams.get("wo") ?? searchParams.get("workOrderId") ?? "";
+    return (initialWoId ?? fromUrl).trim();
+  }, [initialWoId, searchParams]);
   const [eligibility, setEligibility] = useState<MobilityEligibilityRecord | null>(null);
-  const [loadingEligibility, setLoadingEligibility] = useState(!!initialWoId);
+  const [loadingEligibility, setLoadingEligibility] = useState(!!workOrderId);
   const [supplierId, setSupplierId] = useState("");
   const [replacementRegistration, setReplacementRegistration] = useState("");
   const [deliveryMode, setDeliveryMode] = useState<MobilityDeliveryMode>("customer_pickup");
@@ -44,12 +48,16 @@ export function MobilityAssignmentForm({ workOrderId: initialWoId, prefill }: Pr
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!initialWoId) return;
+    if (!workOrderId) {
+      setEligibility(null);
+      setLoadingEligibility(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoadingEligibility(true);
       try {
-        const res = await fetch(`${mobilityBrowserBase}/eligibility/${initialWoId}`);
+        const res = await fetch(`${mobilityBrowserBase}/eligibility/${workOrderId}`);
         if (res.ok && !cancelled) {
           setEligibility((await res.json()) as MobilityEligibilityRecord);
         }
@@ -60,7 +68,7 @@ export function MobilityAssignmentForm({ workOrderId: initialWoId, prefill }: Pr
     return () => {
       cancelled = true;
     };
-  }, [initialWoId]);
+  }, [workOrderId]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -116,11 +124,21 @@ export function MobilityAssignmentForm({ workOrderId: initialWoId, prefill }: Pr
 
   const eligible = eligibility?.eligible ?? false;
   const hasActive = !!eligibility?.activeAssignment;
-  const base = initialWoId ? 1 : 0;
+  const base = workOrderId ? 1 : 0;
+
+  if (!workOrderId) {
+    return (
+      <p className="rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+        Deschide formularul din{" "}
+        <strong>comanda service</strong> (banner mobilitate) sau din{" "}
+        <strong>tichet → Mașină la schimb</strong>. Alocarea trebuie legată de o comandă WO.
+      </p>
+    );
+  }
 
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="space-y-6">
-      {initialWoId ? (
+      {workOrderId ? (
         <OpsFormSection number={1} title="Eligibilitate">
           {loadingEligibility ? (
             <p className="text-sm text-zinc-500">Se calculează eligibilitatea…</p>

@@ -30,6 +30,7 @@ export function WorkOrderQuoteBillingActions({
   const [invoiceDate, setInvoiceDate] = useState(
     quote.invoiceDate ? quote.invoiceDate.slice(0, 10) : "",
   );
+  const [invoiceAttachmentUrl, setInvoiceAttachmentUrl] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +53,11 @@ export function WorkOrderQuoteBillingActions({
         {
           method: "POST",
           headers: fleetJsonHeaders(),
-          body: JSON.stringify({ invoiceNumber: invoiceNumber.trim(), invoiceDate }),
+          body: JSON.stringify({
+            invoiceNumber: invoiceNumber.trim(),
+            invoiceDate,
+            invoiceAttachmentUrl: invoiceAttachmentUrl.trim() || null,
+          }),
         },
       );
       if (!res.ok) {
@@ -162,6 +167,15 @@ export function WorkOrderQuoteBillingActions({
               value={invoiceDate}
               onChange={(e) => setInvoiceDate(e.target.value)}
               className={OPS_INPUT_CLASS}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={OPS_LABEL_CLASS}>Link atașament factură (URL)</label>
+            <input
+              value={invoiceAttachmentUrl}
+              onChange={(e) => setInvoiceAttachmentUrl(e.target.value)}
+              className={OPS_INPUT_CLASS}
+              placeholder="https://… sau link document încărcat"
             />
           </div>
           <div className="sm:col-span-2">

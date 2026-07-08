@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { MobilityAssignmentForm } from "@/components/fleet/MobilityAssignmentForm";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -41,17 +42,19 @@ export default async function NewReplacementCarPage({ searchParams }: PageProps)
         </p>
       ) : null}
       <div className="mt-8">
-        <MobilityAssignmentForm
-          workOrderId={woId || undefined}
-          prefill={
-            wo
-              ? {
-                  coveredVehicleReg: wo.registrationNumber,
-                  workOrderDisplayNumber: wo.displayNumber,
-                }
-              : undefined
-          }
-        />
+        <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă formularul…</p>}>
+          <MobilityAssignmentForm
+            workOrderId={woId || undefined}
+            prefill={
+              wo
+                ? {
+                    coveredVehicleReg: wo.registrationNumber,
+                    workOrderDisplayNumber: wo.displayNumber,
+                  }
+                : undefined
+            }
+          />
+        </Suspense>
       </div>
     </FleetPageMain>
   );

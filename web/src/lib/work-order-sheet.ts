@@ -38,6 +38,10 @@ export function buildWorkOrderMilestones(
   const approved = qs.status === "approved";
   const invoiced = !!qs.invoicedAt;
   const done = wo.status === "done";
+  const repairActive =
+    approved &&
+    !wo.readyAt &&
+    (wo.status === "in_progress" || wo.status === "waiting_parts" || !!wo.inServiceAt);
 
   return [
     {
@@ -55,10 +59,10 @@ export function buildWorkOrderMilestones(
       date: fmt(wo.inServiceAt),
     },
     {
-      id: "in_progress",
-      label: "În lucru",
-      done: !!wo.inServiceAt && (submitted || wo.status === "in_progress" || wo.status === "waiting_parts"),
-      active: !!wo.inServiceAt && !submitted && wo.status === "in_progress",
+      id: "verifying",
+      label: "Verificare",
+      done: !!wo.inServiceAt && submitted,
+      active: !!wo.inServiceAt && !submitted,
       date: fmt(wo.inServiceAt),
     },
     {
@@ -76,17 +80,17 @@ export function buildWorkOrderMilestones(
       date: fmt(qs.approvedAt),
     },
     {
-      id: "out_service",
-      label: "Out service",
-      done: !!wo.outServiceAt,
-      active: approved && !wo.outServiceAt,
-      date: fmt(wo.outServiceAt),
+      id: "repair_in_progress",
+      label: "În lucru",
+      done: approved && (!!wo.readyAt || wo.status === "done"),
+      active: repairActive,
+      date: fmt(wo.readyAt ?? wo.inServiceAt),
     },
     {
       id: "work_ready",
       label: "Lucrare gata",
       done: !!wo.readyAt,
-      active: !wo.readyAt && approved && !!wo.outServiceAt,
+      active: approved && !wo.readyAt,
       date: fmt(wo.readyAt),
       canToggle: opts?.canMarkReady && approved && !wo.readyAt,
     },
@@ -96,6 +100,13 @@ export function buildWorkOrderMilestones(
       done: invoiced,
       active: !!wo.readyAt && !invoiced,
       date: fmt(qs.invoicedAt),
+    },
+    {
+      id: "out_service",
+      label: "Out service",
+      done: !!wo.outServiceAt,
+      active: invoiced && !wo.outServiceAt,
+      date: fmt(wo.outServiceAt),
     },
     {
       id: "closed",
