@@ -59,6 +59,7 @@ export type MobilityEligibilityRecord = {
   estimatedRepairAt: string | null;
   outServiceAt: string | null;
   activeAssignment: MobilityAssignmentRecord | null;
+  benefitAssignment: MobilityAssignmentRecord | null;
 };
 
 export type MobilityListPayload = {
@@ -113,4 +114,43 @@ export function isMobilityEligible(
 ): boolean {
   const hours = computeImmobilizationHours(inServiceAt, estimatedRepairAt, outServiceAt);
   return hours !== null && hours > MOBILITY_ELIGIBILITY_HOURS;
+}
+
+function fmtMobilityDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("ro-RO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Rezumat beneficiu mobilitate pentru tichet / WO (data IN–OUT, nr., furnizor rent). */
+export function formatMobilityBenefitSummary(m: MobilityAssignmentRecord): string {
+  if (m.status === "waived") {
+    return `Renunțare la mașină la schimb${m.waivedReason ? ` — ${m.waivedReason}` : ""}`;
+  }
+  const inDate = fmtMobilityDate(m.handoverAt);
+  const outDate = fmtMobilityDate(m.returnedAt ?? (m.status === "active" ? null : m.expectedReturnAt));
+  const period =
+    inDate && outDate
+      ? `${inDate} → ${outDate}`
+      : inDate
+        ? `din ${inDate}${m.status === "active" || m.status === "reserved" ? " (în curs)" : ""}`
+        : outDate
+          ? `până la ${outDate}`
+          : null;
+  const reg = m.replacementRegistration?.trim();
+  const supplier = m.supplierLegalName?.trim();
+  const parts = [
+    period,
+    reg ? `nr. ${reg}` : null,
+    supplier ? `furnizor rent: ${supplier}` : null,
+    m.deliveryMode ? mobilityDeliveryModeLabel(m.deliveryMode) : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : mobilityStatusLabel(m.status);
 }

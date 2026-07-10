@@ -155,6 +155,19 @@ export function SchedulerShell({
     [load],
   );
 
+  const setAppointmentStatus = useCallback(
+    async (id: string, status: "confirmed" | "cancelled") => {
+      const res = await fetch(`${appointmentsBrowserBase}/${id}`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) return;
+      await load();
+    },
+    [load],
+  );
+
   function toggleSupplier(id: string) {
     setSupplierFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -276,6 +289,7 @@ export function SchedulerShell({
                   onSelect={selectAppointment}
                   onReschedule={canWrite ? reschedule : undefined}
                   onSlotClick={canWrite ? openCreateAt : undefined}
+                  onStatusChange={canWrite ? setAppointmentStatus : undefined}
                 />
               ) : (
                 <SchedulerSupplierBandView

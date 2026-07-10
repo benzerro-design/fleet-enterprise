@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { FleetGlyphTooltip } from "@/components/fleet/FleetGlyphTooltip";
 import {
   FleetDataTable,
   fleetTableClass,
@@ -33,6 +34,7 @@ import { workOrderListTitleFull, workOrderListTitleShort } from "@/lib/work-orde
 import { serviceOrderTypeLabel } from "@/lib/work-order-sheet";
 import {
   formatMoneyCents,
+  quoteStatusLabel,
   serviceCaseStageLabel,
   workOrderStatusLabel,
   type WorkOrderListRow,
@@ -74,15 +76,15 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
         );
       case "status":
         return (
-          <span className="inline-flex items-center" title={workOrderStatusLabel(row.status)}>
+          <FleetGlyphTooltip label={workOrderStatusLabel(row.status)}>
             <WorkOrderStatusGlyph status={row.status} />
-          </span>
+          </FleetGlyphTooltip>
         );
       case "type":
         return (
-          <span className="inline-flex items-center" title={serviceOrderTypeLabel(row.serviceOrderType)}>
+          <FleetGlyphTooltip label={serviceOrderTypeLabel(row.serviceOrderType)}>
             <ServiceOrderTypeGlyph type={row.serviceOrderType} />
-          </span>
+          </FleetGlyphTooltip>
         );
       case "title":
         return (
@@ -98,9 +100,9 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
         return (
           <span className="inline-flex items-center gap-1">
             {q.status ? (
-              <span title={q.status}>
+              <FleetGlyphTooltip label={`Deviz: ${quoteStatusLabel(q.status)}`}>
                 <WorkOrderQuoteGlyph status={q.status} />
-              </span>
+              </FleetGlyphTooltip>
             ) : null}
             {q.totalGrossCents != null ? (
               <span className="font-mono text-[11px] text-zinc-200">
@@ -139,35 +141,36 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
         );
       case "stage":
         return (
-          <span className="inline-flex items-center" title={serviceCaseStageLabel(row.serviceCaseStage)}>
+          <FleetGlyphTooltip label={`Etapă dosar: ${serviceCaseStageLabel(row.serviceCaseStage)}`}>
             <WorkOrderStageGlyph stage={row.serviceCaseStage} />
-          </span>
+          </FleetGlyphTooltip>
         );
       case "estimated":
         return (
-          <span
-            className="inline-flex items-center gap-1"
-            title={
+          <FleetGlyphTooltip
+            label={
               row.estimatedRepairAt
                 ? `Estimare finalizare: ${formatDateRo(row.estimatedRepairAt)}`
                 : "Estimare finalizare necompletată"
             }
           >
-            <WorkOrderEstimatedGlyph set={Boolean(row.estimatedRepairAt)} />
-            {row.estimatedRepairAt ? (
-              <span className="hidden text-[10px] text-zinc-400 xl:inline">{formatDateRo(row.estimatedRepairAt)}</span>
-            ) : null}
-          </span>
+            <span className="inline-flex items-center gap-1">
+              <WorkOrderEstimatedGlyph set={Boolean(row.estimatedRepairAt)} />
+              {row.estimatedRepairAt ? (
+                <span className="hidden text-[10px] text-zinc-400 xl:inline">{formatDateRo(row.estimatedRepairAt)}</span>
+              ) : null}
+            </span>
+          </FleetGlyphTooltip>
         );
       case "ticket":
         return row.sourceTicketId && row.ticketDisplayId ? (
-          <Link
-            href={`/fleet/tickets/${row.sourceTicketId}`}
-            className="inline-flex items-center"
-            title={`Tichet #${row.ticketDisplayId}${row.ticketSubject ? ` — ${row.ticketSubject}` : ""}`}
+          <FleetGlyphTooltip
+            label={`Tichet #${row.ticketDisplayId}${row.ticketSubject ? ` — ${row.ticketSubject}` : ""}`}
           >
-            <WorkOrderTicketGlyph />
-          </Link>
+            <Link href={`/fleet/tickets/${row.sourceTicketId}`} className="inline-flex items-center">
+              <WorkOrderTicketGlyph />
+            </Link>
+          </FleetGlyphTooltip>
         ) : (
           "—"
         );
@@ -179,9 +182,11 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
         );
       case "actions":
         return (
-          <Link href={`/fleet/work-orders/${row.id}`} className="inline-flex items-center" title="Deschide fișă">
-            <TicketActionGlyph action="open" />
-          </Link>
+          <FleetGlyphTooltip label="Deschide fișă">
+            <Link href={`/fleet/work-orders/${row.id}`} className="inline-flex items-center">
+              <TicketActionGlyph action="open" />
+            </Link>
+          </FleetGlyphTooltip>
         );
       default:
         return null;

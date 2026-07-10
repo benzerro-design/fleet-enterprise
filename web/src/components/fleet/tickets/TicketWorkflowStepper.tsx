@@ -323,7 +323,7 @@ export function TicketWorkflowStepper({
     serviceCase,
     closed,
     ticketCreatedAt,
-    mobility: mobilityEligibility?.activeAssignment ?? null,
+    mobility: mobilityEligibility?.benefitAssignment ?? mobilityEligibility?.activeAssignment ?? null,
     mobilityEligible: mobilityEligibility?.eligible,
     mobilityImmobilizationHours: mobilityEligibility?.immobilizationHours ?? null,
   });

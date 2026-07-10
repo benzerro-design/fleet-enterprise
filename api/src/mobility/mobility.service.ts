@@ -57,7 +57,10 @@ export type MobilityEligibilityRecord = {
   inServiceAt: string | null;
   estimatedRepairAt: string | null;
   outServiceAt: string | null;
+  /** Alocare în curs (draft → active). */
   activeAssignment: MobilityAssignmentRecord | null;
+  /** Ultima alocare înregistrată pe WO (inclusiv returnată / renunțare). */
+  benefitAssignment: MobilityAssignmentRecord | null;
 };
 
 export type CreateMobilityAssignmentInput = {
@@ -239,6 +242,16 @@ export class MobilityService {
       include: this.includeRelations(),
     });
 
+    const benefitRow = await this.prisma.mobilityAssignment.findFirst({
+      where: {
+        tenantId: tenant.id,
+        workOrderId,
+        status: { in: ['eligible', 'reserved', 'active', 'returned', 'waived'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: this.includeRelations(),
+    });
+
     return {
       workOrderId,
       eligible,
@@ -248,6 +261,7 @@ export class MobilityService {
       estimatedRepairAt: wo.estimatedRepairAt?.toISOString() ?? null,
       outServiceAt: wo.outServiceAt?.toISOString() ?? null,
       activeAssignment: activeRow ? this.toRecord(activeRow) : null,
+      benefitAssignment: benefitRow ? this.toRecord(benefitRow) : null,
     };
   }
 

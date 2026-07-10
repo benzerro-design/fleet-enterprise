@@ -2,6 +2,7 @@ import type { ServiceCaseRecord } from "@/lib/service-cases-api";
 import { formatDateRo } from "@/lib/datetime-local";
 import {
   computeImmobilizationHours,
+  formatMobilityBenefitSummary,
   isMobilityEligible,
   mobilityStatusLabel,
   MOBILITY_ELIGIBILITY_HOURS,
@@ -242,12 +243,10 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       title: "Mașină la schimb (opțional)",
       situation: mobility
         ? mobility.status === "waived"
-          ? `Client a renunțat la mobilitate · ${mobilityStatusLabel(mobility.status)}`
-          : mobility.status === "returned"
-            ? `Returnat · ${mobility.replacementRegistration ?? mobility.displayNumber ?? "—"}`
-            : mobility.status === "active" || mobility.status === "reserved"
-              ? `${mobilityStatusLabel(mobility.status)} · ${mobility.replacementRegistration ?? "—"} — beneficiați de mașină la schimb pe durata reparației.`
-              : `${mobilityStatusLabel(mobility.status)} · ${mobility.displayNumber ?? "—"}`
+          ? `Client a renunțat la mobilitate · ${formatMobilityBenefitSummary(mobility)}`
+          : mobility.status === "returned" || mobility.status === "active" || mobility.status === "reserved"
+            ? `Beneficiu mașină la schimb pe durata reparației · ${formatMobilityBenefitSummary(mobility)}`
+            : `${mobilityStatusLabel(mobility.status)} · ${formatMobilityBenefitSummary(mobility)}`
         : !wo?.estimatedRepairAt && wo?.inServiceAt
           ? "Opțional — eligibilitatea se calculează după estimarea finalizării reparației (pe deviz)."
           : eligible && wo?.inServiceAt && !wo.outServiceAt

@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   MOBILITY_ELIGIBILITY_HOURS,
+  formatMobilityBenefitSummary,
   mobilityBrowserBase,
+  mobilityStatusLabel,
   type MobilityEligibilityRecord,
 } from "@/lib/mobility-api";
 
@@ -33,10 +35,11 @@ export function MobilityWoBanner({ workOrderId, canWrite }: Props) {
     };
   }, [workOrderId]);
 
-  if (!data?.eligible && !data?.activeAssignment) return null;
+  if (!data?.eligible && !data?.activeAssignment && !data?.benefitAssignment) return null;
 
   const hours = data.immobilizationHours?.toFixed(1) ?? "—";
   const active = data.activeAssignment;
+  const benefit = data.benefitAssignment;
 
   return (
     <div className="border-b border-amber-800/50 bg-amber-950/30 px-4 py-3">
@@ -53,7 +56,13 @@ export function MobilityWoBanner({ workOrderId, canWrite }: Props) {
                 </>
               ) : null}
               {" · "}
-              {active.status}
+              {mobilityStatusLabel(active.status)}
+              <span className="mt-1 block text-xs text-amber-200/80">{formatMobilityBenefitSummary(active)}</span>
+            </>
+          ) : benefit ? (
+            <>
+              <strong className="text-amber-200">Mobilitate înregistrată:</strong>{" "}
+              {formatMobilityBenefitSummary(benefit)}
             </>
           ) : (
             <>
@@ -66,6 +75,13 @@ export function MobilityWoBanner({ workOrderId, canWrite }: Props) {
           {active ? (
             <Link
               href={`/fleet/mobility/replacement-cars/${active.id}`}
+              className="rounded border border-amber-600/50 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-900/40"
+            >
+              Vezi alocare →
+            </Link>
+          ) : benefit ? (
+            <Link
+              href={`/fleet/mobility/replacement-cars/${benefit.id}`}
               className="rounded border border-amber-600/50 px-2.5 py-1 text-xs text-amber-100 hover:bg-amber-900/40"
             >
               Vezi alocare →
