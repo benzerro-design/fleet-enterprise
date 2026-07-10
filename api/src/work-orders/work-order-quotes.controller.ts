@@ -9,6 +9,7 @@ import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import {
   WorkOrderQuotesService,
+  type PostCostInput,
   type UpsertQuoteInput,
 } from './work-order-quotes.service';
 
@@ -105,10 +106,11 @@ export class WorkOrderQuotesController {
     @TenantId() tenantSlug: string,
     @Param('workOrderId') workOrderId: string,
     @Param('quoteId') quoteId: string,
+    @Body() body: PostCostInput,
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {
-    return this.quotes.postCost(tenantSlug, workOrderId, quoteId, actorUserId, access);
+    return this.quotes.postCost(tenantSlug, workOrderId, quoteId, body ?? {}, actorUserId, access);
   }
 
   @Post(':quoteId/record-invoice')

@@ -2,6 +2,7 @@ export const appointmentsBrowserBase = "/api/appointments";
 
 export type AppointmentStatus =
   | "scheduled"
+  | "pending_supplier"
   | "confirmed"
   | "completed"
   | "cancelled"
@@ -40,6 +41,8 @@ export type CalendarAppointment = {
   workOrders: CalendarWorkOrderSummary[];
   recurrenceRule: AppointmentRecurrence;
   recurrenceSeriesId: string | null;
+  proposedByRole: string | null;
+  supplierValidatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -53,6 +56,7 @@ export type AppointmentStats = {
 
 export const APPOINTMENT_STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "scheduled", label: "Programat" },
+  { value: "pending_supplier", label: "Așteaptă furnizor" },
   { value: "confirmed", label: "Confirmat" },
   { value: "completed", label: "Finalizat" },
   { value: "cancelled", label: "Anulat" },

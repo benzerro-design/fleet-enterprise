@@ -79,6 +79,24 @@ export class ServiceCasesController {
     return this.serviceCases.createAppointment(tenantSlug, id, body, actorUserId, access);
   }
 
+  @Post('appointments/:appointmentId/supplier-validate')
+  @Roles(...FLEET_WRITE_ROLES)
+  supplierValidateAppointment(
+    @TenantId() tenantSlug: string,
+    @Param('appointmentId') appointmentId: string,
+    @Body() body: { scheduledAt?: string; notes?: string | null },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.supplierValidateAppointment(
+      tenantSlug,
+      appointmentId,
+      body,
+      actorUserId,
+      access,
+    );
+  }
+
   @Post('appointments/:appointmentId/confirm')
   @Roles(...FLEET_WRITE_ROLES)
   confirmAppointment(

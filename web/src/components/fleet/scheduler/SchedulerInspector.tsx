@@ -142,7 +142,80 @@ export function SchedulerInspector({
   }
 
   async function setStatus(status: string) {
+    if (status === "confirmed") {
+      await confirmAppointment();
+      return;
+    }
     await patchAppointment({ status });
+  }
+
+  async function confirmAppointment() {
+    if (!appointment) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/appointments/${appointment.id}/confirm`,
+        { method: "POST", headers: fleetJsonHeaders() },
+      );
+      if (!res.ok) {
+        const j = (await res.json()) as { message?: string };
+        setError(j.message ?? `HTTP ${res.status}`);
+        return;
+      }
+      onUpdated();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function supplierValidate() {
+    if (!appointment) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/appointments/${appointment.id}/supplier-validate`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({}),
+        },
+      );
+      if (!res.ok) {
+        const j = (await res.json()) as { message?: string };
+        setError(j.message ?? `HTTP ${res.status}`);
+        return;
+      }
+      onUpdated();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function supplierValidateWithReschedule() {
+    if (!appointment || !editScheduledAt) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/appointments/${appointment.id}/supplier-validate`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({ scheduledAt: new Date(editScheduledAt).toISOString() }),
+        },
+      );
+      if (!res.ok) {
+        const j = (await res.json()) as { message?: string };
+        setError(j.message ?? `HTTP ${res.status}`);
+        return;
+      }
+      setEditing(false);
+      onUpdated();
+    } finally {
+      setPending(false);
+    }
   }
 
   async function ensureWorkOrder() {
@@ -404,14 +477,44 @@ export function SchedulerInspector({
 
       {canWrite ? (
         <div className="mt-4 flex flex-wrap gap-2">
+          {appointment.status === "pending_supplier" ? (
+            <>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void supplierValidate()}
+                className="rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs text-white hover:bg-sky-500 disabled:opacity-50"
+              >
+                Validează (furnizor)
+              </button>
+              {!editing ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
+                >
+                  Repropune dată
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pending || !editScheduledAt}
+                  onClick={() => void supplierValidateWithReschedule()}
+                  className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs text-white hover:bg-amber-500 disabled:opacity-50"
+                >
+                  Trimite reprogramare
+                </button>
+              )}
+            </>
+          ) : null}
           {appointment.status === "scheduled" ? (
             <button
               type="button"
               disabled={pending}
-              onClick={() => void setStatus("confirmed")}
+              onClick={() => void confirmAppointment()}
               className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              Confirmă
+              Confirmă (manager)
             </button>
           ) : null}
           {appointment.status !== "cancelled" && appointment.status !== "completed" ? (

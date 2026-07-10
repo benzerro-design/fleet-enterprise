@@ -23,6 +23,7 @@ import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/Wor
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 import { formatDateRo } from "@/lib/datetime-local";
 import { mobilityBrowserBase, type MobilityEligibilityRecord } from "@/lib/mobility-api";
+import { fleetJsonHeaders as ticketFleetHeaders, ticketsBrowserBase } from "@/lib/tickets-api";
 
 type Props = {
   ticketId: string;
@@ -205,6 +206,65 @@ export function TicketWorkflowStepper({
       const data = (await res.json()) as ServiceCaseRecord;
       setServiceCase(data);
       router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function supplierValidateAppointment(appointmentId: string) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/appointments/${appointmentId}/supplier-validate`,
+        { method: "POST", headers: fleetJsonHeaders(), body: JSON.stringify({}) },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const data = (await res.json()) as ServiceCaseRecord;
+      setServiceCase(data);
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function transformToMaintenance() {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${ticketsBrowserBase}/${ticketId}/transform`, {
+        method: "POST",
+        headers: ticketFleetHeaders(),
+        body: JSON.stringify({ entityType: "maintenance" }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const data = (await res.json()) as { createdEntityId?: string };
+      await load();
+      if (data.createdEntityId) {
+        router.push(`/fleet/maintenance/${data.createdEntityId}`);
+      } else {
+        router.refresh();
+      }
     } finally {
       setPending(false);
     }
@@ -466,6 +526,9 @@ export function TicketWorkflowStepper({
                     router.refresh();
                   }}
                   repairPath={serviceCase.postApprovalPath}
+                  workflowType={serviceCase.workflowType}
+                  closed={closed}
+                  onTransformMaintenance={transformToMaintenance}
                 />
               ))}
             </div>
@@ -501,7 +564,9 @@ export function TicketWorkflowStepper({
                       {appt.location ? ` · ${appt.location}` : ""}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500">
-                      {appt.managerConfirmedAt ? (
+                      {appt.status === "pending_supplier" ? (
+                        <span className="text-amber-400/90">Așteaptă validare furnizor</span>
+                      ) : appt.managerConfirmedAt ? (
                         <span className="text-emerald-400/90">Confirmat manager</span>
                       ) : (
                         <span>Neconfirmat manager</span>
@@ -514,7 +579,19 @@ export function TicketWorkflowStepper({
                     </div>
                     {!closed && appt.status !== "cancelled" ? (
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {canConfirmAppointment && !appt.managerConfirmedAt ? (
+                        {canOperate && appt.status === "pending_supplier" ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => void supplierValidateAppointment(appt.id)}
+                            className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                          >
+                            Validează (furnizor)
+                          </button>
+                        ) : null}
+                        {canConfirmAppointment &&
+                        appt.status === "scheduled" &&
+                        !appt.managerConfirmedAt ? (
                           <button
                             type="button"
                             disabled={pending}
@@ -623,6 +700,9 @@ function WorkOrderStepCard({
   onRecordServiceTime,
   onRefresh,
   repairPath,
+  workflowType,
+  closed,
+  onTransformMaintenance,
 }: {
   wo: WorkOrderRecord;
   pending: boolean;
@@ -637,6 +717,9 @@ function WorkOrderStepCard({
   ) => void;
   onRefresh: () => void;
   repairPath?: "immediate" | "reschedule" | null;
+  workflowType?: ServiceCaseRecord["workflowType"];
+  closed?: boolean;
+  onTransformMaintenance?: () => void | Promise<void>;
 }) {
   const approved = wo.approvedQuote ?? (wo.latestQuote?.status === "approved" ? wo.latestQuote : null);
   const pendingQuote = wo.pendingQuote ?? (wo.latestQuote?.status === "submitted" ? wo.latestQuote : null);
@@ -750,8 +833,24 @@ function WorkOrderStepCard({
             quote={approved}
             canWrite={canOperate}
             compact
+            workflowType={workflowType}
+            vehicleOdometerKm={wo.odometerKmOut ?? wo.odometerKmIn ?? undefined}
             onUpdated={onRefresh}
           />
+          {canOperate &&
+          !closed &&
+          approved.costEntryId &&
+          onTransformMaintenance &&
+          (workflowType === "itp" || workflowType === "repair") ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void onTransformMaintenance()}
+              className="mt-2 rounded-lg border border-violet-500/50 px-2.5 py-1 text-xs text-violet-200 hover:bg-violet-950/40 disabled:opacity-50"
+            >
+              Transformă în mentenanță →
+            </button>
+          ) : null}
         </>
       ) : null}
 

@@ -18,6 +18,13 @@ import {
 import type { AccessContext } from '../iam/access-context.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { providerLabelForSupplier } from '../suppliers/supplier-resolve';
+import { RemindersService } from '../ops/reminders.service';
+import {
+  reminderMenuSyncEnabledForCreate,
+  shouldRunReminderMenuSync,
+} from '../ops/reminder-sync';
+import { normalizeReminderOffsets } from '../ops/document-reminders';
+import { normalizeReminderOffsetsKm } from '../ops/reminder-status';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { costCategoryForWorkflow } from './work-order-cost.utils';
 import {
@@ -38,11 +45,38 @@ export type UpsertQuoteInput = {
   currency?: string;
 };
 
+export type PostCostInput = {
+  nextDueOn?: string | null;
+  reminderOffsetsDays?: number[] | null;
+  dueOdometerKm?: number | null;
+  reminderOffsetsKm?: number[] | null;
+  syncReminderAction?: boolean;
+};
+
+function reminderOffsetsForDb(
+  raw: number[] | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (raw === undefined) return Prisma.JsonNull;
+  if (raw === null) return Prisma.JsonNull;
+  const normalized = normalizeReminderOffsets(raw);
+  return normalized?.length ? normalized : Prisma.JsonNull;
+}
+
+function reminderOffsetsKmForDb(
+  raw: number[] | null | undefined,
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (raw === undefined) return Prisma.JsonNull;
+  if (raw === null) return Prisma.JsonNull;
+  const normalized = normalizeReminderOffsetsKm(raw);
+  return normalized?.length ? normalized : Prisma.JsonNull;
+}
+
 @Injectable()
 export class WorkOrderQuotesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly reminders: RemindersService,
   ) {}
 
   private quoteInclude() {
@@ -396,6 +430,7 @@ export class WorkOrderQuotesService {
     tenantSlug: string,
     workOrderId: string,
     quoteId: string,
+    dto: PostCostInput = {},
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
@@ -449,6 +484,12 @@ export class WorkOrderQuotesService {
           invoiceNumber: existing.invoiceNumber,
           invoiceDate: existing.invoiceDate,
           invoiceAttachmentUrl: existing.invoiceAttachmentUrl,
+          nextDueOn:
+            dto.nextDueOn === undefined ? null : dto.nextDueOn ? new Date(dto.nextDueOn) : null,
+          reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
+          dueOdometerKm: dto.dueOdometerKm ?? null,
+          reminderOffsetsKm: reminderOffsetsKmForDb(dto.reminderOffsetsKm),
+          reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
         },
       });
 
@@ -510,6 +551,35 @@ export class WorkOrderQuotesService {
       entityId: quoteId,
       meta: { workOrderId, costEntryId: quote.costEntryId },
     });
+
+    if (quote.costEntryId) {
+      const costRow = await this.prisma.costEntry.findFirst({
+        where: { id: quote.costEntryId, tenantId: tenant.id },
+      });
+      if (
+        costRow &&
+        shouldRunReminderMenuSync(costRow.reminderMenuSyncEnabled, dto.syncReminderAction)
+      ) {
+        try {
+          const vehicle = await this.prisma.vehicle.findUnique({
+            where: { id: costRow.vehicleId },
+            select: { registrationNumber: true },
+          });
+          await this.reminders.syncFromCost(tenant.id, {
+            id: costRow.id,
+            vehicleId: costRow.vehicleId,
+            category: costRow.category,
+            title: `${costRow.category} — ${vehicle?.registrationNumber ?? 'vehicul'}`,
+            nextDueOn: costRow.nextDueOn,
+            reminderOffsetsDays: costRow.reminderOffsetsDays,
+            dueOdometerKm: costRow.dueOdometerKm,
+            reminderOffsetsKm: costRow.reminderOffsetsKm,
+          });
+        } catch (err) {
+          console.error('syncFromCost after postCost failed', err);
+        }
+      }
+    }
 
     return toQuoteRecord(quote);
   }

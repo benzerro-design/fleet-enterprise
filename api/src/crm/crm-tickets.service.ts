@@ -1121,18 +1121,65 @@ export class CrmTicketsService {
       throw new BadRequestException('Ticket has no vehicle — cannot transform');
     }
 
+    const existingMaintLink = await this.prisma.crmTicketLink.findFirst({
+      where: { tenantId: tenant.id, ticketId: id, entityType: CrmTicketLinkEntityType.maintenance },
+    });
+
     let entityType: CrmTicketLinkEntityType;
     let entityId: string;
     let eventBody: string;
 
     if (dto.entityType === 'maintenance') {
+      if (existingMaintLink) {
+        throw new BadRequestException('Tichetul are deja o înregistrare mentenanță legată.');
+      }
+
+      const serviceCase = await this.prisma.serviceCase.findFirst({
+        where: { tenantId: tenant.id, sourceTicketId: id },
+        include: {
+          workOrders: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              quotes: {
+                where: { status: 'approved' },
+                orderBy: { version: 'desc' },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+      const wo = serviceCase?.workOrders[0];
+      const approvedQuote = wo?.quotes[0];
+      const grossCents = approvedQuote
+        ? approvedQuote.totalNetCents + approvedQuote.totalVatCents
+        : null;
+
       const title = dto.title?.trim() || ticket.subject;
+      const provider = wo?.supplierId
+        ? (
+            await this.prisma.supplier.findFirst({
+              where: { id: wo.supplierId, tenantId: tenant.id },
+              select: { legalName: true },
+            })
+          )?.legalName ?? null
+        : null;
+
       const maint = await this.prisma.maintenanceEntry.create({
         data: {
           tenantId: tenant.id,
           vehicleId: ticket.vehicleId,
           title,
           notes: dto.notes?.trim() || ticket.description,
+          performedAt: wo?.outServiceAt ?? wo?.completedAt ?? approvedQuote?.invoiceDate ?? new Date(),
+          odometerKm: wo?.odometerKmOut ?? wo?.odometerKmIn ?? null,
+          costCents: grossCents,
+          provider,
+          supplierId: wo?.supplierId ?? null,
+          invoiceNumber: approvedQuote?.invoiceNumber ?? null,
+          invoiceDate: approvedQuote?.invoiceDate ?? null,
+          invoiceAttachmentUrl: approvedQuote?.invoiceAttachmentUrl ?? null,
         },
       });
       entityType = CrmTicketLinkEntityType.maintenance;

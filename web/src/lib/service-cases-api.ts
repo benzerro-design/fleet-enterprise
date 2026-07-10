@@ -67,6 +67,7 @@ export type WorkOrderRecord = {
 
 export type ServiceAppointmentStatus =
   | "scheduled"
+  | "pending_supplier"
   | "confirmed"
   | "completed"
   | "cancelled"
@@ -84,6 +85,8 @@ export type ServiceAppointmentRecord = {
   durationMin: number;
   location: string | null;
   status: ServiceAppointmentStatus;
+  proposedByRole: string | null;
+  supplierValidatedAt: string | null;
   notes: string | null;
   managerConfirmedAt: string | null;
   driverAcknowledgedAt: string | null;
@@ -145,6 +148,7 @@ export function serviceCaseStageLabel(stage: ServiceCaseStage): string {
 export function appointmentStatusLabel(status: ServiceAppointmentStatus | string): string {
   const map: Record<string, string> = {
     scheduled: "Programat",
+    pending_supplier: "Așteaptă validare furnizor",
     confirmed: "Confirmat",
     completed: "Finalizat",
     cancelled: "Anulat",

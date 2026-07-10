@@ -12,6 +12,7 @@ import {
   MaintenanceWorkOrderStatus,
   Prisma,
   ServiceAppointmentStatus,
+  ServiceAppointmentProposedBy,
   ServiceCaseSourceType,
   ServiceCaseStage,
   ServiceCaseStatus,
@@ -32,6 +33,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { nextWorkOrderDisplayNumber } from '../work-orders/work-order-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
+import {
+  proposedByFromAccess,
+  resolveInitialAppointmentStatus,
+} from '../appointments/appointment-status.utils';
 
 export const SERVICE_CASE_STAGE_ORDER: ServiceCaseStage[] = [
   ServiceCaseStage.intake,
@@ -96,6 +101,8 @@ export type ServiceAppointmentRecord = {
   durationMin: number;
   location: string | null;
   status: ServiceAppointmentStatus;
+  proposedByRole: ServiceAppointmentProposedBy | null;
+  supplierValidatedAt: string | null;
   notes: string | null;
   managerConfirmedAt: string | null;
   driverAcknowledgedAt: string | null;
@@ -111,6 +118,13 @@ export type CreateServiceAppointmentInput = {
   status?: ServiceAppointmentStatus;
   title?: string | null;
   durationMin?: number;
+  /** Programare directă de furnizor — fără pending_supplier. */
+  createdBySupplier?: boolean;
+};
+
+export type SupplierValidateAppointmentInput = {
+  scheduledAt?: string;
+  notes?: string | null;
 };
 
 export type UpdateServiceAppointmentInput = {
@@ -433,6 +447,16 @@ export class ServiceCasesService {
       throw new BadRequestException('Invalid durationMin');
     }
 
+    const initialStatus =
+      dto.status ??
+      resolveInitialAppointmentStatus(supplierId, dto.createdBySupplier);
+    const proposedByRole =
+      initialStatus === ServiceAppointmentStatus.pending_supplier
+        ? proposedByFromAccess(access)
+        : dto.createdBySupplier
+          ? ServiceAppointmentProposedBy.supplier
+          : null;
+
     const appointment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.serviceAppointment.create({
         data: {
@@ -445,7 +469,8 @@ export class ServiceCasesService {
           durationMin,
           location: dto.location?.trim() || null,
           notes: dto.notes?.trim() || null,
-          status: dto.status ?? ServiceAppointmentStatus.scheduled,
+          status: initialStatus,
+          proposedByRole,
         },
         include: { supplier: { select: { legalName: true } } },
       });
@@ -599,6 +624,11 @@ export class ServiceCasesService {
     if (existing.status === ServiceAppointmentStatus.cancelled) {
       throw new BadRequestException('Cannot confirm cancelled appointment');
     }
+    if (existing.status === ServiceAppointmentStatus.pending_supplier) {
+      throw new BadRequestException(
+        'Programarea trebuie validată de furnizor înainte de confirmare.',
+      );
+    }
     if (access && !canConfirmAppointment(access, existing.serviceCase.clientId)) {
       throw new ForbiddenException('Cannot confirm appointment');
     }
@@ -649,6 +679,86 @@ export class ServiceCasesService {
           },
         });
       }
+    });
+
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: existing.serviceCaseId },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded!);
+  }
+
+  async supplierValidateAppointment(
+    tenantSlug: string,
+    appointmentId: string,
+    dto: SupplierValidateAppointmentInput = {},
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const existing = await this.prisma.serviceAppointment.findFirst({
+      where: { id: appointmentId, tenantId: tenant.id },
+      include: { serviceCase: true },
+    });
+    if (!existing) throw new NotFoundException('Appointment not found');
+    if (existing.status !== ServiceAppointmentStatus.pending_supplier) {
+      throw new BadRequestException('Appointment is not awaiting supplier validation');
+    }
+    if (access) assertServiceCaseWrite(access, existing.serviceCase.clientId);
+
+    let scheduledAt = existing.scheduledAt;
+    if (dto.scheduledAt) {
+      const next = new Date(dto.scheduledAt);
+      if (Number.isNaN(next.getTime())) {
+        throw new BadRequestException('Invalid scheduledAt');
+      }
+      scheduledAt = next;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.serviceAppointment.update({
+        where: { id: appointmentId },
+        data: {
+          status: ServiceAppointmentStatus.scheduled,
+          supplierValidatedAt: new Date(),
+          scheduledAt,
+          notes: dto.notes !== undefined ? dto.notes?.trim() || null : undefined,
+          managerConfirmedAt: null,
+          driverAcknowledgedAt: null,
+        },
+      });
+
+      await tx.maintenanceWorkOrder.updateMany({
+        where: { serviceCaseId: existing.serviceCaseId },
+        data: { plannedAt: scheduledAt },
+      });
+
+      if (existing.serviceCase.sourceTicketId) {
+        const body = dto.scheduledAt
+          ? `Furnizorul a acceptat cu altă dată: ${scheduledAt.toLocaleString('ro-RO')}.`
+          : `Furnizorul a validat programarea: ${scheduledAt.toLocaleString('ro-RO')}.`;
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: existing.serviceCase.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body,
+            payload: { appointmentId, serviceCaseId: existing.serviceCaseId, supplierValidated: true },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_appointment.supplier_validate',
+      entityType: 'service_appointment',
+      entityId: appointmentId,
+      meta: { serviceCaseId: existing.serviceCaseId },
     });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
@@ -884,6 +994,8 @@ export class ServiceCasesService {
     durationMin: number;
     location: string | null;
     status: ServiceAppointmentStatus;
+    proposedByRole?: ServiceAppointmentProposedBy | null;
+    supplierValidatedAt?: Date | null;
     notes: string | null;
     managerConfirmedAt?: Date | null;
     driverAcknowledgedAt?: Date | null;
@@ -906,6 +1018,8 @@ export class ServiceCasesService {
       durationMin,
       location: row.location,
       status: row.status,
+      proposedByRole: row.proposedByRole ?? null,
+      supplierValidatedAt: row.supplierValidatedAt?.toISOString() ?? null,
       notes: row.notes,
       managerConfirmedAt: row.managerConfirmedAt?.toISOString() ?? null,
       driverAcknowledgedAt: row.driverAcknowledgedAt?.toISOString() ?? null,

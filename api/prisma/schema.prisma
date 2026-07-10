@@ -1161,10 +1161,17 @@ model MaintenanceWorkOrder {
 
 enum ServiceAppointmentStatus {
   scheduled
+  pending_supplier
   confirmed
   completed
   cancelled
   no_show
+}
+
+enum ServiceAppointmentProposedBy {
+  tenant_admin
+  client_manager
+  supplier
 }
 
 enum ServiceAppointmentRecurrence {
@@ -1186,6 +1193,8 @@ model ServiceAppointment {
   durationMin   Int                      @default(60)
   location      String?
   status               ServiceAppointmentStatus     @default(scheduled)
+  proposedByRole       ServiceAppointmentProposedBy?
+  supplierValidatedAt  DateTime?
   notes                String?
   managerConfirmedAt   DateTime?
   driverAcknowledgedAt DateTime?

@@ -10,6 +10,7 @@ import {
   Prisma,
   ServiceAppointmentRecurrence,
   ServiceAppointmentStatus,
+  ServiceAppointmentProposedBy,
   ServiceCaseSourceType,
   ServiceCaseStage,
   ServiceCaseStatus,
@@ -21,6 +22,10 @@ import type { AccessContext } from '../iam/access-context.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
+import {
+  proposedByFromAccess,
+  resolveInitialAppointmentStatus,
+} from './appointment-status.utils';
 import {
   type AppointmentStats,
   type CalendarAppointmentRecord,
@@ -96,6 +101,8 @@ export class AppointmentsService {
     scheduledAt: Date;
     durationMin: number;
     status: ServiceAppointmentStatus;
+    proposedByRole?: ServiceAppointmentProposedBy | null;
+    supplierValidatedAt?: Date | null;
     location: string | null;
     notes: string | null;
     recurrenceRule: ServiceAppointmentRecurrence;
@@ -127,6 +134,8 @@ export class AppointmentsService {
       endAt: endAtIso(row.scheduledAt, row.durationMin),
       durationMin: row.durationMin,
       status: row.status,
+      proposedByRole: row.proposedByRole ?? null,
+      supplierValidatedAt: row.supplierValidatedAt?.toISOString() ?? null,
       location: row.location,
       notes: row.notes,
       vehicleId: row.vehicleId,
@@ -321,6 +330,13 @@ export class AppointmentsService {
     }
 
     const recurrenceRule = dto.recurrenceRule ?? ServiceAppointmentRecurrence.none;
+    const initialStatus = resolveInitialAppointmentStatus(supplierId, dto.createdBySupplier);
+    const proposedByRole =
+      initialStatus === ServiceAppointmentStatus.pending_supplier
+        ? proposedByFromAccess(access)
+        : dto.createdBySupplier
+          ? ServiceAppointmentProposedBy.supplier
+          : null;
 
     const row = await this.prisma.$transaction(async (tx) => {
       let serviceCase = dto.serviceCaseId
@@ -367,7 +383,8 @@ export class AppointmentsService {
           durationMin,
           location: dto.location?.trim() || null,
           notes: dto.notes?.trim() || null,
-          status: ServiceAppointmentStatus.scheduled,
+          status: initialStatus,
+          proposedByRole,
           recurrenceRule,
           recurrenceSeriesId: seriesId,
         },
@@ -386,7 +403,8 @@ export class AppointmentsService {
             durationMin,
             location: dto.location?.trim() || null,
             notes: dto.notes?.trim() || null,
-            status: ServiceAppointmentStatus.scheduled,
+            status: initialStatus,
+            proposedByRole,
             recurrenceRule,
             recurrenceSeriesId: seriesId,
           },

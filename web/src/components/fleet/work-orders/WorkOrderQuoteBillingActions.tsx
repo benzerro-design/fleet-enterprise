@@ -1,11 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import {
+  defaultDayOffsetsForMode,
+  defaultKmOffsets,
+  hasConfiguredOpsReminder,
+  inferReminderConstraintMode,
+  type ReminderConstraintMode,
+} from "@/lib/ops-reminder-fields";
 import {
   formatQuoteMoney,
   type QuoteSummary,
+  type ServiceCaseWorkflowType,
 } from "@/lib/service-cases-api";
 import { fleetJsonHeaders, workOrdersBrowserBase } from "@/lib/work-orders-api";
 
@@ -15,6 +24,8 @@ type Props = {
   quote: QuoteSummary;
   canWrite: boolean;
   compact?: boolean;
+  workflowType?: ServiceCaseWorkflowType | string;
+  vehicleOdometerKm?: number;
   onUpdated: () => void;
 };
 
@@ -24,6 +35,8 @@ export function WorkOrderQuoteBillingActions({
   quote,
   canWrite,
   compact = false,
+  workflowType,
+  vehicleOdometerKm = 0,
   onUpdated,
 }: Props) {
   const [invoiceNumber, setInvoiceNumber] = useState(quote.invoiceNumber ?? "");
@@ -33,6 +46,30 @@ export function WorkOrderQuoteBillingActions({
   const [invoiceAttachmentUrl, setInvoiceAttachmentUrl] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showReminder, setShowReminder] = useState(false);
+  const isItp = workflowType === "itp";
+  const [constraintMode, setConstraintMode] = useState<ReminderConstraintMode>(() =>
+    isItp ? "time" : inferReminderConstraintMode({}),
+  );
+  const [dueDate, setDueDate] = useState("");
+  const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(() =>
+    isItp ? defaultDayOffsetsForMode(true) : [],
+  );
+  const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(null);
+  const [reminderOffsetsKm, setReminderOffsetsKm] = useState<number[]>([]);
+  const [syncReminderAction, setSyncReminderAction] = useState(true);
+
+  const reminderConfigured = useMemo(
+    () =>
+      hasConfiguredOpsReminder({
+        mode: constraintMode,
+        dueDate,
+        reminderOffsetsDays,
+        dueOdometerKm,
+        reminderOffsetsKm,
+      }),
+    [constraintMode, dueDate, reminderOffsetsDays, dueOdometerKm, reminderOffsetsKm],
+  );
 
   if (quote.status !== "approved") return null;
 
@@ -81,9 +118,21 @@ export function WorkOrderQuoteBillingActions({
     setPending(true);
     setError(null);
     try {
+      const body: Record<string, unknown> = {};
+      if (showReminder && reminderConfigured) {
+        if (constraintMode === "time" || constraintMode === "both") {
+          body.nextDueOn = dueDate || null;
+          body.reminderOffsetsDays = reminderOffsetsDays;
+        }
+        if (constraintMode === "km" || constraintMode === "both") {
+          body.dueOdometerKm = dueOdometerKm;
+          body.reminderOffsetsKm = reminderOffsetsKm.length ? reminderOffsetsKm : defaultKmOffsets();
+        }
+        body.syncReminderAction = syncReminderAction;
+      }
       const res = await fetch(
         `${workOrdersBrowserBase}/${workOrderId}/quotes/${quote.id}/post-cost`,
-        { method: "POST", headers: fleetJsonHeaders() },
+        { method: "POST", headers: fleetJsonHeaders(), body: JSON.stringify(body) },
       );
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
@@ -201,14 +250,52 @@ export function WorkOrderQuoteBillingActions({
           </Link>
         </p>
       ) : quote.invoicedAt && canWrite ? (
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => void postCost()}
-          className="rounded-lg bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
-        >
-          Generează cost din deviz
-        </button>
+        <div className="space-y-3">
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={showReminder}
+              onChange={(e) => {
+                setShowReminder(e.target.checked);
+                if (e.target.checked && isItp && !dueDate) {
+                  setReminderOffsetsDays(defaultDayOffsetsForMode(true));
+                }
+              }}
+              className="rounded border-zinc-600"
+            />
+            Creează reminder la generarea costului
+          </label>
+          {showReminder ? (
+            <OpsReminderFields
+              constraintMode={constraintMode}
+              onConstraintModeChange={setConstraintMode}
+              dueDate={dueDate}
+              onDueDateChange={setDueDate}
+              dueDateLabel={isItp ? "ITP valabil până la" : "Următoarea acțiune (dată)"}
+              dueDateHint={isItp ? "Recomandat pentru flux ITP." : undefined}
+              reminderOffsetsDays={reminderOffsetsDays}
+              onReminderOffsetsDaysChange={setReminderOffsetsDays}
+              dueOdometerKm={dueOdometerKm}
+              onDueOdometerKmChange={setDueOdometerKm}
+              reminderOffsetsKm={reminderOffsetsKm}
+              onReminderOffsetsKmChange={setReminderOffsetsKm}
+              vehicleOdometerKm={vehicleOdometerKm}
+              syncReminderAction={syncReminderAction}
+              onSyncReminderActionChange={setSyncReminderAction}
+              disabled={pending}
+              isItp={isItp}
+              fixedMode={isItp ? "time" : undefined}
+            />
+          ) : null}
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void postCost()}
+            className="rounded-lg bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+          >
+            Generează cost din deviz
+          </button>
+        </div>
       ) : !quote.invoicedAt ? (
         <p className="text-xs text-zinc-500">După factură: generezi costul automat.</p>
       ) : null}
@@ -220,7 +307,7 @@ export function WorkOrderQuoteBillingActions({
           onClick={() => void completeWorkOrder()}
           className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         >
-          Finalizează comanda service
+          Finalizează comanda
         </button>
       ) : null}
     </div>

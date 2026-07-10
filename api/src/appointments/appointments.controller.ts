@@ -29,6 +29,7 @@ function parseStatus(raw?: string): ServiceAppointmentStatus | undefined {
   const v = raw.trim() as ServiceAppointmentStatus;
   if (
     v === 'scheduled' ||
+    v === 'pending_supplier' ||
     v === 'confirmed' ||
     v === 'completed' ||
     v === 'cancelled' ||

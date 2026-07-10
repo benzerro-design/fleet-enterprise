@@ -1,4 +1,4 @@
-import { ServiceAppointmentRecurrence, ServiceAppointmentStatus, SupplierCategory } from '@prisma/client';
+import { ServiceAppointmentRecurrence, ServiceAppointmentStatus, ServiceAppointmentProposedBy, SupplierCategory } from '@prisma/client';
 
 export type CalendarWorkOrderSummary = {
   id: string;
@@ -13,6 +13,8 @@ export type CalendarAppointmentRecord = {
   endAt: string;
   durationMin: number;
   status: ServiceAppointmentStatus;
+  proposedByRole: ServiceAppointmentProposedBy | null;
+  supplierValidatedAt: string | null;
   location: string | null;
   notes: string | null;
   vehicleId: string;
@@ -62,6 +64,8 @@ export type CreateCalendarAppointmentInput = {
   serviceCaseId?: string;
   sourceTicketId?: string;
   recurrenceRule?: ServiceAppointmentRecurrence;
+  /** Dacă true, programare directă de furnizor (fără pending_supplier). */
+  createdBySupplier?: boolean;
 };
 
 export type UpdateCalendarAppointmentInput = {

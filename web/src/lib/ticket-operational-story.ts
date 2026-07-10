@@ -164,11 +164,13 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
         : serviceCase
           ? "Nicio programare încă."
           : "După deschiderea fluxului service.",
-      detail: appt?.managerConfirmedAt
-        ? "Confirmată de manager."
-        : appt
-          ? "De confirmat cu service și șofer."
-          : undefined,
+      detail: appt?.status === "pending_supplier"
+        ? "Propus de flotă — așteaptă validare furnizor."
+        : appt?.managerConfirmedAt
+          ? "Confirmată de manager."
+          : appt
+            ? "De confirmat cu service și șofer."
+            : undefined,
     },
     {
       id: "work-order",
@@ -274,7 +276,7 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       situation: approved?.costEntryId
         ? `Cost ${fmtMoney(approved.totalGrossCents, approved.currency)} înregistrat.`
         : approved?.invoicedAt
-          ? `Factură ${approved.invoiceNumber ?? "—"} — generează cost.`
+          ? `Factură ${approved.invoiceNumber ?? "—"} — generează cost${serviceCase?.workflowType === "itp" || serviceCase?.workflowType === "repair" ? " (opțional reminder)" : ""}.`
           : approved && wo?.readyAt
             ? "După lucrare gata: factură apoi cost."
             : approved
