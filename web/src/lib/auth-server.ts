@@ -137,6 +137,18 @@ export function isPartnerPortalUser(auth: AuthMeResult): boolean {
   return auth.ok && (auth.me.role === "supplier_user" || auth.me.partnerPortal === true);
 }
 
+/** Acces portal partener — furnizor sau admin tenant (view-as). */
+export function canAccessPartnerPortal(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (isPartnerPortalUser(auth)) return true;
+  return auth.me.role === "tenant_admin" || auth.me.role === "tenant_viewer";
+}
+
+/** Admin flotă în mod portal (overview / view-as furnizor). */
+export function isPartnerAdminMode(auth: AuthMeResult): boolean {
+  return auth.ok && (auth.me.role === "tenant_admin" || auth.me.role === "tenant_viewer");
+}
+
 export function canWritePartnerOps(auth: AuthMeResult): boolean {
   if (!auth.ok || !isPartnerPortalUser(auth)) return false;
   const roles = auth.me.access?.supplierMemberships.map((m) => m.role) ?? [];

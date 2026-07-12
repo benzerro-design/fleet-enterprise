@@ -95,6 +95,23 @@ export class SuppliersController {
     });
   }
 
+  @Get('stats')
+  @Roles(...FLEET_READ_ROLES)
+  stats(
+    @TenantId() tenantSlug: string,
+    @Query('q') q?: string,
+    @Query('status') status?: string,
+    @Query('category') category?: string,
+    @Query('serviceKind') serviceKind?: string,
+  ) {
+    return this.suppliers.getStats(tenantSlug, {
+      q: q?.trim(),
+      status: parseStatus(status),
+      category: parseCategory(category),
+      serviceKind: parseServiceKind(serviceKind),
+    });
+  }
+
   @Get('export')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
   @Header('Content-Type', 'text/csv; charset=utf-8')

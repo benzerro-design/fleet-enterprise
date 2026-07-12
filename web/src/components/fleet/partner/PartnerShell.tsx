@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { PartnerNavLinks } from "@/components/fleet/partner/PartnerNavLinks";
 import { PartnerTopBar, type PartnerTopBarContext } from "@/components/fleet/partner/PartnerTopBar";
 import { PARTNER_NAV_ITEMS, partnerNavActive } from "@/lib/partner-nav";
 
@@ -62,28 +63,7 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
         </Link>
       </div>
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        {PARTNER_NAV_ITEMS.map((item) => {
-          const active = partnerNavActive(pathname, item.activePrefixes);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={closeMenu}
-              className={`mb-0.5 flex items-center justify-between rounded-md py-2 pl-3 pr-2 text-sm transition-colors ${
-                active
-                  ? "border-l-2 border-violet-500 bg-zinc-900/80 pl-[10px] font-medium text-zinc-100"
-                  : "border-l-2 border-transparent text-zinc-400 hover:bg-zinc-900/50 hover:text-zinc-200"
-              }`}
-            >
-              <span>{item.label}</span>
-              {item.badge ? (
-                <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                  {item.badge}
-                </span>
-              ) : null}
-            </Link>
-          );
-        })}
+        <PartnerNavLinks items={PARTNER_NAV_ITEMS} onNavigate={closeMenu} />
       </nav>
       {supplierFooter ? (
         <div className="shrink-0 border-t border-zinc-800 px-4 py-3 text-[10px] text-zinc-600">
@@ -126,20 +106,7 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
           aria-label="Navigare partener"
         >
-          {PARTNER_NAV_ITEMS.map((item) => {
-            const active = partnerNavActive(pathname, item.activePrefixes);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`px-1 py-2.5 text-center text-[10px] leading-tight ${
-                  active ? "text-violet-400" : "text-zinc-500"
-                }`}
-              >
-                {item.label.split(" ")[0]}
-              </Link>
-            );
-          })}
+          <PartnerNavLinks items={PARTNER_NAV_ITEMS} className="grid-cols-4" />
         </nav>
       </div>
 

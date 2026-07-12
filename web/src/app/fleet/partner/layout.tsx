@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
+import { PartnerAdminBanner } from "@/components/fleet/partner/PartnerAdminChrome";
 import { PartnerShell } from "@/components/fleet/partner/PartnerShell";
-import { getAuthMeResult, isPartnerPortalUser } from "@/lib/auth-server";
+import {
+  canAccessPartnerPortal,
+  getAuthMeResult,
+  isPartnerAdminMode,
+} from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
   partnerPendingTotal,
@@ -8,6 +13,7 @@ import {
   supplierRoleLabel,
   userInitialsFromEmail,
 } from "@/lib/partner-auth";
+import type { SupplierListPayload } from "@/lib/suppliers-api";
 import type { WorkOrderStats } from "@/lib/work-orders-api";
 
 async function loadStats(): Promise<WorkOrderStats | null> {
@@ -20,39 +26,70 @@ async function loadStats(): Promise<WorkOrderStats | null> {
   }
 }
 
+async function loadAdminSuppliers(): Promise<SupplierListPayload["items"]> {
+  try {
+    const res = await fleetServerFetch("/suppliers?status=active&pageSize=200");
+    if (!res?.ok) return [];
+    const payload = (await res.json()) as SupplierListPayload;
+    return payload.items;
+  } catch {
+    return [];
+  }
+}
+
 export default async function PartnerLayout({ children }: { children: React.ReactNode }) {
   const auth = await getAuthMeResult();
   if (!auth.ok) {
     redirect("/login?next=/fleet/partner");
   }
-  if (!isPartnerPortalUser(auth)) {
+  if (!canAccessPartnerPortal(auth)) {
     redirect("/fleet/dashboard");
   }
 
-  const supplier = primarySupplierMembership(auth.me);
-  const stats = await loadStats();
+  const adminMode = isPartnerAdminMode(auth);
+  const supplierMembership = adminMode ? undefined : primarySupplierMembership(auth.me);
+  const adminSuppliers = adminMode ? await loadAdminSuppliers() : [];
+  const stats = adminMode ? null : await loadStats();
   const pending = partnerPendingTotal(stats);
 
   const topBar = {
     pageTitle: "Portal partener",
-    supplierLegalName: supplier?.supplierLegalName ?? "Furnizor",
-    supplierCode: supplier?.supplierCode ?? "—",
+    supplierLegalName: adminMode
+      ? "Toți furnizorii"
+      : (supplierMembership?.supplierLegalName ?? "Furnizor"),
+    supplierCode: adminMode ? "ADMIN" : (supplierMembership?.supplierCode ?? "—"),
     tenantSlug: auth.me.tenantSlug,
     userEmail: auth.me.email,
     userInitials: userInitialsFromEmail(auth.me.email),
-    supplierRoleLabel: supplier ? supplierRoleLabel(supplier.role) : "Partener",
-    docAlert: true,
+    supplierRoleLabel: adminMode
+      ? "Administrator tenant"
+      : supplierMembership
+        ? supplierRoleLabel(supplierMembership.role)
+        : "Partener",
+    docAlert: !adminMode,
     docAlertTitle: "Autorizație ITP expiră în curând",
     notificationCount: pending > 0 ? pending : undefined,
     pendingTotal: pending > 0 ? pending : undefined,
+    isAdminMode: adminMode,
+    adminSuppliers: adminSuppliers.map((s) => ({
+      id: s.id,
+      code: s.code,
+      legalName: s.legalName,
+    })),
   };
 
-  const supplierFooter = supplier
-    ? `${supplier.supplierLegalName} · ${supplier.supplierCode}`
-    : undefined;
+  const supplierFooter = adminMode
+    ? `${adminSuppliers.length} furnizori activi · mod admin`
+    : supplierMembership
+      ? `${supplierMembership.supplierLegalName} · ${supplierMembership.supplierCode}`
+      : undefined;
+
+  const authBanner = adminMode ? (
+    <PartnerAdminBanner adminEmail={auth.me.email} />
+  ) : undefined;
 
   return (
-    <PartnerShell topBar={topBar} supplierFooter={supplierFooter}>
+    <PartnerShell topBar={topBar} supplierFooter={supplierFooter} authBanner={authBanner}>
       {children}
     </PartnerShell>
   );

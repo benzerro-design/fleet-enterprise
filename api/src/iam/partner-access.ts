@@ -76,3 +76,16 @@ export function assertPartnerWrite(access: AccessContext): void {
     throw new ForbiddenException('Read-only supplier role');
   }
 }
+
+/** Query ?supplierId= or ?suppliers=id1,id2 — used by admin view-as filters. */
+export function parseSupplierIdsQuery(supplierId?: string, suppliers?: string): string[] | undefined {
+  if (suppliers?.trim()) {
+    const ids = suppliers
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return ids.length ? ids : undefined;
+  }
+  if (supplierId?.trim()) return [supplierId.trim()];
+  return undefined;
+}

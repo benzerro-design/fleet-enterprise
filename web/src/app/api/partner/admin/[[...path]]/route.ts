@@ -1,0 +1,32 @@
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+
+const COOKIE = "fleet_access";
+
+function upstreamUrl(req: NextRequest, segments: string[] | undefined): string {
+  const apiUrl = process.env.API_URL ?? "http://localhost:4000";
+  const suffix = segments?.length ? segments.join("/") : "";
+  const path = suffix ? `/partner/admin/${suffix}` : "/partner/admin";
+  const search = req.nextUrl.search;
+  return `${apiUrl}${path}${search}`;
+}
+
+async function proxy(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  const token = req.cookies.get(COOKIE)?.value;
+  if (!token) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+  const { path: segments } = await ctx.params;
+  const url = upstreamUrl(req, segments);
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  const upstream = await fetch(url, { method: req.method, headers });
+  const outHeaders = new Headers();
+  const uct = upstream.headers.get("content-type");
+  if (uct) outHeaders.set("Content-Type", uct);
+  const buf = await upstream.arrayBuffer();
+  return new NextResponse(buf, { status: upstream.status, headers: outHeaders });
+}
+
+export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  return proxy(req, ctx);
+}

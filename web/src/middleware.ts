@@ -95,6 +95,9 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathAllowed(PARTNER_PREFIXES, pathname)) {
+    if (payload?.role === "tenant_admin" || payload?.role === "tenant_viewer") {
+      return NextResponse.next();
+    }
     const home =
       payload?.role === "client_user"
         ? payload.clientPortal === "driver"

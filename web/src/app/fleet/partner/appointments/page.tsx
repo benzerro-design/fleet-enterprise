@@ -4,15 +4,18 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { SchedulerKpiStrip } from "@/components/fleet/scheduler/SchedulerKpiStrip";
 import { SchedulerShell } from "@/components/fleet/scheduler/SchedulerShell";
 import type { AppointmentStats } from "@/lib/appointments-api";
-import { canWritePartnerOps, getAuthMeResult } from "@/lib/auth-server";
+import { canWritePartnerOps, getAuthMeResult, isPartnerAdminMode } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { parsePartnerSupplierQuery, partnerSupplierSearchParams } from "@/lib/partner-context";
 import { primarySupplierMembership } from "@/lib/partner-auth";
+import type { SupplierListPayload } from "@/lib/suppliers-api";
 import type { SchedulerViewMode } from "@/lib/scheduler-deep-link";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
-async function loadStats(): Promise<AppointmentStats | null> {
+async function loadStats(supplierQuery: ReturnType<typeof parsePartnerSupplierQuery>): Promise<AppointmentStats | null> {
   try {
-    const res = await fleetServerFetch("/appointments/stats");
+    const p = partnerSupplierSearchParams(supplierQuery);
+    const res = await fleetServerFetch(`/appointments/stats?${p.toString()}`);
     if (!res?.ok) return null;
     return (await res.json()) as AppointmentStats;
   } catch {
@@ -20,32 +23,67 @@ async function loadStats(): Promise<AppointmentStats | null> {
   }
 }
 
+async function loadAdminSuppliers(): Promise<SupplierListPayload["items"]> {
+  try {
+    const res = await fleetServerFetch("/suppliers?status=active&pageSize=200");
+    if (!res?.ok) return [];
+    return ((await res.json()) as SupplierListPayload).items;
+  } catch {
+    return [];
+  }
+}
+
 type PageProps = {
-  searchParams: Promise<{ week?: string; select?: string; view?: string; ticket?: string; vehicle?: string; create?: string }>;
+  searchParams: Promise<{
+    week?: string;
+    select?: string;
+    view?: string;
+    ticket?: string;
+    vehicle?: string;
+    create?: string;
+    supplierId?: string;
+    suppliers?: string;
+  }>;
 };
 
 export default async function PartnerAppointmentsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  const supplierQuery = parsePartnerSupplierQuery(sp);
   const initialViewMode: SchedulerViewMode = sp.view === "bands" ? "bands" : "grid";
 
-  const [auth, stats, vehicles] = await Promise.all([
-    getAuthMeResult(),
-    loadStats(),
-    getVehicleOptions(),
-  ]);
-  const canWrite = canWritePartnerOps(auth);
-  const supplier = auth.ok ? primarySupplierMembership(auth.me) : undefined;
+  const auth = await getAuthMeResult();
+  const adminMode = auth.ok && isPartnerAdminMode(auth);
+  const canWrite = adminMode ? false : canWritePartnerOps(auth);
 
-  const suppliers = supplier
+  const [stats, vehicles, adminSuppliers] = await Promise.all([
+    loadStats(supplierQuery),
+    getVehicleOptions(),
+    adminMode ? loadAdminSuppliers() : Promise.resolve([]),
+  ]);
+
+  const membership = auth.ok && !adminMode ? primarySupplierMembership(auth.me) : undefined;
+  const filteredAdmin =
+    supplierQuery.supplierId
+      ? adminSuppliers.filter((s) => s.id === supplierQuery.supplierId)
+      : supplierQuery.suppliers?.length
+        ? adminSuppliers.filter((s) => supplierQuery.suppliers!.includes(s.id))
+        : adminSuppliers;
+
+  const suppliers = membership
     ? [
         {
-          id: supplier.supplierId,
-          code: supplier.supplierCode,
-          legalName: supplier.supplierLegalName,
+          id: membership.supplierId,
+          code: membership.supplierCode,
+          legalName: membership.supplierLegalName,
           category: "service_auto" as const,
         },
       ]
-    : [];
+    : filteredAdmin.map((s) => ({
+        id: s.id,
+        code: s.code,
+        legalName: s.legalName,
+        category: s.category,
+      }));
 
   const vehicleOptions = vehicles.map((v) => ({
     id: v.id,
@@ -62,7 +100,8 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
               <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight">Programator</h1>
               <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-                Programări service — calendar filtrat pe locația dvs. ({supplier?.supplierCode ?? "furnizor"}).
+                Programări service — calendar filtrat pe{" "}
+                {membership?.supplierCode ?? (suppliers.length === 1 ? suppliers[0].code : `${suppliers.length} furnizori`)}.
               </p>
             </div>
             <SchedulerKpiStrip stats={stats} />

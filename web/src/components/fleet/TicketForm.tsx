@@ -18,6 +18,11 @@ import {
   type TicketRecord,
   type TicketType,
 } from "@/lib/tickets-api";
+import type { TenantServiceType } from "@/lib/tenant-service-types/types";
+import {
+  activeTenantServiceTypes,
+  serviceTypeCodeToTicketType,
+} from "@/lib/tenant-service-types/ticket-type-map";
 
 type Props = {
   vehicles: OpsVehicleOption[];
@@ -30,14 +35,24 @@ type Props = {
     description: string;
   }>;
   lockClient?: boolean;
+  /** Catalog tenant activ — înlocuiește TICKET_TYPES hardcodat când e disponibil. */
+  serviceTypes?: TenantServiceType[];
 };
 
-export function TicketForm({ vehicles, initial, lockClient = false }: Props) {
+export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [subject, setSubject] = useState(initial?.subject ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  const catalogOptions = serviceTypes ? activeTenantServiceTypes(serviceTypes) : [];
+  const useCatalog = catalogOptions.length > 0;
+  const [selectedServiceCode, setSelectedServiceCode] = useState(
+    () => catalogOptions[0]?.code ?? "other",
+  );
   const [ticketType, setTicketType] = useState<TicketType>("other");
+  const resolvedTicketType = useCatalog
+    ? serviceTypeCodeToTicketType(selectedServiceCode)
+    : ticketType;
   const [priority, setPriority] = useState<TicketPriority>("normal");
   const [odometerKm, setOdometerKm] = useState("");
   const [reminderActionId, setReminderActionId] = useState(initial?.reminderActionId ?? "");
@@ -58,10 +73,16 @@ export function TicketForm({ vehicles, initial, lockClient = false }: Props) {
 
   useEffect(() => {
     const s = subject.toLowerCase();
+    if (useCatalog) {
+      if (s.includes("daun")) setSelectedServiceCode("damage_repair");
+      else if (s.includes("itp")) setSelectedServiceCode("itp");
+      else if (s.includes("menten")) setSelectedServiceCode("periodic_maintenance");
+      return;
+    }
     if (s.includes("daun")) setTicketType("damage");
     else if (s.includes("itp")) setTicketType("itp");
     else if (s.includes("menten")) setTicketType("maintenance");
-  }, [subject]);
+  }, [subject, useCatalog]);
 
   async function submitTicket(
     ctx: {
@@ -78,7 +99,7 @@ export function TicketForm({ vehicles, initial, lockClient = false }: Props) {
       clientId: ctx.clientId.trim(),
       subject: subject.trim(),
       description: description.trim() || null,
-      ticketType,
+      ticketType: resolvedTicketType,
       priority,
       vehicleId: ctx.vehicleId.trim() || null,
       driverId: ctx.driverId.trim() || null,
@@ -186,17 +207,38 @@ export function TicketForm({ vehicles, initial, lockClient = false }: Props) {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-xs text-zinc-500">Tip solicitare</label>
-                <select
-                  value={ticketType}
-                  onChange={(e) => setTicketType(e.target.value as TicketType)}
-                  className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-                >
-                  {TICKET_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
+                {useCatalog ? (
+                  <>
+                    <select
+                      value={selectedServiceCode}
+                      onChange={(e) => setSelectedServiceCode(e.target.value)}
+                      className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                    >
+                      {catalogOptions.map((t) => (
+                        <option key={t.id} value={t.code}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                    {catalogOptions.find((t) => t.code === selectedServiceCode)?.clientDescription ? (
+                      <p className="mt-1 text-[10px] text-zinc-500">
+                        {catalogOptions.find((t) => t.code === selectedServiceCode)?.clientDescription}
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <select
+                    value={ticketType}
+                    onChange={(e) => setTicketType(e.target.value as TicketType)}
+                    className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  >
+                    {TICKET_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="text-xs text-zinc-500">Prioritate</label>

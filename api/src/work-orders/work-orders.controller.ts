@@ -17,7 +17,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
-import { resolvePartnerSupplierIdsFilter } from '../iam/partner-access';
+import { resolvePartnerSupplierIdsFilter, parseSupplierIdsQuery } from '../iam/partner-access';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { WorkOrdersService, type WorkOrderInbox } from './work-orders.service';
 
@@ -94,6 +94,7 @@ export class WorkOrdersController {
     @Query('q') q?: string,
     @Query('status') status?: string,
     @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
     @Query('vehicleId') vehicleId?: string,
     @Query('clientId') clientId?: string,
     @Query('inbox') inbox?: string,
@@ -102,10 +103,8 @@ export class WorkOrdersController {
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    const supplierIds = resolvePartnerSupplierIdsFilter(
-      access,
-      supplierId?.trim() ? [supplierId.trim()] : undefined,
-    );
+    const requested = parseSupplierIdsQuery(supplierId, suppliers);
+    const supplierIds = resolvePartnerSupplierIdsFilter(access, requested);
     return this.workOrders.listPaged(tenantSlug, {
       page,
       pageSize,
@@ -126,10 +125,12 @@ export class WorkOrdersController {
     @TenantId() tenantSlug: string,
     @CurrentAccess() access: AccessContext,
     @Query('clientId') clientId?: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
   ) {
-    const supplierIds = resolvePartnerSupplierIdsFilter(access);
-    const supplierId = supplierIds?.length === 1 ? supplierIds[0] : undefined;
-    return this.workOrders.getStats(tenantSlug, clientId?.trim(), supplierId);
+    const requested = parseSupplierIdsQuery(supplierId, suppliers);
+    const supplierIds = resolvePartnerSupplierIdsFilter(access, requested);
+    return this.workOrders.getStats(tenantSlug, clientId?.trim(), supplierIds);
   }
 
   @Get(':id')

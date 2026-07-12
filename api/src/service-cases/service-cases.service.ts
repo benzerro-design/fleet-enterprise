@@ -643,42 +643,27 @@ export class ServiceCasesService {
       });
 
       const serviceCase = await tx.serviceCase.findFirst({ where: { id: existing.serviceCaseId } });
-      if (!serviceCase?.vehicleId) return;
-
-      await this.ensureWorkOrderTx(
-        tx,
-        tenant.id,
-        serviceCase,
-        existing.supplierId ?? serviceCase.supplierId,
-        actorUserId,
-      );
-
-      const workOrderIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.work_order);
-      const currentIdx = SERVICE_CASE_STAGE_ORDER.indexOf(serviceCase.currentStage);
-      if (currentIdx < workOrderIdx) {
-        await tx.serviceCase.update({
-          where: { id: serviceCase.id },
-          data: { currentStage: ServiceCaseStage.work_order },
-        });
-      }
-
-      await tx.maintenanceWorkOrder.updateMany({
-        where: { serviceCaseId: serviceCase.id },
-        data: { plannedAt: existing.scheduledAt, supplierId: existing.supplierId ?? serviceCase.supplierId },
-      });
-
-      if (serviceCase.sourceTicketId) {
+      if (serviceCase?.sourceTicketId) {
         await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,
             ticketId: serviceCase.sourceTicketId,
             kind: CrmTicketEventKind.workflow_advance,
-            body: `Programare confirmată: ${existing.scheduledAt.toLocaleString('ro-RO')}.`,
+            body: `Programare confirmată de manager: ${existing.scheduledAt.toLocaleString('ro-RO')}.`,
             payload: { appointmentId, serviceCaseId: serviceCase.id },
             actorUserId: actorUserId ?? null,
           },
         });
       }
+
+      await this.maybeCreateWorkOrderAfterDualConfirmTx(
+        tx,
+        tenant.id,
+        appointmentId,
+        existing.scheduledAt,
+        existing.supplierId ?? existing.serviceCase.supplierId,
+        actorUserId,
+      );
     });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
@@ -786,9 +771,20 @@ export class ServiceCasesService {
       throw new ForbiddenException('Cannot acknowledge appointment');
     }
 
-    await this.prisma.serviceAppointment.update({
-      where: { id: appointmentId },
-      data: { driverAcknowledgedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.serviceAppointment.update({
+        where: { id: appointmentId },
+        data: { driverAcknowledgedAt: new Date() },
+      });
+
+      await this.maybeCreateWorkOrderAfterDualConfirmTx(
+        tx,
+        tenant.id,
+        appointmentId,
+        existing.scheduledAt,
+        existing.supplierId ?? existing.serviceCase.supplierId,
+        actorUserId,
+      );
     });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
@@ -876,6 +872,46 @@ export class ServiceCasesService {
       include: this.caseInclude(),
     });
     return this.toRecord(reloaded!);
+  }
+
+  private async maybeCreateWorkOrderAfterDualConfirmTx(
+    tx: Prisma.TransactionClient | PrismaService,
+    tenantId: string,
+    appointmentId: string,
+    scheduledAt: Date,
+    supplierId: string | null,
+    actorUserId?: string,
+  ): Promise<boolean> {
+    const appt = await tx.serviceAppointment.findFirst({ where: { id: appointmentId } });
+    if (!appt?.managerConfirmedAt || !appt?.driverAcknowledgedAt) return false;
+    if (appt.status !== ServiceAppointmentStatus.confirmed) return false;
+
+    const serviceCase = await tx.serviceCase.findFirst({ where: { id: appt.serviceCaseId } });
+    if (!serviceCase?.vehicleId) return false;
+
+    await this.ensureWorkOrderTx(
+      tx,
+      tenantId,
+      serviceCase,
+      supplierId ?? serviceCase.supplierId,
+      actorUserId,
+    );
+
+    const workOrderIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.work_order);
+    const currentIdx = SERVICE_CASE_STAGE_ORDER.indexOf(serviceCase.currentStage);
+    if (currentIdx < workOrderIdx) {
+      await tx.serviceCase.update({
+        where: { id: serviceCase.id },
+        data: { currentStage: ServiceCaseStage.work_order },
+      });
+    }
+
+    await tx.maintenanceWorkOrder.updateMany({
+      where: { serviceCaseId: serviceCase.id },
+      data: { plannedAt: scheduledAt, supplierId: supplierId ?? serviceCase.supplierId },
+    });
+
+    return true;
   }
 
   private async ensureWorkOrder(

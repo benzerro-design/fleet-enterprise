@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { LogoutButton } from "@/app/fleet/logout-button";
+import {
+  PartnerSupplierSelector,
+  type PartnerSupplierOption,
+} from "@/components/fleet/partner/PartnerAdminChrome";
 
 export type PartnerTopBarContext = {
   pageTitle: string;
@@ -15,6 +19,8 @@ export type PartnerTopBarContext = {
   docAlertTitle?: string;
   notificationCount?: number;
   pendingTotal?: number;
+  isAdminMode?: boolean;
+  adminSuppliers?: PartnerSupplierOption[];
 };
 
 type Props = {
@@ -50,13 +56,22 @@ export function PartnerTopBar({ ctx }: Props) {
     <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950 px-4 lg:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
         <span className="shrink-0 text-sm font-semibold text-zinc-100">{ctx.pageTitle}</span>
-        <span className="shrink-0 text-[10px] text-zinc-600">·</span>
-        <span
-          className="truncate text-[10px] text-zinc-400"
-          title={`${ctx.supplierLegalName} · tenant ${ctx.tenantSlug}`}
-        >
-          {ctx.supplierLegalName}
-        </span>
+        {ctx.isAdminMode && ctx.adminSuppliers?.length ? (
+          <>
+            <span className="shrink-0 text-[10px] text-zinc-600">·</span>
+            <PartnerSupplierSelector suppliers={ctx.adminSuppliers} />
+          </>
+        ) : (
+          <>
+            <span className="shrink-0 text-[10px] text-zinc-600">·</span>
+            <span
+              className="truncate text-[10px] text-zinc-400"
+              title={`${ctx.supplierLegalName} · tenant ${ctx.tenantSlug}`}
+            >
+              {ctx.supplierLegalName}
+            </span>
+          </>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">

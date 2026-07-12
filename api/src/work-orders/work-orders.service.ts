@@ -401,7 +401,11 @@ export class WorkOrdersService {
     };
   }
 
-  async getStats(tenantSlug: string, clientId?: string, supplierId?: string): Promise<WorkOrderStats> {
+  async getStats(
+    tenantSlug: string,
+    clientId?: string,
+    supplierIds?: string[],
+  ): Promise<WorkOrderStats> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return { open: 0, inProgress: 0, waitingParts: 0, done: 0, pendingApproval: 0, readyUninvoiced: 0 };
 
@@ -414,8 +418,8 @@ export class WorkOrdersService {
         }
       : undefined;
 
-    const supplierFilter: Prisma.MaintenanceWorkOrderWhereInput | undefined = supplierId?.trim()
-      ? { supplierId: supplierId.trim() }
+    const supplierFilter: Prisma.MaintenanceWorkOrderWhereInput | undefined = supplierIds?.length
+      ? { supplierId: { in: supplierIds } }
       : undefined;
 
     const base: Prisma.MaintenanceWorkOrderWhereInput = {

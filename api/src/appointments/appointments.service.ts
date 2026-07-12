@@ -255,7 +255,12 @@ export class AppointmentsService {
     return rows.map((r) => this.toCalendarRecord(r));
   }
 
-  async getStats(tenantSlug: string, clientId?: string, access?: AccessContext): Promise<AppointmentStats> {
+  async getStats(
+    tenantSlug: string,
+    clientId?: string,
+    access?: AccessContext,
+    supplierIds?: string[],
+  ): Promise<AppointmentStats> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return { today: 0, thisWeek: 0, confirmed: 0, scheduled: 0 };
 
@@ -271,6 +276,10 @@ export class AppointmentsService {
       ? { vehicle: { clientId: clientId.trim() } }
       : undefined;
 
+    const supplierFilter: Prisma.ServiceAppointmentWhereInput | undefined = supplierIds?.length
+      ? { supplierId: { in: supplierIds } }
+      : undefined;
+
     const clientScope = this.appointmentClientScope(access);
     const partnerScope = this.appointmentPartnerScope(access);
 
@@ -278,6 +287,7 @@ export class AppointmentsService {
     if (Object.keys(clientScope).length > 0) baseParts.push(clientScope);
     if (Object.keys(partnerScope).length > 0) baseParts.push(partnerScope);
     if (clientFilter) baseParts.push(clientFilter);
+    if (supplierFilter) baseParts.push(supplierFilter);
     const base: Prisma.ServiceAppointmentWhereInput = { AND: baseParts };
 
     const [today, thisWeek, confirmed, scheduled] = await Promise.all([

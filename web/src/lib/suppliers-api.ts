@@ -52,6 +52,14 @@ export type SupplierListPayload = {
   pageSize: number;
 };
 
+export type SupplierStats = {
+  total: number;
+  active: number;
+  inactive: number;
+  blocked: number;
+  openWorkOrders: number;
+};
+
 export const SUPPLIER_CATEGORIES: SupplierCategory[] = [
   "service_auto",
   "itp",

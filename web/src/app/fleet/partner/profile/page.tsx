@@ -1,9 +1,8 @@
-import { canWritePartnerOps, getAuthMeResult } from "@/lib/auth-server";
+import { canManageFleet, canWritePartnerOps, getAuthMeResult, isPartnerAdminMode } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { parsePartnerSupplierQuery } from "@/lib/partner-context";
 import { primarySupplierMembership } from "@/lib/partner-auth";
-import {
-  loadSupplierServiceCatalogServer,
-} from "@/lib/suppliers-api-server";
+import { loadSupplierServiceCatalogServer } from "@/lib/suppliers-api-server";
 import type { SupplierRecord } from "@/lib/suppliers-api";
 import { PartnerProfileClient } from "./PartnerProfileClient";
 
@@ -17,13 +16,24 @@ async function loadSupplier(id: string): Promise<SupplierRecord | null> {
   }
 }
 
-export default async function PartnerProfilePage() {
+type PageProps = { searchParams: Promise<{ supplierId?: string; suppliers?: string }> };
+
+export default async function PartnerProfilePage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const supplierQuery = parsePartnerSupplierQuery(sp);
   const auth = await getAuthMeResult();
-  const membership = auth.ok ? primarySupplierMembership(auth.me) : undefined;
+  const adminMode = auth.ok && isPartnerAdminMode(auth);
+  const membership = auth.ok && !adminMode ? primarySupplierMembership(auth.me) : undefined;
+  const supplierId = supplierQuery.supplierId ?? membership?.supplierId;
+
   const [supplier, serviceCatalog] = await Promise.all([
-    membership?.supplierId ? loadSupplier(membership.supplierId) : Promise.resolve(null),
+    supplierId ? loadSupplier(supplierId) : Promise.resolve(null),
     loadSupplierServiceCatalogServer(),
   ]);
+
+  const canWriteServices = adminMode
+    ? canManageFleet(auth)
+    : canWritePartnerOps(auth);
 
   return (
     <PartnerProfileClient
@@ -31,7 +41,7 @@ export default async function PartnerProfilePage() {
       supplier={supplier}
       serviceCatalog={serviceCatalog}
       tenantSlug={auth.ok ? auth.me.tenantSlug : "demo"}
-      canWriteServices={canWritePartnerOps(auth)}
+      canWriteServices={canWriteServices}
     />
   );
 }

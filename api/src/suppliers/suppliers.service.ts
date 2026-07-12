@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SupplierCategory, SupplierServiceKind, SupplierStatus } from '@prisma/client';
+import { Prisma, SupplierCategory, SupplierServiceKind, SupplierStatus, MaintenanceWorkOrderStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -62,6 +62,14 @@ export type SupplierListParams = {
   status?: SupplierStatus;
   category?: SupplierCategory;
   serviceKind?: SupplierServiceKind;
+};
+
+export type SupplierStats = {
+  total: number;
+  active: number;
+  inactive: number;
+  blocked: number;
+  openWorkOrders: number;
 };
 
 function normalizeCode(code: string): string {
@@ -193,6 +201,39 @@ export class SuppliersService {
       page,
       pageSize,
     };
+  }
+
+  async getStats(tenantSlug: string, params: Omit<SupplierListParams, 'page' | 'pageSize'>): Promise<SupplierStats> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) {
+      return { total: 0, active: 0, inactive: 0, blocked: 0, openWorkOrders: 0 };
+    }
+
+    const where = this.listWhere(tenant.id, { ...params, page: 1, pageSize: 1 });
+
+    const [total, active, inactive, blocked, matchingIds] = await Promise.all([
+      this.prisma.supplier.count({ where }),
+      this.prisma.supplier.count({ where: { AND: [where, { status: SupplierStatus.active }] } }),
+      this.prisma.supplier.count({ where: { AND: [where, { status: SupplierStatus.inactive }] } }),
+      this.prisma.supplier.count({ where: { AND: [where, { status: SupplierStatus.blocked }] } }),
+      this.prisma.supplier.findMany({ where, select: { id: true } }),
+    ]);
+
+    const supplierIds = matchingIds.map((s) => s.id);
+    const openWorkOrders =
+      supplierIds.length === 0
+        ? 0
+        : await this.prisma.maintenanceWorkOrder.count({
+            where: {
+              tenantId: tenant.id,
+              supplierId: { in: supplierIds },
+              status: {
+                notIn: [MaintenanceWorkOrderStatus.done, MaintenanceWorkOrderStatus.cancelled],
+              },
+            },
+          });
+
+    return { total, active, inactive, blocked, openWorkOrders };
   }
 
   async getById(tenantSlug: string, id: string, access?: AccessContext): Promise<SupplierRecord> {

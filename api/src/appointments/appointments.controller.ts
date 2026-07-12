@@ -18,7 +18,7 @@ import { TenantId } from '../fleet/tenant-id.decorator';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
-import { resolvePartnerSupplierIdsFilter } from '../iam/partner-access';
+import { resolvePartnerSupplierIdsFilter, parseSupplierIdsQuery } from '../iam/partner-access';
 import { AppointmentsService } from './appointments.service';
 import type {
   CreateCalendarAppointmentInput,
@@ -89,8 +89,12 @@ export class AppointmentsController {
     @TenantId() tenantSlug: string,
     @CurrentAccess() access: AccessContext,
     @Query('clientId') clientId?: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
   ) {
-    return this.appointments.getStats(tenantSlug, clientId?.trim(), access);
+    const requested = parseSupplierIdsQuery(supplierId, suppliers);
+    const supplierIds = resolvePartnerSupplierIdsFilter(access, requested);
+    return this.appointments.getStats(tenantSlug, clientId?.trim(), access, supplierIds);
   }
 
   @Get(':id')

@@ -1,15 +1,46 @@
 import Link from "next/link";
+import { PartnerAdminOverview } from "@/components/fleet/partner/PartnerAdminOverview";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { WorkOrderKpiStrip } from "@/components/fleet/work-orders/WorkOrderKpiStrip";
-import { getAuthMeResult } from "@/lib/auth-server";
+import {
+  getAuthMeResult,
+  isPartnerAdminMode,
+} from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import type { PartnerAdminOverview as PartnerAdminOverviewType } from "@/lib/partner-api";
+import {
+  isPartnerViewAs,
+  parsePartnerSupplierQuery,
+  partnerSupplierSearchParams,
+} from "@/lib/partner-context";
 import { primarySupplierMembership } from "@/lib/partner-auth";
+import type { SupplierRecord } from "@/lib/suppliers-api";
 import type { AppointmentStats } from "@/lib/appointments-api";
 import type { WorkOrderListPayload, WorkOrderStats } from "@/lib/work-orders-api";
 
-async function loadStats(): Promise<WorkOrderStats | null> {
+type Search = { supplierId?: string; suppliers?: string; inbox?: string };
+
+function supplierQueryString(q: ReturnType<typeof parsePartnerSupplierQuery>): string {
+  const p = partnerSupplierSearchParams(q);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+async function loadAdminOverview(q: ReturnType<typeof parsePartnerSupplierQuery>): Promise<PartnerAdminOverviewType | null> {
   try {
-    const res = await fleetServerFetch("/work-orders/stats");
+    const p = partnerSupplierSearchParams(q);
+    const res = await fleetServerFetch(`/partner/admin/overview?${p.toString()}`);
+    if (!res?.ok) return null;
+    return (await res.json()) as PartnerAdminOverviewType;
+  } catch {
+    return null;
+  }
+}
+
+async function loadStats(q: ReturnType<typeof parsePartnerSupplierQuery>): Promise<WorkOrderStats | null> {
+  try {
+    const p = partnerSupplierSearchParams(q);
+    const res = await fleetServerFetch(`/work-orders/stats?${p.toString()}`);
     if (!res?.ok) return null;
     return (await res.json()) as WorkOrderStats;
   } catch {
@@ -17,9 +48,10 @@ async function loadStats(): Promise<WorkOrderStats | null> {
   }
 }
 
-async function loadAppointmentStats(): Promise<AppointmentStats | null> {
+async function loadAppointmentStats(q: ReturnType<typeof parsePartnerSupplierQuery>): Promise<AppointmentStats | null> {
   try {
-    const res = await fleetServerFetch("/appointments/stats");
+    const p = partnerSupplierSearchParams(q);
+    const res = await fleetServerFetch(`/appointments/stats?${p.toString()}`);
     if (!res?.ok) return null;
     return (await res.json()) as AppointmentStats;
   } catch {
@@ -27,9 +59,11 @@ async function loadAppointmentStats(): Promise<AppointmentStats | null> {
   }
 }
 
-async function loadRecentOrders(): Promise<WorkOrderListPayload | null> {
+async function loadRecentOrders(q: ReturnType<typeof parsePartnerSupplierQuery>): Promise<WorkOrderListPayload | null> {
   try {
-    const res = await fleetServerFetch("/work-orders?inbox=open&pageSize=6");
+    const p = new URLSearchParams({ inbox: "open", pageSize: "6" });
+    partnerSupplierSearchParams(q).forEach((v, k) => p.set(k, v));
+    const res = await fleetServerFetch(`/work-orders?${p.toString()}`);
     if (!res?.ok) return null;
     return (await res.json()) as WorkOrderListPayload;
   } catch {
@@ -37,7 +71,23 @@ async function loadRecentOrders(): Promise<WorkOrderListPayload | null> {
   }
 }
 
-function kpiCard(href: string, label: string, value: number, sub: string, warn?: boolean) {
+async function loadSupplierById(id: string): Promise<SupplierRecord | null> {
+  try {
+    const res = await fleetServerFetch(`/suppliers/${id}`);
+    if (!res?.ok) return null;
+    return (await res.json()) as SupplierRecord;
+  } catch {
+    return null;
+  }
+}
+
+function kpiCard(
+  href: string,
+  label: string,
+  value: number,
+  sub: string,
+  warn?: boolean,
+) {
   return (
     <Link
       href={href}
@@ -52,14 +102,33 @@ function kpiCard(href: string, label: string, value: number, sub: string, warn?:
   );
 }
 
-export default async function PartnerDashboardPage() {
-  const [auth, stats, apptStats, recent] = await Promise.all([
-    getAuthMeResult(),
-    loadStats(),
-    loadAppointmentStats(),
-    loadRecentOrders(),
+type PageProps = { searchParams: Promise<Search> };
+
+export default async function PartnerDashboardPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const supplierQuery = parsePartnerSupplierQuery(sp);
+  const qs = supplierQueryString(supplierQuery);
+
+  const auth = await getAuthMeResult();
+  const adminMode = auth.ok && isPartnerAdminMode(auth);
+
+  if (adminMode && !isPartnerViewAs(supplierQuery)) {
+    const overview = await loadAdminOverview(supplierQuery);
+    if (overview) return <PartnerAdminOverview overview={overview} />;
+  }
+
+  const [stats, apptStats, recent, viewAsSupplier] = await Promise.all([
+    loadStats(supplierQuery),
+    loadAppointmentStats(supplierQuery),
+    loadRecentOrders(supplierQuery),
+    supplierQuery.supplierId ? loadSupplierById(supplierQuery.supplierId) : Promise.resolve(null),
   ]);
-  const supplier = auth.ok ? primarySupplierMembership(auth.me) : undefined;
+
+  const supplier = auth.ok
+    ? viewAsSupplier
+      ? { supplierLegalName: viewAsSupplier.legalName, supplierCode: viewAsSupplier.code }
+      : primarySupplierMembership(auth.me)
+    : undefined;
   const displayName = auth.ok ? auth.me.email?.split("@")[0] ?? "Partener" : "Partener";
   const today = new Date().toLocaleDateString("ro-RO", {
     weekday: "long",
@@ -77,6 +146,8 @@ export default async function PartnerDashboardPage() {
     readyUninvoiced: 0,
   };
 
+  const woBase = `/fleet/partner/work-orders${qs}`;
+
   return (
     <FleetPageMain>
       <div>
@@ -90,16 +161,16 @@ export default async function PartnerDashboardPage() {
       <div className="mt-8">
         <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Operațional — comenzi</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {kpiCard("/fleet/partner/work-orders?inbox=open", "Deschise", s.open, "Necesită urmărire", s.open > 0)}
-          {kpiCard("/fleet/partner/work-orders", "În lucru", s.inProgress, "Recepționate / reparație")}
+          {kpiCard(`${woBase}${woBase.includes("?") ? "&" : "?"}inbox=open`, "Deschise", s.open, "Necesită urmărire", s.open > 0)}
+          {kpiCard(woBase, "În lucru", s.inProgress, "Recepționate / reparație")}
           {kpiCard(
-            "/fleet/partner/work-orders?inbox=pending_approval",
+            `${woBase}${woBase.includes("?") ? "&" : "?"}inbox=pending_approval`,
             "Așteaptă aprobare",
             s.pendingApproval,
             "Deviz trimis flotei",
             s.pendingApproval > 0,
           )}
-          {kpiCard("/fleet/partner/work-orders", "Așteaptă piese", s.waitingParts, "Status waiting_parts")}
+          {kpiCard(woBase, "Așteaptă piese", s.waitingParts, "Status waiting_parts")}
         </div>
       </div>
 
@@ -108,21 +179,16 @@ export default async function PartnerDashboardPage() {
           Programări · facturare
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {kpiCard(`/fleet/partner/appointments${qs}`, "Programări săptămâna", apptStats?.thisWeek ?? 0, "Calendar furnizor")}
           {kpiCard(
-            "/fleet/partner/appointments",
-            "Programări săptămâna",
-            apptStats?.thisWeek ?? 0,
-            "Calendar furnizor",
-          )}
-          {kpiCard(
-            "/fleet/partner/work-orders?inbox=ready",
+            `${woBase}${woBase.includes("?") ? "&" : "?"}inbox=ready`,
             "Gata, nefacturat",
             s.readyUninvoiced,
             "Upload factură",
             s.readyUninvoiced > 0,
           )}
-          {kpiCard("/fleet/partner/work-orders?inbox=invoiced", "Facturate", s.done, "Finalizate")}
-          {kpiCard("/fleet/partner/profile", "Profil firmă", 1, "Documente & tarife", true)}
+          {kpiCard(`${woBase}${woBase.includes("?") ? "&" : "?"}inbox=invoiced`, "Facturate", s.done, "Finalizate")}
+          {kpiCard(`/fleet/partner/profile${qs}`, "Profil firmă", 1, "Documente & tarife", true)}
         </div>
       </div>
 
@@ -133,22 +199,13 @@ export default async function PartnerDashboardPage() {
       ) : null}
 
       <div className="mt-8 flex flex-wrap gap-2">
-        <Link
-          href="/fleet/partner/appointments"
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
-        >
+        <Link href={`/fleet/partner/appointments${qs}`} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900">
           Deschide programator
         </Link>
-        <Link
-          href="/fleet/partner/work-orders"
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
-        >
+        <Link href={woBase} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900">
           Toate comenzile
         </Link>
-        <Link
-          href="/fleet/partner/profile"
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
-        >
+        <Link href={`/fleet/partner/profile${qs}`} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900">
           Profil firmă
         </Link>
       </div>
@@ -156,7 +213,7 @@ export default async function PartnerDashboardPage() {
       <div className="mt-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-200">Comenzi recente</h2>
-          <Link href="/fleet/partner/work-orders" className="text-xs text-violet-400 hover:underline">
+          <Link href={woBase} className="text-xs text-violet-400 hover:underline">
             Devize & comenzi →
           </Link>
         </div>
@@ -178,7 +235,7 @@ export default async function PartnerDashboardPage() {
                   <tr key={row.id} className="border-t border-zinc-800/80">
                     <td className="px-3 py-2">
                       <Link
-                        href={`/fleet/partner/work-orders/${row.id}`}
+                        href={`/fleet/partner/work-orders/${row.id}${qs}`}
                         className="font-mono text-xs text-violet-300 hover:underline"
                       >
                         {row.displayNumber ?? row.id.slice(-6).toUpperCase()}

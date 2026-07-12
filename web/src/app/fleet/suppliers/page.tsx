@@ -1,32 +1,29 @@
 import Link from "next/link";
-import {
-  FleetDataTable,
-  fleetTableClass,
-  fleetTdClass,
-  fleetThClass,
-  fleetTheadClass,
-} from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { SupplierDataGrid } from "@/components/fleet/suppliers/SupplierDataGrid";
+import { SupplierKpiStrip } from "@/components/fleet/suppliers/SupplierKpiStrip";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { loadSupplierServiceCatalogServer } from "@/lib/suppliers-api-server";
 import {
   SUPPLIER_CATEGORIES,
   supplierCategoryLabel,
-  supplierStatusLabel,
   suppliersBrowserBase,
   type SupplierListPayload,
+  type SupplierStats,
 } from "@/lib/suppliers-api";
 
-type Search = { q?: string; status?: string; category?: string; page?: string };
+type Search = { q?: string; status?: string; category?: string; serviceKind?: string; page?: string };
 
 async function loadSuppliers(sp: Search): Promise<SupplierListPayload | null> {
   const p = new URLSearchParams();
   if (sp.q?.trim()) p.set("q", sp.q.trim());
   if (sp.status?.trim()) p.set("status", sp.status.trim());
   if (sp.category?.trim()) p.set("category", sp.category.trim());
+  if (sp.serviceKind?.trim()) p.set("serviceKind", sp.serviceKind.trim());
   p.set("page", String(Math.max(1, parseInt(sp.page ?? "1", 10) || 1)));
   p.set("pageSize", "50");
   try {
@@ -38,11 +35,31 @@ async function loadSuppliers(sp: Search): Promise<SupplierListPayload | null> {
   }
 }
 
+async function loadStats(sp: Search): Promise<SupplierStats | null> {
+  const p = new URLSearchParams();
+  if (sp.q?.trim()) p.set("q", sp.q.trim());
+  if (sp.status?.trim()) p.set("status", sp.status.trim());
+  if (sp.category?.trim()) p.set("category", sp.category.trim());
+  if (sp.serviceKind?.trim()) p.set("serviceKind", sp.serviceKind.trim());
+  try {
+    const res = await fleetServerFetch(`/suppliers/stats?${p.toString()}`);
+    if (!res?.ok) return null;
+    return (await res.json()) as SupplierStats;
+  } catch {
+    return null;
+  }
+}
+
 type PageProps = { searchParams: Promise<Search> };
 
 export default async function FleetSuppliersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const [list, auth] = await Promise.all([loadSuppliers(sp), getAuthMeResult()]);
+  const [list, stats, auth, serviceCatalog] = await Promise.all([
+    loadSuppliers(sp),
+    loadStats(sp),
+    getAuthMeResult(),
+    loadSupplierServiceCatalogServer(),
+  ]);
   const write = canManageFleet(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const exportQs = new URLSearchParams();
@@ -56,9 +73,17 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
     if (sp.q?.trim()) p.set("q", sp.q.trim());
     if (sp.status?.trim()) p.set("status", sp.status.trim());
     if (sp.category?.trim()) p.set("category", sp.category.trim());
+    if (sp.serviceKind?.trim()) p.set("serviceKind", sp.serviceKind.trim());
     p.set("page", String(next));
     return `/fleet/suppliers?${p.toString()}`;
   };
+
+  const quickFilters = [
+    { label: "Activi", href: "/fleet/suppliers?status=active" },
+    { label: "Toate", href: "/fleet/suppliers" },
+    { label: "Service auto", href: "/fleet/suppliers?category=service_auto" },
+    { label: "ITP", href: "/fleet/suppliers?category=itp" },
+  ];
 
   return (
     <FleetPageMain fill>
@@ -133,6 +158,21 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="text-xs text-zinc-500">Serviciu</label>
+              <select
+                name="serviceKind"
+                defaultValue={sp.serviceKind ?? ""}
+                className="mt-1 block max-w-[12rem] rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="">Toate</option>
+                {serviceCatalog.map((entry) => (
+                  <option key={entry.kind} value={entry.kind}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               type="submit"
               className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
@@ -142,60 +182,35 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
             <FilterResetLink href="/fleet/suppliers" />
           </form>
         }
+        toolbar={
+          <div className="flex flex-wrap gap-2">
+            {quickFilters.map((f) => (
+              <Link
+                key={f.href}
+                href={f.href}
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
+              >
+                {f.label}
+              </Link>
+            ))}
+          </div>
+        }
       >
+        {stats ? (
+          <div className="mb-6">
+            <SupplierKpiStrip stats={stats} />
+          </div>
+        ) : null}
+
         {!list ? (
           <p className="text-amber-400">Nu am putut încărca furnizorii. Rulează migrarea Prisma.</p>
         ) : list.items.length === 0 ? (
           <p className="text-zinc-500">Niciun furnizor găsit.</p>
         ) : (
           <>
-            <FleetDataTable>
-              <table className={fleetTableClass}>
-                <thead className={`${fleetTheadClass} tracking-wide`}>
-                  <tr>
-                    <th className={fleetThClass}>Cod</th>
-                    <th className={fleetThClass}>Denumire</th>
-                    <th className={fleetThClass}>CUI</th>
-                    <th className={fleetThClass}>Categorie</th>
-                    <th className={fleetThClass}>Status</th>
-                    <th className={fleetThClass}>Comenzi</th>
-                    <th className={fleetThClass} />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/80">
-                  {list.items.map((row) => (
-                    <tr key={row.id} className="text-zinc-200">
-                      <td className={`${fleetTdClass} font-mono`}>
-                        <Link href={`/fleet/suppliers/${row.id}`} className="text-sky-300/90 hover:underline">
-                          {row.code}
-                        </Link>
-                      </td>
-                      <td className={fleetTdClass}>
-                        <Link href={`/fleet/suppliers/${row.id}`} className="hover:text-emerald-200 hover:underline">
-                          {row.legalName}
-                        </Link>
-                      </td>
-                      <td className={`${fleetTdClass} font-mono text-zinc-400`}>{row.taxId ?? "—"}</td>
-                      <td className={fleetTdClass}>{supplierCategoryLabel(row.category)}</td>
-                      <td className={fleetTdClass}>{supplierStatusLabel(row.status)}</td>
-                      <td className={fleetTdClass}>{row.workOrderCount}</td>
-                      <td className={`${fleetTdClass} text-right`}>
-                        <Link href={`/fleet/suppliers/${row.id}`} className="mr-3 text-zinc-400 hover:text-zinc-200 hover:underline">
-                          Detalii
-                        </Link>
-                        {write ? (
-                          <Link href={`/fleet/suppliers/${row.id}/edit`} className="text-emerald-400 hover:underline">
-                            Editare
-                          </Link>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </FleetDataTable>
+            <SupplierDataGrid items={list.items} canWrite={write} />
             {list.total > list.pageSize ? (
-              <div className="flex gap-2 text-sm">
+              <div className="mt-4 flex gap-2 text-sm">
                 {page > 1 ? (
                   <Link href={withPage(page - 1)} className="text-emerald-400 hover:underline">
                     ← Anterior

@@ -6,6 +6,7 @@ import { WorkOrderDataGrid } from "@/components/fleet/work-orders/WorkOrderDataG
 import { WorkOrderKpiStrip } from "@/components/fleet/work-orders/WorkOrderKpiStrip";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { mergePartnerQueryIntoParams, parsePartnerSupplierQuery, partnerSupplierSearchParams } from "@/lib/partner-context";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 import { SERVICE_ORDER_TYPES } from "@/lib/work-order-sheet";
 import {
@@ -24,6 +25,8 @@ type Search = {
   serviceCaseStage?: string;
   serviceOrderType?: string;
   page?: string;
+  supplierId?: string;
+  suppliers?: string;
 };
 
 const SERVICE_CASE_STAGES = [
@@ -39,7 +42,8 @@ const SERVICE_CASE_STAGES = [
 const BASE = "/fleet/partner/work-orders";
 
 async function loadWorkOrders(sp: Search): Promise<WorkOrderListPayload | null> {
-  const p = new URLSearchParams();
+  const supplierQuery = parsePartnerSupplierQuery(sp);
+  const p = mergePartnerQueryIntoParams(new URLSearchParams(), supplierQuery);
   if (sp.q?.trim()) p.set("q", sp.q.trim());
   if (sp.status?.trim()) p.set("status", sp.status.trim());
   if (sp.vehicleId?.trim()) p.set("vehicleId", sp.vehicleId.trim());
@@ -58,9 +62,11 @@ async function loadWorkOrders(sp: Search): Promise<WorkOrderListPayload | null> 
   }
 }
 
-async function loadStats(): Promise<WorkOrderStats | null> {
+async function loadStats(sp: Search): Promise<WorkOrderStats | null> {
+  const supplierQuery = parsePartnerSupplierQuery(sp);
+  const p = partnerSupplierSearchParams(supplierQuery);
   try {
-    const res = await fleetServerFetch("/work-orders/stats");
+    const res = await fleetServerFetch(`/work-orders/stats?${p.toString()}`);
     if (!res?.ok) return null;
     return (await res.json()) as WorkOrderStats;
   } catch {
@@ -78,13 +84,12 @@ function quickTabClass(active: boolean): string {
 
 export default async function PartnerWorkOrdersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const [list, stats, vehicles] = await Promise.all([loadWorkOrders(sp), loadStats(), getVehicleOptions()]);
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const activeInbox = (sp.inbox?.trim() || "open") as WorkOrderInbox | "all";
+  const [list, stats, vehicles] = await Promise.all([loadWorkOrders(sp), loadStats(sp), getVehicleOptions()]);
+  const supplierQuery = parsePartnerSupplierQuery(sp);
 
   const withParams = (overrides: Partial<Search>) => {
-    const p = new URLSearchParams();
     const merged = { ...sp, ...overrides };
+    const p = mergePartnerQueryIntoParams(new URLSearchParams(), supplierQuery);
     if (merged.q?.trim()) p.set("q", merged.q.trim());
     if (merged.status?.trim()) p.set("status", merged.status.trim());
     if (merged.vehicleId?.trim()) p.set("vehicleId", merged.vehicleId.trim());
@@ -96,6 +101,8 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
     return `${BASE}${qs ? `?${qs}` : ""}`;
   };
 
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const activeInbox = (sp.inbox?.trim() || "open") as WorkOrderInbox | "all";
   const withPage = (next: number) => withParams({ page: String(next) });
 
   const filterParams: Record<string, string> = {};
