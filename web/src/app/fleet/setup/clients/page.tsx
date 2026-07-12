@@ -25,7 +25,7 @@ export default async function SetupClientsPage() {
   const data = await loadServiceTypes();
 
   return (
-    <FleetPageMain fill className="min-h-0">
+    <FleetPageMain className="min-h-0">
       {!data ? (
         <p className="text-amber-400">
           Nu am putut încărca catalogul. Verifică API-ul și migrarea{" "}

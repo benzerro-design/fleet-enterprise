@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createTenantServiceType,
   deleteTenantServiceType,
@@ -12,9 +12,16 @@ type Props = {
   initialItems: TenantServiceType[];
 };
 
-function ClientPreview({ types }: { types: TenantServiceType[] }) {
+function ClientPreview({
+  types,
+  previewCode,
+  onPreviewCodeChange,
+}: {
+  types: TenantServiceType[];
+  previewCode: string;
+  onPreviewCodeChange: (code: string) => void;
+}) {
   const active = types.filter((t) => t.active);
-  const [previewCode, setPreviewCode] = useState(active[0]?.code ?? "");
   const preview = active.find((t) => t.code === previewCode) ?? active[0];
 
   if (active.length === 0) {
@@ -27,14 +34,14 @@ function ClientPreview({ types }: { types: TenantServiceType[] }) {
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
       <p className="text-sm font-medium text-zinc-200">Preview — portal client (tichet nou)</p>
       <p className="mt-1 text-xs text-zinc-500">
-        Dropdown „Tip solicitare” — doar tipuri active, cu descrierea pentru clienți.
+        Simulare dropdown — fiecare tip are propria descriere; nu afectează celelalte din catalog.
       </p>
       <label className="mt-4 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-        Tip solicitare service
+        Tip solicitare servicii
       </label>
       <select
         value={preview?.code ?? ""}
-        onChange={(e) => setPreviewCode(e.target.value)}
+        onChange={(e) => onPreviewCodeChange(e.target.value)}
         className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
       >
         {active.map((s) => (
@@ -43,7 +50,9 @@ function ClientPreview({ types }: { types: TenantServiceType[] }) {
           </option>
         ))}
       </select>
-      <p className="mt-2 text-xs leading-relaxed text-zinc-400">{preview?.clientDescription}</p>
+      <p key={preview?.id} className="mt-2 text-xs leading-relaxed text-zinc-400">
+        {preview?.clientDescription}
+      </p>
     </div>
   );
 }
@@ -51,6 +60,7 @@ function ClientPreview({ types }: { types: TenantServiceType[] }) {
 export function TenantServiceTypesEditor({ initialItems }: Props) {
   const [items, setItems] = useState(initialItems);
   const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
+  const [previewCode, setPreviewCode] = useState(initialItems.find((t) => t.active)?.code ?? initialItems[0]?.code ?? "");
   const [showAdd, setShowAdd] = useState(false);
   const [draftCode, setDraftCode] = useState("");
   const [draftLabel, setDraftLabel] = useState("");
@@ -58,6 +68,7 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const addPanelRef = useRef<HTMLDivElement>(null);
 
   const selected = items.find((x) => x.id === selectedId) ?? items[0];
 
@@ -69,6 +80,38 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
     if (!orig) return true;
     return orig.label !== selected.label || orig.clientDescription !== selected.clientDescription;
   }, [selected, initialItems]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setPreviewCode(selected.code);
+  }, [selected?.id, selected?.code]);
+
+  useEffect(() => {
+    const active = items.filter((t) => t.active);
+    if (active.length === 0) return;
+    if (!active.some((t) => t.code === previewCode)) {
+      setPreviewCode(active[0]!.code);
+    }
+  }, [items, previewCode]);
+
+  useEffect(() => {
+    if (showAdd) {
+      addPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [showAdd]);
+
+  function selectRow(id: string) {
+    const row = items.find((x) => x.id === id);
+    setSelectedId(id);
+    if (row) setPreviewCode(row.code);
+    setShowAdd(false);
+  }
+
+  function handlePreviewCodeChange(code: string) {
+    setPreviewCode(code);
+    const row = items.find((t) => t.code === code);
+    if (row) setSelectedId(row.id);
+  }
 
   function updateLocal(id: string, patch: Partial<TenantServiceType>) {
     setItems((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -115,7 +158,11 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
       await deleteTenantServiceType(id);
       const next = items.filter((x) => x.id !== id);
       setItems(next);
-      if (selectedId === id) setSelectedId(next[0]?.id ?? null);
+      if (selectedId === id) {
+        const fallback = next[0];
+        setSelectedId(fallback?.id ?? null);
+        if (fallback) setPreviewCode(fallback.code);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare la ștergere");
     } finally {
@@ -140,6 +187,7 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
       });
       setItems((prev) => [...prev, created]);
       setSelectedId(created.id);
+      setPreviewCode(created.code);
       setDraftCode("");
       setDraftLabel("");
       setDraftDesc("");
@@ -152,16 +200,19 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid min-h-0 gap-6 lg:grid-cols-2">
       <div className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-100">Catalog tipuri service</h2>
+            <h2 className="text-lg font-semibold text-zinc-100">Catalog tipuri servicii</h2>
             <p className="mt-1 text-sm text-zinc-400">Tenant-wide — folosit de clienți, furnizori și CRM.</p>
           </div>
           <button
             type="button"
-            onClick={() => setShowAdd(true)}
+            onClick={() => {
+              setShowAdd(true);
+              setError(null);
+            }}
             disabled={pending}
             className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
@@ -186,7 +237,7 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
             <button
               key={row.id}
               type="button"
-              onClick={() => setSelectedId(row.id)}
+              onClick={() => selectRow(row.id)}
               className={`grid w-full grid-cols-[4.5rem_1fr_3rem_3rem_3rem] gap-2 px-3 py-2.5 text-left text-sm transition-colors ${
                 selected?.id === row.id ? "bg-zinc-900/80" : "bg-zinc-950 hover:bg-zinc-900/40"
               } ${i ? "border-t border-zinc-800" : ""}`}
@@ -202,10 +253,12 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
             </button>
           ))}
         </div>
+      </div>
 
+      <div ref={addPanelRef} className="space-y-4 lg:max-h-[calc(100dvh-12rem)] lg:overflow-y-auto lg:pr-1 fleet-scroll-pane">
         {showAdd ? (
-          <div className="space-y-3 rounded-xl border border-zinc-700 bg-zinc-900/40 p-4">
-            <p className="text-sm font-medium text-zinc-200">Tip service nou</p>
+          <div className="space-y-3 rounded-xl border border-emerald-900/40 bg-zinc-900/40 p-4">
+            <p className="text-sm font-medium text-zinc-200">Tip servicii nou</p>
             <div>
               <label className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Cod (slug)</label>
               <input
@@ -254,11 +307,7 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
               </button>
             </div>
           </div>
-        ) : null}
-      </div>
-
-      <div className="space-y-4">
-        {selected ? (
+        ) : selected ? (
           <>
             <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="flex items-center justify-between gap-2">
@@ -325,7 +374,11 @@ export function TenantServiceTypesEditor({ initialItems }: Props) {
                 ) : null}
               </div>
             </div>
-            <ClientPreview types={items} />
+            <ClientPreview
+              types={items}
+              previewCode={previewCode}
+              onPreviewCodeChange={handlePreviewCodeChange}
+            />
           </>
         ) : null}
       </div>
