@@ -27,7 +27,9 @@ export class AccessScopeInterceptor implements NestInterceptor {
         membershipRole: MembershipRole.tenant_admin,
         isTenantWide: true,
         clientMemberships: [],
+        supplierMemberships: [],
         allowedClientIds: [],
+        allowedSupplierIds: [],
       };
       return next.handle();
     }

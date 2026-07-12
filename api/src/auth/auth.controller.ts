@@ -40,8 +40,15 @@ export class AuthController {
               role: m.role,
               driverId: m.driverId,
             })),
+            supplierMemberships: access.supplierMemberships.map((m) => ({
+              supplierId: m.supplierId,
+              supplierCode: m.supplierCode,
+              supplierLegalName: m.supplierLegalName,
+              role: m.role,
+            })),
           }
         : undefined,
+      partnerPortal: u.partnerPortal,
     };
   }
 

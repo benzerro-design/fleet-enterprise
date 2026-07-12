@@ -11,6 +11,7 @@ declare module 'express-serve-static-core' {
       email?: string;
       role?: MembershipRole;
       clientPortal?: ClientPortalMode;
+      partnerPortal?: boolean;
     };
     accessContext?: AccessContext;
   }

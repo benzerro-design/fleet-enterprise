@@ -1,10 +1,17 @@
-import type { ClientRole, CrmTicketRoutingLevel, MembershipRole } from '@prisma/client';
+import type { ClientRole, CrmTicketRoutingLevel, MembershipRole, SupplierRole } from '@prisma/client';
 
 export type ClientMembershipContext = {
   clientId: string;
   clientCode: string;
   role: ClientRole;
   driverId: string | null;
+};
+
+export type SupplierMembershipContext = {
+  supplierId: string;
+  supplierCode: string;
+  supplierLegalName: string;
+  role: SupplierRole;
 };
 
 export type AccessContext = {
@@ -18,6 +25,8 @@ export type AccessContext = {
   isTenantWide: boolean;
   clientMemberships: ClientMembershipContext[];
   allowedClientIds: string[];
+  supplierMemberships: SupplierMembershipContext[];
+  allowedSupplierIds: string[];
   /** Pentru rol driver — vehicule cu alocare activă (șofer ↔ vehicul). */
   assignedVehicleIds?: string[];
 };

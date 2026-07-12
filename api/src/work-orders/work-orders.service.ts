@@ -17,6 +17,11 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { assertClientFleetWrite } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
+import {
+  assertPartnerSupplierId,
+  assertPartnerWrite,
+  isPartnerUser,
+} from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { ensureWorkOrderDisplayNumber } from './work-order-display-number';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
@@ -125,6 +130,7 @@ export type WorkOrderListParams = {
   q?: string;
   status?: MaintenanceWorkOrderStatus;
   supplierId?: string;
+  supplierIds?: string[];
   vehicleId?: string;
   clientId?: string;
   serviceCaseStage?: ServiceCaseStage;
@@ -152,6 +158,18 @@ export class WorkOrdersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  private assertWorkOrderWrite(
+    access: AccessContext,
+    wo: { supplierId: string | null; vehicle: { clientId: string } },
+  ): void {
+    if (isPartnerUser(access)) {
+      assertPartnerSupplierId(access, wo.supplierId);
+      assertPartnerWrite(access);
+      return;
+    }
+    assertClientFleetWrite(access, wo.vehicle.clientId);
+  }
 
   private listInclude() {
     return {
@@ -301,7 +319,11 @@ export class WorkOrdersService {
   private listWhere(tenantId: string, params: WorkOrderListParams): Prisma.MaintenanceWorkOrderWhereInput {
     const parts: Prisma.MaintenanceWorkOrderWhereInput[] = [{ tenantId }];
     if (params.status) parts.push({ status: params.status });
-    if (params.supplierId?.trim()) parts.push({ supplierId: params.supplierId.trim() });
+    if (params.supplierIds?.length) {
+      parts.push({ supplierId: { in: params.supplierIds } });
+    } else if (params.supplierId?.trim()) {
+      parts.push({ supplierId: params.supplierId.trim() });
+    }
     if (params.vehicleId?.trim()) parts.push({ vehicleId: params.vehicleId.trim() });
     if (params.clientId?.trim()) {
       parts.push({
@@ -379,7 +401,7 @@ export class WorkOrdersService {
     };
   }
 
-  async getStats(tenantSlug: string, clientId?: string): Promise<WorkOrderStats> {
+  async getStats(tenantSlug: string, clientId?: string, supplierId?: string): Promise<WorkOrderStats> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return { open: 0, inProgress: 0, waitingParts: 0, done: 0, pendingApproval: 0, readyUninvoiced: 0 };
 
@@ -392,9 +414,17 @@ export class WorkOrdersService {
         }
       : undefined;
 
+    const supplierFilter: Prisma.MaintenanceWorkOrderWhereInput | undefined = supplierId?.trim()
+      ? { supplierId: supplierId.trim() }
+      : undefined;
+
     const base: Prisma.MaintenanceWorkOrderWhereInput = {
       tenantId: tenant.id,
-      ...(clientFilter ? { AND: [clientFilter] } : {}),
+      ...(clientFilter || supplierFilter
+        ? {
+            AND: [clientFilter, supplierFilter].filter(Boolean) as Prisma.MaintenanceWorkOrderWhereInput[],
+          }
+        : {}),
     };
 
     const [open, inProgress, waitingParts, done, pendingApproval, readyUninvoiced] = await Promise.all([
@@ -431,7 +461,7 @@ export class WorkOrdersService {
     return { open, inProgress, waitingParts, done, pendingApproval, readyUninvoiced };
   }
 
-  async getById(tenantSlug: string, id: string): Promise<WorkOrderDetail> {
+  async getById(tenantSlug: string, id: string, access?: AccessContext): Promise<WorkOrderDetail> {
     const row = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
       include: {
@@ -505,6 +535,10 @@ export class WorkOrdersService {
       },
     });
     if (!row) throw new NotFoundException('Work order not found');
+
+    if (access && isPartnerUser(access)) {
+      assertPartnerSupplierId(access, row.supplierId);
+    }
 
     if (!row.displayNumber) {
       row.displayNumber = await this.prisma.$transaction((tx) =>
@@ -605,7 +639,7 @@ export class WorkOrdersService {
     if (!wo) throw new NotFoundException('Work order not found');
     if (access) {
       try {
-        assertClientFleetWrite(access, wo.vehicle.clientId);
+        this.assertWorkOrderWrite(access, wo);
       } catch {
         throw new ForbiddenException('Cannot update work order');
       }
@@ -713,7 +747,7 @@ export class WorkOrdersService {
     if (!wo) throw new NotFoundException('Work order not found');
     if (access) {
       try {
-        assertClientFleetWrite(access, wo.vehicle.clientId);
+        this.assertWorkOrderWrite(access, wo);
       } catch {
         throw new ForbiddenException('Cannot mark work ready');
       }
@@ -784,7 +818,7 @@ export class WorkOrdersService {
     if (!wo) throw new NotFoundException('Work order not found');
     if (access) {
       try {
-        assertClientFleetWrite(access, wo.vehicle.clientId);
+        this.assertWorkOrderWrite(access, wo);
       } catch {
         throw new ForbiddenException('Cannot update service times');
       }
@@ -981,7 +1015,7 @@ export class WorkOrdersService {
     if (!wo) throw new NotFoundException('Work order not found');
     if (access) {
       try {
-        assertClientFleetWrite(access, wo.vehicle.clientId);
+        this.assertWorkOrderWrite(access, wo);
       } catch {
         throw new ForbiddenException('Cannot complete work order');
       }

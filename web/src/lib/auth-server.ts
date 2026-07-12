@@ -8,17 +8,27 @@ export type ClientMembershipMe = {
   driverId?: string | null;
 };
 
+export type SupplierMembershipMe = {
+  supplierId: string;
+  supplierCode: string;
+  supplierLegalName: string;
+  role: "supplier_manager" | "supplier_staff" | "supplier_accountant";
+};
+
 export type AuthMe = {
   userId?: string;
   email?: string;
   tenantSlug: string;
-  role: "tenant_admin" | "tenant_viewer" | "client_user";
+  role: "tenant_admin" | "tenant_viewer" | "client_user" | "supplier_user";
   /** Set for client_user: fleet = manager/dispatcher/viewer; driver = șofer cu flotă redusă. */
   clientPortal?: "fleet" | "driver";
+  /** Set for supplier_user — portal partener. */
+  partnerPortal?: boolean;
   access?: {
     isTenantWide: boolean;
     assignedVehicleIds?: string[];
     clientMemberships: ClientMembershipMe[];
+    supplierMemberships: SupplierMembershipMe[];
   };
 };
 
@@ -123,6 +133,16 @@ export function isClientPortalUser(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "client_user";
 }
 
+export function isPartnerPortalUser(auth: AuthMeResult): boolean {
+  return auth.ok && (auth.me.role === "supplier_user" || auth.me.partnerPortal === true);
+}
+
+export function canWritePartnerOps(auth: AuthMeResult): boolean {
+  if (!auth.ok || !isPartnerPortalUser(auth)) return false;
+  const roles = auth.me.access?.supplierMemberships.map((m) => m.role) ?? [];
+  return roles.some((r) => r === "supplier_manager" || r === "supplier_staff");
+}
+
 export function isClientDriverPortal(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "client_user" && auth.me.clientPortal === "driver";
 }
@@ -168,8 +188,9 @@ export function driverNameFromAuth(auth: AuthMeResult): string | undefined {
   return auth.me.email?.split("@")[0];
 }
 
-/** Pagină implicită după login — șoferi la vehicule, manager client la panou scoped. */
+/** Pagină implicită după login — șoferi la vehicule, manager client la panou scoped, partener la portal. */
 export function getDefaultFleetHome(auth: AuthMeResult): string {
+  if (isPartnerPortalUser(auth)) return "/fleet/partner";
   if (isClientFleetPortal(auth)) return "/fleet/dashboard";
   if (isClientDriverPortal(auth)) return "/fleet/vehicles";
   if (isClientPortalUser(auth)) return "/fleet/tickets";

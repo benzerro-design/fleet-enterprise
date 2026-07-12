@@ -44,8 +44,14 @@ export function LoginForm({ nextPath }: Props) {
       try {
         const meRes = await fetch("/api/auth/me");
         if (meRes.ok) {
-          const me = (await meRes.json()) as { role?: string; clientPortal?: "fleet" | "driver" | "tickets" };
-          if (me.role === "client_user") {
+          const me = (await meRes.json()) as {
+            role?: string;
+            clientPortal?: "fleet" | "driver" | "tickets";
+            partnerPortal?: boolean;
+          };
+          if (me.role === "supplier_user" || me.partnerPortal) {
+            destination = "/fleet/partner";
+          } else if (me.role === "client_user") {
             if (me.clientPortal === "fleet") destination = "/fleet/dashboard";
             else if (me.clientPortal === "driver") destination = "/fleet/vehicles";
             else destination = "/fleet/tickets";

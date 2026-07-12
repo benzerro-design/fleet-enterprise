@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 type JwtFleetPayload = {
   role?: string;
   clientPortal?: "fleet" | "driver" | "tickets";
+  partnerPortal?: boolean;
 };
 
 function jwtPayload(token: string): JwtFleetPayload | undefined {
@@ -47,6 +48,11 @@ const CLIENT_DRIVER_PREFIXES = [
 
 const CLIENT_FLEET_HOME = "/fleet/dashboard";
 const CLIENT_DRIVER_HOME = "/fleet/vehicles";
+const PARTNER_HOME = "/fleet/partner";
+
+const PARTNER_PREFIXES = [
+  "/fleet/partner",
+];
 
 function pathAllowed(prefixes: string[], pathname: string): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -66,6 +72,29 @@ export function middleware(request: NextRequest) {
   }
 
   const payload = jwtPayload(token);
+
+  if (payload?.role === "supplier_user" || payload?.partnerPortal) {
+    if (pathname === "/fleet" || pathname === "/fleet/") {
+      return NextResponse.redirect(new URL(PARTNER_HOME, request.url));
+    }
+    if (!pathAllowed(PARTNER_PREFIXES, pathname)) {
+      return NextResponse.redirect(new URL(PARTNER_HOME, request.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (pathAllowed(PARTNER_PREFIXES, pathname)) {
+    const home =
+      payload?.role === "client_user"
+        ? payload.clientPortal === "driver"
+          ? CLIENT_DRIVER_HOME
+          : payload.clientPortal === "fleet"
+            ? CLIENT_FLEET_HOME
+            : "/fleet/tickets"
+        : CLIENT_FLEET_HOME;
+    return NextResponse.redirect(new URL(home, request.url));
+  }
+
   if (payload?.role !== "client_user") {
     return NextResponse.next();
   }

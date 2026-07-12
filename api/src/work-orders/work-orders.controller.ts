@@ -17,6 +17,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
+import { resolvePartnerSupplierIdsFilter } from '../iam/partner-access';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { WorkOrdersService, type WorkOrderInbox } from './work-orders.service';
 
@@ -87,6 +88,7 @@ export class WorkOrdersController {
   @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
     @Query('q') q?: string,
@@ -100,12 +102,16 @@ export class WorkOrdersController {
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
+    const supplierIds = resolvePartnerSupplierIdsFilter(
+      access,
+      supplierId?.trim() ? [supplierId.trim()] : undefined,
+    );
     return this.workOrders.listPaged(tenantSlug, {
       page,
       pageSize,
       q: q?.trim(),
       status: parseStatus(status),
-      supplierId: supplierId?.trim(),
+      supplierIds,
       vehicleId: vehicleId?.trim(),
       clientId: clientId?.trim(),
       inbox: parseInbox(inbox),
@@ -116,14 +122,24 @@ export class WorkOrdersController {
 
   @Get('stats')
   @Roles(...FLEET_READ_ROLES)
-  stats(@TenantId() tenantSlug: string, @Query('clientId') clientId?: string) {
-    return this.workOrders.getStats(tenantSlug, clientId?.trim());
+  stats(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('clientId') clientId?: string,
+  ) {
+    const supplierIds = resolvePartnerSupplierIdsFilter(access);
+    const supplierId = supplierIds?.length === 1 ? supplierIds[0] : undefined;
+    return this.workOrders.getStats(tenantSlug, clientId?.trim(), supplierId);
   }
 
   @Get(':id')
   @Roles(...FLEET_READ_ROLES)
-  get(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.workOrders.getById(tenantSlug, id);
+  get(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.workOrders.getById(tenantSlug, id, access);
   }
 
   @Patch(':id')

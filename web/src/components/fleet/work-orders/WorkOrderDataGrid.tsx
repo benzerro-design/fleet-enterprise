@@ -50,9 +50,18 @@ function formatRelative(iso: string): string {
 type Props = {
   items: WorkOrderListRow[];
   filterParams?: Record<string, string>;
+  /** Base path for WO detail links (default /fleet/work-orders). */
+  workOrdersBasePath?: string;
+  /** Partner portal — hide fleet-only links (vehicles, tickets). */
+  partnerView?: boolean;
 };
 
-export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
+export function WorkOrderDataGrid({
+  items,
+  filterParams = {},
+  workOrdersBasePath = "/fleet/work-orders",
+  partnerView = false,
+}: Props) {
   const [layout, setLayout] = useState<WorkOrderGridLayout>(() => readWorkOrderGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
@@ -67,7 +76,7 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
       case "number":
         return (
           <Link
-            href={`/fleet/work-orders/${row.id}`}
+            href={`${workOrdersBasePath}/${row.id}`}
             className="font-mono text-[11px] text-violet-300 hover:underline"
             title={row.title}
           >
@@ -89,7 +98,7 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
       case "title":
         return (
           <Link
-            href={`/fleet/work-orders/${row.id}`}
+            href={`${workOrdersBasePath}/${row.id}`}
             className="font-medium text-zinc-100 hover:text-white"
             title={titleFull}
           >
@@ -114,7 +123,12 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
           </span>
         );
       case "vehicle":
-        return (
+        return partnerView ? (
+          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-zinc-300" title={row.registrationNumber}>
+            <TicketVehicleGlyph />
+            {row.registrationNumber}
+          </span>
+        ) : (
           <Link
             href={`/fleet/vehicles/${row.vehicleId}`}
             className="inline-flex items-center gap-1 font-mono text-[11px] text-sky-300/90 hover:underline"
@@ -167,9 +181,15 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
           <FleetGlyphTooltip
             label={`Tichet #${row.ticketDisplayId}${row.ticketSubject ? ` — ${row.ticketSubject}` : ""}`}
           >
-            <Link href={`/fleet/tickets/${row.sourceTicketId}`} className="inline-flex items-center">
-              <WorkOrderTicketGlyph />
-            </Link>
+            {partnerView ? (
+              <span className="inline-flex items-center">
+                <WorkOrderTicketGlyph />
+              </span>
+            ) : (
+              <Link href={`/fleet/tickets/${row.sourceTicketId}`} className="inline-flex items-center">
+                <WorkOrderTicketGlyph />
+              </Link>
+            )}
           </FleetGlyphTooltip>
         ) : (
           "—"
@@ -183,7 +203,7 @@ export function WorkOrderDataGrid({ items, filterParams = {} }: Props) {
       case "actions":
         return (
           <FleetGlyphTooltip label="Deschide fișă">
-            <Link href={`/fleet/work-orders/${row.id}`} className="inline-flex items-center">
+            <Link href={`${workOrdersBasePath}/${row.id}`} className="inline-flex items-center">
               <TicketActionGlyph action="open" />
             </Link>
           </FleetGlyphTooltip>

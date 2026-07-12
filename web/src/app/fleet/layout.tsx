@@ -1,4 +1,4 @@
-import { FleetShell } from "@/components/fleet/FleetShell";
+import { FleetLayoutSwitcher } from "@/components/fleet/FleetLayoutSwitcher";
 import { canManageFleet, canUseBot, getAuthMeResult, getDefaultFleetHome, isClientDriverPortal, isClientFleetPortal } from "@/lib/auth-server";
 import { getFleetNavForUser } from "@/lib/fleet-nav";
 
@@ -24,7 +24,7 @@ export default async function FleetLayout({ children }: { children: React.ReactN
     ) : null;
 
   return (
-    <FleetShell
+    <FleetLayoutSwitcher
       groups={groups}
       admin={admin}
       bot={bot}
@@ -35,6 +35,6 @@ export default async function FleetLayout({ children }: { children: React.ReactN
       homeHref={getDefaultFleetHome(auth)}
     >
       {children}
-    </FleetShell>
+    </FleetLayoutSwitcher>
   );
 }

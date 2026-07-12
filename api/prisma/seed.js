@@ -90,6 +90,7 @@ async function main() {
   }
 
   await seedDemoClientUsers(demoTenant.id, passwordHash);
+  await seedDemoPartnerUser(demoTenant.id, passwordHash);
 }
 
 async function seedDemoClientUsers(tenantId, passwordHash) {
@@ -155,6 +156,69 @@ async function seedDemoClientUsers(tenantId, passwordHash) {
 
   // eslint-disable-next-line no-console
   console.log('Demo client users: manager.alpha@demo.local (L1), sofer.alpha@demo.local (L0)');
+}
+
+async function seedDemoPartnerUser(tenantId, passwordHash) {
+  let supplier = await prisma.supplier.findFirst({
+    where: { tenantId, code: { equals: 'SUP-0042', mode: 'insensitive' } },
+  });
+  if (!supplier) {
+    supplier = await prisma.supplier.create({
+      data: {
+        tenantId,
+        code: 'SUP-0042',
+        legalName: 'Alpha Service SRL',
+        category: 'service_auto',
+        contactEmail: 'maria@alphaservice.local',
+        contactPhone: '+40 721 000 042',
+        addressLine: 'Str. Service 42',
+        city: 'București',
+      },
+    });
+  }
+
+  const user = await prisma.user.upsert({
+    where: { email: 'partner@alphaservice.local' },
+    create: {
+      email: 'partner@alphaservice.local',
+      passwordHash,
+      displayName: 'Maria Ionescu',
+    },
+    update: {
+      passwordHash,
+      displayName: 'Maria Ionescu',
+    },
+  });
+
+  await prisma.tenantMembership.upsert({
+    where: {
+      userId_tenantId: { userId: user.id, tenantId },
+    },
+    create: {
+      userId: user.id,
+      tenantId,
+      role: 'supplier_user',
+    },
+    update: { role: 'supplier_user' },
+  });
+
+  await prisma.supplierMembership.upsert({
+    where: {
+      userId_tenantId_supplierId: { userId: user.id, tenantId, supplierId: supplier.id },
+    },
+    create: {
+      tenantId,
+      supplierId: supplier.id,
+      userId: user.id,
+      role: 'supplier_manager',
+    },
+    update: { role: 'supplier_manager' },
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `Demo partner: partner@alphaservice.local / tenant: demo / password: ${DEMO_PASSWORD} (SUP-0042 Alpha Service SRL)`,
+  );
 }
 
 main()

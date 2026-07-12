@@ -18,6 +18,8 @@ export type JwtPayload = {
   role?: MembershipRole;
   /** Set for client_user: fleet = manager; driver = șofer cu flotă redusă. */
   clientPortal?: ClientPortalMode;
+  /** Set for supplier_user — portal partener. */
+  partnerPortal?: boolean;
 };
 
 @Injectable()
@@ -91,6 +93,10 @@ export class AuthService {
         clientMemberships.length > 0 &&
         clientMemberships.every((m) => m.role === ClientRole.driver);
       payload.clientPortal = driverOnly ? 'driver' : 'fleet';
+    }
+
+    if (membership.role === 'supplier_user') {
+      payload.partnerPortal = true;
     }
 
     const accessToken = this.jwt.sign(payload);

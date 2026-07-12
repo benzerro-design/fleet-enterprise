@@ -19,6 +19,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { assertClientFleetWrite } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
+import { assertPartnerSupplierId, isPartnerUser } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
@@ -164,11 +165,20 @@ export class AppointmentsService {
   }
 
   private appointmentClientScope(access?: AccessContext): Prisma.ServiceAppointmentWhereInput {
-    if (!access || access.isTenantWide) return {};
+    if (!access || access.isTenantWide || isPartnerUser(access)) return {};
     if (access.allowedClientIds.length === 0) {
       return { vehicle: { clientId: { in: [] } } };
     }
     return { vehicle: { clientId: { in: access.allowedClientIds } } };
+  }
+
+  private appointmentPartnerScope(access?: AccessContext): Prisma.ServiceAppointmentWhereInput {
+    if (!access || !isPartnerUser(access)) return {};
+    const ids = access.allowedSupplierIds;
+    if (ids.length === 0) {
+      return { supplierId: { in: [] } };
+    }
+    return { supplierId: { in: ids } };
   }
 
   private assertClientIdFilter(access: AccessContext | undefined, clientId?: string): void {
@@ -194,12 +204,24 @@ export class AppointmentsService {
       { scheduledAt: { gte: from, lt: to } },
     ];
 
-    const scope = this.appointmentClientScope(access);
-    if (Object.keys(scope).length > 0) {
-      parts.push(scope);
+    const clientScope = this.appointmentClientScope(access);
+    if (Object.keys(clientScope).length > 0) {
+      parts.push(clientScope);
+    }
+
+    const partnerScope = this.appointmentPartnerScope(access);
+    if (Object.keys(partnerScope).length > 0) {
+      parts.push(partnerScope);
     }
 
     if (params.supplierIds?.length) {
+      if (access && isPartnerUser(access)) {
+        for (const id of params.supplierIds) {
+          if (!access.allowedSupplierIds.includes(id)) {
+            throw new ForbiddenException('Supplier access denied');
+          }
+        }
+      }
       parts.push({ supplierId: { in: params.supplierIds } });
     }
     if (params.vehicleId?.trim()) {
@@ -249,10 +271,12 @@ export class AppointmentsService {
       ? { vehicle: { clientId: clientId.trim() } }
       : undefined;
 
-    const scope = this.appointmentClientScope(access);
+    const clientScope = this.appointmentClientScope(access);
+    const partnerScope = this.appointmentPartnerScope(access);
 
     const baseParts: Prisma.ServiceAppointmentWhereInput[] = [{ tenantId: tenant.id }];
-    if (Object.keys(scope).length > 0) baseParts.push(scope);
+    if (Object.keys(clientScope).length > 0) baseParts.push(clientScope);
+    if (Object.keys(partnerScope).length > 0) baseParts.push(partnerScope);
     if (clientFilter) baseParts.push(clientFilter);
     const base: Prisma.ServiceAppointmentWhereInput = { AND: baseParts };
 
@@ -283,16 +307,21 @@ export class AppointmentsService {
   }
 
   async getById(tenantSlug: string, id: string, access?: AccessContext): Promise<CalendarAppointmentRecord> {
-    const scope = this.appointmentClientScope(access);
+    const clientScope = this.appointmentClientScope(access);
+    const partnerScope = this.appointmentPartnerScope(access);
     const row = await this.prisma.serviceAppointment.findFirst({
       where: {
         id,
         tenant: { slug: tenantSlug },
-        ...(Object.keys(scope).length > 0 ? scope : {}),
+        ...(Object.keys(clientScope).length > 0 ? clientScope : {}),
+        ...(Object.keys(partnerScope).length > 0 ? partnerScope : {}),
       },
       include: this.calendarInclude(),
     });
     if (!row) throw new NotFoundException('Appointment not found');
+    if (access && isPartnerUser(access)) {
+      assertPartnerSupplierId(access, row.supplierId);
+    }
     return this.toCalendarRecord(row);
   }
 

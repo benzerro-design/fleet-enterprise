@@ -38,6 +38,7 @@ model Tenant {
   crmTicketLinks     CrmTicketLink[]
   crmTicketNotifications CrmTicketNotification[]
   clientMemberships  ClientMembership[]
+  supplierMemberships SupplierMembership[]
   botPopulationSessions BotPopulationSession[]
   suppliers              Supplier[]
   serviceCases           ServiceCase[]
@@ -279,6 +280,7 @@ model User {
   crmTicketEvents          CrmTicketEvent[]          @relation("TicketEventActor")
   crmTicketNotifications   CrmTicketNotification[]
   clientMemberships        ClientMembership[]
+  supplierMemberships      SupplierMembership[]
   botPopulationSessions    BotPopulationSession[]    @relation("BotSessionActor")
 }
 
@@ -398,6 +400,32 @@ model ClientMembership {
   @@index([clientId])
   @@index([userId])
   @@index([driverId])
+}
+
+/// Rol în organizația furnizorului — portal partener (axa R).
+enum SupplierRole {
+  supplier_manager
+  supplier_staff
+  supplier_accountant
+}
+
+/// User invitat la un Supplier din tenant — scope comenzi / programări furnizor.
+model SupplierMembership {
+  id         String       @id @default(cuid())
+  tenantId   String
+  supplierId String
+  userId     String
+  role       SupplierRole
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier   Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId, supplierId])
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([userId])
 }
 
 enum FuelType {
@@ -802,6 +830,8 @@ enum MembershipRole {
   tenant_viewer
   /// Angajat al unui Client contractual — acces restricționat prin ClientMembership.
   client_user
+  /// Utilizator portal furnizor — scope prin SupplierMembership.
+  supplier_user
 }
 
 enum VehicleType {
@@ -1014,6 +1044,7 @@ model Supplier {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships  SupplierMembership[]
   costEntries        CostEntry[]
   maintenanceEntries MaintenanceEntry[]
   serviceCases       ServiceCase[]

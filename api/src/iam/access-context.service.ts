@@ -28,6 +28,12 @@ export class AccessContextService {
       orderBy: { createdAt: 'asc' },
     });
 
+    const supplierRows = await this.prisma.supplierMembership.findMany({
+      where: { userId, tenantId: tenant.id },
+      include: { supplier: { select: { code: true, legalName: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+
     const clientMemberships = rows.map((r) => ({
       clientId: r.clientId,
       clientCode: r.client.code,
@@ -35,9 +41,18 @@ export class AccessContextService {
       driverId: r.driverId,
     }));
 
+    const supplierMemberships = supplierRows.map((r) => ({
+      supplierId: r.supplierId,
+      supplierCode: r.supplier.code,
+      supplierLegalName: r.supplier.legalName,
+      role: r.role,
+    }));
+
     const isTenantWide =
-      membership.role === MembershipRole.tenant_admin ||
-      (membership.role === MembershipRole.tenant_viewer && clientMemberships.length === 0);
+      (membership.role === MembershipRole.tenant_admin ||
+        membership.role === MembershipRole.tenant_viewer) &&
+      clientMemberships.length === 0 &&
+      supplierMemberships.length === 0;
 
     const driverOnly =
       clientMemberships.length > 0 &&
@@ -69,6 +84,8 @@ export class AccessContextService {
       isTenantWide,
       clientMemberships,
       allowedClientIds: clientMemberships.map((m) => m.clientId),
+      supplierMemberships,
+      allowedSupplierIds: supplierMemberships.map((m) => m.supplierId),
       assignedVehicleIds,
     };
   }

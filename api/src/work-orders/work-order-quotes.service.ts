@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -16,6 +17,11 @@ import {
   assertClientFleetWrite,
 } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
+import {
+  assertPartnerSupplierId,
+  assertPartnerWrite,
+  isPartnerUser,
+} from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { providerLabelForSupplier } from '../suppliers/supplier-resolve';
 import { RemindersService } from '../ops/reminders.service';
@@ -98,8 +104,17 @@ export class WorkOrderQuotesService {
     });
     if (!wo) throw new NotFoundException('Work order not found');
     if (access) {
-      if (mode === 'approve') assertApproveServiceQuote(access, wo.vehicle.clientId);
-      else assertClientFleetWrite(access, wo.vehicle.clientId);
+      if (mode === 'approve') {
+        if (isPartnerUser(access)) {
+          throw new ForbiddenException('Partners cannot approve quotes');
+        }
+        assertApproveServiceQuote(access, wo.vehicle.clientId);
+      } else if (isPartnerUser(access)) {
+        assertPartnerSupplierId(access, wo.supplierId);
+        assertPartnerWrite(access);
+      } else {
+        assertClientFleetWrite(access, wo.vehicle.clientId);
+      }
     }
     return wo;
   }
