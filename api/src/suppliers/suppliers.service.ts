@@ -14,7 +14,8 @@ import {
 } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvCell } from '../ops/ops-csv';
-import { parseSupplierServiceKinds } from './supplier-services';
+import { parseSupplierServiceKinds, supplierServiceCatalog } from './supplier-services';
+import { isEnumServiceKind } from '../tenant/tenant-service-types';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -135,6 +136,25 @@ export class SuppliersService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  async getServiceCatalog(tenantSlug: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) return supplierServiceCatalog();
+
+    const rows = await this.prisma.tenantServiceType.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    });
+
+    const enumRows = rows.filter((r) => isEnumServiceKind(r.code));
+    if (enumRows.length === 0) return supplierServiceCatalog();
+
+    return enumRows.map((r) => ({
+      kind: r.code as SupplierServiceKind,
+      label: r.label,
+      description: r.clientDescription,
+    }));
   }
 
   async listPaged(tenantSlug: string, params: SupplierListParams) {

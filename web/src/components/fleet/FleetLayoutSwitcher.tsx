@@ -7,6 +7,7 @@ import type { FleetNavGroup } from "@/lib/fleet-nav";
 type Props = {
   children: React.ReactNode;
   groups: FleetNavGroup[];
+  setup?: FleetNavGroup | null;
   admin: FleetNavGroup | null;
   bot?: FleetNavGroup | null;
   tenantSlug?: string;
@@ -19,6 +20,7 @@ type Props = {
 export function FleetLayoutSwitcher({
   children,
   groups,
+  setup,
   admin,
   bot,
   tenantSlug,
@@ -37,6 +39,7 @@ export function FleetLayoutSwitcher({
   return (
     <FleetShell
       groups={groups}
+      setup={setup}
       admin={admin}
       bot={bot}
       tenantSlug={tenantSlug}

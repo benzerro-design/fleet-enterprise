@@ -54,6 +54,17 @@ const PARTNER_PREFIXES = [
   "/fleet/partner",
 ];
 
+const ADMIN_ONLY_PREFIXES = [
+  "/fleet/members",
+  "/fleet/audit",
+  "/fleet/user-strategy",
+  "/fleet/setup",
+];
+
+function isAdminOnlyRoute(pathname: string): boolean {
+  return ADMIN_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 function pathAllowed(prefixes: string[], pathname: string): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
@@ -105,7 +116,7 @@ export function middleware(request: NextRequest) {
     const home = portal === "driver" ? CLIENT_DRIVER_HOME : "/fleet/tickets";
     const allowed = portal === "driver" ? CLIENT_DRIVER_PREFIXES : ["/fleet/tickets"];
 
-    if (pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit") || pathname.startsWith("/fleet/user-strategy")) {
+    if (isAdminOnlyRoute(pathname)) {
       return NextResponse.redirect(new URL(home, request.url));
     }
 
@@ -120,7 +131,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/fleet/members") || pathname.startsWith("/fleet/audit") || pathname.startsWith("/fleet/user-strategy")) {
+  if (isAdminOnlyRoute(pathname)) {
     return NextResponse.redirect(new URL(CLIENT_FLEET_HOME, request.url));
   }
 

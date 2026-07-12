@@ -114,6 +114,7 @@ function NavGroupItems({
 
 type FleetSidebarNavProps = {
   groups: FleetNavGroup[];
+  setup?: FleetNavGroup | null;
   admin: FleetNavGroup | null;
   bot?: FleetNavGroup | null;
   onNavigate?: () => void;
@@ -121,7 +122,7 @@ type FleetSidebarNavProps = {
   variant?: "desktop" | "drawer";
 };
 
-export function FleetSidebarNav({ groups, admin, bot, onNavigate, variant = "desktop" }: FleetSidebarNavProps) {
+export function FleetSidebarNav({ groups, setup, admin, bot, onNavigate, variant = "desktop" }: FleetSidebarNavProps) {
   const pathname = usePathname() ?? "";
 
   return (
@@ -137,6 +138,15 @@ export function FleetSidebarNav({ groups, admin, bot, onNavigate, variant = "des
           ),
         )}
       </div>
+      {setup ? (
+        <div className="mt-2 border-t border-zinc-800 pt-2">
+          {variant === "drawer" ? (
+            <NavGroupBlock group={setup} pathname={pathname} onNavigate={onNavigate} defaultOpen />
+          ) : (
+            <NavGroupItems group={setup} pathname={pathname} onNavigate={onNavigate} />
+          )}
+        </div>
+      ) : null}
       {bot ? (
         <div className="mt-2 border-t border-zinc-800 pt-2">
           {variant === "drawer" ? (

@@ -68,8 +68,8 @@ export class SuppliersController {
 
   @Get('catalog/services')
   @Roles(...FLEET_READ_ROLES)
-  serviceCatalog() {
-    return supplierServiceCatalog();
+  serviceCatalog(@TenantId() tenantSlug: string) {
+    return this.suppliers.getServiceCatalog(tenantSlug);
   }
 
   @Get()

@@ -222,6 +222,25 @@ export const FLEET_NAV_BOT_GROUP: FleetNavGroup = {
   ],
 };
 
+export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
+  id: "setup",
+  label: "Setup",
+  footer: true,
+  items: [
+    {
+      kind: "link",
+      label: "Clienți",
+      href: "/fleet/setup/clients",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/setup/clients", "/fleet/setup"],
+    },
+    { kind: "soon", label: "Furnizori", phase: "phase2" },
+    { kind: "soon", label: "Flotă & vehicule", phase: "phase2" },
+    { kind: "soon", label: "Integrări", phase: "phase2" },
+  ],
+};
+
 export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
   id: "admin",
   label: "Administrare",
@@ -251,7 +270,6 @@ export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
       requireAuth: true,
       activePrefixes: ["/fleet/audit"],
     },
-    { kind: "soon", label: "Setări tenant", phase: "phase1" },
   ],
 };
 
@@ -318,7 +336,7 @@ function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup 
     return null;
   }
 
-  if (ctx.clientFleetPortal && group.id === "admin") return null;
+  if (ctx.clientFleetPortal && (group.id === "admin" || group.id === "setup")) return null;
 
   const items = group.items.map((e) => filterEntry(e, ctx)).filter((e): e is FleetNavEntry => e !== null);
   if (items.length === 0) return null;
@@ -327,13 +345,15 @@ function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup 
 
 export function getFleetNavForUser(ctx: FleetNavContext): {
   groups: FleetNavGroup[];
+  setup: FleetNavGroup | null;
   admin: FleetNavGroup | null;
   bot: FleetNavGroup | null;
 } {
   const groups = FLEET_NAV_GROUPS.map((g) => filterGroup(g, ctx)).filter((g): g is FleetNavGroup => g !== null);
+  const setup = filterGroup(FLEET_NAV_SETUP_GROUP, ctx);
   const admin = filterGroup(FLEET_NAV_ADMIN_GROUP, ctx);
   const bot = ctx.demoBot ? filterGroup(FLEET_NAV_BOT_GROUP, ctx) : null;
-  return { groups, admin, bot };
+  return { groups, setup, admin, bot };
 }
 
 export function navEntryIsActive(pathname: string, entry: FleetNavLink): boolean {

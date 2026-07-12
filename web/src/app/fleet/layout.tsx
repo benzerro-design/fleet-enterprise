@@ -5,7 +5,7 @@ import { getFleetNavForUser } from "@/lib/fleet-nav";
 export default async function FleetLayout({ children }: { children: React.ReactNode }) {
   const auth = await getAuthMeResult();
   const write = canManageFleet(auth);
-  const { groups, admin, bot } = getFleetNavForUser({
+  const { groups, setup, admin, bot } = getFleetNavForUser({
     canWrite: write,
     authenticated: auth.ok,
     demoBot: canUseBot(auth),
@@ -26,6 +26,7 @@ export default async function FleetLayout({ children }: { children: React.ReactN
   return (
     <FleetLayoutSwitcher
       groups={groups}
+      setup={setup}
       admin={admin}
       bot={bot}
       tenantSlug={auth.ok ? auth.me.tenantSlug : undefined}

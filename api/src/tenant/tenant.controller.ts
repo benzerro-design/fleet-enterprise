@@ -2,6 +2,7 @@ import {
   Body,
   BadRequestException,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -79,6 +80,46 @@ export class TenantController {
   resetIamStrategy(@TenantId() tenantSlug: string, @CurrentUserId() actorUserId?: string) {
     if (!actorUserId) throw new BadRequestException('Missing actor');
     return this.tenant.resetIamStrategy(tenantSlug, actorUserId);
+  }
+
+  @Get('service-types')
+  @Roles(MembershipRole.tenant_admin)
+  listServiceTypes(@TenantId() tenantSlug: string) {
+    return this.tenant.listServiceTypes(tenantSlug);
+  }
+
+  @Post('service-types')
+  @Roles(MembershipRole.tenant_admin)
+  createServiceType(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.createServiceType(tenantSlug, body, actorUserId);
+  }
+
+  @Patch('service-types/:id')
+  @Roles(MembershipRole.tenant_admin)
+  patchServiceType(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.patchServiceType(tenantSlug, id, body, actorUserId);
+  }
+
+  @Delete('service-types/:id')
+  @Roles(MembershipRole.tenant_admin)
+  deleteServiceType(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.deleteServiceType(tenantSlug, id, actorUserId);
   }
 }
 
