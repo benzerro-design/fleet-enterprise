@@ -215,6 +215,15 @@ async function seedDemoPartnerUser(tenantId, passwordHash) {
     update: { role: 'supplier_manager' },
   });
 
+  const demoServices = ['mechanics', 'electrical', 'itp', 'tire_service', 'diagnostics'];
+  for (const kind of demoServices) {
+    await prisma.supplierService.upsert({
+      where: { supplierId_kind: { supplierId: supplier.id, kind } },
+      create: { tenantId, supplierId: supplier.id, kind },
+      update: {},
+    });
+  }
+
   // eslint-disable-next-line no-console
   console.log(
     `Demo partner: partner@alphaservice.local / tenant: demo / password: ${DEMO_PASSWORD} (SUP-0042 Alpha Service SRL)`,

@@ -4,6 +4,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { SupplierForm } from "@/components/fleet/SupplierForm";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { loadSupplierServiceCatalogServer } from "@/lib/suppliers-api-server";
 import type { SupplierRecord } from "@/lib/suppliers-api";
 
 async function load(id: string): Promise<SupplierRecord | null> {
@@ -20,7 +21,11 @@ type PageProps = { params: Promise<{ id: string }> };
 
 export default async function EditSupplierPage({ params }: PageProps) {
   const { id } = await params;
-  const [supplier, auth] = await Promise.all([load(id), getAuthMeResult()]);
+  const [supplier, auth, serviceCatalog] = await Promise.all([
+    load(id),
+    getAuthMeResult(),
+    loadSupplierServiceCatalogServer(),
+  ]);
   if (!canManageFleet(auth)) redirect("/fleet/suppliers");
   if (!supplier) notFound();
 
@@ -31,7 +36,7 @@ export default async function EditSupplierPage({ params }: PageProps) {
       </Link>
       <h1 className="mt-4 text-2xl font-semibold">Editare furnizor</h1>
       <div className="mt-8">
-        <SupplierForm mode="edit" initial={supplier} />
+        <SupplierForm mode="edit" initial={supplier} serviceCatalog={serviceCatalog} />
       </div>
     </FleetPageMain>
   );

@@ -41,6 +41,7 @@ model Tenant {
   supplierMemberships SupplierMembership[]
   botPopulationSessions BotPopulationSession[]
   suppliers              Supplier[]
+  supplierServices       SupplierService[]
   serviceCases           ServiceCase[]
   maintenanceWorkOrders  MaintenanceWorkOrder[]
   serviceAppointments    ServiceAppointment[]
@@ -1026,6 +1027,21 @@ enum SupplierCategory {
   other
 }
 
+/// Servicii operaționale pe care le poate presta un furnizor (multi-select per Supplier).
+enum SupplierServiceKind {
+  mechanics
+  electrical
+  bodywork_painting
+  damage_repair
+  itp
+  tire_service
+  periodic_maintenance
+  ac_climate
+  diagnostics
+  towing
+  glass_repair
+}
+
 /// Furnizor / partener service (atelier, ITP, broker, asigurator).
 model Supplier {
   id           String           @id @default(cuid())
@@ -1045,6 +1061,7 @@ model Supplier {
   updatedAt    DateTime         @updatedAt
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships  SupplierMembership[]
+  serviceOfferings SupplierService[]
   costEntries        CostEntry[]
   maintenanceEntries MaintenanceEntry[]
   serviceCases       ServiceCase[]
@@ -1056,6 +1073,22 @@ model Supplier {
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, category])
+}
+
+/// Servicii prestate de un furnizor — relație many-to-many (catalog SupplierServiceKind).
+model SupplierService {
+  id         String              @id @default(cuid())
+  tenantId   String
+  supplierId String
+  kind       SupplierServiceKind
+  createdAt  DateTime            @default(now())
+  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier   Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, kind])
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([tenantId, kind])
 }
 
 enum ServiceCaseWorkflowType {

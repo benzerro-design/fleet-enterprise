@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
 import type { SupplierMembershipMe } from "@/lib/auth-server";
+import type { SupplierRecord } from "@/lib/suppliers-api";
+import type { SupplierServiceCatalogEntry } from "@/lib/supplier-service-catalog";
 
 const PROFILE_TABS = [
   { id: "identitate", label: "Identitate & contact" },
@@ -16,11 +19,20 @@ const PROFILE_TABS = [
 type TabId = (typeof PROFILE_TABS)[number]["id"];
 
 type Props = {
-  supplier?: SupplierMembershipMe;
+  supplierMembership?: SupplierMembershipMe;
+  supplier: SupplierRecord | null;
+  serviceCatalog: SupplierServiceCatalogEntry[];
   tenantSlug: string;
+  canWriteServices: boolean;
 };
 
-export function PartnerProfileClient({ supplier, tenantSlug }: Props) {
+export function PartnerProfileClient({
+  supplierMembership,
+  supplier,
+  serviceCatalog,
+  tenantSlug,
+  canWriteServices,
+}: Props) {
   const [tab, setTab] = useState<TabId>("identitate");
 
   return (
@@ -29,7 +41,8 @@ export function PartnerProfileClient({ supplier, tenantSlug }: Props) {
         <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Profil firmă</h1>
         <p className="mt-2 text-sm text-zinc-400">
-          {supplier?.supplierLegalName ?? "Furnizor"} · {supplier?.supplierCode ?? "—"} · tenant {tenantSlug}
+          {supplier?.legalName ?? supplierMembership?.supplierLegalName ?? "Furnizor"} ·{" "}
+          {supplier?.code ?? supplierMembership?.supplierCode ?? "—"} · tenant {tenantSlug}
         </p>
       </div>
 
@@ -55,21 +68,47 @@ export function PartnerProfileClient({ supplier, tenantSlug }: Props) {
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
               <dt className="text-xs text-zinc-500">Denumire legală</dt>
-              <dd className="mt-1 text-sm text-zinc-200">{supplier?.supplierLegalName ?? "—"}</dd>
+              <dd className="mt-1 text-sm text-zinc-200">
+                {supplier?.legalName ?? supplierMembership?.supplierLegalName ?? "—"}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-zinc-500">Cod furnizor</dt>
-              <dd className="mt-1 font-mono text-sm text-zinc-200">{supplier?.supplierCode ?? "—"}</dd>
+              <dd className="mt-1 font-mono text-sm text-zinc-200">
+                {supplier?.code ?? supplierMembership?.supplierCode ?? "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">Email contact</dt>
+              <dd className="mt-1 text-sm text-zinc-200">{supplier?.contactEmail ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">Telefon</dt>
+              <dd className="mt-1 text-sm text-zinc-200">{supplier?.contactPhone ?? "—"}</dd>
             </div>
             <div>
               <dt className="text-xs text-zinc-500">Rol cont</dt>
-              <dd className="mt-1 text-sm text-zinc-200">{supplier?.role ?? "—"}</dd>
+              <dd className="mt-1 text-sm text-zinc-200">{supplierMembership?.role ?? "—"}</dd>
             </div>
             <div>
               <dt className="text-xs text-zinc-500">Tenant</dt>
               <dd className="mt-1 font-mono text-sm text-zinc-200">{tenantSlug}</dd>
             </div>
           </dl>
+        ) : null}
+
+        {tab === "tip" && supplier ? (
+          <SupplierServicesEditor
+            supplierId={supplier.id}
+            catalog={serviceCatalog}
+            initialSelected={supplier.services ?? []}
+            canWrite={canWriteServices}
+            assignedByLabel="Partener / flotă"
+          />
+        ) : null}
+
+        {tab === "tip" && !supplier ? (
+          <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
         {tab === "documente" ? (
@@ -81,7 +120,7 @@ export function PartnerProfileClient({ supplier, tenantSlug }: Props) {
           </div>
         ) : null}
 
-        {tab !== "identitate" && tab !== "documente" ? (
+        {tab !== "identitate" && tab !== "documente" && tab !== "tip" ? (
           <p className="text-sm text-zinc-500">
             Conținut tab „{PROFILE_TABS.find((t) => t.id === tab)?.label}” — urmează în faza P2 profil furnizor.
           </p>

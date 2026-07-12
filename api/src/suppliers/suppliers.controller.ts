@@ -2,24 +2,30 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Header,
   HttpCode,
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { MembershipRole, SupplierCategory, SupplierStatus } from '@prisma/client';
+import { MembershipRole, SupplierCategory, SupplierServiceKind, SupplierStatus } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
-import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
+import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser } from '../iam/partner-access';
 import type { CreateSupplierInput, PatchSupplierInput } from './suppliers.service';
 import { SuppliersService } from './suppliers.service';
+import { supplierServiceCatalog } from './supplier-services';
 
 function parseStatus(raw?: string): SupplierStatus | undefined {
   if (!raw?.trim()) return undefined;
@@ -47,10 +53,24 @@ function parseCategory(raw?: string): SupplierCategory | undefined {
   throw new BadRequestException('Invalid category');
 }
 
+function parseServiceKind(raw?: string): SupplierServiceKind | undefined {
+  if (!raw?.trim()) return undefined;
+  const catalog = supplierServiceCatalog();
+  const hit = catalog.find((c) => c.kind === raw.trim());
+  if (!hit) throw new BadRequestException('Invalid service kind');
+  return hit.kind;
+}
+
 @Controller('suppliers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SuppliersController {
   constructor(private readonly suppliers: SuppliersService) {}
+
+  @Get('catalog/services')
+  @Roles(...FLEET_READ_ROLES)
+  serviceCatalog() {
+    return supplierServiceCatalog();
+  }
 
   @Get()
   @Roles(...FLEET_READ_ROLES)
@@ -61,6 +81,7 @@ export class SuppliersController {
     @Query('q') q?: string,
     @Query('status') status?: string,
     @Query('category') category?: string,
+    @Query('serviceKind') serviceKind?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
@@ -70,6 +91,7 @@ export class SuppliersController {
       q: q?.trim(),
       status: parseStatus(status),
       category: parseCategory(category),
+      serviceKind: parseServiceKind(serviceKind),
     });
   }
 
@@ -91,9 +113,13 @@ export class SuppliersController {
   }
 
   @Get(':id')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  get(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.suppliers.getById(tenantSlug, id);
+  @Roles(...FLEET_READ_ROLES)
+  get(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.suppliers.getById(tenantSlug, id, access);
   }
 
   @Post()
@@ -116,5 +142,23 @@ export class SuppliersController {
     @CurrentUserId() actorUserId?: string,
   ) {
     return this.suppliers.patch(tenantSlug, id, body, actorUserId);
+  }
+
+  @Put(':id/services')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  setServices(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: { services?: unknown },
+    @CurrentUserId() actorUserId?: string,
+    @CurrentAccess() access?: AccessContext,
+  ) {
+    if (access && isPartnerUser(access)) {
+      assertPartnerSupplierId(access, id);
+      assertPartnerWrite(access);
+    } else if (!access || access.membershipRole !== MembershipRole.tenant_admin) {
+      throw new ForbiddenException('Only tenant admin or partner can update supplier services');
+    }
+    return this.suppliers.setServices(tenantSlug, id, body.services, actorUserId, access);
   }
 }

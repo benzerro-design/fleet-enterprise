@@ -12,18 +12,22 @@ import {
   fleetJsonHeaders,
   SUPPLIER_CATEGORIES,
   supplierCategoryLabel,
+  supplierServiceLabel,
   suppliersBrowserBase,
   type SupplierCategory,
   type SupplierRecord,
+  type SupplierServiceKind,
   type SupplierStatus,
 } from "@/lib/suppliers-api";
+import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
 
 type Props = {
   mode: "create" | "edit";
   initial?: SupplierRecord;
+  serviceCatalog: import("@/lib/supplier-service-catalog").SupplierServiceCatalogEntry[];
 };
 
-export function SupplierForm({ mode, initial }: Props) {
+export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
   const router = useRouter();
   const [code, setCode] = useState(initial?.code ?? "");
   const [legalName, setLegalName] = useState(initial?.legalName ?? "");
@@ -36,6 +40,7 @@ export function SupplierForm({ mode, initial }: Props) {
   const [city, setCity] = useState(initial?.city ?? "");
   const [county, setCounty] = useState(initial?.county ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [services, setServices] = useState<SupplierServiceKind[]>(initial?.services ?? []);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +60,7 @@ export function SupplierForm({ mode, initial }: Props) {
       city: city.trim() || null,
       county: county.trim() || null,
       notes: notes.trim() || null,
+      services,
     };
     try {
       const url =
@@ -138,6 +144,44 @@ export function SupplierForm({ mode, initial }: Props) {
             <input value={county} onChange={(e) => setCounty(e.target.value)} className={OPS_INPUT_CLASS} />
           </OpsFormField>
         </div>
+      </OpsFormSection>
+      <OpsFormSection number={3} title="Servicii prestate">
+        {mode === "edit" && initial ? (
+          <SupplierServicesEditor
+            supplierId={initial.id}
+            catalog={serviceCatalog}
+            initialSelected={services}
+            canWrite
+            assignedByLabel="Administrator flotă"
+            onSaved={setServices}
+          />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {serviceCatalog.map((entry) => {
+              const active = services.includes(entry.kind);
+              return (
+                <button
+                  key={entry.kind}
+                  type="button"
+                  onClick={() =>
+                    setServices((prev) =>
+                      prev.includes(entry.kind)
+                        ? prev.filter((k) => k !== entry.kind)
+                        : [...prev, entry.kind],
+                    )
+                  }
+                  className={`rounded-lg border px-3 py-1.5 text-xs ${
+                    active
+                      ? "border-violet-600 bg-violet-950/40 text-violet-200"
+                      : "border-zinc-700 text-zinc-400 hover:bg-zinc-900"
+                  }`}
+                >
+                  {entry.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </OpsFormSection>
       <OpsFormField label="Notițe">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={OPS_INPUT_CLASS} />

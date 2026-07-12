@@ -4,10 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SupplierCategory, SupplierStatus } from '@prisma/client';
+import { Prisma, SupplierCategory, SupplierServiceKind, SupplierStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import type { AccessContext } from '../iam/access-context.types';
+import {
+  assertPartnerSupplierId,
+  assertPartnerWrite,
+  isPartnerUser,
+} from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvCell } from '../ops/ops-csv';
+import { parseSupplierServiceKinds } from './supplier-services';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -24,6 +31,7 @@ export type SupplierRecord = {
   city: string | null;
   county: string | null;
   notes: string | null;
+  services: SupplierServiceKind[];
   workOrderCount: number;
   createdAt: string;
   updatedAt: string;
@@ -41,6 +49,7 @@ export type CreateSupplierInput = {
   city?: string | null;
   county?: string | null;
   notes?: string | null;
+  services?: SupplierServiceKind[];
 };
 
 export type PatchSupplierInput = Partial<CreateSupplierInput>;
@@ -51,6 +60,7 @@ export type SupplierListParams = {
   q?: string;
   status?: SupplierStatus;
   category?: SupplierCategory;
+  serviceKind?: SupplierServiceKind;
 };
 
 function normalizeCode(code: string): string {
@@ -71,6 +81,9 @@ export class SuppliersService {
     const parts: Prisma.SupplierWhereInput[] = [{ tenantId }];
     if (params.status) parts.push({ status: params.status });
     if (params.category) parts.push({ category: params.category });
+    if (params.serviceKind) {
+      parts.push({ serviceOfferings: { some: { kind: params.serviceKind } } });
+    }
     const q = params.q?.trim();
     if (q) {
       parts.push({
@@ -102,6 +115,7 @@ export class SuppliersService {
       updatedAt: Date;
     },
     workOrderCount = 0,
+    services: SupplierServiceKind[] = [],
   ): SupplierRecord {
     return {
       id: row.id,
@@ -116,6 +130,7 @@ export class SuppliersService {
       city: row.city,
       county: row.county,
       notes: row.notes,
+      services,
       workOrderCount,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -139,24 +154,86 @@ export class SuppliersService {
         orderBy: [{ status: 'asc' }, { code: 'asc' }],
         skip,
         take: pageSize,
-        include: { _count: { select: { workOrders: true } } },
+        include: {
+          _count: { select: { workOrders: true } },
+          serviceOfferings: { select: { kind: true }, orderBy: { kind: 'asc' } },
+        },
       }),
     ]);
 
     return {
-      items: rows.map((r) => this.toRecord(r, r._count.workOrders)),
+      items: rows.map((r) =>
+        this.toRecord(
+          r,
+          r._count.workOrders,
+          r.serviceOfferings.map((s) => s.kind),
+        ),
+      ),
       total,
       page,
       pageSize,
     };
   }
 
-  async getById(tenantSlug: string, id: string): Promise<SupplierRecord> {
+  async getById(tenantSlug: string, id: string, access?: AccessContext): Promise<SupplierRecord> {
+    if (access && isPartnerUser(access)) {
+      assertPartnerSupplierId(access, id);
+    }
     const row = await this.findRow(tenantSlug, id);
-    const woCount = await this.prisma.maintenanceWorkOrder.count({
-      where: { supplierId: id, tenant: { slug: tenantSlug } },
+    const [woCount, offerings] = await Promise.all([
+      this.prisma.maintenanceWorkOrder.count({
+        where: { supplierId: id, tenant: { slug: tenantSlug } },
+      }),
+      this.prisma.supplierService.findMany({
+        where: { supplierId: id },
+        orderBy: { kind: 'asc' },
+        select: { kind: true },
+      }),
+    ]);
+    return this.toRecord(
+      row,
+      woCount,
+      offerings.map((o) => o.kind),
+    );
+  }
+
+  async setServices(
+    tenantSlug: string,
+    id: string,
+    rawServices: unknown,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<SupplierRecord> {
+    const services = parseSupplierServiceKinds(rawServices);
+    if (access && isPartnerUser(access)) {
+      assertPartnerSupplierId(access, id);
+      assertPartnerWrite(access);
+    }
+    const row = await this.findRow(tenantSlug, id);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.supplierService.deleteMany({ where: { supplierId: id, tenantId: row.tenantId } });
+      if (services.length > 0) {
+        await tx.supplierService.createMany({
+          data: services.map((kind) => ({
+            tenantId: row.tenantId,
+            supplierId: id,
+            kind,
+          })),
+        });
+      }
     });
-    return this.toRecord(row, woCount);
+
+    await this.audit.log({
+      tenantId: row.tenantId,
+      actorUserId,
+      action: 'supplier.set_services',
+      entityType: 'supplier',
+      entityId: id,
+      meta: { services },
+    });
+
+    return this.getById(tenantSlug, id, access);
   }
 
   async create(tenantSlug: string, dto: CreateSupplierInput, actorUserId?: string) {
@@ -183,6 +260,18 @@ export class SuppliersService {
           notes: dto.notes?.trim() || null,
         },
       });
+      if (dto.services?.length) {
+        const services = parseSupplierServiceKinds(dto.services);
+        if (services.length > 0) {
+          await this.prisma.supplierService.createMany({
+            data: services.map((kind) => ({
+              tenantId: tenant.id,
+              supplierId: row.id,
+              kind,
+            })),
+          });
+        }
+      }
       await this.audit.log({
         tenantId: tenant.id,
         actorUserId,
@@ -191,7 +280,7 @@ export class SuppliersService {
         entityId: row.id,
         meta: { code: row.code },
       });
-      return this.toRecord(row);
+      return this.getById(tenantSlug, row.id);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException('Supplier code already exists');
@@ -219,8 +308,35 @@ export class SuppliersService {
     if (dto.county !== undefined) data.county = dto.county?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
 
+    const serviceKinds =
+      dto.services !== undefined ? parseSupplierServiceKinds(dto.services) : undefined;
+
     try {
-      const row = await this.prisma.supplier.update({ where: { id }, data });
+      if (Object.keys(data).length > 0) {
+        await this.prisma.supplier.update({ where: { id }, data });
+      }
+      if (serviceKinds !== undefined) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.supplierService.deleteMany({ where: { supplierId: id, tenantId: before.tenantId } });
+          if (serviceKinds.length > 0) {
+            await tx.supplierService.createMany({
+              data: serviceKinds.map((kind) => ({
+                tenantId: before.tenantId,
+                supplierId: id,
+                kind,
+              })),
+            });
+          }
+        });
+        await this.audit.log({
+          tenantId: before.tenantId,
+          actorUserId,
+          action: 'supplier.set_services',
+          entityType: 'supplier',
+          entityId: id,
+          meta: { services: serviceKinds },
+        });
+      }
       await this.audit.log({
         tenantId: before.tenantId,
         actorUserId,
@@ -228,7 +344,7 @@ export class SuppliersService {
         entityType: 'supplier',
         entityId: id,
       });
-      return this.getById(tenantSlug, row.id);
+      return this.getById(tenantSlug, id);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException('Supplier code already exists');

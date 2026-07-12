@@ -4,6 +4,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { supplierCategoryLabel, supplierStatusLabel, type SupplierRecord } from "@/lib/suppliers-api";
+import { supplierServiceLabel } from "@/lib/supplier-service-catalog";
 
 async function load(id: string): Promise<SupplierRecord | null> {
   try {
@@ -75,6 +76,24 @@ export default async function SupplierDetailPage({ params }: PageProps) {
           </div>
         ) : null}
       </dl>
+
+      <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/30 p-6">
+        <h2 className="text-sm font-semibold text-zinc-200">Servicii prestate</h2>
+        {supplier.services?.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {supplier.services.map((s) => (
+              <span
+                key={s}
+                className="rounded-full border border-violet-800/50 bg-violet-950/30 px-3 py-1 text-xs text-violet-200"
+              >
+                {supplierServiceLabel(s)}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-zinc-500">Niciun serviciu configurat.</p>
+        )}
+      </div>
     </FleetPageMain>
   );
 }

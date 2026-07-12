@@ -1,4 +1,14 @@
 import { fleetJsonHeaders } from "@/lib/fleet-api";
+import {
+  fallbackServiceCatalog,
+  supplierServiceDescription,
+  supplierServiceLabel,
+  type SupplierServiceCatalogEntry,
+  type SupplierServiceKind,
+} from "@/lib/supplier-service-catalog";
+
+export type { SupplierServiceCatalogEntry, SupplierServiceKind };
+export { supplierServiceLabel, supplierServiceDescription };
 
 export const suppliersBrowserBase = "/api/suppliers";
 export { fleetJsonHeaders };
@@ -16,19 +26,6 @@ export type SupplierCategory =
   | "rent"
   | "other";
 
-export const SUPPLIER_CATEGORIES: SupplierCategory[] = [
-  "service_auto",
-  "itp",
-  "fuel",
-  "tires",
-  "insurer",
-  "broker",
-  "dealer",
-  "roadside_assistance",
-  "rent",
-  "other",
-];
-
 export type SupplierRecord = {
   id: string;
   code: string;
@@ -42,6 +39,7 @@ export type SupplierRecord = {
   city: string | null;
   county: string | null;
   notes: string | null;
+  services: SupplierServiceKind[];
   workOrderCount: number;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +51,29 @@ export type SupplierListPayload = {
   page: number;
   pageSize: number;
 };
+
+export const SUPPLIER_CATEGORIES: SupplierCategory[] = [
+  "service_auto",
+  "itp",
+  "fuel",
+  "tires",
+  "insurer",
+  "broker",
+  "dealer",
+  "roadside_assistance",
+  "rent",
+  "other",
+];
+
+export async function loadSupplierServiceCatalog(): Promise<SupplierServiceCatalogEntry[]> {
+  try {
+    const res = await fetch(`${suppliersBrowserBase}/catalog/services`, { cache: "no-store" });
+    if (!res.ok) return fallbackServiceCatalog();
+    return (await res.json()) as SupplierServiceCatalogEntry[];
+  } catch {
+    return fallbackServiceCatalog();
+  }
+}
 
 export function supplierCategoryLabel(c: SupplierCategory): string {
   const map: Record<SupplierCategory, string> = {
