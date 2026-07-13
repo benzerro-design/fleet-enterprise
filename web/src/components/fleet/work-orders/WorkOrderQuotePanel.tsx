@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import { InvoiceAttachmentField } from "@/components/fleet/work-orders/InvoiceAttachmentField";
 import { formatDateRo, toDateInput, toIsoFromDateInput } from "@/lib/datetime-local";
 import {
   fleetJsonHeaders,
@@ -235,6 +236,7 @@ export function WorkOrderQuotePanel({
       if (selected?.costInvoiceDate) {
         setInvoiceDate(selected.costInvoiceDate.slice(0, 10));
       }
+      if (selected?.invoiceAttachmentUrl) setInvoiceAttachmentUrl(selected.invoiceAttachmentUrl);
     } catch {
       setQuotes([]);
     }
@@ -520,6 +522,7 @@ export function WorkOrderQuotePanel({
                 }
                 if (q.costInvoiceNumber) setInvoiceNumber(q.costInvoiceNumber);
                 if (q.costInvoiceDate) setInvoiceDate(q.costInvoiceDate.slice(0, 10));
+                if (q.invoiceAttachmentUrl) setInvoiceAttachmentUrl(q.invoiceAttachmentUrl);
               }}
               className={`rounded-full border px-2.5 py-1 text-xs ${
                 activeId === q.id ? "border-sky-500/60 bg-sky-950/40" : "border-zinc-700"
@@ -615,6 +618,19 @@ export function WorkOrderQuotePanel({
                   {activeQuote.costInvoiceDate
                     ? ` · ${new Date(activeQuote.costInvoiceDate).toLocaleDateString("ro-RO")}`
                     : ""}
+                  {activeQuote.invoiceAttachmentUrl ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={activeQuote.invoiceAttachmentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-violet-300 hover:underline"
+                      >
+                        PDF factură
+                      </a>
+                    </>
+                  ) : null}
                 </p>
               ) : canWrite ? (
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -636,12 +652,11 @@ export function WorkOrderQuotePanel({
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className={OPS_LABEL_CLASS}>Link atașament factură (URL)</label>
-                    <input
+                    <InvoiceAttachmentField
                       value={invoiceAttachmentUrl}
-                      onChange={(e) => setInvoiceAttachmentUrl(e.target.value)}
-                      className={OPS_INPUT_CLASS}
-                      placeholder="https://…"
+                      onChange={setInvoiceAttachmentUrl}
+                      invoiceNumber={invoiceNumber}
+                      disabled={pending}
                     />
                   </div>
                   <div className="sm:col-span-2">

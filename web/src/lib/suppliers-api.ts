@@ -39,7 +39,7 @@ export type SupplierRecord = {
   city: string | null;
   county: string | null;
   notes: string | null;
-  services: SupplierServiceKind[];
+  services: string[];
   workOrderCount: number;
   createdAt: string;
   updatedAt: string;

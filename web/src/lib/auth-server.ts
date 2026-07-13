@@ -53,6 +53,14 @@ export function canManageFleet(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "tenant_admin";
 }
 
+/** Citire furnizori — tenant-wide, viewer sau client flotă scoped (SUPP-004). */
+export function canReadSuppliers(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin" || auth.me.role === "tenant_viewer") return true;
+  if (auth.me.role === "client_user") return isClientFleetPortal(auth);
+  return false;
+}
+
 /** Meniu BOT — doar tenant_admin pe tenant demo (mediu dev/staging). */
 export function canUseBot(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "tenant_admin" && auth.me.tenantSlug === "demo";

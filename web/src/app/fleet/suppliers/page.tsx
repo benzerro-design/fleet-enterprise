@@ -4,7 +4,8 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { SupplierDataGrid } from "@/components/fleet/suppliers/SupplierDataGrid";
 import { SupplierKpiStrip } from "@/components/fleet/suppliers/SupplierKpiStrip";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canManageFleet, canReadSuppliers, getAuthMeResult, getDefaultFleetHome } from "@/lib/auth-server";
+import { redirect } from "next/navigation";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { loadSupplierServiceCatalogServer } from "@/lib/suppliers-api-server";
@@ -60,6 +61,7 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
     getAuthMeResult(),
     loadSupplierServiceCatalogServer(),
   ]);
+  if (!canReadSuppliers(auth)) redirect(getDefaultFleetHome(auth));
   const write = canManageFleet(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const exportQs = new URLSearchParams();
@@ -167,7 +169,7 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
               >
                 <option value="">Toate</option>
                 {serviceCatalog.map((entry) => (
-                  <option key={entry.kind} value={entry.kind}>
+                  <option key={entry.code ?? entry.kind} value={entry.code ?? entry.kind}>
                     {entry.label}
                   </option>
                 ))}

@@ -185,21 +185,23 @@ export class TenantService {
     });
   }
 
-  private async usageForCodes(tenantId: string, codes: string[]) {
-    const enumCodes = codes.filter(isEnumServiceKind);
-    const supplierCounts = enumCodes.length
-      ? await this.prisma.supplierService.groupBy({
-          by: ['kind'],
-          where: { tenantId, kind: { in: enumCodes as SupplierServiceKind[] } },
-          _count: { kind: true },
-        })
-      : [];
-    const supplierMap = new Map(supplierCounts.map((r) => [r.kind, r._count.kind]));
-    return codes.map((code) => ({
-      code,
-      suppliers: isEnumServiceKind(code) ? (supplierMap.get(code) ?? 0) : 0,
-      tickets: 0,
-    }));
+  private async usageForCodes(tenantId: string, rows: { id: string; code: string }[]) {
+    if (rows.length === 0) return new Map<string, { suppliers: number; tickets: number }>();
+    const counts = await this.prisma.supplierService.groupBy({
+      by: ['serviceTypeId'],
+      where: { tenantId, serviceTypeId: { in: rows.map((r) => r.id) } },
+      _count: { serviceTypeId: true },
+    });
+    const idToCode = new Map(rows.map((r) => [r.id, r.code]));
+    const map = new Map<string, { suppliers: number; tickets: number }>();
+    for (const row of rows) {
+      map.set(row.code, { suppliers: 0, tickets: 0 });
+    }
+    for (const c of counts) {
+      const code = idToCode.get(c.serviceTypeId);
+      if (code) map.set(code, { suppliers: c._count.serviceTypeId, tickets: 0 });
+    }
+    return map;
   }
 
   async listServiceTypes(tenantSlug: string): Promise<{ items: TenantServiceTypeRow[] }> {
@@ -212,15 +214,14 @@ export class TenantService {
     });
     const usage = await this.usageForCodes(
       tenant.id,
-      rows.map((r) => r.code),
+      rows.map((r) => ({ id: r.id, code: r.code })),
     );
-    const usageMap = new Map(usage.map((u) => [u.code, u]));
 
     return {
       items: rows.map((row) =>
         mapTenantServiceTypeRow(row, {
-          suppliers: usageMap.get(row.code)?.suppliers ?? 0,
-          tickets: usageMap.get(row.code)?.tickets ?? 0,
+          suppliers: usage.get(row.code)?.suppliers ?? 0,
+          tickets: usage.get(row.code)?.tickets ?? 0,
         }),
       ),
     };
@@ -319,7 +320,7 @@ export class TenantService {
       data,
     });
 
-    const [usage] = await this.usageForCodes(tenant.id, [updated.code]);
+    const usage = await this.usageForCodes(tenant.id, [{ id: updated.id, code: updated.code }]);
 
     await this.audit.log({
       tenantId: tenant.id,
@@ -330,9 +331,10 @@ export class TenantService {
       meta: { code: updated.code },
     });
 
+    const usageRow = usage.get(updated.code);
     return mapTenantServiceTypeRow(updated, {
-      suppliers: usage?.suppliers ?? 0,
-      tickets: usage?.tickets ?? 0,
+      suppliers: usageRow?.suppliers ?? 0,
+      tickets: usageRow?.tickets ?? 0,
     });
   }
 
@@ -346,8 +348,9 @@ export class TenantService {
       throw new BadRequestException('System service types cannot be deleted — deactivate instead');
     }
 
-    const [usage] = await this.usageForCodes(tenant.id, [row.code]);
-    if ((usage?.suppliers ?? 0) > 0) {
+    const usage = await this.usageForCodes(tenant.id, [{ id: row.id, code: row.code }]);
+    const usageRow = usage.get(row.code);
+    if ((usageRow?.suppliers ?? 0) > 0) {
       throw new BadRequestException('Service type is used by suppliers — deactivate instead');
     }
 
@@ -365,13 +368,15 @@ export class TenantService {
     return { ok: true as const };
   }
 
-  /** Catalog activ pentru furnizori — doar tipuri enum (SupplierServiceKind). */
+  /** Catalog activ pentru furnizori — toate tipurile tenant active. */
   async activeSupplierServiceCatalog(tenantSlug: string) {
     const { items } = await this.listServiceTypes(tenantSlug);
     return items
-      .filter((t) => t.active && isEnumServiceKind(t.code))
+      .filter((t) => t.active)
       .map((t) => ({
-        kind: t.code as SupplierServiceKind,
+        id: t.id,
+        code: t.code,
+        kind: t.code,
         label: t.label,
         description: t.clientDescription,
       }));

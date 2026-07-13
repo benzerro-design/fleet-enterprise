@@ -6,16 +6,15 @@ import {
   supplierServiceLabel,
   suppliersBrowserBase,
   type SupplierServiceCatalogEntry,
-  type SupplierServiceKind,
 } from "@/lib/suppliers-api";
 
 type Props = {
   supplierId: string;
   catalog: SupplierServiceCatalogEntry[];
-  initialSelected: SupplierServiceKind[];
+  initialSelected: string[];
   canWrite: boolean;
   assignedByLabel?: string;
-  onSaved?: (services: SupplierServiceKind[]) => void;
+  onSaved?: (services: string[]) => void;
 };
 
 export function SupplierServicesEditor({
@@ -26,7 +25,7 @@ export function SupplierServicesEditor({
   assignedByLabel = "Flotă",
   onSaved,
 }: Props) {
-  const [selected, setSelected] = useState<SupplierServiceKind[]>(initialSelected);
+  const [selected, setSelected] = useState<string[]>(initialSelected);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -37,11 +36,9 @@ export function SupplierServicesEditor({
     return a !== b;
   }, [selected, initialSelected]);
 
-  function toggle(kind: SupplierServiceKind) {
+  function toggle(code: string) {
     if (!canWrite) return;
-    setSelected((prev) =>
-      prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind],
-    );
+    setSelected((prev) => (prev.includes(code) ? prev.filter((k) => k !== code) : [...prev, code]));
     setSaved(false);
   }
 
@@ -66,7 +63,7 @@ export function SupplierServicesEditor({
         setError(msg);
         return;
       }
-      const updated = (await res.json()) as { services?: SupplierServiceKind[] };
+      const updated = (await res.json()) as { services?: string[] };
       const next = updated.services ?? selected;
       setSelected(next);
       setSaved(true);
@@ -79,8 +76,7 @@ export function SupplierServicesEditor({
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-400">
-        Bifați serviciile pe care le prestați. Lista e folosită de flotă și clienți la programări și alocare
-        comenzi.
+        Bifați serviciile pe care le prestați. Lista e din catalogul tenant (Setup → Tip & Servicii).
       </p>
 
       {error ? (
@@ -88,9 +84,7 @@ export function SupplierServicesEditor({
           {error}
         </p>
       ) : null}
-      {saved ? (
-        <p className="text-sm text-emerald-400">Servicii salvate.</p>
-      ) : null}
+      {saved ? <p className="text-sm text-emerald-400">Servicii salvate.</p> : null}
 
       <div className="overflow-hidden rounded-xl border border-zinc-800">
         <div className="grid grid-cols-[1fr_1fr_5rem_6rem] gap-2 border-b border-zinc-800 bg-zinc-900/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
@@ -100,10 +94,11 @@ export function SupplierServicesEditor({
           <span>Sursă</span>
         </div>
         {catalog.map((entry, i) => {
-          const active = selected.includes(entry.kind);
+          const code = entry.code ?? entry.kind;
+          const active = selected.includes(code);
           return (
             <div
-              key={entry.kind}
+              key={entry.id ?? code}
               className={`grid grid-cols-[1fr_1fr_5rem_6rem] items-center gap-2 px-3 py-2.5 text-sm ${
                 i > 0 ? "border-t border-zinc-800/80" : ""
               } ${canWrite ? "hover:bg-zinc-900/40" : ""}`}
@@ -113,12 +108,12 @@ export function SupplierServicesEditor({
                   <input
                     type="checkbox"
                     checked={active}
-                    onChange={() => toggle(entry.kind)}
+                    onChange={() => toggle(code)}
                     className="rounded border-zinc-600"
                   />
                 ) : null}
                 <span className="font-medium text-zinc-200">
-                  {entry.label ?? supplierServiceLabel(entry.kind)}
+                  {entry.label ?? supplierServiceLabel(code)}
                 </span>
               </label>
               <span className="text-xs text-zinc-500">{entry.description}</span>

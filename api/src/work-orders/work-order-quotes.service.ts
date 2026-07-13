@@ -23,6 +23,7 @@ import {
   isPartnerUser,
 } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
+import { PartnerNotificationService } from '../partner/partner-notification.service';
 import { providerLabelForSupplier } from '../suppliers/supplier-resolve';
 import { RemindersService } from '../ops/reminders.service';
 import {
@@ -83,6 +84,7 @@ export class WorkOrderQuotesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly reminders: RemindersService,
+    private readonly partnerNotify: PartnerNotificationService,
   ) {}
 
   private quoteInclude() {
@@ -394,6 +396,15 @@ export class WorkOrderQuotesService {
       meta: { workOrderId },
     });
 
+    void this.partnerNotify.notifySupplierContact(
+      tenant.id,
+      existing.workOrder.supplierId,
+      'quote_approved',
+      `Deviz aprobat — ${existing.workOrder.title}`,
+      `Devizul v${existing.version} a fost aprobat de client.`,
+      { workOrderId, quoteId },
+    );
+
     return toQuoteRecord(quote);
   }
 
@@ -412,7 +423,7 @@ export class WorkOrderQuotesService {
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
-      include: this.quoteInclude(),
+      include: { workOrder: { include: { serviceCase: true } }, ...this.quoteInclude() },
     });
     if (!existing) throw new NotFoundException('Quote not found');
     if (existing.status !== WorkOrderQuoteStatus.submitted) {
@@ -437,6 +448,15 @@ export class WorkOrderQuotesService {
       entityId: quoteId,
       meta: { workOrderId },
     });
+
+    void this.partnerNotify.notifySupplierContact(
+      tenant.id,
+      existing.workOrder.supplierId,
+      'quote_rejected',
+      `Deviz respins — ${existing.workOrder.title}`,
+      `Devizul v${existing.version} a fost respins.${reason?.trim() ? ` Motiv: ${reason.trim()}` : ''}`,
+      { workOrderId, quoteId },
+    );
 
     return toQuoteRecord(quote);
   }
@@ -678,6 +698,15 @@ export class WorkOrderQuotesService {
       entityId: quoteId,
       meta: { workOrderId, invoiceNumber },
     });
+
+    void this.partnerNotify.notifySupplierContact(
+      tenant.id,
+      existing.workOrder.supplierId,
+      'invoice_recorded',
+      `Factură înregistrată — ${existing.workOrder.title}`,
+      `Factura ${invoiceNumber} a fost înregistrată pe comanda ${workOrderId}.`,
+      { workOrderId, quoteId, invoiceNumber },
+    );
 
     return toQuoteRecord(quote);
   }

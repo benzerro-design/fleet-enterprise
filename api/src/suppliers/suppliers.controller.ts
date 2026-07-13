@@ -13,7 +13,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { MembershipRole, SupplierCategory, SupplierServiceKind, SupplierStatus } from '@prisma/client';
+import { MembershipRole, SupplierCategory, SupplierStatus } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -53,12 +53,9 @@ function parseCategory(raw?: string): SupplierCategory | undefined {
   throw new BadRequestException('Invalid category');
 }
 
-function parseServiceKind(raw?: string): SupplierServiceKind | undefined {
-  if (!raw?.trim()) return undefined;
-  const catalog = supplierServiceCatalog();
-  const hit = catalog.find((c) => c.kind === raw.trim());
-  if (!hit) throw new BadRequestException('Invalid service kind');
-  return hit.kind;
+function parseServiceTypeCode(raw?: string, legacyKind?: string): string | undefined {
+  const v = (raw ?? legacyKind)?.trim();
+  return v || undefined;
 }
 
 @Controller('suppliers')
@@ -76,40 +73,52 @@ export class SuppliersController {
   @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
     @Query('q') q?: string,
     @Query('status') status?: string,
     @Query('category') category?: string,
+    @Query('serviceTypeCode') serviceTypeCode?: string,
     @Query('serviceKind') serviceKind?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.suppliers.listPaged(tenantSlug, {
-      page,
-      pageSize,
-      q: q?.trim(),
-      status: parseStatus(status),
-      category: parseCategory(category),
-      serviceKind: parseServiceKind(serviceKind),
-    });
+    return this.suppliers.listPaged(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        q: q?.trim(),
+        status: parseStatus(status),
+        category: parseCategory(category),
+        serviceTypeCode: parseServiceTypeCode(serviceTypeCode, serviceKind),
+      },
+      access,
+    );
   }
 
   @Get('stats')
   @Roles(...FLEET_READ_ROLES)
   stats(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query('q') q?: string,
     @Query('status') status?: string,
     @Query('category') category?: string,
+    @Query('serviceTypeCode') serviceTypeCode?: string,
     @Query('serviceKind') serviceKind?: string,
   ) {
-    return this.suppliers.getStats(tenantSlug, {
-      q: q?.trim(),
-      status: parseStatus(status),
-      category: parseCategory(category),
-      serviceKind: parseServiceKind(serviceKind),
-    });
+    return this.suppliers.getStats(
+      tenantSlug,
+      {
+        q: q?.trim(),
+        status: parseStatus(status),
+        category: parseCategory(category),
+        serviceTypeCode: parseServiceTypeCode(serviceTypeCode, serviceKind),
+      },
+      access,
+    );
   }
 
   @Get('export')

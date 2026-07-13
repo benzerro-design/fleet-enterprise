@@ -16,7 +16,6 @@ import {
   suppliersBrowserBase,
   type SupplierCategory,
   type SupplierRecord,
-  type SupplierServiceKind,
   type SupplierStatus,
 } from "@/lib/suppliers-api";
 import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
@@ -40,7 +39,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
   const [city, setCity] = useState(initial?.city ?? "");
   const [county, setCounty] = useState(initial?.county ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [services, setServices] = useState<SupplierServiceKind[]>(initial?.services ?? []);
+  const [services, setServices] = useState<string[]>(initial?.services ?? []);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -158,16 +157,17 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
         ) : (
           <div className="flex flex-wrap gap-2">
             {serviceCatalog.map((entry) => {
-              const active = services.includes(entry.kind);
+              const code = entry.code ?? entry.kind;
+              const active = services.includes(code);
               return (
                 <button
-                  key={entry.kind}
+                  key={code}
                   type="button"
                   onClick={() =>
                     setServices((prev) =>
-                      prev.includes(entry.kind)
-                        ? prev.filter((k) => k !== entry.kind)
-                        : [...prev, entry.kind],
+                      prev.includes(code)
+                        ? prev.filter((k) => k !== code)
+                        : [...prev, code],
                     )
                   }
                   className={`rounded-lg border px-3 py-1.5 text-xs ${

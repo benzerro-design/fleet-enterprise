@@ -1,6 +1,6 @@
 import { SupplierServiceKind } from '@prisma/client';
 
-/** Catalog central — singura sursă de adevăr pentru servicii furnizor (API + validare). */
+/** @deprecated Enum legacy — catalogul activ vine din TenantServiceType. */
 export const SUPPLIER_SERVICE_KINDS: SupplierServiceKind[] = [
   SupplierServiceKind.mechanics,
   SupplierServiceKind.electrical,
@@ -43,29 +43,45 @@ const DESCRIPTIONS: Record<SupplierServiceKind, string> = {
   [SupplierServiceKind.glass_repair]: 'Înlocuire parbriz, lunetă, geamuri laterale',
 };
 
-export function supplierServiceLabel(kind: SupplierServiceKind): string {
-  return LABELS[kind] ?? kind;
+export type SupplierCatalogEntry = {
+  id: string;
+  code: string;
+  label: string;
+  description: string;
+};
+
+export function supplierServiceLabel(kind: string): string {
+  return LABELS[kind as SupplierServiceKind] ?? kind;
 }
 
-export function supplierServiceDescription(kind: SupplierServiceKind): string {
-  return DESCRIPTIONS[kind] ?? '';
+export function supplierServiceDescription(kind: string): string {
+  return DESCRIPTIONS[kind as SupplierServiceKind] ?? '';
 }
 
-export function parseSupplierServiceKinds(raw: unknown): SupplierServiceKind[] {
+/** Parse array of service type codes from API body. */
+export function parseSupplierServiceCodes(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  const out: SupplierServiceKind[] = [];
+  const out: string[] = [];
   for (const item of raw) {
     if (typeof item !== 'string') continue;
-    const v = item.trim() as SupplierServiceKind;
-    if (SUPPLIER_SERVICE_KINDS.includes(v) && !out.includes(v)) {
-      out.push(v);
-    }
+    const code = item.trim().toLowerCase();
+    if (!code || out.includes(code)) continue;
+    out.push(code);
   }
   return out;
 }
 
+/** @deprecated use parseSupplierServiceCodes */
+export function parseSupplierServiceKinds(raw: unknown): SupplierServiceKind[] {
+  return parseSupplierServiceCodes(raw).filter((c): c is SupplierServiceKind =>
+    SUPPLIER_SERVICE_KINDS.includes(c as SupplierServiceKind),
+  );
+}
+
 export function supplierServiceCatalog() {
   return SUPPLIER_SERVICE_KINDS.map((kind) => ({
+    id: kind,
+    code: kind,
     kind,
     label: supplierServiceLabel(kind),
     description: supplierServiceDescription(kind),

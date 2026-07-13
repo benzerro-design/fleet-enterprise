@@ -135,6 +135,7 @@ export type WorkOrderQuoteRecord = {
   invoicedAt: string | null;
   costInvoiceNumber: string | null;
   costInvoiceDate: string | null;
+  invoiceAttachmentUrl: string | null;
   createdAt: string;
   updatedAt: string;
   lines: QuoteLineRecord[];

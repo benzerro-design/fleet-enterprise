@@ -39,6 +39,8 @@ model Tenant {
   crmTicketNotifications CrmTicketNotification[]
   clientMemberships  ClientMembership[]
   supplierMemberships SupplierMembership[]
+  supplierInvites     SupplierInvite[]
+  partnerNotifications PartnerNotificationOutbox[]
   botPopulationSessions BotPopulationSession[]
   suppliers              Supplier[]
   supplierServices       SupplierService[]
@@ -48,6 +50,7 @@ model Tenant {
   serviceAppointments    ServiceAppointment[]
   workOrderQuotes        WorkOrderQuote[]
   workOrderQuoteLines    WorkOrderQuoteLine[]
+  workOrderMessages      WorkOrderMessage[]
   mobilityAssignments    MobilityAssignment[]
 }
 
@@ -283,6 +286,9 @@ model User {
   crmTicketNotifications   CrmTicketNotification[]
   clientMemberships        ClientMembership[]
   supplierMemberships      SupplierMembership[]
+  supplierInvitesCreated   SupplierInvite[]          @relation("SupplierInviteCreator")
+  supplierInvitesAccepted  SupplierInvite[]          @relation("SupplierInviteAccepter")
+  workOrderMessages        WorkOrderMessage[]
   botPopulationSessions    BotPopulationSession[]    @relation("BotSessionActor")
 }
 
@@ -1062,6 +1068,7 @@ model Supplier {
   updatedAt    DateTime         @updatedAt
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships  SupplierMembership[]
+  invites      SupplierInvite[]
   serviceOfferings SupplierService[]
   costEntries        CostEntry[]
   maintenanceEntries MaintenanceEntry[]
@@ -1076,20 +1083,21 @@ model Supplier {
   @@index([tenantId, category])
 }
 
-/// Servicii prestate de un furnizor — relație many-to-many (catalog SupplierServiceKind).
+/// Servicii prestate de un furnizor — legătură la catalog tenant (TenantServiceType).
 model SupplierService {
-  id         String              @id @default(cuid())
-  tenantId   String
-  supplierId String
-  kind       SupplierServiceKind
-  createdAt  DateTime            @default(now())
-  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supplier   Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  id            String            @id @default(cuid())
+  tenantId      String
+  supplierId    String
+  serviceTypeId String
+  createdAt     DateTime          @default(now())
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier      Supplier          @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  serviceType   TenantServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
 
-  @@unique([supplierId, kind])
+  @@unique([supplierId, serviceTypeId])
   @@index([tenantId])
   @@index([supplierId])
-  @@index([tenantId, kind])
+  @@index([tenantId, serviceTypeId])
 }
 
 /// Catalog tenant — tipuri service cu descriere pentru clienți (Setup → Clienți).
@@ -1105,10 +1113,74 @@ model TenantServiceType {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplierOfferings SupplierService[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
   @@index([tenantId, sortOrder])
+}
+
+/// Invitație utilizator în portal partener (link unic).
+model SupplierInvite {
+  id               String       @id @default(cuid())
+  tenantId         String
+  supplierId       String
+  email            String
+  role             SupplierRole @default(supplier_staff)
+  token            String       @unique
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  acceptedByUserId String?
+  createdByUserId  String?
+  createdAt        DateTime     @default(now())
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier         Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  createdBy        User?        @relation("SupplierInviteCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  acceptedBy       User?        @relation("SupplierInviteAccepter", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([email])
+}
+
+enum WorkOrderMessageVisibility {
+  internal
+  client_visible
+}
+
+/// Mesaje pe comandă de lucru — partener ↔ flotă (thread WO).
+model WorkOrderMessage {
+  id           String                     @id @default(cuid())
+  tenantId     String
+  workOrderId  String
+  authorUserId String
+  body         String
+  visibility   WorkOrderMessageVisibility @default(client_visible)
+  createdAt    DateTime                   @default(now())
+  tenant       Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder    MaintenanceWorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  author       User                       @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([workOrderId, createdAt])
+}
+
+/// Coadă notificări email partener — pregătită pentru SMTP (MVP: persist + log).
+model PartnerNotificationOutbox {
+  id         String    @id @default(cuid())
+  tenantId   String
+  supplierId String?
+  toEmail    String
+  kind       String
+  subject    String
+  body       String
+  payload    Json?
+  sentAt     DateTime?
+  createdAt  DateTime  @default(now())
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([supplierId])
 }
 
 enum ServiceCaseWorkflowType {
@@ -1235,6 +1307,7 @@ model MaintenanceWorkOrder {
   supplier      Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   quotes        WorkOrderQuote[]
   mobilityAssignments MobilityAssignment[]
+  messages      WorkOrderMessage[]
 
   @@unique([tenantId, displayNumber])
   @@index([tenantId])

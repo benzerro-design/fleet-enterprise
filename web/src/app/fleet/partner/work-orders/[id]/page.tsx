@@ -59,6 +59,7 @@ export default async function PartnerWorkOrderDetailPage({ params }: PageProps) 
           canApprove={false}
           hasInvoicedQuote={hasInvoicedQuote}
           hasCostFromQuote={hasCostFromQuote}
+          isPartner
         />
       </div>
     </FleetPageMain>

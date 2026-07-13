@@ -20,6 +20,7 @@ import {
   PostApprovalPath,
   WorkOrderQuoteStatus,
 } from '@prisma/client';
+import { PartnerNotificationService } from '../partner/partner-notification.service';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -204,6 +205,7 @@ export class ServiceCasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly partnerNotify: PartnerNotificationService,
   ) {}
 
   async getByTicketId(
@@ -633,6 +635,7 @@ export class ServiceCasesService {
       throw new ForbiddenException('Cannot confirm appointment');
     }
 
+    let woCreated = false;
     await this.prisma.$transaction(async (tx) => {
       await tx.serviceAppointment.update({
         where: { id: appointmentId },
@@ -656,7 +659,7 @@ export class ServiceCasesService {
         });
       }
 
-      await this.maybeCreateWorkOrderAfterDualConfirmTx(
+      woCreated = await this.maybeCreateWorkOrderAfterDualConfirmTx(
         tx,
         tenant.id,
         appointmentId,
@@ -665,6 +668,17 @@ export class ServiceCasesService {
         actorUserId,
       );
     });
+
+    if (woCreated) {
+      void this.partnerNotify.notifySupplierContact(
+        tenant.id,
+        existing.supplierId ?? existing.serviceCase.supplierId,
+        'wo_created',
+        `Comandă service nouă — ${existing.serviceCase.title}`,
+        `S-a creat comanda de lucru după confirmarea programării.`,
+        { appointmentId, serviceCaseId: existing.serviceCaseId },
+      );
+    }
 
     const reloaded = await this.prisma.serviceCase.findFirst({
       where: { id: existing.serviceCaseId },
@@ -771,13 +785,14 @@ export class ServiceCasesService {
       throw new ForbiddenException('Cannot acknowledge appointment');
     }
 
+    let woCreated = false;
     await this.prisma.$transaction(async (tx) => {
       await tx.serviceAppointment.update({
         where: { id: appointmentId },
         data: { driverAcknowledgedAt: new Date() },
       });
 
-      await this.maybeCreateWorkOrderAfterDualConfirmTx(
+      woCreated = await this.maybeCreateWorkOrderAfterDualConfirmTx(
         tx,
         tenant.id,
         appointmentId,
@@ -786,6 +801,20 @@ export class ServiceCasesService {
         actorUserId,
       );
     });
+
+    if (woCreated) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+      if (tenant) {
+        void this.partnerNotify.notifySupplierContact(
+          tenant.id,
+          existing.supplierId ?? existing.serviceCase.supplierId,
+          'wo_created',
+          `Comandă service nouă — ${existing.serviceCase.title}`,
+          `S-a creat comanda de lucru după confirmarea șoferului.`,
+          { appointmentId, serviceCaseId: existing.serviceCaseId },
+        );
+      }
+    }
 
     const reloaded = await this.prisma.serviceCase.findFirst({
       where: { id: existing.serviceCaseId },
@@ -889,6 +918,10 @@ export class ServiceCasesService {
     const serviceCase = await tx.serviceCase.findFirst({ where: { id: appt.serviceCaseId } });
     if (!serviceCase?.vehicleId) return false;
 
+    const prior = await tx.maintenanceWorkOrder.findFirst({
+      where: { serviceCaseId: serviceCase.id },
+    });
+
     await this.ensureWorkOrderTx(
       tx,
       tenantId,
@@ -911,7 +944,7 @@ export class ServiceCasesService {
       data: { plannedAt: scheduledAt, supplierId: supplierId ?? serviceCase.supplierId },
     });
 
-    return true;
+    return !prior;
   }
 
   private async ensureWorkOrder(

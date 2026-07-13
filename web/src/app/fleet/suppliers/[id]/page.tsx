@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { SupplierInvitePanel } from "@/components/fleet/suppliers/SupplierInvitePanel";
 import { SupplierProfileTabs } from "@/components/fleet/suppliers/SupplierProfileTabs";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { canManageFleet, canReadSuppliers, getAuthMeResult, getDefaultFleetHome } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { loadSupplierServiceCatalogServer } from "@/lib/suppliers-api-server";
 import { supplierCategoryLabel, supplierStatusLabel, type SupplierRecord } from "@/lib/suppliers-api";
@@ -27,6 +28,7 @@ export default async function SupplierDetailPage({ params }: PageProps) {
     loadSupplierServiceCatalogServer(),
   ]);
   if (!supplier) notFound();
+  if (!canReadSuppliers(auth)) redirect(getDefaultFleetHome(auth));
   const write = canManageFleet(auth);
 
   return (
@@ -68,6 +70,12 @@ export default async function SupplierDetailPage({ params }: PageProps) {
           assignedByLabel="Flotă"
         />
       </div>
+
+      {write ? (
+        <div className="mt-6">
+          <SupplierInvitePanel supplierId={supplier.id} />
+        </div>
+      ) : null}
     </FleetPageMain>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
+import { WorkOrderMessageThread } from "@/components/fleet/work-orders/WorkOrderMessageThread";
 import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
 import { schedulerHref } from "@/lib/scheduler-deep-link";
 import { formatDateRo } from "@/lib/datetime-local";
@@ -30,6 +31,7 @@ type Props = {
   canApprove: boolean;
   hasInvoicedQuote: boolean;
   hasCostFromQuote: boolean;
+  isPartner?: boolean;
 };
 
 function fmtDate(iso: string | null): string {
@@ -63,7 +65,7 @@ function sheetBtn(primary?: boolean) {
   ].join(" ");
 }
 
-export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote, hasCostFromQuote }: Props) {
+export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote, hasCostFromQuote, isPartner = false }: Props) {
   const router = useRouter();
   const [serviceType, setServiceType] = useState<ServiceOrderType>(wo.serviceOrderType);
   const [pending, setPending] = useState(false);
@@ -430,6 +432,10 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
           wo.quoteSummary.status === "submitted" || wo.quoteSummary.status === "approved"
         }
       />
+
+      <div className="border-t border-zinc-800 p-4">
+        <WorkOrderMessageThread workOrderId={wo.id} canWrite={canWrite || canApprove} isPartner={isPartner} />
+      </div>
 
       <div className="border-t border-zinc-800 px-4 py-3">
         <WorkOrderCompleteButton

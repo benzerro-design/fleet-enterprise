@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SupplierCategory, SupplierServiceKind, SupplierStatus, MaintenanceWorkOrderStatus } from '@prisma/client';
+import { Prisma, SupplierCategory, SupplierStatus, MaintenanceWorkOrderStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -14,8 +14,11 @@ import {
 } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvCell } from '../ops/ops-csv';
-import { parseSupplierServiceKinds, supplierServiceCatalog } from './supplier-services';
-import { isEnumServiceKind } from '../tenant/tenant-service-types';
+import { parseSupplierServiceCodes, supplierServiceCatalog } from './supplier-services';
+import {
+  assertSupplierReadById,
+  supplierListScope,
+} from './supplier-access';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -32,7 +35,7 @@ export type SupplierRecord = {
   city: string | null;
   county: string | null;
   notes: string | null;
-  services: SupplierServiceKind[];
+  services: string[];
   workOrderCount: number;
   createdAt: string;
   updatedAt: string;
@@ -50,7 +53,7 @@ export type CreateSupplierInput = {
   city?: string | null;
   county?: string | null;
   notes?: string | null;
-  services?: SupplierServiceKind[];
+  services?: string[];
 };
 
 export type PatchSupplierInput = Partial<CreateSupplierInput>;
@@ -61,7 +64,7 @@ export type SupplierListParams = {
   q?: string;
   status?: SupplierStatus;
   category?: SupplierCategory;
-  serviceKind?: SupplierServiceKind;
+  serviceTypeCode?: string;
 };
 
 export type SupplierStats = {
@@ -86,12 +89,20 @@ export class SuppliersService {
     private readonly audit: AuditService,
   ) {}
 
-  private listWhere(tenantId: string, params: SupplierListParams): Prisma.SupplierWhereInput {
+  private listWhere(
+    tenantId: string,
+    params: SupplierListParams,
+    access?: AccessContext,
+  ): Prisma.SupplierWhereInput {
     const parts: Prisma.SupplierWhereInput[] = [{ tenantId }];
+    const scope = access ? supplierListScope(access) : undefined;
+    if (scope) parts.push(scope);
     if (params.status) parts.push({ status: params.status });
     if (params.category) parts.push({ category: params.category });
-    if (params.serviceKind) {
-      parts.push({ serviceOfferings: { some: { kind: params.serviceKind } } });
+    if (params.serviceTypeCode) {
+      parts.push({
+        serviceOfferings: { some: { serviceType: { code: params.serviceTypeCode.trim() } } },
+      });
     }
     const q = params.q?.trim();
     if (q) {
@@ -124,7 +135,7 @@ export class SuppliersService {
       updatedAt: Date;
     },
     workOrderCount = 0,
-    services: SupplierServiceKind[] = [],
+    services: string[] = [],
   ): SupplierRecord {
     return {
       id: row.id,
@@ -155,17 +166,39 @@ export class SuppliersService {
       orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
     });
 
-    const enumRows = rows.filter((r) => isEnumServiceKind(r.code));
-    if (enumRows.length === 0) return supplierServiceCatalog();
+    if (rows.length === 0) return supplierServiceCatalog();
 
-    return enumRows.map((r) => ({
-      kind: r.code as SupplierServiceKind,
+    return rows.map((r) => ({
+      id: r.id,
+      code: r.code,
+      kind: r.code,
       label: r.label,
       description: r.clientDescription,
     }));
   }
 
-  async listPaged(tenantSlug: string, params: SupplierListParams) {
+  private async resolveServiceTypeIds(tenantId: string, codes: string[]) {
+    if (codes.length === 0) return [] as { id: string; code: string }[];
+    const types = await this.prisma.tenantServiceType.findMany({
+      where: { tenantId, active: true, code: { in: codes } },
+      select: { id: true, code: true },
+    });
+    if (types.length !== codes.length) {
+      throw new BadRequestException('Invalid or inactive service type code');
+    }
+    return types;
+  }
+
+  private offeringInclude() {
+    return {
+      serviceOfferings: {
+        orderBy: { serviceType: { sortOrder: 'asc' as const } },
+        select: { serviceType: { select: { code: true } } },
+      },
+    } as const;
+  }
+
+  async listPaged(tenantSlug: string, params: SupplierListParams, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -173,7 +206,7 @@ export class SuppliersService {
     const pageSize = Math.min(Math.max(1, params.pageSize), MAX_PAGE_SIZE);
     const page = Math.max(1, params.page);
     const skip = (page - 1) * pageSize;
-    const where = this.listWhere(tenant.id, params);
+    const where = this.listWhere(tenant.id, params, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.supplier.count({ where }),
@@ -184,7 +217,7 @@ export class SuppliersService {
         take: pageSize,
         include: {
           _count: { select: { workOrders: true } },
-          serviceOfferings: { select: { kind: true }, orderBy: { kind: 'asc' } },
+          ...this.offeringInclude(),
         },
       }),
     ]);
@@ -194,7 +227,7 @@ export class SuppliersService {
         this.toRecord(
           r,
           r._count.workOrders,
-          r.serviceOfferings.map((s) => s.kind),
+          r.serviceOfferings.map((s) => s.serviceType.code),
         ),
       ),
       total,
@@ -203,13 +236,17 @@ export class SuppliersService {
     };
   }
 
-  async getStats(tenantSlug: string, params: Omit<SupplierListParams, 'page' | 'pageSize'>): Promise<SupplierStats> {
+  async getStats(
+    tenantSlug: string,
+    params: Omit<SupplierListParams, 'page' | 'pageSize'>,
+    access?: AccessContext,
+  ): Promise<SupplierStats> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { total: 0, active: 0, inactive: 0, blocked: 0, openWorkOrders: 0 };
     }
 
-    const where = this.listWhere(tenant.id, { ...params, page: 1, pageSize: 1 });
+    const where = this.listWhere(tenant.id, { ...params, page: 1, pageSize: 1 }, access);
 
     const [total, active, inactive, blocked, matchingIds] = await Promise.all([
       this.prisma.supplier.count({ where }),
@@ -237,8 +274,8 @@ export class SuppliersService {
   }
 
   async getById(tenantSlug: string, id: string, access?: AccessContext): Promise<SupplierRecord> {
-    if (access && isPartnerUser(access)) {
-      assertPartnerSupplierId(access, id);
+    if (access) {
+      await assertSupplierReadById(this.prisma, tenantSlug, id, access);
     }
     const row = await this.findRow(tenantSlug, id);
     const [woCount, offerings] = await Promise.all([
@@ -247,14 +284,14 @@ export class SuppliersService {
       }),
       this.prisma.supplierService.findMany({
         where: { supplierId: id },
-        orderBy: { kind: 'asc' },
-        select: { kind: true },
+        orderBy: { serviceType: { sortOrder: 'asc' } },
+        select: { serviceType: { select: { code: true } } },
       }),
     ]);
     return this.toRecord(
       row,
       woCount,
-      offerings.map((o) => o.kind),
+      offerings.map((o) => o.serviceType.code),
     );
   }
 
@@ -265,21 +302,22 @@ export class SuppliersService {
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<SupplierRecord> {
-    const services = parseSupplierServiceKinds(rawServices);
+    const codes = parseSupplierServiceCodes(rawServices);
     if (access && isPartnerUser(access)) {
       assertPartnerSupplierId(access, id);
       assertPartnerWrite(access);
     }
     const row = await this.findRow(tenantSlug, id);
+    const types = await this.resolveServiceTypeIds(row.tenantId, codes);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.supplierService.deleteMany({ where: { supplierId: id, tenantId: row.tenantId } });
-      if (services.length > 0) {
+      if (types.length > 0) {
         await tx.supplierService.createMany({
-          data: services.map((kind) => ({
+          data: types.map((t) => ({
             tenantId: row.tenantId,
             supplierId: id,
-            kind,
+            serviceTypeId: t.id,
           })),
         });
       }
@@ -291,7 +329,7 @@ export class SuppliersService {
       action: 'supplier.set_services',
       entityType: 'supplier',
       entityId: id,
-      meta: { services },
+      meta: { services: codes },
     });
 
     return this.getById(tenantSlug, id, access);
@@ -322,13 +360,14 @@ export class SuppliersService {
         },
       });
       if (dto.services?.length) {
-        const services = parseSupplierServiceKinds(dto.services);
-        if (services.length > 0) {
+        const codes = parseSupplierServiceCodes(dto.services);
+        const types = await this.resolveServiceTypeIds(tenant.id, codes);
+        if (types.length > 0) {
           await this.prisma.supplierService.createMany({
-            data: services.map((kind) => ({
+            data: types.map((t) => ({
               tenantId: tenant.id,
               supplierId: row.id,
-              kind,
+              serviceTypeId: t.id,
             })),
           });
         }
@@ -369,22 +408,23 @@ export class SuppliersService {
     if (dto.county !== undefined) data.county = dto.county?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
 
-    const serviceKinds =
-      dto.services !== undefined ? parseSupplierServiceKinds(dto.services) : undefined;
+    const serviceCodes =
+      dto.services !== undefined ? parseSupplierServiceCodes(dto.services) : undefined;
 
     try {
       if (Object.keys(data).length > 0) {
         await this.prisma.supplier.update({ where: { id }, data });
       }
-      if (serviceKinds !== undefined) {
+      if (serviceCodes !== undefined) {
+        const types = await this.resolveServiceTypeIds(before.tenantId, serviceCodes);
         await this.prisma.$transaction(async (tx) => {
           await tx.supplierService.deleteMany({ where: { supplierId: id, tenantId: before.tenantId } });
-          if (serviceKinds.length > 0) {
+          if (types.length > 0) {
             await tx.supplierService.createMany({
-              data: serviceKinds.map((kind) => ({
+              data: types.map((t) => ({
                 tenantId: before.tenantId,
                 supplierId: id,
-                kind,
+                serviceTypeId: t.id,
               })),
             });
           }
@@ -395,7 +435,7 @@ export class SuppliersService {
           action: 'supplier.set_services',
           entityType: 'supplier',
           entityId: id,
-          meta: { services: serviceKinds },
+          meta: { services: serviceCodes },
         });
       }
       await this.audit.log({
