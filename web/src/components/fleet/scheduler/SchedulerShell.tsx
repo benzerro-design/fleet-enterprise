@@ -26,13 +26,15 @@ import { SchedulerSidebar } from "./SchedulerSidebar";
 import { SchedulerSupplierBandView } from "./SchedulerSupplierBandView";
 import { SchedulerWeekView } from "./SchedulerWeekView";
 
-type SupplierOption = { id: string; code: string; legalName: string; category: string };
+type SupplierOption = { id: string; code: string; legalName: string; category: string; services?: string[] };
+type ServiceTypeOption = { id: string; code: string; label: string };
 type VehicleOption = { id: string; registrationNumber: string; clientId: string };
 
 type Props = {
   canWrite: boolean;
   initialStats: AppointmentStats | null;
   suppliers: SupplierOption[];
+  serviceTypes?: ServiceTypeOption[];
   vehicles: VehicleOption[];
   initialWeekIso?: string;
   initialSelectId?: string;
@@ -46,6 +48,7 @@ export function SchedulerShell({
   canWrite,
   initialStats,
   suppliers,
+  serviceTypes = [],
   vehicles,
   initialWeekIso,
   initialSelectId,
@@ -65,6 +68,16 @@ export function SchedulerShell({
   const [stats, setStats] = useState<AppointmentStats | null>(initialStats);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectId ?? null);
   const [supplierFilter, setSupplierFilter] = useState<string[]>(() => suppliers.map((s) => s.id));
+  const [serviceTypeCode, setServiceTypeCode] = useState("");
+  const visibleSuppliers = useMemo(() => {
+    if (!serviceTypeCode) return suppliers;
+    return suppliers.filter((s) => s.services?.includes(serviceTypeCode));
+  }, [suppliers, serviceTypeCode]);
+
+  useEffect(() => {
+    setSupplierFilter(visibleSuppliers.map((s) => s.id));
+  }, [serviceTypeCode, visibleSuppliers]);
+
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<SchedulerViewMode>(initialViewMode);
   const [createPrefillAt, setCreatePrefillAt] = useState<string | undefined>();
@@ -269,7 +282,10 @@ export function SchedulerShell({
 
       <div className="relative flex min-h-0 flex-1">
         <SchedulerSidebar
-          suppliers={suppliers}
+          suppliers={visibleSuppliers}
+          serviceTypes={serviceTypes}
+          serviceTypeCode={serviceTypeCode}
+          onServiceTypeChange={setServiceTypeCode}
           selectedIds={supplierFilter}
           onToggle={toggleSupplier}
           weekLabel={weekLabel}
@@ -332,6 +348,7 @@ export function SchedulerShell({
             initialCreateScheduledAt={createPrefillAt}
             linkTicketId={linkTicketId}
             initialVehicleId={linkVehicleId ?? undefined}
+            serviceTypeCode={serviceTypeCode || undefined}
           />
         ) : null}
       </div>
@@ -366,6 +383,7 @@ export function SchedulerShell({
           initialCreateScheduledAt={createPrefillAt}
           linkTicketId={linkTicketId}
           initialVehicleId={linkVehicleId ?? undefined}
+          serviceTypeCode={serviceTypeCode || undefined}
         />
       ) : null}
     </div>

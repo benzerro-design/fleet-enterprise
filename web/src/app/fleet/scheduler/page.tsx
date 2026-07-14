@@ -30,7 +30,19 @@ async function loadSuppliers() {
       code: s.code,
       legalName: s.legalName,
       category: s.category,
+      services: s.services ?? [],
     }));
+  } catch {
+    return [];
+  }
+}
+
+async function loadServiceTypes() {
+  try {
+    const res = await fleetServerFetch("/tenant/service-types/active");
+    if (!res?.ok) return [];
+    const data = (await res.json()) as { items: { id: string; code: string; label: string }[] };
+    return data.items ?? [];
   } catch {
     return [];
   }
@@ -44,10 +56,11 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const initialViewMode: SchedulerViewMode = sp.view === "bands" ? "bands" : "grid";
 
-  const [auth, stats, suppliers, vehicles] = await Promise.all([
+  const [auth, stats, suppliers, serviceTypes, vehicles] = await Promise.all([
     getAuthMeResult(),
     loadStats(),
     loadSuppliers(),
+    loadServiceTypes(),
     getVehicleOptions(),
   ]);
   const canWrite = canWriteFleetOps(auth);
@@ -80,6 +93,7 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               canWrite={canWrite}
               initialStats={stats}
               suppliers={suppliers}
+              serviceTypes={serviceTypes}
               vehicles={vehicleOptions}
               initialWeekIso={sp.week}
               initialSelectId={sp.select}

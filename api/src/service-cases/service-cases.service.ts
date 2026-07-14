@@ -87,6 +87,7 @@ export type QuoteSummary = {
   invoicedAt: string | null;
   invoiceNumber: string | null;
   invoiceDate: string | null;
+  invoiceAttachmentUrl: string | null;
   costEntryId: string | null;
 };
 
@@ -264,6 +265,7 @@ export class ServiceCasesService {
         sourceType: ServiceCaseSourceType.ticket,
         sourceTicketId: ticket.id,
         sourceReminderActionId: ticket.reminderActionId,
+        serviceTypeId: ticket.serviceTypeId,
         currentStage: ServiceCaseStage.intake,
         status: ServiceCaseStatus.active,
         title: ticket.subject,
@@ -1041,6 +1043,7 @@ export class ServiceCasesService {
               invoicedAt: true,
               invoiceNumber: true,
               invoiceDate: true,
+              invoiceAttachmentUrl: true,
               costEntryId: true,
             },
           },
@@ -1147,6 +1150,7 @@ export class ServiceCasesService {
           invoicedAt: Date | null;
           invoiceNumber: string | null;
           invoiceDate: Date | null;
+          invoiceAttachmentUrl: string | null;
           costEntryId: string | null;
         }>;
       }>;
@@ -1204,6 +1208,7 @@ export class ServiceCasesService {
                 invoicedAt: q.invoicedAt?.toISOString() ?? null,
                 invoiceNumber: q.invoiceNumber ?? null,
                 invoiceDate: q.invoiceDate?.toISOString() ?? null,
+                invoiceAttachmentUrl: q.invoiceAttachmentUrl ?? null,
                 costEntryId: q.costEntryId ?? null,
               }
             : null;

@@ -33,6 +33,7 @@ type Props = {
   initialCreateScheduledAt?: string;
   linkTicketId?: string | null;
   initialVehicleId?: string;
+  serviceTypeCode?: string;
 };
 
 export function SchedulerInspector({
@@ -47,6 +48,7 @@ export function SchedulerInspector({
   initialCreateScheduledAt,
   linkTicketId,
   initialVehicleId,
+  serviceTypeCode,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -290,7 +292,7 @@ export function SchedulerInspector({
           </div>
           <div>
             <label className={OPS_LABEL_CLASS}>Furnizor</label>
-            <SupplierCombobox value={supplierId} onChange={setSupplierId} />
+            <SupplierCombobox value={supplierId} onChange={setSupplierId} serviceTypeCode={serviceTypeCode} />
           </div>
           <div>
             <label className={OPS_LABEL_CLASS}>Titlu</label>

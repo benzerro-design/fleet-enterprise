@@ -26,6 +26,10 @@ import {
 } from '../iam/client-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from '../ops/ops-csv';
+import {
+  serviceTypeCodeToTicketType,
+  ticketTypeToDefaultServiceCode,
+} from '../tenant/ticket-service-type-map';
 
 const MAX_PAGE_SIZE = 200;
 export const FLOTAX_OPS_QUEUE = 'flotax:ops';
@@ -37,6 +41,9 @@ export type TicketRecord = {
   clientCode: string;
   clientLegalName: string;
   ticketType: CrmTicketType;
+  serviceTypeId: string | null;
+  serviceTypeCode: string | null;
+  serviceTypeLabel: string | null;
   subject: string;
   description: string | null;
   status: CrmTicketStatus;
@@ -99,6 +106,7 @@ export type CreateTicketInput = {
   description?: string | null;
   priority?: CrmTicketPriority;
   ticketType?: CrmTicketType;
+  serviceTypeId?: string | null;
   vehicleId?: string | null;
   driverId?: string | null;
   reminderActionId?: string | null;
@@ -113,6 +121,7 @@ export type PatchTicketInput = {
   status?: CrmTicketStatus;
   priority?: CrmTicketPriority;
   ticketType?: CrmTicketType;
+  serviceTypeId?: string | null;
   ownerUserId?: string | null;
 };
 
@@ -186,6 +195,7 @@ type TicketRow = Prisma.CrmTicketGetPayload<{
     driver: { select: { fullName: true } };
     createdBy: { select: { email: true } };
     owner: { select: { email: true } };
+    serviceType: { select: { id: true; code: true; label: true } };
   };
 }>;
 
@@ -472,7 +482,13 @@ export class CrmTicketsService {
     );
 
     let ticketType = dto.ticketType ?? CrmTicketType.other;
-    if (reminderActionId && !dto.ticketType) {
+    let serviceTypeId: string | null = null;
+
+    if (dto.serviceTypeId?.trim()) {
+      const resolved = await this.resolveServiceTypeId(tenant.id, dto.serviceTypeId.trim());
+      serviceTypeId = resolved.id;
+      ticketType = resolved.ticketType;
+    } else if (reminderActionId && !dto.ticketType) {
       const reminder = await this.prisma.reminderAction.findFirst({
         where: { id: reminderActionId, tenantId: tenant.id },
         select: { sourceType: true, title: true },
@@ -480,6 +496,15 @@ export class CrmTicketsService {
       if (reminder) {
         ticketType = this.inferTicketTypeFromReminder(reminder.sourceType, reminder.title);
       }
+    }
+
+    if (!serviceTypeId) {
+      const code = ticketTypeToDefaultServiceCode(ticketType);
+      const st = await this.prisma.tenantServiceType.findFirst({
+        where: { tenantId: tenant.id, code },
+        select: { id: true },
+      });
+      serviceTypeId = st?.id ?? null;
     }
 
     const routingLevel =
@@ -510,6 +535,7 @@ export class CrmTicketsService {
         tenantId: tenant.id,
         clientId: client.id,
         ticketType,
+        serviceTypeId,
         subject,
         description: dto.description?.trim() || null,
         priority: dto.priority ?? CrmTicketPriority.normal,
@@ -589,6 +615,22 @@ export class CrmTicketsService {
     if (dto.description !== undefined) data.description = dto.description?.trim() || null;
     if (dto.priority !== undefined) data.priority = dto.priority;
     if (dto.ticketType !== undefined) data.ticketType = dto.ticketType;
+    if (dto.serviceTypeId !== undefined) {
+      if (dto.serviceTypeId === null) {
+        data.serviceType = { disconnect: true };
+      } else {
+        const resolved = await this.resolveServiceTypeId(tenant.id, dto.serviceTypeId.trim());
+        data.serviceType = { connect: { id: resolved.id } };
+        data.ticketType = resolved.ticketType;
+      }
+    } else if (dto.ticketType !== undefined) {
+      const code = ticketTypeToDefaultServiceCode(dto.ticketType);
+      const st = await this.prisma.tenantServiceType.findFirst({
+        where: { tenantId: tenant.id, code },
+        select: { id: true },
+      });
+      data.serviceType = st ? { connect: { id: st.id } } : { disconnect: true };
+    }
     if (dto.ownerUserId !== undefined) {
       data.owner = dto.ownerUserId
         ? { connect: { id: dto.ownerUserId } }
@@ -1348,7 +1390,20 @@ export class CrmTicketsService {
       driver: { select: { fullName: true } },
       createdBy: { select: { email: true } },
       owner: { select: { email: true } },
+      serviceType: { select: { id: true, code: true, label: true } },
     } as const;
+  }
+
+  private async resolveServiceTypeId(
+    tenantId: string,
+    serviceTypeId: string,
+  ): Promise<{ id: string; ticketType: CrmTicketType }> {
+    const row = await this.prisma.tenantServiceType.findFirst({
+      where: { id: serviceTypeId, tenantId, active: true },
+      select: { id: true, code: true },
+    });
+    if (!row) throw new BadRequestException('Invalid or inactive service type');
+    return { id: row.id, ticketType: serviceTypeCodeToTicketType(row.code) };
   }
 
   private listWhere(
@@ -1416,6 +1471,9 @@ export class CrmTicketsService {
       clientCode: row.client.code,
       clientLegalName: row.client.legalName,
       ticketType: row.ticketType,
+      serviceTypeId: row.serviceTypeId ?? row.serviceType?.id ?? null,
+      serviceTypeCode: row.serviceType?.code ?? null,
+      serviceTypeLabel: row.serviceType?.label ?? null,
       subject: row.subject,
       description: row.description,
       status: row.status,

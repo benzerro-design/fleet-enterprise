@@ -37,6 +37,9 @@ export type TicketRecord = {
   clientCode: string;
   clientLegalName: string;
   ticketType: TicketType;
+  serviceTypeId: string | null;
+  serviceTypeCode: string | null;
+  serviceTypeLabel: string | null;
   subject: string;
   description: string | null;
   status: TicketStatus;

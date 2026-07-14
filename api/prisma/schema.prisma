@@ -915,6 +915,7 @@ model CrmTicket {
   tenantId         String
   clientId         String
   ticketType       CrmTicketType         @default(other)
+  serviceTypeId    String?
   subject          String
   description      String?
   status           CrmTicketStatus       @default(open)
@@ -937,6 +938,7 @@ model CrmTicket {
   reminderAction   ReminderAction?       @relation(fields: [reminderActionId], references: [id], onDelete: SetNull)
   createdBy        User?                 @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
   owner            User?                 @relation("TicketOwner", fields: [ownerUserId], references: [id])
+  serviceType      TenantServiceType?    @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
   events           CrmTicketEvent[]
   links            CrmTicketLink[]
   notifications    CrmTicketNotification[]
@@ -951,6 +953,7 @@ model CrmTicket {
   @@index([routingLevel])
   @@index([assignedQueue])
   @@index([ticketType])
+  @@index([serviceTypeId])
 }
 
 model CrmTicketEvent {
@@ -1114,6 +1117,8 @@ model TenantServiceType {
   updatedAt         DateTime @updatedAt
   tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   supplierOfferings SupplierService[]
+  tickets           CrmTicket[]
+  serviceCases      ServiceCase[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -1176,11 +1181,14 @@ model PartnerNotificationOutbox {
   body       String
   payload    Json?
   sentAt     DateTime?
+  attempts   Int       @default(0)
+  lastError  String?
   createdAt  DateTime  @default(now())
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
   @@index([supplierId])
+  @@index([sentAt])
 }
 
 enum ServiceCaseWorkflowType {
@@ -1247,6 +1255,7 @@ model ServiceCase {
   clientId               String
   vehicleId              String?
   workflowType           ServiceCaseWorkflowType
+  serviceTypeId          String?
   sourceType             ServiceCaseSourceType
   sourceTicketId         String?                 @unique
   sourceTicket           CrmTicket?              @relation(fields: [sourceTicketId], references: [id], onDelete: SetNull)
@@ -1265,6 +1274,7 @@ model ServiceCase {
   client                 Client                  @relation(fields: [clientId], references: [id], onDelete: Restrict)
   vehicle                Vehicle?                @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   supplier               Supplier?               @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  serviceType            TenantServiceType?      @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
   workOrders             MaintenanceWorkOrder[]
   appointments           ServiceAppointment[]
   mobilityAssignments    MobilityAssignment[]
@@ -1273,6 +1283,7 @@ model ServiceCase {
   @@index([clientId])
   @@index([vehicleId])
   @@index([sourceTicketId])
+  @@index([serviceTypeId])
   @@index([tenantId, status])
   @@index([tenantId, currentStage])
 }

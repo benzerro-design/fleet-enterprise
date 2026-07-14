@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
+import { FLEET_READ_ROLES } from '../iam/role-sets';
 import { TenantService } from './tenant.service';
 
 @Controller('tenant')
@@ -80,6 +81,12 @@ export class TenantController {
   resetIamStrategy(@TenantId() tenantSlug: string, @CurrentUserId() actorUserId?: string) {
     if (!actorUserId) throw new BadRequestException('Missing actor');
     return this.tenant.resetIamStrategy(tenantSlug, actorUserId);
+  }
+
+  @Get('service-types/active')
+  @Roles(...FLEET_READ_ROLES)
+  listActiveServiceTypes(@TenantId() tenantSlug: string) {
+    return this.tenant.listActiveServiceTypes(tenantSlug);
   }
 
   @Get('service-types')

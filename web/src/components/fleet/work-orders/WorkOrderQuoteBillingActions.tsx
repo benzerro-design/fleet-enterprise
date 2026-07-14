@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import { InvoiceAttachmentField } from "@/components/fleet/work-orders/InvoiceAttachmentField";
 import {
   defaultDayOffsetsForMode,
   defaultKmOffsets,
@@ -43,7 +44,7 @@ export function WorkOrderQuoteBillingActions({
   const [invoiceDate, setInvoiceDate] = useState(
     quote.invoiceDate ? quote.invoiceDate.slice(0, 10) : "",
   );
-  const [invoiceAttachmentUrl, setInvoiceAttachmentUrl] = useState("");
+  const [invoiceAttachmentUrl, setInvoiceAttachmentUrl] = useState(quote.invoiceAttachmentUrl ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showReminder, setShowReminder] = useState(false);
@@ -198,6 +199,19 @@ export function WorkOrderQuoteBillingActions({
           {quote.invoiceDate
             ? ` · ${new Date(quote.invoiceDate).toLocaleDateString("ro-RO")}`
             : ""}
+          {quote.invoiceAttachmentUrl ? (
+            <>
+              {" · "}
+              <a
+                href={quote.invoiceAttachmentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-violet-300 hover:underline"
+              >
+                PDF factură
+              </a>
+            </>
+          ) : null}
         </p>
       ) : canWrite ? (
         <div className="grid gap-2 sm:grid-cols-2">
@@ -219,12 +233,11 @@ export function WorkOrderQuoteBillingActions({
             />
           </div>
           <div className="sm:col-span-2">
-            <label className={OPS_LABEL_CLASS}>Link atașament factură (URL)</label>
-            <input
+            <InvoiceAttachmentField
               value={invoiceAttachmentUrl}
-              onChange={(e) => setInvoiceAttachmentUrl(e.target.value)}
-              className={OPS_INPUT_CLASS}
-              placeholder="https://… sau link document încărcat"
+              onChange={setInvoiceAttachmentUrl}
+              invoiceNumber={invoiceNumber}
+              disabled={pending}
             />
           </div>
           <div className="sm:col-span-2">

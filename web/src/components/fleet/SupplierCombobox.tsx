@@ -11,6 +11,7 @@ type Props = {
   value: string;
   onChange: (supplierId: string, supplier: SupplierRecord | null) => void;
   category?: SupplierCategory;
+  serviceTypeCode?: string;
   disabled?: boolean;
   className?: string;
 };
@@ -19,6 +20,7 @@ export function SupplierCombobox({
   value,
   onChange,
   category,
+  serviceTypeCode,
   disabled,
   className = "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2",
 }: Props) {
@@ -35,6 +37,7 @@ export function SupplierCombobox({
       params.set("pageSize", "30");
       if (q.trim()) params.set("q", q.trim());
       if (category) params.set("category", category);
+      if (serviceTypeCode) params.set("serviceTypeCode", serviceTypeCode);
       void fetch(`${suppliersBrowserBase}?${params}`)
         .then((r) => (r.ok ? r.json() : { items: [] }))
         .then((j: { items?: SupplierRecord[] }) => {
@@ -48,7 +51,7 @@ export function SupplierCombobox({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [q, category]);
+  }, [q, category, serviceTypeCode]);
 
   return (
     <div className="space-y-2">

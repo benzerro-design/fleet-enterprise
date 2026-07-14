@@ -10,7 +10,7 @@ import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 async function loadServiceTypes(): Promise<TenantServiceTypesResponse["items"]> {
   try {
-    const res = await fleetServerFetch("/tenant/service-types");
+    const res = await fleetServerFetch("/tenant/service-types/active");
     if (!res?.ok) return [];
     const payload = (await res.json()) as TenantServiceTypesResponse;
     return payload.items;

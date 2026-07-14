@@ -37,6 +37,7 @@ export type QuoteSummary = {
   invoicedAt: string | null;
   invoiceNumber: string | null;
   invoiceDate: string | null;
+  invoiceAttachmentUrl: string | null;
   costEntryId: string | null;
 };
 

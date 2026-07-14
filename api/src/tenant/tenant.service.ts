@@ -192,6 +192,11 @@ export class TenantService {
       where: { tenantId, serviceTypeId: { in: rows.map((r) => r.id) } },
       _count: { serviceTypeId: true },
     });
+    const ticketCounts = await this.prisma.crmTicket.groupBy({
+      by: ['serviceTypeId'],
+      where: { tenantId, serviceTypeId: { in: rows.map((r) => r.id) } },
+      _count: { serviceTypeId: true },
+    });
     const idToCode = new Map(rows.map((r) => [r.id, r.code]));
     const map = new Map<string, { suppliers: number; tickets: number }>();
     for (const row of rows) {
@@ -199,9 +204,37 @@ export class TenantService {
     }
     for (const c of counts) {
       const code = idToCode.get(c.serviceTypeId);
-      if (code) map.set(code, { suppliers: c._count.serviceTypeId, tickets: 0 });
+      if (code) {
+        const cur = map.get(code) ?? { suppliers: 0, tickets: 0 };
+        map.set(code, { ...cur, suppliers: c._count.serviceTypeId });
+      }
+    }
+    for (const c of ticketCounts) {
+      if (!c.serviceTypeId) continue;
+      const code = idToCode.get(c.serviceTypeId);
+      if (code) {
+        const cur = map.get(code) ?? { suppliers: 0, tickets: 0 };
+        map.set(code, { ...cur, tickets: c._count.serviceTypeId });
+      }
     }
     return map;
+  }
+
+  async listActiveServiceTypes(tenantSlug: string) {
+    const tenant = await this.resolveTenant(tenantSlug);
+    await this.ensureDefaultServiceTypes(tenant.id);
+    const rows = await this.prisma.tenantServiceType.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+      select: {
+        id: true,
+        code: true,
+        label: true,
+        clientDescription: true,
+        sortOrder: true,
+      },
+    });
+    return { items: rows };
   }
 
   async listServiceTypes(tenantSlug: string): Promise<{ items: TenantServiceTypeRow[] }> {

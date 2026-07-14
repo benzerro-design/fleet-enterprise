@@ -95,11 +95,13 @@ export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes
     setPending(true);
     setError(null);
     const km = parseOdometerInput(odometerKm);
+    const selectedCatalog = catalogOptions.find((t) => t.code === selectedServiceCode);
     const body = {
       clientId: ctx.clientId.trim(),
       subject: subject.trim(),
       description: description.trim() || null,
       ticketType: resolvedTicketType,
+      serviceTypeId: useCatalog && selectedCatalog ? selectedCatalog.id : null,
       priority,
       vehicleId: ctx.vehicleId.trim() || null,
       driverId: ctx.driverId.trim() || null,
