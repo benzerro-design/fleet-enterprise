@@ -15,7 +15,7 @@ import {
 } from "@/lib/partner-context";
 import { primarySupplierMembership } from "@/lib/partner-auth";
 import type { SupplierRecord } from "@/lib/suppliers-api";
-import type { AppointmentStats } from "@/lib/appointments-api";
+import type { AppointmentStats, CalendarAppointment } from "@/lib/appointments-api";
 import type { WorkOrderListPayload, WorkOrderStats } from "@/lib/work-orders-api";
 
 type Search = { supplierId?: string; suppliers?: string; inbox?: string };
@@ -56,6 +56,24 @@ async function loadAppointmentStats(q: ReturnType<typeof parsePartnerSupplierQue
     return (await res.json()) as AppointmentStats;
   } catch {
     return null;
+  }
+}
+
+async function loadPendingAppointments(
+  q: ReturnType<typeof parsePartnerSupplierQuery>,
+): Promise<CalendarAppointment[]> {
+  try {
+    const from = new Date().toISOString();
+    const to = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+    const p = partnerSupplierSearchParams(q);
+    p.set("from", from);
+    p.set("to", to);
+    p.set("status", "pending_supplier");
+    const res = await fleetServerFetch(`/appointments/calendar?${p.toString()}`);
+    if (!res?.ok) return [];
+    return (await res.json()) as CalendarAppointment[];
+  } catch {
+    return [];
   }
 }
 
@@ -117,10 +135,11 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
     if (overview) return <PartnerAdminOverview overview={overview} />;
   }
 
-  const [stats, apptStats, recent, viewAsSupplier] = await Promise.all([
+  const [stats, apptStats, recent, pendingAppts, viewAsSupplier] = await Promise.all([
     loadStats(supplierQuery),
     loadAppointmentStats(supplierQuery),
     loadRecentOrders(supplierQuery),
+    loadPendingAppointments(supplierQuery),
     supplierQuery.supplierId ? loadSupplierById(supplierQuery.supplierId) : Promise.resolve(null),
   ]);
 
@@ -147,6 +166,34 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
   };
 
   const woBase = `/fleet/partner/work-orders${qs}`;
+  const apptBase = `/fleet/partner/appointments${qs}`;
+  const pendingSupplier = apptStats?.pendingSupplier ?? 0;
+  const actionItems = [
+    pendingSupplier > 0
+      ? {
+          href: `${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=pending_supplier`,
+          label: "Programări de validat",
+          count: pendingSupplier,
+          tone: "amber" as const,
+        }
+      : null,
+    s.pendingApproval > 0
+      ? {
+          href: `${woBase}${woBase.includes("?") ? "&" : "?"}inbox=pending_approval`,
+          label: "Devize așteaptă aprobare",
+          count: s.pendingApproval,
+          tone: "violet" as const,
+        }
+      : null,
+    s.readyUninvoiced > 0
+      ? {
+          href: `${woBase}${woBase.includes("?") ? "&" : "?"}inbox=ready`,
+          label: "Gata, nefacturat",
+          count: s.readyUninvoiced,
+          tone: "sky" as const,
+        }
+      : null,
+  ].filter(Boolean) as { href: string; label: string; count: number; tone: "amber" | "violet" | "sky" }[];
 
   return (
     <FleetPageMain>
@@ -159,7 +206,35 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
       </div>
 
       <div className="mt-8">
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Operațional — comenzi</p>
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Acțiuni necesare</p>
+        {actionItems.length === 0 ? (
+          <p className="rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-3 text-sm text-zinc-500">
+            Niciun element în așteptare — totul la zi.
+          </p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {actionItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center justify-between rounded-lg border px-4 py-3 transition-colors hover:bg-zinc-900/50 ${
+                  item.tone === "amber"
+                    ? "border-amber-800/50 bg-amber-950/20"
+                    : item.tone === "sky"
+                      ? "border-sky-800/50 bg-sky-950/20"
+                      : "border-violet-800/50 bg-violet-950/20"
+                }`}
+              >
+                <span className="text-sm text-zinc-200">{item.label}</span>
+                <span className="text-xl font-bold tabular-nums text-zinc-100">{item.count}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-8">
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Comenzi service (WO)</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {kpiCard(`${woBase}${woBase.includes("?") ? "&" : "?"}inbox=open`, "Deschise", s.open, "Necesită urmărire", s.open > 0)}
           {kpiCard(woBase, "În lucru", s.inProgress, "Recepționate / reparație")}
@@ -175,20 +250,22 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
       </div>
 
       <div className="mt-6">
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-          Programări · facturare
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {kpiCard(`/fleet/partner/appointments${qs}`, "Programări săptămâna", apptStats?.thisWeek ?? 0, "Calendar furnizor")}
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Programări</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {kpiCard(apptBase, "Săptămâna curentă", apptStats?.thisWeek ?? 0, "Toate programările")}
           {kpiCard(
-            `${woBase}${woBase.includes("?") ? "&" : "?"}inbox=ready`,
-            "Gata, nefacturat",
-            s.readyUninvoiced,
-            "Upload factură",
-            s.readyUninvoiced > 0,
+            `${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=pending_supplier`,
+            "De validat (eu)",
+            pendingSupplier,
+            "Necesită acțiune furnizor",
+            pendingSupplier > 0,
           )}
-          {kpiCard(`${woBase}${woBase.includes("?") ? "&" : "?"}inbox=invoiced`, "Facturate", s.done, "Finalizate")}
-          {kpiCard(`/fleet/partner/profile${qs}`, "Profil firmă", 1, "Documente & tarife", true)}
+          {kpiCard(
+            `${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=scheduled`,
+            "De confirmat flotă",
+            apptStats?.awaitingConfirm ?? apptStats?.scheduled ?? 0,
+            "Așteaptă manager flotă",
+          )}
         </div>
       </div>
 
@@ -199,7 +276,7 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
       ) : null}
 
       <div className="mt-8 flex flex-wrap gap-2">
-        <Link href={`/fleet/partner/appointments${qs}`} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900">
+        <Link href={apptBase} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900">
           Deschide programator
         </Link>
         <Link href={woBase} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900">
@@ -208,6 +285,58 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
         <Link href={`/fleet/partner/profile${qs}`} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900">
           Profil firmă
         </Link>
+      </div>
+
+      <div className="mt-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-200">Programări de validat</h2>
+          <Link
+            href={`${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=pending_supplier`}
+            className="text-xs text-violet-400 hover:underline"
+          >
+            Programator →
+          </Link>
+        </div>
+        {!pendingAppts.length ? (
+          <p className="text-sm text-zinc-500">Nicio programare așteaptă validarea dvs.</p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-zinc-800">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-zinc-900/60 text-[10px] uppercase tracking-wide text-zinc-500">
+                <tr>
+                  <th className="px-3 py-2">Data</th>
+                  <th className="px-3 py-2">Auto</th>
+                  <th className="px-3 py-2">Titlu</th>
+                  <th className="px-3 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingAppts.slice(0, 6).map((row) => (
+                  <tr key={row.id} className="border-t border-zinc-800/80">
+                    <td className="px-3 py-2 text-xs text-zinc-400">
+                      {new Date(row.scheduledAt).toLocaleString("ro-RO", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-zinc-300">{row.registrationNumber}</td>
+                    <td className="px-3 py-2 text-zinc-300">{row.title}</td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`${apptBase}${apptBase.includes("?") ? "&" : "?"}select=${row.id}&inbox=pending_supplier`}
+                        className="text-xs text-amber-300 hover:underline"
+                      >
+                        Validează →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="mt-8">

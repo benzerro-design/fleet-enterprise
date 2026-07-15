@@ -34,6 +34,7 @@ type Props = {
   linkTicketId?: string | null;
   initialVehicleId?: string;
   serviceTypeCode?: string;
+  partnerMode?: boolean;
 };
 
 export function SchedulerInspector({
@@ -49,6 +50,7 @@ export function SchedulerInspector({
   linkTicketId,
   initialVehicleId,
   serviceTypeCode,
+  partnerMode,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -263,7 +265,7 @@ export function SchedulerInspector({
           ) : null}
         </div>
         {error ? <p className="mb-2 text-sm text-red-400">{error}</p> : null}
-        {linkTicketId ? (
+        {linkTicketId && !partnerMode ? (
           <p className="mb-3 rounded-lg border border-sky-800/50 bg-sky-950/30 px-3 py-2 text-xs text-sky-200">
             Legat de tichet{" "}
             <Link href={`/fleet/tickets/${linkTicketId}`} className="font-mono font-semibold text-sky-300 hover:underline">
@@ -271,6 +273,11 @@ export function SchedulerInspector({
             </Link>
             {" — "}
             programarea se atașează dosarului service al tichetului.
+          </p>
+        ) : null}
+        {linkTicketId && partnerMode ? (
+          <p className="mb-3 rounded-lg border border-sky-800/50 bg-sky-950/30 px-3 py-2 text-xs text-sky-200">
+            Legat de tichet #{ticketDisplayIdFromTicketId(linkTicketId)} (referință flotă).
           </p>
         ) : null}
         <div className="space-y-3 overflow-y-auto">
@@ -365,7 +372,7 @@ export function SchedulerInspector({
       </div>
 
       <div className="mb-3 flex flex-wrap gap-1.5">
-        {appointment.sourceTicketId && appointment.ticketDisplayId ? (
+        {!partnerMode && appointment.sourceTicketId && appointment.ticketDisplayId ? (
           <Link
             href={`/fleet/tickets/${appointment.sourceTicketId}`}
             className="rounded-md border border-zinc-700 px-2 py-1 text-[10px] font-medium text-emerald-400 hover:bg-zinc-900"
@@ -373,21 +380,29 @@ export function SchedulerInspector({
             Tichet #{appointment.ticketDisplayId}
           </Link>
         ) : null}
-        {appointment.workOrders.map((wo) => (
+        {!partnerMode
+          ? appointment.workOrders.map((wo) => (
+              <Link
+                key={wo.id}
+                href={`/fleet/work-orders/${wo.id}`}
+                className="rounded-md border border-zinc-700 px-2 py-1 text-[10px] font-medium text-sky-300 hover:bg-zinc-900"
+              >
+                WO · {wo.title}
+              </Link>
+            ))
+          : null}
+        {!partnerMode ? (
           <Link
-            key={wo.id}
-            href={`/fleet/work-orders/${wo.id}`}
-            className="rounded-md border border-zinc-700 px-2 py-1 text-[10px] font-medium text-sky-300 hover:bg-zinc-900"
+            href={`/fleet/vehicles/${appointment.vehicleId}`}
+            className="rounded-md border border-zinc-700 px-2 py-1 font-mono text-[10px] text-zinc-300 hover:bg-zinc-900"
           >
-            WO · {wo.title}
+            {appointment.registrationNumber}
           </Link>
-        ))}
-        <Link
-          href={`/fleet/vehicles/${appointment.vehicleId}`}
-          className="rounded-md border border-zinc-700 px-2 py-1 font-mono text-[10px] text-zinc-300 hover:bg-zinc-900"
-        >
-          {appointment.registrationNumber}
-        </Link>
+        ) : (
+          <span className="rounded-md border border-zinc-700 px-2 py-1 font-mono text-[10px] text-zinc-300">
+            {appointment.registrationNumber}
+          </span>
+        )}
       </div>
 
       {error ? <p className="mb-2 text-sm text-red-400">{error}</p> : null}
@@ -450,9 +465,13 @@ export function SchedulerInspector({
         <div>
           <dt className="text-xs uppercase text-zinc-500">Vehicul</dt>
           <dd className="mt-0.5">
-            <Link href={`/fleet/vehicles/${appointment.vehicleId}`} className="font-mono text-emerald-400 hover:underline">
-              {appointment.registrationNumber}
-            </Link>
+            {partnerMode ? (
+              <span className="font-mono text-emerald-400">{appointment.registrationNumber}</span>
+            ) : (
+              <Link href={`/fleet/vehicles/${appointment.vehicleId}`} className="font-mono text-emerald-400 hover:underline">
+                {appointment.registrationNumber}
+              </Link>
+            )}
             {" · "}
             {appointment.clientCode}
           </dd>
@@ -461,9 +480,15 @@ export function SchedulerInspector({
           <dt className="text-xs uppercase text-zinc-500">Furnizor</dt>
           <dd className="mt-0.5">
             {appointment.supplierId ? (
-              <Link href={`/fleet/suppliers/${appointment.supplierId}`} className="text-sky-300 hover:underline">
-                {appointment.supplierCode} — {appointment.supplierLegalName}
-              </Link>
+              partnerMode ? (
+                <span>
+                  {appointment.supplierCode} — {appointment.supplierLegalName}
+                </span>
+              ) : (
+                <Link href={`/fleet/suppliers/${appointment.supplierId}`} className="text-sky-300 hover:underline">
+                  {appointment.supplierCode} — {appointment.supplierLegalName}
+                </Link>
+              )
             ) : (
               "—"
             )}

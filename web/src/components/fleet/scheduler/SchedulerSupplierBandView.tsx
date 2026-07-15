@@ -11,7 +11,8 @@ import {
   isSameDay,
   topOffsetForTime,
 } from "@/lib/scheduler-date-utils";
-import { supplierAccentClass, supplierDotClass } from "./supplier-colors";
+import { appointmentStatusAccentClass } from "./appointment-status-colors";
+import { supplierDotClass } from "./supplier-colors";
 
 type SupplierOption = { id: string; code: string; legalName: string; category: string };
 
@@ -136,10 +137,8 @@ export function SchedulerSupplierBandView({
                           type="button"
                           onClick={() => onSelect(a.id)}
                           className={`absolute left-0.5 right-0.5 overflow-hidden rounded border border-l-[3px] px-1 py-0.5 text-left text-[9px] leading-tight ${
-                            selected
-                              ? "z-10 border-emerald-500/60 bg-emerald-950/50 ring-1 ring-emerald-500/40"
-                              : "border-zinc-700/80 bg-zinc-900/90 hover:bg-zinc-800/90"
-                          } ${supplierAccentClass(a.supplierCategory)}`}
+                            selected ? "z-10 ring-1 ring-emerald-500/50" : "border-zinc-700/80 hover:brightness-110"
+                          } ${appointmentStatusAccentClass(a.status)}`}
                           style={{
                             top: topOffsetForTime(start),
                             height: heightForDuration(a.durationMin),

@@ -51,7 +51,10 @@ export type AppointmentStats = {
   today: number;
   thisWeek: number;
   confirmed: number;
+  /** @deprecated use awaitingConfirm */
   scheduled: number;
+  pendingSupplier: number;
+  awaitingConfirm: number;
 };
 
 export const APPOINTMENT_STATUSES: { value: AppointmentStatus; label: string }[] = [

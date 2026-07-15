@@ -15,12 +15,23 @@ import {
 } from "@/lib/partner-auth";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
 import type { WorkOrderStats } from "@/lib/work-orders-api";
+import type { AppointmentStats } from "@/lib/appointments-api";
 
 async function loadStats(): Promise<WorkOrderStats | null> {
   try {
     const res = await fleetServerFetch("/work-orders/stats");
     if (!res?.ok) return null;
     return (await res.json()) as WorkOrderStats;
+  } catch {
+    return null;
+  }
+}
+
+async function loadAppointmentStats(): Promise<AppointmentStats | null> {
+  try {
+    const res = await fleetServerFetch("/appointments/stats");
+    if (!res?.ok) return null;
+    return (await res.json()) as AppointmentStats;
   } catch {
     return null;
   }
@@ -49,8 +60,10 @@ export default async function PartnerLayout({ children }: { children: React.Reac
   const adminMode = isPartnerAdminMode(auth);
   const supplierMembership = adminMode ? undefined : primarySupplierMembership(auth.me);
   const adminSuppliers = adminMode ? await loadAdminSuppliers() : [];
-  const stats = adminMode ? null : await loadStats();
-  const pending = partnerPendingTotal(stats);
+  const [stats, apptStats] = adminMode
+    ? [null, null]
+    : await Promise.all([loadStats(), loadAppointmentStats()]);
+  const pending = partnerPendingTotal(stats, apptStats);
 
   const topBar = {
     pageTitle: "Portal partener",

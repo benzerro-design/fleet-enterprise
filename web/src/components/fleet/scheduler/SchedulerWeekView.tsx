@@ -14,20 +14,24 @@ import {
   snapTimeFromOffsetY,
   topOffsetForTime,
 } from "@/lib/scheduler-date-utils";
-import { supplierAccentClass } from "./supplier-colors";
+import { supplierDotClass } from "./supplier-colors";
 
 const DRAG_HOLD_MS = 280;
 const DRAG_MOVE_PX = 10;
+
+import { appointmentStatusAccentClass } from "./appointment-status-colors";
 
 type Props = {
   weekStart: Date;
   appointments: CalendarAppointment[];
   selectedId: string | null;
   canWrite: boolean;
+  partnerMode?: boolean;
   onSelect: (id: string) => void;
   onReschedule?: (id: string, scheduledAt: Date) => Promise<void>;
   onSlotClick?: (scheduledAt: Date) => void;
   onStatusChange?: (id: string, status: "confirmed" | "cancelled") => Promise<void>;
+  onSupplierValidate?: (id: string) => Promise<void>;
 };
 
 type DragState = {
@@ -46,7 +50,8 @@ type PendingPointer = {
   offsetY: number;
 };
 
-function primaryHref(a: CalendarAppointment): string | null {
+function primaryHref(a: CalendarAppointment, partnerMode?: boolean): string | null {
+  if (partnerMode) return null;
   if (a.sourceTicketId) return `/fleet/tickets/${a.sourceTicketId}`;
   if (a.workOrders?.[0]?.id) return `/fleet/work-orders/${a.workOrders[0].id}`;
   return null;
@@ -102,9 +107,9 @@ function AppointmentBlock({
         dragging ? "z-20 cursor-grabbing opacity-40" : canDrag ? "cursor-pointer" : "cursor-pointer"
       } ${
         selected
-          ? "z-10 border-emerald-500/60 bg-emerald-950/50 ring-1 ring-emerald-500/40"
-          : "border-zinc-700/80 bg-zinc-900/90 hover:bg-zinc-800/90"
-      } ${supplierAccentClass(a.supplierCategory)}`}
+          ? "z-10 ring-1 ring-emerald-500/50"
+          : "border-zinc-700/80 hover:brightness-110"
+      } ${appointmentStatusAccentClass(a.status)}`}
       style={{
         top: topOffsetForTime(start),
         height: heightForDuration(a.durationMin),
@@ -115,7 +120,10 @@ function AppointmentBlock({
       </div>
       <div className="truncate font-mono text-emerald-400/90">{a.registrationNumber}</div>
       <div className="truncate text-zinc-400">{a.title}</div>
-      {a.supplierCode ? <div className="truncate text-zinc-500">{a.supplierCode}</div> : null}
+      <div className="flex items-center gap-1 truncate text-zinc-500">
+        <span className={`inline-block h-1 w-1 shrink-0 rounded-full ${supplierDotClass(a.supplierCategory)}`} />
+        {a.supplierCode ?? appointmentStatusLabel(a.status)}
+      </div>
       <div
         role="tooltip"
         className="pointer-events-none absolute bottom-full left-0 z-50 mb-1 hidden min-w-[12rem] max-w-[16rem] whitespace-pre-wrap rounded border border-zinc-600 bg-zinc-900 px-2 py-1.5 text-[10px] leading-snug text-zinc-100 shadow-lg group-hover/appt:block"
@@ -131,10 +139,12 @@ export function SchedulerWeekView({
   appointments,
   selectedId,
   canWrite,
+  partnerMode,
   onSelect,
   onReschedule,
   onSlotClick,
   onStatusChange,
+  onSupplierValidate,
 }: Props) {
   const router = useRouter();
   const days = dayLabels(weekStart);
@@ -346,7 +356,7 @@ export function SchedulerWeekView({
                       canDrag={canDragAppt(a)}
                       onPointerDown={(e) => startPendingDrag(e, a, dayIndex)}
                       onDoubleClick={() => {
-                        const href = primaryHref(a);
+                        const href = primaryHref(a, partnerMode);
                         if (href) router.push(href);
                         else onSelect(a.id);
                       }}
@@ -359,7 +369,7 @@ export function SchedulerWeekView({
                   ))}
                   {showGhost && dragAppt ? (
                     <div
-                      className={`pointer-events-none absolute left-1 right-1 z-30 overflow-hidden rounded-md border border-dashed border-emerald-400/70 bg-emerald-950/60 px-1.5 py-1 text-[10px] leading-tight ${supplierAccentClass(dragAppt.supplierCategory)}`}
+                      className={`pointer-events-none absolute left-1 right-1 z-30 overflow-hidden rounded-md border border-dashed border-emerald-400/70 bg-emerald-950/60 px-1.5 py-1 text-[10px] leading-tight ${appointmentStatusAccentClass(dragAppt.status)}`}
                       style={{
                         top: drag.offsetY - heightForDuration(dragAppt.durationMin) / 2,
                         height: heightForDuration(dragAppt.durationMin),
@@ -403,17 +413,28 @@ export function SchedulerWeekView({
           >
             Detalii în panou
           </button>
-          {primaryHref(ctxMenu.appt) ? (
+          {primaryHref(ctxMenu.appt, partnerMode) ? (
             <button
               type="button"
               className="block w-full px-3 py-1.5 text-left text-xs text-zinc-200 hover:bg-zinc-800"
               onClick={() => {
-                const href = primaryHref(ctxMenu.appt);
+                const href = primaryHref(ctxMenu.appt, partnerMode);
                 if (href) router.push(href);
                 setCtxMenu(null);
               }}
             >
               {ctxMenu.appt.sourceTicketId ? "Deschide tichet" : "Deschide WO"}
+            </button>
+          ) : null}
+          {canWrite && onSupplierValidate && ctxMenu.appt.status === "pending_supplier" ? (
+            <button
+              type="button"
+              className="block w-full px-3 py-1.5 text-left text-xs text-sky-300 hover:bg-zinc-800"
+              onClick={() => {
+                void onSupplierValidate(ctxMenu.appt.id).then(() => setCtxMenu(null));
+              }}
+            >
+              Validează (furnizor)
             </button>
           ) : null}
           {canWrite && onStatusChange && ctxMenu.appt.status === "scheduled" ? (

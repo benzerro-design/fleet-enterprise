@@ -29,10 +29,19 @@ export function userInitialsFromEmail(email?: string): string {
   return local.slice(0, 2).toUpperCase();
 }
 
-export function partnerPendingTotal(stats?: {
-  pendingApproval?: number;
-  readyUninvoiced?: number;
-} | null): number {
-  if (!stats) return 0;
-  return (stats.pendingApproval ?? 0) + (stats.readyUninvoiced ?? 0);
+export function partnerPendingTotal(
+  stats?: {
+    pendingApproval?: number;
+    readyUninvoiced?: number;
+  } | null,
+  apptStats?: {
+    pendingSupplier?: number;
+  } | null,
+): number {
+  if (!stats && !apptStats) return 0;
+  return (
+    (stats?.pendingApproval ?? 0) +
+    (stats?.readyUninvoiced ?? 0) +
+    (apptStats?.pendingSupplier ?? 0)
+  );
 }

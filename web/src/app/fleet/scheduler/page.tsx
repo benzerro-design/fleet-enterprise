@@ -1,12 +1,11 @@
 import { Suspense } from "react";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { SchedulerKpiStrip } from "@/components/fleet/scheduler/SchedulerKpiStrip";
 import { SchedulerShell } from "@/components/fleet/scheduler/SchedulerShell";
 import type { AppointmentStats } from "@/lib/appointments-api";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
-import type { SchedulerViewMode } from "@/lib/scheduler-deep-link";
+import { parseSchedulerInboxParam, parseSchedulerViewParam } from "@/lib/scheduler-deep-link";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
@@ -49,12 +48,21 @@ async function loadServiceTypes() {
 }
 
 type PageProps = {
-  searchParams: Promise<{ week?: string; select?: string; view?: string; ticket?: string; vehicle?: string; create?: string }>;
+  searchParams: Promise<{
+    week?: string;
+    select?: string;
+    view?: string;
+    inbox?: string;
+    ticket?: string;
+    vehicle?: string;
+    create?: string;
+  }>;
 };
 
 export default async function SchedulerPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const initialViewMode: SchedulerViewMode = sp.view === "bands" ? "bands" : "grid";
+  const initialViewMode = parseSchedulerViewParam(sp.view);
+  const initialInbox = parseSchedulerInboxParam(sp.inbox);
 
   const [auth, stats, suppliers, serviceTypes, vehicles] = await Promise.all([
     getAuthMeResult(),
@@ -80,10 +88,9 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               <p className="text-sm font-medium uppercase tracking-widest text-sky-400">Clienți & CRM</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Programator</h1>
               <p className="mt-3 max-w-2xl text-zinc-400">
-                Programări service — grilă sau benzi furnizor, drag-and-drop reprogramare, legături tichet și WO.
+                Programări service — listă + calendar, validare furnizor, confirmare manager, legături tichet și WO.
               </p>
             </div>
-            <SchedulerKpiStrip stats={stats} />
           </div>
         }
       >
@@ -98,6 +105,7 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               initialWeekIso={sp.week}
               initialSelectId={sp.select}
               initialViewMode={initialViewMode}
+              initialInbox={initialInbox}
               initialTicketId={sp.ticket?.trim()}
               initialVehicleId={sp.vehicle?.trim()}
               initialCreate={sp.create === "1"}

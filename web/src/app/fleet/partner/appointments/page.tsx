@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { SchedulerKpiStrip } from "@/components/fleet/scheduler/SchedulerKpiStrip";
 import { SchedulerShell } from "@/components/fleet/scheduler/SchedulerShell";
 import type { AppointmentStats } from "@/lib/appointments-api";
 import { canWritePartnerOps, getAuthMeResult, isPartnerAdminMode } from "@/lib/auth-server";
@@ -9,7 +8,7 @@ import { fleetServerFetch } from "@/lib/fleet-server";
 import { parsePartnerSupplierQuery, partnerSupplierSearchParams } from "@/lib/partner-context";
 import { primarySupplierMembership } from "@/lib/partner-auth";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
-import type { SchedulerViewMode } from "@/lib/scheduler-deep-link";
+import { parseSchedulerInboxParam, parseSchedulerViewParam } from "@/lib/scheduler-deep-link";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 async function loadStats(supplierQuery: ReturnType<typeof parsePartnerSupplierQuery>): Promise<AppointmentStats | null> {
@@ -38,6 +37,7 @@ type PageProps = {
     week?: string;
     select?: string;
     view?: string;
+    inbox?: string;
     ticket?: string;
     vehicle?: string;
     create?: string;
@@ -49,7 +49,9 @@ type PageProps = {
 export default async function PartnerAppointmentsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const supplierQuery = parsePartnerSupplierQuery(sp);
-  const initialViewMode: SchedulerViewMode = sp.view === "bands" ? "bands" : "grid";
+  const extraSearch = partnerSupplierSearchParams(supplierQuery).toString();
+  const initialViewMode = parseSchedulerViewParam(sp.view);
+  const initialInbox = parseSchedulerInboxParam(sp.inbox);
 
   const auth = await getAuthMeResult();
   const adminMode = auth.ok && isPartnerAdminMode(auth);
@@ -95,16 +97,13 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
     <FleetPageMain fill>
       <FleetListPageLayout
         header={
-          <div className="flex flex-col gap-4">
-            <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight">Programator</h1>
-              <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-                Programări service — calendar filtrat pe{" "}
-                {membership?.supplierCode ?? (suppliers.length === 1 ? suppliers[0].code : `${suppliers.length} furnizori`)}.
-              </p>
-            </div>
-            <SchedulerKpiStrip stats={stats} />
+          <div>
+            <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Programator</h1>
+            <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+              Programări service — listă + calendar, validare și reprogramare pe{" "}
+              {membership?.supplierCode ?? (suppliers.length === 1 ? suppliers[0].code : `${suppliers.length} furnizori`)}.
+            </p>
           </div>
         }
       >
@@ -118,9 +117,13 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
               initialWeekIso={sp.week}
               initialSelectId={sp.select}
               initialViewMode={initialViewMode}
+              initialInbox={initialInbox}
               initialTicketId={sp.ticket?.trim()}
               initialVehicleId={sp.vehicle?.trim()}
               initialCreate={sp.create === "1"}
+              basePath="/fleet/partner/appointments"
+              extraSearch={extraSearch || undefined}
+              partnerMode
             />
           </Suspense>
         </div>

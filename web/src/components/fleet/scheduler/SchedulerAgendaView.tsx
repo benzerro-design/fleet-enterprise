@@ -6,16 +6,18 @@ import {
   type CalendarAppointment,
 } from "@/lib/appointments-api";
 import { addDays, isSameDay, startOfDay } from "@/lib/scheduler-date-utils";
-import { supplierAccentClass, supplierDotClass } from "./supplier-colors";
+import { appointmentStatusAccentClass, appointmentStatusBadgeClass } from "./appointment-status-colors";
+import { supplierDotClass } from "./supplier-colors";
 
 type Props = {
   weekStart: Date;
   appointments: CalendarAppointment[];
   selectedId: string | null;
+  partnerMode?: boolean;
   onSelect: (id: string) => void;
 };
 
-export function SchedulerAgendaView({ weekStart, appointments, selectedId, onSelect }: Props) {
+export function SchedulerAgendaView({ weekStart, appointments, selectedId, partnerMode, onSelect }: Props) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   return (
@@ -54,9 +56,9 @@ export function SchedulerAgendaView({ weekStart, appointments, selectedId, onSel
                       }}
                       className={`w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition-colors ${
                         selected
-                          ? "border-emerald-500/50 bg-emerald-950/30"
-                          : "border-zinc-800 bg-zinc-900/60 hover:border-zinc-700"
-                      } border-l-4 ${supplierAccentClass(a.supplierCategory)}`}
+                          ? "ring-1 ring-emerald-500/50"
+                          : "border-zinc-800 hover:border-zinc-700"
+                      } border-l-4 ${appointmentStatusAccentClass(a.status)}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -72,9 +74,12 @@ export function SchedulerAgendaView({ weekStart, appointments, selectedId, onSel
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
                         <span className={`inline-block h-1.5 w-1.5 rounded-full ${supplierDotClass(a.supplierCategory)}`} />
-                        {a.supplierCode ?? "—"} · {appointmentStatusLabel(a.status)}
+                        {a.supplierCode ?? "—"} ·{" "}
+                        <span className={`rounded border px-1 py-0.5 ${appointmentStatusBadgeClass(a.status)}`}>
+                          {appointmentStatusLabel(a.status)}
+                        </span>
                       </div>
-                      {a.ticketDisplayId && a.sourceTicketId ? (
+                      {!partnerMode && a.ticketDisplayId && a.sourceTicketId ? (
                         <Link
                           href={`/fleet/tickets/${a.sourceTicketId}`}
                           className="mt-1 inline-block text-xs text-sky-400 hover:underline"

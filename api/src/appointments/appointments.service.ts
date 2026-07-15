@@ -262,7 +262,16 @@ export class AppointmentsService {
     supplierIds?: string[],
   ): Promise<AppointmentStats> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) return { today: 0, thisWeek: 0, confirmed: 0, scheduled: 0 };
+    if (!tenant) {
+      return {
+        today: 0,
+        thisWeek: 0,
+        confirmed: 0,
+        scheduled: 0,
+        pendingSupplier: 0,
+        awaitingConfirm: 0,
+      };
+    }
 
     this.assertClientIdFilter(access, clientId);
 
@@ -290,7 +299,7 @@ export class AppointmentsService {
     if (supplierFilter) baseParts.push(supplierFilter);
     const base: Prisma.ServiceAppointmentWhereInput = { AND: baseParts };
 
-    const [today, thisWeek, confirmed, scheduled] = await Promise.all([
+    const [today, thisWeek, confirmed, scheduled, pendingSupplier] = await Promise.all([
       this.prisma.serviceAppointment.count({
         where: {
           ...base,
@@ -311,9 +320,19 @@ export class AppointmentsService {
       this.prisma.serviceAppointment.count({
         where: { ...base, status: ServiceAppointmentStatus.scheduled },
       }),
+      this.prisma.serviceAppointment.count({
+        where: { ...base, status: ServiceAppointmentStatus.pending_supplier },
+      }),
     ]);
 
-    return { today, thisWeek, confirmed, scheduled };
+    return {
+      today,
+      thisWeek,
+      confirmed,
+      scheduled,
+      pendingSupplier,
+      awaitingConfirm: scheduled,
+    };
   }
 
   async getById(tenantSlug: string, id: string, access?: AccessContext): Promise<CalendarAppointmentRecord> {

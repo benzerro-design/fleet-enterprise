@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   appointmentsBrowserBase,
@@ -8,9 +7,10 @@ import {
   type CalendarAppointment,
 } from "@/lib/appointments-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
+import { serviceCasesBrowserBase } from "@/lib/service-cases-api";
 import {
-  parseSchedulerWeekParam,
   schedulerHref,
+  type SchedulerInboxFilter,
   type SchedulerViewMode,
 } from "@/lib/scheduler-deep-link";
 import {
@@ -20,8 +20,10 @@ import {
   startOfWeekMonday,
   toDatetimeLocalValue,
 } from "@/lib/scheduler-date-utils";
+import { AppointmentQueueList } from "./AppointmentQueueList";
 import { SchedulerAgendaView } from "./SchedulerAgendaView";
 import { SchedulerInspector } from "./SchedulerInspector";
+import { SchedulerKpiStrip, SchedulerStatusLegend } from "./SchedulerKpiStrip";
 import { SchedulerSidebar } from "./SchedulerSidebar";
 import { SchedulerSupplierBandView } from "./SchedulerSupplierBandView";
 import { SchedulerWeekView } from "./SchedulerWeekView";
@@ -39,10 +41,22 @@ type Props = {
   initialWeekIso?: string;
   initialSelectId?: string;
   initialViewMode?: SchedulerViewMode;
+  initialInbox?: SchedulerInboxFilter;
   initialTicketId?: string;
   initialVehicleId?: string;
   initialCreate?: boolean;
+  basePath?: string;
+  extraSearch?: string;
+  partnerMode?: boolean;
 };
+
+function filterByInbox(items: CalendarAppointment[], inbox: SchedulerInboxFilter): CalendarAppointment[] {
+  if (inbox === "all") return items;
+  if (inbox === "action") {
+    return items.filter((a) => a.status === "pending_supplier" || a.status === "scheduled");
+  }
+  return items.filter((a) => a.status === inbox);
+}
 
 export function SchedulerShell({
   canWrite,
@@ -52,23 +66,37 @@ export function SchedulerShell({
   vehicles,
   initialWeekIso,
   initialSelectId,
-  initialViewMode = "grid",
+  initialViewMode = "split",
+  initialInbox = "all",
   initialTicketId,
   initialVehicleId,
   initialCreate = false,
+  basePath = "/fleet/scheduler",
+  extraSearch,
+  partnerMode = false,
 }: Props) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
   const [weekStart, setWeekStart] = useState(() => {
-    const parsed = parseSchedulerWeekParam(initialWeekIso);
-    return parsed ? startOfWeekMonday(parsed) : startOfWeekMonday(new Date());
+    const parsed = initialWeekIso ? new Date(initialWeekIso) : null;
+    return parsed && !Number.isNaN(parsed.getTime())
+      ? startOfWeekMonday(parsed)
+      : startOfWeekMonday(new Date());
   });
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [stats, setStats] = useState<AppointmentStats | null>(initialStats);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectId ?? null);
   const [supplierFilter, setSupplierFilter] = useState<string[]>(() => suppliers.map((s) => s.id));
   const [serviceTypeCode, setServiceTypeCode] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<SchedulerViewMode>(initialViewMode);
+  const [inboxFilter, setInboxFilter] = useState<SchedulerInboxFilter>(initialInbox);
+  const [createPrefillAt, setCreatePrefillAt] = useState<string | undefined>();
+  const [linkTicketId] = useState(initialTicketId ?? null);
+  const [linkVehicleId] = useState(initialVehicleId ?? null);
+  const [createMode, setCreateMode] = useState(() => !!(initialCreate && initialTicketId && canWrite));
+  const [mobileDetail, setMobileDetail] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
   const visibleSuppliers = useMemo(() => {
     if (!serviceTypeCode) return suppliers;
     return suppliers.filter((s) => s.services?.includes(serviceTypeCode));
@@ -78,80 +106,77 @@ export function SchedulerShell({
     setSupplierFilter(visibleSuppliers.map((s) => s.id));
   }, [serviceTypeCode, visibleSuppliers]);
 
-  const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<SchedulerViewMode>(initialViewMode);
-  const [createPrefillAt, setCreatePrefillAt] = useState<string | undefined>();
-  const [linkTicketId] = useState(initialTicketId ?? null);
-  const [linkVehicleId] = useState(initialVehicleId ?? null);
-  const [createMode, setCreateMode] = useState(() => !!(initialCreate && initialTicketId && canWrite));
-  const [mobileDetail, setMobileDetail] = useState(() => !!(initialSelectId || (initialCreate && initialTicketId)));
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   const weekLabel = useMemo(() => formatWeekRange(weekStart), [weekStart]);
   const range = useMemo(() => calendarRangeIso(weekStart), [weekStart]);
 
-  const syncUrl = useCallback(
+  const syncUrlHistory = useCallback(
     (opts: {
       week?: Date;
       select?: string | null;
       view?: SchedulerViewMode;
+      inbox?: SchedulerInboxFilter;
       clearTicketLink?: boolean;
     }) => {
       const href = schedulerHref({
+        basePath,
+        extraSearch,
         week: opts.week ?? weekStart,
         select: opts.select ?? undefined,
         view: opts.view ?? viewMode,
+        inbox: opts.inbox ?? inboxFilter,
         ticket: opts.clearTicketLink ? undefined : linkTicketId ?? undefined,
         vehicle: opts.clearTicketLink ? undefined : linkVehicleId ?? undefined,
-        create:
-          !opts.clearTicketLink && createMode && linkTicketId ? true : undefined,
+        create: !opts.clearTicketLink && createMode && linkTicketId ? true : undefined,
       });
-      router.replace(href, { scroll: false });
+      window.history.replaceState(null, "", href);
     },
-    [router, viewMode, weekStart, linkTicketId, linkVehicleId, createMode],
+    [basePath, extraSearch, weekStart, viewMode, inboxFilter, linkTicketId, linkVehicleId, createMode],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ from: range.from, to: range.to });
-      if (supplierFilter.length > 0 && supplierFilter.length < suppliers.length) {
-        params.set("supplierIds", supplierFilter.join(","));
+  const load = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setInitialLoading(true);
+      try {
+        const params = new URLSearchParams({ from: range.from, to: range.to });
+        if (supplierFilter.length > 0 && supplierFilter.length < suppliers.length) {
+          params.set("supplierIds", supplierFilter.join(","));
+        }
+        const statsParams = extraSearch ? `?${extraSearch}` : "";
+        const [calRes, statsRes] = await Promise.all([
+          fetch(`${appointmentsBrowserBase}/calendar?${params.toString()}`),
+          fetch(`${appointmentsBrowserBase}/stats${statsParams}`),
+        ]);
+        if (calRes.ok) {
+          setAppointments((await calRes.json()) as CalendarAppointment[]);
+        }
+        if (statsRes.ok) {
+          setStats((await statsRes.json()) as AppointmentStats);
+        }
+      } finally {
+        setInitialLoading(false);
+        setRefreshing(false);
       }
-      const [calRes, statsRes] = await Promise.all([
-        fetch(`${appointmentsBrowserBase}/calendar?${params.toString()}`),
-        fetch(`${appointmentsBrowserBase}/stats`),
-      ]);
-      if (calRes.ok) {
-        setAppointments((await calRes.json()) as CalendarAppointment[]);
-      }
-      if (statsRes.ok) {
-        setStats((await statsRes.json()) as AppointmentStats);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [range.from, range.to, supplierFilter, suppliers.length]);
+    },
+    [range.from, range.to, supplierFilter, suppliers.length, extraSearch],
+  );
 
   useEffect(() => {
-    void load();
+    void load(false);
   }, [load]);
 
-  useEffect(() => {
-    const weekParam = searchParams.get("week");
-    const parsed = parseSchedulerWeekParam(weekParam);
-    if (parsed) {
-      setWeekStart(startOfWeekMonday(parsed));
-    }
-    const select = searchParams.get("select");
-    if (select) {
-      setSelectedId(select);
-      setMobileDetail(true);
-    }
-    const view = searchParams.get("view");
-    if (view === "bands" || view === "grid") {
-      setViewMode(view);
-    }
-  }, [searchParams]);
+  const filteredAppointments = useMemo(
+    () => filterByInbox(appointments, inboxFilter),
+    [appointments, inboxFilter],
+  );
 
   const selected = appointments.find((a) => a.id === selectedId) ?? null;
 
@@ -163,20 +188,41 @@ export function SchedulerShell({
         body: JSON.stringify({ scheduledAt: scheduledAt.toISOString() }),
       });
       if (!res.ok) return;
-      await load();
+      await load(true);
     },
     [load],
   );
 
   const setAppointmentStatus = useCallback(
     async (id: string, status: "confirmed" | "cancelled") => {
-      const res = await fetch(`${appointmentsBrowserBase}/${id}`, {
-        method: "PATCH",
+      if (status === "confirmed") {
+        const res = await fetch(`${serviceCasesBrowserBase}/appointments/${id}/confirm`, {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+        });
+        if (!res.ok) return;
+      } else {
+        const res = await fetch(`${appointmentsBrowserBase}/${id}`, {
+          method: "PATCH",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({ status }),
+        });
+        if (!res.ok) return;
+      }
+      await load(true);
+    },
+    [load],
+  );
+
+  const supplierValidateById = useCallback(
+    async (id: string) => {
+      const res = await fetch(`${serviceCasesBrowserBase}/appointments/${id}/supplier-validate`, {
+        method: "POST",
         headers: fleetJsonHeaders(),
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({}),
       });
       if (!res.ok) return;
-      await load();
+      await load(true);
     },
     [load],
   );
@@ -188,40 +234,138 @@ export function SchedulerShell({
   function selectAppointment(id: string) {
     setSelectedId(id);
     setCreateMode(false);
-    setMobileDetail(true);
-    syncUrl({ select: id, clearTicketLink: true });
+    if (isMobile) setMobileDetail(true);
+    syncUrlHistory({ select: id, clearTicketLink: true });
   }
 
   function goToday() {
     const w = startOfWeekMonday(new Date());
     setWeekStart(w);
-    syncUrl({ week: w, select: selectedId });
+    syncUrlHistory({ week: w, select: selectedId });
   }
 
   function shiftWeek(delta: number) {
     setWeekStart((w) => {
       const next = addDays(w, delta * 7);
-      syncUrl({ week: next, select: selectedId });
+      syncUrlHistory({ week: next, select: selectedId });
       return next;
     });
   }
 
   function setView(mode: SchedulerViewMode) {
     setViewMode(mode);
-    syncUrl({ view: mode, select: selectedId });
+    syncUrlHistory({ view: mode, select: selectedId });
+  }
+
+  function setInbox(inbox: SchedulerInboxFilter) {
+    setInboxFilter(inbox);
+    syncUrlHistory({ inbox, select: selectedId });
   }
 
   function openCreateAt(when: Date) {
     setCreatePrefillAt(toDatetimeLocalValue(when.toISOString()));
     setCreateMode(true);
     setSelectedId(null);
-    setMobileDetail(true);
+    if (isMobile) setMobileDetail(true);
   }
 
-  const showMobileInspector = mobileDetail && (selected || createMode);
+  const showMobileInspector = isMobile && mobileDetail && (selected || createMode);
+
+  const calendarBlock = (
+    <>
+      {viewMode === "split" ? (
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <div className="flex min-h-0 w-full flex-col border-b border-zinc-800 lg:w-1/2 lg:border-b-0 lg:border-r">
+            <p className="border-b border-zinc-800/80 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              Listă programări {refreshing ? "· actualizare…" : ""}
+            </p>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <AppointmentQueueList
+                appointments={filteredAppointments}
+                selectedId={selectedId}
+                canWrite={canWrite}
+                onSelect={selectAppointment}
+                onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
+                onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
+                onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
+                compact
+              />
+            </div>
+          </div>
+          <div className="hidden min-h-0 w-full flex-1 lg:flex lg:w-1/2 lg:flex-col">
+            <SchedulerWeekView
+              weekStart={weekStart}
+              appointments={filteredAppointments}
+              selectedId={selectedId}
+              canWrite={canWrite}
+              partnerMode={partnerMode}
+              onSelect={selectAppointment}
+              onReschedule={canWrite ? reschedule : undefined}
+              onSlotClick={canWrite ? openCreateAt : undefined}
+              onStatusChange={canWrite ? setAppointmentStatus : undefined}
+              onSupplierValidate={canWrite ? supplierValidateById : undefined}
+            />
+          </div>
+        </div>
+      ) : null}
+      {viewMode === "grid" ? (
+        <SchedulerWeekView
+          weekStart={weekStart}
+          appointments={filteredAppointments}
+          selectedId={selectedId}
+          canWrite={canWrite}
+          partnerMode={partnerMode}
+          onSelect={selectAppointment}
+          onReschedule={canWrite ? reschedule : undefined}
+          onSlotClick={canWrite ? openCreateAt : undefined}
+          onStatusChange={canWrite ? setAppointmentStatus : undefined}
+          onSupplierValidate={canWrite ? supplierValidateById : undefined}
+        />
+      ) : null}
+      {viewMode === "bands" ? (
+        <SchedulerSupplierBandView
+          weekStart={weekStart}
+          appointments={filteredAppointments}
+          suppliers={suppliers}
+          supplierFilter={supplierFilter}
+          selectedId={selectedId}
+          onSelect={selectAppointment}
+        />
+      ) : null}
+      {viewMode === "list" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <AppointmentQueueList
+            appointments={filteredAppointments}
+            selectedId={selectedId}
+            canWrite={canWrite}
+            onSelect={selectAppointment}
+            onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
+            onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
+            onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
+          />
+        </div>
+      ) : null}
+      <SchedulerAgendaView
+        weekStart={weekStart}
+        appointments={filteredAppointments}
+        selectedId={selectedId}
+        partnerMode={partnerMode}
+        onSelect={selectAppointment}
+      />
+    </>
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b border-zinc-800 px-3 py-3 lg:px-4">
+        <SchedulerKpiStrip
+          stats={stats}
+          activeInbox={inboxFilter}
+          onInboxChange={setInbox}
+          partnerMode={partnerMode}
+        />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-3 py-3 lg:px-4">
         <div className="flex items-center gap-2">
           <button
@@ -241,28 +385,26 @@ export function SchedulerShell({
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center rounded-lg border border-zinc-700 p-0.5 lg:flex">
-            <button
-              type="button"
-              onClick={() => setView("grid")}
-              className={`rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${
-                viewMode === "grid" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              Grilă
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("bands")}
-              className={`rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${
-                viewMode === "bands" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              Benzi
-            </button>
+            {(
+              [
+                ["split", "Split"],
+                ["grid", "Calendar"],
+                ["bands", "Benzi"],
+                ["list", "Listă"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setView(mode)}
+                className={`rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${
+                  viewMode === mode ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500 lg:hidden">
-            Agendă
-          </span>
           {canWrite ? (
             <button
               type="button"
@@ -270,7 +412,7 @@ export function SchedulerShell({
                 setCreatePrefillAt(undefined);
                 setCreateMode(true);
                 setSelectedId(null);
-                setMobileDetail(true);
+                if (isMobile) setMobileDetail(true);
               }}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
             >
@@ -279,6 +421,8 @@ export function SchedulerShell({
           ) : null}
         </div>
       </div>
+
+      <SchedulerStatusLegend />
 
       <div className="relative flex min-h-0 flex-1">
         <SchedulerSidebar
@@ -291,57 +435,30 @@ export function SchedulerShell({
           weekLabel={weekLabel}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          {loading ? (
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          {initialLoading ? (
             <p className="p-6 text-sm text-zinc-500">Se încarcă programările…</p>
           ) : (
-            <>
-              {viewMode === "grid" ? (
-                <SchedulerWeekView
-                  weekStart={weekStart}
-                  appointments={appointments}
-                  selectedId={selectedId}
-                  canWrite={canWrite}
-                  onSelect={selectAppointment}
-                  onReschedule={canWrite ? reschedule : undefined}
-                  onSlotClick={canWrite ? openCreateAt : undefined}
-                  onStatusChange={canWrite ? setAppointmentStatus : undefined}
-                />
-              ) : (
-                <SchedulerSupplierBandView
-                  weekStart={weekStart}
-                  appointments={appointments}
-                  suppliers={suppliers}
-                  supplierFilter={supplierFilter}
-                  selectedId={selectedId}
-                  onSelect={selectAppointment}
-                />
-              )}
-              <SchedulerAgendaView
-                weekStart={weekStart}
-                appointments={appointments}
-                selectedId={selectedId}
-                onSelect={selectAppointment}
-              />
-            </>
+            calendarBlock
           )}
         </div>
 
-        {!showMobileInspector ? (
+        {!isMobile ? (
           <SchedulerInspector
             appointment={selected}
             canWrite={canWrite}
             createMode={createMode}
+            partnerMode={partnerMode}
             onCancelCreate={() => {
               setCreateMode(false);
               setMobileDetail(false);
-              if (linkTicketId) syncUrl({ clearTicketLink: true });
+              syncUrlHistory({ clearTicketLink: true });
             }}
             onUpdated={() => {
-              void load();
+              void load(true);
               if (linkTicketId) {
                 setCreateMode(false);
-                syncUrl({ clearTicketLink: true });
+                syncUrlHistory({ clearTicketLink: true });
               }
             }}
             vehicles={vehicles}
@@ -359,24 +476,25 @@ export function SchedulerShell({
           canWrite={canWrite}
           mobile
           createMode={createMode}
+          partnerMode={partnerMode}
           onClose={() => {
             setMobileDetail(false);
             setCreateMode(false);
             setCreatePrefillAt(undefined);
-            if (linkTicketId) syncUrl({ clearTicketLink: true });
+            syncUrlHistory({ clearTicketLink: true });
           }}
           onCancelCreate={() => {
             setCreateMode(false);
             setMobileDetail(false);
             setCreatePrefillAt(undefined);
-            if (linkTicketId) syncUrl({ clearTicketLink: true });
+            syncUrlHistory({ clearTicketLink: true });
           }}
           onUpdated={() => {
-            void load();
+            void load(true);
             if (linkTicketId) {
               setCreateMode(false);
               setCreatePrefillAt(undefined);
-              syncUrl({ clearTicketLink: true });
+              syncUrlHistory({ clearTicketLink: true });
             }
           }}
           vehicles={vehicles}
