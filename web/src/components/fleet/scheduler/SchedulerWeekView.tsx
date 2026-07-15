@@ -472,7 +472,7 @@ export function SchedulerWeekView({
               Validează (furnizor)
             </button>
           ) : null}
-          {canWrite && onStatusChange && ctxMenu.appt.status === "scheduled" ? (
+          {canWrite && onStatusChange && !partnerMode && ctxMenu.appt.status === "scheduled" ? (
             <button
               type="button"
               className="block w-full px-3 py-1.5 text-left text-xs text-emerald-300 hover:bg-zinc-800"

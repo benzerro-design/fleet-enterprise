@@ -578,7 +578,7 @@ export function SchedulerInspector({
               ) : null}
             </>
           ) : null}
-          {appointment.status === "scheduled" ? (
+          {appointment.status === "scheduled" && !partnerMode ? (
             <button
               type="button"
               disabled={pending}
@@ -587,6 +587,11 @@ export function SchedulerInspector({
             >
               Confirmă (manager)
             </button>
+          ) : null}
+          {appointment.status === "scheduled" && partnerMode ? (
+            <p className="w-full rounded-lg border border-sky-800/40 bg-sky-950/20 px-2.5 py-2 text-[11px] text-sky-200">
+              Validat de dvs. — așteaptă confirmarea managerului flotă / client.
+            </p>
           ) : null}
           {appointment.status !== "cancelled" && appointment.status !== "completed" && !partnerMode ? (
             <button
