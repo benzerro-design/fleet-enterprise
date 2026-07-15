@@ -71,7 +71,12 @@ export function SchedulerInspector({
     setEditScheduledAt(toDatetimeLocalValue(appointment.scheduledAt));
     setEditDurationMin(String(appointment.durationMin));
     setEditing(false);
+    setError(null);
   }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin]);
+
+  useEffect(() => {
+    setError(null);
+  }, [createMode, appointment?.id]);
 
   useEffect(() => {
     if (createMode && initialCreateScheduledAt) {
@@ -542,7 +547,7 @@ export function SchedulerInspector({
               Confirmă (manager)
             </button>
           ) : null}
-          {appointment.status !== "cancelled" && appointment.status !== "completed" ? (
+          {appointment.status !== "cancelled" && appointment.status !== "completed" && !partnerMode ? (
             <button
               type="button"
               disabled={pending}

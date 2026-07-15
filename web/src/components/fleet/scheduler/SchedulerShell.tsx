@@ -288,6 +288,7 @@ export function SchedulerShell({
                 onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
                 onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
                 onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
+                partnerMode={partnerMode}
                 compact
               />
             </div>
@@ -342,6 +343,7 @@ export function SchedulerShell({
             onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
             onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
             onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
+            partnerMode={partnerMode}
           />
         </div>
       ) : null}
@@ -452,6 +454,7 @@ export function SchedulerShell({
             onCancelCreate={() => {
               setCreateMode(false);
               setMobileDetail(false);
+              setCreatePrefillAt(undefined);
               syncUrlHistory({ clearTicketLink: true });
             }}
             onUpdated={() => {

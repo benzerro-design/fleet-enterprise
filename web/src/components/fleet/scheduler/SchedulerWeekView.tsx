@@ -155,11 +155,16 @@ export function SchedulerWeekView({
   const pendingRef = useRef<PendingPointer | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didDragRef = useRef(false);
+  const suppressSlotClickUntilRef = useRef(0);
 
   const canDragAppt = useCallback(
     (a: CalendarAppointment) =>
-      canWrite && !!onReschedule && a.status !== "cancelled" && a.status !== "completed",
-    [canWrite, onReschedule],
+      canWrite &&
+      !!onReschedule &&
+      a.status !== "cancelled" &&
+      a.status !== "completed" &&
+      !(partnerMode && a.status === "pending_supplier"),
+    [canWrite, onReschedule, partnerMode],
   );
 
   const clearPending = useCallback(() => {
@@ -192,8 +197,9 @@ export function SchedulerWeekView({
   }, [clearPending]);
 
   const finishDrag = useCallback(
-    async (clientX: number, clientY: number, currentDrag: DragState) => {
-      if (!onReschedule) {
+    async (clientX: number, clientY: number, currentDrag: DragState, commit: boolean) => {
+      suppressSlotClickUntilRef.current = Date.now() + 400;
+      if (!commit || !onReschedule) {
         setDrag(null);
         return;
       }
@@ -209,6 +215,13 @@ export function SchedulerWeekView({
     },
     [appointments, days, onReschedule, resolveDrop],
   );
+
+  const cancelDrag = useCallback(() => {
+    suppressSlotClickUntilRef.current = Date.now() + 400;
+    setDrag(null);
+    didDragRef.current = false;
+    clearPending();
+  }, [clearPending]);
 
   useEffect(() => {
     function onDocPointerMove(e: PointerEvent) {
@@ -238,20 +251,38 @@ export function SchedulerWeekView({
       }
 
       if (drag && drag.pointerId === e.pointerId) {
-        void finishDrag(e.clientX, e.clientY, drag);
+        void finishDrag(e.clientX, e.clientY, drag, true);
         didDragRef.current = false;
+      }
+    }
+
+    function onDocPointerCancel(e: PointerEvent) {
+      if (drag && drag.pointerId === e.pointerId) {
+        cancelDrag();
+      }
+      if (pendingRef.current?.pointerId === e.pointerId) {
+        clearPending();
+        didDragRef.current = false;
+      }
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && drag) {
+        cancelDrag();
       }
     }
 
     document.addEventListener("pointermove", onDocPointerMove);
     document.addEventListener("pointerup", onDocPointerUp);
-    document.addEventListener("pointercancel", onDocPointerUp);
+    document.addEventListener("pointercancel", onDocPointerCancel);
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("pointermove", onDocPointerMove);
       document.removeEventListener("pointerup", onDocPointerUp);
-      document.removeEventListener("pointercancel", onDocPointerUp);
+      document.removeEventListener("pointercancel", onDocPointerCancel);
+      document.removeEventListener("keydown", onKeyDown);
     };
-  }, [activateDrag, clearPending, drag, finishDrag, onSelect, resolveDrop]);
+  }, [activateDrag, cancelDrag, clearPending, drag, finishDrag, onSelect, resolveDrop]);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -334,6 +365,7 @@ export function SchedulerWeekView({
                   style={{ height: gridH }}
                   onClick={(e) => {
                     if (!canWrite || !onSlotClick) return;
+                    if (Date.now() < suppressSlotClickUntilRef.current) return;
                     if ((e.target as HTMLElement).closest("[data-appt-block]")) return;
                     const rect = e.currentTarget.getBoundingClientRect();
                     const offsetY = e.clientY - rect.top;
@@ -395,6 +427,7 @@ export function SchedulerWeekView({
           Click = selectează · dublu-click = deschide tichet/WO · click dreapta = meniu · ține apăsat și trage =
           reprogramare.
           {onSlotClick ? " Click pe slot liber = programare nouă." : ""}
+          {partnerMode ? " Programările de validat: folosește Repropune dată, nu drag." : ""}
         </p>
       ) : null}
       {ctxMenu ? (
@@ -450,6 +483,7 @@ export function SchedulerWeekView({
           ) : null}
           {canWrite &&
           onStatusChange &&
+          !partnerMode &&
           ctxMenu.appt.status !== "cancelled" &&
           ctxMenu.appt.status !== "completed" ? (
             <button

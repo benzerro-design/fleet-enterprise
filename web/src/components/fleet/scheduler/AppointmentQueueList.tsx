@@ -18,6 +18,7 @@ type Props = {
   onConfirm?: (id: string) => void;
   onCancel?: (id: string) => void;
   onSupplierValidate?: (id: string) => void;
+  partnerMode?: boolean;
   compact?: boolean;
 };
 
@@ -29,6 +30,7 @@ export function AppointmentQueueList({
   onConfirm,
   onCancel,
   onSupplierValidate,
+  partnerMode,
   compact,
 }: Props) {
   const sorted = [...appointments].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
@@ -102,7 +104,7 @@ export function AppointmentQueueList({
                       Confirmă
                     </button>
                   ) : null}
-                  {a.status !== "cancelled" && a.status !== "completed" && onCancel ? (
+                  {a.status !== "cancelled" && a.status !== "completed" && onCancel && !partnerMode ? (
                     <button
                       type="button"
                       onClick={() => onCancel(a.id)}
