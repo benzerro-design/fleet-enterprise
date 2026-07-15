@@ -19,7 +19,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { assertClientFleetWrite } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
-import { assertPartnerSupplierId, isPartnerUser } from '../iam/partner-access';
+import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
@@ -530,7 +530,15 @@ export class AppointmentsService {
     });
     if (!existing) throw new NotFoundException('Appointment not found');
     if (access) {
-      assertClientFleetWrite(access, existing.vehicle.clientId);
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        assertPartnerSupplierId(access, existing.supplierId);
+        if (dto.status !== undefined) {
+          throw new ForbiddenException('Partners cannot change appointment status via this endpoint');
+        }
+      } else {
+        assertClientFleetWrite(access, existing.vehicle.clientId);
+      }
     }
 
     const data: Prisma.ServiceAppointmentUpdateInput = {};

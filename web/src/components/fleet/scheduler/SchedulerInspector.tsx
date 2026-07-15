@@ -137,7 +137,11 @@ export function SchedulerInspector({
   }
 
   async function saveReschedule() {
-    if (!editScheduledAt) return;
+    if (!editScheduledAt || !appointment) return;
+    if (appointment.status === "pending_supplier" && partnerMode) {
+      await supplierValidateWithReschedule();
+      return;
+    }
     await patchAppointment({
       scheduledAt: new Date(editScheduledAt).toISOString(),
       durationMin: parseInt(editDurationMin, 10) || 60,
@@ -207,7 +211,10 @@ export function SchedulerInspector({
         {
           method: "POST",
           headers: fleetJsonHeaders(),
-          body: JSON.stringify({ scheduledAt: new Date(editScheduledAt).toISOString() }),
+          body: JSON.stringify({
+          scheduledAt: new Date(editScheduledAt).toISOString(),
+          durationMin: parseInt(editDurationMin, 10) || 60,
+        }),
         },
       );
       if (!res.ok) {
@@ -425,7 +432,7 @@ export function SchedulerInspector({
               onClick={() => void saveReschedule()}
               className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              Salvează
+              {appointment?.status === "pending_supplier" && partnerMode ? "Trimite reprogramare" : "Salvează"}
             </button>
             <button
               type="button"
@@ -445,7 +452,7 @@ export function SchedulerInspector({
             <span>
               {start.toLocaleString("ro-RO")} · {appointment.durationMin} min
             </span>
-            {editable && !editing ? (
+            {editable && !editing && appointment.status !== "pending_supplier" ? (
               <button type="button" onClick={() => setEditing(true)} className="text-[10px] text-sky-400 hover:underline">
                 Editează
               </button>
@@ -522,16 +529,7 @@ export function SchedulerInspector({
                 >
                   Repropune dată
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={pending || !editScheduledAt}
-                  onClick={() => void supplierValidateWithReschedule()}
-                  className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs text-white hover:bg-amber-500 disabled:opacity-50"
-                >
-                  Trimite reprogramare
-                </button>
-              )}
+              ) : null}
             </>
           ) : null}
           {appointment.status === "scheduled" ? (
@@ -554,7 +552,7 @@ export function SchedulerInspector({
               Anulează
             </button>
           ) : null}
-          {appointment.workOrders.length === 0 && editable ? (
+          {appointment.workOrders.length === 0 && editable && !partnerMode ? (
             <button
               type="button"
               disabled={pending}

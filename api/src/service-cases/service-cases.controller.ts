@@ -84,7 +84,7 @@ export class ServiceCasesController {
   supplierValidateAppointment(
     @TenantId() tenantSlug: string,
     @Param('appointmentId') appointmentId: string,
-    @Body() body: { scheduledAt?: string; notes?: string | null },
+    @Body() body: { scheduledAt?: string; durationMin?: number; notes?: string | null },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {

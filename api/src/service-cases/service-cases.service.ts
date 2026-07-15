@@ -31,6 +31,7 @@ import {
   canReadTicket,
   isTenantWideAccess,
 } from '../iam/client-access';
+import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { nextWorkOrderDisplayNumber } from '../work-orders/work-order-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
@@ -126,6 +127,7 @@ export type CreateServiceAppointmentInput = {
 
 export type SupplierValidateAppointmentInput = {
   scheduledAt?: string;
+  durationMin?: number;
   notes?: string | null;
 };
 
@@ -707,15 +709,29 @@ export class ServiceCasesService {
     if (existing.status !== ServiceAppointmentStatus.pending_supplier) {
       throw new BadRequestException('Appointment is not awaiting supplier validation');
     }
-    if (access) assertServiceCaseWrite(access, existing.serviceCase.clientId);
+    if (access) {
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        assertPartnerSupplierId(access, existing.supplierId);
+      } else {
+        assertServiceCaseWrite(access, existing.serviceCase.clientId);
+      }
+    }
 
     let scheduledAt = existing.scheduledAt;
+    let durationMin = existing.durationMin;
     if (dto.scheduledAt) {
       const next = new Date(dto.scheduledAt);
       if (Number.isNaN(next.getTime())) {
         throw new BadRequestException('Invalid scheduledAt');
       }
       scheduledAt = next;
+    }
+    if (dto.durationMin !== undefined) {
+      if (!Number.isInteger(dto.durationMin) || dto.durationMin < 15 || dto.durationMin > 24 * 60) {
+        throw new BadRequestException('durationMin must be between 15 and 1440');
+      }
+      durationMin = dto.durationMin;
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -725,6 +741,7 @@ export class ServiceCasesService {
           status: ServiceAppointmentStatus.scheduled,
           supplierValidatedAt: new Date(),
           scheduledAt,
+          durationMin,
           notes: dto.notes !== undefined ? dto.notes?.trim() || null : undefined,
           managerConfirmedAt: null,
           driverAcknowledgedAt: null,
