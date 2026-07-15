@@ -97,6 +97,24 @@ export class ServiceCasesController {
     );
   }
 
+  @Post('appointments/:appointmentId/request-cancel')
+  @Roles(...FLEET_WRITE_ROLES)
+  requestCancelAppointment(
+    @TenantId() tenantSlug: string,
+    @Param('appointmentId') appointmentId: string,
+    @Body() body: { note?: string | null },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.requestCancelAppointment(
+      tenantSlug,
+      appointmentId,
+      body,
+      actorUserId,
+      access,
+    );
+  }
+
   @Post('appointments/:appointmentId/confirm')
   @Roles(...FLEET_WRITE_ROLES)
   confirmAppointment(

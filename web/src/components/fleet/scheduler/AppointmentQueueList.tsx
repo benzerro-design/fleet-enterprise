@@ -18,6 +18,7 @@ type Props = {
   onConfirm?: (id: string) => void;
   onCancel?: (id: string) => void;
   onSupplierValidate?: (id: string) => void;
+  onRequestCancel?: (id: string) => void;
   partnerMode?: boolean;
   compact?: boolean;
 };
@@ -30,6 +31,7 @@ export function AppointmentQueueList({
   onConfirm,
   onCancel,
   onSupplierValidate,
+  onRequestCancel,
   partnerMode,
   compact,
 }: Props) {
@@ -83,6 +85,9 @@ export function AppointmentQueueList({
                   {appointmentStatusLabel(a.status)}
                 </span>
               </div>
+              {a.cancellationRequestedAt ? (
+                <p className="mt-1 text-[10px] font-medium text-rose-300">Anulare solicitată de furnizor</p>
+              ) : null}
 
               {canWrite ? (
                 <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -95,7 +100,7 @@ export function AppointmentQueueList({
                       Validează
                     </button>
                   ) : null}
-                  {a.status === "scheduled" && onConfirm ? (
+                  {a.status === "scheduled" && onConfirm && !partnerMode ? (
                     <button
                       type="button"
                       onClick={() => onConfirm(a.id)}
@@ -111,6 +116,19 @@ export function AppointmentQueueList({
                       className="rounded-md border border-red-500/40 px-2 py-1 text-[10px] text-red-300 hover:bg-red-950/40"
                     >
                       Anulează
+                    </button>
+                  ) : null}
+                  {partnerMode &&
+                  onRequestCancel &&
+                  !a.cancellationRequestedAt &&
+                  a.status !== "cancelled" &&
+                  a.status !== "completed" ? (
+                    <button
+                      type="button"
+                      onClick={() => onRequestCancel(a.id)}
+                      className="rounded-md border border-rose-500/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-950/40"
+                    >
+                      Solicită anulare
                     </button>
                   ) : null}
                 </div>

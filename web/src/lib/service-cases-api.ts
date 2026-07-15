@@ -88,6 +88,8 @@ export type ServiceAppointmentRecord = {
   status: ServiceAppointmentStatus;
   proposedByRole: string | null;
   supplierValidatedAt: string | null;
+  cancellationRequestedAt?: string | null;
+  cancellationRequestNote?: string | null;
   notes: string | null;
   managerConfirmedAt: string | null;
   driverAcknowledgedAt: string | null;

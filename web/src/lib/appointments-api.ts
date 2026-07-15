@@ -43,6 +43,8 @@ export type CalendarAppointment = {
   recurrenceSeriesId: string | null;
   proposedByRole: string | null;
   supplierValidatedAt: string | null;
+  cancellationRequestedAt: string | null;
+  cancellationRequestNote: string | null;
   createdAt: string;
   updatedAt: string;
 };

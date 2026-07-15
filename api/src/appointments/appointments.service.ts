@@ -104,6 +104,8 @@ export class AppointmentsService {
     status: ServiceAppointmentStatus;
     proposedByRole?: ServiceAppointmentProposedBy | null;
     supplierValidatedAt?: Date | null;
+    cancellationRequestedAt?: Date | null;
+    cancellationRequestNote?: string | null;
     location: string | null;
     notes: string | null;
     recurrenceRule: ServiceAppointmentRecurrence;
@@ -137,6 +139,8 @@ export class AppointmentsService {
       status: row.status,
       proposedByRole: row.proposedByRole ?? null,
       supplierValidatedAt: row.supplierValidatedAt?.toISOString() ?? null,
+      cancellationRequestedAt: row.cancellationRequestedAt?.toISOString() ?? null,
+      cancellationRequestNote: row.cancellationRequestNote ?? null,
       location: row.location,
       notes: row.notes,
       vehicleId: row.vehicleId,

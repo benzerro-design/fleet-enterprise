@@ -106,6 +106,8 @@ export type ServiceAppointmentRecord = {
   status: ServiceAppointmentStatus;
   proposedByRole: ServiceAppointmentProposedBy | null;
   supplierValidatedAt: string | null;
+  cancellationRequestedAt: string | null;
+  cancellationRequestNote: string | null;
   notes: string | null;
   managerConfirmedAt: string | null;
   driverAcknowledgedAt: string | null;
@@ -129,6 +131,10 @@ export type SupplierValidateAppointmentInput = {
   scheduledAt?: string;
   durationMin?: number;
   notes?: string | null;
+};
+
+export type RequestCancelAppointmentInput = {
+  note?: string | null;
 };
 
 export type UpdateServiceAppointmentInput = {
@@ -786,6 +792,89 @@ export class ServiceCasesService {
     return this.toRecord(reloaded!);
   }
 
+  async requestCancelAppointment(
+    tenantSlug: string,
+    appointmentId: string,
+    dto: RequestCancelAppointmentInput = {},
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const existing = await this.prisma.serviceAppointment.findFirst({
+      where: { id: appointmentId, tenantId: tenant.id },
+      include: { serviceCase: true, vehicle: { select: { registrationNumber: true } } },
+    });
+    if (!existing) throw new NotFoundException('Appointment not found');
+
+    if (
+      existing.status === ServiceAppointmentStatus.cancelled ||
+      existing.status === ServiceAppointmentStatus.completed
+    ) {
+      throw new BadRequestException('Appointment is already closed');
+    }
+    if (existing.cancellationRequestedAt) {
+      throw new BadRequestException('Cancellation already requested');
+    }
+
+    if (!access || !isPartnerUser(access)) {
+      throw new ForbiddenException('Only supplier partners can request cancellation');
+    }
+    assertPartnerWrite(access);
+    assertPartnerSupplierId(access, existing.supplierId);
+
+    const note = dto.note?.trim() || null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.serviceAppointment.update({
+        where: { id: appointmentId },
+        data: {
+          cancellationRequestedAt: new Date(),
+          cancellationRequestNote: note,
+        },
+      });
+
+      if (existing.serviceCase.sourceTicketId) {
+        const when = existing.scheduledAt.toLocaleString('ro-RO');
+        const reg = existing.vehicle.registrationNumber;
+        const body = note
+          ? `Furnizorul solicită anularea programării (${reg}, ${when}): ${note}`
+          : `Furnizorul solicită anularea programării (${reg}, ${when}).`;
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: existing.serviceCase.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body,
+            payload: {
+              appointmentId,
+              serviceCaseId: existing.serviceCaseId,
+              cancellationRequested: true,
+              note,
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_appointment.request_cancel',
+      entityType: 'service_appointment',
+      entityId: appointmentId,
+      meta: { serviceCaseId: existing.serviceCaseId, note },
+    });
+
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: existing.serviceCaseId },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded!);
+  }
+
   async acknowledgeAppointment(
     tenantSlug: string,
     appointmentId: string,
@@ -1085,6 +1174,8 @@ export class ServiceCasesService {
     status: ServiceAppointmentStatus;
     proposedByRole?: ServiceAppointmentProposedBy | null;
     supplierValidatedAt?: Date | null;
+    cancellationRequestedAt?: Date | null;
+    cancellationRequestNote?: string | null;
     notes: string | null;
     managerConfirmedAt?: Date | null;
     driverAcknowledgedAt?: Date | null;
@@ -1109,6 +1200,8 @@ export class ServiceCasesService {
       status: row.status,
       proposedByRole: row.proposedByRole ?? null,
       supplierValidatedAt: row.supplierValidatedAt?.toISOString() ?? null,
+      cancellationRequestedAt: row.cancellationRequestedAt?.toISOString() ?? null,
+      cancellationRequestNote: row.cancellationRequestNote ?? null,
       notes: row.notes,
       managerConfirmedAt: row.managerConfirmedAt?.toISOString() ?? null,
       driverAcknowledgedAt: row.driverAcknowledgedAt?.toISOString() ?? null,

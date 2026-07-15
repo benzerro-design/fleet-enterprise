@@ -1363,6 +1363,8 @@ model ServiceAppointment {
   status               ServiceAppointmentStatus     @default(scheduled)
   proposedByRole       ServiceAppointmentProposedBy?
   supplierValidatedAt  DateTime?
+  cancellationRequestedAt   DateTime?
+  cancellationRequestNote   String?
   notes                String?
   managerConfirmedAt   DateTime?
   driverAcknowledgedAt DateTime?

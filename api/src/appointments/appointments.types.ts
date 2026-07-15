@@ -15,6 +15,8 @@ export type CalendarAppointmentRecord = {
   status: ServiceAppointmentStatus;
   proposedByRole: ServiceAppointmentProposedBy | null;
   supplierValidatedAt: string | null;
+  cancellationRequestedAt: string | null;
+  cancellationRequestNote: string | null;
   location: string | null;
   notes: string | null;
   vehicleId: string;

@@ -32,6 +32,7 @@ type Props = {
   onSlotClick?: (scheduledAt: Date) => void;
   onStatusChange?: (id: string, status: "confirmed" | "cancelled") => Promise<void>;
   onSupplierValidate?: (id: string) => Promise<void>;
+  onRequestCancel?: (id: string) => Promise<void>;
 };
 
 type DragState = {
@@ -145,6 +146,7 @@ export function SchedulerWeekView({
   onSlotClick,
   onStatusChange,
   onSupplierValidate,
+  onRequestCancel,
 }: Props) {
   const router = useRouter();
   const days = dayLabels(weekStart);
@@ -493,7 +495,23 @@ export function SchedulerWeekView({
                 void onStatusChange(ctxMenu.appt.id, "cancelled").then(() => setCtxMenu(null));
               }}
             >
-              Anulează
+              {ctxMenu.appt.cancellationRequestedAt ? "Confirmă anularea" : "Anulează"}
+            </button>
+          ) : null}
+          {canWrite &&
+          partnerMode &&
+          onRequestCancel &&
+          !ctxMenu.appt.cancellationRequestedAt &&
+          ctxMenu.appt.status !== "cancelled" &&
+          ctxMenu.appt.status !== "completed" ? (
+            <button
+              type="button"
+              className="block w-full px-3 py-1.5 text-left text-xs text-rose-300 hover:bg-zinc-800"
+              onClick={() => {
+                void onRequestCancel(ctxMenu.appt.id).then(() => setCtxMenu(null));
+              }}
+            >
+              Solicită anulare
             </button>
           ) : null}
         </div>

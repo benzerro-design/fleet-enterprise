@@ -65,6 +65,8 @@ export function SchedulerInspector({
   const [recurrenceRule, setRecurrenceRule] = useState("none");
   const [editScheduledAt, setEditScheduledAt] = useState("");
   const [editDurationMin, setEditDurationMin] = useState("60");
+  const [cancelNote, setCancelNote] = useState("");
+  const [requestingCancel, setRequestingCancel] = useState(false);
 
   useEffect(() => {
     if (!appointment) return;
@@ -72,10 +74,14 @@ export function SchedulerInspector({
     setEditDurationMin(String(appointment.durationMin));
     setEditing(false);
     setError(null);
+    setRequestingCancel(false);
+    setCancelNote("");
   }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin]);
 
   useEffect(() => {
     setError(null);
+    setRequestingCancel(false);
+    setCancelNote("");
   }, [createMode, appointment?.id]);
 
   useEffect(() => {
@@ -217,9 +223,9 @@ export function SchedulerInspector({
           method: "POST",
           headers: fleetJsonHeaders(),
           body: JSON.stringify({
-          scheduledAt: new Date(editScheduledAt).toISOString(),
-          durationMin: parseInt(editDurationMin, 10) || 60,
-        }),
+            scheduledAt: new Date(editScheduledAt).toISOString(),
+            durationMin: parseInt(editDurationMin, 10) || 60,
+          }),
         },
       );
       if (!res.ok) {
@@ -228,6 +234,32 @@ export function SchedulerInspector({
         return;
       }
       setEditing(false);
+      onUpdated();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function requestCancel() {
+    if (!appointment) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/appointments/${appointment.id}/request-cancel`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({ note: cancelNote.trim() || null }),
+        },
+      );
+      if (!res.ok) {
+        const j = (await res.json()) as { message?: string };
+        setError(j.message ?? `HTTP ${res.status}`);
+        return;
+      }
+      setRequestingCancel(false);
+      setCancelNote("");
       onUpdated();
     } finally {
       setPending(false);
@@ -467,6 +499,15 @@ export function SchedulerInspector({
         <div>
           <dt className="text-xs uppercase text-zinc-500">Status</dt>
           <dd className="mt-0.5">{appointmentStatusLabel(appointment.status)}</dd>
+          {appointment.cancellationRequestedAt ? (
+            <p className="mt-1 rounded border border-rose-800/50 bg-rose-950/30 px-2 py-1 text-[10px] text-rose-200">
+              Anulare solicitată
+              {appointment.cancellationRequestNote
+                ? `: ${appointment.cancellationRequestNote}`
+                : ""}
+              {!partnerMode ? " — confirmați cu Anulează dacă sunteți de acord." : " — așteaptă decizia flotei."}
+            </p>
+          ) : null}
         </div>
         {appointment.recurrenceRule !== "none" ? (
           <div>
@@ -554,8 +595,53 @@ export function SchedulerInspector({
               onClick={() => void setStatus("cancelled")}
               className="rounded-lg border border-red-500/40 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
             >
-              Anulează
+              {appointment.cancellationRequestedAt ? "Confirmă anularea" : "Anulează"}
             </button>
+          ) : null}
+          {partnerMode &&
+          appointment.status !== "cancelled" &&
+          appointment.status !== "completed" &&
+          !appointment.cancellationRequestedAt ? (
+            requestingCancel ? (
+              <div className="w-full space-y-2 rounded-lg border border-rose-800/40 bg-rose-950/20 p-2">
+                <label className={OPS_LABEL_CLASS}>Motiv (opțional)</label>
+                <input
+                  value={cancelNote}
+                  onChange={(e) => setCancelNote(e.target.value)}
+                  className={OPS_INPUT_CLASS}
+                  placeholder="Ex. capacitate full, confuzie dată…"
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void requestCancel()}
+                    className="rounded-lg bg-rose-700 px-2.5 py-1.5 text-xs text-white hover:bg-rose-600 disabled:opacity-50"
+                  >
+                    Trimite solicitarea
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRequestingCancel(false);
+                      setCancelNote("");
+                    }}
+                    className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900"
+                  >
+                    Renunță
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setRequestingCancel(true)}
+                className="rounded-lg border border-rose-500/40 px-2.5 py-1.5 text-xs text-rose-200 hover:bg-rose-950/40 disabled:opacity-50"
+              >
+                Solicită anulare
+              </button>
+            )
           ) : null}
           {appointment.workOrders.length === 0 && editable && !partnerMode ? (
             <button

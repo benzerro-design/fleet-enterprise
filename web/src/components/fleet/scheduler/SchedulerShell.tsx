@@ -227,6 +227,19 @@ export function SchedulerShell({
     [load],
   );
 
+  const requestCancelById = useCallback(
+    async (id: string) => {
+      const res = await fetch(`${serviceCasesBrowserBase}/appointments/${id}/request-cancel`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) return;
+      await load(true);
+    },
+    [load],
+  );
+
   function toggleSupplier(id: string) {
     setSupplierFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -288,6 +301,9 @@ export function SchedulerShell({
                 onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
                 onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
                 onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
+                onRequestCancel={
+                  canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
+                }
                 partnerMode={partnerMode}
                 compact
               />
@@ -305,6 +321,7 @@ export function SchedulerShell({
               onSlotClick={canWrite ? openCreateAt : undefined}
               onStatusChange={canWrite ? setAppointmentStatus : undefined}
               onSupplierValidate={canWrite ? supplierValidateById : undefined}
+              onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
             />
           </div>
         </div>
@@ -321,6 +338,7 @@ export function SchedulerShell({
           onSlotClick={canWrite ? openCreateAt : undefined}
           onStatusChange={canWrite ? setAppointmentStatus : undefined}
           onSupplierValidate={canWrite ? supplierValidateById : undefined}
+          onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
         />
       ) : null}
       {viewMode === "bands" ? (
@@ -343,6 +361,9 @@ export function SchedulerShell({
             onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
             onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
             onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
+            onRequestCancel={
+              canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
+            }
             partnerMode={partnerMode}
           />
         </div>
