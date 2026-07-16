@@ -14,6 +14,7 @@ export type CalendarWorkOrderSummary = {
   id: string;
   title: string;
   status: string;
+  displayNumber: string | null;
 };
 
 export type CalendarAppointment = {

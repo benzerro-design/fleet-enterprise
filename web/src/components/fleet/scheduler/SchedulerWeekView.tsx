@@ -60,6 +60,9 @@ function primaryHref(a: CalendarAppointment, partnerMode?: boolean): string | nu
 
 function appointmentHoverDetail(a: CalendarAppointment): string {
   const start = new Date(a.scheduledAt);
+  const woLabels = a.workOrders
+    .map((wo) => wo.displayNumber ?? wo.id.slice(-6).toUpperCase())
+    .filter(Boolean);
   const lines = [
     `${start.toLocaleString("ro-RO")} · ${a.durationMin} min`,
     `${a.registrationNumber} · ${a.clientCode}`,
@@ -68,7 +71,8 @@ function appointmentHoverDetail(a: CalendarAppointment): string {
     a.supplierLegalName ? `Furnizor: ${a.supplierLegalName}` : null,
     a.title,
     a.location,
-    a.sourceTicketId && a.ticketDisplayId ? `Tichet #${a.ticketDisplayId}` : null,
+    a.ticketDisplayId ? `Tichet #${a.ticketDisplayId}` : null,
+    woLabels.length ? `WO ${woLabels.join(", ")}` : null,
   ].filter(Boolean);
   return lines.join("\n");
 }

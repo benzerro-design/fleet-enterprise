@@ -389,25 +389,40 @@ export function SchedulerInspector({
       </div>
 
       <div className="mb-3 flex flex-wrap gap-1.5">
-        {!partnerMode && appointment.sourceTicketId && appointment.ticketDisplayId ? (
-          <Link
-            href={`/fleet/tickets/${appointment.sourceTicketId}`}
-            className="rounded-md border border-zinc-700 px-2 py-1 text-[10px] font-medium text-emerald-400 hover:bg-zinc-900"
-          >
-            Tichet #{appointment.ticketDisplayId}
-          </Link>
+        {appointment.sourceTicketId && appointment.ticketDisplayId ? (
+          partnerMode ? (
+            <span className="rounded-md border border-zinc-700 px-2 py-1 font-mono text-[10px] font-medium text-emerald-400/90">
+              Tichet #{appointment.ticketDisplayId}
+            </span>
+          ) : (
+            <Link
+              href={`/fleet/tickets/${appointment.sourceTicketId}`}
+              className="rounded-md border border-zinc-700 px-2 py-1 font-mono text-[10px] font-medium text-emerald-400 hover:bg-zinc-900"
+            >
+              Tichet #{appointment.ticketDisplayId}
+            </Link>
+          )
         ) : null}
-        {!partnerMode
-          ? appointment.workOrders.map((wo) => (
-              <Link
-                key={wo.id}
-                href={`/fleet/work-orders/${wo.id}`}
-                className="rounded-md border border-zinc-700 px-2 py-1 text-[10px] font-medium text-sky-300 hover:bg-zinc-900"
-              >
-                WO · {wo.title}
-              </Link>
-            ))
-          : null}
+        {appointment.workOrders.map((wo) => {
+          const label = wo.displayNumber ?? wo.id.slice(-6).toUpperCase();
+          return partnerMode ? (
+            <Link
+              key={wo.id}
+              href={`/fleet/partner/work-orders/${wo.id}`}
+              className="rounded-md border border-zinc-700 px-2 py-1 font-mono text-[10px] font-medium text-sky-300 hover:bg-zinc-900"
+            >
+              WO {label}
+            </Link>
+          ) : (
+            <Link
+              key={wo.id}
+              href={`/fleet/work-orders/${wo.id}`}
+              className="rounded-md border border-zinc-700 px-2 py-1 font-mono text-[10px] font-medium text-sky-300 hover:bg-zinc-900"
+            >
+              WO {label}
+            </Link>
+          );
+        })}
         {!partnerMode ? (
           <Link
             href={`/fleet/vehicles/${appointment.vehicleId}`}
@@ -456,6 +471,20 @@ export function SchedulerInspector({
       ) : null}
 
       <dl className="space-y-3 text-sm">
+        {(appointment.ticketDisplayId || appointment.workOrders.length > 0) ? (
+          <div>
+            <dt className="text-xs uppercase text-zinc-500">Referințe</dt>
+            <dd className="mt-0.5 space-y-0.5 font-mono text-xs text-zinc-300">
+              {appointment.ticketDisplayId ? <p>Tichet #{appointment.ticketDisplayId}</p> : null}
+              {appointment.workOrders.map((wo) => (
+                <p key={wo.id}>
+                  WO {wo.displayNumber ?? wo.id.slice(-6).toUpperCase()}
+                  {wo.title ? <span className="font-sans text-zinc-500"> · {wo.title}</span> : null}
+                </p>
+              ))}
+            </dd>
+          </div>
+        ) : null}
         <div>
           <dt className="text-xs uppercase text-zinc-500">Interval</dt>
           <dd className="mt-0.5 flex items-center gap-2">

@@ -78,6 +78,15 @@ export function AppointmentQueueList({
                     · {start.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}
                     {a.supplierCode ? ` · ${a.supplierCode}` : ""}
                   </p>
+                  {(a.ticketDisplayId || a.workOrders.length > 0) ? (
+                    <p className="mt-1 font-mono text-[10px] text-zinc-400">
+                      {a.ticketDisplayId ? `Tichet #${a.ticketDisplayId}` : null}
+                      {a.ticketDisplayId && a.workOrders.length > 0 ? " · " : null}
+                      {a.workOrders
+                        .map((wo) => `WO ${wo.displayNumber ?? wo.id.slice(-6).toUpperCase()}`)
+                        .join(" · ")}
+                    </p>
+                  ) : null}
                 </div>
                 <span
                   className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${appointmentStatusBadgeClass(a.status)}`}

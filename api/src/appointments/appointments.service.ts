@@ -89,7 +89,7 @@ export class AppointmentsService {
           sourceTicketId: true,
           workOrders: {
             orderBy: { createdAt: 'asc' as const },
-            select: { id: true, title: true, status: true },
+            select: { id: true, title: true, status: true, displayNumber: true },
           },
         },
       },
@@ -128,7 +128,7 @@ export class AppointmentsService {
       title: string;
       workflowType: string;
       sourceTicketId: string | null;
-      workOrders: { id: string; title: string; status: string }[];
+      workOrders: { id: string; title: string; status: string; displayNumber: string | null }[];
     };
   }): CalendarAppointmentRecord {
     const title = row.title?.trim() || row.serviceCase.title;
@@ -164,6 +164,7 @@ export class AppointmentsService {
         id: wo.id,
         title: wo.title,
         status: wo.status,
+        displayNumber: wo.displayNumber ?? null,
       })),
       recurrenceRule: row.recurrenceRule,
       recurrenceSeriesId: row.recurrenceSeriesId,

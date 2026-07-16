@@ -79,14 +79,39 @@ export function SchedulerAgendaView({ weekStart, appointments, selectedId, partn
                           {appointmentStatusLabel(a.status)}
                         </span>
                       </div>
-                      {!partnerMode && a.ticketDisplayId && a.sourceTicketId ? (
-                        <Link
-                          href={`/fleet/tickets/${a.sourceTicketId}`}
-                          className="mt-1 inline-block text-xs text-sky-400 hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Tichet #{a.ticketDisplayId}
-                        </Link>
+                      {(a.ticketDisplayId || a.workOrders.length > 0) ? (
+                        <p className="mt-1 font-mono text-[11px] text-zinc-400">
+                          {a.ticketDisplayId && a.sourceTicketId && !partnerMode ? (
+                            <Link
+                              href={`/fleet/tickets/${a.sourceTicketId}`}
+                              className="text-sky-400 hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Tichet #{a.ticketDisplayId}
+                            </Link>
+                          ) : a.ticketDisplayId ? (
+                            <span>Tichet #{a.ticketDisplayId}</span>
+                          ) : null}
+                          {a.ticketDisplayId && a.workOrders.length > 0 ? " · " : null}
+                          {a.workOrders.map((wo, i) => {
+                            const label = wo.displayNumber ?? wo.id.slice(-6).toUpperCase();
+                            const href = partnerMode
+                              ? `/fleet/partner/work-orders/${wo.id}`
+                              : `/fleet/work-orders/${wo.id}`;
+                            return (
+                              <span key={wo.id}>
+                                {i > 0 ? " · " : null}
+                                <Link
+                                  href={href}
+                                  className="text-sky-400 hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  WO {label}
+                                </Link>
+                              </span>
+                            );
+                          })}
+                        </p>
                       ) : null}
                     </div>
                   </li>
