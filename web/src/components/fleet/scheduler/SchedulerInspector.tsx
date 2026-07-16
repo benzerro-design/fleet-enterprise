@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   APPOINTMENT_RECURRENCE,
@@ -52,7 +51,6 @@ export function SchedulerInspector({
   serviceTypeCode,
   partnerMode,
 }: Props) {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -261,31 +259,6 @@ export function SchedulerInspector({
       setRequestingCancel(false);
       setCancelNote("");
       onUpdated();
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function ensureWorkOrder() {
-    if (!appointment) return;
-    setPending(true);
-    setError(null);
-    try {
-      const res = await fetch(`${serviceCasesBrowserBase}/${appointment.serviceCaseId}/advance`, {
-        method: "POST",
-        headers: fleetJsonHeaders(),
-        body: JSON.stringify({
-          targetStage: "work_order",
-          supplierId: appointment.supplierId,
-        }),
-      });
-      if (!res.ok) {
-        const j = (await res.json()) as { message?: string };
-        setError(j.message ?? `HTTP ${res.status}`);
-        return;
-      }
-      onUpdated();
-      router.refresh();
     } finally {
       setPending(false);
     }
@@ -509,6 +482,31 @@ export function SchedulerInspector({
             </p>
           ) : null}
         </div>
+        {!partnerMode && appointment.status !== "cancelled" && appointment.status !== "completed" ? (
+          <div>
+            <dt className="text-xs uppercase text-zinc-500">Confirmări WO</dt>
+            <dd className="mt-1 space-y-0.5 text-xs text-zinc-400">
+              <p className={appointment.managerConfirmedAt ? "text-emerald-400/90" : ""}>
+                {appointment.managerConfirmedAt ? "✓ Manager" : "○ Manager — neconfirmat"}
+              </p>
+              <p className={appointment.driverAcknowledgedAt ? "text-sky-400/90" : ""}>
+                {appointment.driverAcknowledgedAt ? "✓ Șofer (primire)" : "○ Șofer — Confirmă primire"}
+              </p>
+              {appointment.workOrders.length === 0 &&
+              appointment.managerConfirmedAt &&
+              !appointment.driverAcknowledgedAt ? (
+                <p className="mt-1 rounded border border-amber-800/40 bg-amber-950/20 px-2 py-1 text-[10px] text-amber-200">
+                  Comanda (WO) se creează automat după Confirmă primire (șofer) pe tichet.
+                </p>
+              ) : null}
+              {appointment.workOrders.length === 0 &&
+              appointment.managerConfirmedAt &&
+              appointment.driverAcknowledgedAt ? (
+                <p className="mt-1 text-[10px] text-zinc-500">Confirmări complete — reîncarcă dacă WO nu apare.</p>
+              ) : null}
+            </dd>
+          </div>
+        ) : null}
         {appointment.recurrenceRule !== "none" ? (
           <div>
             <dt className="text-xs uppercase text-zinc-500">Recurență</dt>
@@ -647,16 +645,6 @@ export function SchedulerInspector({
                 Solicită anulare
               </button>
             )
-          ) : null}
-          {appointment.workOrders.length === 0 && editable && !partnerMode ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => void ensureWorkOrder()}
-              className="rounded-lg border border-sky-500/40 px-2.5 py-1.5 text-xs text-sky-300 hover:bg-sky-950/40 disabled:opacity-50"
-            >
-              Creează WO
-            </button>
           ) : null}
         </div>
       ) : null}

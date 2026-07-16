@@ -106,6 +106,8 @@ export class AppointmentsService {
     supplierValidatedAt?: Date | null;
     cancellationRequestedAt?: Date | null;
     cancellationRequestNote?: string | null;
+    managerConfirmedAt?: Date | null;
+    driverAcknowledgedAt?: Date | null;
     location: string | null;
     notes: string | null;
     recurrenceRule: ServiceAppointmentRecurrence;
@@ -141,6 +143,8 @@ export class AppointmentsService {
       supplierValidatedAt: row.supplierValidatedAt?.toISOString() ?? null,
       cancellationRequestedAt: row.cancellationRequestedAt?.toISOString() ?? null,
       cancellationRequestNote: row.cancellationRequestNote ?? null,
+      managerConfirmedAt: row.managerConfirmedAt?.toISOString() ?? null,
+      driverAcknowledgedAt: row.driverAcknowledgedAt?.toISOString() ?? null,
       location: row.location,
       notes: row.notes,
       vehicleId: row.vehicleId,

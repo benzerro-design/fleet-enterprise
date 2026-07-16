@@ -75,7 +75,7 @@ export function operationalHeadline(
     return "Factura e înregistrată — generează costul și închide comanda.";
   }
   if (wo?.approvedQuote) return "Deviz aprobat — după reparație înregistrează factura.";
-  if (wo && !wo.inServiceAt && appt?.managerConfirmedAt) {
+  if (wo && !wo.inServiceAt && appt?.managerConfirmedAt && appt?.driverAcknowledgedAt) {
     const nr = wo.displayNumber ? `${wo.displayNumber} · ` : "";
     return `Comanda ${nr}deschisă — marchează când mașina intră la service.`;
   }
@@ -84,6 +84,9 @@ export function operationalHeadline(
   }
   if (pendingAppt) {
     return `Programare ${fmt(pendingAppt.scheduledAt)}${pendingAppt.supplierLegalName ? ` la ${pendingAppt.supplierLegalName}` : ""} — confirmă.`;
+  }
+  if (appt?.managerConfirmedAt && !appt.driverAcknowledgedAt) {
+    return "Managerul a confirmat — așteaptă Confirmă primire (șofer) ca să se deschidă comanda (WO).";
   }
   if (appt && !appt.managerConfirmedAt) {
     return "Programare stabilită — confirmă cu service-ul și șoferul.";
@@ -166,18 +169,22 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
           : "După deschiderea fluxului service.",
       detail: appt?.status === "pending_supplier"
         ? "Propus de flotă — așteaptă validare furnizor."
-        : appt?.managerConfirmedAt
-          ? "Confirmată de manager."
-          : appt
-            ? "De confirmat cu service și șofer."
-            : undefined,
+        : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
+          ? "Confirmată de manager — așteaptă Confirmă primire (șofer)."
+          : appt?.managerConfirmedAt && appt.driverAcknowledgedAt
+            ? "Confirmată de manager și șofer."
+            : appt
+              ? "De confirmat cu service și șofer."
+              : undefined,
     },
     {
       id: "work-order",
       title: "Comandă service",
       situation: wo
         ? `${wo.displayNumber ? `${wo.displayNumber} · ` : ""}${wo.title}`
-        : "Se deschide la confirmarea programării.",
+        : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
+          ? "Se deschide după Confirmă primire (șofer)."
+          : "Se deschide după confirmarea duală (manager + șofer).",
       detail: wo?.supplierLegalName ?? undefined,
       links: wo ? [{ href: `/fleet/work-orders/${wo.id}`, label: wo.displayNumber ?? "Comandă" }] : undefined,
     },
@@ -188,7 +195,7 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
         ? `Intrare ${fmt(wo.inServiceAt)}${wo.outServiceAt ? "" : " · încă în service"}`
         : wo
           ? "Marchează intrarea când mașina ajunge."
-          : "După confirmarea programării.",
+          : "După deschiderea comenzii (confirmare duală).",
       detail: wo?.odometerKmIn != null ? `Km intrare: ${wo.odometerKmIn.toLocaleString("ro-RO")}` : undefined,
     },
     {

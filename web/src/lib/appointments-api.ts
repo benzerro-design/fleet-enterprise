@@ -45,6 +45,8 @@ export type CalendarAppointment = {
   supplierValidatedAt: string | null;
   cancellationRequestedAt: string | null;
   cancellationRequestNote: string | null;
+  managerConfirmedAt: string | null;
+  driverAcknowledgedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
