@@ -4,8 +4,12 @@ import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { WorkOrderSheetShell } from "@/components/fleet/work-orders/WorkOrderSheetShell";
 import { canWritePartnerOps, getAuthMeResult } from "@/lib/auth-server";
-import { fleetServerFetch } from "@/lib/fleet-server";
+import { apiServerFetch, fleetServerFetch } from "@/lib/fleet-server";
 import { workOrderPageTitle } from "@/lib/work-order-display";
+import {
+  DEFAULT_WORK_ORDER_SETTINGS,
+  type WorkOrderSettings,
+} from "@/lib/work-order-settings";
 import { type WorkOrderDetail, type WorkOrderQuoteRecord } from "@/lib/work-orders-api";
 
 async function loadQuotes(id: string): Promise<WorkOrderQuoteRecord[]> {
@@ -15,6 +19,16 @@ async function loadQuotes(id: string): Promise<WorkOrderQuoteRecord[]> {
     return (await res.json()) as WorkOrderQuoteRecord[];
   } catch {
     return [];
+  }
+}
+
+async function loadSettings(): Promise<WorkOrderSettings> {
+  try {
+    const res = await apiServerFetch("/tenant/work-order-settings");
+    if (!res?.ok) return DEFAULT_WORK_ORDER_SETTINGS;
+    return (await res.json()) as WorkOrderSettings;
+  } catch {
+    return DEFAULT_WORK_ORDER_SETTINGS;
   }
 }
 
@@ -39,7 +53,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function PartnerWorkOrderDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const [wo, auth] = await Promise.all([load(id), getAuthMeResult()]);
+  const [wo, auth, workOrderSettings] = await Promise.all([
+    load(id),
+    getAuthMeResult(),
+    loadSettings(),
+  ]);
   if (!wo) notFound();
   const canWrite = canWritePartnerOps(auth);
   const quotes = await loadQuotes(id);
@@ -60,6 +78,7 @@ export default async function PartnerWorkOrderDetailPage({ params }: PageProps) 
           hasInvoicedQuote={hasInvoicedQuote}
           hasCostFromQuote={hasCostFromQuote}
           isPartner
+          workOrderSettings={workOrderSettings}
         />
       </div>
     </FleetPageMain>

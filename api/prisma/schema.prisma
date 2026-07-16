@@ -14,6 +14,8 @@ model Tenant {
   name               String
   /// Hartă ierarhie IAM editabilă (Administrare → Strategie useri). Null = default canonic.
   iamStrategyMap     Json?
+  /// Setări comenzi service (Setup → WO). Null = defaults (km obligatorii + update odometru flotă).
+  workOrderSettings  Json?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   auditLogs          AuditLog[]

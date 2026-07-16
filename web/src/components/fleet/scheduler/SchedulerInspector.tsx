@@ -99,13 +99,28 @@ export function SchedulerInspector({
     workOrderId: string,
     field: "inServiceAt" | "outServiceAt",
   ) {
+    const kmLabel = field === "inServiceAt" ? "Km la intrare" : "Km la ieșire";
+    const raw = window.prompt(`${kmLabel} (obligatoriu dacă setarea WO cere km):`);
+    if (raw == null) return;
+    const trimmed = raw.trim();
+    const body: Record<string, string | number> = { [field]: new Date().toISOString() };
+    if (trimmed) {
+      const km = parseInt(trimmed, 10);
+      if (!Number.isFinite(km) || km < 0) {
+        setError("Km invalid.");
+        return;
+      }
+      if (field === "inServiceAt") body.odometerKmIn = km;
+      else body.odometerKmOut = km;
+    }
+
     setPending(true);
     setError(null);
     try {
       const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/service-times`, {
         method: "PATCH",
         headers: fleetJsonHeaders(),
-        body: JSON.stringify({ [field]: new Date().toISOString() }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;

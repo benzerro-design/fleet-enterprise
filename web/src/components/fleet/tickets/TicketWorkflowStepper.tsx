@@ -787,7 +787,7 @@ function WorkOrderStepCard({
                 type="button"
                 disabled={pending}
                 onClick={() => {
-                  const raw = window.prompt("Km la intrare (opțional, lasă gol dacă nu știi):");
+                  const raw = window.prompt("Km la intrare (obligatoriu dacă setarea WO cere km):");
                   const km = raw?.trim() ? parseInt(raw, 10) : undefined;
                   if (raw?.trim() && (!Number.isFinite(km) || km! < 0)) return;
                   void onRecordServiceTime(wo.id, "inServiceAt", undefined, km);
@@ -802,7 +802,7 @@ function WorkOrderStepCard({
                 type="button"
                 disabled={pending}
                 onClick={() => {
-                  const raw = window.prompt("Km la ieșire (opțional):");
+                  const raw = window.prompt("Km la ieșire (obligatoriu dacă setarea WO cere km):");
                   const km = raw?.trim() ? parseInt(raw, 10) : undefined;
                   if (raw?.trim() && (!Number.isFinite(km) || km! < 0)) return;
                   void onRecordServiceTime(wo.id, "outServiceAt", undefined, km);

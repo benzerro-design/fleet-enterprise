@@ -83,6 +83,23 @@ export class TenantController {
     return this.tenant.resetIamStrategy(tenantSlug, actorUserId);
   }
 
+  @Get('work-order-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getWorkOrderSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getWorkOrderSettings(tenantSlug);
+  }
+
+  @Patch('work-order-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchWorkOrderSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setWorkOrderSettings(tenantSlug, body, actorUserId);
+  }
+
   @Get('service-types/active')
   @Roles(...FLEET_READ_ROLES)
   listActiveServiceTypes(@TenantId() tenantSlug: string) {

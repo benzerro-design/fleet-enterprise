@@ -23,6 +23,7 @@ import {
   isPartnerUser,
 } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
+import { parseWorkOrderSettings } from '../tenant/work-order-settings';
 import { ensureWorkOrderDisplayNumber } from './work-order-display-number';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 
@@ -809,13 +810,17 @@ export class WorkOrdersService {
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<WorkOrderDetail> {
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, workOrderSettings: true },
+    });
     if (!tenant) throw new NotFoundException('Tenant not found');
+    const settings = parseWorkOrderSettings(tenant.workOrderSettings);
 
     const wo = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id, tenantId: tenant.id },
       include: {
-        vehicle: { select: { clientId: true } },
+        vehicle: { select: { id: true, clientId: true, odometerKm: true } },
         serviceCase: { select: { id: true, currentStage: true, sourceTicketId: true, clientId: true } },
       },
     });
@@ -887,12 +892,41 @@ export class WorkOrdersService {
 
     const nextIn = data.inServiceAt !== undefined ? data.inServiceAt : wo.inServiceAt;
     const nextOut = data.outServiceAt !== undefined ? data.outServiceAt : wo.outServiceAt;
+    const nextKmIn = data.odometerKmIn !== undefined ? data.odometerKmIn : wo.odometerKmIn;
+    const nextKmOut = data.odometerKmOut !== undefined ? data.odometerKmOut : wo.odometerKmOut;
+
     if (nextIn && nextOut && nextOut.getTime() < nextIn.getTime()) {
       throw new BadRequestException('outServiceAt must be after inServiceAt');
     }
 
+    const markingIn = data.inServiceAt != null && !wo.inServiceAt;
+    const markingOut = data.outServiceAt != null && !wo.outServiceAt;
+
+    if (settings.requireServiceKm) {
+      if (markingIn && (nextKmIn == null || nextKmIn < 0)) {
+        throw new BadRequestException('Km intrare este obligatoriu (setare WO)');
+      }
+      if (markingOut && (nextKmOut == null || nextKmOut < 0)) {
+        throw new BadRequestException('Km ieșire este obligatoriu (setare WO)');
+      }
+    }
+
+    if (nextKmIn != null && nextKmOut != null && nextKmOut < nextKmIn) {
+      throw new BadRequestException('Km ieșire trebuie să fie ≥ km intrare');
+    }
+
     if (data.inServiceAt && wo.status === MaintenanceWorkOrderStatus.draft) {
       data.status = MaintenanceWorkOrderStatus.in_progress;
+    }
+
+    const fleetKmCandidates: { km: number; phase: 'in' | 'out' }[] = [];
+    if (settings.updateFleetOdometerFromServiceKm) {
+      if (markingIn && nextKmIn != null) fleetKmCandidates.push({ km: nextKmIn, phase: 'in' });
+      if (markingOut && nextKmOut != null) fleetKmCandidates.push({ km: nextKmOut, phase: 'out' });
+      if (!markingIn && !markingOut) {
+        if (data.odometerKmIn != null) fleetKmCandidates.push({ km: data.odometerKmIn, phase: 'in' });
+        if (data.odometerKmOut != null) fleetKmCandidates.push({ km: data.odometerKmOut, phase: 'out' });
+      }
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -921,6 +955,32 @@ export class WorkOrdersService {
           `Ieșire service: ${data.outServiceAt.toLocaleString('ro-RO')}.`,
         );
       }
+
+      let currentFleetKm = wo.vehicle.odometerKm;
+      for (const cand of fleetKmCandidates) {
+        if (cand.km < currentFleetKm) continue;
+        await tx.odometerReading.create({
+          data: {
+            vehicleId: wo.vehicle.id,
+            odometerKm: cand.km,
+            source: 'ops',
+            sourceRef: `work_order:${id}:${cand.phase}`,
+            notes:
+              cand.phase === 'in'
+                ? 'Km la intrare service (comandă)'
+                : 'Km la ieșire service (comandă)',
+            recordedByUserId: actorUserId ?? null,
+          },
+        });
+        await tx.vehicle.update({
+          where: { id: wo.vehicle.id },
+          data: {
+            odometerKm: cand.km,
+            updatedByUserId: actorUserId ?? undefined,
+          },
+        });
+        currentFleetKm = cand.km;
+      }
     });
 
     await this.audit.log({
@@ -932,8 +992,10 @@ export class WorkOrdersService {
       meta: {
         inServiceAt: nextIn?.toISOString(),
         outServiceAt: nextOut?.toISOString(),
-        odometerKmIn: data.odometerKmIn ?? wo.odometerKmIn,
-        odometerKmOut: data.odometerKmOut ?? wo.odometerKmOut,
+        odometerKmIn: nextKmIn,
+        odometerKmOut: nextKmOut,
+        requireServiceKm: settings.requireServiceKm,
+        updateFleetOdometer: settings.updateFleetOdometerFromServiceKm,
       },
     });
 

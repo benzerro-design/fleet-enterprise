@@ -12,6 +12,11 @@ import {
   parseServiceTypeCode,
   type TenantServiceTypeRow,
 } from './tenant-service-types';
+import {
+  parseWorkOrderSettings,
+  parseWorkOrderSettingsPatch,
+  type WorkOrderSettings,
+} from './work-order-settings';
 
 @Injectable()
 export class TenantService {
@@ -147,6 +152,55 @@ export class TenantService {
     });
 
     return this.getIamStrategy(tenantSlug);
+  }
+
+  async getWorkOrderSettings(tenantSlug: string): Promise<WorkOrderSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { workOrderSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseWorkOrderSettings(tenant.workOrderSettings);
+  }
+
+  async setWorkOrderSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<WorkOrderSettings> {
+    let patch: Partial<WorkOrderSettings>;
+    try {
+      patch = parseWorkOrderSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid settings');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, workOrderSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const next: WorkOrderSettings = {
+      ...parseWorkOrderSettings(tenant.workOrderSettings),
+      ...patch,
+    };
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { workOrderSettings: next as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: next,
+    });
+
+    return next;
   }
 
   async resetIamStrategy(tenantSlug: string, actorUserId: string) {

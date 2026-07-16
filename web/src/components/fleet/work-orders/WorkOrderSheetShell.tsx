@@ -24,6 +24,10 @@ import {
 import { workOrderDisplayLabel } from "@/lib/work-order-display";
 import { MobilityWoBanner } from "@/components/fleet/MobilityWoBanner";
 import { WorkOrderMobilitySummary } from "@/components/fleet/work-orders/WorkOrderMobilitySummary";
+import {
+  DEFAULT_WORK_ORDER_SETTINGS,
+  type WorkOrderSettings,
+} from "@/lib/work-order-settings";
 
 type Props = {
   wo: WorkOrderDetail;
@@ -32,6 +36,7 @@ type Props = {
   hasInvoicedQuote: boolean;
   hasCostFromQuote: boolean;
   isPartner?: boolean;
+  workOrderSettings?: WorkOrderSettings;
 };
 
 function fmtDate(iso: string | null): string {
@@ -65,13 +70,22 @@ function sheetBtn(primary?: boolean) {
   ].join(" ");
 }
 
-export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote, hasCostFromQuote, isPartner = false }: Props) {
+export function WorkOrderSheetShell({
+  wo,
+  canWrite,
+  canApprove,
+  hasInvoicedQuote,
+  hasCostFromQuote,
+  isPartner = false,
+  workOrderSettings = DEFAULT_WORK_ORDER_SETTINGS,
+}: Props) {
   const router = useRouter();
   const [serviceType, setServiceType] = useState<ServiceOrderType>(wo.serviceOrderType);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kmIn, setKmIn] = useState(wo.odometerKmIn != null ? String(wo.odometerKmIn) : "");
   const [kmOut, setKmOut] = useState(wo.odometerKmOut != null ? String(wo.odometerKmOut) : "");
+  const requireKm = workOrderSettings.requireServiceKm;
 
   const milestones = useMemo(
     () => buildWorkOrderMilestones({ ...wo, serviceOrderType: serviceType }, { canMarkReady: canWrite }),
@@ -125,6 +139,9 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
         return;
       }
       body.odometerKmIn = n;
+    } else if (requireKm) {
+      setError("Km intrare este obligatoriu.");
+      return;
     }
     await patchServiceTimes(body);
   }
@@ -138,6 +155,9 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
         return;
       }
       body.odometerKmOut = n;
+    } else if (requireKm) {
+      setError("Km ieșire este obligatoriu.");
+      return;
     }
     await patchServiceTimes(body);
   }
@@ -185,22 +205,6 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
     }
   }
 
-  const receptionActions: { label: string; onClick: () => void }[] = [];
-  if (canWrite) {
-    if (!wo.inServiceAt) {
-      receptionActions.push({
-        label: isPartner ? "Mașina a intrat" : "Intrare km",
-        onClick: () => void markIn(),
-      });
-    }
-    if (wo.inServiceAt && !wo.outServiceAt) {
-      receptionActions.push({
-        label: isPartner ? "Mașina a ieșit" : "Ieșire km",
-        onClick: () => void markOut(),
-      });
-    }
-  }
-
   const navActions: { label: string; href: string }[] = isPartner
     ? [
         { label: "← Inbox", href: "/fleet/partner/work-orders" },
@@ -219,91 +223,13 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
 
   const toolbarGroups = [
     { label: "Comandă", items: [] as { label: string; href?: string; onClick?: () => void }[] },
-    { label: "Recepție", items: receptionActions },
     { label: "Navigare", items: navActions },
   ];
 
   return (
     <div className="space-y-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950/80">
-      {isPartner ? (
-        <div className="border-b border-violet-800/50 bg-violet-950/25 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-300">
-            Recepție vehicul (partener)
-          </p>
-          <p className="mt-1 text-xs text-zinc-400">
-            Marcați când preluați mașina de la utilizator (intrare) și când o predăți înapoi (ieșire).
-          </p>
-          {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
-          <div className="mt-3 flex flex-wrap items-end gap-3">
-            <label className="text-xs text-zinc-500">
-              Km intrare
-              <input
-                type="number"
-                min={0}
-                value={kmIn}
-                disabled={!canWrite || pending || !!wo.inServiceAt}
-                onChange={(e) => setKmIn(e.target.value)}
-                className="ml-1 w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                placeholder="Opțional"
-              />
-            </label>
-            <label className="text-xs text-zinc-500">
-              Km ieșire
-              <input
-                type="number"
-                min={0}
-                value={kmOut}
-                disabled={!canWrite || pending || !wo.inServiceAt || !!wo.outServiceAt}
-                onChange={(e) => setKmOut(e.target.value)}
-                className="ml-1 w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                placeholder="Opțional"
-              />
-            </label>
-            {canWrite && !wo.inServiceAt ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void markIn()}
-                className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-              >
-                Mașina a intrat
-              </button>
-            ) : null}
-            {canWrite && wo.inServiceAt && !wo.outServiceAt ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void markOut()}
-                className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-1.5 text-sm font-medium text-violet-100 hover:bg-violet-900/40 disabled:opacity-50"
-              >
-                Mașina a ieșit
-              </button>
-            ) : null}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
-            <span>
-              In:{" "}
-              <strong className="text-zinc-200">
-                {wo.inServiceAt ? new Date(wo.inServiceAt).toLocaleString("ro-RO") : "—"}
-              </strong>
-            </span>
-            <span>
-              Out:{" "}
-              <strong className="text-zinc-200">
-                {wo.outServiceAt ? new Date(wo.outServiceAt).toLocaleString("ro-RO") : "—"}
-              </strong>
-            </span>
-          </div>
-          {!canWrite ? (
-            <p className="mt-2 text-xs text-amber-300/90">
-              Contul dvs. este read-only pe acest furnizor — nu puteți marca recepția.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/60 px-2 py-2">
-        <div className="grid min-w-[640px] grid-cols-3 gap-1.5">
+        <div className="grid min-w-[640px] grid-cols-2 gap-1.5">
           {toolbarGroups.map((g) => (
             <div key={g.label} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5">
               <div className="mb-1 text-[9px] font-semibold uppercase text-zinc-500">{g.label}</div>
@@ -491,29 +417,64 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
                 {wo.driverPhone ? ` · ${wo.driverPhone}` : ""}
               </div>
             ) : null}
-            <div className="flex flex-wrap gap-2 pt-1">
-              <label className="text-zinc-500">
-                Km in
-                <input
-                  type="number"
-                  min={0}
-                  value={kmIn}
-                  disabled={!canWrite}
-                  onChange={(e) => setKmIn(e.target.value)}
-                  className="ml-1 w-20 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 font-mono text-zinc-200"
-                />
-              </label>
-              <label className="text-zinc-500">
-                Km out
-                <input
-                  type="number"
-                  min={0}
-                  value={kmOut}
-                  disabled={!canWrite}
-                  onChange={(e) => setKmOut(e.target.value)}
-                  className="ml-1 w-20 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 font-mono text-zinc-200"
-                />
-              </label>
+            {error ? <p className="pt-1 text-red-400">{error}</p> : null}
+            <div className="grid gap-3 pt-2 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="block text-zinc-500">
+                  Km in{requireKm ? <span className="text-amber-400"> *</span> : null}
+                  <input
+                    type="number"
+                    min={0}
+                    value={kmIn}
+                    disabled={!canWrite || pending || !!wo.inServiceAt}
+                    onChange={(e) => setKmIn(e.target.value)}
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                    placeholder={requireKm ? "Obligatoriu" : "Opțional"}
+                  />
+                </label>
+                {wo.inServiceAt ? (
+                  <p className="text-[10px] text-zinc-500">
+                    In service: {new Date(wo.inServiceAt).toLocaleString("ro-RO")}
+                  </p>
+                ) : canWrite ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void markIn()}
+                    className="w-full rounded-lg bg-violet-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+                  >
+                    In service
+                  </button>
+                ) : null}
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-zinc-500">
+                  Km out{requireKm ? <span className="text-amber-400"> *</span> : null}
+                  <input
+                    type="number"
+                    min={0}
+                    value={kmOut}
+                    disabled={!canWrite || pending || !wo.inServiceAt || !!wo.outServiceAt}
+                    onChange={(e) => setKmOut(e.target.value)}
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                    placeholder={requireKm ? "Obligatoriu" : "Opțional"}
+                  />
+                </label>
+                {wo.outServiceAt ? (
+                  <p className="text-[10px] text-zinc-500">
+                    Out service: {new Date(wo.outServiceAt).toLocaleString("ro-RO")}
+                  </p>
+                ) : canWrite && wo.inServiceAt ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void markOut()}
+                    className="w-full rounded-lg border border-violet-500/50 bg-violet-950/40 px-2 py-1.5 text-xs font-medium text-violet-100 hover:bg-violet-900/40 disabled:opacity-50"
+                  >
+                    Out service
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
