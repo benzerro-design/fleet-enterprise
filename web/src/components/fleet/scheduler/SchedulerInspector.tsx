@@ -12,6 +12,7 @@ import {
 } from "@/lib/appointments-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import { serviceCasesBrowserBase } from "@/lib/service-cases-api";
+import { workOrdersBrowserBase } from "@/lib/work-orders-api";
 import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
 import { ticketDisplayIdFromTicketId } from "@/lib/scheduler-deep-link";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
@@ -93,6 +94,36 @@ export function SchedulerInspector({
       setVehicleId(initialVehicleId);
     }
   }, [createMode, initialVehicleId]);
+
+  async function markVehicleService(
+    workOrderId: string,
+    field: "inServiceAt" | "outServiceAt",
+  ) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/service-times`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ [field]: new Date().toISOString() }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+          else if (Array.isArray(j.message)) msg = j.message.join(", ");
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      onUpdated();
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function submitCreate() {
     setPending(true);
@@ -581,6 +612,63 @@ export function SchedulerInspector({
           </div>
         ) : null}
       </dl>
+
+      {partnerMode && appointment.workOrders.length > 0 ? (
+        <div className="mt-4 rounded-lg border border-violet-800/40 bg-violet-950/20 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-300">
+            Recepție vehicul
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500">
+            Marcați când preluați mașina de la utilizator și când o predăți înapoi.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {appointment.workOrders.map((wo) => {
+              const label = wo.displayNumber ?? wo.id.slice(-6).toUpperCase();
+              return (
+                <li key={wo.id} className="rounded-md border border-zinc-800 bg-zinc-950/50 p-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Link
+                      href={`/fleet/partner/work-orders/${wo.id}`}
+                      className="font-mono text-xs text-sky-300 hover:underline"
+                    >
+                      {label}
+                    </Link>
+                    <span className="text-[10px] text-zinc-500">
+                      In: {wo.inServiceAt ? new Date(wo.inServiceAt).toLocaleString("ro-RO") : "—"}
+                      {" · "}
+                      Out: {wo.outServiceAt ? new Date(wo.outServiceAt).toLocaleString("ro-RO") : "—"}
+                    </span>
+                  </div>
+                  {canWrite ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {!wo.inServiceAt ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => void markVehicleService(wo.id, "inServiceAt")}
+                          className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs text-white hover:bg-violet-500 disabled:opacity-50"
+                        >
+                          Mașina a intrat
+                        </button>
+                      ) : null}
+                      {wo.inServiceAt && !wo.outServiceAt ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => void markVehicleService(wo.id, "outServiceAt")}
+                          className="rounded-lg border border-violet-500/50 px-2.5 py-1 text-xs text-violet-100 hover:bg-violet-950/40 disabled:opacity-50"
+                        >
+                          Mașina a ieșit
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       {canWrite ? (
         <div className="mt-4 flex flex-wrap gap-2">

@@ -194,8 +194,8 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       situation: wo?.inServiceAt
         ? `Intrare ${fmt(wo.inServiceAt)}${wo.outServiceAt ? "" : " · încă în service"}`
         : wo
-          ? "Marchează intrarea când mașina ajunge."
-          : "După deschiderea comenzii (confirmare duală).",
+          ? "Marchează intrarea când mașina ajunge (partenerul o face la recepție)."
+          : "După deschiderea comenzii — partenerul marchează intrarea/ieșirea.",
       detail: wo?.odometerKmIn != null ? `Km intrare: ${wo.odometerKmIn.toLocaleString("ro-RO")}` : undefined,
     },
     {
@@ -297,13 +297,13 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       situation: wo?.outServiceAt
         ? `Ieșire ${fmt(wo.outServiceAt)}${wo.odometerKmOut != null ? ` · ${wo.odometerKmOut.toLocaleString("ro-RO")} km` : ""}`
         : approved?.costEntryId
-          ? "Marchează ieșirea din service după factură și cost."
+          ? "Partenerul marchează ieșirea la predarea mașinii (km ieșire)."
           : approved?.invoicedAt
-            ? "Generează costul, apoi marchează ieșirea vehiculului."
-            : "După factură, cost și predare către client.",
+            ? "Generează costul, apoi partenerul marchează ieșirea."
+            : "După factură și cost — partenerul predă mașina și marchează ieșirea.",
       detail:
-        wo?.inServiceAt && !wo.outServiceAt && approved?.costEntryId
-          ? "Predare mașină reparată — înregistrează km ieșire pe comandă."
+        wo?.inServiceAt && !wo.outServiceAt
+          ? "Predare mașină reparată — partenerul înregistrează km ieșire pe comandă."
           : undefined,
       links: wo
         ? [{ href: `/fleet/work-orders/${wo.id}`, label: wo.displayNumber ?? "Comandă" }]

@@ -823,8 +823,13 @@ export class WorkOrdersService {
     if (access) {
       try {
         this.assertWorkOrderWrite(access, wo);
-      } catch {
-        throw new ForbiddenException('Cannot update service times');
+      } catch (e) {
+        if (e instanceof ForbiddenException) throw e;
+        throw new ForbiddenException(
+          isPartnerUser(access)
+            ? 'Partenerul nu poate marca recepția pe această comandă'
+            : 'Cannot update service times',
+        );
       }
     }
 

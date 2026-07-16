@@ -86,6 +86,7 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
   const schedulerLink =
     wo.linkedAppointmentScheduledAt || wo.plannedAt
       ? schedulerHref({
+          basePath: isPartner ? "/fleet/partner/appointments" : "/fleet/scheduler",
           week: new Date(wo.linkedAppointmentScheduledAt ?? wo.plannedAt!),
           select: wo.linkedAppointmentId ?? undefined,
         })
@@ -186,16 +187,35 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
 
   const receptionActions: { label: string; onClick: () => void }[] = [];
   if (canWrite) {
-    if (!wo.inServiceAt) receptionActions.push({ label: "Intrare km", onClick: () => void markIn() });
-    if (wo.inServiceAt && !wo.outServiceAt) receptionActions.push({ label: "Ieșire km", onClick: () => void markOut() });
+    if (!wo.inServiceAt) {
+      receptionActions.push({
+        label: isPartner ? "Mașina a intrat" : "Intrare km",
+        onClick: () => void markIn(),
+      });
+    }
+    if (wo.inServiceAt && !wo.outServiceAt) {
+      receptionActions.push({
+        label: isPartner ? "Mașina a ieșit" : "Ieșire km",
+        onClick: () => void markOut(),
+      });
+    }
   }
 
-  const navActions: { label: string; href: string }[] = [
-    { label: "← Inbox", href: "/fleet/work-orders" },
-    { label: "Vehicul", href: `/fleet/vehicles/${wo.vehicleId}` },
-  ];
-  if (schedulerLink) navActions.push({ label: "Programator", href: schedulerLink });
-  if (wo.sourceTicketId) navActions.push({ label: "Tichet", href: `/fleet/tickets/${wo.sourceTicketId}` });
+  const navActions: { label: string; href: string }[] = isPartner
+    ? [
+        { label: "← Inbox", href: "/fleet/partner/work-orders" },
+        ...(schedulerLink
+          ? [{ label: "Programator", href: "/fleet/partner/appointments" }]
+          : []),
+      ]
+    : [
+        { label: "← Inbox", href: "/fleet/work-orders" },
+        { label: "Vehicul", href: `/fleet/vehicles/${wo.vehicleId}` },
+        ...(schedulerLink ? [{ label: "Programator", href: schedulerLink }] : []),
+        ...(wo.sourceTicketId
+          ? [{ label: "Tichet", href: `/fleet/tickets/${wo.sourceTicketId}` }]
+          : []),
+      ];
 
   const toolbarGroups = [
     { label: "Comandă", items: [] as { label: string; href?: string; onClick?: () => void }[] },
@@ -205,6 +225,83 @@ export function WorkOrderSheetShell({ wo, canWrite, canApprove, hasInvoicedQuote
 
   return (
     <div className="space-y-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950/80">
+      {isPartner ? (
+        <div className="border-b border-violet-800/50 bg-violet-950/25 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-300">
+            Recepție vehicul (partener)
+          </p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Marcați când preluați mașina de la utilizator (intrare) și când o predăți înapoi (ieșire).
+          </p>
+          {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="text-xs text-zinc-500">
+              Km intrare
+              <input
+                type="number"
+                min={0}
+                value={kmIn}
+                disabled={!canWrite || pending || !!wo.inServiceAt}
+                onChange={(e) => setKmIn(e.target.value)}
+                className="ml-1 w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                placeholder="Opțional"
+              />
+            </label>
+            <label className="text-xs text-zinc-500">
+              Km ieșire
+              <input
+                type="number"
+                min={0}
+                value={kmOut}
+                disabled={!canWrite || pending || !wo.inServiceAt || !!wo.outServiceAt}
+                onChange={(e) => setKmOut(e.target.value)}
+                className="ml-1 w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                placeholder="Opțional"
+              />
+            </label>
+            {canWrite && !wo.inServiceAt ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void markIn()}
+                className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+              >
+                Mașina a intrat
+              </button>
+            ) : null}
+            {canWrite && wo.inServiceAt && !wo.outServiceAt ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void markOut()}
+                className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-1.5 text-sm font-medium text-violet-100 hover:bg-violet-900/40 disabled:opacity-50"
+              >
+                Mașina a ieșit
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
+            <span>
+              In:{" "}
+              <strong className="text-zinc-200">
+                {wo.inServiceAt ? new Date(wo.inServiceAt).toLocaleString("ro-RO") : "—"}
+              </strong>
+            </span>
+            <span>
+              Out:{" "}
+              <strong className="text-zinc-200">
+                {wo.outServiceAt ? new Date(wo.outServiceAt).toLocaleString("ro-RO") : "—"}
+              </strong>
+            </span>
+          </div>
+          {!canWrite ? (
+            <p className="mt-2 text-xs text-amber-300/90">
+              Contul dvs. este read-only pe acest furnizor — nu puteți marca recepția.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/60 px-2 py-2">
         <div className="grid min-w-[640px] grid-cols-3 gap-1.5">
           {toolbarGroups.map((g) => (
