@@ -85,7 +85,12 @@ export function WorkOrderSheetShell({
   const [error, setError] = useState<string | null>(null);
   const [kmIn, setKmIn] = useState(wo.odometerKmIn != null ? String(wo.odometerKmIn) : "");
   const [kmOut, setKmOut] = useState(wo.odometerKmOut != null ? String(wo.odometerKmOut) : "");
+  const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const requireKm = workOrderSettings.requireServiceKm;
+
+  const fleetAlignedFromService =
+    (wo.odometerKmOut != null && wo.vehicle.odometerKm === wo.odometerKmOut) ||
+    (wo.odometerKmIn != null && wo.vehicle.odometerKm === wo.odometerKmIn);
 
   const milestones = useMemo(
     () => buildWorkOrderMilestones({ ...wo, serviceOrderType: serviceType }, { canMarkReady: canWrite }),
@@ -110,6 +115,7 @@ export function WorkOrderSheetShell({
     async (body: Record<string, string | number>) => {
       setPending(true);
       setError(null);
+      setFleetOdoNotice(null);
       try {
         const res = await fetch(`${workOrdersBrowserBase}/${wo.id}/service-times`, {
           method: "PATCH",
@@ -119,6 +125,14 @@ export function WorkOrderSheetShell({
         if (!res.ok) {
           const j = (await res.json().catch(() => ({}))) as { message?: string };
           throw new Error(j.message ?? `HTTP ${res.status}`);
+        }
+        const j = (await res.json().catch(() => ({}))) as {
+          fleetOdometerUpdate?: { updated: boolean; previousKm: number; newKm: number | null };
+        };
+        if (j.fleetOdometerUpdate?.updated && j.fleetOdometerUpdate.newKm != null) {
+          setFleetOdoNotice(
+            `Odometru flotă actualizat: ${j.fleetOdometerUpdate.previousKm.toLocaleString("ro-RO")} → ${j.fleetOdometerUpdate.newKm.toLocaleString("ro-RO")} km`,
+          );
         }
         router.refresh();
       } catch (e) {
@@ -337,7 +351,22 @@ export function WorkOrderSheetShell({
               value={[wo.vehicle.brand, wo.vehicle.model].filter(Boolean).join(" ") || "—"}
             />
             <Row label="VIN / șasiu" value={wo.vehicle.vin ?? "—"} mono />
-            <Row label="Km flotă" value={`${wo.vehicle.odometerKm.toLocaleString("ro-RO")} km`} />
+            <div className="grid grid-cols-[88px_1fr] gap-2">
+              <dt className="text-zinc-500">Km flotă</dt>
+              <dd className="text-zinc-200">
+                {wo.vehicle.odometerKm.toLocaleString("ro-RO")} km
+                {fleetOdoNotice || fleetAlignedFromService ? (
+                  <span className="ml-1.5 inline-flex items-center rounded border border-emerald-800/50 bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                    actualizat
+                  </span>
+                ) : null}
+              </dd>
+            </div>
+            {fleetOdoNotice ? (
+              <p className="text-[10px] text-emerald-400/80">{fleetOdoNotice}</p>
+            ) : fleetAlignedFromService ? (
+              <p className="text-[10px] text-emerald-400/80">Odometru flotă actualizat din recepție service</p>
+            ) : null}
             <Row label="ITP expiră" value={fmtItp(wo.vehicle.itpExpiresOn)} />
             <div className="my-2 border-t border-zinc-800" />
             <Row label="Denumire" value={wo.client.legalName} />
@@ -418,6 +447,9 @@ export function WorkOrderSheetShell({
               </div>
             ) : null}
             {error ? <p className="pt-1 text-red-400">{error}</p> : null}
+            {fleetOdoNotice ? (
+              <p className="pt-1 text-[11px] text-emerald-400/90">{fleetOdoNotice}</p>
+            ) : null}
             <div className="grid gap-3 pt-2 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="block text-zinc-500">

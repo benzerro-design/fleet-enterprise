@@ -66,6 +66,7 @@ export function SchedulerInspector({
   const [editDurationMin, setEditDurationMin] = useState("60");
   const [cancelNote, setCancelNote] = useState("");
   const [requestingCancel, setRequestingCancel] = useState(false);
+  const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!appointment) return;
@@ -116,6 +117,7 @@ export function SchedulerInspector({
 
     setPending(true);
     setError(null);
+    setFleetOdoNotice(null);
     try {
       const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/service-times`, {
         method: "PATCH",
@@ -133,6 +135,14 @@ export function SchedulerInspector({
         }
         setError(msg);
         return;
+      }
+      const j = (await res.json().catch(() => ({}))) as {
+        fleetOdometerUpdate?: { updated: boolean; previousKm: number; newKm: number | null };
+      };
+      if (j.fleetOdometerUpdate?.updated && j.fleetOdometerUpdate.newKm != null) {
+        setFleetOdoNotice(
+          `Odometru flotă actualizat: ${j.fleetOdometerUpdate.previousKm.toLocaleString("ro-RO")} → ${j.fleetOdometerUpdate.newKm.toLocaleString("ro-RO")} km`,
+        );
       }
       onUpdated();
     } finally {
@@ -636,6 +646,9 @@ export function SchedulerInspector({
           <p className="mt-1 text-[11px] text-zinc-500">
             Marcați când preluați mașina de la utilizator și când o predăți înapoi.
           </p>
+          {fleetOdoNotice ? (
+            <p className="mt-2 text-[11px] text-emerald-400/90">{fleetOdoNotice}</p>
+          ) : null}
           <ul className="mt-2 space-y-2">
             {appointment.workOrders.map((wo) => {
               const label = wo.displayNumber ?? wo.id.slice(-6).toUpperCase();

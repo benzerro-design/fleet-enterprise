@@ -100,6 +100,14 @@ export type WorkOrderDetail = WorkOrderListRow & {
   driverPhone: string | null;
 };
 
+export type ServiceTimesResult = WorkOrderDetail & {
+  fleetOdometerUpdate?: {
+    updated: boolean;
+    previousKm: number;
+    newKm: number | null;
+  };
+};
+
 export type QuoteLineType = "labor" | "parts" | "other";
 
 export type QuoteLineRecord = {

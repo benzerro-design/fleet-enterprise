@@ -123,6 +123,15 @@ export type WorkOrderDetail = WorkOrderListRow & {
   };
 };
 
+/** Răspuns PATCH service-times — include dacă odometrul flotă a fost actualizat. */
+export type ServiceTimesResult = WorkOrderDetail & {
+  fleetOdometerUpdate: {
+    updated: boolean;
+    previousKm: number;
+    newKm: number | null;
+  };
+};
+
 export type WorkOrderInbox = 'open' | 'pending_approval' | 'in_service' | 'ready' | 'invoiced';
 
 export type WorkOrderListParams = {
@@ -809,7 +818,7 @@ export class WorkOrdersService {
     },
     actorUserId?: string,
     access?: AccessContext,
-  ): Promise<WorkOrderDetail> {
+  ): Promise<ServiceTimesResult> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { slug: tenantSlug },
       select: { id: true, workOrderSettings: true },
@@ -929,6 +938,9 @@ export class WorkOrdersService {
       }
     }
 
+    const previousFleetKm = wo.vehicle.odometerKm;
+    let fleetUpdatedTo: number | null = null;
+
     await this.prisma.$transaction(async (tx) => {
       await tx.maintenanceWorkOrder.update({ where: { id }, data });
 
@@ -956,7 +968,7 @@ export class WorkOrdersService {
         );
       }
 
-      let currentFleetKm = wo.vehicle.odometerKm;
+      let currentFleetKm = previousFleetKm;
       for (const cand of fleetKmCandidates) {
         if (cand.km < currentFleetKm) continue;
         await tx.odometerReading.create({
@@ -980,6 +992,7 @@ export class WorkOrdersService {
           },
         });
         currentFleetKm = cand.km;
+        fleetUpdatedTo = cand.km;
       }
     });
 
@@ -996,10 +1009,21 @@ export class WorkOrdersService {
         odometerKmOut: nextKmOut,
         requireServiceKm: settings.requireServiceKm,
         updateFleetOdometer: settings.updateFleetOdometerFromServiceKm,
+        fleetOdometerUpdated: fleetUpdatedTo != null,
+        fleetOdometerPreviousKm: previousFleetKm,
+        fleetOdometerNewKm: fleetUpdatedTo,
       },
     });
 
-    return this.getById(tenantSlug, id);
+    const detail = await this.getById(tenantSlug, id);
+    return {
+      ...detail,
+      fleetOdometerUpdate: {
+        updated: fleetUpdatedTo != null,
+        previousKm: previousFleetKm,
+        newKm: fleetUpdatedTo,
+      },
+    };
   }
 
   private async ensureCaseStageAtLeast(
