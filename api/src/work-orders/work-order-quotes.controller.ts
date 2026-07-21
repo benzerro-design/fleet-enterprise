@@ -8,6 +8,8 @@ import type { AccessContext } from '../iam/access-context.types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import {
+  type ApproveQuoteInput,
+  type PatchQuoteLinePartsInput,
   WorkOrderQuotesService,
   type PostCostInput,
   type UpsertQuoteInput,
@@ -81,10 +83,33 @@ export class WorkOrderQuotesController {
     @TenantId() tenantSlug: string,
     @Param('workOrderId') workOrderId: string,
     @Param('quoteId') quoteId: string,
+    @Body() body: ApproveQuoteInput,
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {
-    return this.quotes.approve(tenantSlug, workOrderId, quoteId, actorUserId, access);
+    return this.quotes.approve(tenantSlug, workOrderId, quoteId, body ?? {}, actorUserId, access);
+  }
+
+  @Patch(':quoteId/lines/:lineId/parts')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchLineParts(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Param('quoteId') quoteId: string,
+    @Param('lineId') lineId: string,
+    @Body() body: PatchQuoteLinePartsInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.patchLineParts(
+      tenantSlug,
+      workOrderId,
+      quoteId,
+      lineId,
+      body ?? {},
+      actorUserId,
+      access,
+    );
   }
 
   @Post(':quoteId/reject')

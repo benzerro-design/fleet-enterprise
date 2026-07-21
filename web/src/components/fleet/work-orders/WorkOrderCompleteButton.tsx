@@ -10,6 +10,8 @@ type Props = {
   status: string;
   hasInvoicedQuote: boolean;
   hasCostFromQuote: boolean;
+  /** Partenerii nu închid WO — flotă finalizează după cost. */
+  isPartner?: boolean;
 };
 
 export function WorkOrderCompleteButton({
@@ -18,12 +20,21 @@ export function WorkOrderCompleteButton({
   status,
   hasInvoicedQuote,
   hasCostFromQuote,
+  isPartner = false,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!canWrite || status === "done" || status === "cancelled" || !hasInvoicedQuote || !hasCostFromQuote) {
+  // Finalizarea (cost + închidere) e acțiune flotă — partenerul nu generează costul.
+  if (
+    isPartner ||
+    !canWrite ||
+    status === "done" ||
+    status === "cancelled" ||
+    !hasInvoicedQuote ||
+    !hasCostFromQuote
+  ) {
     return null;
   }
 
@@ -56,7 +67,7 @@ export function WorkOrderCompleteButton({
     <section className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4">
       <h2 className="text-sm font-medium text-emerald-200">Finalizare</h2>
       <p className="mt-1 text-xs text-zinc-400">
-        Închide comanda service și dosarul lucrare după facturare.
+        Închide comanda și dosarul după factură + cost generat din deviz (doar flotă).
       </p>
       {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
       <button

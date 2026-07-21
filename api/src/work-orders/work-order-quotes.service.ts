@@ -7,8 +7,11 @@ import {
 import {
   CrmTicketEventKind,
   CrmTicketLinkEntityType,
+  MaintenanceWorkOrderStatus,
   Prisma,
+  QuotePartsOrderStatus,
   ServiceCaseStage,
+  WorkOrderQuoteLineApproval,
   WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
@@ -32,9 +35,11 @@ import {
 } from '../ops/reminder-sync';
 import { normalizeReminderOffsets } from '../ops/document-reminders';
 import { normalizeReminderOffsetsKm } from '../ops/reminder-status';
+import { parseWorkOrderSettings, type WorkOrderSettings } from '../tenant/work-order-settings';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { costCategoryForWorkflow } from './work-order-cost.utils';
 import {
+  computeApprovedTotals,
   computeQuoteTotals,
   type QuoteLineInput,
   toQuoteRecord,
@@ -58,6 +63,18 @@ export type PostCostInput = {
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
   syncReminderAction?: boolean;
+};
+
+export type ApproveQuoteInput = {
+  lineDecisions?: Array<{
+    lineId: string;
+    status: 'approved' | 'rejected';
+  }>;
+};
+
+export type PatchQuoteLinePartsInput = {
+  partsOrderStatus?: QuotePartsOrderStatus;
+  partsExpectedOn?: string | null;
 };
 
 function reminderOffsetsForDb(
@@ -161,7 +178,8 @@ export class WorkOrderQuotesService {
       throw new BadRequestException('A draft quote already exists — edit or submit it first');
     }
 
-    const lines = this.normalizeLines(dto.lines);
+    const settings = parseWorkOrderSettings(tenant.workOrderSettings);
+    const lines = this.normalizeLines(dto.lines, settings);
     const { totalNetCents, totalVatCents } = computeQuoteTotals(lines);
     const maxVersion = await this.prisma.workOrderQuote.aggregate({
       where: { workOrderId },
@@ -189,6 +207,9 @@ export class WorkOrderQuotesService {
               unitNetCents: line.unitNetCents,
               vatRatePercent: line.vatRatePercent ?? 19,
               partNumber: line.partNumber?.trim() || null,
+              partCodeExempt: line.partCodeExempt ?? false,
+              warrantyMonths: line.warrantyMonths ?? null,
+              warrantyKm: line.warrantyKm ?? null,
             })),
           },
         },
@@ -240,7 +261,8 @@ export class WorkOrderQuotesService {
       throw new BadRequestException('Only draft quotes can be edited');
     }
 
-    const lines = this.normalizeLines(dto.lines);
+    const settings = parseWorkOrderSettings(tenant.workOrderSettings);
+    const lines = this.normalizeLines(dto.lines, settings);
     const { totalNetCents, totalVatCents } = computeQuoteTotals(lines);
 
     const quote = await this.prisma.$transaction(async (tx) => {
@@ -262,6 +284,9 @@ export class WorkOrderQuotesService {
               unitNetCents: line.unitNetCents,
               vatRatePercent: line.vatRatePercent ?? 19,
               partNumber: line.partNumber?.trim() || null,
+              partCodeExempt: line.partCodeExempt ?? false,
+              warrantyMonths: line.warrantyMonths ?? null,
+              warrantyKm: line.warrantyKm ?? null,
             })),
           },
         },
@@ -304,6 +329,8 @@ export class WorkOrderQuotesService {
     if (existing.lines.length === 0) {
       throw new BadRequestException('Quote must have at least one line');
     }
+    const settings = parseWorkOrderSettings(tenant.workOrderSettings);
+    this.normalizeLines(existing.lines, settings);
     if (!existing.workOrder.estimatedRepairAt) {
       throw new BadRequestException(
         'Estimated repair completion date is required before submitting quote for approval',
@@ -348,6 +375,7 @@ export class WorkOrderQuotesService {
     tenantSlug: string,
     workOrderId: string,
     quoteId: string,
+    dto: ApproveQuoteInput = {},
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
@@ -365,11 +393,43 @@ export class WorkOrderQuotesService {
       throw new BadRequestException('Only submitted quotes can be approved');
     }
 
+    const decisions = new Map<string, WorkOrderQuoteLineApproval>();
+    if (dto.lineDecisions?.length) {
+      for (const decision of dto.lineDecisions) {
+        if (!decision.lineId?.trim()) throw new BadRequestException('lineId is required');
+        decisions.set(decision.lineId, decision.status);
+      }
+      const knownLineIds = new Set(existing.lines.map((line) => line.id));
+      for (const lineId of decisions.keys()) {
+        if (!knownLineIds.has(lineId)) throw new BadRequestException('Line decision references unknown line');
+      }
+    }
+
+    const decidedLines = existing.lines.map((line) => ({
+      ...line,
+      approvalStatus: decisions.size ? decisions.get(line.id) ?? 'rejected' : 'approved',
+    }));
+    const approvedLines = decidedLines.filter((line) => line.approvalStatus === 'approved');
+    if (approvedLines.length === 0) {
+      throw new BadRequestException('Trebuie aprobată cel puțin o linie din deviz');
+    }
+    const approvedTotals = computeApprovedTotals(decidedLines);
+
     const quote = await this.prisma.$transaction(async (tx) => {
+      for (const line of decidedLines) {
+        await tx.workOrderQuoteLine.update({
+          where: { id: line.id },
+          data: { approvalStatus: line.approvalStatus },
+        });
+      }
       const updated = await tx.workOrderQuote.update({
         where: { id: quoteId },
         data: {
           status: WorkOrderQuoteStatus.approved,
+          totalNetCents: approvedTotals.totalNetCents,
+          totalVatCents: approvedTotals.totalVatCents,
+          approvedNetCents: approvedTotals.totalNetCents,
+          approvedVatCents: approvedTotals.totalVatCents,
           approvedAt: new Date(),
           approvedByUserId: actorUserId ?? null,
         },
@@ -404,6 +464,81 @@ export class WorkOrderQuotesService {
       `Devizul v${existing.version} a fost aprobat de client.`,
       { workOrderId, quoteId },
     );
+
+    return toQuoteRecord(quote);
+  }
+
+  async patchLineParts(
+    tenantSlug: string,
+    workOrderId: string,
+    quoteId: string,
+    lineId: string,
+    dto: PatchQuoteLinePartsInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderQuoteRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+
+    const existing = await this.prisma.workOrderQuote.findFirst({
+      where: { id: quoteId, workOrderId, tenantId: tenant.id },
+      include: { workOrder: true, ...this.quoteInclude() },
+    });
+    if (!existing) throw new NotFoundException('Quote not found');
+    const line = existing.lines.find((l) => l.id === lineId);
+    if (!line) throw new NotFoundException('Quote line not found');
+    if (line.lineType !== 'parts') {
+      throw new BadRequestException('Comanda de piese se poate seta doar pe linii de tip piese');
+    }
+
+    const data: Prisma.WorkOrderQuoteLineUpdateInput = {};
+    if (dto.partsOrderStatus !== undefined) {
+      if (!Object.values(QuotePartsOrderStatus).includes(dto.partsOrderStatus)) {
+        throw new BadRequestException('Status comandă piese invalid');
+      }
+      data.partsOrderStatus = dto.partsOrderStatus;
+    }
+    if (dto.partsExpectedOn !== undefined) {
+      if (dto.partsExpectedOn === null || dto.partsExpectedOn === '') {
+        data.partsExpectedOn = null;
+      } else {
+        const parsed = new Date(dto.partsExpectedOn);
+        if (Number.isNaN(parsed.getTime())) throw new BadRequestException('Dată estimată piese invalidă');
+        data.partsExpectedOn = parsed;
+      }
+    }
+    if (Object.keys(data).length === 0) throw new BadRequestException('No fields to update');
+
+    const quote = await this.prisma.$transaction(async (tx) => {
+      await tx.workOrderQuoteLine.update({ where: { id: lineId }, data });
+
+      if (
+        dto.partsOrderStatus === QuotePartsOrderStatus.ordered &&
+        existing.workOrder.status !== MaintenanceWorkOrderStatus.done &&
+        existing.workOrder.status !== MaintenanceWorkOrderStatus.cancelled
+      ) {
+        await tx.maintenanceWorkOrder.update({
+          where: { id: workOrderId },
+          data: { status: MaintenanceWorkOrderStatus.waiting_parts },
+        });
+      }
+
+      return tx.workOrderQuote.findUniqueOrThrow({
+        where: { id: quoteId },
+        include: this.quoteInclude(),
+      });
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order_quote.line_parts',
+      entityType: 'work_order_quote_line',
+      entityId: lineId,
+      meta: { workOrderId, quoteId, ...dto },
+    });
 
     return toQuoteRecord(quote);
   }
@@ -492,7 +627,9 @@ export class WorkOrderQuotesService {
       throw new BadRequestException('Cost already created for this quote');
     }
 
-    const grossCents = existing.totalNetCents + existing.totalVatCents;
+    const netCents = existing.approvedNetCents ?? existing.totalNetCents;
+    const vatCents = existing.approvedVatCents ?? existing.totalVatCents;
+    const grossCents = netCents + vatCents;
     const category = costCategoryForWorkflow(existing.workOrder.serviceCase.workflowType);
     const provider = await providerLabelForSupplier(
       this.prisma,
@@ -738,7 +875,7 @@ export class WorkOrderQuotesService {
     return { buffer, filename: `deviz-v${row.version}.pdf` };
   }
 
-  private normalizeLines(lines: QuoteLineInput[]) {
+  private normalizeLines(lines: QuoteLineInput[], settings: WorkOrderSettings) {
     if (!lines?.length) {
       throw new BadRequestException('At least one quote line is required');
     }
@@ -756,7 +893,32 @@ export class WorkOrderQuotesService {
       if (!Number.isInteger(vatRatePercent) || vatRatePercent < 0 || vatRatePercent > 100) {
         throw new BadRequestException(`Line ${idx + 1}: invalid VAT rate`);
       }
-      return { ...line, description, quantity, unitNetCents: Math.round(line.unitNetCents), vatRatePercent };
+      const lineType = line.lineType ?? 'parts';
+      const partNumber = line.partNumber?.trim() || null;
+      const partCodeExempt = line.partCodeExempt ?? false;
+      if (settings.requirePartCode && lineType === 'parts' && !partNumber && !partCodeExempt) {
+        throw new BadRequestException(`Linia ${idx + 1}: cod piesă obligatoriu sau marcați explicit fără cod`);
+      }
+      const warrantyMonths = line.warrantyMonths ?? null;
+      if (warrantyMonths != null && (!Number.isFinite(warrantyMonths) || warrantyMonths < 0)) {
+        throw new BadRequestException(`Line ${idx + 1}: invalid warranty months`);
+      }
+      const warrantyKm = line.warrantyKm ?? null;
+      if (warrantyKm != null && (!Number.isFinite(warrantyKm) || warrantyKm < 0)) {
+        throw new BadRequestException(`Line ${idx + 1}: invalid warranty km`);
+      }
+      return {
+        ...line,
+        lineType,
+        description,
+        quantity,
+        unitNetCents: Math.round(line.unitNetCents),
+        vatRatePercent,
+        partNumber,
+        partCodeExempt,
+        warrantyMonths: warrantyMonths == null ? null : Math.round(warrantyMonths),
+        warrantyKm: warrantyKm == null ? null : Math.round(warrantyKm),
+      };
     });
   }
 

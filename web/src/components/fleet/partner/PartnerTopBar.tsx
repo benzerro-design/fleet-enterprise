@@ -29,17 +29,22 @@ type Props = {
 
 export function PartnerTopBar({ ctx }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen && !notifOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
+      const t = e.target as Node;
+      if (menuOpen && menuRef.current && !menuRef.current.contains(t)) setMenuOpen(false);
+      if (notifOpen && notifRef.current && !notifRef.current.contains(t)) setNotifOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        setNotifOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
@@ -47,7 +52,7 @@ export function PartnerTopBar({ ctx }: Props) {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [menuOpen]);
+  }, [menuOpen, notifOpen]);
 
   const notifCount = ctx.notificationCount ?? 0;
   const pending = ctx.pendingTotal ?? 0;
@@ -89,18 +94,57 @@ export function PartnerTopBar({ ctx }: Props) {
           />
         ) : null}
 
-        <button
-          type="button"
-          className="relative rounded-md border border-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-900"
-          title="Notificări"
-        >
-          🔔
-          {notifCount > 0 ? (
-            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-sky-600 px-0.5 text-[8px] font-bold text-white">
-              {notifCount > 9 ? "9+" : notifCount}
-            </span>
+        <div className="relative" ref={notifRef}>
+          <button
+            type="button"
+            onClick={() => {
+              setNotifOpen((v) => !v);
+              setMenuOpen(false);
+            }}
+            className="relative rounded-md border border-zinc-800 px-2 py-1 text-[10px] text-zinc-400 hover:bg-zinc-900"
+            title="Notificări"
+            aria-expanded={notifOpen}
+            aria-haspopup="menu"
+          >
+            🔔
+            {notifCount > 0 ? (
+              <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-sky-600 px-0.5 text-[8px] font-bold text-white">
+                {notifCount > 9 ? "9+" : notifCount}
+              </span>
+            ) : null}
+          </button>
+          {notifOpen ? (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-zinc-800 bg-zinc-950 py-1 shadow-xl"
+            >
+              <p className="border-b border-zinc-800 px-3 py-2 text-[10px] font-medium uppercase text-zinc-500">
+                Notificări
+              </p>
+              {pending > 0 ? (
+                <p className="px-3 py-2 text-[10px] text-amber-300">
+                  {pending} acțiuni în așteptare
+                </p>
+              ) : (
+                <p className="px-3 py-2 text-[10px] text-zinc-500">Nimic în așteptare</p>
+              )}
+              <a
+                href="/fleet/partner/work-orders"
+                className="block px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900"
+                onClick={() => setNotifOpen(false)}
+              >
+                Comenzi (WO)
+              </a>
+              <a
+                href="/fleet/partner/appointments"
+                className="block px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900"
+                onClick={() => setNotifOpen(false)}
+              >
+                Programări
+              </a>
+            </div>
           ) : null}
-        </button>
+        </div>
 
         <div className="relative" ref={menuRef}>
           <button

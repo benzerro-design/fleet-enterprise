@@ -13,6 +13,7 @@ import {
   ServiceCaseStatus,
   ServiceOrderType,
   WorkOrderQuoteStatus,
+  WorkOrderWarrantyStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { assertClientFleetWrite } from '../iam/client-access';
@@ -98,12 +99,18 @@ export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
   serviceCaseTitle: string;
   serviceCaseStatus: string;
+  awaitingPostApproval: boolean;
+  postApprovalPath: 'immediate' | 'reschedule' | null;
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
+  visit2InServiceAt: string | null;
+  visit2OutServiceAt: string | null;
   odometerKmIn: number | null;
   odometerKmOut: number | null;
+  visit2OdometerKmIn: number | null;
+  visit2OdometerKmOut: number | null;
   repairPathNote: string | null;
   readyAt: string | null;
   vehicle: WorkOrderVehicleSnapshot;
@@ -523,6 +530,8 @@ export class WorkOrdersService {
             workflowType: true,
             sourceTicketId: true,
             clientId: true,
+            awaitingPostApproval: true,
+            postApprovalPath: true,
             sourceTicket: {
               select: {
                 subject: true,
@@ -573,12 +582,18 @@ export class WorkOrdersService {
       notes: row.notes,
       serviceCaseTitle: row.serviceCase.title,
       serviceCaseStatus: row.serviceCase.status,
+      awaitingPostApproval: row.serviceCase.awaitingPostApproval ?? false,
+      postApprovalPath: row.serviceCase.postApprovalPath ?? null,
       linkedAppointmentId: linked?.id ?? null,
       linkedAppointmentScheduledAt: linked?.scheduledAt.toISOString() ?? null,
       inServiceAt: row.inServiceAt?.toISOString() ?? null,
       outServiceAt: row.outServiceAt?.toISOString() ?? null,
+      visit2InServiceAt: row.visit2InServiceAt?.toISOString() ?? null,
+      visit2OutServiceAt: row.visit2OutServiceAt?.toISOString() ?? null,
       odometerKmIn: row.odometerKmIn ?? null,
       odometerKmOut: row.odometerKmOut ?? null,
+      visit2OdometerKmIn: row.visit2OdometerKmIn ?? null,
+      visit2OdometerKmOut: row.visit2OdometerKmOut ?? null,
       repairPathNote: row.repairPathNote ?? null,
       readyAt: row.readyAt?.toISOString() ?? null,
       estimatedRepairAt: row.estimatedRepairAt?.toISOString() ?? null,
@@ -636,7 +651,11 @@ export class WorkOrdersService {
   async patch(
     tenantSlug: string,
     id: string,
-    dto: { serviceOrderType?: ServiceOrderType; estimatedRepairAt?: string | null },
+    dto: {
+      serviceOrderType?: ServiceOrderType;
+      estimatedRepairAt?: string | null;
+      status?: MaintenanceWorkOrderStatus;
+    },
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<WorkOrderDetail> {
@@ -692,6 +711,12 @@ export class WorkOrdersService {
         }
         data.estimatedRepairAt = parsed;
       }
+    }
+    if (dto.status !== undefined) {
+      if (!Object.values(MaintenanceWorkOrderStatus).includes(dto.status)) {
+        throw new BadRequestException('Invalid status');
+      }
+      data.status = dto.status;
     }
     if (Object.keys(data).length === 0) {
       throw new BadRequestException('No fields to update');
@@ -830,7 +855,15 @@ export class WorkOrdersService {
       where: { id, tenantId: tenant.id },
       include: {
         vehicle: { select: { id: true, clientId: true, odometerKm: true } },
-        serviceCase: { select: { id: true, currentStage: true, sourceTicketId: true, clientId: true } },
+        serviceCase: {
+          select: {
+            id: true,
+            currentStage: true,
+            sourceTicketId: true,
+            clientId: true,
+            postApprovalPath: true,
+          },
+        },
       },
     });
     if (!wo) throw new NotFoundException('Work order not found');
@@ -850,48 +883,61 @@ export class WorkOrdersService {
     const data: {
       inServiceAt?: Date | null;
       outServiceAt?: Date | null;
+      visit2InServiceAt?: Date | null;
+      visit2OutServiceAt?: Date | null;
       odometerKmIn?: number | null;
       odometerKmOut?: number | null;
+      visit2OdometerKmIn?: number | null;
+      visit2OdometerKmOut?: number | null;
       status?: MaintenanceWorkOrderStatus;
     } = {};
+    const useVisit2 = wo.serviceCase.postApprovalPath === 'reschedule' && !!wo.outServiceAt;
 
     if (dto.inServiceAt !== undefined) {
       if (dto.inServiceAt === null || dto.inServiceAt === '') {
-        data.inServiceAt = null;
+        if (useVisit2) data.visit2InServiceAt = null;
+        else data.inServiceAt = null;
       } else {
         const d = new Date(dto.inServiceAt);
         if (Number.isNaN(d.getTime())) throw new BadRequestException('Invalid inServiceAt');
-        data.inServiceAt = d;
+        if (useVisit2) data.visit2InServiceAt = d;
+        else data.inServiceAt = d;
       }
     }
 
     if (dto.outServiceAt !== undefined) {
       if (dto.outServiceAt === null || dto.outServiceAt === '') {
-        data.outServiceAt = null;
+        if (useVisit2) data.visit2OutServiceAt = null;
+        else data.outServiceAt = null;
       } else {
         const d = new Date(dto.outServiceAt);
         if (Number.isNaN(d.getTime())) throw new BadRequestException('Invalid outServiceAt');
-        data.outServiceAt = d;
+        if (useVisit2) data.visit2OutServiceAt = d;
+        else data.outServiceAt = d;
       }
     }
 
     if (dto.odometerKmIn !== undefined) {
       if (dto.odometerKmIn === null) {
-        data.odometerKmIn = null;
+        if (useVisit2) data.visit2OdometerKmIn = null;
+        else data.odometerKmIn = null;
       } else if (!Number.isFinite(dto.odometerKmIn) || dto.odometerKmIn < 0) {
         throw new BadRequestException('odometerKmIn must be a non-negative integer');
       } else {
-        data.odometerKmIn = Math.round(dto.odometerKmIn);
+        if (useVisit2) data.visit2OdometerKmIn = Math.round(dto.odometerKmIn);
+        else data.odometerKmIn = Math.round(dto.odometerKmIn);
       }
     }
 
     if (dto.odometerKmOut !== undefined) {
       if (dto.odometerKmOut === null) {
-        data.odometerKmOut = null;
+        if (useVisit2) data.visit2OdometerKmOut = null;
+        else data.odometerKmOut = null;
       } else if (!Number.isFinite(dto.odometerKmOut) || dto.odometerKmOut < 0) {
         throw new BadRequestException('odometerKmOut must be a non-negative integer');
       } else {
-        data.odometerKmOut = Math.round(dto.odometerKmOut);
+        if (useVisit2) data.visit2OdometerKmOut = Math.round(dto.odometerKmOut);
+        else data.odometerKmOut = Math.round(dto.odometerKmOut);
       }
     }
 
@@ -899,17 +945,45 @@ export class WorkOrdersService {
       throw new BadRequestException('Provide inServiceAt, outServiceAt, and/or odometer fields');
     }
 
-    const nextIn = data.inServiceAt !== undefined ? data.inServiceAt : wo.inServiceAt;
-    const nextOut = data.outServiceAt !== undefined ? data.outServiceAt : wo.outServiceAt;
-    const nextKmIn = data.odometerKmIn !== undefined ? data.odometerKmIn : wo.odometerKmIn;
-    const nextKmOut = data.odometerKmOut !== undefined ? data.odometerKmOut : wo.odometerKmOut;
+    const nextIn = useVisit2
+      ? data.visit2InServiceAt !== undefined
+        ? data.visit2InServiceAt
+        : wo.visit2InServiceAt
+      : data.inServiceAt !== undefined
+        ? data.inServiceAt
+        : wo.inServiceAt;
+    const nextOut = useVisit2
+      ? data.visit2OutServiceAt !== undefined
+        ? data.visit2OutServiceAt
+        : wo.visit2OutServiceAt
+      : data.outServiceAt !== undefined
+        ? data.outServiceAt
+        : wo.outServiceAt;
+    const nextKmIn = useVisit2
+      ? data.visit2OdometerKmIn !== undefined
+        ? data.visit2OdometerKmIn
+        : wo.visit2OdometerKmIn
+      : data.odometerKmIn !== undefined
+        ? data.odometerKmIn
+        : wo.odometerKmIn;
+    const nextKmOut = useVisit2
+      ? data.visit2OdometerKmOut !== undefined
+        ? data.visit2OdometerKmOut
+        : wo.visit2OdometerKmOut
+      : data.odometerKmOut !== undefined
+        ? data.odometerKmOut
+        : wo.odometerKmOut;
 
     if (nextIn && nextOut && nextOut.getTime() < nextIn.getTime()) {
       throw new BadRequestException('outServiceAt must be after inServiceAt');
     }
 
-    const markingIn = data.inServiceAt != null && !wo.inServiceAt;
-    const markingOut = data.outServiceAt != null && !wo.outServiceAt;
+    const markingIn = useVisit2
+      ? data.visit2InServiceAt != null && !wo.visit2InServiceAt
+      : data.inServiceAt != null && !wo.inServiceAt;
+    const markingOut = useVisit2
+      ? data.visit2OutServiceAt != null && !wo.visit2OutServiceAt
+      : data.outServiceAt != null && !wo.outServiceAt;
 
     if (settings.requireServiceKm) {
       if (markingIn && (nextKmIn == null || nextKmIn < 0)) {
@@ -924,17 +998,25 @@ export class WorkOrdersService {
       throw new BadRequestException('Km ieșire trebuie să fie ≥ km intrare');
     }
 
-    if (data.inServiceAt && wo.status === MaintenanceWorkOrderStatus.draft) {
-      data.status = MaintenanceWorkOrderStatus.in_progress;
+    if (data.inServiceAt || data.visit2InServiceAt) {
+      if (
+        wo.status === MaintenanceWorkOrderStatus.draft ||
+        wo.status === MaintenanceWorkOrderStatus.sent ||
+        wo.status === MaintenanceWorkOrderStatus.waiting_parts
+      ) {
+        data.status = MaintenanceWorkOrderStatus.in_progress;
+      }
     }
 
-    const fleetKmCandidates: { km: number; phase: 'in' | 'out' }[] = [];
+    const fleetKmCandidates: { km: number; phase: 'in' | 'out' | 'visit2_in' | 'visit2_out' }[] = [];
     if (settings.updateFleetOdometerFromServiceKm) {
-      if (markingIn && nextKmIn != null) fleetKmCandidates.push({ km: nextKmIn, phase: 'in' });
-      if (markingOut && nextKmOut != null) fleetKmCandidates.push({ km: nextKmOut, phase: 'out' });
+      if (markingIn && nextKmIn != null) fleetKmCandidates.push({ km: nextKmIn, phase: useVisit2 ? 'visit2_in' : 'in' });
+      if (markingOut && nextKmOut != null) fleetKmCandidates.push({ km: nextKmOut, phase: useVisit2 ? 'visit2_out' : 'out' });
       if (!markingIn && !markingOut) {
         if (data.odometerKmIn != null) fleetKmCandidates.push({ km: data.odometerKmIn, phase: 'in' });
         if (data.odometerKmOut != null) fleetKmCandidates.push({ km: data.odometerKmOut, phase: 'out' });
+        if (data.visit2OdometerKmIn != null) fleetKmCandidates.push({ km: data.visit2OdometerKmIn, phase: 'visit2_in' });
+        if (data.visit2OdometerKmOut != null) fleetKmCandidates.push({ km: data.visit2OdometerKmOut, phase: 'visit2_out' });
       }
     }
 
@@ -945,7 +1027,9 @@ export class WorkOrdersService {
       await tx.maintenanceWorkOrder.update({ where: { id }, data });
 
       const ticketId = wo.serviceCase.sourceTicketId;
-      if (data.inServiceAt) {
+      const inEventAt = data.inServiceAt ?? data.visit2InServiceAt;
+      const outEventAt = data.outServiceAt ?? data.visit2OutServiceAt;
+      if (inEventAt) {
         await this.ensureCaseStageAtLeast(
           tx,
           tenant.id,
@@ -953,10 +1037,10 @@ export class WorkOrdersService {
           ServiceCaseStage.in_service,
           ticketId,
           actorUserId,
-          `Intrare service: ${data.inServiceAt.toLocaleString('ro-RO')}.`,
+          `${useVisit2 ? 'Intrare service vizita 2' : 'Intrare service'}: ${inEventAt.toLocaleString('ro-RO')}.`,
         );
       }
-      if (data.outServiceAt) {
+      if (outEventAt) {
         await this.ensureCaseStageAtLeast(
           tx,
           tenant.id,
@@ -964,8 +1048,16 @@ export class WorkOrdersService {
           ServiceCaseStage.out_service,
           ticketId,
           actorUserId,
-          `Ieșire service: ${data.outServiceAt.toLocaleString('ro-RO')}.`,
+          `${useVisit2 ? 'Ieșire service vizita 2' : 'Ieșire service'}: ${outEventAt.toLocaleString('ro-RO')}.`,
         );
+        await tx.workOrderWarranty.updateMany({
+          where: { tenantId: tenant.id, workOrderId: id, status: WorkOrderWarrantyStatus.draft },
+          data: {
+            status: WorkOrderWarrantyStatus.active,
+            startsAt: outEventAt,
+            startsKm: nextKmOut ?? null,
+          },
+        });
       }
 
       let currentFleetKm = previousFleetKm;
@@ -980,7 +1072,11 @@ export class WorkOrdersService {
             notes:
               cand.phase === 'in'
                 ? 'Km la intrare service (comandă)'
-                : 'Km la ieșire service (comandă)',
+                : cand.phase === 'out'
+                  ? 'Km la ieșire service (comandă)'
+                  : cand.phase === 'visit2_in'
+                    ? 'Km la intrare service vizita 2 (comandă)'
+                    : 'Km la ieșire service vizita 2 (comandă)',
             recordedByUserId: actorUserId ?? null,
           },
         });

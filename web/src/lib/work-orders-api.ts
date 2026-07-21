@@ -87,10 +87,16 @@ export type WorkOrderDetail = WorkOrderListRow & {
   serviceCaseTitle: string;
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;
+  awaitingPostApproval: boolean;
+  postApprovalPath: "immediate" | "reschedule" | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
+  visit2InServiceAt: string | null;
+  visit2OutServiceAt: string | null;
   odometerKmIn: number | null;
   odometerKmOut: number | null;
+  visit2OdometerKmIn: number | null;
+  visit2OdometerKmOut: number | null;
   repairPathNote: string | null;
   vehicle: WorkOrderVehicleSnapshot;
   client: WorkOrderClientSnapshot;
@@ -109,6 +115,8 @@ export type ServiceTimesResult = WorkOrderDetail & {
 };
 
 export type QuoteLineType = "labor" | "parts" | "other";
+export type QuoteLineApprovalStatus = "pending" | "approved" | "rejected";
+export type QuotePartsOrderStatus = "none" | "ordered" | "in_stock" | "delivered";
 
 export type QuoteLineRecord = {
   id: string;
@@ -119,6 +127,12 @@ export type QuoteLineRecord = {
   unitNetCents: number;
   vatRatePercent: number;
   partNumber: string | null;
+  partCodeExempt: boolean;
+  approvalStatus: QuoteLineApprovalStatus;
+  partsOrderStatus: QuotePartsOrderStatus;
+  partsExpectedOn: string | null;
+  warrantyMonths: number | null;
+  warrantyKm: number | null;
   lineNetCents: number;
   lineVatCents: number;
 };
@@ -134,6 +148,9 @@ export type WorkOrderQuoteRecord = {
   totalNetCents: number;
   totalVatCents: number;
   totalGrossCents: number;
+  approvedNetCents: number | null;
+  approvedVatCents: number | null;
+  approvedGrossCents: number | null;
   submittedAt: string | null;
   approvedAt: string | null;
   rejectedAt: string | null;
@@ -156,6 +173,12 @@ export type QuoteLineInput = {
   unitNetCents: number;
   vatRatePercent?: number;
   partNumber?: string | null;
+  partCodeExempt?: boolean;
+  approvalStatus?: QuoteLineApprovalStatus;
+  partsOrderStatus?: QuotePartsOrderStatus;
+  partsExpectedOn?: string | null;
+  warrantyMonths?: number | null;
+  warrantyKm?: number | null;
   sortOrder?: number;
 };
 

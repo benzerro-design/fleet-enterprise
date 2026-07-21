@@ -28,6 +28,7 @@ import {
   DEFAULT_WORK_ORDER_SETTINGS,
   type WorkOrderSettings,
 } from "@/lib/work-order-settings";
+import { serviceCasesBrowserBase } from "@/lib/service-cases-api";
 
 type Props = {
   wo: WorkOrderDetail;
@@ -85,8 +86,13 @@ export function WorkOrderSheetShell({
   const [error, setError] = useState<string | null>(null);
   const [kmIn, setKmIn] = useState(wo.odometerKmIn != null ? String(wo.odometerKmIn) : "");
   const [kmOut, setKmOut] = useState(wo.odometerKmOut != null ? String(wo.odometerKmOut) : "");
+  const [kmIn2, setKmIn2] = useState(wo.visit2OdometerKmIn != null ? String(wo.visit2OdometerKmIn) : "");
+  const [kmOut2, setKmOut2] = useState(wo.visit2OdometerKmOut != null ? String(wo.visit2OdometerKmOut) : "");
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const requireKm = workOrderSettings.requireServiceKm;
+
+  const useVisit2 = wo.postApprovalPath === "reschedule" && !!wo.outServiceAt;
 
   const fleetAlignedFromService =
     (wo.odometerKmOut != null && wo.vehicle.odometerKm === wo.odometerKmOut) ||
@@ -146,8 +152,9 @@ export function WorkOrderSheetShell({
 
   async function markIn() {
     const body: Record<string, string | number> = { inServiceAt: new Date().toISOString() };
-    if (kmIn.trim()) {
-      const n = parseInt(kmIn, 10);
+    const kmVal = useVisit2 ? kmIn2 : kmIn;
+    if (kmVal.trim()) {
+      const n = parseInt(kmVal, 10);
       if (!Number.isFinite(n) || n < 0) {
         setError("Km intrare invalid.");
         return;
@@ -162,8 +169,9 @@ export function WorkOrderSheetShell({
 
   async function markOut() {
     const body: Record<string, string | number> = { outServiceAt: new Date().toISOString() };
-    if (kmOut.trim()) {
-      const n = parseInt(kmOut, 10);
+    const kmVal = useVisit2 ? kmOut2 : kmOut;
+    if (kmVal.trim()) {
+      const n = parseInt(kmVal, 10);
       if (!Number.isFinite(n) || n < 0) {
         setError("Km ieșire invalid.");
         return;
@@ -174,6 +182,27 @@ export function WorkOrderSheetShell({
       return;
     }
     await patchServiceTimes(body);
+  }
+
+  async function applyPostApproval(path: "immediate" | "reschedule") {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${serviceCasesBrowserBase}/${wo.serviceCaseId}/post-approval`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ path }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setPending(false);
+    }
   }
 
   async function changeServiceType(code: ServiceOrderTypeCode) {
@@ -508,19 +537,163 @@ export function WorkOrderSheetShell({
                 ) : null}
               </div>
             </div>
+
+            {useVisit2 ? (
+              <div className="mt-3 space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
+                  Vizită 2 — reparație
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="block text-zinc-500">
+                      Km in V2{requireKm ? <span className="text-amber-400"> *</span> : null}
+                      <input
+                        type="number"
+                        min={0}
+                        value={kmIn2}
+                        disabled={!canWrite || pending || !!wo.visit2InServiceAt}
+                        onChange={(e) => setKmIn2(e.target.value)}
+                        className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                      />
+                    </label>
+                    {wo.visit2InServiceAt ? (
+                      <p className="text-[10px] text-zinc-500">
+                        In: {new Date(wo.visit2InServiceAt).toLocaleString("ro-RO")}
+                      </p>
+                    ) : canWrite ? (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => void markIn()}
+                        className="w-full rounded-lg bg-amber-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                      >
+                        In service (V2)
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-zinc-500">
+                      Km out V2{requireKm ? <span className="text-amber-400"> *</span> : null}
+                      <input
+                        type="number"
+                        min={0}
+                        value={kmOut2}
+                        disabled={!canWrite || pending || !wo.visit2InServiceAt || !!wo.visit2OutServiceAt}
+                        onChange={(e) => setKmOut2(e.target.value)}
+                        className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                      />
+                    </label>
+                    {wo.visit2OutServiceAt ? (
+                      <p className="text-[10px] text-zinc-500">
+                        Out: {new Date(wo.visit2OutServiceAt).toLocaleString("ro-RO")}
+                      </p>
+                    ) : canWrite && wo.visit2InServiceAt ? (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => void markOut()}
+                        className="w-full rounded-lg border border-amber-500/50 bg-amber-950/40 px-2 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-900/40 disabled:opacity-50"
+                      >
+                        Out service (V2)
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
+
+      {wo.awaitingPostApproval || wo.postApprovalPath ? (
+        <div className="border-b border-zinc-800 bg-zinc-950/60 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Decizie după aprobare deviz
+          </p>
+          {wo.awaitingPostApproval && canWrite ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void applyPostApproval("immediate")}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                Continuă reparația
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void applyPostApproval("reschedule")}
+                className="rounded-lg border border-amber-500/50 bg-amber-950/30 px-3 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
+              >
+                Programează din nou
+              </button>
+              <span className="text-[10px] text-zinc-500">Flotă sau partener</span>
+            </div>
+          ) : wo.postApprovalPath === "immediate" ? (
+            <p className="mt-1 text-xs text-emerald-200">
+              {wo.repairPathNote ?? "Reparație directă — devizul rămâne pe comandă"}
+            </p>
+          ) : wo.postApprovalPath === "reschedule" ? (
+            <div className="mt-1 space-y-2">
+              <p className="text-xs text-amber-100">
+                {wo.repairPathNote ?? "Reprogramare — devizul aprobat rămâne valid"}
+              </p>
+              <button
+                type="button"
+                onClick={() => setRescheduleOpen((v) => !v)}
+                className="text-xs text-sky-300 hover:underline"
+              >
+                {rescheduleOpen ? "Ascunde programare ▴" : "Programare reparație ▾"}
+              </button>
+              {rescheduleOpen ? (
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                  <p>
+                    Programează vizita de reparație din calendar
+                    {schedulerLink ? (
+                      <>
+                        {" · "}
+                        <Link href={schedulerLink} className="text-sky-300 hover:underline">
+                          deschide programatorul
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        {" · "}
+                        <Link
+                          href={isPartner ? "/fleet/partner/appointments" : "/fleet/scheduler"}
+                          className="text-sky-300 hover:underline"
+                        >
+                          deschide programatorul
+                        </Link>
+                      </>
+                    )}
+                    .
+                  </p>
+                  <p className="mt-1 text-[10px] text-zinc-500">
+                    Partenerul validează propunerile pending; după confirmare duală folosești km In/Out vizită 2 pe
+                    această comandă.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <WorkOrderQuotePanel
         workOrderId={wo.id}
         canWrite={canWrite}
         canApprove={canApprove}
+        canPostCost={!isPartner}
         sheetLayout
         estimatedRepairAt={wo.estimatedRepairAt}
         quoteLocked={
           wo.quoteSummary.status === "submitted" || wo.quoteSummary.status === "approved"
         }
+        workOrderStatus={wo.status}
+        outServiceAt={wo.outServiceAt}
+        requirePartCode={workOrderSettings.requirePartCode}
       />
 
       <div className="border-t border-zinc-800 p-4">
@@ -534,6 +707,7 @@ export function WorkOrderSheetShell({
           status={wo.status}
           hasInvoicedQuote={hasInvoicedQuote}
           hasCostFromQuote={hasCostFromQuote}
+          isPartner={isPartner}
         />
       </div>
     </div>

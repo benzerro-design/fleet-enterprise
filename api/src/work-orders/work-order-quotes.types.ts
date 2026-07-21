@@ -1,4 +1,6 @@
 import {
+  QuotePartsOrderStatus,
+  WorkOrderQuoteLineApproval,
   WorkOrderQuoteLineType,
   WorkOrderQuoteStatus,
 } from '@prisma/client';
@@ -10,6 +12,12 @@ export type QuoteLineInput = {
   unitNetCents: number;
   vatRatePercent?: number;
   partNumber?: string | null;
+  partCodeExempt?: boolean;
+  approvalStatus?: WorkOrderQuoteLineApproval;
+  partsOrderStatus?: QuotePartsOrderStatus;
+  partsExpectedOn?: string | Date | null;
+  warrantyMonths?: number | null;
+  warrantyKm?: number | null;
   sortOrder?: number;
 };
 
@@ -22,6 +30,12 @@ export type QuoteLineRecord = {
   unitNetCents: number;
   vatRatePercent: number;
   partNumber: string | null;
+  partCodeExempt: boolean;
+  approvalStatus: WorkOrderQuoteLineApproval;
+  partsOrderStatus: QuotePartsOrderStatus;
+  partsExpectedOn: string | null;
+  warrantyMonths: number | null;
+  warrantyKm: number | null;
   lineNetCents: number;
   lineVatCents: number;
 };
@@ -35,6 +49,9 @@ export type WorkOrderQuoteRecord = {
   totalNetCents: number;
   totalVatCents: number;
   totalGrossCents: number;
+  approvedNetCents: number | null;
+  approvedVatCents: number | null;
+  approvedGrossCents: number | null;
   submittedAt: string | null;
   approvedAt: string | null;
   rejectedAt: string | null;
@@ -72,6 +89,20 @@ export function computeQuoteTotals(
   return { totalNetCents, totalVatCents };
 }
 
+export function computeApprovedTotals(
+  lines: Array<{
+    quantity: number;
+    unitNetCents: number;
+    vatRatePercent: number;
+    approvalStatus?: WorkOrderQuoteLineApproval | null;
+  }>,
+): { totalNetCents: number; totalVatCents: number } {
+  const hasDecision = lines.some((line) => line.approvalStatus && line.approvalStatus !== 'pending');
+  return computeQuoteTotals(
+    hasDecision ? lines.filter((line) => line.approvalStatus === 'approved') : lines,
+  );
+}
+
 export function toQuoteLineRecord(line: {
   id: string;
   sortOrder: number;
@@ -81,6 +112,12 @@ export function toQuoteLineRecord(line: {
   unitNetCents: number;
   vatRatePercent: number;
   partNumber: string | null;
+  partCodeExempt: boolean;
+  approvalStatus: WorkOrderQuoteLineApproval;
+  partsOrderStatus: QuotePartsOrderStatus;
+  partsExpectedOn: Date | null;
+  warrantyMonths: number | null;
+  warrantyKm: number | null;
 }): QuoteLineRecord {
   const { lineNetCents, lineVatCents } = computeLineAmounts(line);
   return {
@@ -92,6 +129,12 @@ export function toQuoteLineRecord(line: {
     unitNetCents: line.unitNetCents,
     vatRatePercent: line.vatRatePercent,
     partNumber: line.partNumber,
+    partCodeExempt: line.partCodeExempt,
+    approvalStatus: line.approvalStatus,
+    partsOrderStatus: line.partsOrderStatus,
+    partsExpectedOn: line.partsExpectedOn?.toISOString() ?? null,
+    warrantyMonths: line.warrantyMonths,
+    warrantyKm: line.warrantyKm,
     lineNetCents,
     lineVatCents,
   };
@@ -105,6 +148,8 @@ export function toQuoteRecord(quote: {
   currency: string;
   totalNetCents: number;
   totalVatCents: number;
+  approvedNetCents: number | null;
+  approvedVatCents: number | null;
   submittedAt: Date | null;
   approvedAt: Date | null;
   rejectedAt: Date | null;
@@ -130,6 +175,12 @@ export function toQuoteRecord(quote: {
     unitNetCents: number;
     vatRatePercent: number;
     partNumber: string | null;
+    partCodeExempt: boolean;
+    approvalStatus: WorkOrderQuoteLineApproval;
+    partsOrderStatus: QuotePartsOrderStatus;
+    partsExpectedOn: Date | null;
+    warrantyMonths: number | null;
+    warrantyKm: number | null;
   }>;
 }): WorkOrderQuoteRecord {
   return {
@@ -141,6 +192,12 @@ export function toQuoteRecord(quote: {
     totalNetCents: quote.totalNetCents,
     totalVatCents: quote.totalVatCents,
     totalGrossCents: quote.totalNetCents + quote.totalVatCents,
+    approvedNetCents: quote.approvedNetCents,
+    approvedVatCents: quote.approvedVatCents,
+    approvedGrossCents:
+      quote.approvedNetCents == null || quote.approvedVatCents == null
+        ? null
+        : quote.approvedNetCents + quote.approvedVatCents,
     submittedAt: quote.submittedAt?.toISOString() ?? null,
     approvedAt: quote.approvedAt?.toISOString() ?? null,
     rejectedAt: quote.rejectedAt?.toISOString() ?? null,

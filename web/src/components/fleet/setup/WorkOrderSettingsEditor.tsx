@@ -41,6 +41,12 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
     }
   }
 
+  function patchNumber(key: keyof WorkOrderSettings, value: string) {
+    const n = parseInt(value, 10);
+    if (!Number.isFinite(n) || n < 0) return;
+    void patch({ [key]: n } as Partial<WorkOrderSettings>);
+  }
+
   return (
     <div className="max-w-xl space-y-6 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
       <div>
@@ -84,6 +90,65 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
           </span>
         </span>
       </label>
+
+      <label className="flex items-start gap-3 text-sm text-zinc-300">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={settings.requirePartCode}
+          disabled={pending}
+          onChange={(e) => void patch({ requirePartCode: e.target.checked })}
+        />
+        <span>
+          <span className="font-medium text-zinc-100">Cod piesă obligatoriu în deviz</span>
+          <span className="mt-0.5 block text-xs text-zinc-500">
+            Da = liniile de tip piese au nevoie de cod, cu excepția marcajului explicit „fără cod”.
+          </span>
+        </span>
+      </label>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <label className="space-y-1 text-sm text-zinc-300">
+          <span className="font-medium text-zinc-100">Garanție piese (luni)</span>
+          <input
+            type="number"
+            min={0}
+            className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            value={settings.defaultPartsWarrantyMonths}
+            disabled={pending}
+            onChange={(e) =>
+              setSettings((s) => ({ ...s, defaultPartsWarrantyMonths: parseInt(e.target.value, 10) || 0 }))
+            }
+            onBlur={(e) => patchNumber("defaultPartsWarrantyMonths", e.target.value)}
+          />
+        </label>
+        <label className="space-y-1 text-sm text-zinc-300">
+          <span className="font-medium text-zinc-100">Garanție piese (km)</span>
+          <input
+            type="number"
+            min={0}
+            className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            value={settings.defaultPartsWarrantyKm}
+            disabled={pending}
+            onChange={(e) => setSettings((s) => ({ ...s, defaultPartsWarrantyKm: parseInt(e.target.value, 10) || 0 }))}
+            onBlur={(e) => patchNumber("defaultPartsWarrantyKm", e.target.value)}
+          />
+        </label>
+        <label className="space-y-1 text-sm text-zinc-300">
+          <span className="font-medium text-zinc-100">Garanție manoperă (luni)</span>
+          <input
+            type="number"
+            min={0}
+            className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            value={settings.defaultLaborWarrantyMonths}
+            disabled={pending}
+            onChange={(e) =>
+              setSettings((s) => ({ ...s, defaultLaborWarrantyMonths: parseInt(e.target.value, 10) || 0 }))
+            }
+            onBlur={(e) => patchNumber("defaultLaborWarrantyMonths", e.target.value)}
+          />
+        </label>
+      </div>
     </div>
   );
 }

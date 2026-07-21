@@ -943,10 +943,27 @@ export class ServiceCasesService {
 
     const row = await this.prisma.serviceCase.findFirst({
       where: { id: caseId, tenantId: tenant.id },
-      include: { sourceTicket: true },
+      include: { sourceTicket: true, workOrders: { select: { supplierId: true } } },
     });
     if (!row) throw new NotFoundException('Service case not found');
-    if (access) assertServiceCaseWrite(access, row.clientId);
+    if (access) {
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        const ownsWo = row.workOrders.some((wo) => {
+          try {
+            assertPartnerSupplierId(access, wo.supplierId);
+            return true;
+          } catch {
+            return false;
+          }
+        });
+        if (!ownsWo) {
+          throw new ForbiddenException('Partenerul nu poate decide pe acest dosar');
+        }
+      } else {
+        assertServiceCaseWrite(access, row.clientId);
+      }
+    }
     if (!row.awaitingPostApproval) {
       throw new BadRequestException('Service case is not awaiting post-approval decision');
     }

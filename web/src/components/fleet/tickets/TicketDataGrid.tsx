@@ -23,6 +23,7 @@ import {
 } from "@/components/fleet/tickets/TicketListGlyphs";
 import { TicketRowActions } from "@/components/fleet/tickets/TicketRowActions";
 import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
+import { FleetGlyphTooltip } from "@/components/fleet/FleetGlyphTooltip";
 import {
   readTicketGridLayout,
   type TicketGridColumnKey,
@@ -32,6 +33,7 @@ import {
 import {
   ticketPriorityLabel,
   ticketRoutingLabel,
+  ticketStatusLabel,
   ticketTypeLabel,
   type TicketRecord,
 } from "@/lib/tickets-api";
@@ -77,7 +79,9 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
           <TicketInlinePatchCell ticket={row} field="status" />
         ) : (
           <span className="inline-flex items-center gap-1.5">
-            <TicketStatusGlyph status={row.status} />
+            <FleetGlyphTooltip label={ticketStatusLabel(row.status)}>
+              <TicketStatusGlyph status={row.status} />
+            </FleetGlyphTooltip>
             <TicketStatusBadge status={row.status} compact />
           </span>
         );
@@ -85,15 +89,19 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         return canPatch ? (
           <TicketInlinePatchCell ticket={row} field="priority" />
         ) : (
-          <span className="inline-flex items-center gap-1.5" title={ticketPriorityLabel(row.priority)}>
-            <TicketPriorityGlyph priority={row.priority} />
+          <span className="inline-flex items-center gap-1.5">
+            <FleetGlyphTooltip label={ticketPriorityLabel(row.priority)}>
+              <TicketPriorityGlyph priority={row.priority} />
+            </FleetGlyphTooltip>
             <span className="text-xs">{ticketPriorityLabel(row.priority)}</span>
           </span>
         );
       case "type":
         return (
           <span className="inline-flex items-center gap-1.5">
-            <TicketTypeGlyph type={row.ticketType} />
+            <FleetGlyphTooltip label={ticketTypeLabel(row.ticketType)}>
+              <TicketTypeGlyph type={row.ticketType} />
+            </FleetGlyphTooltip>
             <span>{ticketTypeLabel(row.ticketType)}</span>
           </span>
         );
@@ -108,7 +116,9 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
       case "vehicle":
         return (
           <span className="inline-flex items-center gap-1.5 font-mono text-zinc-300">
-            <TicketVehicleGlyph />
+            <FleetGlyphTooltip label="Vehicul">
+              <TicketVehicleGlyph />
+            </FleetGlyphTooltip>
             {row.registrationNumber ?? "—"}
           </span>
         );
@@ -123,8 +133,10 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         );
       case "routing":
         return (
-          <span className="inline-flex items-center gap-1" title={ticketRoutingLabel(row.routingLevel)}>
-            <TicketRoutingGlyph level={row.routingLevel} />
+          <span className="inline-flex items-center gap-1">
+            <FleetGlyphTooltip label={ticketRoutingLabel(row.routingLevel)}>
+              <TicketRoutingGlyph level={row.routingLevel} />
+            </FleetGlyphTooltip>
             <span className="text-xs">{ticketRoutingLabel(row.routingLevel)}</span>
           </span>
         );

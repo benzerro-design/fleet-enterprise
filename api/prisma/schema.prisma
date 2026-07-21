@@ -52,6 +52,8 @@ model Tenant {
   serviceAppointments    ServiceAppointment[]
   workOrderQuotes        WorkOrderQuote[]
   workOrderQuoteLines    WorkOrderQuoteLine[]
+  workOrderWarranties    WorkOrderWarranty[]
+  workOrderWarrantyLines WorkOrderWarrantyLine[]
   workOrderMessages      WorkOrderMessage[]
   mobilityAssignments    MobilityAssignment[]
 }
@@ -643,6 +645,8 @@ model MaintenanceEntry {
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   supplier             Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  sourceCostEntryId    String?   @unique
+  sourceCostEntry      CostEntry? @relation(fields: [sourceCostEntryId], references: [id], onDelete: SetNull)
   reminderAction       ReminderAction?
 
   @@index([tenantId])
@@ -681,6 +685,7 @@ model CostEntry {
   supplier             Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   reminderAction       ReminderAction?
   workOrderQuote       WorkOrderQuote?
+  maintenanceEntry     MaintenanceEntry?
 
   @@index([tenantId])
   @@index([vehicleId])
@@ -1303,9 +1308,13 @@ model MaintenanceWorkOrder {
   completedAt   DateTime?
   inServiceAt   DateTime?
   outServiceAt  DateTime?
+  visit2InServiceAt DateTime?
+  visit2OutServiceAt DateTime?
   displayNumber String?
   odometerKmIn  Int?
   odometerKmOut Int?
+  visit2OdometerKmIn Int?
+  visit2OdometerKmOut Int?
   repairPathNote String?
   serviceOrderType ServiceOrderType       @default(M)
   readyAt          DateTime?
@@ -1319,6 +1328,7 @@ model MaintenanceWorkOrder {
   vehicle       Vehicle                    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   supplier      Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   quotes        WorkOrderQuote[]
+  warranty      WorkOrderWarranty?
   mobilityAssignments MobilityAssignment[]
   messages      WorkOrderMessage[]
 
@@ -1400,6 +1410,25 @@ enum WorkOrderQuoteLineType {
   other
 }
 
+enum WorkOrderQuoteLineApproval {
+  pending
+  approved
+  rejected
+}
+
+enum QuotePartsOrderStatus {
+  none
+  ordered
+  in_stock
+  delivered
+}
+
+enum WorkOrderWarrantyStatus {
+  draft
+  active
+  locked
+}
+
 /// Deviz structurat pe comandă service (versiuni).
 model WorkOrderQuote {
   id               String               @id @default(cuid())
@@ -1410,6 +1439,8 @@ model WorkOrderQuote {
   currency         String               @default("RON")
   totalNetCents    Int                  @default(0)
   totalVatCents    Int                  @default(0)
+  approvedNetCents Int?
+  approvedVatCents Int?
   submittedAt      DateTime?
   approvedAt       DateTime?
   approvedByUserId String?
@@ -1441,18 +1472,65 @@ model WorkOrderQuoteLine {
   quoteId        String
   sortOrder      Int                    @default(0)
   lineType       WorkOrderQuoteLineType @default(parts)
+  approvalStatus WorkOrderQuoteLineApproval @default(pending)
   description    String
   quantity       Float                  @default(1)
   unitNetCents   Int
   vatRatePercent Int                    @default(19)
   partNumber     String?
+  partCodeExempt Boolean                @default(false)
+  partsOrderStatus QuotePartsOrderStatus @default(none)
+  partsExpectedOn DateTime?
+  warrantyMonths Int?
+  warrantyKm     Int?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
   tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   quote          WorkOrderQuote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  warrantyLines  WorkOrderWarrantyLine[]
 
   @@index([tenantId])
   @@index([quoteId])
+}
+
+model WorkOrderWarranty {
+  id               String                  @id @default(cuid())
+  tenantId         String
+  workOrderId      String                  @unique
+  sourceQuoteId    String?
+  status           WorkOrderWarrantyStatus @default(draft)
+  startsAt         DateTime?
+  startsKm         Int?
+  conditionsPdfUrl String?
+  notes            String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  tenant           Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder        MaintenanceWorkOrder    @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  lines            WorkOrderWarrantyLine[]
+
+  @@index([tenantId])
+  @@index([workOrderId])
+}
+
+model WorkOrderWarrantyLine {
+  id                String                 @id @default(cuid())
+  tenantId          String
+  warrantyId        String
+  sortOrder         Int                    @default(0)
+  sourceQuoteLineId String?
+  lineType          WorkOrderQuoteLineType
+  description       String
+  partNumber        String?
+  warrantyMonths    Int
+  warrantyKm        Int?
+  tenant            Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warranty          WorkOrderWarranty      @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  sourceQuoteLine   WorkOrderQuoteLine?    @relation(fields: [sourceQuoteLineId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([warrantyId])
+  @@index([sourceQuoteLineId])
 }
 
 enum MobilityAssignmentStatus {

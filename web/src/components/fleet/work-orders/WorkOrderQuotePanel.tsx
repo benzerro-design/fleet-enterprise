@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import { InvoiceAttachmentField } from "@/components/fleet/work-orders/InvoiceAttachmentField";
+import { WorkOrderWarrantyPanel } from "@/components/fleet/work-orders/WorkOrderWarrantyPanel";
 import { formatDateRo, toDateInput, toIsoFromDateInput } from "@/lib/datetime-local";
 import {
   fleetJsonHeaders,
@@ -12,7 +13,9 @@ import {
   quoteLineTypeLabel,
   quoteStatusLabel,
   workOrdersBrowserBase,
+  type QuoteLineApprovalStatus,
   type QuoteLineInput,
+  type QuotePartsOrderStatus,
   type WorkOrderQuoteRecord,
   type WorkOrderQuoteStatus,
 } from "@/lib/work-orders-api";
@@ -25,6 +28,7 @@ type EditableLine = {
   unitNetLei: string;
   vatRatePercent: string;
   partNumber: string;
+  partCodeExempt: boolean;
 };
 
 function newLine(): EditableLine {
@@ -36,6 +40,7 @@ function newLine(): EditableLine {
     unitNetLei: "",
     vatRatePercent: "21",
     partNumber: "",
+    partCodeExempt: false,
   };
 }
 
@@ -59,6 +64,7 @@ function linesFromQuote(quote: WorkOrderQuoteRecord): EditableLine[] {
     unitNetLei: centsToLei(line.unitNetCents),
     vatRatePercent: String(line.vatRatePercent),
     partNumber: line.partNumber ?? "",
+    partCodeExempt: line.partCodeExempt,
   }));
 }
 
@@ -70,16 +76,22 @@ function toPayload(lines: EditableLine[]): QuoteLineInput[] {
     unitNetCents: leiToCents(line.unitNetLei),
     vatRatePercent: parseInt(line.vatRatePercent, 10) || 19,
     partNumber: line.partNumber || null,
+    partCodeExempt: line.partCodeExempt,
     sortOrder: idx,
   }));
 }
 
-function quoteSubtotalsFromLines(lines: WorkOrderQuoteRecord["lines"]) {
+function quoteSubtotalsFromLines(
+  lines: WorkOrderQuoteRecord["lines"],
+  decisions?: Record<string, QuoteLineApprovalStatus | undefined>,
+) {
+  const hasDecisions = decisions ? Object.values(decisions).some(Boolean) : false;
+  const subtotalLines = hasDecisions ? lines.filter((line) => decisions?.[line.id] === "approved") : lines;
   let labor = 0;
   let parts = 0;
   let other = 0;
   let vat = 0;
-  for (const line of lines) {
+  for (const line of subtotalLines) {
     if (line.lineType === "labor") labor += line.lineNetCents;
     else if (line.lineType === "parts") parts += line.lineNetCents;
     else other += line.lineNetCents;
@@ -136,6 +148,19 @@ function SubtotalRow({
 const sheetBtnClass =
   "inline-flex h-7 items-center justify-center rounded border px-2.5 text-xs whitespace-nowrap disabled:opacity-50";
 
+const partsOrderLabels: Record<QuotePartsOrderStatus, string> = {
+  none: "Nicio comandă",
+  ordered: "Comandate",
+  in_stock: "În stoc",
+  delivered: "Livrate",
+};
+
+const approvalLabels: Record<QuoteLineApprovalStatus, string> = {
+  pending: "În așteptare",
+  approved: "Aprobată",
+  rejected: "Respinsă",
+};
+
 function statusBadgeClass(status: WorkOrderQuoteStatus): string {
   switch (status) {
     case "draft":
@@ -155,27 +180,39 @@ type Props = {
   workOrderId: string;
   canWrite: boolean;
   canApprove?: boolean;
+  /** Factură + cost din deviz — doar flotă (nu partener). */
+  canPostCost?: boolean;
   sheetLayout?: boolean;
   estimatedRepairAt?: string | null;
   quoteLocked?: boolean;
+  workOrderStatus?: string;
+  outServiceAt?: string | null;
+  requirePartCode?: boolean;
 };
 
 export function WorkOrderQuotePanel({
   workOrderId,
   canWrite,
   canApprove = false,
+  canPostCost = true,
   sheetLayout = false,
   estimatedRepairAt = null,
   quoteLocked = false,
+  workOrderStatus = "",
+  outServiceAt = null,
+  requirePartCode = true,
 }: Props) {
   const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"quote" | "warranty">("quote");
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [lines, setLines] = useState<EditableLine[]>([newLine()]);
   const [notes, setNotes] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [invoiceAttachmentUrl, setInvoiceAttachmentUrl] = useState("");
+  const [lineDecisions, setLineDecisions] = useState<Record<string, QuoteLineApprovalStatus | undefined>>({});
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [estimatedDate, setEstimatedDate] = useState(() => toDateInput(estimatedRepairAt));
@@ -228,6 +265,8 @@ export function WorkOrderQuotePanel({
       const draft = data.find((q) => q.status === "draft");
       const selected = draft ?? data[0] ?? null;
       setActiveId(selected?.id ?? null);
+      setEditingDraftId((current) => (current && data.some((q) => q.id === current && q.status === "draft") ? current : null));
+      setLineDecisions({});
       if (selected?.status === "draft") {
         setLines(linesFromQuote(selected));
         setNotes(selected.notes ?? "");
@@ -252,7 +291,9 @@ export function WorkOrderQuotePanel({
   );
 
   const draftQuote = quotes?.find((q) => q.status === "draft") ?? null;
-  const isEditingDraft = activeQuote?.status === "draft";
+  const isEditingDraft = activeQuote?.status === "draft" && editingDraftId === activeQuote.id;
+  const isCreatingDraft = !activeQuote && canWrite;
+  const hasLineDecisions = Object.values(lineDecisions).some(Boolean);
 
   const previewTotals = useMemo(() => {
     let net = 0;
@@ -286,6 +327,10 @@ export function WorkOrderQuotePanel({
           setError("Completați descrierea pentru toate liniile.");
           return;
         }
+        if (requirePartCode && line.lineType === "parts" && !line.partCodeExempt && !line.partNumber?.trim()) {
+          setError("Completați codul piesei sau bifați „fără cod”.");
+          return;
+        }
         if (!Number.isFinite(line.unitNetCents) || line.unitNetCents < 0) {
           setError("Preț unitar invalid.");
           return;
@@ -312,6 +357,7 @@ export function WorkOrderQuotePanel({
         return;
       }
       await load();
+      setEditingDraftId(null);
     } finally {
       setPending(false);
     }
@@ -377,7 +423,10 @@ export function WorkOrderQuotePanel({
     }
   }
 
-  async function quoteAction(action: "submit" | "approve" | "reject") {
+  async function quoteAction(
+    action: "submit" | "approve" | "reject",
+    approveBody?: { lineDecisions?: { lineId: string; status: "approved" | "rejected" }[] },
+  ) {
     if (!activeQuote) return;
     if (action === "submit") {
       const ok = await saveEstimatedRepair();
@@ -390,6 +439,8 @@ export function WorkOrderQuotePanel({
       if (action === "reject") {
         const reason = window.prompt("Motiv respingere (opțional):") ?? "";
         body = JSON.stringify({ reason });
+      } else if (action === "approve" && approveBody) {
+        body = JSON.stringify(approveBody);
       }
       const res = await fetch(
         `${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/${action}`,
@@ -411,6 +462,51 @@ export function WorkOrderQuotePanel({
         return;
       }
       await load();
+      setLineDecisions({});
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function approveSelection() {
+    if (!activeQuote) return;
+    const decisions = activeQuote.lines.map((line) => ({ lineId: line.id, status: lineDecisions[line.id] }));
+    if (decisions.some((line) => !line.status)) {
+      setError("Alegeți aprobat/respins pentru fiecare linie.");
+      return;
+    }
+    if (!decisions.some((line) => line.status === "approved")) {
+      setError("Selecția trebuie să conțină cel puțin o linie aprobată.");
+      return;
+    }
+    await quoteAction("approve", {
+      lineDecisions: decisions.map((line) => ({
+        lineId: line.lineId,
+        status: line.status as "approved" | "rejected",
+      })),
+    });
+  }
+
+  async function patchLineParts(
+    lineId: string,
+    body: { partsOrderStatus?: QuotePartsOrderStatus; partsExpectedOn?: string | null },
+  ) {
+    if (!activeQuote) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/lines/${lineId}/parts`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Eroare la actualizarea pieselor");
     } finally {
       setPending(false);
     }
@@ -418,6 +514,7 @@ export function WorkOrderQuotePanel({
 
   function startNewDraft() {
     setActiveId(null);
+    setEditingDraftId(null);
     setLines([newLine()]);
     setNotes("");
   }
@@ -506,9 +603,38 @@ export function WorkOrderQuotePanel({
         </div>
       )}
 
+      <div className="mt-3 flex gap-2 border-b border-zinc-800">
+        {[
+          { id: "quote" as const, label: "Deviz" },
+          { id: "warranty" as const, label: "Garanție" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`border-b-2 px-3 py-2 text-sm ${
+              activeTab === tab.id
+                ? "border-violet-500 text-violet-200"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
 
-      {quotes.length > 0 ? (
+      {activeTab === "warranty" ? (
+        <WorkOrderWarrantyPanel
+          workOrderId={workOrderId}
+          canWrite={canWrite}
+          woStatus={workOrderStatus}
+          outServiceAt={outServiceAt}
+        />
+      ) : null}
+
+      {activeTab === "quote" && quotes.length > 0 ? (
         <div className="mt-4 flex flex-wrap gap-2">
           {quotes.map((q) => (
             <button
@@ -523,10 +649,13 @@ export function WorkOrderQuotePanel({
                 if (q.costInvoiceNumber) setInvoiceNumber(q.costInvoiceNumber);
                 if (q.costInvoiceDate) setInvoiceDate(q.costInvoiceDate.slice(0, 10));
                 if (q.invoiceAttachmentUrl) setInvoiceAttachmentUrl(q.invoiceAttachmentUrl);
+                setEditingDraftId(null);
+                setLineDecisions({});
               }}
               className={`rounded-full border px-2.5 py-1 text-xs ${
                 activeId === q.id ? "border-sky-500/60 bg-sky-950/40" : "border-zinc-700"
               } ${statusBadgeClass(q.status)}`}
+              title={`${q.lines.length} linii · ${formatMoneyCents(q.totalGrossCents, q.currency)} · ${quoteStatusLabel(q.status)}`}
             >
               v{q.version} · {quoteStatusLabel(q.status)}
             </button>
@@ -534,7 +663,7 @@ export function WorkOrderQuotePanel({
         </div>
       ) : null}
 
-      {activeQuote && !isEditingDraft ? (
+      {activeTab === "quote" && activeQuote && !isEditingDraft ? (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-4 text-sm">
             <span>
@@ -546,6 +675,11 @@ export function WorkOrderQuotePanel({
             <span>
               Total: <strong>{formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}</strong>
             </span>
+            {activeQuote.approvedGrossCents != null ? (
+              <span className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-2 py-0.5 text-emerald-200">
+                Total aprobat: <strong>{formatMoneyCents(activeQuote.approvedGrossCents, activeQuote.currency)}</strong>
+              </span>
+            ) : null}
             {activeQuote.status !== "draft" ? (
               <a
                 href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
@@ -556,6 +690,21 @@ export function WorkOrderQuotePanel({
                 PDF deviz
               </a>
             ) : null}
+            {canWrite && activeQuote.status === "draft" ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setEditingDraftId(activeQuote.id)}
+                className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Editează
+              </button>
+            ) : null}
+            {activeQuote.lines.some((line) => line.partsOrderStatus === "ordered") ? (
+              <span className="rounded-full border border-amber-700/50 bg-amber-950/30 px-2 py-0.5 text-xs text-amber-200">
+                Comandă piese
+              </span>
+            ) : null}
           </div>
           {activeQuote.rejectionReason ? (
             <p className="text-sm text-red-300">Motiv respingere: {activeQuote.rejectionReason}</p>
@@ -565,37 +714,160 @@ export function WorkOrderQuotePanel({
               <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
                 <th className="py-2 pr-2">Tip</th>
                 <th className="py-2 pr-2">Descriere</th>
+                <th className="py-2 pr-2">Cod</th>
                 <th className="py-2 pr-2">Cant.</th>
                 <th className="py-2 pr-2">Preț unit.</th>
                 <th className="py-2 pr-2">TVA %</th>
-                <th className="py-2">Total net</th>
+                <th className="py-2 pr-2">Total net</th>
+                <th className="py-2 pr-2">Aprobare</th>
+                <th className="py-2">Piese</th>
               </tr>
             </thead>
             <tbody>
-              {activeQuote.lines.map((line) => (
-                <tr key={line.id} className="border-b border-zinc-800/60">
-                  <td className="py-2 pr-2 text-zinc-400">{quoteLineTypeLabel(line.lineType)}</td>
-                  <td className="py-2 pr-2">{line.description}</td>
-                  <td className="py-2 pr-2 font-mono">{line.quantity}</td>
-                  <td className="py-2 pr-2 font-mono">{formatMoneyCents(line.unitNetCents)}</td>
-                  <td className="py-2 pr-2">{line.vatRatePercent}%</td>
-                  <td className="py-2 font-mono">{formatMoneyCents(line.lineNetCents)}</td>
-                </tr>
-              ))}
+              {activeQuote.lines.map((line) => {
+                const decision = lineDecisions[line.id];
+                const displayedApproval = decision ?? line.approvalStatus;
+                const tint =
+                  decision === "approved"
+                    ? "bg-emerald-950/20"
+                    : decision === "rejected"
+                      ? "bg-red-950/20"
+                      : line.approvalStatus === "approved"
+                        ? "bg-emerald-950/10"
+                        : line.approvalStatus === "rejected"
+                          ? "bg-red-950/10"
+                          : "";
+                return (
+                  <tr key={line.id} className={`border-b border-zinc-800/60 ${tint}`}>
+                    <td className="py-2 pr-2 text-zinc-400">{quoteLineTypeLabel(line.lineType)}</td>
+                    <td className="py-2 pr-2">{line.description}</td>
+                    <td className="py-2 pr-2 font-mono text-xs text-zinc-300">
+                      {line.partNumber ?? (line.partCodeExempt ? "fără cod" : "—")}
+                    </td>
+                    <td className="py-2 pr-2 font-mono">{line.quantity}</td>
+                    <td className="py-2 pr-2 font-mono">{formatMoneyCents(line.unitNetCents)}</td>
+                    <td className="py-2 pr-2">{line.vatRatePercent}%</td>
+                    <td className="py-2 pr-2 font-mono">{formatMoneyCents(line.lineNetCents)}</td>
+                    <td className="py-2 pr-2">
+                      {canApprove && activeQuote.status === "submitted" ? (
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => setLineDecisions((s) => ({ ...s, [line.id]: "approved" }))}
+                            className={`rounded border px-2 py-0.5 text-xs ${
+                              decision === "approved"
+                                ? "border-emerald-500 bg-emerald-950/50 text-emerald-200"
+                                : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                            }`}
+                            aria-label="Aprobă linia"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => setLineDecisions((s) => ({ ...s, [line.id]: "rejected" }))}
+                            className={`rounded border px-2 py-0.5 text-xs ${
+                              decision === "rejected"
+                                ? "border-red-500 bg-red-950/50 text-red-200"
+                                : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                            }`}
+                            aria-label="Respinge linia"
+                          >
+                            ✗
+                          </button>
+                        </div>
+                      ) : displayedApproval !== "pending" ? (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-xs ${
+                            displayedApproval === "approved"
+                              ? "border-emerald-700/50 text-emerald-200"
+                              : "border-red-700/50 text-red-200"
+                          }`}
+                        >
+                          {approvalLabels[displayedApproval]}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-zinc-500">—</span>
+                      )}
+                    </td>
+                    <td className="py-2">
+                      {line.lineType === "parts" ? (
+                        activeQuote.status === "approved" && canWrite ? (
+                          <div className="flex min-w-[260px] flex-wrap gap-2">
+                            <select
+                              value={line.partsOrderStatus}
+                              disabled={pending}
+                              onChange={(e) =>
+                                void patchLineParts(line.id, {
+                                  partsOrderStatus: e.target.value as QuotePartsOrderStatus,
+                                })
+                              }
+                              className={`${OPS_INPUT_CLASS} w-32`}
+                              aria-label="Comandă piese"
+                            >
+                              <option value="none">{partsOrderLabels.none}</option>
+                              <option value="ordered">{partsOrderLabels.ordered}</option>
+                              <option value="in_stock">{partsOrderLabels.in_stock}</option>
+                              <option value="delivered">{partsOrderLabels.delivered}</option>
+                            </select>
+                            <input
+                              type="date"
+                              value={line.partsExpectedOn ? line.partsExpectedOn.slice(0, 10) : ""}
+                              disabled={pending}
+                              onChange={(e) =>
+                                void patchLineParts(line.id, {
+                                  partsExpectedOn: e.target.value || null,
+                                })
+                              }
+                              className={`${OPS_INPUT_CLASS} w-36`}
+                              aria-label="Data estimată piese"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-zinc-400">
+                            {partsOrderLabels[line.partsOrderStatus]}
+                            {line.partsExpectedOn
+                              ? ` · ${new Date(line.partsExpectedOn).toLocaleDateString("ro-RO")}`
+                              : ""}
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-xs text-zinc-600">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <div className="mt-3 flex justify-end">
-            <QuoteSubtotals {...quoteSubtotalsFromLines(activeQuote.lines)} currency={activeQuote.currency} />
+            <QuoteSubtotals
+              {...quoteSubtotalsFromLines(activeQuote.lines, lineDecisions)}
+              currency={activeQuote.currency}
+            />
           </div>
           {canApprove && activeQuote.status === "submitted" ? (
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => void quoteAction("approve")}
+                onClick={() => {
+                  setLineDecisions({});
+                  void quoteAction("approve", {});
+                }}
                 className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
               >
-                Aprobă deviz
+                Aprobă tot
+              </button>
+              <button
+                type="button"
+                disabled={pending || !hasLineDecisions}
+                onClick={() => void approveSelection()}
+                className="rounded-lg border border-emerald-500/50 px-3 py-1.5 text-sm text-emerald-200 hover:bg-emerald-950/40 disabled:opacity-50"
+              >
+                Aprobă selecția
               </button>
               <button
                 type="button"
@@ -632,7 +904,7 @@ export function WorkOrderQuotePanel({
                     </>
                   ) : null}
                 </p>
-              ) : canWrite ? (
+              ) : canWrite && canPostCost ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className={OPS_LABEL_CLASS}>Nr. factură</label>
@@ -683,7 +955,7 @@ export function WorkOrderQuotePanel({
                   {" · "}
                   {formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}
                 </p>
-              ) : activeQuote.invoicedAt && canWrite ? (
+              ) : activeQuote.invoicedAt && canWrite && canPostCost ? (
                 <button
                   type="button"
                   disabled={pending}
@@ -700,14 +972,15 @@ export function WorkOrderQuotePanel({
         </div>
       ) : null}
 
-      {(isEditingDraft || quotes.length === 0 || (!activeQuote && canWrite)) && canWrite ? (
+      {activeTab === "quote" && (isEditingDraft || quotes.length === 0 || isCreatingDraft) && canWrite ? (
         <div className="mt-4 space-y-4">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead>
                 <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
                   <th className="py-2 pr-2">Tip</th>
                   <th className="py-2 pr-2">Descriere</th>
+                  <th className="py-2 pr-2">Cod piesă</th>
                   <th className="py-2 pr-2">Cant.</th>
                   <th className="py-2 pr-2">Preț net (lei)</th>
                   <th className="py-2 pr-2">TVA %</th>
@@ -743,6 +1016,37 @@ export function WorkOrderQuotePanel({
                         className={OPS_INPUT_CLASS}
                         placeholder="Descriere linie"
                       />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <div className="space-y-1">
+                        <input
+                          value={line.partNumber}
+                          disabled={line.partCodeExempt}
+                          onChange={(e) => {
+                            const next = [...lines];
+                            next[idx] = { ...line, partNumber: e.target.value };
+                            setLines(next);
+                          }}
+                          className={`${OPS_INPUT_CLASS} w-36 font-mono`}
+                          placeholder={line.lineType === "parts" && requirePartCode ? "Obligatoriu" : "Opțional"}
+                        />
+                        <label className="flex items-center gap-1 text-[11px] text-zinc-500">
+                          <input
+                            type="checkbox"
+                            checked={line.partCodeExempt}
+                            onChange={(e) => {
+                              const next = [...lines];
+                              next[idx] = {
+                                ...line,
+                                partCodeExempt: e.target.checked,
+                                partNumber: e.target.checked ? "" : line.partNumber,
+                              };
+                              setLines(next);
+                            }}
+                          />
+                          fără cod
+                        </label>
+                      </div>
                     </td>
                     <td className="py-2 pr-2">
                       <input
@@ -869,7 +1173,7 @@ export function WorkOrderQuotePanel({
         </div>
       ) : null}
 
-      {!canWrite && quotes.length === 0 ? (
+      {activeTab === "quote" && !canWrite && quotes.length === 0 ? (
         <p className="mt-4 text-sm text-zinc-500">Nu există devize pentru această comandă.</p>
       ) : null}
     </section>

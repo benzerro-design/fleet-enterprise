@@ -148,7 +148,12 @@ export class WorkOrdersController {
   patch(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
-    @Body() body: { serviceOrderType?: 'M' | 'E' | 'D' | 'TV'; estimatedRepairAt?: string | null },
+    @Body()
+    body: {
+      serviceOrderType?: 'M' | 'E' | 'D' | 'TV';
+      estimatedRepairAt?: string | null;
+      status?: MaintenanceWorkOrderStatus;
+    },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {

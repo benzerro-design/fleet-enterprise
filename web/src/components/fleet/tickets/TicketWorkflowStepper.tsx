@@ -611,7 +611,10 @@ export function TicketWorkflowStepper({
                             Confirmă primire (șofer)
                           </button>
                         ) : null}
-                        {appt.managerConfirmedAt && !appt.driverAcknowledgedAt ? (
+                        {appt.managerConfirmedAt &&
+                        !appt.driverAcknowledgedAt &&
+                        serviceCase.workOrders.length === 0 &&
+                        !inRescheduleLoop ? (
                           <p className="w-full text-[11px] text-amber-200/90">
                             WO se creează automat după Confirmă primire (șofer) — nu există încă o comandă de deschis.
                           </p>

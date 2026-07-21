@@ -1195,8 +1195,19 @@ export class CrmTicketsService {
       const wo = serviceCase?.workOrders[0];
       const approvedQuote = wo?.quotes[0];
       const grossCents = approvedQuote
-        ? approvedQuote.totalNetCents + approvedQuote.totalVatCents
+        ? (approvedQuote.approvedNetCents ?? approvedQuote.totalNetCents) +
+          (approvedQuote.approvedVatCents ?? approvedQuote.totalVatCents)
         : null;
+
+      if (approvedQuote?.costEntryId) {
+        const existingFromCost = await this.prisma.maintenanceEntry.findFirst({
+          where: { tenantId: tenant.id, sourceCostEntryId: approvedQuote.costEntryId },
+          select: { id: true },
+        });
+        if (existingFromCost) {
+          throw new BadRequestException('Există deja o mentenanță creată din costul devizului aprobat.');
+        }
+      }
 
       const title = dto.title?.trim() || ticket.subject;
       const provider = wo?.supplierId
@@ -1219,6 +1230,7 @@ export class CrmTicketsService {
           costCents: grossCents,
           provider,
           supplierId: wo?.supplierId ?? null,
+          sourceCostEntryId: approvedQuote?.costEntryId ?? null,
           invoiceNumber: approvedQuote?.invoiceNumber ?? null,
           invoiceDate: approvedQuote?.invoiceDate ?? null,
           invoiceAttachmentUrl: approvedQuote?.invoiceAttachmentUrl ?? null,
