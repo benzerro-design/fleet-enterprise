@@ -82,6 +82,12 @@ export type WorkOrderQuoteSummary = {
 
 export type WorkOrderInbox = "open" | "pending_approval" | "in_service" | "ready" | "invoiced";
 
+export type WorkOrderTicketSettlement = {
+  entityType: "maintenance" | "cost" | "document";
+  entityId: string;
+  createdAt: string;
+};
+
 export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
   serviceCaseTitle: string;
@@ -98,6 +104,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   visit2OdometerKmIn: number | null;
   visit2OdometerKmOut: number | null;
   repairPathNote: string | null;
+  ticketSettlement: WorkOrderTicketSettlement | null;
+  hasQuoteCost: boolean;
   vehicle: WorkOrderVehicleSnapshot;
   client: WorkOrderClientSnapshot;
   supplier: WorkOrderSupplierSnapshot | null;

@@ -23,7 +23,7 @@ import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/Wor
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 import { formatDateRo } from "@/lib/datetime-local";
 import { mobilityBrowserBase, type MobilityEligibilityRecord } from "@/lib/mobility-api";
-import { fleetJsonHeaders as ticketFleetHeaders, ticketsBrowserBase } from "@/lib/tickets-api";
+import { fleetJsonHeaders as ticketFleetHeaders, ticketsBrowserBase, type TicketLinkRecord } from "@/lib/tickets-api";
 
 type Props = {
   ticketId: string;
@@ -35,6 +35,7 @@ type Props = {
   canAckAppointment: boolean;
   closed: boolean;
   hasVehicle: boolean;
+  ticketLinks?: TicketLinkRecord[];
   onServiceCaseChange?: (record: ServiceCaseRecord | null | undefined) => void;
   compact?: boolean;
 };
@@ -49,6 +50,7 @@ export function TicketWorkflowStepper({
   canAckAppointment,
   closed,
   hasVehicle,
+  ticketLinks = [],
   onServiceCaseChange,
   compact = false,
 }: Props) {
@@ -379,6 +381,18 @@ export function TicketWorkflowStepper({
     );
   }
 
+  const ticketSettlement = (() => {
+    const link = ticketLinks
+      .filter((l) => l.entityType === "maintenance" || l.entityType === "cost" || l.entityType === "document")
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    if (!link) return null;
+    return {
+      entityType: link.entityType as "maintenance" | "cost" | "document",
+      entityId: link.entityId,
+      createdAt: link.createdAt,
+    };
+  })();
+
   const chapters = buildOperationalChapters({
     serviceCase,
     closed,
@@ -529,6 +543,7 @@ export function TicketWorkflowStepper({
                   workflowType={serviceCase.workflowType}
                   closed={closed}
                   onTransformMaintenance={transformToMaintenance}
+                  ticketSettlement={ticketSettlement}
                 />
               ))}
             </div>
@@ -711,6 +726,7 @@ function WorkOrderStepCard({
   workflowType,
   closed,
   onTransformMaintenance,
+  ticketSettlement,
 }: {
   wo: WorkOrderRecord;
   pending: boolean;
@@ -728,6 +744,11 @@ function WorkOrderStepCard({
   workflowType?: ServiceCaseRecord["workflowType"];
   closed?: boolean;
   onTransformMaintenance?: () => void | Promise<void>;
+  ticketSettlement?: {
+    entityType: "maintenance" | "cost" | "document";
+    entityId: string;
+    createdAt: string;
+  } | null;
 }) {
   const approved = wo.approvedQuote ?? (wo.latestQuote?.status === "approved" ? wo.latestQuote : null);
   const pendingQuote = wo.pendingQuote ?? (wo.latestQuote?.status === "submitted" ? wo.latestQuote : null);
@@ -835,7 +856,7 @@ function WorkOrderStepCard({
             ) : null}
           </div>
           <WorkOrderQuoteBillingActions
-            key={`${approved.id}-${approved.invoicedAt ?? ""}-${approved.costEntryId ?? ""}`}
+            key={`${approved.id}-${approved.invoicedAt ?? ""}-${approved.costEntryId ?? ""}-${ticketSettlement?.entityId ?? ""}`}
             workOrderId={wo.id}
             workOrderStatus={wo.status}
             quote={approved}
@@ -843,11 +864,12 @@ function WorkOrderStepCard({
             compact
             workflowType={workflowType}
             vehicleOdometerKm={wo.odometerKmOut ?? wo.odometerKmIn ?? undefined}
+            ticketSettlement={ticketSettlement}
             onUpdated={onRefresh}
           />
           {canOperate &&
           !closed &&
-          approved.costEntryId &&
+          !ticketSettlement &&
           onTransformMaintenance &&
           (workflowType === "itp" || workflowType === "repair") ? (
             <button
@@ -858,6 +880,11 @@ function WorkOrderStepCard({
             >
               Transformă în mentenanță →
             </button>
+          ) : ticketSettlement?.entityType === "maintenance" ? (
+            <p className="mt-2 text-[10px] text-violet-300/80">
+              Deja transformată în mentenanță (
+              {new Date(ticketSettlement.createdAt).toLocaleDateString("ro-RO")}).
+            </p>
           ) : null}
         </>
       ) : null}

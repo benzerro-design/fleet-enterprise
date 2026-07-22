@@ -93,6 +93,8 @@ export function WorkOrderSheetShell({
   const requireKm = workOrderSettings.requireServiceKm;
 
   const useVisit2 = wo.postApprovalPath === "reschedule" && !!wo.outServiceAt;
+  const outServiceDone = useVisit2 ? !!wo.visit2OutServiceAt : !!wo.outServiceAt;
+  const ticketSettlement = wo.ticketSettlement ?? null;
 
   const fleetAlignedFromService =
     (wo.odometerKmOut != null && wo.vehicle.odometerKm === wo.odometerKmOut) ||
@@ -694,6 +696,7 @@ export function WorkOrderSheetShell({
         workOrderStatus={wo.status}
         outServiceAt={wo.outServiceAt}
         requirePartCode={workOrderSettings.requirePartCode}
+        ticketSettlement={ticketSettlement}
       />
 
       <div className="border-t border-zinc-800 p-4">
@@ -705,8 +708,11 @@ export function WorkOrderSheetShell({
           workOrderId={wo.id}
           canWrite={canWrite}
           status={wo.status}
+          serviceCaseStatus={wo.serviceCaseStatus}
+          outServiceDone={outServiceDone}
           hasInvoicedQuote={hasInvoicedQuote}
-          hasCostFromQuote={hasCostFromQuote}
+          hasCostFromQuote={hasCostFromQuote || wo.hasQuoteCost}
+          ticketSettlement={ticketSettlement}
           isPartner={isPartner}
         />
       </div>

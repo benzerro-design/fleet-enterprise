@@ -188,6 +188,11 @@ type Props = {
   workOrderStatus?: string;
   outServiceAt?: string | null;
   requirePartCode?: boolean;
+  ticketSettlement?: {
+    entityType: "maintenance" | "cost" | "document";
+    entityId: string;
+    createdAt: string;
+  } | null;
 };
 
 export function WorkOrderQuotePanel({
@@ -201,6 +206,7 @@ export function WorkOrderQuotePanel({
   workOrderStatus = "",
   outServiceAt = null,
   requirePartCode = true,
+  ticketSettlement = null,
 }: Props) {
   const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
@@ -365,6 +371,19 @@ export function WorkOrderQuotePanel({
 
   async function postCost() {
     if (!activeQuote) return;
+    if (ticketSettlement) {
+      const kind =
+        ticketSettlement.entityType === "maintenance"
+          ? "Mentenanță"
+          : ticketSettlement.entityType === "cost"
+            ? "Cost"
+            : "Document";
+      const date = new Date(ticketSettlement.createdAt).toLocaleDateString("ro-RO");
+      const ok = window.confirm(
+        `ATENȚIE: această reparație a fost transformată în ${kind} la data ${date}.\n\nSunteți sigur că vreți să generați încă un cost din deviz?`,
+      );
+      if (!ok) return;
+    }
     setPending(true);
     setError(null);
     try {

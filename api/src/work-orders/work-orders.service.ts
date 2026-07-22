@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   CrmTicketEventKind,
+  CrmTicketLinkEntityType,
   CrmTicketStatus,
   MaintenanceWorkOrderStatus,
   Prisma,
@@ -95,6 +96,12 @@ export type WorkOrderListRow = {
   };
 };
 
+export type WorkOrderTicketSettlement = {
+  entityType: 'maintenance' | 'cost' | 'document';
+  entityId: string;
+  createdAt: string;
+};
+
 export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
   serviceCaseTitle: string;
@@ -113,6 +120,10 @@ export type WorkOrderDetail = WorkOrderListRow & {
   visit2OdometerKmOut: number | null;
   repairPathNote: string | null;
   readyAt: string | null;
+  /** Transformare din Acțiuni (mentenanță/cost/document) pe tichetul sursă. */
+  ticketSettlement: WorkOrderTicketSettlement | null;
+  /** Cost generat din devizul aprobat. */
+  hasQuoteCost: boolean;
   vehicle: WorkOrderVehicleSnapshot;
   client: WorkOrderClientSnapshot;
   supplier: WorkOrderSupplierSnapshot | null;
@@ -553,6 +564,7 @@ export class WorkOrdersService {
             submittedAt: true,
             approvedAt: true,
             invoicedAt: true,
+            costEntryId: true,
           },
         },
       },
@@ -577,6 +589,12 @@ export class WorkOrdersService {
     const draft = row.quotes.find((q) => q.status === 'draft');
     const primary = approved ?? submitted ?? draft ?? row.quotes[0];
 
+    const ticketSettlement = await this.resolveTicketSettlement(
+      row.tenantId,
+      row.serviceCase.sourceTicketId,
+    );
+    const hasQuoteCost = row.quotes.some((q) => q.status === 'approved' && !!q.costEntryId);
+
     return {
       ...list,
       notes: row.notes,
@@ -597,6 +615,8 @@ export class WorkOrdersService {
       repairPathNote: row.repairPathNote ?? null,
       readyAt: row.readyAt?.toISOString() ?? null,
       estimatedRepairAt: row.estimatedRepairAt?.toISOString() ?? null,
+      ticketSettlement,
+      hasQuoteCost,
       vehicle: {
         registrationNumber: row.vehicle.registrationNumber,
         brand: row.vehicle.brand,
@@ -1187,6 +1207,52 @@ export class WorkOrdersService {
     });
   }
 
+  private async resolveTicketSettlement(
+    tenantId: string,
+    sourceTicketId: string | null,
+  ): Promise<WorkOrderTicketSettlement | null> {
+    if (!sourceTicketId) return null;
+    const link = await this.prisma.crmTicketLink.findFirst({
+      where: {
+        tenantId,
+        ticketId: sourceTicketId,
+        entityType: {
+          in: [
+            CrmTicketLinkEntityType.maintenance,
+            CrmTicketLinkEntityType.cost,
+            CrmTicketLinkEntityType.document,
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { entityType: true, entityId: true, createdAt: true },
+    });
+    if (!link) return null;
+    if (
+      link.entityType !== CrmTicketLinkEntityType.maintenance &&
+      link.entityType !== CrmTicketLinkEntityType.cost &&
+      link.entityType !== CrmTicketLinkEntityType.document
+    ) {
+      return null;
+    }
+    return {
+      entityType: link.entityType,
+      entityId: link.entityId,
+      createdAt: link.createdAt.toISOString(),
+    };
+  }
+
+  private outServiceDone(wo: {
+    outServiceAt: Date | null;
+    visit2OutServiceAt: Date | null;
+    postApprovalPath?: string | null;
+  }): boolean {
+    if (wo.postApprovalPath === 'reschedule') {
+      return !!wo.visit2OutServiceAt || !!wo.outServiceAt;
+    }
+    return !!wo.outServiceAt;
+  }
+
   async complete(tenantSlug: string, id: string, actorUserId?: string, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -1211,41 +1277,118 @@ export class WorkOrdersService {
         throw new ForbiddenException('Cannot complete work order');
       }
     }
-    if (wo.status === MaintenanceWorkOrderStatus.done) {
-      throw new BadRequestException('Work order is already completed');
-    }
 
+    const partner = !!(access && isPartnerUser(access));
     const approvedQuote = wo.quotes[0];
-    if (!approvedQuote?.invoicedAt) {
-      throw new BadRequestException('Record invoice on approved quote before completing');
-    }
-    if (!approvedQuote?.costEntryId) {
-      throw new BadRequestException('Post cost from quote before completing');
+    const outDone = this.outServiceDone({
+      outServiceAt: wo.outServiceAt,
+      visit2OutServiceAt: wo.visit2OutServiceAt,
+      postApprovalPath: wo.serviceCase.postApprovalPath,
+    });
+
+    if (partner) {
+      if (wo.status === MaintenanceWorkOrderStatus.done) {
+        throw new BadRequestException('Comanda este deja finalizată');
+      }
+      if (wo.status === MaintenanceWorkOrderStatus.cancelled) {
+        throw new BadRequestException('Comanda anulată nu poate fi finalizată');
+      }
+      if (!outDone) {
+        throw new BadRequestException('Marcați Out service înainte de a închide comanda');
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.maintenanceWorkOrder.update({
+          where: { id },
+          data: {
+            status: MaintenanceWorkOrderStatus.done,
+            completedAt: new Date(),
+            repairPathNote: wo.repairPathNote?.trim()
+              ? wo.repairPathNote
+              : 'Finalizată de partener (lucrare gata)',
+          },
+        });
+
+        if (wo.serviceCase.sourceTicketId) {
+          await tx.crmTicketEvent.create({
+            data: {
+              tenantId: tenant.id,
+              ticketId: wo.serviceCase.sourceTicketId,
+              kind: CrmTicketEventKind.workflow_advance,
+              body: 'Partenerul a marcat comanda finalizată (lucrare gata). Dosarul rămâne deschis până la evidența flotă.',
+              payload: {
+                workOrderId: id,
+                serviceCaseId: wo.serviceCaseId,
+                completedBy: 'partner',
+              },
+              actorUserId: actorUserId ?? null,
+            },
+          });
+        }
+      });
+
+      await this.audit.log({
+        tenantId: tenant.id,
+        actorUserId,
+        action: 'work_order.complete_partner',
+        entityType: 'maintenance_work_order',
+        entityId: id,
+        meta: { serviceCaseId: wo.serviceCaseId },
+      });
+
+      return this.getById(tenantSlug, id, access);
     }
 
-    const stageIdx = SERVICE_CASE_STAGE_ORDER.indexOf(wo.serviceCase.currentStage);
-    const costIdx = SERVICE_CASE_STAGE_ORDER.indexOf(ServiceCaseStage.cost);
-    if (stageIdx < costIdx) {
-      throw new BadRequestException('Service case must reach cost stage before completion');
+    // Flotă: închide WO (dacă e nevoie) + dosar + tichet când există evidență.
+    const ticketSettlement = await this.resolveTicketSettlement(
+      tenant.id,
+      wo.serviceCase.sourceTicketId,
+    );
+    const hasSettlement = !!approvedQuote?.costEntryId || !!ticketSettlement;
+
+    if (!hasSettlement) {
+      throw new BadRequestException(
+        'Înainte de închiderea dosarului: generați cost din deviz sau transformați reparația în mentenanță / cost / document din Acțiuni.',
+      );
+    }
+
+    if (wo.status === MaintenanceWorkOrderStatus.cancelled) {
+      throw new BadRequestException('Comanda anulată nu poate fi finalizată');
+    }
+
+    const caseAlreadyClosed =
+      wo.serviceCase.status === ServiceCaseStatus.completed ||
+      wo.serviceCase.currentStage === ServiceCaseStage.closed;
+
+    if (wo.status === MaintenanceWorkOrderStatus.done && caseAlreadyClosed) {
+      throw new BadRequestException('Comanda și dosarul sunt deja închise');
+    }
+
+    if (wo.status !== MaintenanceWorkOrderStatus.done && !outDone) {
+      throw new BadRequestException('Marcați Out service înainte de a închide comanda');
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.maintenanceWorkOrder.update({
-        where: { id },
-        data: {
-          status: MaintenanceWorkOrderStatus.done,
-          completedAt: new Date(),
-        },
-      });
+      if (wo.status !== MaintenanceWorkOrderStatus.done) {
+        await tx.maintenanceWorkOrder.update({
+          where: { id },
+          data: {
+            status: MaintenanceWorkOrderStatus.done,
+            completedAt: new Date(),
+          },
+        });
+      }
 
-      await tx.serviceCase.update({
-        where: { id: wo.serviceCaseId },
-        data: {
-          currentStage: ServiceCaseStage.closed,
-          status: ServiceCaseStatus.completed,
-          closedAt: new Date(),
-        },
-      });
+      if (!caseAlreadyClosed) {
+        await tx.serviceCase.update({
+          where: { id: wo.serviceCaseId },
+          data: {
+            currentStage: ServiceCaseStage.closed,
+            status: ServiceCaseStatus.completed,
+            closedAt: new Date(),
+          },
+        });
+      }
 
       if (wo.serviceCase.sourceTicketId) {
         const ticket = await tx.crmTicket.findFirst({
@@ -1268,27 +1411,35 @@ export class WorkOrdersService {
               tenantId: tenant.id,
               ticketId: ticket.id,
               kind: CrmTicketEventKind.status,
-              body: 'Tichet rezolvat automat — comandă service finalizată.',
-              payload: { status: 'resolved', auto: true, workOrderId: id },
+              body: 'Tichet rezolvat — comandă service finalizată (evidență cost/mentenanță/document).',
+              payload: {
+                status: 'resolved',
+                auto: true,
+                workOrderId: id,
+                settlement: ticketSettlement?.entityType ?? (approvedQuote?.costEntryId ? 'quote_cost' : null),
+              },
               actorUserId: actorUserId ?? null,
             },
           });
         }
-        await tx.crmTicketEvent.create({
-          data: {
-            tenantId: tenant.id,
-            ticketId: wo.serviceCase.sourceTicketId,
-            kind: CrmTicketEventKind.workflow_advance,
-            body: 'Comandă service finalizată — dosar închis.',
-            payload: {
-              fromStage: wo.serviceCase.currentStage,
-              toStage: ServiceCaseStage.closed,
-              serviceCaseId: wo.serviceCaseId,
-              workOrderId: id,
+        if (!caseAlreadyClosed) {
+          await tx.crmTicketEvent.create({
+            data: {
+              tenantId: tenant.id,
+              ticketId: wo.serviceCase.sourceTicketId,
+              kind: CrmTicketEventKind.workflow_advance,
+              body: 'Comandă service finalizată — dosar închis.',
+              payload: {
+                fromStage: wo.serviceCase.currentStage,
+                toStage: ServiceCaseStage.closed,
+                serviceCaseId: wo.serviceCaseId,
+                workOrderId: id,
+                completedBy: 'fleet',
+              },
+              actorUserId: actorUserId ?? null,
             },
-            actorUserId: actorUserId ?? null,
-          },
-        });
+          });
+        }
       }
     });
 
@@ -1298,9 +1449,12 @@ export class WorkOrdersService {
       action: 'work_order.complete',
       entityType: 'maintenance_work_order',
       entityId: id,
-      meta: { serviceCaseId: wo.serviceCaseId },
+      meta: {
+        serviceCaseId: wo.serviceCaseId,
+        settlement: ticketSettlement?.entityType ?? (approvedQuote?.costEntryId ? 'quote_cost' : null),
+      },
     });
 
-    return this.getById(tenantSlug, id);
+    return this.getById(tenantSlug, id, access);
   }
 }

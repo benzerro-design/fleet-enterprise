@@ -27,6 +27,11 @@ type Props = {
   compact?: boolean;
   workflowType?: ServiceCaseWorkflowType | string;
   vehicleOdometerKm?: number;
+  ticketSettlement?: {
+    entityType: "maintenance" | "cost" | "document";
+    entityId: string;
+    createdAt: string;
+  } | null;
   onUpdated: () => void;
 };
 
@@ -38,6 +43,7 @@ export function WorkOrderQuoteBillingActions({
   compact = false,
   workflowType,
   vehicleOdometerKm = 0,
+  ticketSettlement = null,
   onUpdated,
 }: Props) {
   const [invoiceNumber, setInvoiceNumber] = useState(quote.invoiceNumber ?? "");
@@ -74,12 +80,10 @@ export function WorkOrderQuoteBillingActions({
 
   if (quote.status !== "approved") return null;
 
-  const canComplete =
+  const showComplete =
     canWrite &&
-    workOrderStatus !== "done" &&
     workOrderStatus !== "cancelled" &&
-    !!quote.invoicedAt &&
-    !!quote.costEntryId;
+    (!!quote.costEntryId || !!ticketSettlement);
 
   async function recordInvoice() {
     if (!invoiceNumber.trim() || !invoiceDate) return;
@@ -116,6 +120,19 @@ export function WorkOrderQuoteBillingActions({
   }
 
   async function postCost() {
+    if (ticketSettlement) {
+      const kind =
+        ticketSettlement.entityType === "maintenance"
+          ? "Mentenanță"
+          : ticketSettlement.entityType === "cost"
+            ? "Cost"
+            : "Document";
+      const date = new Date(ticketSettlement.createdAt).toLocaleDateString("ro-RO");
+      const ok = window.confirm(
+        `ATENȚIE: această reparație a fost transformată în ${kind} la data ${date}.\n\nSunteți sigur că vreți să generați încă un cost din deviz?`,
+      );
+      if (!ok) return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -313,14 +330,14 @@ export function WorkOrderQuoteBillingActions({
         <p className="text-xs text-zinc-500">După factură: generezi costul automat.</p>
       ) : null}
 
-      {canComplete ? (
+      {showComplete ? (
         <button
           type="button"
           disabled={pending}
           onClick={() => void completeWorkOrder()}
           className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         >
-          Finalizează comanda
+          {workOrderStatus === "done" ? "Închide dosarul" : "Finalizează comanda"}
         </button>
       ) : null}
     </div>
