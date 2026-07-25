@@ -21,6 +21,12 @@ export function SchedulerKpiStrip({ stats, activeInbox = "all", onInboxChange, p
       warn: (stats?.pendingSupplier ?? 0) > 0,
     },
     {
+      key: "needs_repropose",
+      label: partnerMode ? "Șofer nu poate" : "Reprogramare (șofer)",
+      value: stats?.needsRepropose ?? 0,
+      warn: (stats?.needsRepropose ?? 0) > 0,
+    },
+    {
       key: "scheduled",
       label: partnerMode ? "De confirmat flotă" : "De confirmat",
       value: stats?.awaitingConfirm ?? stats?.scheduled ?? 0,
@@ -30,7 +36,7 @@ export function SchedulerKpiStrip({ stats, activeInbox = "all", onInboxChange, p
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {items.map((item) => {
         const active = activeInbox === item.key;
         const clickable = !!onInboxChange;
@@ -76,6 +82,7 @@ export function SchedulerKpiStrip({ stats, activeInbox = "all", onInboxChange, p
 export function SchedulerStatusLegend() {
   const items = [
     { cls: appointmentStatusBadgeClass("pending_supplier"), label: "De validat" },
+    { cls: appointmentStatusBadgeClass("needs_repropose"), label: "Șofer nu poate" },
     { cls: appointmentStatusBadgeClass("scheduled"), label: "De confirmat" },
     { cls: appointmentStatusBadgeClass("confirmed"), label: "Confirmat" },
   ];

@@ -298,13 +298,15 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
           : "După deschiderea fluxului service.",
       detail: appt?.status === "pending_supplier"
         ? "Propus de flotă — așteaptă validare furnizor."
-        : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
-          ? "Confirmată de manager — așteaptă Confirmă primire (șofer)."
-          : appt?.managerConfirmedAt && appt.driverAcknowledgedAt
-            ? "Confirmată de manager și șofer."
-            : appt
-              ? "De confirmat cu service și șofer."
-              : undefined,
+        : appt?.status === "needs_repropose"
+          ? "Șoferul nu poate la data curentă — reprogramare necesară."
+          : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
+            ? "Confirmată de manager — așteaptă Confirmă primire (șofer)."
+            : appt?.managerConfirmedAt && appt.driverAcknowledgedAt
+              ? "Confirmată de manager și șofer."
+              : appt
+                ? "De confirmat cu service și șofer."
+                : undefined,
     },
     {
       id: "work-order",

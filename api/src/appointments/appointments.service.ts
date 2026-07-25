@@ -115,6 +115,9 @@ export class AppointmentsService {
     cancellationRequestNote?: string | null;
     managerConfirmedAt?: Date | null;
     driverAcknowledgedAt?: Date | null;
+    driverDeclinedAt?: Date | null;
+    driverDeclineNote?: string | null;
+    lastProposalNote?: string | null;
     location: string | null;
     notes: string | null;
     recurrenceRule: ServiceAppointmentRecurrence;
@@ -159,6 +162,9 @@ export class AppointmentsService {
       cancellationRequestNote: row.cancellationRequestNote ?? null,
       managerConfirmedAt: row.managerConfirmedAt?.toISOString() ?? null,
       driverAcknowledgedAt: row.driverAcknowledgedAt?.toISOString() ?? null,
+      driverDeclinedAt: row.driverDeclinedAt?.toISOString() ?? null,
+      driverDeclineNote: row.driverDeclineNote ?? null,
+      lastProposalNote: row.lastProposalNote ?? null,
       location: row.location,
       notes: row.notes,
       vehicleId: row.vehicleId,
@@ -294,6 +300,7 @@ export class AppointmentsService {
         confirmed: 0,
         scheduled: 0,
         pendingSupplier: 0,
+        needsRepropose: 0,
         awaitingConfirm: 0,
       };
     }
@@ -324,7 +331,7 @@ export class AppointmentsService {
     if (supplierFilter) baseParts.push(supplierFilter);
     const base: Prisma.ServiceAppointmentWhereInput = { AND: baseParts };
 
-    const [today, thisWeek, confirmed, scheduled, pendingSupplier] = await Promise.all([
+    const [today, thisWeek, confirmed, scheduled, pendingSupplier, needsRepropose] = await Promise.all([
       this.prisma.serviceAppointment.count({
         where: {
           ...base,
@@ -348,6 +355,9 @@ export class AppointmentsService {
       this.prisma.serviceAppointment.count({
         where: { ...base, status: ServiceAppointmentStatus.pending_supplier },
       }),
+      this.prisma.serviceAppointment.count({
+        where: { ...base, status: ServiceAppointmentStatus.needs_repropose },
+      }),
     ]);
 
     return {
@@ -356,6 +366,7 @@ export class AppointmentsService {
       confirmed,
       scheduled,
       pendingSupplier,
+      needsRepropose,
       awaitingConfirm: scheduled,
     };
   }

@@ -97,10 +97,16 @@ export function AppointmentQueueList({
               {a.cancellationRequestedAt ? (
                 <p className="mt-1 text-[10px] font-medium text-rose-300">Anulare solicitată de furnizor</p>
               ) : null}
+              {a.status === "needs_repropose" || a.driverDeclinedAt ? (
+                <p className="mt-1 text-[10px] font-medium text-rose-300">
+                  Șofer nu poate{a.driverDeclineNote ? `: ${a.driverDeclineNote}` : ""}
+                </p>
+              ) : null}
 
               {canWrite ? (
                 <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-                  {a.status === "pending_supplier" && onSupplierValidate ? (
+                  {(a.status === "pending_supplier" || a.status === "needs_repropose") &&
+                  onSupplierValidate ? (
                     <button
                       type="button"
                       onClick={() => onSupplierValidate(a.id)}

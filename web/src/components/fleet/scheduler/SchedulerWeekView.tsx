@@ -174,7 +174,7 @@ export function SchedulerWeekView({
       !!onReschedule &&
       a.status !== "cancelled" &&
       a.status !== "completed" &&
-      !(partnerMode && a.status === "pending_supplier"),
+      !(partnerMode && (a.status === "pending_supplier" || a.status === "needs_repropose")),
     [canWrite, onReschedule, partnerMode],
   );
 
@@ -477,7 +477,9 @@ export function SchedulerWeekView({
               {ctxMenu.appt.sourceTicketId ? "Deschide tichet" : "Deschide WO"}
             </button>
           ) : null}
-          {canWrite && onSupplierValidate && ctxMenu.appt.status === "pending_supplier" ? (
+          {canWrite &&
+          onSupplierValidate &&
+          (ctxMenu.appt.status === "pending_supplier" || ctxMenu.appt.status === "needs_repropose") ? (
             <button
               type="button"
               className="block w-full px-3 py-1.5 text-left text-xs text-sky-300 hover:bg-zinc-800"

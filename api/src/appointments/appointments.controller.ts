@@ -20,6 +20,7 @@ import type { AccessContext } from '../iam/access-context.types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { resolvePartnerSupplierIdsFilter, parseSupplierIdsQuery } from '../iam/partner-access';
 import { AppointmentsService } from './appointments.service';
+import { parseServiceAppointmentStatus } from './appointment-status.utils';
 import type {
   CreateCalendarAppointmentInput,
   UpdateCalendarAppointmentInput,
@@ -27,18 +28,9 @@ import type {
 
 function parseStatus(raw?: string): ServiceAppointmentStatus | undefined {
   if (!raw?.trim()) return undefined;
-  const v = raw.trim() as ServiceAppointmentStatus;
-  if (
-    v === 'scheduled' ||
-    v === 'pending_supplier' ||
-    v === 'confirmed' ||
-    v === 'completed' ||
-    v === 'cancelled' ||
-    v === 'no_show'
-  ) {
-    return v;
-  }
-  throw new BadRequestException('Invalid status');
+  const v = parseServiceAppointmentStatus(raw);
+  if (!v) throw new BadRequestException('Invalid status');
+  return v;
 }
 
 function parseSupplierIds(raw?: string): string[] | undefined {

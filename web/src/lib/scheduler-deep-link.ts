@@ -59,6 +59,7 @@ export function parseSchedulerInboxParam(raw?: string | null): SchedulerInboxFil
   if (raw === "action") return "action";
   const allowed: AppointmentStatus[] = [
     "pending_supplier",
+    "needs_repropose",
     "scheduled",
     "confirmed",
     "completed",

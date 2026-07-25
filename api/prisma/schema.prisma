@@ -1362,6 +1362,7 @@ enum ServiceAppointmentStatus {
   scheduled
   pending_supplier
   confirmed
+  needs_repropose
   completed
   cancelled
   no_show
@@ -1399,6 +1400,9 @@ model ServiceAppointment {
   notes                String?
   managerConfirmedAt   DateTime?
   driverAcknowledgedAt DateTime?
+  driverDeclinedAt     DateTime?
+  driverDeclineNote    String?
+  lastProposalNote     String?
   recurrenceRule       ServiceAppointmentRecurrence @default(none)
   recurrenceSeriesId   String?
   createdAt            DateTime                     @default(now())

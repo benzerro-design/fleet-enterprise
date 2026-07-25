@@ -65,13 +65,20 @@ async function loadPendingAppointments(
   try {
     const from = new Date().toISOString();
     const to = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
-    const p = partnerSupplierSearchParams(q);
-    p.set("from", from);
-    p.set("to", to);
-    p.set("status", "pending_supplier");
-    const res = await fleetServerFetch(`/appointments/calendar?${p.toString()}`);
-    if (!res?.ok) return [];
-    return (await res.json()) as CalendarAppointment[];
+    const base = partnerSupplierSearchParams(q);
+    base.set("from", from);
+    base.set("to", to);
+    const [pendingRes, declinedRes] = await Promise.all([
+      fleetServerFetch(`/appointments/calendar?${new URLSearchParams({ ...Object.fromEntries(base), status: "pending_supplier" })}`),
+      fleetServerFetch(`/appointments/calendar?${new URLSearchParams({ ...Object.fromEntries(base), status: "needs_repropose" })}`),
+    ]);
+    const pending = pendingRes?.ok ? ((await pendingRes.json()) as CalendarAppointment[]) : [];
+    const declined = declinedRes?.ok ? ((await declinedRes.json()) as CalendarAppointment[]) : [];
+    const byId = new Map<string, CalendarAppointment>();
+    for (const a of [...declined, ...pending]) byId.set(a.id, a);
+    return Array.from(byId.values()).sort(
+      (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
+    );
   } catch {
     return [];
   }
@@ -168,12 +175,21 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
   const woBase = `/fleet/partner/work-orders${qs}`;
   const apptBase = `/fleet/partner/appointments${qs}`;
   const pendingSupplier = apptStats?.pendingSupplier ?? 0;
+  const needsRepropose = apptStats?.needsRepropose ?? 0;
   const actionItems = [
     pendingSupplier > 0
       ? {
           href: `${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=pending_supplier`,
           label: "Programări de validat",
           count: pendingSupplier,
+          tone: "amber" as const,
+        }
+      : null,
+    needsRepropose > 0
+      ? {
+          href: `${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=needs_repropose`,
+          label: "Șofer nu poate — reprogramare",
+          count: needsRepropose,
           tone: "amber" as const,
         }
       : null,

@@ -114,6 +114,9 @@ export type ServiceAppointmentRecord = {
   notes: string | null;
   managerConfirmedAt: string | null;
   driverAcknowledgedAt: string | null;
+  driverDeclinedAt: string | null;
+  driverDeclineNote: string | null;
+  lastProposalNote: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -134,6 +137,16 @@ export type SupplierValidateAppointmentInput = {
   scheduledAt?: string;
   durationMin?: number;
   notes?: string | null;
+};
+
+export type DeclineAppointmentInput = {
+  note: string;
+};
+
+export type ReproposeAppointmentInput = {
+  scheduledAt: string;
+  durationMin?: number;
+  note?: string | null;
 };
 
 export type RequestCancelAppointmentInput = {
@@ -764,6 +777,14 @@ export class ServiceCasesService {
     if (existing.status === ServiceAppointmentStatus.cancelled) {
       throw new BadRequestException('Cannot confirm cancelled appointment');
     }
+    if (
+      existing.status === ServiceAppointmentStatus.needs_repropose ||
+      existing.driverDeclinedAt
+    ) {
+      throw new BadRequestException(
+        'Programarea a fost refuzată de șofer — propuneți o nouă dată.',
+      );
+    }
     if (existing.status === ServiceAppointmentStatus.pending_supplier) {
       throw new BadRequestException(
         'Programarea trebuie validată de furnizor înainte de confirmare.',
@@ -840,7 +861,10 @@ export class ServiceCasesService {
       include: { serviceCase: true },
     });
     if (!existing) throw new NotFoundException('Appointment not found');
-    if (existing.status !== ServiceAppointmentStatus.pending_supplier) {
+    const canValidate =
+      existing.status === ServiceAppointmentStatus.pending_supplier ||
+      existing.status === ServiceAppointmentStatus.needs_repropose;
+    if (!canValidate) {
       throw new BadRequestException('Appointment is not awaiting supplier validation');
     }
     if (access) {
@@ -879,6 +903,8 @@ export class ServiceCasesService {
           notes: dto.notes !== undefined ? dto.notes?.trim() || null : undefined,
           managerConfirmedAt: null,
           driverAcknowledgedAt: null,
+          driverDeclinedAt: null,
+          driverDeclineNote: null,
         },
       });
 
@@ -1020,6 +1046,12 @@ export class ServiceCasesService {
     if (access && !canAckAppointmentAsDriver(access, existing.serviceCase.clientId)) {
       throw new ForbiddenException('Cannot acknowledge appointment');
     }
+    if (
+      existing.status === ServiceAppointmentStatus.needs_repropose ||
+      existing.driverDeclinedAt
+    ) {
+      throw new BadRequestException('Appointment was declined — awaiting manager reproposal');
+    }
 
     let woCreated = false;
     await this.prisma.$transaction(async (tx) => {
@@ -1051,6 +1083,201 @@ export class ServiceCasesService {
         );
       }
     }
+
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: existing.serviceCaseId },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded!);
+  }
+
+  async declineAppointment(
+    tenantSlug: string,
+    appointmentId: string,
+    dto: DeclineAppointmentInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const existing = await this.prisma.serviceAppointment.findFirst({
+      where: { id: appointmentId, tenantId: tenant.id },
+      include: { serviceCase: true },
+    });
+    if (!existing) throw new NotFoundException('Appointment not found');
+    if (access && !canAckAppointmentAsDriver(access, existing.serviceCase.clientId)) {
+      throw new ForbiddenException('Cannot decline appointment');
+    }
+
+    const note = dto.note?.trim() ?? '';
+    if (note.length < 3) {
+      throw new BadRequestException('Decline note is required (min 3 characters)');
+    }
+
+    if (!existing.managerConfirmedAt) {
+      throw new BadRequestException('Appointment is not manager-confirmed yet');
+    }
+    if (existing.driverAcknowledgedAt) {
+      throw new BadRequestException('Appointment already acknowledged by driver');
+    }
+    if (existing.driverDeclinedAt || existing.status === ServiceAppointmentStatus.needs_repropose) {
+      throw new BadRequestException('Appointment already declined');
+    }
+    const declineAllowed =
+      existing.status === ServiceAppointmentStatus.confirmed ||
+      (existing.status === ServiceAppointmentStatus.scheduled && !!existing.managerConfirmedAt);
+    if (!declineAllowed) {
+      throw new BadRequestException('Appointment cannot be declined in current status');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.serviceAppointment.update({
+        where: { id: appointmentId },
+        data: {
+          status: ServiceAppointmentStatus.needs_repropose,
+          driverDeclinedAt: new Date(),
+          driverDeclineNote: note,
+          managerConfirmedAt: null,
+          driverAcknowledgedAt: null,
+        },
+      });
+
+      if (existing.serviceCase.sourceTicketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: existing.serviceCase.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Șoferul a refuzat programarea (${existing.scheduledAt.toLocaleString('ro-RO')}): ${note}`,
+            payload: {
+              appointmentId,
+              serviceCaseId: existing.serviceCaseId,
+              driverDeclined: true,
+              note,
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_appointment.decline',
+      entityType: 'service_appointment',
+      entityId: appointmentId,
+      meta: { serviceCaseId: existing.serviceCaseId, note },
+    });
+
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: existing.serviceCaseId },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded!);
+  }
+
+  async reproposeAppointment(
+    tenantSlug: string,
+    appointmentId: string,
+    dto: ReproposeAppointmentInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const existing = await this.prisma.serviceAppointment.findFirst({
+      where: { id: appointmentId, tenantId: tenant.id },
+      include: { serviceCase: true },
+    });
+    if (!existing) throw new NotFoundException('Appointment not found');
+    if (access) assertServiceCaseWrite(access, existing.serviceCase.clientId);
+
+    const canRepropose =
+      existing.status === ServiceAppointmentStatus.needs_repropose ||
+      !!existing.driverDeclinedAt;
+    if (!canRepropose) {
+      throw new BadRequestException('Appointment is not awaiting reproposal');
+    }
+
+    const scheduledAt = new Date(dto.scheduledAt);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new BadRequestException('Invalid scheduledAt');
+    }
+
+    let durationMin = existing.durationMin;
+    if (dto.durationMin !== undefined) {
+      if (!Number.isInteger(dto.durationMin) || dto.durationMin < 15 || dto.durationMin > 24 * 60) {
+        throw new BadRequestException('durationMin must be between 15 and 1440');
+      }
+      durationMin = dto.durationMin;
+    }
+
+    const proposalNote = dto.note?.trim() || null;
+    const priorDeclineNote = existing.driverDeclineNote;
+    const nextStatus = existing.supplierId
+      ? ServiceAppointmentStatus.pending_supplier
+      : ServiceAppointmentStatus.scheduled;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.serviceAppointment.update({
+        where: { id: appointmentId },
+        data: {
+          scheduledAt,
+          durationMin,
+          status: nextStatus,
+          lastProposalNote: proposalNote,
+          driverDeclinedAt: null,
+          driverDeclineNote: null,
+          managerConfirmedAt: null,
+          driverAcknowledgedAt: null,
+          supplierValidatedAt: null,
+          proposedByRole: nextStatus === ServiceAppointmentStatus.pending_supplier
+            ? proposedByFromAccess(access)
+            : existing.proposedByRole,
+        },
+      });
+
+      await tx.maintenanceWorkOrder.updateMany({
+        where: { serviceCaseId: existing.serviceCaseId },
+        data: { plannedAt: scheduledAt },
+      });
+
+      if (existing.serviceCase.sourceTicketId) {
+        const body = proposalNote
+          ? `Managerul a repropus programarea: ${scheduledAt.toLocaleString('ro-RO')}. ${proposalNote}`
+          : `Managerul a repropus programarea: ${scheduledAt.toLocaleString('ro-RO')}.`;
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: existing.serviceCase.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body,
+            payload: {
+              appointmentId,
+              serviceCaseId: existing.serviceCaseId,
+              reproposed: true,
+              note: proposalNote,
+              priorDeclineNote,
+              scheduledAt: scheduledAt.toISOString(),
+              status: nextStatus,
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_appointment.repropose',
+      entityType: 'service_appointment',
+      entityId: appointmentId,
+      meta: { serviceCaseId: existing.serviceCaseId, scheduledAt: scheduledAt.toISOString(), note: proposalNote },
+    });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
       where: { id: existing.serviceCaseId },
@@ -1341,6 +1568,9 @@ export class ServiceCasesService {
     notes: string | null;
     managerConfirmedAt?: Date | null;
     driverAcknowledgedAt?: Date | null;
+    driverDeclinedAt?: Date | null;
+    driverDeclineNote?: string | null;
+    lastProposalNote?: string | null;
     createdAt: Date;
     updatedAt: Date;
     supplier?: { legalName: string } | null;
@@ -1367,6 +1597,9 @@ export class ServiceCasesService {
       notes: row.notes,
       managerConfirmedAt: row.managerConfirmedAt?.toISOString() ?? null,
       driverAcknowledgedAt: row.driverAcknowledgedAt?.toISOString() ?? null,
+      driverDeclinedAt: row.driverDeclinedAt?.toISOString() ?? null,
+      driverDeclineNote: row.driverDeclineNote ?? null,
+      lastProposalNote: row.lastProposalNote ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

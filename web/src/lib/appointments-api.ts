@@ -3,6 +3,7 @@ export const appointmentsBrowserBase = "/api/appointments";
 export type AppointmentStatus =
   | "scheduled"
   | "pending_supplier"
+  | "needs_repropose"
   | "confirmed"
   | "completed"
   | "cancelled"
@@ -50,6 +51,9 @@ export type CalendarAppointment = {
   cancellationRequestNote: string | null;
   managerConfirmedAt: string | null;
   driverAcknowledgedAt: string | null;
+  driverDeclinedAt: string | null;
+  driverDeclineNote: string | null;
+  lastProposalNote: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -62,11 +66,13 @@ export type AppointmentStats = {
   scheduled: number;
   pendingSupplier: number;
   awaitingConfirm: number;
+  needsRepropose: number;
 };
 
 export const APPOINTMENT_STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "scheduled", label: "Programat" },
   { value: "pending_supplier", label: "Așteaptă furnizor" },
+  { value: "needs_repropose", label: "Șofer nu poate — reprogramare" },
   { value: "confirmed", label: "Confirmat" },
   { value: "completed", label: "Finalizat" },
   { value: "cancelled", label: "Anulat" },

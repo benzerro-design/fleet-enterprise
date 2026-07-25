@@ -53,7 +53,12 @@ type Props = {
 function filterByInbox(items: CalendarAppointment[], inbox: SchedulerInboxFilter): CalendarAppointment[] {
   if (inbox === "all") return items;
   if (inbox === "action") {
-    return items.filter((a) => a.status === "pending_supplier" || a.status === "scheduled");
+    return items.filter(
+      (a) =>
+        a.status === "pending_supplier" ||
+        a.status === "needs_repropose" ||
+        a.status === "scheduled",
+    );
   }
   return items.filter((a) => a.status === inbox);
 }

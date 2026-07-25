@@ -150,6 +150,42 @@ export class ServiceCasesController {
     return this.serviceCases.acknowledgeAppointment(tenantSlug, appointmentId, actorUserId, access);
   }
 
+  @Post('appointments/:appointmentId/decline')
+  @Roles(...FLEET_WRITE_ROLES)
+  declineAppointment(
+    @TenantId() tenantSlug: string,
+    @Param('appointmentId') appointmentId: string,
+    @Body() body: { note: string },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.declineAppointment(
+      tenantSlug,
+      appointmentId,
+      body,
+      actorUserId,
+      access,
+    );
+  }
+
+  @Post('appointments/:appointmentId/repropose')
+  @Roles(...FLEET_WRITE_ROLES)
+  reproposeAppointment(
+    @TenantId() tenantSlug: string,
+    @Param('appointmentId') appointmentId: string,
+    @Body() body: { scheduledAt: string; durationMin?: number; note?: string | null },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.reproposeAppointment(
+      tenantSlug,
+      appointmentId,
+      body,
+      actorUserId,
+      access,
+    );
+  }
+
   @Patch('appointments/:appointmentId')
   @Roles(...FLEET_WRITE_ROLES)
   updateAppointment(

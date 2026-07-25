@@ -219,8 +219,40 @@ export function SchedulerInspector({
 
   async function saveReschedule() {
     if (!editScheduledAt || !appointment) return;
-    if (appointment.status === "pending_supplier" && partnerMode) {
+    if (
+      (appointment.status === "pending_supplier" || appointment.status === "needs_repropose") &&
+      partnerMode
+    ) {
       await supplierValidateWithReschedule();
+      return;
+    }
+    if (appointment.status === "needs_repropose" && !partnerMode) {
+      setPending(true);
+      setError(null);
+      try {
+        const res = await fetch(
+          `${serviceCasesBrowserBase}/appointments/${appointment.id}/repropose`,
+          {
+            method: "POST",
+            headers: fleetJsonHeaders(),
+            body: JSON.stringify({
+              scheduledAt: new Date(editScheduledAt).toISOString(),
+              durationMin: parseInt(editDurationMin, 10) || 60,
+              note: null,
+            }),
+          },
+        );
+        if (!res.ok) {
+          const j = (await res.json()) as { message?: string };
+          setError(j.message ?? `HTTP ${res.status}`);
+          return;
+        }
+        setEditing(false);
+        onRescheduleEditingChange?.(false);
+        onUpdated();
+      } finally {
+        setPending(false);
+      }
       return;
     }
     await patchAppointment({
@@ -534,7 +566,13 @@ export function SchedulerInspector({
               onClick={() => void saveReschedule()}
               className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              {appointment?.status === "pending_supplier" && partnerMode ? "Trimite reprogramare" : "Salvează"}
+              {appointment?.status === "pending_supplier" || appointment?.status === "needs_repropose"
+                ? partnerMode
+                  ? "Trimite reprogramare"
+                  : appointment.status === "needs_repropose"
+                    ? "Trimite propunere"
+                    : "Salvează"
+                : "Salvează"}
             </button>
             <button
               type="button"
@@ -595,6 +633,20 @@ export function SchedulerInspector({
                 ? `: ${appointment.cancellationRequestNote}`
                 : ""}
               {!partnerMode ? " — confirmați cu Anulează dacă sunteți de acord." : " — așteaptă decizia flotei."}
+            </p>
+          ) : null}
+          {appointment.status === "needs_repropose" || appointment.driverDeclinedAt ? (
+            <p className="mt-1 rounded border border-rose-800/50 bg-rose-950/30 px-2 py-1 text-[10px] text-rose-200">
+              Șoferul nu poate la data programată
+              {appointment.driverDeclineNote ? `: ${appointment.driverDeclineNote}` : "."}
+              {partnerMode
+                ? " — așteaptă propunere flotă sau repropune tu un slot."
+                : " — propune altă dată (Repropune / Propune)."}
+            </p>
+          ) : null}
+          {appointment.lastProposalNote ? (
+            <p className="mt-1 rounded border border-zinc-700 bg-zinc-900/50 px-2 py-1 text-[10px] text-zinc-300">
+              Ultima notă propunere: {appointment.lastProposalNote}
             </p>
           ) : null}
         </div>
@@ -731,7 +783,7 @@ export function SchedulerInspector({
 
       {canWrite ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          {appointment.status === "pending_supplier" ? (
+          {appointment.status === "pending_supplier" || appointment.status === "needs_repropose" ? (
             <>
               <button
                 type="button"
@@ -750,7 +802,7 @@ export function SchedulerInspector({
                   }}
                   className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
                 >
-                  Repropune dată
+                  {appointment.status === "needs_repropose" ? "Propune / repropune dată" : "Repropune dată"}
                 </button>
               ) : null}
             </>

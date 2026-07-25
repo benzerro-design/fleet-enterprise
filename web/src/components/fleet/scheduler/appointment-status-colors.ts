@@ -5,6 +5,8 @@ export function appointmentStatusAccentClass(status: AppointmentStatus | string)
   switch (status) {
     case "pending_supplier":
       return "border-l-amber-500 bg-amber-950/35";
+    case "needs_repropose":
+      return "border-l-rose-500 bg-rose-950/30";
     case "scheduled":
       return "border-l-sky-500 bg-sky-950/30";
     case "confirmed":
@@ -24,6 +26,8 @@ export function appointmentStatusBadgeClass(status: AppointmentStatus | string):
   switch (status) {
     case "pending_supplier":
       return "bg-amber-950/60 text-amber-200 border-amber-800/50";
+    case "needs_repropose":
+      return "bg-rose-950/50 text-rose-200 border-rose-800/50";
     case "scheduled":
       return "bg-sky-950/60 text-sky-200 border-sky-800/50";
     case "confirmed":
@@ -41,6 +45,7 @@ export function appointmentStatusBadgeClass(status: AppointmentStatus | string):
 
 export const APPOINTMENT_STATUS_LEGEND: { status: AppointmentStatus; label: string }[] = [
   { status: "pending_supplier", label: "De validat (furnizor)" },
+  { status: "needs_repropose", label: "Șofer nu poate" },
   { status: "scheduled", label: "De confirmat (manager)" },
   { status: "confirmed", label: "Confirmat" },
   { status: "completed", label: "Finalizat" },

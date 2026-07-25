@@ -25,6 +25,7 @@ import { formatDateRo } from "@/lib/datetime-local";
 import { mobilityBrowserBase, type MobilityEligibilityRecord } from "@/lib/mobility-api";
 import { roadsideBrowserBase, type RoadsideInterventionRecord } from "@/lib/roadside-api";
 import { fleetJsonHeaders as ticketFleetHeaders, ticketsBrowserBase, type TicketLinkRecord } from "@/lib/tickets-api";
+import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
 
 type Props = {
   ticketId: string;
@@ -65,6 +66,11 @@ export function TicketWorkflowStepper({
   const [appointmentNotes, setAppointmentNotes] = useState("");
   const [mobilityEligibility, setMobilityEligibility] = useState<MobilityEligibilityRecord | null>(null);
   const [roadsideItems, setRoadsideItems] = useState<RoadsideInterventionRecord[]>([]);
+  const [declineApptId, setDeclineApptId] = useState<string | null>(null);
+  const [declineNote, setDeclineNote] = useState("");
+  const [reproposeApptId, setReproposeApptId] = useState<string | null>(null);
+  const [reproposeAt, setReproposeAt] = useState("");
+  const [reproposeNote, setReproposeNote] = useState("");
 
   const loadMobility = useCallback(async (workOrderId: string) => {
     try {
@@ -315,6 +321,81 @@ export function TicketWorkflowStepper({
       }
       const data = (await res.json()) as ServiceCaseRecord;
       setServiceCase(data);
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function declineAppointment(appointmentId: string) {
+    const note = declineNote.trim();
+    if (note.length < 3) {
+      setError("Nota pentru refuz trebuie să aibă cel puțin 3 caractere.");
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${serviceCasesBrowserBase}/appointments/${appointmentId}/decline`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ note }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+          else if (Array.isArray(j.message)) msg = j.message.join(", ");
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const data = (await res.json()) as ServiceCaseRecord;
+      setServiceCase(data);
+      setDeclineApptId(null);
+      setDeclineNote("");
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function reproposeAppointment(appointmentId: string) {
+    if (!reproposeAt) {
+      setError("Alege data și ora pentru reprogramare.");
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${serviceCasesBrowserBase}/appointments/${appointmentId}/repropose`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({
+          scheduledAt: new Date(reproposeAt).toISOString(),
+          note: reproposeNote.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+          else if (Array.isArray(j.message)) msg = j.message.join(", ");
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const data = (await res.json()) as ServiceCaseRecord;
+      setServiceCase(data);
+      setReproposeApptId(null);
+      setReproposeAt("");
+      setReproposeNote("");
       router.refresh();
     } finally {
       setPending(false);
@@ -602,7 +683,12 @@ export function TicketWorkflowStepper({
                       {appt.location ? ` · ${appt.location}` : ""}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500">
-                      {appt.status === "pending_supplier" ? (
+                      {appt.status === "needs_repropose" ? (
+                        <span className="text-rose-300">
+                          Șoferul nu poate
+                          {appt.driverDeclineNote ? `: ${appt.driverDeclineNote}` : ""}
+                        </span>
+                      ) : appt.status === "pending_supplier" ? (
                         <span className="text-amber-400/90">Așteaptă validare furnizor</span>
                       ) : appt.managerConfirmedAt ? (
                         <span className="text-emerald-400/90">Confirmat manager</span>
@@ -611,13 +697,17 @@ export function TicketWorkflowStepper({
                       )}
                       {appt.driverAcknowledgedAt ? (
                         <span className="text-sky-400/90">Confirmat șofer</span>
-                      ) : (
+                      ) : appt.status !== "needs_repropose" ? (
                         <span>Fără confirmare șofer</span>
-                      )}
+                      ) : null}
+                      {appt.lastProposalNote ? (
+                        <span className="w-full text-zinc-400">Notă propunere: {appt.lastProposalNote}</span>
+                      ) : null}
                     </div>
                     {!closed && appt.status !== "cancelled" ? (
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {canOperate && appt.status === "pending_supplier" ? (
+                        {canOperate &&
+                        (appt.status === "pending_supplier" || appt.status === "needs_repropose") ? (
                           <button
                             type="button"
                             disabled={pending}
@@ -639,23 +729,140 @@ export function TicketWorkflowStepper({
                             Confirmă programarea
                           </button>
                         ) : null}
-                        {canAckAppointment && appt.managerConfirmedAt && !appt.driverAcknowledgedAt ? (
+                        {canAckAppointment &&
+                        appt.managerConfirmedAt &&
+                        !appt.driverAcknowledgedAt &&
+                        appt.status !== "needs_repropose" &&
+                        !appt.driverDeclinedAt ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => void acknowledgeAppointment(appt.id)}
+                              className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                            >
+                              Confirmă primire (șofer)
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => {
+                                setDeclineApptId(appt.id);
+                                setDeclineNote("");
+                                setReproposeApptId(null);
+                              }}
+                              className="rounded-lg border border-rose-500/40 px-2.5 py-1 text-xs text-rose-200 hover:bg-rose-950/40 disabled:opacity-50"
+                            >
+                              Nu pot la data asta
+                            </button>
+                          </>
+                        ) : null}
+                        {canOperate && appt.status === "needs_repropose" ? (
                           <button
                             type="button"
                             disabled={pending}
-                            onClick={() => void acknowledgeAppointment(appt.id)}
-                            className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                            onClick={() => {
+                              setReproposeApptId(appt.id);
+                              setReproposeAt(toDatetimeLocalValue(appt.scheduledAt));
+                              setReproposeNote("");
+                              setDeclineApptId(null);
+                            }}
+                            className="rounded-lg border border-amber-500/40 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-950/40 disabled:opacity-50"
                           >
-                            Confirmă primire (șofer)
+                            Propune altă dată
                           </button>
                         ) : null}
                         {appt.managerConfirmedAt &&
                         !appt.driverAcknowledgedAt &&
+                        appt.status !== "needs_repropose" &&
                         serviceCase.workOrders.length === 0 &&
                         !inRescheduleLoop ? (
                           <p className="w-full text-[11px] text-amber-200/90">
                             WO se creează automat după Confirmă primire (șofer) — nu există încă o comandă de deschis.
                           </p>
+                        ) : null}
+                        {declineApptId === appt.id ? (
+                          <div className="w-full space-y-2 rounded-lg border border-rose-800/40 bg-rose-950/20 p-2">
+                            <label className={OPS_LABEL_CLASS}>De ce nu poți? (min. 3 caractere)</label>
+                            <input
+                              className={OPS_INPUT_CLASS}
+                              value={declineNote}
+                              onChange={(e) => setDeclineNote(e.target.value)}
+                              placeholder="ex. cursă lungă, nu ajung dimineața"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={pending}
+                                onClick={() => void declineAppointment(appt.id)}
+                                className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+                              >
+                                Trimite refuz
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeclineApptId(null);
+                                  setDeclineNote("");
+                                }}
+                                className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400"
+                              >
+                                Anulează
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                        {reproposeApptId === appt.id ? (
+                          <div className="w-full space-y-2 rounded-lg border border-amber-800/40 bg-amber-950/20 p-2">
+                            <label className={OPS_LABEL_CLASS}>Dată / oră nouă</label>
+                            <input
+                              type="datetime-local"
+                              className={OPS_INPUT_CLASS}
+                              value={reproposeAt}
+                              onChange={(e) => setReproposeAt(e.target.value)}
+                            />
+                            <label className={OPS_LABEL_CLASS}>Notă (opțional)</label>
+                            <input
+                              className={OPS_INPUT_CLASS}
+                              value={reproposeNote}
+                              onChange={(e) => setReproposeNote(e.target.value)}
+                              placeholder="Context pentru furnizor"
+                            />
+                            <p className="text-[10px] text-zinc-500">
+                              Se trimite din nou la furnizor pentru validare. Poți alege data și din calendar
+                              (Programator).
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={pending || !reproposeAt}
+                                onClick={() => void reproposeAppointment(appt.id)}
+                                className="rounded-lg bg-amber-600 px-2.5 py-1 text-xs font-medium text-zinc-950 hover:bg-amber-500 disabled:opacity-50"
+                              >
+                                Trimite propunere
+                              </button>
+                              <Link
+                                href={schedulerHref({
+                                  week: new Date(appt.scheduledAt),
+                                  select: appt.id,
+                                })}
+                                className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-sky-300 hover:bg-zinc-900"
+                              >
+                                Deschide calendar →
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReproposeApptId(null);
+                                  setReproposeAt("");
+                                  setReproposeNote("");
+                                }}
+                                className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400"
+                              >
+                                Anulează
+                              </button>
+                            </div>
+                          </div>
                         ) : null}
                       </div>
                     ) : null}

@@ -22,6 +22,9 @@ export type CalendarAppointmentRecord = {
   cancellationRequestNote: string | null;
   managerConfirmedAt: string | null;
   driverAcknowledgedAt: string | null;
+  driverDeclinedAt: string | null;
+  driverDeclineNote: string | null;
+  lastProposalNote: string | null;
   location: string | null;
   notes: string | null;
   vehicleId: string;
@@ -60,6 +63,7 @@ export type AppointmentStats = {
   /** @deprecated use awaitingConfirm */
   scheduled: number;
   pendingSupplier: number;
+  needsRepropose: number;
   awaitingConfirm: number;
 };
 

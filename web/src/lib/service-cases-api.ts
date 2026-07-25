@@ -129,6 +129,7 @@ export type WorkOrderRecord = {
 export type ServiceAppointmentStatus =
   | "scheduled"
   | "pending_supplier"
+  | "needs_repropose"
   | "confirmed"
   | "completed"
   | "cancelled"
@@ -153,6 +154,9 @@ export type ServiceAppointmentRecord = {
   notes: string | null;
   managerConfirmedAt: string | null;
   driverAcknowledgedAt: string | null;
+  driverDeclinedAt?: string | null;
+  driverDeclineNote?: string | null;
+  lastProposalNote?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -220,6 +224,7 @@ export function appointmentStatusLabel(status: ServiceAppointmentStatus | string
   const map: Record<string, string> = {
     scheduled: "Programat",
     pending_supplier: "Așteaptă validare furnizor",
+    needs_repropose: "Șofer nu poate — reprogramare",
     confirmed: "Confirmat",
     completed: "Finalizat",
     cancelled: "Anulat",
