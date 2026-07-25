@@ -1314,6 +1314,14 @@ model ServiceCase {
   damageInsurerQuotePdfUrl     String?
   /// Log corespondență asigurător: array { id, at, direction, to, subject, status, quoteId?, note?, pdfUrl? }
   damageInsurerMailLogJson     Json?
+  /// Constatare: pe poze vs inspector la partener.
+  damageInspectionMode              DamageInspectionMode?
+  /// PDF notă de constatare (emisă doar de asigurător).
+  damageInspectionNotePdfUrl        String?
+  damageInspectionNoteFileName      String?
+  damageInspectionNoteIssuedOn      DateTime? @db.Date
+  damageInspectionNoteReceivedAt    DateTime?
+  damageInspectionNoteNotes         String?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1659,6 +1667,11 @@ enum DamageInsurerPipelineStatus {
 enum DamageQuoteOrigin {
   prepared_by_us
   received_from_insurer
+}
+
+enum DamageInspectionMode {
+  photos
+  on_site
 }
 
 enum DamageInsuranceType {

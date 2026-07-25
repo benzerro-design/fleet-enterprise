@@ -163,6 +163,12 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageQuoteOrigin: 'prepared_by_us' | 'received_from_insurer' | null;
   damageInsurerQuotePdfUrl: string | null;
   damageInsurerMailLog: DamageInsurerMailLogItem[];
+  damageInspectionMode: 'photos' | 'on_site' | null;
+  damageInspectionNotePdfUrl: string | null;
+  damageInspectionNoteFileName: string | null;
+  damageInspectionNoteIssuedOn: string | null;
+  damageInspectionNoteReceivedAt: string | null;
+  damageInspectionNoteNotes: string | null;
   quoteSummary: {
     status: string | null;
     version: number | null;
@@ -592,6 +598,12 @@ export class WorkOrdersService {
             damageQuoteOrigin: true,
             damageInsurerQuotePdfUrl: true,
             damageInsurerMailLogJson: true,
+            damageInspectionMode: true,
+            damageInspectionNotePdfUrl: true,
+            damageInspectionNoteFileName: true,
+            damageInspectionNoteIssuedOn: true,
+            damageInspectionNoteReceivedAt: true,
+            damageInspectionNoteNotes: true,
             sourceTicket: {
               select: {
                 subject: true,
@@ -711,6 +723,15 @@ export class WorkOrdersService {
       damageQuoteOrigin: row.serviceCase.damageQuoteOrigin ?? null,
       damageInsurerQuotePdfUrl: row.serviceCase.damageInsurerQuotePdfUrl ?? null,
       damageInsurerMailLog: this.parseDamageInsurerMailLog(row.serviceCase.damageInsurerMailLogJson),
+      damageInspectionMode: row.serviceCase.damageInspectionMode ?? null,
+      damageInspectionNotePdfUrl: row.serviceCase.damageInspectionNotePdfUrl ?? null,
+      damageInspectionNoteFileName: row.serviceCase.damageInspectionNoteFileName ?? null,
+      damageInspectionNoteIssuedOn: row.serviceCase.damageInspectionNoteIssuedOn
+        ? row.serviceCase.damageInspectionNoteIssuedOn.toISOString().slice(0, 10)
+        : null,
+      damageInspectionNoteReceivedAt:
+        row.serviceCase.damageInspectionNoteReceivedAt?.toISOString() ?? null,
+      damageInspectionNoteNotes: row.serviceCase.damageInspectionNoteNotes ?? null,
       quoteSummary: primary
         ? {
             status: primary.status,
@@ -1640,7 +1661,10 @@ export class WorkOrdersService {
         to: o.to,
         subject: o.subject,
         status,
-        kind: o.kind === 'avizare' || o.kind === 'quote' ? o.kind : undefined,
+        kind:
+          o.kind === 'avizare' || o.kind === 'quote' || o.kind === 'reinspection'
+            ? o.kind
+            : undefined,
         quoteId: typeof o.quoteId === 'string' ? o.quoteId : undefined,
         note: typeof o.note === 'string' ? o.note : undefined,
         pdfUrl: typeof o.pdfUrl === 'string' ? o.pdfUrl : undefined,

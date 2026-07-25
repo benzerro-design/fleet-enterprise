@@ -46,14 +46,16 @@ export type DamageInsurerMailLogItem = {
   to: string;
   subject: string;
   status: "sent" | "stubbed" | "failed";
-  /** quote = deviz; avizare = pachet documente+poze. Lipsă → treat as quote (legacy). */
-  kind?: "quote" | "avizare";
+  /** quote = deviz; avizare; reinspection. Lipsă → treat as quote (legacy). */
+  kind?: "quote" | "avizare" | "reinspection";
   quoteId?: string;
   note?: string;
   pdfUrl?: string;
   attachmentUrls?: string[];
   error?: string;
 };
+
+export type DamageInspectionMode = "photos" | "on_site";
 
 export type DamageClaimStatus =
   | "open"
@@ -139,6 +141,12 @@ export type PatchDamageClaimInput = {
   damageInsurerEmail?: string | null;
   damageQuoteOrigin?: DamageQuoteOrigin | null;
   damageInsurerQuotePdfUrl?: string | null;
+  damageInspectionMode?: DamageInspectionMode | null;
+  damageInspectionNotePdfUrl?: string | null;
+  damageInspectionNoteFileName?: string | null;
+  /** YYYY-MM-DD */
+  damageInspectionNoteIssuedOn?: string | null;
+  damageInspectionNoteNotes?: string | null;
   lockSection?: { section: DamageSectionKey | string; lock: boolean };
 };
 
@@ -386,6 +394,12 @@ export type ServiceCaseRecord = {
   damageQuoteOrigin?: DamageQuoteOrigin | null;
   damageInsurerQuotePdfUrl?: string | null;
   damageInsurerMailLog?: DamageInsurerMailLogItem[];
+  damageInspectionMode?: DamageInspectionMode | null;
+  damageInspectionNotePdfUrl?: string | null;
+  damageInspectionNoteFileName?: string | null;
+  damageInspectionNoteIssuedOn?: string | null;
+  damageInspectionNoteReceivedAt?: string | null;
+  damageInspectionNoteNotes?: string | null;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];

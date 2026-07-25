@@ -21,6 +21,7 @@ import {
   type DamageDocumentKind,
   type DamageInsurerMailLogItem,
   type DamageInsurerPipelineStatus,
+  type DamageInspectionMode,
   type DamageInsuranceType,
   type DamagePayerType,
   type DamagePhotoItem,
@@ -105,6 +106,12 @@ export function DamageClaimPanel({
   const [avizareNote, setAvizareNote] = useState("");
   const [avizareDocIds, setAvizareDocIds] = useState<Set<string>>(new Set());
   const [avizarePhotoIds, setAvizarePhotoIds] = useState<Set<string>>(new Set());
+  const [inspectionMode, setInspectionMode] = useState<DamageInspectionMode | "">("");
+  const [inspectionNotePdfUrl, setInspectionNotePdfUrl] = useState<string | null>(null);
+  const [inspectionNoteFileName, setInspectionNoteFileName] = useState<string | null>(null);
+  const [inspectionNoteIssuedOn, setInspectionNoteIssuedOn] = useState("");
+  const [inspectionNoteNotes, setInspectionNoteNotes] = useState("");
+  const [reinspectionNote, setReinspectionNote] = useState("");
   const [docs, setDocs] = useState<DamageDocumentItem[]>([]);
   const [photos, setPhotos] = useState<DamagePhotoItem[]>([]);
   const [locks, setLocks] = useState<DamageSectionLocks>({});
@@ -135,6 +142,11 @@ export function DamageClaimPanel({
     setQuoteOrigin(serviceCase.damageQuoteOrigin ?? "");
     setMailLog(serviceCase.damageInsurerMailLog ?? []);
     setInsurerPdfUrl(serviceCase.damageInsurerQuotePdfUrl ?? null);
+    setInspectionMode(serviceCase.damageInspectionMode ?? "");
+    setInspectionNotePdfUrl(serviceCase.damageInspectionNotePdfUrl ?? null);
+    setInspectionNoteFileName(serviceCase.damageInspectionNoteFileName ?? null);
+    setInspectionNoteIssuedOn(serviceCase.damageInspectionNoteIssuedOn ?? "");
+    setInspectionNoteNotes(serviceCase.damageInspectionNoteNotes ?? "");
     const mergedDocs = mergeDamageDocuments(
       documentKindsForInsurance(serviceCase.damageInsuranceType),
       serviceCase.damageDocuments,
@@ -1018,6 +1030,229 @@ export function DamageClaimPanel({
         </section>
       ) : null}
 
+      {/* Notă de constatare — emisă doar de asigurător */}
+      {!isClientPayer ? (
+        <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Notă de constatare
+          </h4>
+          <p className="text-[11px] text-zinc-500">
+            Document emis exclusiv de asigurător. Încarcă PDF-ul primit pe mail. Pentru daune ușoare
+            constatarea e adesea pe poze; pentru daune serioase, un inspector se deplasează la
+            partener.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className={OPS_LABEL_CLASS}>Mod constatare</span>
+              <select
+                className={OPS_INPUT_CLASS}
+                disabled={disabled}
+                value={inspectionMode}
+                onChange={(e) => setInspectionMode(e.target.value as DamageInspectionMode | "")}
+              >
+                <option value="">—</option>
+                <option value="photos">Pe baza pozelor / documentelor</option>
+                <option value="on_site">Inspector la partener</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className={OPS_LABEL_CLASS}>Data emiterii (opțional)</span>
+              <input
+                type="date"
+                className={OPS_INPUT_CLASS}
+                disabled={disabled}
+                value={inspectionNoteIssuedOn}
+                onChange={(e) => setInspectionNoteIssuedOn(e.target.value)}
+              />
+            </label>
+          </div>
+          <label className="block">
+            <span className={OPS_LABEL_CLASS}>Notă internă / nr. referință (opțional)</span>
+            <input
+              className={OPS_INPUT_CLASS}
+              disabled={disabled}
+              value={inspectionNoteNotes}
+              onChange={(e) => setInspectionNoteNotes(e.target.value)}
+              placeholder="ex. nr. dosar constatare asigurător"
+            />
+          </label>
+          {inspectionNotePdfUrl ? (
+            <p className="text-xs text-zinc-300">
+              PDF pe dosar:{" "}
+              <a
+                href={inspectionNotePdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-400 hover:underline"
+              >
+                {inspectionNoteFileName ?? "deschide"}
+              </a>
+              {serviceCase.damageInspectionNoteReceivedAt ? (
+                <span className="ml-2 text-zinc-500">
+                  · primit{" "}
+                  {new Date(serviceCase.damageInspectionNoteReceivedAt).toLocaleString("ro-RO", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })}
+                </span>
+              ) : null}
+            </p>
+          ) : (
+            <p className="text-xs text-amber-400/90">Așteptăm nota de la asigurător.</p>
+          )}
+          {canWrite ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  void patch(
+                    {
+                      damageInspectionMode: inspectionMode || null,
+                      damageInspectionNoteIssuedOn: inspectionNoteIssuedOn.trim() || null,
+                      damageInspectionNoteNotes: inspectionNoteNotes.trim() || null,
+                    },
+                    "Date constatare salvate.",
+                  )
+                }
+                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Salvează constatare
+              </button>
+              <label className="cursor-pointer rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
+                {uploading ? "Se încarcă…" : inspectionNotePdfUrl ? "Înlocuiește PDF" : "Încarcă PDF notă"}
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  disabled={disabled || uploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void (async () => {
+                      setUploading(true);
+                      setError(null);
+                      try {
+                        const up = await uploadDocumentFile(file, "Notă constatare asigurător");
+                        const next = await patch(
+                          {
+                            damageInspectionMode: inspectionMode || null,
+                            damageInspectionNotePdfUrl: up.url,
+                            damageInspectionNoteFileName: up.name,
+                            damageInspectionNoteIssuedOn: inspectionNoteIssuedOn.trim() || null,
+                            damageInspectionNoteNotes: inspectionNoteNotes.trim() || null,
+                          },
+                          "Notă de constatare înregistrată pe dosar.",
+                        );
+                        if (next) {
+                          setInspectionNotePdfUrl(next.damageInspectionNotePdfUrl ?? up.url);
+                          setInspectionNoteFileName(
+                            next.damageInspectionNoteFileName ?? up.name,
+                          );
+                          setPipeline(next.damageInsurerPipelineStatus ?? "inspection_note");
+                        }
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Upload eșuat.");
+                      } finally {
+                        setUploading(false);
+                        e.target.value = "";
+                      }
+                    })();
+                  }}
+                />
+              </label>
+              {inspectionNotePdfUrl ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  className="text-[11px] text-rose-400 hover:underline disabled:opacity-50"
+                  onClick={() =>
+                    void (async () => {
+                      const next = await patch(
+                        {
+                          damageInspectionNotePdfUrl: null,
+                          damageInspectionNoteFileName: null,
+                        },
+                        "PDF notă de constatare șters.",
+                      );
+                      if (next) {
+                        setInspectionNotePdfUrl(null);
+                        setInspectionNoteFileName(null);
+                      }
+                    })()
+                  }
+                >
+                  Șterge PDF
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {canWrite ? (
+            <div className="space-y-2 border-t border-zinc-800 pt-3">
+              <label className="block">
+                <span className={OPS_LABEL_CLASS}>Motiv reconstatare (opțional)</span>
+                <input
+                  className={OPS_INPUT_CLASS}
+                  disabled={disabled}
+                  value={reinspectionNote}
+                  onChange={(e) => setReinspectionNote(e.target.value)}
+                  placeholder="ex. daună ascunsă / diferențe față de poze"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={pending || !insurerEmail.trim()}
+                onClick={() => {
+                  void (async () => {
+                    setPending(true);
+                    setError(null);
+                    setOk(null);
+                    try {
+                      const res = await fetch(
+                        `${serviceCasesBrowserBase}/${serviceCase!.id}/damage-claim/request-reinspection`,
+                        {
+                          method: "POST",
+                          headers: fleetJsonHeaders(),
+                          body: JSON.stringify({
+                            note: reinspectionNote.trim() || null,
+                          }),
+                        },
+                      );
+                      if (!res.ok) {
+                        let msg = `HTTP ${res.status}`;
+                        try {
+                          const j = (await res.json()) as { message?: string | string[] };
+                          if (j.message)
+                            msg = Array.isArray(j.message) ? j.message.join(", ") : j.message;
+                        } catch {
+                          /* ignore */
+                        }
+                        setError(msg);
+                        return;
+                      }
+                      const next = (await res.json()) as ServiceCaseRecord;
+                      onUpdated?.(next);
+                      setMailLog(next.damageInsurerMailLog ?? []);
+                      setPipeline(next.damageInsurerPipelineStatus ?? "reinspection_requested");
+                      setOk(
+                        next.damageInsurerMailLog?.[0]?.status === "stubbed"
+                          ? "Reconstatare înregistrată (SMTP neconfigurat)."
+                          : "Reconstatare solicitată către asigurător.",
+                      );
+                    } finally {
+                      setPending(false);
+                    }
+                  })();
+                }}
+                className="rounded-lg border border-amber-600/50 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
+              >
+                Solicită reconstatare
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* Deviz asigurător — 2 origini */}
       {!isClientPayer ? (
         <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
@@ -1196,7 +1431,11 @@ export function DamageClaimPanel({
                   </span>
                   {" · "}
                   <span className="text-zinc-500">
-                    {m.kind === "avizare" ? "avizare" : "deviz"}
+                    {m.kind === "avizare"
+                      ? "avizare"
+                      : m.kind === "reinspection"
+                        ? "reconstatare"
+                        : "deviz"}
                   </span>
                   {" → "}
                   {m.to}
@@ -1346,6 +1585,12 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   damageQuoteOrigin?: DamageQuoteOrigin | null;
   damageInsurerQuotePdfUrl?: string | null;
   damageInsurerMailLog?: DamageInsurerMailLogItem[];
+  damageInspectionMode?: DamageInspectionMode | null;
+  damageInspectionNotePdfUrl?: string | null;
+  damageInspectionNoteFileName?: string | null;
+  damageInspectionNoteIssuedOn?: string | null;
+  damageInspectionNoteReceivedAt?: string | null;
+  damageInspectionNoteNotes?: string | null;
 }): ServiceCaseRecord {
   return {
     id: wo.serviceCaseId,
@@ -1379,6 +1624,12 @@ export function serviceCaseFromWorkOrderDamage(wo: {
     damageQuoteOrigin: wo.damageQuoteOrigin ?? null,
     damageInsurerQuotePdfUrl: wo.damageInsurerQuotePdfUrl ?? null,
     damageInsurerMailLog: wo.damageInsurerMailLog ?? [],
+    damageInspectionMode: wo.damageInspectionMode ?? null,
+    damageInspectionNotePdfUrl: wo.damageInspectionNotePdfUrl ?? null,
+    damageInspectionNoteFileName: wo.damageInspectionNoteFileName ?? null,
+    damageInspectionNoteIssuedOn: wo.damageInspectionNoteIssuedOn ?? null,
+    damageInspectionNoteReceivedAt: wo.damageInspectionNoteReceivedAt ?? null,
+    damageInspectionNoteNotes: wo.damageInspectionNoteNotes ?? null,
     createdAt: wo.createdAt,
     updatedAt: wo.updatedAt,
     workOrders: [],

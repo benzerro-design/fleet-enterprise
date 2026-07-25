@@ -165,11 +165,19 @@ export type WorkOrderDetail = WorkOrderListRow & {
     to: string;
     subject: string;
     status: "sent" | "stubbed" | "failed";
+    kind?: "quote" | "avizare" | "reinspection";
     quoteId?: string;
     note?: string;
     pdfUrl?: string;
+    attachmentUrls?: string[];
     error?: string;
   }[];
+  damageInspectionMode?: "photos" | "on_site" | null;
+  damageInspectionNotePdfUrl?: string | null;
+  damageInspectionNoteFileName?: string | null;
+  damageInspectionNoteIssuedOn?: string | null;
+  damageInspectionNoteReceivedAt?: string | null;
+  damageInspectionNoteNotes?: string | null;
 };
 
 export type ServiceTimesResult = WorkOrderDetail & {
