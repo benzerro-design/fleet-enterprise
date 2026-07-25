@@ -13,6 +13,7 @@ import {
   DamageInsuranceType,
   DamageInsurerPipelineStatus,
   DamagePayerType,
+  DamageQuoteOrigin,
   MaintenanceWorkOrderStatus,
   MembershipRole,
   Prisma,
@@ -30,6 +31,7 @@ import {
   WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { PartnerNotificationService } from '../partner/partner-notification.service';
+import { PartnerMailService } from '../partner/partner-mail.service';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -199,6 +201,19 @@ export type DamageSectionLock = {
 
 export type DamageSectionLocks = Partial<Record<DamageSectionKey, DamageSectionLock>>;
 
+export type DamageInsurerMailLogItem = {
+  id: string;
+  at: string;
+  direction: 'outbound' | 'inbound_note';
+  to: string;
+  subject: string;
+  status: 'sent' | 'stubbed' | 'failed';
+  quoteId?: string;
+  note?: string;
+  pdfUrl?: string;
+  error?: string;
+};
+
 export type ServiceCaseRecord = {
   id: string;
   clientId: string;
@@ -230,6 +245,10 @@ export type ServiceCaseRecord = {
   damageSectionLocks: DamageSectionLocks;
   /** Franciză CASCO în cenți RON — plătită de client. */
   damageCascoFranchiseCents: number | null;
+  damageInsurerEmail: string | null;
+  damageQuoteOrigin: DamageQuoteOrigin | null;
+  damageInsurerQuotePdfUrl: string | null;
+  damageInsurerMailLog: DamageInsurerMailLogItem[];
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
@@ -250,7 +269,17 @@ export type PatchDamageClaimInput = {
   clientPayerConfirmed?: boolean;
   damageInsurerAgreementNotes?: string | null;
   damageCascoFranchiseCents?: number | null;
+  damageInsurerEmail?: string | null;
+  damageQuoteOrigin?: DamageQuoteOrigin | null;
+  damageInsurerQuotePdfUrl?: string | null;
   lockSection?: { section: string; lock: boolean };
+};
+
+export type SendDamageQuoteToInsurerInput = {
+  quoteId?: string | null;
+  note?: string | null;
+  /** Absolute or app-relative URL to quote PDF (optional override). */
+  pdfUrl?: string | null;
 };
 
 const DAMAGE_SECTION_KEYS: DamageSectionKey[] = [
@@ -321,6 +350,7 @@ export class ServiceCasesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly partnerNotify: PartnerNotificationService,
+    private readonly partnerMail: PartnerMailService,
   ) {}
 
   async getByTicketId(
@@ -584,6 +614,9 @@ export class ServiceCasesService {
       dto.clientPayerConfirmed === undefined &&
       dto.damageInsurerAgreementNotes === undefined &&
       dto.damageCascoFranchiseCents === undefined &&
+      dto.damageInsurerEmail === undefined &&
+      dto.damageQuoteOrigin === undefined &&
+      dto.damageInsurerQuotePdfUrl === undefined &&
       dto.lockSection === undefined;
 
     if (row.workflowType !== ServiceCaseWorkflowType.damage && !vehicleMovableOnly) {
@@ -677,6 +710,38 @@ export class ServiceCasesService {
         }
       }
       data.damageCascoFranchiseCents = dto.damageCascoFranchiseCents;
+    }
+    if (dto.damageInsurerEmail !== undefined) {
+      const email = dto.damageInsurerEmail?.trim() || null;
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new BadRequestException('damageInsurerEmail is invalid');
+      }
+      data.damageInsurerEmail = email;
+    }
+    if (dto.damageQuoteOrigin !== undefined) {
+      if (
+        dto.damageQuoteOrigin !== null &&
+        dto.damageQuoteOrigin !== DamageQuoteOrigin.prepared_by_us &&
+        dto.damageQuoteOrigin !== DamageQuoteOrigin.received_from_insurer
+      ) {
+        throw new BadRequestException(
+          'damageQuoteOrigin must be prepared_by_us or received_from_insurer',
+        );
+      }
+      data.damageQuoteOrigin = dto.damageQuoteOrigin;
+    }
+    if (dto.damageInsurerQuotePdfUrl !== undefined) {
+      data.damageInsurerQuotePdfUrl = dto.damageInsurerQuotePdfUrl?.trim() || null;
+      if (data.damageInsurerQuotePdfUrl && !data.damageQuoteOrigin && !row.damageQuoteOrigin) {
+        data.damageQuoteOrigin = DamageQuoteOrigin.received_from_insurer;
+      }
+      if (
+        data.damageInsurerQuotePdfUrl &&
+        !dto.damageInsurerPipelineStatus &&
+        row.damageInsurerPipelineStatus !== DamageInsurerPipelineStatus.payment_accepted
+      ) {
+        data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.quote_ready;
+      }
     }
     if (dto.agreeInsurer === true) {
       data.damageInsurerAgreedAt = new Date();
@@ -791,6 +856,169 @@ export class ServiceCasesService {
     return this.toRecord(updated);
   }
 
+  async sendDamageQuoteToInsurer(
+    tenantSlug: string,
+    caseId: string,
+    dto: SendDamageQuoteToInsurerInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const row = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+      include: {
+        workOrders: {
+          select: { id: true, supplierId: true, displayNumber: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Service case not found');
+    if (access) {
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        const partnerWo = row.workOrders.find((w) =>
+          allowedSupplierIds(access).includes(w.supplierId ?? ''),
+        );
+        if (!partnerWo) {
+          throw new ForbiddenException('No partner work order on this damage case');
+        }
+        assertPartnerSupplierId(access, partnerWo.supplierId);
+      } else {
+        assertServiceCaseWrite(access, row.clientId);
+      }
+    }
+    if (row.workflowType !== ServiceCaseWorkflowType.damage) {
+      throw new BadRequestException('Send to insurer applies only to damage workflow');
+    }
+    if (row.damagePayerType === DamagePayerType.client) {
+      throw new BadRequestException('Plătitor client — nu se trimite către asigurător');
+    }
+
+    const to = row.damageInsurerEmail?.trim();
+    if (!to) {
+      throw new BadRequestException('Completează emailul asigurătorului pe dosar');
+    }
+
+    const origin = row.damageQuoteOrigin ?? DamageQuoteOrigin.prepared_by_us;
+    const wo = row.workOrders[0];
+    let quoteId = dto.quoteId?.trim() || null;
+    if (!quoteId && wo) {
+      const q = await this.prisma.workOrderQuote.findFirst({
+        where: { workOrderId: wo.id },
+        orderBy: { version: 'desc' },
+        select: { id: true },
+      });
+      quoteId = q?.id ?? null;
+    }
+
+    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
+    const pdfFromDossier = row.damageInsurerQuotePdfUrl?.trim() || null;
+    const pdfUrl =
+      dto.pdfUrl?.trim() ||
+      pdfFromDossier ||
+      (quoteId && wo && webOrigin
+        ? `${webOrigin}/api/work-orders/${wo.id}/quotes/${quoteId}/pdf`
+        : null);
+
+    const insurerLabel = row.damageInsurerName?.trim() || 'asigurător';
+    const claim = row.damageClaimNumber?.trim() || caseId.slice(-6).toUpperCase();
+    const subject = `Deviz daună ${claim} — ${row.title}`;
+    const bodyLines = [
+      `Bună ziua,`,
+      ``,
+      `Vă transmitem devizul pentru dosarul de daună ${claim} (${insurerLabel}).`,
+      row.damageCascoFranchiseCents != null
+        ? `Franciză CASCO menționată: ${(row.damageCascoFranchiseCents / 100).toFixed(2)} RON (plătită de client).`
+        : null,
+      wo?.displayNumber ? `Comandă service: ${wo.displayNumber}.` : null,
+      pdfUrl ? `PDF deviz: ${pdfUrl}` : 'PDF: atașați / descărcați din platformă (link indisponibil).',
+      dto.note?.trim() ? `Notă: ${dto.note.trim()}` : null,
+      ``,
+      `Origine: ${origin === DamageQuoteOrigin.received_from_insurer ? 'deviz primit/încărcat de la asigurător' : 'deviz întocmit de service / flotă'}.`,
+      ``,
+      `Cu stimă,`,
+      `Fleet Enterprise`,
+    ].filter((l) => l != null) as string[];
+    const body = bodyLines.join('\n');
+
+    let status: DamageInsurerMailLogItem['status'] = 'stubbed';
+    let error: string | undefined;
+    if (this.partnerMail.isConfigured()) {
+      try {
+        await this.partnerMail.send({ to, subject, body });
+        status = 'sent';
+      } catch (e) {
+        status = 'failed';
+        error = e instanceof Error ? e.message : 'SMTP send failed';
+      }
+    }
+
+    const logItem: DamageInsurerMailLogItem = {
+      id: `mail_${Date.now()}`,
+      at: new Date().toISOString(),
+      direction: 'outbound',
+      to,
+      subject,
+      status,
+      quoteId: quoteId ?? undefined,
+      note: dto.note?.trim() || undefined,
+      pdfUrl: pdfUrl ?? undefined,
+      error,
+    };
+    const prevLog = this.parseDamageInsurerMailLog(row.damageInsurerMailLogJson);
+    const nextLog = [logItem, ...prevLog].slice(0, 50);
+
+    const updated = await this.prisma.serviceCase.update({
+      where: { id: caseId },
+      data: {
+        damageQuoteOrigin: origin,
+        damageInsurerMailLogJson: nextLog as unknown as Prisma.InputJsonValue,
+        damageInsurerPipelineStatus:
+          row.damageInsurerPipelineStatus === DamageInsurerPipelineStatus.payment_accepted
+            ? row.damageInsurerPipelineStatus
+            : DamageInsurerPipelineStatus.quote_ready,
+      },
+      include: this.caseInclude(),
+    });
+
+    if (row.sourceTicketId) {
+      await this.prisma.crmTicketEvent.create({
+        data: {
+          tenantId: tenant.id,
+          ticketId: row.sourceTicketId,
+          kind: CrmTicketEventKind.damage_claim_update,
+          body:
+            status === 'sent'
+              ? `Deviz trimis către asigurător (${to}).`
+              : status === 'stubbed'
+                ? `Deviz către asigurător înregistrat (SMTP neconfigurat) — ${to}.`
+                : `Trimitere către asigurător eșuată — ${error ?? 'eroare'}.`,
+          payload: { serviceCaseId: caseId, mail: logItem },
+          actorUserId: actorUserId ?? null,
+        },
+      });
+    }
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_case.damage_quote_send_insurer',
+      entityType: 'service_case',
+      entityId: caseId,
+      meta: { to, status, quoteId },
+    });
+
+    if (status === 'failed') {
+      throw new BadRequestException(error || 'Trimiterea către asigurător a eșuat');
+    }
+
+    return this.toRecord(updated);
+  }
+
   private assertDamageSectionKey(section: string): DamageSectionKey {
     if (!DAMAGE_SECTION_KEYS.includes(section as DamageSectionKey)) {
       throw new BadRequestException(
@@ -810,7 +1038,10 @@ export class ServiceCasesService {
         dto.damageClaimStatus !== undefined ||
         dto.damagePayerType !== undefined ||
         dto.damageInsurerAgreementNotes !== undefined ||
-        dto.damageCascoFranchiseCents !== undefined,
+        dto.damageCascoFranchiseCents !== undefined ||
+        dto.damageInsurerEmail !== undefined ||
+        dto.damageQuoteOrigin !== undefined ||
+        dto.damageInsurerQuotePdfUrl !== undefined,
       documents: dto.damageDocuments !== undefined,
       photos: dto.damagePhotos !== undefined,
       pipeline:
@@ -1987,6 +2218,32 @@ export class ServiceCasesService {
     });
   }
 
+  private parseDamageInsurerMailLog(raw: unknown): DamageInsurerMailLogItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamageInsurerMailLogItem[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.at !== 'string' || typeof o.to !== 'string') continue;
+      if (typeof o.subject !== 'string') continue;
+      const status =
+        o.status === 'sent' || o.status === 'stubbed' || o.status === 'failed' ? o.status : 'stubbed';
+      out.push({
+        id: o.id,
+        at: o.at,
+        direction: o.direction === 'inbound_note' ? 'inbound_note' : 'outbound',
+        to: o.to,
+        subject: o.subject,
+        status,
+        quoteId: typeof o.quoteId === 'string' ? o.quoteId : undefined,
+        note: typeof o.note === 'string' ? o.note : undefined,
+        pdfUrl: typeof o.pdfUrl === 'string' ? o.pdfUrl : undefined,
+        error: typeof o.error === 'string' ? o.error : undefined,
+      });
+    }
+    return out;
+  }
+
   private parseDamageSectionLocks(raw: unknown): DamageSectionLocks {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
     const out: DamageSectionLocks = {};
@@ -2033,6 +2290,10 @@ export class ServiceCasesService {
       damagePhotosJson?: unknown;
       damageSectionLocksJson?: unknown;
       damageCascoFranchiseCents?: number | null;
+      damageInsurerEmail?: string | null;
+      damageQuoteOrigin?: DamageQuoteOrigin | null;
+      damageInsurerQuotePdfUrl?: string | null;
+      damageInsurerMailLogJson?: unknown;
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
@@ -2119,6 +2380,10 @@ export class ServiceCasesService {
       damagePhotos: this.parseDamagePhotos(row.damagePhotosJson),
       damageSectionLocks: this.parseDamageSectionLocks(row.damageSectionLocksJson),
       damageCascoFranchiseCents: row.damageCascoFranchiseCents ?? null,
+      damageInsurerEmail: row.damageInsurerEmail ?? null,
+      damageQuoteOrigin: row.damageQuoteOrigin ?? null,
+      damageInsurerQuotePdfUrl: row.damageInsurerQuotePdfUrl ?? null,
+      damageInsurerMailLog: this.parseDamageInsurerMailLog(row.damageInsurerMailLogJson),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       workOrders: (row.workOrders ?? []).map((wo) => {

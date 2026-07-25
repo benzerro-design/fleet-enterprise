@@ -37,6 +37,21 @@ export type DamageInsurerPipelineStatus =
   | "quote_ready"
   | "payment_accepted";
 
+export type DamageQuoteOrigin = "prepared_by_us" | "received_from_insurer";
+
+export type DamageInsurerMailLogItem = {
+  id: string;
+  at: string;
+  direction: "outbound" | "inbound_note";
+  to: string;
+  subject: string;
+  status: "sent" | "stubbed" | "failed";
+  quoteId?: string;
+  note?: string;
+  pdfUrl?: string;
+  error?: string;
+};
+
 export type DamageClaimStatus =
   | "open"
   | "documents_pending"
@@ -107,6 +122,9 @@ export type PatchDamageClaimInput = {
   clientPayerConfirmed?: boolean;
   damageInsurerAgreementNotes?: string | null;
   damageCascoFranchiseCents?: number | null;
+  damageInsurerEmail?: string | null;
+  damageQuoteOrigin?: DamageQuoteOrigin | null;
+  damageInsurerQuotePdfUrl?: string | null;
   lockSection?: { section: DamageSectionKey | string; lock: boolean };
 };
 
@@ -349,6 +367,10 @@ export type ServiceCaseRecord = {
   damageSectionLocks?: DamageSectionLocks;
   /** Franciză CASCO în cenți RON — plătită de client. */
   damageCascoFranchiseCents?: number | null;
+  damageInsurerEmail?: string | null;
+  damageQuoteOrigin?: DamageQuoteOrigin | null;
+  damageInsurerQuotePdfUrl?: string | null;
+  damageInsurerMailLog?: DamageInsurerMailLogItem[];
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];

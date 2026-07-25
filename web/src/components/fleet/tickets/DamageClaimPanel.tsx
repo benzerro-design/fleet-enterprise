@@ -17,11 +17,13 @@ import {
   vehicleMovableLabel,
   type DamageClaimStatus,
   type DamageDocumentItem,
+  type DamageInsurerMailLogItem,
   type DamageInsurerPipelineStatus,
   type DamageInsuranceType,
   type DamagePayerType,
   type DamagePhotoItem,
   type DamagePhotoKind,
+  type DamageQuoteOrigin,
   type DamageSectionKey,
   type DamageSectionLocks,
   type PatchDamageClaimInput,
@@ -89,6 +91,11 @@ export function DamageClaimPanel({
   const [pipeline, setPipeline] = useState<DamageInsurerPipelineStatus | "">("");
   const [agreementNotes, setAgreementNotes] = useState("");
   const [franchiseRon, setFranchiseRon] = useState("");
+  const [insurerEmail, setInsurerEmail] = useState("");
+  const [quoteOrigin, setQuoteOrigin] = useState<DamageQuoteOrigin | "">("");
+  const [mailLog, setMailLog] = useState<DamageInsurerMailLogItem[]>([]);
+  const [insurerPdfUrl, setInsurerPdfUrl] = useState<string | null>(null);
+  const [sendNote, setSendNote] = useState("");
   const [docs, setDocs] = useState<DamageDocumentItem[]>([]);
   const [photos, setPhotos] = useState<DamagePhotoItem[]>([]);
   const [locks, setLocks] = useState<DamageSectionLocks>({});
@@ -114,6 +121,10 @@ export function DamageClaimPanel({
         ? (serviceCase.damageCascoFranchiseCents / 100).toFixed(2)
         : "",
     );
+    setInsurerEmail(serviceCase.damageInsurerEmail ?? "");
+    setQuoteOrigin(serviceCase.damageQuoteOrigin ?? "");
+    setMailLog(serviceCase.damageInsurerMailLog ?? []);
+    setInsurerPdfUrl(serviceCase.damageInsurerQuotePdfUrl ?? null);
     setDocs(
       mergeDamageDocuments(
         documentKindsForInsurance(serviceCase.damageInsuranceType),
@@ -210,6 +221,8 @@ export function DamageClaimPanel({
         damageClaimStatus: claimStatus,
         damageInsurerAgreementNotes: agreementNotes.trim() || null,
         damageCascoFranchiseCents: showFranchise ? franchiseCents : null,
+        damageInsurerEmail: insurerEmail.trim() || null,
+        damageQuoteOrigin: quoteOrigin || null,
       },
       "Informații dosar salvate.",
     );
@@ -416,6 +429,17 @@ export function DamageClaimPanel({
             <span className="mt-0.5 block text-[10px] text-zinc-500">
               Catalogul de asigurători vine într-un modul separat; deocamdată nume liber.
             </span>
+          </label>
+          <label className="block">
+            <span className={OPS_LABEL_CLASS}>Email asigurător</span>
+            <input
+              type="email"
+              className={OPS_INPUT_CLASS}
+              disabled={disabled || sectionLocked("claim_info") || isClientPayer}
+              value={insurerEmail}
+              onChange={(e) => setInsurerEmail(e.target.value)}
+              placeholder="claims@asigurator.ro"
+            />
           </label>
           {insuranceType === "CASCO" || insuranceType === "BOTH" ? (
             <label className="block sm:col-span-2">
@@ -650,6 +674,199 @@ export function DamageClaimPanel({
         </p>
       </section>
 
+      {/* Quote ↔ insurer */}
+      {!isClientPayer ? (
+        <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Deviz către asigurător
+          </h4>
+          <p className="text-[11px] text-zinc-500">
+            Același WorkOrderQuote de pe WO. Origine: întocmit de noi (Audatex/PDF) sau primit de la
+            asigurător.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className={OPS_LABEL_CLASS}>Origine deviz</span>
+              <select
+                className={OPS_INPUT_CLASS}
+                disabled={disabled}
+                value={quoteOrigin}
+                onChange={(e) => setQuoteOrigin(e.target.value as DamageQuoteOrigin | "")}
+              >
+                <option value="">—</option>
+                <option value="prepared_by_us">Întocmit de noi → trimitem</option>
+                <option value="received_from_insurer">Primit de la asigurător</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className={OPS_LABEL_CLASS}>Notă la trimitere (opțional)</span>
+              <input
+                className={OPS_INPUT_CLASS}
+                disabled={disabled}
+                value={sendNote}
+                onChange={(e) => setSendNote(e.target.value)}
+                placeholder="ex. versiune Audatex 2"
+              />
+            </label>
+          </div>
+          {insurerPdfUrl ? (
+            <p className="text-xs text-zinc-300">
+              PDF pe dosar:{" "}
+              <a href={insurerPdfUrl} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">
+                deschide
+              </a>
+            </p>
+          ) : (
+            <p className="text-xs text-zinc-500">Niciun PDF încărcat pe dosar (opțional pentru origină B).</p>
+          )}
+          {canWrite ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  void patch(
+                    {
+                      damageQuoteOrigin: quoteOrigin || null,
+                      damageInsurerEmail: insurerEmail.trim() || null,
+                    },
+                    "Origine / email salvate.",
+                  )
+                }
+                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Salvează origine
+              </button>
+              <label className="cursor-pointer rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
+                {uploading ? "Se încarcă…" : "Încarcă PDF de la asigurător"}
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  disabled={disabled || uploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void (async () => {
+                      setUploading(true);
+                      setError(null);
+                      try {
+                        const up = await uploadDocumentFile(file, "Deviz asigurător");
+                        const saved = await patch(
+                          {
+                            damageInsurerQuotePdfUrl: up.url,
+                            damageQuoteOrigin: "received_from_insurer",
+                            damageInsurerPipelineStatus: "quote_ready",
+                          },
+                          "PDF asigurător încărcat — pipeline quote_ready.",
+                        );
+                        if (saved) {
+                          setInsurerPdfUrl(saved.damageInsurerQuotePdfUrl ?? up.url);
+                          setQuoteOrigin("received_from_insurer");
+                          setPipeline(saved.damageInsurerPipelineStatus ?? "quote_ready");
+                        }
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Upload eșuat.");
+                      } finally {
+                        setUploading(false);
+                        e.target.value = "";
+                      }
+                    })();
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={pending || !insurerEmail.trim()}
+                onClick={() => {
+                  void (async () => {
+                    setPending(true);
+                    setError(null);
+                    setOk(null);
+                    try {
+                      await patch(
+                        {
+                          damageQuoteOrigin: quoteOrigin || "prepared_by_us",
+                          damageInsurerEmail: insurerEmail.trim() || null,
+                        },
+                        "Pregătit pentru trimitere.",
+                      );
+                      const res = await fetch(
+                        `${serviceCasesBrowserBase}/${serviceCase!.id}/damage-claim/send-to-insurer`,
+                        {
+                          method: "POST",
+                          headers: fleetJsonHeaders(),
+                          body: JSON.stringify({ note: sendNote.trim() || null }),
+                        },
+                      );
+                      if (!res.ok) {
+                        let msg = `HTTP ${res.status}`;
+                        try {
+                          const j = (await res.json()) as { message?: string | string[] };
+                          if (j.message)
+                            msg = Array.isArray(j.message) ? j.message.join(", ") : j.message;
+                        } catch {
+                          /* ignore */
+                        }
+                        setError(msg);
+                        return;
+                      }
+                      const next = (await res.json()) as ServiceCaseRecord;
+                      onUpdated?.(next);
+                      setMailLog(next.damageInsurerMailLog ?? []);
+                      setPipeline(next.damageInsurerPipelineStatus ?? "quote_ready");
+                      setOk(
+                        next.damageInsurerMailLog?.[0]?.status === "stubbed"
+                          ? "Înregistrat (SMTP neconfigurat pe server) — verifică logul."
+                          : "Deviz trimis către asigurător.",
+                      );
+                    } finally {
+                      setPending(false);
+                    }
+                  })();
+                }}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                Trimite către asigurător
+              </button>
+            </div>
+          ) : null}
+          {mailLog.length ? (
+            <ul className="space-y-1.5 border-t border-zinc-800 pt-2">
+              {mailLog.slice(0, 5).map((m) => (
+                <li key={m.id} className="text-[11px] text-zinc-400">
+                  <span className="font-mono text-zinc-500">
+                    {new Date(m.at).toLocaleString("ro-RO", { dateStyle: "short", timeStyle: "short" })}
+                  </span>
+                  {" · "}
+                  <span
+                    className={
+                      m.status === "sent"
+                        ? "text-emerald-400"
+                        : m.status === "failed"
+                          ? "text-rose-400"
+                          : "text-amber-300"
+                    }
+                  >
+                    {m.status}
+                  </span>
+                  {" → "}
+                  {m.to}
+                  {m.pdfUrl ? (
+                    <>
+                      {" · "}
+                      <a href={m.pdfUrl} className="text-sky-400 hover:underline" target="_blank" rel="noreferrer">
+                        PDF
+                      </a>
+                    </>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* Pipeline */}
       {isInsurerPayer && !isClientPayer ? (
         <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
@@ -777,6 +994,10 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   damagePhotos?: DamagePhotoItem[];
   damageSectionLocks?: DamageSectionLocks;
   damageCascoFranchiseCents?: number | null;
+  damageInsurerEmail?: string | null;
+  damageQuoteOrigin?: DamageQuoteOrigin | null;
+  damageInsurerQuotePdfUrl?: string | null;
+  damageInsurerMailLog?: DamageInsurerMailLogItem[];
 }): ServiceCaseRecord {
   return {
     id: wo.serviceCaseId,
@@ -806,6 +1027,10 @@ export function serviceCaseFromWorkOrderDamage(wo: {
     damagePhotos: wo.damagePhotos ?? [],
     damageSectionLocks: wo.damageSectionLocks ?? {},
     damageCascoFranchiseCents: wo.damageCascoFranchiseCents ?? null,
+    damageInsurerEmail: wo.damageInsurerEmail ?? null,
+    damageQuoteOrigin: wo.damageQuoteOrigin ?? null,
+    damageInsurerQuotePdfUrl: wo.damageInsurerQuotePdfUrl ?? null,
+    damageInsurerMailLog: wo.damageInsurerMailLog ?? [],
     createdAt: wo.createdAt,
     updatedAt: wo.updatedAt,
     workOrders: [],

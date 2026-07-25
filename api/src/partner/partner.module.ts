@@ -16,6 +16,6 @@ import { PartnerNotificationService } from './partner-notification.service';
     PartnerNotificationService,
     PartnerNotificationProcessor,
   ],
-  exports: [PartnerAdminService, PartnerNotificationService],
+  exports: [PartnerAdminService, PartnerNotificationService, PartnerMailService],
 })
 export class PartnerModule {}

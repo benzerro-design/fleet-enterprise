@@ -153,6 +153,21 @@ export type WorkOrderDetail = WorkOrderListRow & {
     >
   >;
   damageCascoFranchiseCents?: number | null;
+  damageInsurerEmail?: string | null;
+  damageQuoteOrigin?: "prepared_by_us" | "received_from_insurer" | null;
+  damageInsurerQuotePdfUrl?: string | null;
+  damageInsurerMailLog?: {
+    id: string;
+    at: string;
+    direction: "outbound" | "inbound_note";
+    to: string;
+    subject: string;
+    status: "sent" | "stubbed" | "failed";
+    quoteId?: string;
+    note?: string;
+    pdfUrl?: string;
+    error?: string;
+  }[];
 };
 
 export type ServiceTimesResult = WorkOrderDetail & {

@@ -41,6 +41,7 @@ import {
 import {
   SERVICE_CASE_STAGE_ORDER,
   type DamageDocumentItem,
+  type DamageInsurerMailLogItem,
   type DamagePhotoItem,
   type DamageSectionLocks,
 } from '../service-cases/service-cases.service';
@@ -158,6 +159,10 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damagePhotos: DamagePhotoItem[];
   damageSectionLocks: DamageSectionLocks;
   damageCascoFranchiseCents: number | null;
+  damageInsurerEmail: string | null;
+  damageQuoteOrigin: 'prepared_by_us' | 'received_from_insurer' | null;
+  damageInsurerQuotePdfUrl: string | null;
+  damageInsurerMailLog: DamageInsurerMailLogItem[];
   quoteSummary: {
     status: string | null;
     version: number | null;
@@ -583,6 +588,10 @@ export class WorkOrdersService {
             damagePhotosJson: true,
             damageSectionLocksJson: true,
             damageCascoFranchiseCents: true,
+            damageInsurerEmail: true,
+            damageQuoteOrigin: true,
+            damageInsurerQuotePdfUrl: true,
+            damageInsurerMailLogJson: true,
             sourceTicket: {
               select: {
                 subject: true,
@@ -698,6 +707,10 @@ export class WorkOrdersService {
       damagePhotos: this.parseDamagePhotos(row.serviceCase.damagePhotosJson),
       damageSectionLocks: this.parseDamageSectionLocks(row.serviceCase.damageSectionLocksJson),
       damageCascoFranchiseCents: row.serviceCase.damageCascoFranchiseCents ?? null,
+      damageInsurerEmail: row.serviceCase.damageInsurerEmail ?? null,
+      damageQuoteOrigin: row.serviceCase.damageQuoteOrigin ?? null,
+      damageInsurerQuotePdfUrl: row.serviceCase.damageInsurerQuotePdfUrl ?? null,
+      damageInsurerMailLog: this.parseDamageInsurerMailLog(row.serviceCase.damageInsurerMailLogJson),
       quoteSummary: primary
         ? {
             status: primary.status,
@@ -1603,6 +1616,32 @@ export class WorkOrdersService {
         uploadedAt: typeof o.uploadedAt === 'string' ? o.uploadedAt : new Date(0).toISOString(),
         uploadedByUserId: typeof o.uploadedByUserId === 'string' ? o.uploadedByUserId : undefined,
         uploadedByLabel: typeof o.uploadedByLabel === 'string' ? o.uploadedByLabel : undefined,
+      });
+    }
+    return out;
+  }
+
+  private parseDamageInsurerMailLog(raw: unknown): DamageInsurerMailLogItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamageInsurerMailLogItem[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.at !== 'string' || typeof o.to !== 'string') continue;
+      if (typeof o.subject !== 'string') continue;
+      const status =
+        o.status === 'sent' || o.status === 'stubbed' || o.status === 'failed' ? o.status : 'stubbed';
+      out.push({
+        id: o.id,
+        at: o.at,
+        direction: o.direction === 'inbound_note' ? 'inbound_note' : 'outbound',
+        to: o.to,
+        subject: o.subject,
+        status,
+        quoteId: typeof o.quoteId === 'string' ? o.quoteId : undefined,
+        note: typeof o.note === 'string' ? o.note : undefined,
+        pdfUrl: typeof o.pdfUrl === 'string' ? o.pdfUrl : undefined,
+        error: typeof o.error === 'string' ? o.error : undefined,
       });
     }
     return out;

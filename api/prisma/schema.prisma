@@ -1306,6 +1306,14 @@ model ServiceCase {
   damageSectionLocksJson       Json?
   /// Franciză CASCO (bani) — plătită de client; în cenți RON.
   damageCascoFranchiseCents    Int?
+  /// Email asigurător (text liber până la modulul asigurători).
+  damageInsurerEmail           String?
+  /// Origine deviz față de asigurător: întocmit de noi | primit de la ei.
+  damageQuoteOrigin            DamageQuoteOrigin?
+  /// PDF deviz de la asigurător (sau copie locală încărcată).
+  damageInsurerQuotePdfUrl     String?
+  /// Log corespondență asigurător: array { id, at, direction, to, subject, status, quoteId?, note?, pdfUrl? }
+  damageInsurerMailLogJson     Json?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1646,6 +1654,11 @@ enum DamageInsurerPipelineStatus {
   reinspection_requested
   quote_ready
   payment_accepted
+}
+
+enum DamageQuoteOrigin {
+  prepared_by_us
+  received_from_insurer
 }
 
 enum DamageInsuranceType {
