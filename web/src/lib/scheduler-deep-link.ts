@@ -14,6 +14,8 @@ export function schedulerHref(opts?: {
   ticket?: string;
   vehicle?: string;
   create?: boolean;
+  /** După reprogramare / repropunere, UI poate întoarce userul la tichet. */
+  returnToTicket?: boolean;
   extraSearch?: string;
 }): string {
   const base = opts?.basePath ?? "/fleet/scheduler";
@@ -38,6 +40,9 @@ export function schedulerHref(opts?: {
   }
   if (opts?.create) {
     params.set("create", "1");
+  }
+  if (opts?.returnToTicket && opts?.ticket?.trim()) {
+    params.set("return", "1");
   }
   const q = params.toString();
   return q ? `${base}?${q}` : base;

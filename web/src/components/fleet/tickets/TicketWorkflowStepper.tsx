@@ -829,8 +829,8 @@ export function TicketWorkflowStepper({
                               placeholder="Context pentru furnizor"
                             />
                             <p className="text-[10px] text-zinc-500">
-                              Se trimite din nou la furnizor pentru validare. Poți alege data și din calendar
-                              (Programator).
+                              Se trimite din nou la furnizor pentru validare. „Deschide calendar” te duce la
+                              programator; după ce trimiți repropunerea te întoarce pe tichet.
                             </p>
                             <div className="flex flex-wrap gap-2">
                               <button
@@ -845,6 +845,8 @@ export function TicketWorkflowStepper({
                                 href={schedulerHref({
                                   week: new Date(appt.scheduledAt),
                                   select: appt.id,
+                                  ticket: ticketId,
+                                  returnToTicket: true,
                                 })}
                                 className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-sky-300 hover:bg-zinc-900"
                               >

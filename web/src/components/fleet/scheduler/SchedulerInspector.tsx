@@ -40,6 +40,9 @@ type Props = {
   /** Slot ales din calendar în timp ce editezi intervalul. */
   calendarPickAt?: string;
   onCalendarPickConsumed?: () => void;
+  /** După trimiterea repropunerii, întoarce la tichet. */
+  returnTicketId?: string | null;
+  onReturnToTicket?: () => void;
 };
 
 export function SchedulerInspector({
@@ -59,6 +62,8 @@ export function SchedulerInspector({
   onRescheduleEditingChange,
   calendarPickAt,
   onCalendarPickConsumed,
+  returnTicketId,
+  onReturnToTicket,
 }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +255,7 @@ export function SchedulerInspector({
         setEditing(false);
         onRescheduleEditingChange?.(false);
         onUpdated();
+        onReturnToTicket?.();
       } finally {
         setPending(false);
       }
@@ -261,6 +267,7 @@ export function SchedulerInspector({
     });
     setEditing(false);
     onRescheduleEditingChange?.(false);
+    if (returnTicketId) onReturnToTicket?.();
   }
 
   async function setStatus(status: string) {
@@ -339,6 +346,7 @@ export function SchedulerInspector({
       setEditing(false);
       onRescheduleEditingChange?.(false);
       onUpdated();
+      onReturnToTicket?.();
     } finally {
       setPending(false);
     }
@@ -551,6 +559,12 @@ export function SchedulerInspector({
           <p className="text-[11px] text-sky-300/90">
             Click pe un slot liber din calendar ca să alegi data/ora vizual.
           </p>
+          {returnTicketId ? (
+            <p className="text-[11px] text-emerald-300/90">
+              După trimitere te întorci automat la tichet #
+              {ticketDisplayIdFromTicketId(returnTicketId)}.
+            </p>
+          ) : null}
           <div>
             <label className={OPS_LABEL_CLASS}>Data și ora</label>
             <input type="datetime-local" value={editScheduledAt} onChange={(e) => setEditScheduledAt(e.target.value)} className={OPS_INPUT_CLASS} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   appointmentsBrowserBase,
   type AppointmentStats,
@@ -45,6 +46,8 @@ type Props = {
   initialTicketId?: string;
   initialVehicleId?: string;
   initialCreate?: boolean;
+  /** După repropunere / reprogramare, navighează înapoi la tichet. */
+  returnToTicket?: boolean;
   basePath?: string;
   extraSearch?: string;
   partnerMode?: boolean;
@@ -76,10 +79,12 @@ export function SchedulerShell({
   initialTicketId,
   initialVehicleId,
   initialCreate = false,
+  returnToTicket = false,
   basePath = "/fleet/scheduler",
   extraSearch,
   partnerMode = false,
 }: Props) {
+  const router = useRouter();
   const [weekStart, setWeekStart] = useState(() => {
     const parsed = initialWeekIso ? new Date(initialWeekIso) : null;
     return parsed && !Number.isNaN(parsed.getTime())
@@ -98,6 +103,9 @@ export function SchedulerShell({
   const [createPrefillAt, setCreatePrefillAt] = useState<string | undefined>();
   const [linkTicketId] = useState(initialTicketId ?? null);
   const [linkVehicleId] = useState(initialVehicleId ?? null);
+  const [returnTicketId] = useState(() =>
+    returnToTicket && initialTicketId ? initialTicketId : null,
+  );
   const [createMode, setCreateMode] = useState(() => !!(initialCreate && initialTicketId && canWrite));
   const [mobileDetail, setMobileDetail] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -140,13 +148,14 @@ export function SchedulerShell({
         select: opts.select ?? undefined,
         view: opts.view ?? viewMode,
         inbox: opts.inbox ?? inboxFilter,
-        ticket: opts.clearTicketLink ? undefined : linkTicketId ?? undefined,
-        vehicle: opts.clearTicketLink ? undefined : linkVehicleId ?? undefined,
+        ticket: opts.clearTicketLink && !returnTicketId ? undefined : linkTicketId ?? returnTicketId ?? undefined,
+        vehicle: opts.clearTicketLink && !returnTicketId ? undefined : linkVehicleId ?? undefined,
         create: !opts.clearTicketLink && createMode && linkTicketId ? true : undefined,
+        returnToTicket: !!returnTicketId,
       });
       window.history.replaceState(null, "", href);
     },
-    [basePath, extraSearch, weekStart, viewMode, inboxFilter, linkTicketId, linkVehicleId, createMode],
+    [basePath, extraSearch, weekStart, viewMode, inboxFilter, linkTicketId, linkVehicleId, createMode, returnTicketId],
   );
 
   const load = useCallback(
@@ -272,7 +281,12 @@ export function SchedulerShell({
     setRescheduleEditing(false);
     setReschedulePickAt(undefined);
     if (isMobile) setMobileDetail(true);
-    syncUrlHistory({ select: id, clearTicketLink: true });
+    syncUrlHistory({ select: id, clearTicketLink: !returnTicketId });
+  }
+
+  function goBackToTicket() {
+    if (!returnTicketId) return;
+    router.push(`/fleet/tickets/${returnTicketId}`);
   }
 
   function goToday() {
@@ -522,17 +536,19 @@ export function SchedulerShell({
               setCreateMode(false);
               setMobileDetail(false);
               setCreatePrefillAt(undefined);
-              syncUrlHistory({ clearTicketLink: true });
+              syncUrlHistory({ clearTicketLink: !returnTicketId });
             }}
             onUpdated={() => {
               void load(true);
               setRescheduleEditing(false);
               setReschedulePickAt(undefined);
-              if (linkTicketId) {
+              if (linkTicketId && !returnTicketId) {
                 setCreateMode(false);
                 syncUrlHistory({ clearTicketLink: true });
               }
             }}
+            onReturnToTicket={returnTicketId ? goBackToTicket : undefined}
+            returnTicketId={returnTicketId}
             vehicles={vehicles}
             initialCreateScheduledAt={createPrefillAt}
             linkTicketId={linkTicketId}
@@ -557,18 +573,20 @@ export function SchedulerShell({
             setCreateMode(false);
             setMobileDetail(false);
             setCreatePrefillAt(undefined);
-            syncUrlHistory({ clearTicketLink: true });
+            syncUrlHistory({ clearTicketLink: !returnTicketId });
           }}
           onUpdated={() => {
             void load(true);
             setRescheduleEditing(false);
             setReschedulePickAt(undefined);
-            if (linkTicketId) {
+            if (linkTicketId && !returnTicketId) {
               setCreateMode(false);
               setCreatePrefillAt(undefined);
               syncUrlHistory({ clearTicketLink: true });
             }
           }}
+          onReturnToTicket={returnTicketId ? goBackToTicket : undefined}
+          returnTicketId={returnTicketId}
           vehicles={vehicles}
           initialCreateScheduledAt={createPrefillAt}
           linkTicketId={linkTicketId}
