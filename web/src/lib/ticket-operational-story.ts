@@ -8,6 +8,11 @@ import {
   MOBILITY_ELIGIBILITY_HOURS,
   type MobilityAssignmentRecord,
 } from "@/lib/mobility-api";
+import {
+  isRoadsideActive,
+  roadsideKindLabel,
+  type RoadsideInterventionRecord,
+} from "@/lib/roadside-api";
 
 export type StoryChapterState = "done" | "now" | "next" | "later";
 
@@ -23,6 +28,12 @@ export type OperationalChapter = {
   detail?: string;
   links?: OperationalChapterLink[];
   state: StoryChapterState;
+  /** Ramură în dreapta (asistență / mașină schimb) — nu e pe linia principală. */
+  optionalSide?: boolean;
+  /** True = ramură folosită (inverzit). */
+  optionalActive?: boolean;
+  /** Text scurt pe stânga fork-ului. */
+  sideHint?: string;
 };
 
 export type OperationalStoryInput = {
@@ -32,6 +43,7 @@ export type OperationalStoryInput = {
   mobility?: MobilityAssignmentRecord | null;
   mobilityEligible?: boolean;
   mobilityImmobilizationHours?: number | null;
+  roadside?: RoadsideInterventionRecord[] | null;
 };
 
 function fmt(iso: string): string {
@@ -58,10 +70,14 @@ export function operationalHeadline(
   }
   if (serviceCase.status === "completed") return "Reparația s-a încheiat — tichet și dosar închise.";
 
+  const isDamage = serviceCase.workflowType === "damage";
   const wo = serviceCase.workOrders[0];
   const appt = serviceCase.appointments.find((a) => a.status !== "cancelled");
   const pendingAppt = serviceCase.appointments.find((a) => a.status === "scheduled");
 
+  if (isDamage && !serviceCase.damageInsurerAgreedAt && (wo?.pendingQuote || wo?.approvedQuote)) {
+    return "Pe daună: înregistrează acordul asigurătorului înainte de execuția reparației.";
+  }
   if (serviceCase.awaitingPostApproval) {
     return "Deviz aprobat — alege dacă continui reparația sau reprogramezi.";
   }
@@ -97,8 +113,91 @@ export function operationalHeadline(
   return "Dosar service activ — vezi fluxul operațional.";
 }
 
+type DraftChapter = Omit<OperationalChapter, "state">;
+
+function assignChapterStates(
+  chapters: DraftChapter[],
+  nowId: string,
+  caseClosed: boolean,
+  ticketClosed: boolean,
+): OperationalChapter[] {
+  if (caseClosed) {
+    return chapters.map((c) => ({
+      ...c,
+      state: (c.optionalSide ? (c.optionalActive ? "done" : "later") : "done") as StoryChapterState,
+    }));
+  }
+
+  if (!chapters.some((c) => c.id === "ticket-open") && ticketClosed) {
+    return chapters.map((c) => ({ ...c, state: "done" as StoryChapterState }));
+  }
+
+  const mainIds = chapters.filter((c) => !c.optionalSide).map((c) => c.id);
+  let nowMainIdx = mainIds.indexOf(nowId);
+  if (nowMainIdx < 0) nowMainIdx = 0;
+
+  return chapters.map((c) => {
+    if (c.optionalSide) {
+      return {
+        ...c,
+        state: (c.optionalActive ? "done" : "later") as StoryChapterState,
+      };
+    }
+    const mainIdx = mainIds.indexOf(c.id);
+    return {
+      ...c,
+      state: (mainIdx < nowMainIdx
+        ? "done"
+        : mainIdx === nowMainIdx
+          ? "now"
+          : mainIdx === nowMainIdx + 1
+            ? "next"
+            : "later") as StoryChapterState,
+    };
+  });
+}
+
+function resolveNowId(input: {
+  serviceCase: ServiceCaseRecord;
+  wo: NonNullable<ServiceCaseRecord["workOrders"]>[0] | undefined;
+  appt: ServiceCaseRecord["appointments"][0] | undefined;
+  approved: NonNullable<ServiceCaseRecord["workOrders"]>[0]["approvedQuote"];
+  pendingQ: NonNullable<ServiceCaseRecord["workOrders"]>[0]["pendingQuote"];
+  caseClosed: boolean;
+  woDone: boolean;
+  isDamage: boolean;
+}): string {
+  const { serviceCase, wo, appt, approved, pendingQ, caseClosed, woDone, isDamage } = input;
+  const stage = serviceCase.currentStage;
+
+  if (caseClosed || woDone) return "closure";
+  if (wo?.outServiceAt && approved?.costEntryId) return "closure";
+  if (approved?.costEntryId && approved.invoicedAt) return "vehicle-out";
+  if (stage === "invoiced" || stage === "cost" || approved?.invoicedAt) return "billing";
+  if (wo?.readyAt) return "work-ready";
+  if (serviceCase.awaitingPostApproval) return "decision";
+  if (isDamage && approved && !serviceCase.damageInsurerAgreedAt) return "insurer";
+  if (serviceCase.postApprovalPath && !wo?.readyAt) return "work-ready";
+  if (pendingQ) return "approval";
+  if (approved) return isDamage && !serviceCase.damageInsurerAgreedAt ? "insurer" : "work-ready";
+  if (stage === "quote" || stage === "approval") return "quote";
+  if (stage === "in_service" || wo?.inServiceAt) return "at-service";
+  if (stage === "work_order" || wo) return "work-order";
+  if (stage === "scheduled" || appt) return "schedule";
+  return "schedule";
+}
+
 export function buildOperationalChapters(input: OperationalStoryInput): OperationalChapter[] {
-  const { serviceCase, closed, ticketCreatedAt, mobility, mobilityEligible, mobilityImmobilizationHours } = input;
+  const {
+    serviceCase,
+    closed,
+    ticketCreatedAt,
+    mobility,
+    mobilityEligible,
+    mobilityImmobilizationHours,
+    roadside,
+  } = input;
+  const isDamage = serviceCase?.workflowType === "damage";
   const wo = serviceCase?.workOrders[0];
   const approved = wo?.approvedQuote ?? null;
   const pendingQ = wo?.pendingQuote ?? null;
@@ -126,6 +225,11 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
     mobilityImmobilizationHours ??
     (wo ? computeImmobilizationHours(wo.inServiceAt, wo.estimatedRepairAt, wo.outServiceAt) : null);
 
+  const mobilityActive = !!(
+    mobility &&
+    (mobility.status === "returned" || mobility.status === "active" || mobility.status === "reserved")
+  );
+
   const mobilityLinks: OperationalChapterLink[] = [];
   if (mobility) {
     mobilityLinks.push({
@@ -133,10 +237,10 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       label: mobility.displayNumber ?? "Alocare",
     });
   }
-  if (wo && wo.inServiceAt && !wo.outServiceAt && !mobility) {
+  if (wo && !mobilityActive) {
     mobilityLinks.push({
       href: `/fleet/mobility/replacement-cars/new?wo=${wo.id}`,
-      label: eligible ? "Alocă mașină schimb" : "Mobilitate (opțional)",
+      label: isDamage ? "Alocă mașină schimb (obligatoriu)" : eligible ? "Alocă mașină schimb" : "Mobilitate (opțional)",
     });
   }
 
@@ -152,13 +256,38 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
     billingLinks.push({ href: `/fleet/costs/${approved.costEntryId}`, label: "Cost înregistrat" });
   }
 
-  const chapters: Omit<OperationalChapter, "state">[] = [
+  const roadsideList = roadside ?? [];
+  const roadsideActive = roadsideList.some((r) => isRoadsideActive(r.status));
+  const roadsideSummary =
+    roadsideList.length === 0
+      ? "Opțional — tractare / pornire / etc. pe același dosar."
+      : roadsideList
+          .slice(0, 2)
+          .map((r) => `${roadsideKindLabel(r.kind)} (${r.displayNumber ?? "—"})`)
+          .join(" · ") + (roadsideList.length > 2 ? ` · +${roadsideList.length - 2}` : "");
+
+  const chapters: DraftChapter[] = [
     {
       id: "ticket-open",
       title: "Tichet deschis",
       situation: ticketCreatedAt ? fmt(ticketCreatedAt) : "Solicitarea a fost înregistrată.",
-      detail: closed ? "Tichet închis." : undefined,
+      detail: closed ? "Tichet închis." : isDamage ? "Flux daună — dosar + asistență + acord asigurător." : undefined,
     },
+  ];
+
+  if (isDamage) {
+    chapters.push({
+      id: "roadside",
+      title: "Asistență rutieră",
+      optionalSide: true,
+      optionalActive: roadsideActive,
+      sideHint: "fără asistență → continuă pe linie",
+      situation: roadsideSummary,
+      detail: roadsideActive ? "Intervenție înregistrată pe dosar (nu e WO separat)." : undefined,
+    });
+  }
+
+  chapters.push(
     {
       id: "schedule",
       title: "Programare",
@@ -181,7 +310,9 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       id: "work-order",
       title: "Comandă service",
       situation: wo
-        ? `${wo.displayNumber ? `${wo.displayNumber} · ` : ""}${wo.title}`
+        ? `${wo.displayNumber ? `${wo.displayNumber} · ` : ""}${wo.title}${
+            isDamage && wo.serviceOrderType === "D" ? " · tip D" : ""
+          }`
         : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
           ? "Se deschide după Confirmă primire (șofer)."
           : "Se deschide după confirmarea duală (manager + șofer).",
@@ -194,7 +325,9 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       situation: wo?.inServiceAt
         ? `Intrare ${fmt(wo.inServiceAt)}${wo.outServiceAt ? "" : " · încă în service"}`
         : wo
-          ? "Marchează intrarea când mașina ajunge (partenerul o face la recepție)."
+          ? isDamage
+            ? "Intrare doar după acord asigurător + mașină la schimb."
+            : "Marchează intrarea când mașina ajunge (partenerul o face la recepție)."
           : "După deschiderea comenzii — partenerul marchează intrarea/ieșirea.",
       detail: wo?.odometerKmIn != null ? `Km intrare: ${wo.odometerKmIn.toLocaleString("ro-RO")}` : undefined,
     },
@@ -234,7 +367,38 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
           : undefined,
       links: approved && wo ? [{ href: `/fleet/work-orders/${wo.id}`, label: `Deviz v${approved.version}` }] : undefined,
     },
-    {
+  );
+
+  if (isDamage) {
+    chapters.push({
+      id: "mobility",
+      title: "Mașină la schimb (obligatoriu)",
+      optionalSide: true,
+      optionalActive: mobilityActive,
+      sideHint: "obligatoriu pe daună înainte de reparație",
+      situation: mobility
+        ? mobility.status === "waived"
+          ? `Renunțare — pe daună nu e permisă · ${formatMobilityBenefitSummary(mobility)}`
+          : `${mobilityStatusLabel(mobility.status)} · ${formatMobilityBenefitSummary(mobility)}`
+        : "Necesară pe daună — alocă înainte de In service.",
+      links: mobilityLinks.length ? mobilityLinks : undefined,
+    });
+    chapters.push({
+      id: "insurer",
+      title: "Acord asigurător",
+      situation: serviceCase?.damageInsurerAgreedAt
+        ? `Acordat · ${fmt(serviceCase.damageInsurerAgreedAt)}${
+            serviceCase.damageInsurerName ? ` · ${serviceCase.damageInsurerName}` : ""
+          }`
+        : serviceCase?.damageClaimNumber
+          ? `Dosar ${serviceCase.damageClaimNumber} — așteaptă acordul.`
+          : "Obligatoriu înainte de execuția reparației (tab Daună).",
+      detail: serviceCase?.damageClaimStatus
+        ? `Status dosar: ${serviceCase.damageClaimStatus}`
+        : undefined,
+    });
+  } else {
+    chapters.push({
       id: "decision",
       title: "Decizie reparație",
       situation: serviceCase?.awaitingPostApproval
@@ -246,27 +410,47 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
             : approved
               ? "Decizie luată."
               : "După aprobarea devizului.",
-    },
-    {
+    });
+    chapters.push({
       id: "mobility",
       title: "Mașină la schimb (opțional)",
+      optionalSide: true,
+      optionalActive: mobilityActive,
+      sideHint: "fără mașină la schimb → continuă pe linie",
       situation: mobility
         ? mobility.status === "waived"
-          ? `Client a renunțat la mobilitate · ${formatMobilityBenefitSummary(mobility)}`
-          : mobility.status === "returned" || mobility.status === "active" || mobility.status === "reserved"
-            ? `Beneficiu mașină la schimb pe durata reparației · ${formatMobilityBenefitSummary(mobility)}`
+          ? `Client a renunțat · ${formatMobilityBenefitSummary(mobility)}`
+          : mobilityActive
+            ? `În uz · ${formatMobilityBenefitSummary(mobility)}`
             : `${mobilityStatusLabel(mobility.status)} · ${formatMobilityBenefitSummary(mobility)}`
         : !wo?.estimatedRepairAt && wo?.inServiceAt
-          ? "Opțional — eligibilitatea se calculează după estimarea finalizării reparației (pe deviz)."
+          ? "Opțional — eligibilitate după estimarea finalizării pe deviz."
           : eligible && wo?.inServiceAt && !wo.outServiceAt
-            ? `Eligibil mobilitate (${immHours?.toFixed(1) ?? "—"}h > ${MOBILITY_ELIGIBILITY_HOURS}h).`
+            ? `Eligibil (${immHours?.toFixed(1) ?? "—"}h > ${MOBILITY_ELIGIBILITY_HOURS}h).`
             : wo?.inServiceAt && !wo.outServiceAt
               ? immHours != null
-                ? `Sub prag ${MOBILITY_ELIGIBILITY_HOURS}h (${immHours.toFixed(1)}h) — poți înregistra renunțare sau alocare excepție.`
-                : "Opțional — disponibil după estimare reparație."
+                ? `Sub prag ${MOBILITY_ELIGIBILITY_HOURS}h (${immHours.toFixed(1)}h).`
+                : "Opțional — după estimare reparație."
               : "Opțional — dacă imobilizarea depășește 72h.",
       links: mobilityLinks.length ? mobilityLinks : undefined,
-    },
+    });
+  }
+
+  if (isDamage) {
+    chapters.push({
+      id: "decision",
+      title: "Decizie / execuție",
+      situation: serviceCase?.awaitingPostApproval
+        ? "Alege: reparație acum sau reprogramare."
+        : serviceCase?.damageInsurerAgreedAt && mobilityActive
+          ? "Condiții îndeplinite — reparația poate continua."
+          : approved
+            ? "După acord + mașină schimb: execuție reparație."
+            : "După aprobarea devizului.",
+    });
+  }
+
+  chapters.push(
     {
       id: "work-ready",
       title: "Lucrare gata",
@@ -283,7 +467,11 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       situation: approved?.costEntryId
         ? `Cost ${fmtMoney(approved.totalGrossCents, approved.currency)} înregistrat.`
         : approved?.invoicedAt
-          ? `Factură ${approved.invoiceNumber ?? "—"} — generează cost${serviceCase?.workflowType === "itp" || serviceCase?.workflowType === "repair" ? " (opțional reminder)" : ""}.`
+          ? `Factură ${approved.invoiceNumber ?? "—"} — generează cost${
+              serviceCase?.workflowType === "itp" || serviceCase?.workflowType === "repair"
+                ? " (opțional reminder)"
+                : ""
+            }.`
           : approved && wo?.readyAt
             ? "După lucrare gata: factură apoi cost."
             : approved
@@ -319,44 +507,22 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
         : "După factură și cost — finalizează comanda.",
       detail: caseClosed ? "Dosar service complet." : undefined,
     },
-  ];
+  );
 
   if (!serviceCase) {
-    return chapters.map((c, i) => ({
-      ...c,
-      state: (closed
-        ? "done"
-        : i === 0
-          ? "done"
-          : i === 1
-            ? "now"
-            : "later") as StoryChapterState,
-    }));
+    return assignChapterStates(chapters, closed ? "ticket-open" : "schedule", false, closed);
   }
 
-  if (caseClosed) {
-    return chapters.map((c) => ({ ...c, state: "done" as const }));
-  }
+  const nowId = resolveNowId({
+    serviceCase,
+    wo,
+    appt,
+    approved,
+    pendingQ,
+    caseClosed: !!caseClosed,
+    woDone: !!woDone,
+    isDamage: !!isDamage,
+  });
 
-  const nowIndex = (() => {
-    if (caseClosed || woDone) return 11;
-    if (wo?.outServiceAt && approved?.costEntryId) return 11;
-    if (approved?.costEntryId && approved.invoicedAt) return 10;
-    if (stage === "invoiced" || stage === "cost" || approved?.invoicedAt) return 9;
-    if (wo?.readyAt) return 8;
-    if (serviceCase!.awaitingPostApproval) return 6;
-    if (serviceCase!.postApprovalPath && !wo?.readyAt) return 7;
-    if (pendingQ) return 5;
-    if (approved) return wo?.readyAt ? 9 : 7;
-    if (stage === "quote" || stage === "approval") return 4;
-    if (stage === "in_service" || wo?.inServiceAt) return 3;
-    if (stage === "work_order" || wo) return 2;
-    if (stage === "scheduled" || appt) return 1;
-    return 1;
-  })();
-
-  return chapters.map((c, i) => ({
-    ...c,
-    state: (i < nowIndex ? "done" : i === nowIndex ? "now" : i === nowIndex + 1 ? "next" : "later") as StoryChapterState,
-  }));
+  return assignChapterStates(chapters, nowId, !!caseClosed, closed);
 }

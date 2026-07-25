@@ -40,6 +40,13 @@ export function TicketFormLayout({
     [vehicles, vehicleId],
   );
 
+  function selectVehicle(id: string) {
+    setVehicleId(id);
+    if (!id.trim()) return;
+    const v = vehicles.find((x) => x.id === id);
+    if (v?.clientId) setClientId(v.clientId);
+  }
+
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <aside className="w-full shrink-0 lg:w-[40%] lg:max-w-[40%] lg:border-r lg:border-zinc-800/80 lg:pr-5">
@@ -49,7 +56,7 @@ export function TicketFormLayout({
           driverId={driverId}
           vehicles={vehicles}
           reminderActionId={reminderActionId}
-          onVehicleIdChange={setVehicleId}
+          onVehicleIdChange={selectVehicle}
         />
       </aside>
       <div className="min-w-0 flex-1 lg:w-[60%]">
@@ -63,7 +70,7 @@ export function TicketFormLayout({
           clientId,
           setClientId,
           vehicleId,
-          setVehicleId,
+          setVehicleId: selectVehicle,
           driverId,
           setDriverId,
           selectedVehicle,

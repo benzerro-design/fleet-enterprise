@@ -9,6 +9,8 @@ import {
   CrmTicketLinkEntityType,
   CrmTicketStatus,
   CrmTicketType,
+  DamageClaimStatus,
+  DamageInsuranceType,
   MaintenanceWorkOrderStatus,
   Prisma,
   ServiceAppointmentStatus,
@@ -17,6 +19,7 @@ import {
   ServiceCaseStage,
   ServiceCaseStatus,
   ServiceCaseWorkflowType,
+  ServiceOrderType,
   PostApprovalPath,
   WorkOrderQuoteStatus,
 } from '@prisma/client';
@@ -145,6 +148,16 @@ export type UpdateServiceAppointmentInput = {
   status?: ServiceAppointmentStatus;
 };
 
+export type DamageDocumentItem = {
+  id: string;
+  kind: string;
+  label?: string;
+  notes?: string;
+  received: boolean;
+  uploadedAt: string;
+  uploadedByLabel?: string;
+};
+
 export type ServiceCaseRecord = {
   id: string;
   clientId: string;
@@ -161,10 +174,28 @@ export type ServiceCaseRecord = {
   closedAt: string | null;
   awaitingPostApproval: boolean;
   postApprovalPath: PostApprovalPath | null;
+  damageInsuranceType: DamageInsuranceType | null;
+  damageClaimNumber: string | null;
+  damageInsurerName: string | null;
+  damageClaimStatus: DamageClaimStatus | null;
+  damageInsurerAgreedAt: string | null;
+  damageInsurerAgreedByUserId: string | null;
+  damageInsurerAgreementNotes: string | null;
+  damageDocuments: DamageDocumentItem[];
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
   appointments: ServiceAppointmentRecord[];
+};
+
+export type PatchDamageClaimInput = {
+  damageInsuranceType?: DamageInsuranceType | null;
+  damageClaimNumber?: string | null;
+  damageInsurerName?: string | null;
+  damageClaimStatus?: DamageClaimStatus | null;
+  damageDocuments?: DamageDocumentItem[] | null;
+  agreeInsurer?: boolean;
+  damageInsurerAgreementNotes?: string | null;
 };
 
 export type PostApprovalInput = {
@@ -417,6 +448,103 @@ export class ServiceCasesService {
       include: this.caseInclude(),
     });
     return this.toRecord(reloaded!);
+  }
+
+  async patchDamageClaim(
+    tenantSlug: string,
+    caseId: string,
+    dto: PatchDamageClaimInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const row = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+    });
+    if (!row) throw new NotFoundException('Service case not found');
+    if (access) assertServiceCaseWrite(access, row.clientId);
+
+    if (row.workflowType !== ServiceCaseWorkflowType.damage) {
+      throw new BadRequestException('Damage claim fields apply only to damage workflow');
+    }
+
+    const data: Prisma.ServiceCaseUncheckedUpdateInput = {};
+    if (dto.damageInsuranceType !== undefined) data.damageInsuranceType = dto.damageInsuranceType;
+    if (dto.damageClaimNumber !== undefined) {
+      data.damageClaimNumber = dto.damageClaimNumber?.trim() || null;
+    }
+    if (dto.damageInsurerName !== undefined) {
+      data.damageInsurerName = dto.damageInsurerName?.trim() || null;
+    }
+    if (dto.damageClaimStatus !== undefined) data.damageClaimStatus = dto.damageClaimStatus;
+    if (dto.damageDocuments !== undefined) {
+      data.damageDocumentsJson = dto.damageDocuments ?? Prisma.JsonNull;
+    }
+    if (dto.damageInsurerAgreementNotes !== undefined) {
+      data.damageInsurerAgreementNotes = dto.damageInsurerAgreementNotes?.trim() || null;
+    }
+    if (dto.agreeInsurer === true) {
+      data.damageInsurerAgreedAt = new Date();
+      data.damageInsurerAgreedByUserId = actorUserId ?? null;
+      if (dto.damageClaimStatus === undefined) {
+        data.damageClaimStatus = DamageClaimStatus.agreed;
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No damage claim fields to update');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.serviceCase.update({
+        where: { id: caseId },
+        data,
+        include: this.caseInclude(),
+      });
+
+      if (row.sourceTicketId) {
+        const parts: string[] = [];
+        if (dto.agreeInsurer) parts.push('acord asigurător înregistrat');
+        if (dto.damageClaimStatus) parts.push(`status: ${dto.damageClaimStatus}`);
+        if (dto.damageClaimNumber?.trim()) parts.push(`nr. dosar: ${dto.damageClaimNumber.trim()}`);
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: row.sourceTicketId,
+            kind: CrmTicketEventKind.damage_claim_update,
+            body:
+              parts.length > 0
+                ? `Actualizare daună — ${parts.join(', ')}.`
+                : 'Actualizare dosar daună / asigurare.',
+            payload: {
+              serviceCaseId: caseId,
+              damageInsuranceType: next.damageInsuranceType,
+              damageClaimNumber: next.damageClaimNumber,
+              damageInsurerName: next.damageInsurerName,
+              damageClaimStatus: next.damageClaimStatus,
+              damageInsurerAgreedAt: next.damageInsurerAgreedAt?.toISOString() ?? null,
+              agreeInsurer: dto.agreeInsurer === true,
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+
+      return next;
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_case.damage_claim_patch',
+      entityType: 'service_case',
+      entityId: caseId,
+      meta: dto,
+    });
+
+    return this.toRecord(updated);
   }
 
   async createAppointment(
@@ -1074,7 +1202,13 @@ export class ServiceCasesService {
 
   private async ensureWorkOrder(
     tenantId: string,
-    serviceCase: { id: string; vehicleId: string | null; title: string; sourceTicketId: string | null },
+    serviceCase: {
+      id: string;
+      vehicleId: string | null;
+      title: string;
+      sourceTicketId: string | null;
+      workflowType: ServiceCaseWorkflowType;
+    },
     supplierId: string | null,
     actorUserId?: string,
   ) {
@@ -1087,7 +1221,13 @@ export class ServiceCasesService {
   private async ensureWorkOrderTx(
     tx: Prisma.TransactionClient | PrismaService,
     tenantId: string,
-    serviceCase: { id: string; vehicleId: string | null; title: string; sourceTicketId: string | null },
+    serviceCase: {
+      id: string;
+      vehicleId: string | null;
+      title: string;
+      sourceTicketId: string | null;
+      workflowType: ServiceCaseWorkflowType;
+    },
     supplierId: string | null,
     actorUserId?: string,
   ) {
@@ -1109,6 +1249,10 @@ export class ServiceCasesService {
     }
 
     const displayNumber = await nextWorkOrderDisplayNumber(tx, tenantId, new Date());
+    const serviceOrderType =
+      serviceCase.workflowType === ServiceCaseWorkflowType.damage
+        ? ServiceOrderType.D
+        : ServiceOrderType.M;
 
     const wo = await tx.maintenanceWorkOrder.create({
       data: {
@@ -1118,6 +1262,7 @@ export class ServiceCasesService {
         supplierId,
         title: serviceCase.title,
         displayNumber,
+        serviceOrderType,
         status: supplierId ? MaintenanceWorkOrderStatus.sent : MaintenanceWorkOrderStatus.draft,
       },
     });
@@ -1139,7 +1284,7 @@ export class ServiceCasesService {
       action: 'work_order.create',
       entityType: 'maintenance_work_order',
       entityId: wo.id,
-      meta: { serviceCaseId: serviceCase.id },
+      meta: { serviceCaseId: serviceCase.id, serviceOrderType },
     });
 
     return wo;
@@ -1227,6 +1372,26 @@ export class ServiceCasesService {
     };
   }
 
+  private parseDamageDocuments(raw: unknown): DamageDocumentItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamageDocumentItem[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.kind !== 'string') continue;
+      out.push({
+        id: o.id,
+        kind: o.kind,
+        label: typeof o.label === 'string' ? o.label : undefined,
+        notes: typeof o.notes === 'string' ? o.notes : undefined,
+        received: o.received === true,
+        uploadedAt: typeof o.uploadedAt === 'string' ? o.uploadedAt : new Date(0).toISOString(),
+        uploadedByLabel: typeof o.uploadedByLabel === 'string' ? o.uploadedByLabel : undefined,
+      });
+    }
+    return out;
+  }
+
   private toRecord(
     row: {
       id: string;
@@ -1242,6 +1407,14 @@ export class ServiceCasesService {
       notes: string | null;
       awaitingPostApproval?: boolean;
       postApprovalPath?: PostApprovalPath | null;
+      damageInsuranceType?: DamageInsuranceType | null;
+      damageClaimNumber?: string | null;
+      damageInsurerName?: string | null;
+      damageClaimStatus?: DamageClaimStatus | null;
+      damageInsurerAgreedAt?: Date | null;
+      damageInsurerAgreedByUserId?: string | null;
+      damageInsurerAgreementNotes?: string | null;
+      damageDocumentsJson?: unknown;
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
@@ -1314,6 +1487,14 @@ export class ServiceCasesService {
       closedAt: row.closedAt?.toISOString() ?? null,
       awaitingPostApproval: row.awaitingPostApproval ?? false,
       postApprovalPath: row.postApprovalPath ?? null,
+      damageInsuranceType: row.damageInsuranceType ?? null,
+      damageClaimNumber: row.damageClaimNumber ?? null,
+      damageInsurerName: row.damageInsurerName ?? null,
+      damageClaimStatus: row.damageClaimStatus ?? null,
+      damageInsurerAgreedAt: row.damageInsurerAgreedAt?.toISOString() ?? null,
+      damageInsurerAgreedByUserId: row.damageInsurerAgreedByUserId ?? null,
+      damageInsurerAgreementNotes: row.damageInsurerAgreementNotes ?? null,
+      damageDocuments: this.parseDamageDocuments(row.damageDocumentsJson),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       workOrders: (row.workOrders ?? []).map((wo) => {

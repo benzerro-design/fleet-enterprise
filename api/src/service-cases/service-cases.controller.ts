@@ -10,6 +10,7 @@ import { TenantId } from '../fleet/tenant-id.decorator';
 import type {
   AdvanceServiceCaseInput,
   CreateServiceAppointmentInput,
+  PatchDamageClaimInput,
   PostApprovalInput,
   UpdateServiceAppointmentInput,
 } from './service-cases.service';
@@ -53,6 +54,18 @@ export class ServiceCasesController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.serviceCases.advance(tenantSlug, id, body, actorUserId, access);
+  }
+
+  @Patch(':id/damage-claim')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchDamageClaim(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: PatchDamageClaimInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.patchDamageClaim(tenantSlug, id, body, actorUserId, access);
   }
 
   @Post(':id/post-approval')

@@ -212,34 +212,32 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
       {showLegend ? <TicketGlyphLegendPanel onClose={() => setShowLegend(false)} /> : null}
 
       <FleetDataTable>
-        <div className="fleet-scroll-pane overflow-auto">
-          <table className={`${fleetTableClass} text-xs`}>
-            <thead className={fleetTheadClass}>
-              <tr>
+        <table className={`${fleetTableClass} text-xs`}>
+          <thead className={fleetTheadClass}>
+            <tr>
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  className={`${fleetThClass} whitespace-nowrap`}
+                  style={{ minWidth: col.minWidth }}
+                >
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-800/80">
+            {items.map((row) => (
+              <tr key={row.id} className="hover:bg-zinc-900/40">
                 {columns.map((col) => (
-                  <th
-                    key={col.key}
-                    className={`${fleetThClass} whitespace-nowrap`}
-                    style={{ minWidth: col.minWidth }}
-                  >
-                    {col.label}
-                  </th>
+                  <td key={col.key} className={`${fleetTdClass} max-w-[280px] truncate`}>
+                    {renderCell(col.key, row)}
+                  </td>
                 ))}
               </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/80">
-              {items.map((row) => (
-                <tr key={row.id} className="hover:bg-zinc-900/40">
-                  {columns.map((col) => (
-                    <td key={col.key} className={`${fleetTdClass} max-w-[280px] truncate`}>
-                      {renderCell(col.key, row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </FleetDataTable>
     </div>
   );

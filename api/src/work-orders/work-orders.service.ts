@@ -12,6 +12,7 @@ import {
   Prisma,
   ServiceCaseStage,
   ServiceCaseStatus,
+  ServiceCaseWorkflowType,
   ServiceOrderType,
   WorkOrderQuoteStatus,
   WorkOrderWarrantyStatus,
@@ -882,6 +883,8 @@ export class WorkOrdersService {
             sourceTicketId: true,
             clientId: true,
             postApprovalPath: true,
+            workflowType: true,
+            damageInsurerAgreedAt: true,
           },
         },
       },
@@ -1004,6 +1007,27 @@ export class WorkOrdersService {
     const markingOut = useVisit2
       ? data.visit2OutServiceAt != null && !wo.visit2OutServiceAt
       : data.outServiceAt != null && !wo.outServiceAt;
+
+    if (markingIn && wo.serviceCase.workflowType === ServiceCaseWorkflowType.damage) {
+      if (!wo.serviceCase.damageInsurerAgreedAt) {
+        throw new BadRequestException(
+          'Pentru flux daună este necesar acordul asigurătorului înainte de intrarea în service.',
+        );
+      }
+      const mobility = await this.prisma.mobilityAssignment.findFirst({
+        where: {
+          tenantId: tenant.id,
+          serviceCaseId: wo.serviceCaseId,
+          status: { in: ['reserved', 'active', 'returned'] },
+        },
+        select: { id: true },
+      });
+      if (!mobility) {
+        throw new BadRequestException(
+          'Pentru flux daună este obligatorie mașina la schimb (rezervată, activă sau returnată) înainte de reparație.',
+        );
+      }
+    }
 
     if (settings.requireServiceKm) {
       if (markingIn && (nextKmIn == null || nextKmIn < 0)) {

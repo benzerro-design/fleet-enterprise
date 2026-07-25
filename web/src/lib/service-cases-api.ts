@@ -23,7 +23,67 @@ export type ServiceCaseWorkflowType =
   | "insurance_rca"
   | "insurance_casco";
 
+export type DamageInsuranceType = "RCA" | "CASCO" | "BOTH" | "UNKNOWN";
+
+export type DamageClaimStatus =
+  | "open"
+  | "documents_pending"
+  | "insurer_review"
+  | "agreed"
+  | "rejected"
+  | "closed";
+
+export type DamageDocumentKind =
+  | "declaration"
+  | "police_report"
+  | "amicable_settlement"
+  | "id_card"
+  | "driving_license"
+  | "other";
+
+export type DamageDocumentItem = {
+  id: string;
+  kind: string;
+  label?: string;
+  notes?: string;
+  received: boolean;
+  uploadedAt: string;
+  uploadedByLabel?: string;
+};
+
+export type PatchDamageClaimInput = {
+  damageInsuranceType?: DamageInsuranceType | null;
+  damageClaimNumber?: string | null;
+  damageInsurerName?: string | null;
+  damageClaimStatus?: DamageClaimStatus | null;
+  damageDocuments?: DamageDocumentItem[] | null;
+  agreeInsurer?: boolean;
+  damageInsurerAgreementNotes?: string | null;
+};
+
 export type PostApprovalPath = "immediate" | "reschedule";
+
+export const DAMAGE_DOCUMENT_KINDS: { kind: DamageDocumentKind; label: string }[] = [
+  { kind: "declaration", label: "Declarație" },
+  { kind: "police_report", label: "Proces-verbal poliție" },
+  { kind: "amicable_settlement", label: "Constatare amiabilă" },
+  { kind: "id_card", label: "CI" },
+  { kind: "driving_license", label: "Permis de conducere" },
+  { kind: "other", label: "Altele" },
+];
+
+export function damageClaimStatusLabel(status: DamageClaimStatus | string | null | undefined): string {
+  if (!status) return "—";
+  const map: Record<string, string> = {
+    open: "Deschis",
+    documents_pending: "Documente lipsă",
+    insurer_review: "La asigurător",
+    agreed: "Acordat",
+    rejected: "Respins",
+    closed: "Închis",
+  };
+  return map[status] ?? status;
+}
 
 export type WorkOrderQuoteStatus = "draft" | "submitted" | "approved" | "rejected";
 
@@ -113,6 +173,14 @@ export type ServiceCaseRecord = {
   closedAt: string | null;
   awaitingPostApproval: boolean;
   postApprovalPath: PostApprovalPath | null;
+  damageInsuranceType?: DamageInsuranceType | null;
+  damageClaimNumber?: string | null;
+  damageInsurerName?: string | null;
+  damageClaimStatus?: DamageClaimStatus | null;
+  damageInsurerAgreedAt?: string | null;
+  damageInsurerAgreedByUserId?: string | null;
+  damageInsurerAgreementNotes?: string | null;
+  damageDocuments?: DamageDocumentItem[];
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];

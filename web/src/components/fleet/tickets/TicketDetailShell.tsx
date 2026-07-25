@@ -7,6 +7,8 @@ import { TicketActionTimeline } from "@/components/fleet/tickets/TicketActionTim
 import { TicketCommandHeader } from "@/components/fleet/tickets/TicketCommandHeader";
 import { TicketConversation } from "@/components/fleet/tickets/TicketConversation";
 import { TicketEditPanel } from "@/components/fleet/tickets/TicketEditPanel";
+import { DamageClaimPanel } from "@/components/fleet/tickets/DamageClaimPanel";
+import { RoadsideAssistancePanel } from "@/components/fleet/tickets/RoadsideAssistancePanel";
 import { TicketSideTabs } from "@/components/fleet/tickets/TicketSideTabs";
 import { TicketWorkflowStepper } from "@/components/fleet/tickets/TicketWorkflowStepper";
 import type { ServiceCaseRecord } from "@/lib/service-cases-api";
@@ -114,6 +116,7 @@ export function TicketDetailShell({
         </section>
 
         <TicketSideTabs
+          showDamageTabs={ticket.ticketType === "damage"}
           flow={
             <TicketWorkflowStepper
               ticketId={ticket.id}
@@ -128,6 +131,20 @@ export function TicketDetailShell({
               compact
               ticketLinks={detail.links}
               onServiceCaseChange={setServiceCase}
+            />
+          }
+          damage={
+            <DamageClaimPanel
+              serviceCase={serviceCase}
+              canWrite={write && canOperate}
+              onUpdated={(next) => setServiceCase(next)}
+            />
+          }
+          roadside={
+            <RoadsideAssistancePanel
+              serviceCase={serviceCase}
+              ticketId={ticket.id}
+              canWrite={write && canOperate}
             />
           }
           actions={<TicketActionsPanel detail={detail} canWrite={write} />}

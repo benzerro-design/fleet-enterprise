@@ -56,6 +56,7 @@ model Tenant {
   workOrderWarrantyLines WorkOrderWarrantyLine[]
   workOrderMessages      WorkOrderMessage[]
   mobilityAssignments    MobilityAssignment[]
+  roadsideInterventions  RoadsideIntervention[]
 }
 
 enum ClientStatus {
@@ -89,6 +90,7 @@ model Client {
   memberships   ClientMembership[]
   serviceCases  ServiceCase[]
   mobilityAssignments MobilityAssignment[]
+  roadsideInterventions RoadsideIntervention[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -513,6 +515,7 @@ model Vehicle {
   maintenanceWorkOrders MaintenanceWorkOrder[]
   serviceAppointments ServiceAppointment[]
   mobilityAssignmentsCovered MobilityAssignment[] @relation("MobilityCoveredVehicle")
+  roadsideInterventions      RoadsideIntervention[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])
@@ -894,6 +897,8 @@ enum CrmTicketEventKind {
   odometer
   workflow_advance
   mobility_update
+  roadside_update
+  damage_claim_update
 }
 
 enum CrmTicketLinkEntityType {
@@ -951,6 +956,7 @@ model CrmTicket {
   notifications    CrmTicketNotification[]
   serviceCase      ServiceCase?
   mobilityAssignments MobilityAssignment[]
+  roadsideInterventions RoadsideIntervention[]
 
   @@index([tenantId])
   @@index([clientId])
@@ -1086,6 +1092,7 @@ model Supplier {
   workOrders           MaintenanceWorkOrder[]
   serviceAppointments  ServiceAppointment[]
   mobilityAssignments  MobilityAssignment[]
+  roadsideInterventions RoadsideIntervention[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1275,6 +1282,16 @@ model ServiceCase {
   awaitingPostApproval   Boolean                 @default(false)
   postApprovalPath       PostApprovalPath?
   closedAt               DateTime?
+  /// Tip asigurare daună (RCA / CASCO).
+  damageInsuranceType          DamageInsuranceType?
+  damageClaimNumber            String?
+  damageInsurerName            String?
+  damageClaimStatus            DamageClaimStatus?
+  damageInsurerAgreedAt        DateTime?
+  damageInsurerAgreedByUserId  String?
+  damageInsurerAgreementNotes  String?
+  /// Documente daună: array { id, kind, label?, notes?, received, uploadedAt, uploadedByLabel? }
+  damageDocumentsJson          Json?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1285,6 +1302,7 @@ model ServiceCase {
   workOrders             MaintenanceWorkOrder[]
   appointments           ServiceAppointment[]
   mobilityAssignments    MobilityAssignment[]
+  roadsideInterventions  RoadsideIntervention[]
 
   @@index([tenantId])
   @@index([clientId])
@@ -1330,6 +1348,7 @@ model MaintenanceWorkOrder {
   quotes        WorkOrderQuote[]
   warranty      WorkOrderWarranty?
   mobilityAssignments MobilityAssignment[]
+  roadsideInterventions RoadsideIntervention[]
   messages      WorkOrderMessage[]
 
   @@unique([tenantId, displayNumber])
@@ -1589,4 +1608,75 @@ model MobilityAssignment {
   @@index([sourceTicketId])
   @@index([tenantId, status])
   @@index([coveredVehicleId])
+}
+
+enum DamageInsuranceType {
+  RCA
+  CASCO
+  BOTH
+  UNKNOWN
+}
+
+enum DamageClaimStatus {
+  open
+  documents_pending
+  insurer_review
+  agreed
+  rejected
+  closed
+}
+
+enum RoadsideInterventionKind {
+  tow
+  jump_start
+  tire_change
+  lockout
+  fuel_delivery
+  other
+}
+
+enum RoadsideInterventionStatus {
+  draft
+  requested
+  dispatched
+  on_site
+  completed
+  cancelled
+}
+
+/// Intervenție asistență rutieră (ex. tractare) pe dosar — nu e WO separat.
+model RoadsideIntervention {
+  id              String                       @id @default(cuid())
+  tenantId        String
+  displayNumber   String?
+  serviceCaseId   String
+  sourceTicketId  String?
+  workOrderId     String?
+  clientId        String
+  vehicleId       String?
+  supplierId      String?
+  kind            RoadsideInterventionKind
+  status          RoadsideInterventionStatus   @default(draft)
+  locationText    String?
+  requestedAt     DateTime?
+  dispatchedAt    DateTime?
+  onSiteAt        DateTime?
+  completedAt     DateTime?
+  notes           String?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  tenant          Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceCase     ServiceCase                  @relation(fields: [serviceCaseId], references: [id], onDelete: Cascade)
+  sourceTicket    CrmTicket?                   @relation(fields: [sourceTicketId], references: [id], onDelete: SetNull)
+  workOrder       MaintenanceWorkOrder?        @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  client          Client                       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicle         Vehicle?                     @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  supplier        Supplier?                    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, displayNumber])
+  @@index([tenantId])
+  @@index([serviceCaseId])
+  @@index([sourceTicketId])
+  @@index([workOrderId])
+  @@index([tenantId, status])
 }

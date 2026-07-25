@@ -2,30 +2,60 @@
 
 import { useState } from "react";
 
-type Tab = "flow" | "actions" | "history" | "details";
+type Tab = "flow" | "actions" | "history" | "details" | "damage" | "roadside";
 
 type Props = {
   flow: React.ReactNode;
   actions: React.ReactNode;
   history: React.ReactNode;
   details: React.ReactNode;
+  damage?: React.ReactNode;
+  roadside?: React.ReactNode;
+  showDamageTabs?: boolean;
   defaultTab?: Tab;
 };
 
-const tabs: { id: Tab; label: string }[] = [
-  { id: "flow", label: "Flux operațional" },
-  { id: "actions", label: "Acțiuni" },
-  { id: "history", label: "Istoric" },
-  { id: "details", label: "Detalii" },
-];
-
-export function TicketSideTabs({ flow, actions, history, details, defaultTab = "flow" }: Props) {
+export function TicketSideTabs({
+  flow,
+  actions,
+  history,
+  details,
+  damage,
+  roadside,
+  showDamageTabs = false,
+  defaultTab = "flow",
+}: Props) {
   const [tab, setTab] = useState<Tab>(defaultTab);
-  const panel = tab === "flow" ? flow : tab === "actions" ? actions : tab === "history" ? history : details;
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "flow", label: "Flux operațional" },
+    ...(showDamageTabs
+      ? [
+          { id: "damage" as const, label: "Daună" },
+          { id: "roadside" as const, label: "Asistență" },
+        ]
+      : []),
+    { id: "actions", label: "Acțiuni" },
+    { id: "history", label: "Istoric" },
+    { id: "details", label: "Detalii" },
+  ];
+
+  const panel =
+    tab === "flow"
+      ? flow
+      : tab === "damage"
+        ? damage
+        : tab === "roadside"
+          ? roadside
+          : tab === "actions"
+            ? actions
+            : tab === "history"
+              ? history
+              : details;
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/30">
-      <div className="flex border-b border-zinc-800" role="tablist">
+      <div className="flex flex-wrap border-b border-zinc-800" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -33,7 +63,7 @@ export function TicketSideTabs({ flow, actions, history, details, defaultTab = "
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 px-3 py-2.5 text-xs font-medium transition sm:text-sm ${
+            className={`px-3 py-2.5 text-xs font-medium transition sm:flex-1 sm:text-sm ${
               tab === t.id ? "border-b-2 border-sky-500 text-sky-200" : "text-zinc-500 hover:text-zinc-300"
             }`}
           >

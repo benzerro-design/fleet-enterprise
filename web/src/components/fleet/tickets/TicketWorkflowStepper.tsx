@@ -23,6 +23,7 @@ import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/Wor
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 import { formatDateRo } from "@/lib/datetime-local";
 import { mobilityBrowserBase, type MobilityEligibilityRecord } from "@/lib/mobility-api";
+import { roadsideBrowserBase, type RoadsideInterventionRecord } from "@/lib/roadside-api";
 import { fleetJsonHeaders as ticketFleetHeaders, ticketsBrowserBase, type TicketLinkRecord } from "@/lib/tickets-api";
 
 type Props = {
@@ -63,6 +64,7 @@ export function TicketWorkflowStepper({
   const [appointmentLocation, setAppointmentLocation] = useState("");
   const [appointmentNotes, setAppointmentNotes] = useState("");
   const [mobilityEligibility, setMobilityEligibility] = useState<MobilityEligibilityRecord | null>(null);
+  const [roadsideItems, setRoadsideItems] = useState<RoadsideInterventionRecord[]>([]);
 
   const loadMobility = useCallback(async (workOrderId: string) => {
     try {
@@ -74,6 +76,25 @@ export function TicketWorkflowStepper({
       }
     } catch {
       setMobilityEligibility(null);
+    }
+  }, []);
+
+  const loadRoadside = useCallback(async (serviceCaseId: string | null | undefined) => {
+    if (!serviceCaseId) {
+      setRoadsideItems([]);
+      return;
+    }
+    try {
+      const params = new URLSearchParams({ serviceCaseId, pageSize: "50" });
+      const res = await fetch(`${roadsideBrowserBase}/interventions?${params}`);
+      if (res.ok) {
+        const j = (await res.json()) as { items?: RoadsideInterventionRecord[] };
+        setRoadsideItems(j.items ?? []);
+      } else {
+        setRoadsideItems([]);
+      }
+    } catch {
+      setRoadsideItems([]);
     }
   }, []);
 
@@ -113,12 +134,13 @@ export function TicketWorkflowStepper({
       const woId = data?.workOrders[0]?.id;
       if (woId) void loadMobility(woId);
       else setMobilityEligibility(null);
+      void loadRoadside(data?.id);
       onServiceCaseChange?.(data);
     } catch {
       setServiceCase(null);
       setError("Nu s-a putut încărca dosarul lucrare.");
     }
-  }, [ticketId, onServiceCaseChange, loadMobility]);
+  }, [ticketId, onServiceCaseChange, loadMobility, loadRoadside]);
 
   useEffect(() => {
     void load();
@@ -400,6 +422,7 @@ export function TicketWorkflowStepper({
     mobility: mobilityEligibility?.benefitAssignment ?? mobilityEligibility?.activeAssignment ?? null,
     mobilityEligible: mobilityEligibility?.eligible,
     mobilityImmobilizationHours: mobilityEligibility?.immobilizationHours ?? null,
+    roadside: roadsideItems,
   });
   const shell = compact ? "space-y-4" : "rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-4";
   const hasPendingAppointment =

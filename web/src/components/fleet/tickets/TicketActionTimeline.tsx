@@ -3,7 +3,16 @@
 import { FleetAvatar } from "@/components/fleet/tickets/TicketListGlyphs";
 import { ticketEventKindLabel, ticketRoutingLabel, type TicketEventRecord } from "@/lib/tickets-api";
 
-const ACTION_KINDS = new Set(["routing", "transform", "status", "odometer", "workflow_advance", "mobility_update"]);
+const ACTION_KINDS = new Set([
+  "routing",
+  "transform",
+  "status",
+  "odometer",
+  "workflow_advance",
+  "mobility_update",
+  "roadside_update",
+  "damage_claim_update",
+]);
 
 function actorLabel(ev: TicketEventRecord): string | null {
   if (ev.actorDisplayName) {
