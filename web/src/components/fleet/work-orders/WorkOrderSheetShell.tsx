@@ -95,7 +95,15 @@ export function WorkOrderSheetShell({
   const [kmOut2, setKmOut2] = useState(wo.visit2OdometerKmOut != null ? String(wo.visit2OdometerKmOut) : "");
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [sheetView, setSheetView] = useState<"comanda" | "dosar">("comanda");
   const requireKm = workOrderSettings.requireServiceKm;
+  const isDamageWo = wo.workflowType === "damage";
+  const damageGateReady = isDamageInsurerReady({
+    damagePayerType: wo.damagePayerType,
+    damageInsurerPipelineStatus: wo.damageInsurerPipelineStatus,
+    damageInsurerAgreedAt: wo.damageInsurerAgreedAt,
+  });
+  const damageGateBlocked = isDamageWo && !wo.inServiceAt && !damageGateReady;
 
   const useVisit2 = wo.postApprovalPath === "reschedule" && !!wo.outServiceAt;
   const outServiceDone = useVisit2 ? !!wo.visit2OutServiceAt : !!wo.outServiceAt;
@@ -272,7 +280,23 @@ export function WorkOrderSheetShell({
       ];
 
   const toolbarGroups = [
-    { label: "Comandă", items: [] as { label: string; href?: string; onClick?: () => void }[] },
+    {
+      label: "Comandă",
+      items: isDamageWo
+        ? ([
+            {
+              label: "Comandă",
+              onClick: () => setSheetView("comanda"),
+              active: sheetView === "comanda",
+            },
+            {
+              label: "Dosar daună",
+              onClick: () => setSheetView("dosar"),
+              active: sheetView === "dosar",
+            },
+          ] as { label: string; href?: string; onClick?: () => void; active?: boolean }[])
+        : ([] as { label: string; href?: string; onClick?: () => void; active?: boolean }[]),
+    },
     { label: "Navigare", items: navActions },
   ];
 
@@ -284,6 +308,9 @@ export function WorkOrderSheetShell({
             <div key={g.label} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5">
               <div className="mb-1 text-[9px] font-semibold uppercase text-zinc-500">{g.label}</div>
               <div className="flex flex-wrap gap-1">
+                {g.items.length === 0 && g.label === "Comandă" && !isDamageWo ? (
+                  <span className="text-[10px] text-zinc-600">—</span>
+                ) : null}
                 {g.items.map((act) =>
                   "href" in act && act.href ? (
                     <Link key={act.label} href={act.href} className={sheetBtn()}>
@@ -295,7 +322,11 @@ export function WorkOrderSheetShell({
                       type="button"
                       disabled={pending}
                       onClick={"onClick" in act ? act.onClick : undefined}
-                      className={sheetBtn(true)}
+                      className={
+                        "active" in act && act.active
+                          ? "inline-flex h-7 items-center justify-center rounded border border-violet-500/60 bg-violet-950/50 px-2.5 text-xs font-semibold whitespace-nowrap text-violet-100"
+                          : sheetBtn("onClick" in act && !!act.onClick && !("href" in act && act.href))
+                      }
                     >
                       {act.label}
                     </button>
@@ -312,67 +343,57 @@ export function WorkOrderSheetShell({
           <div className="font-mono text-lg font-semibold tracking-tight text-violet-300">
             {workOrderDisplayLabel(wo)}
           </div>
-          <div className="text-sm font-medium text-zinc-200">{wo.title}</div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
-            <span>{wo.registrationNumber}</span>
-            <span>·</span>
-            <span>{wo.supplierLegalName ?? "—"}</span>
-            <span>·</span>
-            <span>
-              Total deviz <span className="font-mono text-zinc-200">{totalDisplay}</span>
-            </span>
-          </div>
-          <span className="flex items-center gap-1 text-xs font-normal text-zinc-400">
-            Tip:
-            {SERVICE_ORDER_TYPES.map((st) => (
+          {sheetView === "comanda" || !isDamageWo ? (
+            <>
+              <div className="text-sm font-medium text-zinc-200">{wo.title}</div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+                <span>{wo.registrationNumber}</span>
+                <span>·</span>
+                <span>{wo.supplierLegalName ?? "—"}</span>
+                <span>·</span>
+                <span>
+                  Total deviz <span className="font-mono text-zinc-200">{totalDisplay}</span>
+                </span>
+              </div>
+              <span className="flex items-center gap-1 text-xs font-normal text-zinc-400">
+                Tip:
+                {SERVICE_ORDER_TYPES.map((st) => (
+                  <button
+                    key={st.code}
+                    type="button"
+                    disabled={!canWrite || pending}
+                    onClick={() => void changeServiceType(st.code)}
+                    className={`rounded border px-1.5 py-0.5 font-mono text-[11px] ${
+                      serviceType === st.code
+                        ? "border-violet-500/60 bg-violet-950/50 text-violet-200"
+                        : "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                    }`}
+                  >
+                    {st.code}
+                  </button>
+                ))}
+                <span className="text-zinc-300">{serviceOrderTypeLabel(serviceType)}</span>
+              </span>
+            </>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+              <span>Dosar daună</span>
+              <span>·</span>
+              <span>{wo.registrationNumber}</span>
               <button
-                key={st.code}
                 type="button"
-                disabled={!canWrite || pending}
-                onClick={() => void changeServiceType(st.code)}
-                className={`rounded border px-1.5 py-0.5 font-mono text-[11px] ${
-                  serviceType === st.code
-                    ? "border-violet-500/60 bg-violet-950/50 text-violet-200"
-                    : "border-zinc-700 text-zinc-400 hover:border-zinc-600"
-                }`}
+                onClick={() => setSheetView("comanda")}
+                className="text-sky-300 hover:underline"
               >
-                {st.code}
+                ← înapoi la comandă
               </button>
-            ))}
-            <span className="text-zinc-300">{serviceOrderTypeLabel(serviceType)}</span>
-          </span>
+            </div>
+          )}
         </div>
       </div>
 
-      <MobilityWoBanner
-        workOrderId={wo.id}
-        canWrite={canWrite}
-        damageRequired={wo.workflowType === "damage"}
-      />
-      <WorkOrderMobilitySummary workOrderId={wo.id} />
-
-      {wo.workflowType === "damage" ? (
+      {isDamageWo && sheetView === "dosar" ? (
         <div className="border-b border-zinc-800 px-4 py-4">
-          {!wo.inServiceAt &&
-          !isDamageInsurerReady({
-            damagePayerType: wo.damagePayerType,
-            damageInsurerPipelineStatus: wo.damageInsurerPipelineStatus,
-            damageInsurerAgreedAt: wo.damageInsurerAgreedAt,
-          }) ? (
-            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
-              In service blocat până la{" "}
-              {wo.damagePayerType === "client"
-                ? "confirmarea plătitorului client"
-                : "Accept plată (pipeline asigurător)"}{" "}
-              + mașină la schimb
-              {wo.vehicleMovable === "immovable" ? " + asistență rutieră" : ""}.
-            </div>
-          ) : null}
-          {!wo.damagePayerType ? (
-            <div className="mb-3 rounded-lg border border-sky-500/40 bg-sky-950/20 px-3 py-2 text-xs text-sky-100">
-              Alege plătitorul (asigurător sau client) pe dosarul de daună — obligatoriu pe WO.
-            </div>
-          ) : null}
           <DamageClaimPanel
             serviceCase={serviceCaseFromWorkOrderDamage(wo)}
             canWrite={canWrite}
@@ -380,6 +401,54 @@ export function WorkOrderSheetShell({
             fromWorkOrder
             onUpdated={() => router.refresh()}
           />
+        </div>
+      ) : null}
+
+      {sheetView === "comanda" || !isDamageWo ? (
+        <>
+      <MobilityWoBanner
+        workOrderId={wo.id}
+        canWrite={canWrite}
+        damageRequired={isDamageWo}
+      />
+      <WorkOrderMobilitySummary workOrderId={wo.id} />
+
+      {isDamageWo ? (
+        <div className="border-b border-zinc-800 px-4 py-2">
+          {damageGateBlocked ? (
+            <button
+              type="button"
+              onClick={() => setSheetView("dosar")}
+              className="w-full rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-left text-xs text-amber-100 hover:bg-amber-950/35"
+            >
+              In service blocat —{" "}
+              {wo.damagePayerType === "client"
+                ? "confirmă plătitorul client"
+                : "Accept plată (pipeline)"}{" "}
+              + mobilitate
+              {wo.vehicleMovable === "immovable" ? " + asistență" : ""}. Deschide dosarul daună →
+            </button>
+          ) : !wo.damagePayerType ? (
+            <button
+              type="button"
+              onClick={() => setSheetView("dosar")}
+              className="w-full rounded-lg border border-sky-500/40 bg-sky-950/20 px-3 py-2 text-left text-xs text-sky-100 hover:bg-sky-950/35"
+            >
+              Alege plătitorul pe dosarul de daună →
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSheetView("dosar")}
+              className="text-xs text-zinc-500 hover:text-zinc-300 hover:underline"
+            >
+              Dosar daună
+              {wo.damageCascoFranchiseCents != null
+                ? ` · franciză ${(wo.damageCascoFranchiseCents / 100).toFixed(2)} RON`
+                : ""}{" "}
+              →
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -757,6 +826,8 @@ export function WorkOrderSheetShell({
           isPartner={isPartner}
         />
       </div>
+        </>
+      ) : null}
     </div>
   );
 }

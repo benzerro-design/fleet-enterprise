@@ -152,6 +152,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
       { lockedByUserId: string; lockedByLabel?: string; lockedAt: string }
     >
   >;
+  damageCascoFranchiseCents?: number | null;
 };
 
 export type ServiceTimesResult = WorkOrderDetail & {

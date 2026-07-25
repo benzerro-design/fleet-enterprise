@@ -1304,6 +1304,8 @@ model ServiceCase {
   damagePhotosJson             Json?
   /// Lock-uri secțiuni complete: Record<sectionKey, { lockedByUserId, lockedByLabel?, lockedAt }>
   damageSectionLocksJson       Json?
+  /// Franciză CASCO (bani) — plătită de client; în cenți RON.
+  damageCascoFranchiseCents    Int?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)

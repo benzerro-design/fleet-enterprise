@@ -106,6 +106,7 @@ export type PatchDamageClaimInput = {
   agreeInsurer?: boolean;
   clientPayerConfirmed?: boolean;
   damageInsurerAgreementNotes?: string | null;
+  damageCascoFranchiseCents?: number | null;
   lockSection?: { section: DamageSectionKey | string; lock: boolean };
 };
 
@@ -346,6 +347,8 @@ export type ServiceCaseRecord = {
   damageDocuments?: DamageDocumentItem[];
   damagePhotos?: DamagePhotoItem[];
   damageSectionLocks?: DamageSectionLocks;
+  /** Franciză CASCO în cenți RON — plătită de client. */
+  damageCascoFranchiseCents?: number | null;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];

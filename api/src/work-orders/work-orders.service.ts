@@ -153,6 +153,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageDocuments: DamageDocumentItem[];
   damagePhotos: DamagePhotoItem[];
   damageSectionLocks: DamageSectionLocks;
+  damageCascoFranchiseCents: number | null;
   quoteSummary: {
     status: string | null;
     version: number | null;
@@ -577,6 +578,7 @@ export class WorkOrdersService {
             damageDocumentsJson: true,
             damagePhotosJson: true,
             damageSectionLocksJson: true,
+            damageCascoFranchiseCents: true,
             sourceTicket: {
               select: {
                 subject: true,
@@ -691,6 +693,7 @@ export class WorkOrdersService {
       damageDocuments: this.parseDamageDocuments(row.serviceCase.damageDocumentsJson),
       damagePhotos: this.parseDamagePhotos(row.serviceCase.damagePhotosJson),
       damageSectionLocks: this.parseDamageSectionLocks(row.serviceCase.damageSectionLocksJson),
+      damageCascoFranchiseCents: row.serviceCase.damageCascoFranchiseCents ?? null,
       quoteSummary: primary
         ? {
             status: primary.status,

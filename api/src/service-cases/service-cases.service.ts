@@ -227,6 +227,8 @@ export type ServiceCaseRecord = {
   damageDocuments: DamageDocumentItem[];
   damagePhotos: DamagePhotoItem[];
   damageSectionLocks: DamageSectionLocks;
+  /** Franciză CASCO în cenți RON — plătită de client. */
+  damageCascoFranchiseCents: number | null;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
@@ -246,6 +248,7 @@ export type PatchDamageClaimInput = {
   agreeInsurer?: boolean;
   clientPayerConfirmed?: boolean;
   damageInsurerAgreementNotes?: string | null;
+  damageCascoFranchiseCents?: number | null;
   lockSection?: { section: string; lock: boolean };
 };
 
@@ -579,6 +582,7 @@ export class ServiceCasesService {
       dto.agreeInsurer === undefined &&
       dto.clientPayerConfirmed === undefined &&
       dto.damageInsurerAgreementNotes === undefined &&
+      dto.damageCascoFranchiseCents === undefined &&
       dto.lockSection === undefined;
 
     if (row.workflowType !== ServiceCaseWorkflowType.damage && !vehicleMovableOnly) {
@@ -659,6 +663,19 @@ export class ServiceCasesService {
     }
     if (dto.damageInsurerAgreementNotes !== undefined) {
       data.damageInsurerAgreementNotes = dto.damageInsurerAgreementNotes?.trim() || null;
+    }
+    if (dto.damageCascoFranchiseCents !== undefined) {
+      if (dto.damageCascoFranchiseCents !== null) {
+        if (
+          !Number.isInteger(dto.damageCascoFranchiseCents) ||
+          dto.damageCascoFranchiseCents < 0
+        ) {
+          throw new BadRequestException(
+            'damageCascoFranchiseCents must be a non-negative integer (cents)',
+          );
+        }
+      }
+      data.damageCascoFranchiseCents = dto.damageCascoFranchiseCents;
     }
     if (dto.agreeInsurer === true) {
       data.damageInsurerAgreedAt = new Date();
@@ -791,7 +808,8 @@ export class ServiceCasesService {
         dto.damageInsurerName !== undefined ||
         dto.damageClaimStatus !== undefined ||
         dto.damagePayerType !== undefined ||
-        dto.damageInsurerAgreementNotes !== undefined,
+        dto.damageInsurerAgreementNotes !== undefined ||
+        dto.damageCascoFranchiseCents !== undefined,
       documents: dto.damageDocuments !== undefined,
       photos: dto.damagePhotos !== undefined,
       pipeline:
@@ -1997,6 +2015,7 @@ export class ServiceCasesService {
       damageDocumentsJson?: unknown;
       damagePhotosJson?: unknown;
       damageSectionLocksJson?: unknown;
+      damageCascoFranchiseCents?: number | null;
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
@@ -2082,6 +2101,7 @@ export class ServiceCasesService {
       damageDocuments: this.parseDamageDocuments(row.damageDocumentsJson),
       damagePhotos: this.parseDamagePhotos(row.damagePhotosJson),
       damageSectionLocks: this.parseDamageSectionLocks(row.damageSectionLocksJson),
+      damageCascoFranchiseCents: row.damageCascoFranchiseCents ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       workOrders: (row.workOrders ?? []).map((wo) => {

@@ -88,6 +88,7 @@ export function DamageClaimPanel({
   const [claimStatus, setClaimStatus] = useState<DamageClaimStatus>("open");
   const [pipeline, setPipeline] = useState<DamageInsurerPipelineStatus | "">("");
   const [agreementNotes, setAgreementNotes] = useState("");
+  const [franchiseRon, setFranchiseRon] = useState("");
   const [docs, setDocs] = useState<DamageDocumentItem[]>([]);
   const [photos, setPhotos] = useState<DamagePhotoItem[]>([]);
   const [locks, setLocks] = useState<DamageSectionLocks>({});
@@ -108,6 +109,11 @@ export function DamageClaimPanel({
     setClaimStatus(serviceCase.damageClaimStatus ?? "open");
     setPipeline(serviceCase.damageInsurerPipelineStatus ?? "");
     setAgreementNotes(serviceCase.damageInsurerAgreementNotes ?? "");
+    setFranchiseRon(
+      serviceCase.damageCascoFranchiseCents != null
+        ? (serviceCase.damageCascoFranchiseCents / 100).toFixed(2)
+        : "",
+    );
     setDocs(
       mergeDamageDocuments(
         documentKindsForInsurance(serviceCase.damageInsuranceType),
@@ -184,6 +190,16 @@ export function DamageClaimPanel({
   }
 
   async function saveClaimInfo() {
+    let franchiseCents: number | null = null;
+    if (franchiseRon.trim()) {
+      const n = Number(franchiseRon.replace(",", "."));
+      if (!Number.isFinite(n) || n < 0) {
+        setError("Franciza CASCO trebuie să fie un număr ≥ 0.");
+        return;
+      }
+      franchiseCents = Math.round(n * 100);
+    }
+    const showFranchise = insuranceType === "CASCO" || insuranceType === "BOTH";
     await patch(
       {
         vehicleMovable: movable || null,
@@ -193,6 +209,7 @@ export function DamageClaimPanel({
         damageInsurerName: insurerName.trim() || null,
         damageClaimStatus: claimStatus,
         damageInsurerAgreementNotes: agreementNotes.trim() || null,
+        damageCascoFranchiseCents: showFranchise ? franchiseCents : null,
       },
       "Informații dosar salvate.",
     );
@@ -392,9 +409,29 @@ export function DamageClaimPanel({
               disabled={disabled || sectionLocked("claim_info") || isClientPayer}
               value={insurerName}
               onChange={(e) => setInsurerName(e.target.value)}
-              placeholder="Nume societate"
+              placeholder="Nume societate (text liber)"
             />
+            <span className="mt-0.5 block text-[10px] text-zinc-500">
+              Catalogul de asigurători vine într-un modul separat; deocamdată nume liber.
+            </span>
           </label>
+          {insuranceType === "CASCO" || insuranceType === "BOTH" ? (
+            <label className="block sm:col-span-2">
+              <span className={OPS_LABEL_CLASS}>Franciză CASCO (RON)</span>
+              <input
+                className={OPS_INPUT_CLASS}
+                inputMode="decimal"
+                disabled={disabled || sectionLocked("claim_info")}
+                value={franchiseRon}
+                onChange={(e) => setFranchiseRon(e.target.value)}
+                placeholder="ex. 500.00"
+              />
+              <span className="mt-0.5 block text-[10px] text-zinc-500">
+                Sumă plătită de client (utilizator) conform poliței — menționată pe dosar, nu pe
+                plătitorul asigurător.
+              </span>
+            </label>
+          ) : null}
         </div>
 
         <label className="block">
@@ -737,6 +774,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   damageDocuments?: DamageDocumentItem[];
   damagePhotos?: DamagePhotoItem[];
   damageSectionLocks?: DamageSectionLocks;
+  damageCascoFranchiseCents?: number | null;
 }): ServiceCaseRecord {
   return {
     id: wo.serviceCaseId,
@@ -765,6 +803,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
     damageDocuments: wo.damageDocuments ?? [],
     damagePhotos: wo.damagePhotos ?? [],
     damageSectionLocks: wo.damageSectionLocks ?? {},
+    damageCascoFranchiseCents: wo.damageCascoFranchiseCents ?? null,
     createdAt: wo.createdAt,
     updatedAt: wo.updatedAt,
     workOrders: [],
