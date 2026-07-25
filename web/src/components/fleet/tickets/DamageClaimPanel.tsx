@@ -906,7 +906,6 @@ export function DamageClaimPanel({
             />
           </div>
         ) : null}
-        ) : null}
       </section>
 
       {/* Avizare — select docs + photos → send to insurer */}
