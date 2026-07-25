@@ -58,6 +58,8 @@ export type TicketRecord = {
   ownerEmail: string | null;
   resolvedAt: string | null;
   eventOdometerKm: number | null;
+  /** Obligatoriu la tip daună: deplasabilă | nedeplasabilă. */
+  vehicleMovable?: "movable" | "immovable" | null;
   createdAt: string;
   updatedAt: string;
 };

@@ -8,12 +8,18 @@ import {
   CrmTicketEventKind,
   CrmTicketLinkEntityType,
   CrmTicketStatus,
+  DamageClaimStatus,
+  DamageInsuranceType,
+  DamageInsurerPipelineStatus,
+  DamagePayerType,
   MaintenanceWorkOrderStatus,
   Prisma,
+  RoadsideInterventionStatus,
   ServiceCaseStage,
   ServiceCaseStatus,
   ServiceCaseWorkflowType,
   ServiceOrderType,
+  VehicleMovableState,
   WorkOrderQuoteStatus,
   WorkOrderWarrantyStatus,
 } from '@prisma/client';
@@ -28,7 +34,12 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { parseWorkOrderSettings } from '../tenant/work-order-settings';
 import { ensureWorkOrderDisplayNumber } from './work-order-display-number';
-import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
+import {
+  SERVICE_CASE_STAGE_ORDER,
+  type DamageDocumentItem,
+  type DamagePhotoItem,
+  type DamageSectionLocks,
+} from '../service-cases/service-cases.service';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -131,6 +142,17 @@ export type WorkOrderDetail = WorkOrderListRow & {
   ticketSubject: string | null;
   driverName: string | null;
   driverPhone: string | null;
+  vehicleMovable: VehicleMovableState | null;
+  damagePayerType: DamagePayerType | null;
+  damageInsurerPipelineStatus: DamageInsurerPipelineStatus | null;
+  damageInsuranceType: DamageInsuranceType | null;
+  damageClaimNumber: string | null;
+  damageInsurerName: string | null;
+  damageClaimStatus: DamageClaimStatus | null;
+  damageInsurerAgreedAt: string | null;
+  damageDocuments: DamageDocumentItem[];
+  damagePhotos: DamagePhotoItem[];
+  damageSectionLocks: DamageSectionLocks;
   quoteSummary: {
     status: string | null;
     version: number | null;
@@ -544,6 +566,17 @@ export class WorkOrdersService {
             clientId: true,
             awaitingPostApproval: true,
             postApprovalPath: true,
+            vehicleMovable: true,
+            damagePayerType: true,
+            damageInsurerPipelineStatus: true,
+            damageInsuranceType: true,
+            damageClaimNumber: true,
+            damageInsurerName: true,
+            damageClaimStatus: true,
+            damageInsurerAgreedAt: true,
+            damageDocumentsJson: true,
+            damagePhotosJson: true,
+            damageSectionLocksJson: true,
             sourceTicket: {
               select: {
                 subject: true,
@@ -647,6 +680,17 @@ export class WorkOrdersService {
       ticketSubject: row.serviceCase.sourceTicket?.subject ?? null,
       driverName: row.serviceCase.sourceTicket?.driver?.fullName ?? null,
       driverPhone: row.serviceCase.sourceTicket?.driver?.phone ?? null,
+      vehicleMovable: row.serviceCase.vehicleMovable ?? null,
+      damagePayerType: row.serviceCase.damagePayerType ?? null,
+      damageInsurerPipelineStatus: row.serviceCase.damageInsurerPipelineStatus ?? null,
+      damageInsuranceType: row.serviceCase.damageInsuranceType ?? null,
+      damageClaimNumber: row.serviceCase.damageClaimNumber ?? null,
+      damageInsurerName: row.serviceCase.damageInsurerName ?? null,
+      damageClaimStatus: row.serviceCase.damageClaimStatus ?? null,
+      damageInsurerAgreedAt: row.serviceCase.damageInsurerAgreedAt?.toISOString() ?? null,
+      damageDocuments: this.parseDamageDocuments(row.serviceCase.damageDocumentsJson),
+      damagePhotos: this.parseDamagePhotos(row.serviceCase.damagePhotosJson),
+      damageSectionLocks: this.parseDamageSectionLocks(row.serviceCase.damageSectionLocksJson),
       quoteSummary: primary
         ? {
             status: primary.status,
@@ -884,6 +928,9 @@ export class WorkOrdersService {
             clientId: true,
             postApprovalPath: true,
             workflowType: true,
+            vehicleMovable: true,
+            damagePayerType: true,
+            damageInsurerPipelineStatus: true,
             damageInsurerAgreedAt: true,
           },
         },
@@ -1008,24 +1055,61 @@ export class WorkOrdersService {
       ? data.visit2OutServiceAt != null && !wo.visit2OutServiceAt
       : data.outServiceAt != null && !wo.outServiceAt;
 
-    if (markingIn && wo.serviceCase.workflowType === ServiceCaseWorkflowType.damage) {
-      if (!wo.serviceCase.damageInsurerAgreedAt) {
-        throw new BadRequestException(
-          'Pentru flux daună este necesar acordul asigurătorului înainte de intrarea în service.',
-        );
+    if (markingIn) {
+      const sc = wo.serviceCase;
+      const isDamage = sc.workflowType === ServiceCaseWorkflowType.damage;
+
+      if (isDamage) {
+        const payer = sc.damagePayerType;
+        const isClientPayer = payer === DamagePayerType.client;
+        if (!isClientPayer) {
+          // null treated as insurer for damage (backward compatible)
+          const insurerReady =
+            sc.damageInsurerPipelineStatus === DamageInsurerPipelineStatus.payment_accepted ||
+            !!sc.damageInsurerAgreedAt;
+          if (!insurerReady) {
+            throw new BadRequestException(
+              'Pentru flux daună (plătitor asigurător) este necesar payment_accepted sau acordul asigurătorului înainte de intrarea în service.',
+            );
+          }
+        }
+
+        const mobility = await this.prisma.mobilityAssignment.findFirst({
+          where: {
+            tenantId: tenant.id,
+            serviceCaseId: wo.serviceCaseId,
+            status: { in: ['reserved', 'active', 'returned'] },
+          },
+          select: { id: true },
+        });
+        if (!mobility) {
+          throw new BadRequestException(
+            'Pentru flux daună este obligatorie mașina la schimb (rezervată, activă sau returnată) înainte de reparație.',
+          );
+        }
       }
-      const mobility = await this.prisma.mobilityAssignment.findFirst({
-        where: {
-          tenantId: tenant.id,
-          serviceCaseId: wo.serviceCaseId,
-          status: { in: ['reserved', 'active', 'returned'] },
-        },
-        select: { id: true },
-      });
-      if (!mobility) {
-        throw new BadRequestException(
-          'Pentru flux daună este obligatorie mașina la schimb (rezervată, activă sau returnată) înainte de reparație.',
-        );
+
+      if (sc.vehicleMovable === VehicleMovableState.immovable) {
+        const roadside = await this.prisma.roadsideIntervention.findFirst({
+          where: {
+            tenantId: tenant.id,
+            serviceCaseId: wo.serviceCaseId,
+            status: {
+              in: [
+                RoadsideInterventionStatus.requested,
+                RoadsideInterventionStatus.dispatched,
+                RoadsideInterventionStatus.on_site,
+                RoadsideInterventionStatus.completed,
+              ],
+            },
+          },
+          select: { id: true },
+        });
+        if (!roadside) {
+          throw new BadRequestException(
+            'Vehicul imobil: este obligatorie o intervenție asistență rutieră (cel puțin solicitată) înainte de intrarea în service.',
+          );
+        }
       }
     }
 
@@ -1480,5 +1564,65 @@ export class WorkOrdersService {
     });
 
     return this.getById(tenantSlug, id, access);
+  }
+
+  private parseDamageDocuments(raw: unknown): DamageDocumentItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamageDocumentItem[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.kind !== 'string') continue;
+      out.push({
+        id: o.id,
+        kind: o.kind,
+        label: typeof o.label === 'string' ? o.label : undefined,
+        notes: typeof o.notes === 'string' ? o.notes : undefined,
+        received: o.received === true,
+        uploadedAt: typeof o.uploadedAt === 'string' ? o.uploadedAt : new Date(0).toISOString(),
+        uploadedByLabel: typeof o.uploadedByLabel === 'string' ? o.uploadedByLabel : undefined,
+      });
+    }
+    return out;
+  }
+
+  private parseDamagePhotos(raw: unknown): DamagePhotoItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamagePhotoItem[] = [];
+    const kinds = new Set(['exterior', 'damage_detail', 'odometer', 'other']);
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.url !== 'string') continue;
+      const kind = typeof o.kind === 'string' && kinds.has(o.kind) ? o.kind : 'other';
+      out.push({
+        id: o.id,
+        url: o.url,
+        kind: kind as DamagePhotoItem['kind'],
+        caption: typeof o.caption === 'string' ? o.caption : undefined,
+        uploadedAt: typeof o.uploadedAt === 'string' ? o.uploadedAt : new Date(0).toISOString(),
+        uploadedByUserId: typeof o.uploadedByUserId === 'string' ? o.uploadedByUserId : undefined,
+        uploadedByLabel: typeof o.uploadedByLabel === 'string' ? o.uploadedByLabel : undefined,
+      });
+    }
+    return out;
+  }
+
+  private parseDamageSectionLocks(raw: unknown): DamageSectionLocks {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const keys = ['claim_info', 'documents', 'photos', 'pipeline'] as const;
+    const out: DamageSectionLocks = {};
+    for (const key of keys) {
+      const entry = (raw as Record<string, unknown>)[key];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const o = entry as Record<string, unknown>;
+      if (typeof o.lockedByUserId !== 'string' || typeof o.lockedAt !== 'string') continue;
+      out[key] = {
+        lockedByUserId: o.lockedByUserId,
+        lockedByLabel: typeof o.lockedByLabel === 'string' ? o.lockedByLabel : undefined,
+        lockedAt: o.lockedAt,
+      };
+    }
+    return out;
   }
 }

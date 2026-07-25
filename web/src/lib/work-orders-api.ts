@@ -112,6 +112,46 @@ export type WorkOrderDetail = WorkOrderListRow & {
   ticketSubject: string | null;
   driverName: string | null;
   driverPhone: string | null;
+  vehicleMovable?: "movable" | "immovable" | null;
+  damagePayerType?: "insurer" | "client" | null;
+  damageInsurerPipelineStatus?:
+    | "docs_pending"
+    | "ready_to_notify"
+    | "notified"
+    | "inspection_note"
+    | "reinspection_requested"
+    | "quote_ready"
+    | "payment_accepted"
+    | null;
+  damageInsuranceType?: "RCA" | "CASCO" | "BOTH" | "UNKNOWN" | null;
+  damageClaimNumber?: string | null;
+  damageInsurerName?: string | null;
+  damageClaimStatus?: string | null;
+  damageInsurerAgreedAt?: string | null;
+  damageDocuments?: {
+    id: string;
+    kind: string;
+    label?: string;
+    notes?: string;
+    received: boolean;
+    uploadedAt: string;
+    uploadedByLabel?: string;
+  }[];
+  damagePhotos?: {
+    id: string;
+    url: string;
+    kind: "exterior" | "damage_detail" | "odometer" | "other";
+    caption?: string;
+    uploadedAt: string;
+    uploadedByUserId?: string;
+    uploadedByLabel?: string;
+  }[];
+  damageSectionLocks?: Partial<
+    Record<
+      "claim_info" | "documents" | "photos" | "pipeline",
+      { lockedByUserId: string; lockedByLabel?: string; lockedAt: string }
+    >
+  >;
 };
 
 export type ServiceTimesResult = WorkOrderDetail & {

@@ -25,6 +25,11 @@ import { workOrderDisplayLabel } from "@/lib/work-order-display";
 import { MobilityWoBanner } from "@/components/fleet/MobilityWoBanner";
 import { WorkOrderMobilitySummary } from "@/components/fleet/work-orders/WorkOrderMobilitySummary";
 import {
+  DamageClaimPanel,
+  serviceCaseFromWorkOrderDamage,
+} from "@/components/fleet/tickets/DamageClaimPanel";
+import { isDamageInsurerReady } from "@/lib/service-cases-api";
+import {
   DEFAULT_WORK_ORDER_SETTINGS,
   type WorkOrderSettings,
 } from "@/lib/work-order-settings";
@@ -345,6 +350,38 @@ export function WorkOrderSheetShell({
         damageRequired={wo.workflowType === "damage"}
       />
       <WorkOrderMobilitySummary workOrderId={wo.id} />
+
+      {wo.workflowType === "damage" ? (
+        <div className="border-b border-zinc-800 px-4 py-4">
+          {!wo.inServiceAt &&
+          !isDamageInsurerReady({
+            damagePayerType: wo.damagePayerType,
+            damageInsurerPipelineStatus: wo.damageInsurerPipelineStatus,
+            damageInsurerAgreedAt: wo.damageInsurerAgreedAt,
+          }) ? (
+            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+              In service blocat până la{" "}
+              {wo.damagePayerType === "client"
+                ? "confirmarea plătitorului client"
+                : "Accept plată (pipeline asigurător)"}{" "}
+              + mașină la schimb
+              {wo.vehicleMovable === "immovable" ? " + asistență rutieră" : ""}.
+            </div>
+          ) : null}
+          {!wo.damagePayerType ? (
+            <div className="mb-3 rounded-lg border border-sky-500/40 bg-sky-950/20 px-3 py-2 text-xs text-sky-100">
+              Alege plătitorul (asigurător sau client) pe dosarul de daună — obligatoriu pe WO.
+            </div>
+          ) : null}
+          <DamageClaimPanel
+            serviceCase={serviceCaseFromWorkOrderDamage(wo)}
+            canWrite={canWrite}
+            compact
+            fromWorkOrder
+            onUpdated={() => router.refresh()}
+          />
+        </div>
+      ) : null}
 
       {error ? <p className="border-b border-red-900/40 bg-red-950/20 px-4 py-2 text-sm text-red-400">{error}</p> : null}
 

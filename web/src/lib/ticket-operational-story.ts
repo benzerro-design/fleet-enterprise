@@ -1,4 +1,5 @@
 import type { ServiceCaseRecord } from "@/lib/service-cases-api";
+import { isDamageInsurerReady } from "@/lib/service-cases-api";
 import { formatDateRo } from "@/lib/datetime-local";
 import {
   computeImmobilizationHours,
@@ -75,8 +76,10 @@ export function operationalHeadline(
   const appt = serviceCase.appointments.find((a) => a.status !== "cancelled");
   const pendingAppt = serviceCase.appointments.find((a) => a.status === "scheduled");
 
-  if (isDamage && !serviceCase.damageInsurerAgreedAt && (wo?.pendingQuote || wo?.approvedQuote)) {
-    return "Pe daună: înregistrează acordul asigurătorului înainte de execuția reparației.";
+  if (isDamage && !isDamageInsurerReady(serviceCase) && (wo?.pendingQuote || wo?.approvedQuote)) {
+    return serviceCase.damagePayerType === "client"
+      ? "Pe daună (plătitor client): confirmă plătitorul înainte de execuția reparației."
+      : "Pe daună: Accept plată (pipeline asigurător) înainte de execuția reparației.";
   }
   if (serviceCase.awaitingPostApproval) {
     return "Deviz aprobat — alege dacă continui reparația sau reprogramezi.";
@@ -176,10 +179,10 @@ function resolveNowId(input: {
   if (stage === "invoiced" || stage === "cost" || approved?.invoicedAt) return "billing";
   if (wo?.readyAt) return "work-ready";
   if (serviceCase.awaitingPostApproval) return "decision";
-  if (isDamage && approved && !serviceCase.damageInsurerAgreedAt) return "insurer";
+  if (isDamage && approved && !isDamageInsurerReady(serviceCase)) return "insurer";
   if (serviceCase.postApprovalPath && !wo?.readyAt) return "work-ready";
   if (pendingQ) return "approval";
-  if (approved) return isDamage && !serviceCase.damageInsurerAgreedAt ? "insurer" : "work-ready";
+  if (approved) return isDamage && !isDamageInsurerReady(serviceCase) ? "insurer" : "work-ready";
   if (stage === "quote" || stage === "approval") return "quote";
   if (stage === "in_service" || wo?.inServiceAt) return "at-service";
   if (stage === "work_order" || wo) return "work-order";
@@ -387,17 +390,24 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
     });
     chapters.push({
       id: "insurer",
-      title: "Acord asigurător",
-      situation: serviceCase?.damageInsurerAgreedAt
-        ? `Acordat · ${fmt(serviceCase.damageInsurerAgreedAt)}${
-            serviceCase.damageInsurerName ? ` · ${serviceCase.damageInsurerName}` : ""
-          }`
-        : serviceCase?.damageClaimNumber
-          ? `Dosar ${serviceCase.damageClaimNumber} — așteaptă acordul.`
-          : "Obligatoriu înainte de execuția reparației (tab Daună).",
-      detail: serviceCase?.damageClaimStatus
-        ? `Status dosar: ${serviceCase.damageClaimStatus}`
-        : undefined,
+      title:
+        serviceCase?.damagePayerType === "client" ? "Plătitor client" : "Pipeline asigurător",
+      situation: isDamageInsurerReady(serviceCase ?? {})
+        ? serviceCase?.damagePayerType === "client"
+          ? `Confirmat${serviceCase?.damageInsurerAgreedAt ? ` · ${fmt(serviceCase.damageInsurerAgreedAt)}` : ""}`
+          : `Accept plată / acord · ${
+              serviceCase?.damageInsurerPipelineStatus ?? "ok"
+            }${serviceCase?.damageInsurerAgreedAt ? ` · ${fmt(serviceCase.damageInsurerAgreedAt)}` : ""}`
+        : serviceCase?.damagePayerType === "client"
+          ? "Confirmă plătitorul client (tab Daună)."
+          : serviceCase?.damageClaimNumber
+            ? `Dosar ${serviceCase.damageClaimNumber} — așteaptă Accept plată.`
+            : "Obligatoriu Accept plată înainte de reparație (tab Daună).",
+      detail: serviceCase?.damageInsurerPipelineStatus
+        ? `Pipeline: ${serviceCase.damageInsurerPipelineStatus}`
+        : serviceCase?.damageClaimStatus
+          ? `Status dosar: ${serviceCase.damageClaimStatus}`
+          : undefined,
     });
   } else {
     chapters.push({
@@ -444,10 +454,12 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
       title: "Decizie / execuție",
       situation: serviceCase?.awaitingPostApproval
         ? "Alege: reparație acum sau reprogramare."
-        : serviceCase?.damageInsurerAgreedAt && mobilityActive
+        : serviceCase?.damageInsurerAgreedAt &&
+            isDamageInsurerReady(serviceCase) &&
+            mobilityActive
           ? "Condiții îndeplinite — reparația poate continua."
           : approved
-            ? "După acord + mașină schimb: execuție reparație."
+            ? "După Accept plată + mașină schimb: execuție reparație."
             : "După aprobarea devizului.",
     });
   }

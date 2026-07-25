@@ -54,11 +54,13 @@ export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes
     ? serviceTypeCodeToTicketType(selectedServiceCode)
     : ticketType;
   const [priority, setPriority] = useState<TicketPriority>("normal");
+  const [vehicleMovable, setVehicleMovable] = useState<"movable" | "immovable" | "">("");
   const [odometerKm, setOdometerKm] = useState("");
   const [reminderActionId, setReminderActionId] = useState(initial?.reminderActionId ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmKm, setConfirmKm] = useState<number | null>(null);
+  const isDamageTicket = resolvedTicketType === "damage";
 
   useEffect(() => {
     if (!initial?.reminderActionId) {
@@ -94,6 +96,11 @@ export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes
   ) {
     setPending(true);
     setError(null);
+    if (resolvedTicketType === "damage" && !vehicleMovable) {
+      setError("Pentru daună alege dacă vehiculul e deplasabil sau nedeplasabil.");
+      setPending(false);
+      return;
+    }
     const km = parseOdometerInput(odometerKm);
     const selectedCatalog = catalogOptions.find((t) => t.code === selectedServiceCode);
     const body = {
@@ -108,6 +115,7 @@ export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes
       reminderActionId: reminderActionId.trim() || null,
       eventOdometerKm: km,
       updateVehicleOdometer: km != null ? updateVehicleOdometer : undefined,
+      vehicleMovable: resolvedTicketType === "damage" ? vehicleMovable : null,
     };
     try {
       const res = await fetch(ticketsBrowserBase, {
@@ -256,6 +264,27 @@ export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes
                 </select>
               </div>
             </div>
+
+            {isDamageTicket ? (
+              <div>
+                <label className="text-xs text-zinc-500">Vehicul *</label>
+                <select
+                  required
+                  value={vehicleMovable}
+                  onChange={(e) =>
+                    setVehicleMovable(e.target.value as "movable" | "immovable" | "")
+                  }
+                  className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                >
+                  <option value="">— alege —</option>
+                  <option value="movable">Deplasabilă</option>
+                  <option value="immovable">Nedeplasabilă (asistență rutieră)</option>
+                </select>
+                <p className="mt-1 text-[10px] text-zinc-500">
+                  Nedeplasabilă activează asistența rutieră la deschiderea dosarului service.
+                </p>
+              </div>
+            ) : null}
 
             {ctx.vehicleId ? (
               <div>

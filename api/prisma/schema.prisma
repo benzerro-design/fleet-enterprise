@@ -938,6 +938,8 @@ model CrmTicket {
   driverId         String?
   reminderActionId String?
   eventOdometerKm  Int?
+  /// Vehicul mobil / imobil (daună, M/E) — copiat pe ServiceCase la start.
+  vehicleMovable   VehicleMovableState?
   createdByUserId  String?
   ownerUserId      String?
   resolvedAt       DateTime?
@@ -1282,6 +1284,8 @@ model ServiceCase {
   awaitingPostApproval   Boolean                 @default(false)
   postApprovalPath       PostApprovalPath?
   closedAt               DateTime?
+  /// Vehicul mobil / imobil — din tichet sau patch daună.
+  vehicleMovable               VehicleMovableState?
   /// Tip asigurare daună (RCA / CASCO).
   damageInsuranceType          DamageInsuranceType?
   damageClaimNumber            String?
@@ -1290,8 +1294,16 @@ model ServiceCase {
   damageInsurerAgreedAt        DateTime?
   damageInsurerAgreedByUserId  String?
   damageInsurerAgreementNotes  String?
+  /// Plătitor daună: asigurător vs client (client = skip pipeline asigurător).
+  damagePayerType              DamagePayerType?
+  /// Pipeline dosar asigurător (doar când payer = insurer).
+  damageInsurerPipelineStatus  DamageInsurerPipelineStatus?
   /// Documente daună: array { id, kind, label?, notes?, received, uploadedAt, uploadedByLabel? }
   damageDocumentsJson          Json?
+  /// Foto daună: array { id, url, kind, caption?, uploadedAt, uploadedByUserId?, uploadedByLabel? }
+  damagePhotosJson             Json?
+  /// Lock-uri secțiuni complete: Record<sectionKey, { lockedByUserId, lockedByLabel?, lockedAt }>
+  damageSectionLocksJson       Json?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1612,6 +1624,26 @@ model MobilityAssignment {
   @@index([sourceTicketId])
   @@index([tenantId, status])
   @@index([coveredVehicleId])
+}
+
+enum VehicleMovableState {
+  movable
+  immovable
+}
+
+enum DamagePayerType {
+  insurer
+  client
+}
+
+enum DamageInsurerPipelineStatus {
+  docs_pending
+  ready_to_notify
+  notified
+  inspection_note
+  reinspection_requested
+  quote_ready
+  payment_accepted
 }
 
 enum DamageInsuranceType {

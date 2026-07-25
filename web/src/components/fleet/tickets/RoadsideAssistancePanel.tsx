@@ -60,6 +60,10 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
     void load();
   }, [load]);
 
+  const immovableHint =
+    serviceCase?.vehicleMovable === "immovable" ||
+    items.some((i) => i.status === "draft" && i.kind === "tow");
+
   async function createIntervention() {
     if (!serviceCase?.id) {
       setError("Deschide mai întâi fluxul service ca să poți înregistra asistența rutieră.");
@@ -142,6 +146,13 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
           {activeCount > 0 ? ` · ${activeCount} intervenție(i) active/finalizate.` : null}
         </p>
       </div>
+
+      {immovableHint ? (
+        <div className="rounded-lg border border-sky-500/40 bg-sky-950/20 px-3 py-2 text-sm text-sky-100">
+          Vehicul nedeplasabil — completează / activează intervenția (draft → solicitată) înainte de In
+          service.
+        </div>
+      ) : null}
 
       {loading ? <p className="text-sm text-zinc-500">Se încarcă…</p> : null}
 

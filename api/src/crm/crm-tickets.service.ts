@@ -14,6 +14,7 @@ import {
   CrmTicketType,
   Prisma,
   ReminderSourceType,
+  VehicleMovableState,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
@@ -61,6 +62,7 @@ export type TicketRecord = {
   ownerUserId: string | null;
   ownerEmail: string | null;
   eventOdometerKm: number | null;
+  vehicleMovable: VehicleMovableState | null;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -113,6 +115,7 @@ export type CreateTicketInput = {
   routingLevel?: CrmTicketRoutingLevel;
   eventOdometerKm?: number | null;
   updateVehicleOdometer?: boolean;
+  vehicleMovable?: VehicleMovableState | null;
 };
 
 export type PatchTicketInput = {
@@ -123,6 +126,7 @@ export type PatchTicketInput = {
   ticketType?: CrmTicketType;
   serviceTypeId?: string | null;
   ownerUserId?: string | null;
+  vehicleMovable?: VehicleMovableState | null;
 };
 
 export type TicketCommentAttachment = {
@@ -507,6 +511,12 @@ export class CrmTicketsService {
       serviceTypeId = st?.id ?? null;
     }
 
+    const vehicleMovable = this.resolveVehicleMovableInput(
+      ticketType,
+      dto.vehicleMovable,
+      true,
+    );
+
     const routingLevel =
       dto.routingLevel ??
       (actor?.routingLevel === CrmTicketRoutingLevel.L0
@@ -545,6 +555,7 @@ export class CrmTicketsService {
         driverId,
         reminderActionId,
         eventOdometerKm,
+        vehicleMovable,
         createdByUserId: actorUserId ?? null,
         ownerUserId: actorUserId ?? null,
         status: CrmTicketStatus.open,
@@ -636,6 +647,15 @@ export class CrmTicketsService {
         ? { connect: { id: dto.ownerUserId } }
         : { disconnect: true };
     }
+    if (dto.vehicleMovable !== undefined) {
+      const effectiveType =
+        (typeof data.ticketType === 'string' ? data.ticketType : null) ?? existing.ticketType;
+      data.vehicleMovable = this.resolveVehicleMovableInput(
+        effectiveType as CrmTicketType,
+        dto.vehicleMovable,
+        false,
+      );
+    }
 
     if (dto.status !== undefined && dto.status !== existing.status) {
       data.status = dto.status;
@@ -667,6 +687,19 @@ export class CrmTicketsService {
       data,
       include: this.ticketInclude(),
     });
+
+    if (dto.vehicleMovable !== undefined) {
+      const sc = await this.prisma.serviceCase.findFirst({
+        where: { tenantId: tenant.id, sourceTicketId: id },
+        select: { id: true },
+      });
+      if (sc) {
+        await this.prisma.serviceCase.update({
+          where: { id: sc.id },
+          data: { vehicleMovable: row.vehicleMovable },
+        });
+      }
+    }
 
     return this.toRecord(row);
   }
@@ -1503,10 +1536,28 @@ export class CrmTicketsService {
       ownerUserId: row.ownerUserId,
       ownerEmail: row.owner?.email ?? null,
       eventOdometerKm: row.eventOdometerKm,
+      vehicleMovable: row.vehicleMovable ?? null,
       resolvedAt: row.resolvedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  private resolveVehicleMovableInput(
+    ticketType: CrmTicketType,
+    value: VehicleMovableState | null | undefined,
+    requiredForDamage: boolean,
+  ): VehicleMovableState | null {
+    if (value === undefined || value === null) {
+      if (requiredForDamage && ticketType === CrmTicketType.damage) {
+        throw new BadRequestException('vehicleMovable is required for damage tickets');
+      }
+      return null;
+    }
+    if (value !== VehicleMovableState.movable && value !== VehicleMovableState.immovable) {
+      throw new BadRequestException('vehicleMovable must be movable or immovable');
+    }
+    return value;
   }
 
   private normalizeCommentAttachments(

@@ -11,8 +11,13 @@ import {
   CrmTicketType,
   DamageClaimStatus,
   DamageInsuranceType,
+  DamageInsurerPipelineStatus,
+  DamagePayerType,
   MaintenanceWorkOrderStatus,
+  MembershipRole,
   Prisma,
+  RoadsideInterventionKind,
+  RoadsideInterventionStatus,
   ServiceAppointmentStatus,
   ServiceAppointmentProposedBy,
   ServiceCaseSourceType,
@@ -21,6 +26,7 @@ import {
   ServiceCaseWorkflowType,
   ServiceOrderType,
   PostApprovalPath,
+  VehicleMovableState,
   WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { PartnerNotificationService } from '../partner/partner-notification.service';
@@ -34,9 +40,10 @@ import {
   canReadTicket,
   isTenantWideAccess,
 } from '../iam/client-access';
-import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser } from '../iam/partner-access';
+import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser, allowedSupplierIds } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { nextWorkOrderDisplayNumber } from '../work-orders/work-order-display-number';
+import { nextRoadsideDisplayNumber } from '../roadside/roadside-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import {
   proposedByFromAccess,
@@ -171,6 +178,26 @@ export type DamageDocumentItem = {
   uploadedByLabel?: string;
 };
 
+export type DamagePhotoItem = {
+  id: string;
+  url: string;
+  kind: 'exterior' | 'damage_detail' | 'odometer' | 'other';
+  caption?: string;
+  uploadedAt: string;
+  uploadedByUserId?: string;
+  uploadedByLabel?: string;
+};
+
+export type DamageSectionKey = 'claim_info' | 'documents' | 'photos' | 'pipeline';
+
+export type DamageSectionLock = {
+  lockedByUserId: string;
+  lockedByLabel?: string;
+  lockedAt: string;
+};
+
+export type DamageSectionLocks = Partial<Record<DamageSectionKey, DamageSectionLock>>;
+
 export type ServiceCaseRecord = {
   id: string;
   clientId: string;
@@ -187,6 +214,7 @@ export type ServiceCaseRecord = {
   closedAt: string | null;
   awaitingPostApproval: boolean;
   postApprovalPath: PostApprovalPath | null;
+  vehicleMovable: VehicleMovableState | null;
   damageInsuranceType: DamageInsuranceType | null;
   damageClaimNumber: string | null;
   damageInsurerName: string | null;
@@ -194,7 +222,11 @@ export type ServiceCaseRecord = {
   damageInsurerAgreedAt: string | null;
   damageInsurerAgreedByUserId: string | null;
   damageInsurerAgreementNotes: string | null;
+  damagePayerType: DamagePayerType | null;
+  damageInsurerPipelineStatus: DamageInsurerPipelineStatus | null;
   damageDocuments: DamageDocumentItem[];
+  damagePhotos: DamagePhotoItem[];
+  damageSectionLocks: DamageSectionLocks;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
@@ -202,14 +234,40 @@ export type ServiceCaseRecord = {
 };
 
 export type PatchDamageClaimInput = {
+  vehicleMovable?: VehicleMovableState | null;
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
   damageClaimStatus?: DamageClaimStatus | null;
+  damagePayerType?: DamagePayerType | null;
+  damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
   damageDocuments?: DamageDocumentItem[] | null;
+  damagePhotos?: DamagePhotoItem[] | null;
   agreeInsurer?: boolean;
+  clientPayerConfirmed?: boolean;
   damageInsurerAgreementNotes?: string | null;
+  lockSection?: { section: string; lock: boolean };
 };
+
+const DAMAGE_SECTION_KEYS: DamageSectionKey[] = [
+  'claim_info',
+  'documents',
+  'photos',
+  'pipeline',
+];
+
+const PHOTO_KINDS = new Set(['exterior', 'damage_detail', 'odometer', 'other']);
+const PIPELINE_STATUSES = new Set([
+  'docs_pending',
+  'ready_to_notify',
+  'notified',
+  'inspection_note',
+  'reinspection_requested',
+  'quote_ready',
+  'payment_accepted',
+]);
+const PAYER_TYPES = new Set(['insurer', 'client']);
+const MOVABLE_STATES = new Set(['movable', 'immovable']);
 
 export type PostApprovalInput = {
   path: 'immediate' | 'reschedule';
@@ -308,50 +366,59 @@ export class ServiceCasesService {
     if (existing) return this.toRecord(existing);
 
     const workflowType = workflowTypeForTicket(ticket.ticketType);
-    const row = await this.prisma.serviceCase.create({
-      data: {
-        tenantId: tenant.id,
-        clientId: ticket.clientId,
-        vehicleId: ticket.vehicleId,
-        workflowType,
-        sourceType: ServiceCaseSourceType.ticket,
-        sourceTicketId: ticket.id,
-        sourceReminderActionId: ticket.reminderActionId,
-        serviceTypeId: ticket.serviceTypeId,
-        currentStage: ServiceCaseStage.intake,
-        status: ServiceCaseStatus.active,
-        title: ticket.subject,
-        notes: ticket.description,
-      },
-      include: this.caseInclude(),
-    });
-
-    await this.prisma.crmTicketLink.create({
-      data: {
-        tenantId: tenant.id,
-        ticketId: ticket.id,
-        entityType: CrmTicketLinkEntityType.service_case,
-        entityId: row.id,
-      },
-    });
-
-    await this.prisma.crmTicketEvent.create({
-      data: {
-        tenantId: tenant.id,
-        ticketId: ticket.id,
-        kind: CrmTicketEventKind.workflow_advance,
-        body: `Dosar lucrare creat (${workflowType}).`,
-        payload: { stage: ServiceCaseStage.intake, serviceCaseId: row.id },
-        actorUserId: actorUserId ?? null,
-      },
-    });
-
-    if (ticket.status === CrmTicketStatus.open) {
-      await this.prisma.crmTicket.update({
-        where: { id: ticket.id },
-        data: { status: CrmTicketStatus.in_progress },
+    const row = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.serviceCase.create({
+        data: {
+          tenantId: tenant.id,
+          clientId: ticket.clientId,
+          vehicleId: ticket.vehicleId,
+          workflowType,
+          sourceType: ServiceCaseSourceType.ticket,
+          sourceTicketId: ticket.id,
+          sourceReminderActionId: ticket.reminderActionId,
+          serviceTypeId: ticket.serviceTypeId,
+          currentStage: ServiceCaseStage.intake,
+          status: ServiceCaseStatus.active,
+          title: ticket.subject,
+          notes: ticket.description,
+          vehicleMovable: ticket.vehicleMovable ?? null,
+        },
+        include: this.caseInclude(),
       });
-    }
+
+      if (ticket.vehicleMovable === VehicleMovableState.immovable) {
+        await this.ensureDraftRoadsideForImmovable(tx, tenant.id, created);
+      }
+
+      await tx.crmTicketLink.create({
+        data: {
+          tenantId: tenant.id,
+          ticketId: ticket.id,
+          entityType: CrmTicketLinkEntityType.service_case,
+          entityId: created.id,
+        },
+      });
+
+      await tx.crmTicketEvent.create({
+        data: {
+          tenantId: tenant.id,
+          ticketId: ticket.id,
+          kind: CrmTicketEventKind.workflow_advance,
+          body: `Dosar lucrare creat (${workflowType}).`,
+          payload: { stage: ServiceCaseStage.intake, serviceCaseId: created.id },
+          actorUserId: actorUserId ?? null,
+        },
+      });
+
+      if (ticket.status === CrmTicketStatus.open) {
+        await tx.crmTicket.update({
+          where: { id: ticket.id },
+          data: { status: CrmTicketStatus.in_progress },
+        });
+      }
+
+      return created;
+    });
 
     await this.audit.log({
       tenantId: tenant.id,
@@ -475,15 +542,75 @@ export class ServiceCasesService {
 
     const row = await this.prisma.serviceCase.findFirst({
       where: { id: caseId, tenantId: tenant.id },
+      include: {
+        workOrders: {
+          select: { id: true, supplierId: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
     });
     if (!row) throw new NotFoundException('Service case not found');
-    if (access) assertServiceCaseWrite(access, row.clientId);
+    if (access) {
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        const partnerWo = row.workOrders.find((w) =>
+          allowedSupplierIds(access).includes(w.supplierId ?? ''),
+        );
+        if (!partnerWo) {
+          throw new ForbiddenException('No partner work order on this damage case');
+        }
+        assertPartnerSupplierId(access, partnerWo.supplierId);
+      } else {
+        assertServiceCaseWrite(access, row.clientId);
+      }
+    }
 
-    if (row.workflowType !== ServiceCaseWorkflowType.damage) {
+    const vehicleMovableOnly =
+      dto.vehicleMovable !== undefined &&
+      dto.damageInsuranceType === undefined &&
+      dto.damageClaimNumber === undefined &&
+      dto.damageInsurerName === undefined &&
+      dto.damageClaimStatus === undefined &&
+      dto.damagePayerType === undefined &&
+      dto.damageInsurerPipelineStatus === undefined &&
+      dto.damageDocuments === undefined &&
+      dto.damagePhotos === undefined &&
+      dto.agreeInsurer === undefined &&
+      dto.clientPayerConfirmed === undefined &&
+      dto.damageInsurerAgreementNotes === undefined &&
+      dto.lockSection === undefined;
+
+    if (row.workflowType !== ServiceCaseWorkflowType.damage && !vehicleMovableOnly) {
       throw new BadRequestException('Damage claim fields apply only to damage workflow');
     }
 
+    const locks = this.parseDamageSectionLocks(row.damageSectionLocksJson);
+    const actorLabel = access?.displayName;
+
+    if (dto.lockSection?.lock === false) {
+      const section = this.assertDamageSectionKey(dto.lockSection.section);
+      const existingLock = locks[section];
+      if (existingLock) {
+        const isOwner = actorUserId && existingLock.lockedByUserId === actorUserId;
+        const isAdmin = access?.membershipRole === MembershipRole.tenant_admin;
+        if (!isOwner && !isAdmin) {
+          throw new ForbiddenException('Only the locker or tenant_admin can unlock this section');
+        }
+        delete locks[section];
+      }
+    }
+
+    this.assertUnlockedForPatch(locks, dto);
+
     const data: Prisma.ServiceCaseUncheckedUpdateInput = {};
+
+    if (dto.vehicleMovable !== undefined) {
+      if (dto.vehicleMovable !== null && !MOVABLE_STATES.has(dto.vehicleMovable)) {
+        throw new BadRequestException('vehicleMovable must be movable or immovable');
+      }
+      data.vehicleMovable = dto.vehicleMovable;
+    }
     if (dto.damageInsuranceType !== undefined) data.damageInsuranceType = dto.damageInsuranceType;
     if (dto.damageClaimNumber !== undefined) {
       data.damageClaimNumber = dto.damageClaimNumber?.trim() || null;
@@ -492,8 +619,43 @@ export class ServiceCasesService {
       data.damageInsurerName = dto.damageInsurerName?.trim() || null;
     }
     if (dto.damageClaimStatus !== undefined) data.damageClaimStatus = dto.damageClaimStatus;
+    if (dto.damagePayerType !== undefined) {
+      if (dto.damagePayerType !== null && !PAYER_TYPES.has(dto.damagePayerType)) {
+        throw new BadRequestException('damagePayerType must be insurer or client');
+      }
+      data.damagePayerType = dto.damagePayerType;
+      if (dto.damagePayerType === DamagePayerType.client) {
+        // Client pays — insurer pipeline gate is ignored (status may remain for audit).
+      }
+    }
+    if (dto.damageInsurerPipelineStatus !== undefined) {
+      if (
+        dto.damageInsurerPipelineStatus !== null &&
+        !PIPELINE_STATUSES.has(dto.damageInsurerPipelineStatus)
+      ) {
+        throw new BadRequestException('Invalid damageInsurerPipelineStatus');
+      }
+      data.damageInsurerPipelineStatus = dto.damageInsurerPipelineStatus;
+      if (
+        dto.damageInsurerPipelineStatus === DamageInsurerPipelineStatus.payment_accepted &&
+        (dto.damagePayerType === DamagePayerType.insurer ||
+          (dto.damagePayerType === undefined &&
+            (row.damagePayerType === DamagePayerType.insurer || row.damagePayerType == null)))
+      ) {
+        if (!row.damageInsurerAgreedAt) {
+          data.damageInsurerAgreedAt = new Date();
+          data.damageInsurerAgreedByUserId = actorUserId ?? null;
+        }
+      }
+    }
     if (dto.damageDocuments !== undefined) {
       data.damageDocumentsJson = dto.damageDocuments ?? Prisma.JsonNull;
+    }
+    if (dto.damagePhotos !== undefined) {
+      data.damagePhotosJson =
+        dto.damagePhotos == null
+          ? Prisma.JsonNull
+          : this.normalizeDamagePhotos(dto.damagePhotos);
     }
     if (dto.damageInsurerAgreementNotes !== undefined) {
       data.damageInsurerAgreementNotes = dto.damageInsurerAgreementNotes?.trim() || null;
@@ -505,6 +667,37 @@ export class ServiceCasesService {
         data.damageClaimStatus = DamageClaimStatus.agreed;
       }
     }
+    if (dto.clientPayerConfirmed === true) {
+      const payer =
+        dto.damagePayerType !== undefined ? dto.damagePayerType : row.damagePayerType;
+      if (payer !== DamagePayerType.client) {
+        throw new BadRequestException(
+          'clientPayerConfirmed requires damagePayerType=client',
+        );
+      }
+      data.damageInsurerAgreedAt = new Date();
+      data.damageInsurerAgreedByUserId = actorUserId ?? null;
+    }
+
+    if (dto.lockSection?.lock === true) {
+      const section = this.assertDamageSectionKey(dto.lockSection.section);
+      if (!actorUserId) {
+        throw new BadRequestException('Actor required to lock section');
+      }
+      locks[section] = {
+        lockedByUserId: actorUserId,
+        lockedByLabel: actorLabel,
+        lockedAt: new Date().toISOString(),
+      };
+    }
+
+    if (dto.lockSection !== undefined) {
+      data.damageSectionLocksJson =
+        Object.keys(locks).length === 0 ? Prisma.JsonNull : (locks as Prisma.InputJsonValue);
+    }
+
+    const nextMovable =
+      dto.vehicleMovable !== undefined ? dto.vehicleMovable : row.vehicleMovable;
 
     if (Object.keys(data).length === 0) {
       throw new BadRequestException('No damage claim fields to update');
@@ -517,11 +710,27 @@ export class ServiceCasesService {
         include: this.caseInclude(),
       });
 
-      if (row.sourceTicketId) {
+      if (nextMovable === VehicleMovableState.immovable) {
+        await this.ensureDraftRoadsideForImmovable(tx, tenant.id, next);
+      }
+
+      if (row.sourceTicketId && row.workflowType === ServiceCaseWorkflowType.damage) {
         const parts: string[] = [];
         if (dto.agreeInsurer) parts.push('acord asigurător înregistrat');
+        if (dto.clientPayerConfirmed) parts.push('plătitor client confirmat');
         if (dto.damageClaimStatus) parts.push(`status: ${dto.damageClaimStatus}`);
         if (dto.damageClaimNumber?.trim()) parts.push(`nr. dosar: ${dto.damageClaimNumber.trim()}`);
+        if (dto.damageInsurerPipelineStatus) {
+          parts.push(`pipeline: ${dto.damageInsurerPipelineStatus}`);
+        }
+        if (dto.damagePayerType) parts.push(`plătitor: ${dto.damagePayerType}`);
+        if (dto.lockSection) {
+          parts.push(
+            dto.lockSection.lock
+              ? `secțiune blocată: ${dto.lockSection.section}`
+              : `secțiune deblocată: ${dto.lockSection.section}`,
+          );
+        }
         await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,
@@ -538,7 +747,11 @@ export class ServiceCasesService {
               damageInsurerName: next.damageInsurerName,
               damageClaimStatus: next.damageClaimStatus,
               damageInsurerAgreedAt: next.damageInsurerAgreedAt?.toISOString() ?? null,
+              damagePayerType: next.damagePayerType,
+              damageInsurerPipelineStatus: next.damageInsurerPipelineStatus,
+              vehicleMovable: next.vehicleMovable,
               agreeInsurer: dto.agreeInsurer === true,
+              clientPayerConfirmed: dto.clientPayerConfirmed === true,
             },
             actorUserId: actorUserId ?? null,
           },
@@ -558,6 +771,81 @@ export class ServiceCasesService {
     });
 
     return this.toRecord(updated);
+  }
+
+  private assertDamageSectionKey(section: string): DamageSectionKey {
+    if (!DAMAGE_SECTION_KEYS.includes(section as DamageSectionKey)) {
+      throw new BadRequestException(
+        `lockSection.section must be one of: ${DAMAGE_SECTION_KEYS.join(', ')}`,
+      );
+    }
+    return section as DamageSectionKey;
+  }
+
+  private assertUnlockedForPatch(locks: DamageSectionLocks, dto: PatchDamageClaimInput) {
+    const touches: Partial<Record<DamageSectionKey, boolean>> = {
+      claim_info:
+        dto.vehicleMovable !== undefined ||
+        dto.damageInsuranceType !== undefined ||
+        dto.damageClaimNumber !== undefined ||
+        dto.damageInsurerName !== undefined ||
+        dto.damageClaimStatus !== undefined ||
+        dto.damagePayerType !== undefined ||
+        dto.damageInsurerAgreementNotes !== undefined,
+      documents: dto.damageDocuments !== undefined,
+      photos: dto.damagePhotos !== undefined,
+      pipeline:
+        dto.damageInsurerPipelineStatus !== undefined ||
+        dto.agreeInsurer !== undefined ||
+        dto.clientPayerConfirmed !== undefined,
+    };
+    for (const key of DAMAGE_SECTION_KEYS) {
+      if (!touches[key] || !locks[key]) continue;
+      const unlocking =
+        dto.lockSection?.section === key && dto.lockSection.lock === false;
+      if (!unlocking) {
+        throw new BadRequestException(
+          `Section "${key}" is locked and cannot be edited until unlocked`,
+        );
+      }
+    }
+  }
+
+  private async ensureDraftRoadsideForImmovable(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    serviceCase: {
+      id: string;
+      clientId: string;
+      vehicleId: string | null;
+      sourceTicketId: string | null;
+    },
+  ) {
+    const existing = await tx.roadsideIntervention.findFirst({
+      where: {
+        tenantId,
+        serviceCaseId: serviceCase.id,
+        status: { not: RoadsideInterventionStatus.cancelled },
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const now = new Date();
+    const displayNumber = await nextRoadsideDisplayNumber(tx, tenantId, now);
+    await tx.roadsideIntervention.create({
+      data: {
+        tenantId,
+        displayNumber,
+        serviceCaseId: serviceCase.id,
+        sourceTicketId: serviceCase.sourceTicketId,
+        clientId: serviceCase.clientId,
+        vehicleId: serviceCase.vehicleId,
+        kind: RoadsideInterventionKind.tow,
+        status: RoadsideInterventionStatus.draft,
+        notes: 'Auto-draft: vehicul imobil — asistență rutieră necesară',
+      },
+    });
   }
 
   async createAppointment(
@@ -1625,6 +1913,62 @@ export class ServiceCasesService {
     return out;
   }
 
+  private parseDamagePhotos(raw: unknown): DamagePhotoItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamagePhotoItem[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.url !== 'string') continue;
+      const kind = typeof o.kind === 'string' && PHOTO_KINDS.has(o.kind) ? o.kind : 'other';
+      out.push({
+        id: o.id,
+        url: o.url,
+        kind: kind as DamagePhotoItem['kind'],
+        caption: typeof o.caption === 'string' ? o.caption : undefined,
+        uploadedAt: typeof o.uploadedAt === 'string' ? o.uploadedAt : new Date(0).toISOString(),
+        uploadedByUserId: typeof o.uploadedByUserId === 'string' ? o.uploadedByUserId : undefined,
+        uploadedByLabel: typeof o.uploadedByLabel === 'string' ? o.uploadedByLabel : undefined,
+      });
+    }
+    return out;
+  }
+
+  private normalizeDamagePhotos(photos: DamagePhotoItem[]): Prisma.InputJsonValue {
+    return photos.map((p) => {
+      if (!p.id?.trim() || !p.url?.trim()) {
+        throw new BadRequestException('damagePhotos items require id and url');
+      }
+      const kind = PHOTO_KINDS.has(p.kind) ? p.kind : 'other';
+      return {
+        id: p.id.trim(),
+        url: p.url.trim(),
+        kind,
+        caption: p.caption?.trim() || undefined,
+        uploadedAt: p.uploadedAt || new Date().toISOString(),
+        uploadedByUserId: p.uploadedByUserId || undefined,
+        uploadedByLabel: p.uploadedByLabel || undefined,
+      };
+    });
+  }
+
+  private parseDamageSectionLocks(raw: unknown): DamageSectionLocks {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const out: DamageSectionLocks = {};
+    for (const key of DAMAGE_SECTION_KEYS) {
+      const entry = (raw as Record<string, unknown>)[key];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const o = entry as Record<string, unknown>;
+      if (typeof o.lockedByUserId !== 'string' || typeof o.lockedAt !== 'string') continue;
+      out[key] = {
+        lockedByUserId: o.lockedByUserId,
+        lockedByLabel: typeof o.lockedByLabel === 'string' ? o.lockedByLabel : undefined,
+        lockedAt: o.lockedAt,
+      };
+    }
+    return out;
+  }
+
   private toRecord(
     row: {
       id: string;
@@ -1640,6 +1984,7 @@ export class ServiceCasesService {
       notes: string | null;
       awaitingPostApproval?: boolean;
       postApprovalPath?: PostApprovalPath | null;
+      vehicleMovable?: VehicleMovableState | null;
       damageInsuranceType?: DamageInsuranceType | null;
       damageClaimNumber?: string | null;
       damageInsurerName?: string | null;
@@ -1647,7 +1992,11 @@ export class ServiceCasesService {
       damageInsurerAgreedAt?: Date | null;
       damageInsurerAgreedByUserId?: string | null;
       damageInsurerAgreementNotes?: string | null;
+      damagePayerType?: DamagePayerType | null;
+      damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
       damageDocumentsJson?: unknown;
+      damagePhotosJson?: unknown;
+      damageSectionLocksJson?: unknown;
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
@@ -1720,6 +2069,7 @@ export class ServiceCasesService {
       closedAt: row.closedAt?.toISOString() ?? null,
       awaitingPostApproval: row.awaitingPostApproval ?? false,
       postApprovalPath: row.postApprovalPath ?? null,
+      vehicleMovable: row.vehicleMovable ?? null,
       damageInsuranceType: row.damageInsuranceType ?? null,
       damageClaimNumber: row.damageClaimNumber ?? null,
       damageInsurerName: row.damageInsurerName ?? null,
@@ -1727,7 +2077,11 @@ export class ServiceCasesService {
       damageInsurerAgreedAt: row.damageInsurerAgreedAt?.toISOString() ?? null,
       damageInsurerAgreedByUserId: row.damageInsurerAgreedByUserId ?? null,
       damageInsurerAgreementNotes: row.damageInsurerAgreementNotes ?? null,
+      damagePayerType: row.damagePayerType ?? null,
+      damageInsurerPipelineStatus: row.damageInsurerPipelineStatus ?? null,
       damageDocuments: this.parseDamageDocuments(row.damageDocumentsJson),
+      damagePhotos: this.parseDamagePhotos(row.damagePhotosJson),
+      damageSectionLocks: this.parseDamageSectionLocks(row.damageSectionLocksJson),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       workOrders: (row.workOrders ?? []).map((wo) => {

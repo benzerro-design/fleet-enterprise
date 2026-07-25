@@ -25,6 +25,18 @@ export type ServiceCaseWorkflowType =
 
 export type DamageInsuranceType = "RCA" | "CASCO" | "BOTH" | "UNKNOWN";
 
+export type VehicleMovableState = "movable" | "immovable";
+export type DamagePayerType = "insurer" | "client";
+
+export type DamageInsurerPipelineStatus =
+  | "docs_pending"
+  | "ready_to_notify"
+  | "notified"
+  | "inspection_note"
+  | "reinspection_requested"
+  | "quote_ready"
+  | "payment_accepted";
+
 export type DamageClaimStatus =
   | "open"
   | "documents_pending"
@@ -39,7 +51,19 @@ export type DamageDocumentKind =
   | "amicable_settlement"
   | "id_card"
   | "driving_license"
+  | "casco_policy"
+  | "rca_policy"
+  | "itp_expiry"
+  | "registration_certificate"
+  | "person1_id_license"
+  | "vehicle1_cert_rca"
+  | "person2_id_license"
+  | "vehicle2_cert_rca"
   | "other";
+
+export type DamagePhotoKind = "exterior" | "damage_detail" | "odometer" | "other";
+
+export type DamageSectionKey = "claim_info" | "documents" | "photos" | "pipeline";
 
 export type DamageDocumentItem = {
   id: string;
@@ -51,26 +75,128 @@ export type DamageDocumentItem = {
   uploadedByLabel?: string;
 };
 
+export type DamagePhotoItem = {
+  id: string;
+  url: string;
+  kind: DamagePhotoKind;
+  caption?: string;
+  uploadedAt: string;
+  uploadedByUserId?: string;
+  uploadedByLabel?: string;
+};
+
+export type DamageSectionLock = {
+  lockedByUserId: string;
+  lockedByLabel?: string;
+  lockedAt: string;
+};
+
+export type DamageSectionLocks = Partial<Record<DamageSectionKey, DamageSectionLock>>;
+
 export type PatchDamageClaimInput = {
+  vehicleMovable?: VehicleMovableState | null;
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
   damageClaimStatus?: DamageClaimStatus | null;
+  damagePayerType?: DamagePayerType | null;
+  damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
   damageDocuments?: DamageDocumentItem[] | null;
+  damagePhotos?: DamagePhotoItem[] | null;
   agreeInsurer?: boolean;
+  clientPayerConfirmed?: boolean;
   damageInsurerAgreementNotes?: string | null;
+  lockSection?: { section: DamageSectionKey | string; lock: boolean };
 };
 
 export type PostApprovalPath = "immediate" | "reschedule";
 
+/** Checklist generic (legacy / tip necunoscut). */
 export const DAMAGE_DOCUMENT_KINDS: { kind: DamageDocumentKind; label: string }[] = [
-  { kind: "declaration", label: "Declarație" },
+  { kind: "declaration", label: "Declarație eveniment" },
   { kind: "police_report", label: "Proces-verbal poliție" },
   { kind: "amicable_settlement", label: "Constatare amiabilă" },
   { kind: "id_card", label: "CI" },
   { kind: "driving_license", label: "Permis de conducere" },
   { kind: "other", label: "Altele" },
 ];
+
+export const DAMAGE_DOCS_CASCO: { kind: DamageDocumentKind; label: string }[] = [
+  { kind: "declaration", label: "Declarație eveniment" },
+  { kind: "id_card", label: "CI persoană implicată" },
+  { kind: "driving_license", label: "Permis persoană implicată" },
+  { kind: "casco_policy", label: "Poliță CASCO mașină" },
+  { kind: "rca_policy", label: "Poliță RCA mașină" },
+  { kind: "itp_expiry", label: "Data expirare ITP" },
+  { kind: "registration_certificate", label: "Certificat înmatriculare" },
+];
+
+export const DAMAGE_DOCS_RCA: { kind: DamageDocumentKind; label: string }[] = [
+  { kind: "person1_id_license", label: "CI + permis — persoană 1" },
+  { kind: "vehicle1_cert_rca", label: "Certificat + RCA — mașină 1" },
+  { kind: "person2_id_license", label: "CI + permis — persoană 2" },
+  { kind: "vehicle2_cert_rca", label: "Certificat + RCA — mașină 2" },
+  { kind: "amicable_settlement", label: "Formular constatare amiabilă" },
+];
+
+export const DAMAGE_PIPELINE_STATUSES: {
+  value: DamageInsurerPipelineStatus;
+  label: string;
+}[] = [
+  { value: "docs_pending", label: "1. Documente" },
+  { value: "ready_to_notify", label: "2. Pregătit avizare" },
+  { value: "notified", label: "3. Avizat" },
+  { value: "inspection_note", label: "4. Notă constatare" },
+  { value: "reinspection_requested", label: "4b. Reconstatare" },
+  { value: "quote_ready", label: "5. Deviz gata" },
+  { value: "payment_accepted", label: "6. Accept plată" },
+];
+
+export const DAMAGE_PHOTO_KINDS: { kind: DamagePhotoKind; label: string }[] = [
+  { kind: "exterior", label: "Exterior" },
+  { kind: "damage_detail", label: "Detaliu avarie" },
+  { kind: "odometer", label: "Odometru" },
+  { kind: "other", label: "Altele" },
+];
+
+export function documentKindsForInsurance(
+  insuranceType: DamageInsuranceType | "" | null | undefined,
+): { kind: DamageDocumentKind; label: string }[] {
+  if (insuranceType === "CASCO") return DAMAGE_DOCS_CASCO;
+  if (insuranceType === "RCA") return DAMAGE_DOCS_RCA;
+  if (insuranceType === "BOTH") {
+    const seen = new Set<string>();
+    const out: { kind: DamageDocumentKind; label: string }[] = [];
+    for (const d of [...DAMAGE_DOCS_CASCO, ...DAMAGE_DOCS_RCA]) {
+      if (seen.has(d.kind)) continue;
+      seen.add(d.kind);
+      out.push(d);
+    }
+    return out;
+  }
+  return DAMAGE_DOCUMENT_KINDS;
+}
+
+export function mergeDamageDocuments(
+  template: { kind: DamageDocumentKind; label: string }[],
+  existing: DamageDocumentItem[] | undefined,
+): DamageDocumentItem[] {
+  const byKind = new Map((existing ?? []).map((d) => [d.kind, d]));
+  const fromTemplate = template.map((d) => {
+    const prev = byKind.get(d.kind);
+    if (prev) return { ...prev, label: prev.label ?? d.label };
+    return {
+      id: d.kind,
+      kind: d.kind,
+      label: d.label,
+      received: false,
+      uploadedAt: new Date().toISOString(),
+    };
+  });
+  const templateKinds = new Set(template.map((t) => t.kind));
+  const extras = (existing ?? []).filter((d) => !templateKinds.has(d.kind as DamageDocumentKind));
+  return [...fromTemplate, ...extras];
+}
 
 export function damageClaimStatusLabel(status: DamageClaimStatus | string | null | undefined): string {
   if (!status) return "—";
@@ -83,6 +209,36 @@ export function damageClaimStatusLabel(status: DamageClaimStatus | string | null
     closed: "Închis",
   };
   return map[status] ?? status;
+}
+
+export function damagePipelineStatusLabel(
+  status: DamageInsurerPipelineStatus | string | null | undefined,
+): string {
+  if (!status) return "—";
+  return DAMAGE_PIPELINE_STATUSES.find((s) => s.value === status)?.label ?? status;
+}
+
+export function vehicleMovableLabel(state: VehicleMovableState | string | null | undefined): string {
+  if (state === "movable") return "Deplasabilă";
+  if (state === "immovable") return "Nedeplasabilă";
+  return "—";
+}
+
+export function damagePayerLabel(payer: DamagePayerType | string | null | undefined): string {
+  if (payer === "insurer") return "Asigurător";
+  if (payer === "client") return "Client";
+  return "—";
+}
+
+export function isDamageInsurerReady(sc: {
+  damagePayerType?: DamagePayerType | null;
+  damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
+  damageInsurerAgreedAt?: string | null;
+}): boolean {
+  if (sc.damagePayerType === "client") return !!sc.damageInsurerAgreedAt;
+  return (
+    sc.damageInsurerPipelineStatus === "payment_accepted" || !!sc.damageInsurerAgreedAt
+  );
 }
 
 export type WorkOrderQuoteStatus = "draft" | "submitted" | "approved" | "rejected";
@@ -177,6 +333,7 @@ export type ServiceCaseRecord = {
   closedAt: string | null;
   awaitingPostApproval: boolean;
   postApprovalPath: PostApprovalPath | null;
+  vehicleMovable?: VehicleMovableState | null;
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
@@ -184,7 +341,11 @@ export type ServiceCaseRecord = {
   damageInsurerAgreedAt?: string | null;
   damageInsurerAgreedByUserId?: string | null;
   damageInsurerAgreementNotes?: string | null;
+  damagePayerType?: DamagePayerType | null;
+  damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
   damageDocuments?: DamageDocumentItem[];
+  damagePhotos?: DamagePhotoItem[];
+  damageSectionLocks?: DamageSectionLocks;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
