@@ -282,59 +282,84 @@ export function WorkOrderSheetShell({
   const toolbarGroups = [
     {
       label: "Comandă",
-      items: isDamageWo
-        ? ([
-            {
-              label: "Comandă",
-              onClick: () => setSheetView("comanda"),
-              active: sheetView === "comanda",
-            },
-            {
-              label: "Dosar daună",
-              onClick: () => setSheetView("dosar"),
-              active: sheetView === "dosar",
-            },
-          ] as { label: string; href?: string; onClick?: () => void; active?: boolean }[])
-        : ([] as { label: string; href?: string; onClick?: () => void; active?: boolean }[]),
+      items: [] as { label: string; href?: string; onClick?: () => void }[],
     },
     { label: "Navigare", items: navActions },
   ];
 
+  function sheetTabClass(active: boolean): string {
+    return `rounded-t-lg border px-4 py-2 text-sm transition-colors ${
+      active
+        ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
+        : "border-transparent text-zinc-500 hover:text-zinc-200"
+    }`;
+  }
+
   return (
     <div className="space-y-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950/80">
       <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/60 px-2 py-2">
-        <div className="grid min-w-[640px] grid-cols-2 gap-1.5">
-          {toolbarGroups.map((g) => (
-            <div key={g.label} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5">
-              <div className="mb-1 text-[9px] font-semibold uppercase text-zinc-500">{g.label}</div>
-              <div className="flex flex-wrap gap-1">
-                {g.items.length === 0 && g.label === "Comandă" && !isDamageWo ? (
-                  <span className="text-[10px] text-zinc-600">—</span>
-                ) : null}
-                {g.items.map((act) =>
-                  "href" in act && act.href ? (
-                    <Link key={act.label} href={act.href} className={sheetBtn()}>
-                      {act.label}
-                    </Link>
-                  ) : (
-                    <button
-                      key={act.label}
-                      type="button"
-                      disabled={pending}
-                      onClick={"onClick" in act ? act.onClick : undefined}
-                      className={
-                        "active" in act && act.active
-                          ? "inline-flex h-7 items-center justify-center rounded border border-violet-500/60 bg-violet-950/50 px-2.5 text-xs font-semibold whitespace-nowrap text-violet-100"
-                          : sheetBtn("onClick" in act && !!act.onClick && !("href" in act && act.href))
-                      }
-                    >
-                      {act.label}
-                    </button>
-                  ),
-                )}
+        <div className={`grid min-w-[640px] gap-1.5 ${isDamageWo ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2"}`}>
+          {toolbarGroups.map((g) => {
+            if (g.label === "Comandă" && isDamageWo) {
+              return (
+                <div
+                  key={g.label}
+                  className="rounded-md border border-zinc-800 bg-zinc-950 px-2 pt-1.5"
+                >
+                  <div className="mb-0 px-1 text-[9px] font-semibold uppercase text-zinc-500">
+                    Comandă
+                  </div>
+                  <nav className="border-b border-zinc-800">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setSheetView("comanda")}
+                        className={sheetTabClass(sheetView === "comanda")}
+                      >
+                        Comandă
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setSheetView("dosar")}
+                        className={sheetTabClass(sheetView === "dosar")}
+                      >
+                        Dosar daună
+                      </button>
+                    </div>
+                  </nav>
+                </div>
+              );
+            }
+            return (
+              <div key={g.label} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5">
+                <div className="mb-1 text-[9px] font-semibold uppercase text-zinc-500">{g.label}</div>
+                <div className="flex flex-wrap gap-1">
+                  {g.items.length === 0 && g.label === "Comandă" ? (
+                    <span className="text-[10px] text-zinc-600">—</span>
+                  ) : null}
+                  {g.items.map((act) =>
+                    "href" in act && act.href ? (
+                      <Link key={act.label} href={act.href} className={sheetBtn()}>
+                        {act.label}
+                      </Link>
+                    ) : (
+                      <button
+                        key={act.label}
+                        type="button"
+                        disabled={pending}
+                        onClick={"onClick" in act ? act.onClick : undefined}
+                        className={sheetBtn(true)}
+                      >
+                        {act.label}
+                      </button>
+                    ),
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
