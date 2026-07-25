@@ -46,9 +46,12 @@ export type DamageInsurerMailLogItem = {
   to: string;
   subject: string;
   status: "sent" | "stubbed" | "failed";
+  /** quote = deviz; avizare = pachet documente+poze. Lipsă → treat as quote (legacy). */
+  kind?: "quote" | "avizare";
   quoteId?: string;
   note?: string;
   pdfUrl?: string;
+  attachmentUrls?: string[];
   error?: string;
 };
 
@@ -70,11 +73,20 @@ export type DamageDocumentKind =
   | "rca_policy"
   | "itp_expiry"
   | "registration_certificate"
+  | "power_of_attorney"
   | "person1_id_license"
   | "vehicle1_cert_rca"
   | "person2_id_license"
   | "vehicle2_cert_rca"
   | "other";
+
+/** Checklist daună → tip document din modulul Documente flotă. */
+export const DAMAGE_KIND_TO_FLEET_DOC: Partial<Record<DamageDocumentKind, string>> = {
+  casco_policy: "casco",
+  rca_policy: "rca",
+  itp_expiry: "itp_cert",
+  registration_certificate: "cert_inmatriculare",
+};
 
 export type DamagePhotoKind = "exterior" | "damage_detail" | "odometer" | "other";
 
@@ -88,6 +100,8 @@ export type DamageDocumentItem = {
   received: boolean;
   uploadedAt: string;
   uploadedByLabel?: string;
+  url?: string;
+  fileName?: string;
 };
 
 export type DamagePhotoItem = {
@@ -148,6 +162,7 @@ export const DAMAGE_DOCS_CASCO: { kind: DamageDocumentKind; label: string }[] = 
   { kind: "rca_policy", label: "Poliță RCA mașină" },
   { kind: "itp_expiry", label: "Data expirare ITP" },
   { kind: "registration_certificate", label: "Certificat înmatriculare" },
+  { kind: "power_of_attorney", label: "Împuternicire" },
 ];
 
 export const DAMAGE_DOCS_RCA: { kind: DamageDocumentKind; label: string }[] = [

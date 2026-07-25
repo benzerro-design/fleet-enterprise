@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import { uploadDocumentFile } from "@/lib/document-upload";
 import {
+  DAMAGE_KIND_TO_FLEET_DOC,
   DAMAGE_PHOTO_KINDS,
   DAMAGE_PIPELINE_STATUSES,
   damageClaimStatusLabel,
@@ -17,6 +18,7 @@ import {
   vehicleMovableLabel,
   type DamageClaimStatus,
   type DamageDocumentItem,
+  type DamageDocumentKind,
   type DamageInsurerMailLogItem,
   type DamageInsurerPipelineStatus,
   type DamageInsuranceType,
@@ -30,6 +32,7 @@ import {
   type ServiceCaseRecord,
   type VehicleMovableState,
 } from "@/lib/service-cases-api";
+import { documentsBrowserBase } from "@/lib/fleet-api";
 
 type Props = {
   serviceCase: ServiceCaseRecord | null | undefined;
@@ -39,6 +42,8 @@ type Props = {
   compact?: boolean;
   /** When opened from WO, treat as „după WO” for payer hint. */
   fromWorkOrder?: boolean;
+  /** Nr. înmatriculare — pentru import din Documente flotă. */
+  registrationNumber?: string | null;
 };
 
 const INSURANCE_OPTIONS: { value: DamageInsuranceType; label: string }[] = [
@@ -80,6 +85,7 @@ export function DamageClaimPanel({
   onUpdated,
   compact,
   fromWorkOrder = false,
+  registrationNumber = null,
 }: Props) {
   const isDamage = serviceCase?.workflowType === "damage";
   const [movable, setMovable] = useState<VehicleMovableState | "">("");
@@ -96,11 +102,15 @@ export function DamageClaimPanel({
   const [mailLog, setMailLog] = useState<DamageInsurerMailLogItem[]>([]);
   const [insurerPdfUrl, setInsurerPdfUrl] = useState<string | null>(null);
   const [sendNote, setSendNote] = useState("");
+  const [avizareNote, setAvizareNote] = useState("");
+  const [avizareDocIds, setAvizareDocIds] = useState<Set<string>>(new Set());
+  const [avizarePhotoIds, setAvizarePhotoIds] = useState<Set<string>>(new Set());
   const [docs, setDocs] = useState<DamageDocumentItem[]>([]);
   const [photos, setPhotos] = useState<DamagePhotoItem[]>([]);
   const [locks, setLocks] = useState<DamageSectionLocks>({});
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [importingKind, setImportingKind] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [photoKind, setPhotoKind] = useState<DamagePhotoKind>("damage_detail");
@@ -125,14 +135,24 @@ export function DamageClaimPanel({
     setQuoteOrigin(serviceCase.damageQuoteOrigin ?? "");
     setMailLog(serviceCase.damageInsurerMailLog ?? []);
     setInsurerPdfUrl(serviceCase.damageInsurerQuotePdfUrl ?? null);
-    setDocs(
-      mergeDamageDocuments(
-        documentKindsForInsurance(serviceCase.damageInsuranceType),
-        serviceCase.damageDocuments,
+    const mergedDocs = mergeDamageDocuments(
+      documentKindsForInsurance(serviceCase.damageInsuranceType),
+      serviceCase.damageDocuments,
+    );
+    setDocs(mergedDocs);
+    const nextPhotos = serviceCase.damagePhotos ?? [];
+    setPhotos(nextPhotos);
+    setLocks(serviceCase.damageSectionLocks ?? {});
+    setAvizareDocIds(
+      new Set(mergedDocs.filter((d) => d.url || d.received).map((d) => d.id)),
+    );
+    setAvizarePhotoIds(
+      new Set(
+        nextPhotos
+          .filter((p) => p.kind === "exterior" || p.kind === "damage_detail" || p.kind === "odometer")
+          .map((p) => p.id),
       ),
     );
-    setPhotos(serviceCase.damagePhotos ?? []);
-    setLocks(serviceCase.damageSectionLocks ?? {});
   }, [serviceCase]);
 
   useEffect(() => {
@@ -230,6 +250,131 @@ export function DamageClaimPanel({
 
   async function saveDocuments() {
     await patch({ damageDocuments: docs }, "Documente salvate.");
+  }
+
+  async function importFromFleet(doc: DamageDocumentItem) {
+    const plate = registrationNumber?.trim();
+    if (!plate) {
+      setError("Lipsește numărul de înmatriculare — nu pot importa din Documente flotă.");
+      return;
+    }
+    const fleetType = DAMAGE_KIND_TO_FLEET_DOC[doc.kind as DamageDocumentKind];
+    if (!fleetType) return;
+    setImportingKind(doc.kind);
+    setError(null);
+    setOk(null);
+    try {
+      const q = new URLSearchParams({
+        page: "1",
+        pageSize: "100",
+        registrationNumber: plate,
+      });
+      const res = await fetch(`${documentsBrowserBase}?${q.toString()}`, {
+        headers: fleetJsonHeaders(),
+      });
+      if (!res.ok) {
+        setError(`Nu am putut citi Documente flotă (HTTP ${res.status}).`);
+        return;
+      }
+      const payload = (await res.json()) as {
+        items?: Array<{
+          documentTypeCode: string;
+          fileUrl: string | null;
+          fileName: string | null;
+          createdAt: string;
+          title?: string;
+        }>;
+      };
+      const match = (payload.items ?? [])
+        .filter((i) => i.documentTypeCode === fleetType && i.fileUrl)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      if (!match?.fileUrl) {
+        setError(
+          `Nu există ${doc.label ?? doc.kind} cu fișier pe ${plate} în Documente flotă.`,
+        );
+        return;
+      }
+      const nextDocs = docs.map((d) =>
+        d.kind === doc.kind
+          ? {
+              ...d,
+              url: match.fileUrl!,
+              fileName: match.fileName ?? match.title ?? undefined,
+              received: true,
+              uploadedAt: new Date().toISOString(),
+            }
+          : d,
+      );
+      setDocs(nextDocs);
+      setAvizareDocIds((prev) => {
+        const next = new Set(prev);
+        next.add(doc.id);
+        return next;
+      });
+      await patch(
+        { damageDocuments: nextDocs },
+        `Importat din Documente flotă: ${doc.label ?? doc.kind}.`,
+      );
+    } finally {
+      setImportingKind(null);
+    }
+  }
+
+  async function sendAvizare() {
+    if (!serviceCase) return;
+    if (!insurerEmail.trim()) {
+      setError("Completează emailul asigurătorului pe dosar înainte de avizare.");
+      return;
+    }
+    if (avizareDocIds.size === 0 && avizarePhotoIds.size === 0) {
+      setError("Bifează cel puțin un document sau o poză pentru avizare.");
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setOk(null);
+    try {
+      // Persist email if edited locally
+      await fetch(`${serviceCasesBrowserBase}/${serviceCase.id}/damage-claim`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ damageInsurerEmail: insurerEmail.trim() || null }),
+      });
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/${serviceCase.id}/damage-claim/send-avizare`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({
+            documentIds: [...avizareDocIds],
+            photoIds: [...avizarePhotoIds],
+            note: avizareNote.trim() || null,
+          }),
+        },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (j.message) msg = Array.isArray(j.message) ? j.message.join(", ") : j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const next = (await res.json()) as ServiceCaseRecord;
+      onUpdated?.(next);
+      setMailLog(next.damageInsurerMailLog ?? []);
+      setPipeline(next.damageInsurerPipelineStatus ?? "notified");
+      setOk(
+        next.damageInsurerMailLog?.[0]?.status === "stubbed"
+          ? "Avizare înregistrată (SMTP neconfigurat) — verifică logul / linkurile din email."
+          : "Avizare trimisă către asigurător.",
+      );
+    } finally {
+      setPending(false);
+    }
   }
 
   async function savePipeline() {
@@ -561,7 +706,7 @@ export function DamageClaimPanel({
                     {doc.label ?? doc.kind}
                   </label>
                   <input
-                    className={`${OPS_INPUT_CLASS} max-w-xs flex-1 py-1.5 text-xs`}
+                    className={`${OPS_INPUT_CLASS} max-w-[10rem] flex-1 py-1.5 text-xs`}
                     disabled={disabled || sectionLocked("documents")}
                     placeholder="Notă (opțional)"
                     value={doc.notes ?? ""}
@@ -572,6 +717,98 @@ export function DamageClaimPanel({
                       );
                     }}
                   />
+                  {doc.url ? (
+                    <a
+                      href={doc.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="max-w-[8rem] truncate text-xs text-emerald-400 hover:underline"
+                      title={doc.fileName ?? doc.url}
+                    >
+                      {doc.fileName ?? "Fișier"}
+                    </a>
+                  ) : null}
+                  {canWrite && !sectionLocked("documents") ? (
+                    <>
+                      <label className="cursor-pointer rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800">
+                        {uploading ? "…" : doc.url ? "Înlocuiește" : "Încarcă"}
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*,.doc,.docx"
+                          className="hidden"
+                          disabled={disabled || uploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            void (async () => {
+                              setUploading(true);
+                              setError(null);
+                              try {
+                                const up = await uploadDocumentFile(
+                                  file,
+                                  doc.label ?? doc.kind,
+                                );
+                                const nextDocs = docs.map((d) =>
+                                  d.kind === doc.kind
+                                    ? {
+                                        ...d,
+                                        url: up.url,
+                                        fileName: up.name,
+                                        received: true,
+                                        uploadedAt: new Date().toISOString(),
+                                      }
+                                    : d,
+                                );
+                                setDocs(nextDocs);
+                                await patch(
+                                  { damageDocuments: nextDocs },
+                                  `Document încărcat: ${doc.label ?? doc.kind}.`,
+                                );
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : "Upload eșuat.");
+                              } finally {
+                                setUploading(false);
+                                e.target.value = "";
+                              }
+                            })();
+                          }}
+                        />
+                      </label>
+                      {doc.url ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          className="text-[11px] text-rose-400 hover:underline disabled:opacity-50"
+                          onClick={() => {
+                            const nextDocs = docs.map((d) =>
+                              d.kind === doc.kind
+                                ? { ...d, url: undefined, fileName: undefined }
+                                : d,
+                            );
+                            setDocs(nextDocs);
+                            void patch({ damageDocuments: nextDocs }, "Fișier șters de pe document.");
+                          }}
+                        >
+                          Șterge fișier
+                        </button>
+                      ) : null}
+                      {DAMAGE_KIND_TO_FLEET_DOC[doc.kind as DamageDocumentKind] ? (
+                        <button
+                          type="button"
+                          disabled={pending || importingKind === doc.kind || !registrationNumber?.trim()}
+                          title={
+                            registrationNumber?.trim()
+                              ? "Copiază fișierul din Documente flotă"
+                              : "Lipsește nr. înmatriculare"
+                          }
+                          className="text-[11px] text-sky-400 hover:underline disabled:opacity-50"
+                          onClick={() => void importFromFleet(doc)}
+                        >
+                          {importingKind === doc.kind ? "Import…" : "Din flotă"}
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -669,20 +906,128 @@ export function DamageClaimPanel({
             />
           </div>
         ) : null}
-        <p className="text-[11px] text-zinc-600">
-          Email către asigurător (documente + poze): F1 — în curând; atașamentele rămân pe dosar.
-        </p>
+        ) : null}
       </section>
 
-      {/* Quote ↔ insurer */}
+      {/* Avizare — select docs + photos → send to insurer */}
+      {!isClientPayer ? (
+        <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Avizare</h4>
+          <p className="text-[11px] text-zinc-500">
+            Bifează documentele și pozele din dosar, apoi trimite pachetul pe emailul asigurătorului
+            (linkuri către fișiere).
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className={`${OPS_LABEL_CLASS} mb-1`}>Documente</p>
+              {docs.length ? (
+                <ul className="max-h-48 space-y-1 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/40 p-2">
+                  {docs.map((d) => (
+                    <li key={d.id}>
+                      <label className="flex items-start gap-2 text-xs text-zinc-300">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          disabled={disabled || !canWrite}
+                          checked={avizareDocIds.has(d.id)}
+                          onChange={(e) => {
+                            setAvizareDocIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(d.id);
+                              else next.delete(d.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span>
+                          {d.label ?? d.kind}
+                          {!d.url ? (
+                            <span className="ml-1 text-zinc-600">(fără fișier)</span>
+                          ) : null}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-zinc-500">Niciun document pe checklist.</p>
+              )}
+            </div>
+            <div>
+              <p className={`${OPS_LABEL_CLASS} mb-1`}>Poze</p>
+              {photos.length ? (
+                <ul className="max-h-48 space-y-1 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/40 p-2">
+                  {photos.map((p) => (
+                    <li key={p.id}>
+                      <label className="flex items-start gap-2 text-xs text-zinc-300">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          disabled={disabled || !canWrite}
+                          checked={avizarePhotoIds.has(p.id)}
+                          onChange={(e) => {
+                            setAvizarePhotoIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(p.id);
+                              else next.delete(p.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span>
+                          {DAMAGE_PHOTO_KINDS.find((k) => k.kind === p.kind)?.label ?? p.kind}
+                          {p.caption ? ` · ${p.caption}` : ""}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-zinc-500">Nicio poză în galerie.</p>
+              )}
+            </div>
+          </div>
+          <label className="block">
+            <span className={OPS_LABEL_CLASS}>Notă avizare (opțional)</span>
+            <input
+              className={OPS_INPUT_CLASS}
+              disabled={disabled || !canWrite}
+              value={avizareNote}
+              onChange={(e) => setAvizareNote(e.target.value)}
+              placeholder="ex. solicităm constatare / urgență"
+            />
+          </label>
+          {canWrite ? (
+            <button
+              type="button"
+              disabled={
+                pending ||
+                (!avizareDocIds.size && !avizarePhotoIds.size) ||
+                !insurerEmail.trim()
+              }
+              onClick={() => void sendAvizare()}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Trimite avizare
+            </button>
+          ) : null}
+          {!insurerEmail.trim() ? (
+            <p className="text-[11px] text-amber-400/90">
+              Completează emailul asigurătorului în informațiile dosarului.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* Deviz asigurător — 2 origini */}
       {!isClientPayer ? (
         <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            Deviz către asigurător
+            Deviz asigurător
           </h4>
           <p className="text-[11px] text-zinc-500">
-            Același WorkOrderQuote de pe WO. Origine: întocmit de noi (Audatex/PDF) sau primit de la
-            asigurător.
+            Același WorkOrderQuote de pe WO. Două posibilități: întocmit de noi (Audatex/PDF) sau
+            primit de la asigurător.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
@@ -849,6 +1194,10 @@ export function DamageClaimPanel({
                     }
                   >
                     {m.status}
+                  </span>
+                  {" · "}
+                  <span className="text-zinc-500">
+                    {m.kind === "avizare" ? "avizare" : "deviz"}
                   </span>
                   {" → "}
                   {m.to}

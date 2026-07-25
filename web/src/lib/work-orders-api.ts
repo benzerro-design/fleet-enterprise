@@ -136,6 +136,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
     received: boolean;
     uploadedAt: string;
     uploadedByLabel?: string;
+    url?: string;
+    fileName?: string;
   }[];
   damagePhotos?: {
     id: string;

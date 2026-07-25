@@ -1594,6 +1594,8 @@ export class WorkOrdersService {
         received: o.received === true,
         uploadedAt: typeof o.uploadedAt === 'string' ? o.uploadedAt : new Date(0).toISOString(),
         uploadedByLabel: typeof o.uploadedByLabel === 'string' ? o.uploadedByLabel : undefined,
+        url: typeof o.url === 'string' ? o.url : undefined,
+        fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
       });
     }
     return out;
@@ -1638,9 +1640,13 @@ export class WorkOrdersService {
         to: o.to,
         subject: o.subject,
         status,
+        kind: o.kind === 'avizare' || o.kind === 'quote' ? o.kind : undefined,
         quoteId: typeof o.quoteId === 'string' ? o.quoteId : undefined,
         note: typeof o.note === 'string' ? o.note : undefined,
         pdfUrl: typeof o.pdfUrl === 'string' ? o.pdfUrl : undefined,
+        attachmentUrls: Array.isArray(o.attachmentUrls)
+          ? o.attachmentUrls.filter((u): u is string => typeof u === 'string')
+          : undefined,
         error: typeof o.error === 'string' ? o.error : undefined,
       });
     }

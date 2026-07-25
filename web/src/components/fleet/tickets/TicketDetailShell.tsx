@@ -137,6 +137,7 @@ export function TicketDetailShell({
             <DamageClaimPanel
               serviceCase={serviceCase}
               canWrite={write && canOperate}
+              registrationNumber={ticket.registrationNumber}
               onUpdated={(next) => setServiceCase(next)}
             />
           }

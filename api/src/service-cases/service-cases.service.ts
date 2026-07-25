@@ -179,6 +179,9 @@ export type DamageDocumentItem = {
   received: boolean;
   uploadedAt: string;
   uploadedByLabel?: string;
+  /** Fișier scanat / PDF (opțional). */
+  url?: string;
+  fileName?: string;
 };
 
 export type DamagePhotoItem = {
@@ -208,9 +211,12 @@ export type DamageInsurerMailLogItem = {
   to: string;
   subject: string;
   status: 'sent' | 'stubbed' | 'failed';
+  /** quote = deviz; avizare = pachet documente+poze. Lipsă → treat as quote (legacy). */
+  kind?: 'quote' | 'avizare';
   quoteId?: string;
   note?: string;
   pdfUrl?: string;
+  attachmentUrls?: string[];
   error?: string;
 };
 
@@ -281,6 +287,22 @@ export type SendDamageQuoteToInsurerInput = {
   /** Absolute or app-relative URL to quote PDF (optional override). */
   pdfUrl?: string | null;
 };
+
+export type SendDamageAvizareToInsurerInput = {
+  documentIds?: string[];
+  photoIds?: string[];
+  note?: string | null;
+};
+
+const PIPELINE_ORDER: DamageInsurerPipelineStatus[] = [
+  DamageInsurerPipelineStatus.docs_pending,
+  DamageInsurerPipelineStatus.ready_to_notify,
+  DamageInsurerPipelineStatus.notified,
+  DamageInsurerPipelineStatus.inspection_note,
+  DamageInsurerPipelineStatus.reinspection_requested,
+  DamageInsurerPipelineStatus.quote_ready,
+  DamageInsurerPipelineStatus.payment_accepted,
+];
 
 const DAMAGE_SECTION_KEYS: DamageSectionKey[] = [
   'claim_info',
@@ -964,6 +986,7 @@ export class ServiceCasesService {
       to,
       subject,
       status,
+      kind: 'quote',
       quoteId: quoteId ?? undefined,
       note: dto.note?.trim() || undefined,
       pdfUrl: pdfUrl ?? undefined,
@@ -1014,6 +1037,205 @@ export class ServiceCasesService {
 
     if (status === 'failed') {
       throw new BadRequestException(error || 'Trimiterea către asigurător a eșuat');
+    }
+
+    return this.toRecord(updated);
+  }
+
+  async sendDamageAvizareToInsurer(
+    tenantSlug: string,
+    caseId: string,
+    dto: SendDamageAvizareToInsurerInput,
+    actorUserId?: string | null,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const row = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+      include: {
+        workOrders: {
+          select: { id: true, supplierId: true, displayNumber: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Service case not found');
+    if (access) {
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        const partnerWo = row.workOrders.find((w) =>
+          allowedSupplierIds(access).includes(w.supplierId ?? ''),
+        );
+        if (!partnerWo) {
+          throw new ForbiddenException('No partner work order on this damage case');
+        }
+        assertPartnerSupplierId(access, partnerWo.supplierId);
+      } else {
+        assertServiceCaseWrite(access, row.clientId);
+      }
+    }
+    if (row.workflowType !== ServiceCaseWorkflowType.damage) {
+      throw new BadRequestException('Avizarea se aplică doar pe workflow daună');
+    }
+    if (row.damagePayerType === DamagePayerType.client) {
+      throw new BadRequestException('Plătitor client — nu se trimite avizare către asigurător');
+    }
+
+    const to = row.damageInsurerEmail?.trim();
+    if (!to) {
+      throw new BadRequestException('Completează emailul asigurătorului pe dosar');
+    }
+
+    const docs = this.parseDamageDocuments(row.damageDocumentsJson);
+    const photos = this.parseDamagePhotos(row.damagePhotosJson);
+    const docIdSet = new Set((dto.documentIds ?? []).map((id) => id.trim()).filter(Boolean));
+    const photoIdSet = new Set((dto.photoIds ?? []).map((id) => id.trim()).filter(Boolean));
+    if (docIdSet.size === 0 && photoIdSet.size === 0) {
+      throw new BadRequestException('Selectează cel puțin un document sau o poză pentru avizare');
+    }
+
+    const selectedDocs = docs.filter((d) => docIdSet.has(d.id));
+    const selectedPhotos = photos.filter((p) => photoIdSet.has(p.id));
+    if (selectedDocs.length !== docIdSet.size || selectedPhotos.length !== photoIdSet.size) {
+      throw new BadRequestException('Unele documente/poze selectate nu mai există pe dosar');
+    }
+
+    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
+    const absolutize = (url: string) => {
+      const u = url.trim();
+      if (!u) return u;
+      if (/^https?:\/\//i.test(u)) return u;
+      if (!webOrigin) return u;
+      return `${webOrigin}${u.startsWith('/') ? '' : '/'}${u}`;
+    };
+
+    const attachmentLines: string[] = [];
+    const attachmentUrls: string[] = [];
+    for (const d of selectedDocs) {
+      const label = d.label ?? d.kind;
+      if (d.url) {
+        const abs = absolutize(d.url);
+        attachmentUrls.push(abs);
+        attachmentLines.push(`- Document: ${label}${d.fileName ? ` (${d.fileName})` : ''} — ${abs}`);
+      } else {
+        attachmentLines.push(`- Document: ${label} — fără fișier pe dosar (bifat ca primit)`);
+      }
+    }
+    for (const p of selectedPhotos) {
+      const abs = absolutize(p.url);
+      attachmentUrls.push(abs);
+      const kindLabel =
+        p.kind === 'exterior'
+          ? 'Exterior'
+          : p.kind === 'damage_detail'
+            ? 'Detaliu avarie'
+            : p.kind === 'odometer'
+              ? 'Odometru'
+              : 'Poză';
+      attachmentLines.push(
+        `- Poză: ${kindLabel}${p.caption ? ` · ${p.caption}` : ''} — ${abs}`,
+      );
+    }
+
+    const wo = row.workOrders[0];
+    const insurerLabel = row.damageInsurerName?.trim() || 'asigurător';
+    const claim = row.damageClaimNumber?.trim() || caseId.slice(-6).toUpperCase();
+    const subject = `Avizare daună ${claim} — ${row.title}`;
+    const bodyLines = [
+      `Bună ziua,`,
+      ``,
+      `Vă transmitem pachetul de avizare pentru dosarul de daună ${claim} (${insurerLabel}).`,
+      wo?.displayNumber ? `Comandă service: ${wo.displayNumber}.` : null,
+      ``,
+      `Atașamente / linkuri:`,
+      ...attachmentLines,
+      dto.note?.trim() ? `` : null,
+      dto.note?.trim() ? `Notă: ${dto.note.trim()}` : null,
+      ``,
+      `Cu stimă,`,
+      `Fleet Enterprise`,
+    ].filter((l) => l != null) as string[];
+    const body = bodyLines.join('\n');
+
+    let status: DamageInsurerMailLogItem['status'] = 'stubbed';
+    let error: string | undefined;
+    if (this.partnerMail.isConfigured()) {
+      try {
+        await this.partnerMail.send({ to, subject, body });
+        status = 'sent';
+      } catch (e) {
+        status = 'failed';
+        error = e instanceof Error ? e.message : 'SMTP send failed';
+      }
+    }
+
+    const logItem: DamageInsurerMailLogItem = {
+      id: `mail_${Date.now()}`,
+      at: new Date().toISOString(),
+      direction: 'outbound',
+      to,
+      subject,
+      status,
+      kind: 'avizare',
+      note: dto.note?.trim() || undefined,
+      attachmentUrls: attachmentUrls.length ? attachmentUrls : undefined,
+      error,
+    };
+    const prevLog = this.parseDamageInsurerMailLog(row.damageInsurerMailLogJson);
+    const nextLog = [logItem, ...prevLog].slice(0, 50);
+
+    const currentPipeline = row.damageInsurerPipelineStatus;
+    const currentIdx = currentPipeline ? PIPELINE_ORDER.indexOf(currentPipeline) : -1;
+    const notifiedIdx = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.notified);
+    const nextPipeline =
+      currentIdx < notifiedIdx ? DamageInsurerPipelineStatus.notified : currentPipeline;
+
+    const updated = await this.prisma.serviceCase.update({
+      where: { id: caseId },
+      data: {
+        damageInsurerMailLogJson: nextLog as unknown as Prisma.InputJsonValue,
+        damageInsurerPipelineStatus: nextPipeline ?? DamageInsurerPipelineStatus.notified,
+      },
+      include: this.caseInclude(),
+    });
+
+    if (row.sourceTicketId) {
+      await this.prisma.crmTicketEvent.create({
+        data: {
+          tenantId: tenant.id,
+          ticketId: row.sourceTicketId,
+          kind: CrmTicketEventKind.damage_claim_update,
+          body:
+            status === 'sent'
+              ? `Avizare trimisă către asigurător (${to}) — ${selectedDocs.length} doc, ${selectedPhotos.length} poze.`
+              : status === 'stubbed'
+                ? `Avizare înregistrată (SMTP neconfigurat) — ${to}.`
+                : `Avizare către asigurător eșuată — ${error ?? 'eroare'}.`,
+          payload: { serviceCaseId: caseId, mail: logItem },
+          actorUserId: actorUserId ?? null,
+        },
+      });
+    }
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_case.damage_avizare_send_insurer',
+      entityType: 'service_case',
+      entityId: caseId,
+      meta: {
+        to,
+        status,
+        documentIds: [...docIdSet],
+        photoIds: [...photoIdSet],
+      },
+    });
+
+    if (status === 'failed') {
+      throw new BadRequestException(error || 'Trimiterea avizării a eșuat');
     }
 
     return this.toRecord(updated);
@@ -2174,6 +2396,8 @@ export class ServiceCasesService {
         received: o.received === true,
         uploadedAt: typeof o.uploadedAt === 'string' ? o.uploadedAt : new Date(0).toISOString(),
         uploadedByLabel: typeof o.uploadedByLabel === 'string' ? o.uploadedByLabel : undefined,
+        url: typeof o.url === 'string' ? o.url : undefined,
+        fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
       });
     }
     return out;
@@ -2235,9 +2459,13 @@ export class ServiceCasesService {
         to: o.to,
         subject: o.subject,
         status,
+        kind: o.kind === 'avizare' || o.kind === 'quote' ? o.kind : undefined,
         quoteId: typeof o.quoteId === 'string' ? o.quoteId : undefined,
         note: typeof o.note === 'string' ? o.note : undefined,
         pdfUrl: typeof o.pdfUrl === 'string' ? o.pdfUrl : undefined,
+        attachmentUrls: Array.isArray(o.attachmentUrls)
+          ? o.attachmentUrls.filter((u): u is string => typeof u === 'string')
+          : undefined,
         error: typeof o.error === 'string' ? o.error : undefined,
       });
     }

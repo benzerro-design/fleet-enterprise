@@ -430,6 +430,7 @@ export function WorkOrderSheetShell({
             canWrite={canWrite}
             compact
             fromWorkOrder
+            registrationNumber={wo.registrationNumber}
             onUpdated={() => router.refresh()}
           />
         </div>

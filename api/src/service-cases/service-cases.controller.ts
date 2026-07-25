@@ -12,6 +12,7 @@ import type {
   CreateServiceAppointmentInput,
   PatchDamageClaimInput,
   PostApprovalInput,
+  SendDamageAvizareToInsurerInput,
   SendDamageQuoteToInsurerInput,
   UpdateServiceAppointmentInput,
 } from './service-cases.service';
@@ -79,6 +80,24 @@ export class ServiceCasesController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.serviceCases.sendDamageQuoteToInsurer(
+      tenantSlug,
+      id,
+      body ?? {},
+      actorUserId,
+      access,
+    );
+  }
+
+  @Post(':id/damage-claim/send-avizare')
+  @Roles(...FLEET_WRITE_ROLES)
+  sendDamageAvizareToInsurer(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: SendDamageAvizareToInsurerInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.sendDamageAvizareToInsurer(
       tenantSlug,
       id,
       body ?? {},
