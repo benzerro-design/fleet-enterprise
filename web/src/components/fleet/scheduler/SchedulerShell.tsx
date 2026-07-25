@@ -96,6 +96,9 @@ export function SchedulerShell({
   const [createMode, setCreateMode] = useState(() => !!(initialCreate && initialTicketId && canWrite));
   const [mobileDetail, setMobileDetail] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  /** Repropunere / edit interval — click pe slot umple data, nu deschide programare nouă. */
+  const [rescheduleEditing, setRescheduleEditing] = useState(false);
+  const [reschedulePickAt, setReschedulePickAt] = useState<string | undefined>();
 
   const visibleSuppliers = useMemo(() => {
     if (!serviceTypeCode) return suppliers;
@@ -244,9 +247,25 @@ export function SchedulerShell({
     setSupplierFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  function clearSelection() {
+    setSelectedId(null);
+    setCreateMode(false);
+    setRescheduleEditing(false);
+    setReschedulePickAt(undefined);
+    setCreatePrefillAt(undefined);
+    setMobileDetail(false);
+    syncUrlHistory({ select: null, clearTicketLink: true });
+  }
+
   function selectAppointment(id: string) {
+    if (selectedId === id) {
+      clearSelection();
+      return;
+    }
     setSelectedId(id);
     setCreateMode(false);
+    setRescheduleEditing(false);
+    setReschedulePickAt(undefined);
     if (isMobile) setMobileDetail(true);
     syncUrlHistory({ select: id, clearTicketLink: true });
   }
@@ -279,7 +298,18 @@ export function SchedulerShell({
     setCreatePrefillAt(toDatetimeLocalValue(when.toISOString()));
     setCreateMode(true);
     setSelectedId(null);
+    setRescheduleEditing(false);
+    setReschedulePickAt(undefined);
     if (isMobile) setMobileDetail(true);
+    syncUrlHistory({ select: null, clearTicketLink: true });
+  }
+
+  function handleSlotClick(when: Date) {
+    if (rescheduleEditing && selectedId) {
+      setReschedulePickAt(toDatetimeLocalValue(when.toISOString()));
+      return;
+    }
+    openCreateAt(when);
   }
 
   const showMobileInspector = isMobile && mobileDetail && (selected || createMode);
@@ -317,8 +347,10 @@ export function SchedulerShell({
               canWrite={canWrite}
               partnerMode={partnerMode}
               onSelect={selectAppointment}
+              onDeselect={clearSelection}
               onReschedule={canWrite ? reschedule : undefined}
-              onSlotClick={canWrite ? openCreateAt : undefined}
+              onSlotClick={canWrite ? handleSlotClick : undefined}
+              slotClickMode={rescheduleEditing && selectedId ? "reschedule" : "create"}
               onStatusChange={canWrite ? setAppointmentStatus : undefined}
               onSupplierValidate={canWrite ? supplierValidateById : undefined}
               onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
@@ -334,8 +366,10 @@ export function SchedulerShell({
           canWrite={canWrite}
           partnerMode={partnerMode}
           onSelect={selectAppointment}
+          onDeselect={clearSelection}
           onReschedule={canWrite ? reschedule : undefined}
-          onSlotClick={canWrite ? openCreateAt : undefined}
+          onSlotClick={canWrite ? handleSlotClick : undefined}
+          slotClickMode={rescheduleEditing && selectedId ? "reschedule" : "create"}
           onStatusChange={canWrite ? setAppointmentStatus : undefined}
           onSupplierValidate={canWrite ? supplierValidateById : undefined}
           onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
@@ -435,7 +469,10 @@ export function SchedulerShell({
                 setCreatePrefillAt(undefined);
                 setCreateMode(true);
                 setSelectedId(null);
+                setRescheduleEditing(false);
+                setReschedulePickAt(undefined);
                 if (isMobile) setMobileDetail(true);
+                syncUrlHistory({ select: null, clearTicketLink: true });
               }}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
             >
@@ -472,6 +509,10 @@ export function SchedulerShell({
             canWrite={canWrite}
             createMode={createMode}
             partnerMode={partnerMode}
+            onClose={clearSelection}
+            onRescheduleEditingChange={setRescheduleEditing}
+            calendarPickAt={reschedulePickAt}
+            onCalendarPickConsumed={() => setReschedulePickAt(undefined)}
             onCancelCreate={() => {
               setCreateMode(false);
               setMobileDetail(false);
@@ -480,6 +521,8 @@ export function SchedulerShell({
             }}
             onUpdated={() => {
               void load(true);
+              setRescheduleEditing(false);
+              setReschedulePickAt(undefined);
               if (linkTicketId) {
                 setCreateMode(false);
                 syncUrlHistory({ clearTicketLink: true });
@@ -501,12 +544,10 @@ export function SchedulerShell({
           mobile
           createMode={createMode}
           partnerMode={partnerMode}
-          onClose={() => {
-            setMobileDetail(false);
-            setCreateMode(false);
-            setCreatePrefillAt(undefined);
-            syncUrlHistory({ clearTicketLink: true });
-          }}
+          onClose={clearSelection}
+          onRescheduleEditingChange={setRescheduleEditing}
+          calendarPickAt={reschedulePickAt}
+          onCalendarPickConsumed={() => setReschedulePickAt(undefined)}
           onCancelCreate={() => {
             setCreateMode(false);
             setMobileDetail(false);
@@ -515,6 +556,8 @@ export function SchedulerShell({
           }}
           onUpdated={() => {
             void load(true);
+            setRescheduleEditing(false);
+            setReschedulePickAt(undefined);
             if (linkTicketId) {
               setCreateMode(false);
               setCreatePrefillAt(undefined);

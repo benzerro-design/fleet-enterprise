@@ -35,6 +35,11 @@ type Props = {
   initialVehicleId?: string;
   serviceTypeCode?: string;
   partnerMode?: boolean;
+  /** Notifică shell-ul când e activă reprogramarea (pick din calendar). */
+  onRescheduleEditingChange?: (editing: boolean) => void;
+  /** Slot ales din calendar în timp ce editezi intervalul. */
+  calendarPickAt?: string;
+  onCalendarPickConsumed?: () => void;
 };
 
 export function SchedulerInspector({
@@ -51,6 +56,9 @@ export function SchedulerInspector({
   initialVehicleId,
   serviceTypeCode,
   partnerMode,
+  onRescheduleEditingChange,
+  calendarPickAt,
+  onCalendarPickConsumed,
 }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +81,11 @@ export function SchedulerInspector({
     setEditScheduledAt(toDatetimeLocalValue(appointment.scheduledAt));
     setEditDurationMin(String(appointment.durationMin));
     setEditing(false);
+    onRescheduleEditingChange?.(false);
     setError(null);
     setRequestingCancel(false);
     setCancelNote("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when appointment identity/time changes
   }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin]);
 
   useEffect(() => {
@@ -83,6 +93,12 @@ export function SchedulerInspector({
     setRequestingCancel(false);
     setCancelNote("");
   }, [createMode, appointment?.id]);
+
+  useEffect(() => {
+    if (!editing || !calendarPickAt) return;
+    setEditScheduledAt(calendarPickAt);
+    onCalendarPickConsumed?.();
+  }, [calendarPickAt, editing, onCalendarPickConsumed]);
 
   useEffect(() => {
     if (createMode && initialCreateScheduledAt) {
@@ -212,6 +228,7 @@ export function SchedulerInspector({
       durationMin: parseInt(editDurationMin, 10) || 60,
     });
     setEditing(false);
+    onRescheduleEditingChange?.(false);
   }
 
   async function setStatus(status: string) {
@@ -288,6 +305,7 @@ export function SchedulerInspector({
         return;
       }
       setEditing(false);
+      onRescheduleEditingChange?.(false);
       onUpdated();
     } finally {
       setPending(false);
@@ -437,8 +455,8 @@ export function SchedulerInspector({
           </div>
           <p className="mt-1 text-xs text-zinc-500">{workflowTypeLabel(appointment.workflowType)}</p>
         </div>
-        {mobile && onClose ? (
-          <button type="button" onClick={onClose} className="text-xs text-zinc-500 hover:text-zinc-300">
+        {onClose ? (
+          <button type="button" onClick={onClose} className="shrink-0 text-xs text-zinc-500 hover:text-zinc-300">
             Închide
           </button>
         ) : null}
@@ -498,6 +516,9 @@ export function SchedulerInspector({
       {editing && editable ? (
         <div className="mb-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
           <p className="text-xs font-semibold uppercase text-zinc-500">Reprogramare</p>
+          <p className="text-[11px] text-sky-300/90">
+            Click pe un slot liber din calendar ca să alegi data/ora vizual.
+          </p>
           <div>
             <label className={OPS_LABEL_CLASS}>Data și ora</label>
             <input type="datetime-local" value={editScheduledAt} onChange={(e) => setEditScheduledAt(e.target.value)} className={OPS_INPUT_CLASS} />
@@ -517,7 +538,10 @@ export function SchedulerInspector({
             </button>
             <button
               type="button"
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                setEditing(false);
+                onRescheduleEditingChange?.(false);
+              }}
               className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900"
             >
               Anulează
@@ -548,7 +572,14 @@ export function SchedulerInspector({
               {start.toLocaleString("ro-RO")} · {appointment.durationMin} min
             </span>
             {editable && !editing && appointment.status !== "pending_supplier" ? (
-              <button type="button" onClick={() => setEditing(true)} className="text-[10px] text-sky-400 hover:underline">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(true);
+                  onRescheduleEditingChange?.(true);
+                }}
+                className="text-[10px] text-sky-400 hover:underline"
+              >
                 Editează
               </button>
             ) : null}
@@ -713,7 +744,10 @@ export function SchedulerInspector({
               {!editing ? (
                 <button
                   type="button"
-                  onClick={() => setEditing(true)}
+                  onClick={() => {
+                    setEditing(true);
+                    onRescheduleEditingChange?.(true);
+                  }}
                   className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
                 >
                   Repropune dată

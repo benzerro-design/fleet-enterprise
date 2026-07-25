@@ -28,8 +28,11 @@ type Props = {
   canWrite: boolean;
   partnerMode?: boolean;
   onSelect: (id: string) => void;
+  onDeselect?: () => void;
   onReschedule?: (id: string, scheduledAt: Date) => Promise<void>;
   onSlotClick?: (scheduledAt: Date) => void;
+  /** create = programare nouă; reschedule = umple data la repropunere. */
+  slotClickMode?: "create" | "reschedule";
   onStatusChange?: (id: string, status: "confirmed" | "cancelled") => Promise<void>;
   onSupplierValidate?: (id: string) => Promise<void>;
   onRequestCancel?: (id: string) => Promise<void>;
@@ -146,8 +149,10 @@ export function SchedulerWeekView({
   canWrite,
   partnerMode,
   onSelect,
+  onDeselect,
   onReschedule,
   onSlotClick,
+  slotClickMode = "create",
   onStatusChange,
   onSupplierValidate,
   onRequestCancel,
@@ -273,9 +278,12 @@ export function SchedulerWeekView({
     }
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && drag) {
+      if (e.key !== "Escape") return;
+      if (drag) {
         cancelDrag();
+        return;
       }
+      onDeselect?.();
     }
 
     document.addEventListener("pointermove", onDocPointerMove);
@@ -288,7 +296,7 @@ export function SchedulerWeekView({
       document.removeEventListener("pointercancel", onDocPointerCancel);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [activateDrag, cancelDrag, clearPending, drag, finishDrag, onSelect, resolveDrop]);
+  }, [activateDrag, cancelDrag, clearPending, drag, finishDrag, onSelect, onDeselect, resolveDrop]);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -430,10 +438,14 @@ export function SchedulerWeekView({
       </div>
       {canWrite && onReschedule ? (
         <p className="hidden border-t border-zinc-800/80 px-3 py-1.5 text-[10px] text-zinc-600 lg:block">
-          Click = selectează · dublu-click = deschide tichet/WO · click dreapta = meniu · ține apăsat și trage =
-          reprogramare.
-          {onSlotClick ? " Click pe slot liber = programare nouă." : ""}
-          {partnerMode ? " Programările de validat: folosește Repropune dată, nu drag." : ""}
+          Click = selectează · click din nou = deselectează · Escape = deselectează · dublu-click = deschide
+          tichet/WO · click dreapta = meniu · ține apăsat și trage = reprogramare.
+          {onSlotClick
+            ? slotClickMode === "reschedule"
+              ? " Click pe slot liber = alege data pentru repropunere."
+              : " Click pe slot liber = programare nouă."
+            : ""}
+          {partnerMode ? " Programările de validat: folosește Repropune dată (apoi click pe calendar)." : ""}
         </p>
       ) : null}
       {ctxMenu ? (
