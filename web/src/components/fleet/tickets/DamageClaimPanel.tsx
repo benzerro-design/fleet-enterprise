@@ -227,7 +227,7 @@ export function DamageClaimPanel({
     await patch(
       { damageInsurerPipelineStatus: pipeline },
       pipeline === "payment_accepted"
-        ? "Accept plată înregistrat — In service deblocat (dacă și mobilitatea e ok)."
+        ? "Accept plată înregistrat — reparația (În lucru) poate continua după aprobare / post-approval (și mobilitate)."
         : `Pipeline: ${damagePipelineStatusLabel(pipeline)}.`,
     );
   }
@@ -298,16 +298,18 @@ export function DamageClaimPanel({
           {agreedAt
             ? ` · ${new Date(agreedAt).toLocaleString("ro-RO", { dateStyle: "medium", timeStyle: "short" })}`
             : ""}
-          . Mai e nevoie de mașină la schimb înainte de In service.
+          . Mai e nevoie de mașină la schimb înainte de reparație (În lucru).
         </div>
       ) : isClientPayer ? (
         <div className="rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-sm text-amber-100">
-          Confirmă plătitorul client ca să deblochezi execuția (împreună cu mobilitatea).
+          Confirmă plătitorul client ca să deblochezi reparația (împreună cu mobilitatea).
         </div>
       ) : (
         <div className="rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-sm text-amber-100">
-          In service pe daună cere <strong>Accept plată</strong> (pipeline) + mașină la schimb
-          {movable === "immovable" ? " + asistență rutieră activă" : ""}.
+          Reparația (status <strong>În lucru</strong>) cere <strong>Accept plată</strong> (pipeline) +
+          mașină la schimb
+          {movable === "immovable" ? "; recepția In service cere asistență rutieră activă" : ""}.
+          Recepția vehiculului (In service) nu e blocată de pipeline.
         </div>
       )}
 

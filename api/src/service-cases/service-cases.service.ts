@@ -45,6 +45,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { nextWorkOrderDisplayNumber } from '../work-orders/work-order-display-number';
 import { nextRoadsideDisplayNumber } from '../roadside/roadside-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
+import { assertDamageReadyForRepair } from '../work-orders/damage-repair-gates';
 import {
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
@@ -1631,6 +1632,16 @@ export class ServiceCasesService {
 
     const path = dto.path === 'reschedule' ? PostApprovalPath.reschedule : PostApprovalPath.immediate;
 
+    if (path === PostApprovalPath.immediate) {
+      await assertDamageReadyForRepair(this.prisma, tenant.id, {
+        id: row.id,
+        workflowType: row.workflowType,
+        damagePayerType: row.damagePayerType,
+        damageInsurerPipelineStatus: row.damageInsurerPipelineStatus,
+        damageInsurerAgreedAt: row.damageInsurerAgreedAt,
+      });
+    }
+
     await this.prisma.$transaction(async (tx) => {
       if (path === PostApprovalPath.immediate) {
         await tx.serviceCase.update({
@@ -1677,6 +1688,12 @@ export class ServiceCasesService {
               path === PostApprovalPath.immediate
                 ? 'Reparație directă după aprobare deviz'
                 : 'Reparație cu reprogramare după aprobare deviz',
+            ...(path === PostApprovalPath.immediate &&
+            (wo.status === MaintenanceWorkOrderStatus.draft ||
+              wo.status === MaintenanceWorkOrderStatus.sent ||
+              wo.status === MaintenanceWorkOrderStatus.waiting_parts)
+              ? { status: MaintenanceWorkOrderStatus.in_progress }
+              : {}),
           },
         });
       }

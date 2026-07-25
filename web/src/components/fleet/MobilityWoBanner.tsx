@@ -13,7 +13,7 @@ import {
 type Props = {
   workOrderId: string;
   canWrite: boolean;
-  /** Pe daună mașina la schimb e obligatorie înainte de In service. */
+  /** Pe daună mașina la schimb e obligatorie înainte de reparație (În lucru). */
   damageRequired?: boolean;
 };
 
@@ -80,8 +80,8 @@ export function MobilityWoBanner({ workOrderId, canWrite, damageRequired = false
             </>
           ) : damageRequired ? (
             <>
-              <strong className="text-rose-200">Daună — mașină la schimb obligatorie</strong> înainte de In
-              service (împreună cu acordul asigurătorului).
+              <strong className="text-rose-200">Daună — mașină la schimb obligatorie</strong> înainte de
+              reparație / În lucru (împreună cu Accept plată pe dosar).
             </>
           ) : (
             <>

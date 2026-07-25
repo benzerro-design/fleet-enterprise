@@ -103,7 +103,13 @@ export function WorkOrderSheetShell({
     damageInsurerPipelineStatus: wo.damageInsurerPipelineStatus,
     damageInsurerAgreedAt: wo.damageInsurerAgreedAt,
   });
-  const damageGateBlocked = isDamageWo && !wo.inServiceAt && !damageGateReady;
+  const damageGateBlocked =
+    isDamageWo &&
+    wo.quoteSummary.status === "approved" &&
+    wo.status !== "in_progress" &&
+    wo.status !== "waiting_parts" &&
+    wo.status !== "done" &&
+    !damageGateReady;
 
   const useVisit2 = wo.postApprovalPath === "reschedule" && !!wo.outServiceAt;
   const outServiceDone = useVisit2 ? !!wo.visit2OutServiceAt : !!wo.outServiceAt;
@@ -446,12 +452,13 @@ export function WorkOrderSheetShell({
               onClick={() => setSheetView("dosar")}
               className="w-full rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-left text-xs text-amber-100 hover:bg-amber-950/35"
             >
-              In service blocat —{" "}
+              Reparație (În lucru) blocată —{" "}
               {wo.damagePayerType === "client"
                 ? "confirmă plătitorul client"
                 : "Accept plată (pipeline)"}{" "}
               + mobilitate
-              {wo.vehicleMovable === "immovable" ? " + asistență" : ""}. Deschide dosarul daună →
+              {wo.vehicleMovable === "immovable" ? " (+ asistență la recepție dacă e imobil)" : ""}.
+              Deschide dosarul daună →
             </button>
           ) : !wo.damagePayerType ? (
             <button

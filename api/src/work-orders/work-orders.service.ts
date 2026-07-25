@@ -35,6 +35,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { parseWorkOrderSettings } from '../tenant/work-order-settings';
 import { ensureWorkOrderDisplayNumber } from './work-order-display-number';
 import {
+  assertDamageReadyForRepair,
+  assertImmovableRoadsideForReception,
+} from './damage-repair-gates';
+import {
   SERVICE_CASE_STAGE_ORDER,
   type DamageDocumentItem,
   type DamagePhotoItem,
@@ -734,7 +738,16 @@ export class WorkOrdersService {
       where: { id, tenantId: tenant.id },
       include: {
         vehicle: { select: { clientId: true } },
-        serviceCase: { select: { sourceTicketId: true } },
+        serviceCase: {
+          select: {
+            id: true,
+            sourceTicketId: true,
+            workflowType: true,
+            damagePayerType: true,
+            damageInsurerPipelineStatus: true,
+            damageInsurerAgreedAt: true,
+          },
+        },
       },
     });
     if (!wo) throw new NotFoundException('Work order not found');
@@ -763,6 +776,19 @@ export class WorkOrdersService {
       if (quoteLocked) {
         throw new BadRequestException('Cannot change estimated repair date after quote is submitted');
       }
+    }
+
+    if (
+      dto.status === MaintenanceWorkOrderStatus.in_progress &&
+      wo.status !== MaintenanceWorkOrderStatus.in_progress
+    ) {
+      await assertDamageReadyForRepair(this.prisma, tenant.id, {
+        id: wo.serviceCase.id,
+        workflowType: wo.serviceCase.workflowType,
+        damagePayerType: wo.serviceCase.damagePayerType,
+        damageInsurerPipelineStatus: wo.serviceCase.damageInsurerPipelineStatus,
+        damageInsurerAgreedAt: wo.serviceCase.damageInsurerAgreedAt,
+      });
     }
 
     const data: Prisma.MaintenanceWorkOrderUpdateInput = {};
@@ -1062,57 +1088,24 @@ export class WorkOrdersService {
       const sc = wo.serviceCase;
       const isDamage = sc.workflowType === ServiceCaseWorkflowType.damage;
 
-      if (isDamage) {
-        const payer = sc.damagePayerType;
-        const isClientPayer = payer === DamagePayerType.client;
-        if (!isClientPayer) {
-          // null treated as insurer for damage (backward compatible)
-          const insurerReady =
-            sc.damageInsurerPipelineStatus === DamageInsurerPipelineStatus.payment_accepted ||
-            !!sc.damageInsurerAgreedAt;
-          if (!insurerReady) {
-            throw new BadRequestException(
-              'Pentru flux daună (plătitor asigurător) este necesar payment_accepted sau acordul asigurătorului înainte de intrarea în service.',
-            );
-          }
-        }
+      // Recepție (In service): doar roadside pentru imobil.
+      // Gate-ul Accept plată + mobilitate se aplică la start reparație (În lucru), nu aici.
+      await assertImmovableRoadsideForReception(
+        this.prisma,
+        tenant.id,
+        sc.id,
+        sc.vehicleMovable,
+      );
 
-        const mobility = await this.prisma.mobilityAssignment.findFirst({
-          where: {
-            tenantId: tenant.id,
-            serviceCaseId: wo.serviceCaseId,
-            status: { in: ['reserved', 'active', 'returned'] },
-          },
-          select: { id: true },
+      // Vizită 2 = start reparație după reprogramare → gate reparație.
+      if (useVisit2 && isDamage) {
+        await assertDamageReadyForRepair(this.prisma, tenant.id, {
+          id: sc.id,
+          workflowType: sc.workflowType,
+          damagePayerType: sc.damagePayerType,
+          damageInsurerPipelineStatus: sc.damageInsurerPipelineStatus,
+          damageInsurerAgreedAt: sc.damageInsurerAgreedAt,
         });
-        if (!mobility) {
-          throw new BadRequestException(
-            'Pentru flux daună este obligatorie mașina la schimb (rezervată, activă sau returnată) înainte de reparație.',
-          );
-        }
-      }
-
-      if (sc.vehicleMovable === VehicleMovableState.immovable) {
-        const roadside = await this.prisma.roadsideIntervention.findFirst({
-          where: {
-            tenantId: tenant.id,
-            serviceCaseId: wo.serviceCaseId,
-            status: {
-              in: [
-                RoadsideInterventionStatus.requested,
-                RoadsideInterventionStatus.dispatched,
-                RoadsideInterventionStatus.on_site,
-                RoadsideInterventionStatus.completed,
-              ],
-            },
-          },
-          select: { id: true },
-        });
-        if (!roadside) {
-          throw new BadRequestException(
-            'Vehicul imobil: este obligatorie o intervenție asistență rutieră (cel puțin solicitată) înainte de intrarea în service.',
-          );
-        }
       }
     }
 
@@ -1130,10 +1123,14 @@ export class WorkOrdersService {
     }
 
     if (data.inServiceAt || data.visit2InServiceAt) {
+      const isDamage = wo.serviceCase.workflowType === ServiceCaseWorkflowType.damage;
+      // Pe daună, recepția (vizită 1) nu trece automat în „În lucru” — asta e după Accept plată / post-approval.
+      const promoteToInProgress = useVisit2 || !isDamage;
       if (
-        wo.status === MaintenanceWorkOrderStatus.draft ||
-        wo.status === MaintenanceWorkOrderStatus.sent ||
-        wo.status === MaintenanceWorkOrderStatus.waiting_parts
+        promoteToInProgress &&
+        (wo.status === MaintenanceWorkOrderStatus.draft ||
+          wo.status === MaintenanceWorkOrderStatus.sent ||
+          wo.status === MaintenanceWorkOrderStatus.waiting_parts)
       ) {
         data.status = MaintenanceWorkOrderStatus.in_progress;
       }
