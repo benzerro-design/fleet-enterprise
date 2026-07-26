@@ -1805,13 +1805,20 @@ export function DamageClaimPanel({
               </p>
               {primaryWo ? (
                 <p className="text-xs text-zinc-300">
-                  <Link
-                    href={`/fleet/work-orders/${primaryWo.id}`}
-                    className="text-sky-400 hover:underline"
-                  >
-                    Deschide Comanda
-                    {primaryWo.displayNumber ? ` ${primaryWo.displayNumber}` : ""}
-                  </Link>
+                  {fromWorkOrder ? (
+                    <span>
+                      Comanda curentă
+                      {primaryWo.displayNumber ? ` ${primaryWo.displayNumber}` : ""}
+                    </span>
+                  ) : (
+                    <Link
+                      href={`/fleet/work-orders/${primaryWo.id}`}
+                      className="text-sky-400 hover:underline"
+                    >
+                      Deschide Comanda
+                      {primaryWo.displayNumber ? ` ${primaryWo.displayNumber}` : ""}
+                    </Link>
+                  )}
                   {primaryQuote ? (
                     <span className="text-zinc-500">
                       {" "}
@@ -2306,6 +2313,7 @@ export function DamageClaimPanel({
 
 /** Map WO detail damage fields into a ServiceCaseRecord shape for the shared panel. */
 export function serviceCaseFromWorkOrderDamage(wo: {
+  id: string;
   serviceCaseId: string;
   clientId: string;
   vehicleId: string;
@@ -2313,6 +2321,24 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   serviceCaseStatus: string;
   serviceCaseTitle?: string;
   title: string;
+  status?: string;
+  displayNumber?: string | null;
+  plannedAt?: string | null;
+  completedAt?: string | null;
+  inServiceAt?: string | null;
+  outServiceAt?: string | null;
+  odometerKmIn?: number | null;
+  odometerKmOut?: number | null;
+  repairPathNote?: string | null;
+  serviceOrderType?: string;
+  readyAt?: string | null;
+  estimatedRepairAt?: string | null;
+  quoteSummary?: {
+    status: string | null;
+    version: number | null;
+    totalGrossCents: number | null;
+    currency: string | null;
+  };
   supplierId: string | null;
   supplierLegalName: string | null;
   sourceTicketId: string | null;
@@ -2349,6 +2375,27 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   damagePaymentAcceptanceReceivedAt?: string | null;
   damagePaymentAcceptanceNotes?: string | null;
 }): ServiceCaseRecord {
+  const quoteFromSummary =
+    wo.quoteSummary?.status && wo.quoteSummary.version != null
+      ? {
+          id: `wo_quote_${wo.id}`,
+          workOrderId: wo.id,
+          version: wo.quoteSummary.version,
+          status: wo.quoteSummary.status as
+            | "draft"
+            | "submitted"
+            | "approved"
+            | "rejected",
+          totalGrossCents: wo.quoteSummary.totalGrossCents ?? 0,
+          currency: wo.quoteSummary.currency ?? "RON",
+          invoicedAt: null,
+          invoiceNumber: null,
+          invoiceDate: null,
+          invoiceAttachmentUrl: null,
+          costEntryId: null,
+        }
+      : null;
+
   return {
     id: wo.serviceCaseId,
     clientId: wo.clientId,
@@ -2395,7 +2442,35 @@ export function serviceCaseFromWorkOrderDamage(wo: {
     damagePaymentAcceptanceNotes: wo.damagePaymentAcceptanceNotes ?? null,
     createdAt: wo.createdAt,
     updatedAt: wo.updatedAt,
-    workOrders: [],
+    // Include the current WO so Dosar (opened from WO sheet) can link Comandă / quote.
+    workOrders: [
+      {
+        id: wo.id,
+        serviceCaseId: wo.serviceCaseId,
+        vehicleId: wo.vehicleId,
+        supplierId: wo.supplierId,
+        supplierLegalName: wo.supplierLegalName,
+        title: wo.title,
+        status: wo.status ?? "draft",
+        displayNumber: wo.displayNumber ?? null,
+        odometerKmIn: wo.odometerKmIn ?? null,
+        odometerKmOut: wo.odometerKmOut ?? null,
+        repairPathNote: wo.repairPathNote ?? null,
+        serviceOrderType: wo.serviceOrderType,
+        readyAt: wo.readyAt ?? null,
+        estimatedRepairAt: wo.estimatedRepairAt ?? null,
+        plannedAt: wo.plannedAt ?? null,
+        completedAt: wo.completedAt ?? null,
+        inServiceAt: wo.inServiceAt ?? null,
+        outServiceAt: wo.outServiceAt ?? null,
+        createdAt: wo.createdAt,
+        latestQuote: quoteFromSummary,
+        approvedQuote:
+          quoteFromSummary?.status === "approved" ? quoteFromSummary : null,
+        pendingQuote:
+          quoteFromSummary?.status === "submitted" ? quoteFromSummary : null,
+      },
+    ],
     appointments: [],
   };
 }
