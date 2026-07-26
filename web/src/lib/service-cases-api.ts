@@ -114,6 +114,8 @@ export type DamageDocumentItem = {
   uploadedByLabel?: string;
   url?: string;
   fileName?: string;
+  /** YYYY-MM-DD — ex. data expirare ITP (poate exista fără fișier). */
+  expiresOn?: string;
 };
 
 export type DamagePhotoItem = {

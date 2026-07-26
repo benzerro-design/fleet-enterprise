@@ -139,11 +139,12 @@ export type WorkOrderDetail = WorkOrderListRow & {
     uploadedByLabel?: string;
     url?: string;
     fileName?: string;
+    expiresOn?: string;
   }[];
   damagePhotos?: {
     id: string;
     url: string;
-    kind: "exterior" | "damage_detail" | "odometer" | "other";
+    kind: "exterior" | "damage_detail" | "odometer" | "repaired" | "other";
     caption?: string;
     uploadedAt: string;
     uploadedByUserId?: string;

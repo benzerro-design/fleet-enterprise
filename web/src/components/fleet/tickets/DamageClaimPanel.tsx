@@ -35,7 +35,7 @@ import {
   type ServiceCaseRecord,
   type VehicleMovableState,
 } from "@/lib/service-cases-api";
-import { documentsBrowserBase } from "@/lib/fleet-api";
+import { documentsBrowserBase, fleetBrowserBase } from "@/lib/fleet-api";
 import { insurersBrowserBase, type InsurerRecord } from "@/lib/insurers-api";
 
 type Props = {
@@ -174,7 +174,11 @@ export function DamageClaimPanel({
     setPhotos(nextPhotos);
     setLocks(serviceCase.damageSectionLocks ?? {});
     setAvizareDocIds(
-      new Set(mergedDocs.filter((d) => d.url || d.received).map((d) => d.id)),
+      new Set(
+        mergedDocs
+          .filter((d) => d.url || d.received || (d.kind === "itp_expiry" && d.expiresOn))
+          .map((d) => d.id),
+      ),
     );
     setAvizarePhotoIds(
       new Set(
@@ -215,7 +219,14 @@ export function DamageClaimPanel({
     damageInsurerPipelineStatus: pipeline || serviceCase?.damageInsurerPipelineStatus,
     damageInsurerAgreedAt: agreedAt,
   });
-  const docsReceived = useMemo(() => docs.filter((d) => !!d.url || d.received).length, [docs]);
+  const docsReceived = useMemo(
+    () =>
+      docs.filter((d) => {
+        if (d.kind === "itp_expiry") return !!(d.expiresOn || d.url || d.received);
+        return !!(d.url || d.received);
+      }).length,
+    [docs],
+  );
   const initialPhotos = useMemo(
     () => photos.filter((p) => p.kind !== "repaired"),
     [photos],
@@ -317,8 +328,12 @@ export function DamageClaimPanel({
 
   async function importFromFleet(doc: DamageDocumentItem) {
     const plate = registrationNumber?.trim();
-    if (!plate) {
+    if (!plate && doc.kind !== "itp_expiry") {
       setError("Lipsește numărul de înmatriculare — nu pot importa din Documente flotă.");
+      return;
+    }
+    if (!plate && !serviceCase?.vehicleId) {
+      setError("Lipsește nr. înmatriculare / vehicul — nu pot importa ITP din flotă.");
       return;
     }
     const fleetType = DAMAGE_KIND_TO_FLEET_DOC[doc.kind as DamageDocumentKind];
@@ -327,43 +342,107 @@ export function DamageClaimPanel({
     setError(null);
     setOk(null);
     try {
-      const q = new URLSearchParams({
-        page: "1",
-        pageSize: "100",
-        registrationNumber: plate,
-      });
-      const res = await fetch(`${documentsBrowserBase}?${q.toString()}`, {
-        headers: fleetJsonHeaders(),
-      });
-      if (!res.ok) {
-        setError(`Nu am putut citi Documente flotă (HTTP ${res.status}).`);
-        return;
-      }
-      const payload = (await res.json()) as {
-        items?: Array<{
-          documentTypeCode: string;
-          fileUrl: string | null;
-          fileName: string | null;
-          createdAt: string;
-          title?: string;
-        }>;
+      const toDay = (raw: string | null | undefined): string | undefined => {
+        if (!raw?.trim()) return undefined;
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) {
+          const m = raw.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+          return m?.[1];
+        }
+        return d.toISOString().slice(0, 10);
       };
-      const match = (payload.items ?? [])
-        .filter((i) => i.documentTypeCode === fleetType && i.fileUrl)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-      if (!match?.fileUrl) {
-        setError(
-          `Nu există ${doc.label ?? doc.kind} cu fișier pe ${plate} în Documente flotă.`,
-        );
-        return;
+
+      let fileUrl: string | undefined;
+      let fileName: string | undefined;
+      let expiresOn: string | undefined;
+
+      if (plate) {
+        const q = new URLSearchParams({
+          page: "1",
+          pageSize: "100",
+          registrationNumber: plate,
+        });
+        const res = await fetch(`${documentsBrowserBase}?${q.toString()}`, {
+          headers: fleetJsonHeaders(),
+        });
+        if (!res.ok) {
+          setError(`Nu am putut citi Documente flotă (HTTP ${res.status}).`);
+          return;
+        }
+        const payload = (await res.json()) as {
+          items?: Array<{
+            documentTypeCode: string;
+            fileUrl: string | null;
+            fileName: string | null;
+            expiresOn: string | null;
+            createdAt: string;
+            title?: string;
+          }>;
+        };
+        const typed = (payload.items ?? [])
+          .filter((i) => i.documentTypeCode === fleetType)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+        if (doc.kind === "itp_expiry") {
+          const withDate = typed.find((i) => i.expiresOn) ?? typed[0];
+          if (withDate) {
+            expiresOn = toDay(withDate.expiresOn);
+            if (withDate.fileUrl) {
+              fileUrl = withDate.fileUrl;
+              fileName = withDate.fileName ?? withDate.title ?? undefined;
+            }
+          }
+        } else {
+          const withFile = typed.find((i) => i.fileUrl);
+          if (!withFile?.fileUrl) {
+            setError(
+              `Nu există ${doc.label ?? doc.kind} cu fișier pe ${plate} în Documente flotă.`,
+            );
+            return;
+          }
+          fileUrl = withFile.fileUrl;
+          fileName = withFile.fileName ?? withFile.title ?? undefined;
+          expiresOn = toDay(withFile.expiresOn);
+        }
       }
+
+      // ITP: dacă nu avem dată din document, luăm itpExpiresOn de pe vehicul.
+      if (doc.kind === "itp_expiry" && !expiresOn && serviceCase?.vehicleId) {
+        const vRes = await fetch(`${fleetBrowserBase}/vehicles/${serviceCase.vehicleId}`, {
+          headers: fleetJsonHeaders(),
+        });
+        if (vRes.ok) {
+          const vehicle = (await vRes.json()) as { itpExpiresOn?: string | null };
+          expiresOn = toDay(vehicle.itpExpiresOn ?? undefined);
+        }
+      }
+
+      if (doc.kind === "itp_expiry") {
+        if (!expiresOn && !fileUrl) {
+          setError(
+            `Nu am găsit data expirare ITP pe ${plate || "vehicul"} în flotă (nici pe document, nici pe profil).`,
+          );
+          return;
+        }
+      }
+
       const nextDocs = docs.map((d) =>
         d.kind === doc.kind
           ? {
               ...d,
-              url: match.fileUrl!,
-              fileName: match.fileName ?? match.title ?? undefined,
+              ...(fileUrl
+                ? { url: fileUrl, fileName }
+                : doc.kind === "itp_expiry"
+                  ? {}
+                  : { url: fileUrl, fileName }),
+              ...(expiresOn ? { expiresOn } : {}),
               received: true,
+              notes:
+                doc.kind === "itp_expiry" && expiresOn
+                  ? d.notes?.trim()
+                    ? d.notes
+                    : `Expiră ${expiresOn}`
+                  : d.notes,
               uploadedAt: new Date().toISOString(),
             }
           : d,
@@ -376,7 +455,9 @@ export function DamageClaimPanel({
       });
       await patch(
         { damageDocuments: nextDocs },
-        `Importat din Documente flotă: ${doc.label ?? doc.kind}.`,
+        doc.kind === "itp_expiry" && expiresOn && !fileUrl
+          ? `Importată data ITP din flotă: ${expiresOn}.`
+          : `Importat din Documente flotă: ${doc.label ?? doc.kind}.`,
       );
     } finally {
       setImportingKind(null);
@@ -775,12 +856,56 @@ export function DamageClaimPanel({
                     <span className="text-sm text-zinc-200">{doc.label ?? doc.kind}</span>
                     <span
                       className={`text-[10px] ${
-                        doc.url ? "text-emerald-400" : "text-zinc-500"
+                        doc.kind === "itp_expiry"
+                          ? doc.expiresOn || doc.url
+                            ? "text-emerald-400"
+                            : "text-zinc-500"
+                          : doc.url
+                            ? "text-emerald-400"
+                            : "text-zinc-500"
                       }`}
                     >
-                      {doc.url ? "Cu fișier" : "Fără fișier — încarcă sau importă din flotă"}
+                      {doc.kind === "itp_expiry"
+                        ? doc.expiresOn
+                          ? `Expiră ${doc.expiresOn}${doc.url ? " · cu fișier" : ""}`
+                          : doc.url
+                            ? "Cu fișier (fără dată)"
+                            : "Importă data din flotă sau încarcă certificat"
+                        : doc.url
+                          ? "Cu fișier"
+                          : "Fără fișier — încarcă sau importă din flotă"}
                     </span>
                   </div>
+                  {doc.kind === "itp_expiry" ? (
+                    <label className="block">
+                      <span className="sr-only">Data expirare ITP</span>
+                      <input
+                        type="date"
+                        className={`${OPS_INPUT_CLASS} w-[9.5rem] py-1.5 text-xs`}
+                        disabled={disabled || sectionLocked("documents")}
+                        value={doc.expiresOn ?? ""}
+                        onChange={(e) => {
+                          const expiresOn = e.target.value || undefined;
+                          setDocs((prev) =>
+                            prev.map((d) =>
+                              d.kind === doc.kind
+                                ? {
+                                    ...d,
+                                    expiresOn,
+                                    received: !!(expiresOn || d.url),
+                                    notes: expiresOn
+                                      ? d.notes?.startsWith("Expiră ")
+                                        ? `Expiră ${expiresOn}`
+                                        : d.notes
+                                      : d.notes,
+                                  }
+                                : d,
+                            ),
+                          );
+                        }}
+                      />
+                    </label>
+                  ) : null}
                   <input
                     className={`${OPS_INPUT_CLASS} max-w-[10rem] flex-1 py-1.5 text-xs`}
                     disabled={disabled || sectionLocked("documents")}
@@ -871,16 +996,27 @@ export function DamageClaimPanel({
                       {DAMAGE_KIND_TO_FLEET_DOC[doc.kind as DamageDocumentKind] ? (
                         <button
                           type="button"
-                          disabled={pending || importingKind === doc.kind || !registrationNumber?.trim()}
+                          disabled={
+                            pending ||
+                            importingKind === doc.kind ||
+                            (!registrationNumber?.trim() &&
+                              !(doc.kind === "itp_expiry" && serviceCase?.vehicleId))
+                          }
                           title={
-                            registrationNumber?.trim()
-                              ? "Copiază fișierul din Documente flotă"
-                              : "Lipsește nr. înmatriculare"
+                            doc.kind === "itp_expiry"
+                              ? "Importă data ITP din flotă (fișier opțional)"
+                              : registrationNumber?.trim()
+                                ? "Copiază fișierul din Documente flotă"
+                                : "Lipsește nr. înmatriculare"
                           }
                           className="text-[11px] text-sky-400 hover:underline disabled:opacity-50"
                           onClick={() => void importFromFleet(doc)}
                         >
-                          {importingKind === doc.kind ? "Import…" : "Din flotă"}
+                          {importingKind === doc.kind
+                            ? "Import…"
+                            : doc.kind === "itp_expiry"
+                              ? "Dată din flotă"
+                              : "Din flotă"}
                         </button>
                       ) : null}
                     </>

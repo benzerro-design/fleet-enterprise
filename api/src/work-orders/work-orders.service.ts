@@ -1646,6 +1646,7 @@ export class WorkOrdersService {
         uploadedByLabel: typeof o.uploadedByLabel === 'string' ? o.uploadedByLabel : undefined,
         url: typeof o.url === 'string' ? o.url : undefined,
         fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
+        expiresOn: typeof o.expiresOn === 'string' ? o.expiresOn : undefined,
       });
     }
     return out;
