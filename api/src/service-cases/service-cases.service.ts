@@ -188,11 +188,21 @@ export type DamageDocumentItem = {
 export type DamagePhotoItem = {
   id: string;
   url: string;
-  kind: 'exterior' | 'damage_detail' | 'odometer' | 'other';
+  kind: 'exterior' | 'damage_detail' | 'odometer' | 'repaired' | 'other';
   caption?: string;
   uploadedAt: string;
   uploadedByUserId?: string;
   uploadedByLabel?: string;
+};
+
+export type DamageInspectionNoteItem = {
+  id: string;
+  pdfUrl: string;
+  fileName?: string;
+  mode?: DamageInspectionMode | null;
+  issuedOn?: string | null;
+  receivedAt: string;
+  notes?: string | null;
 };
 
 export type DamageSectionKey = 'claim_info' | 'documents' | 'photos' | 'pipeline';
@@ -262,6 +272,11 @@ export type ServiceCaseRecord = {
   damageInspectionNoteIssuedOn: string | null;
   damageInspectionNoteReceivedAt: string | null;
   damageInspectionNoteNotes: string | null;
+  damageInspectionNotes: DamageInspectionNoteItem[];
+  damagePaymentAcceptancePdfUrl: string | null;
+  damagePaymentAcceptanceFileName: string | null;
+  damagePaymentAcceptanceReceivedAt: string | null;
+  damagePaymentAcceptanceNotes: string | null;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
@@ -291,6 +306,9 @@ export type PatchDamageClaimInput = {
   /** YYYY-MM-DD */
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteNotes?: string | null;
+  damagePaymentAcceptancePdfUrl?: string | null;
+  damagePaymentAcceptanceFileName?: string | null;
+  damagePaymentAcceptanceNotes?: string | null;
   lockSection?: { section: string; lock: boolean };
 };
 
@@ -328,7 +346,7 @@ const DAMAGE_SECTION_KEYS: DamageSectionKey[] = [
   'pipeline',
 ];
 
-const PHOTO_KINDS = new Set(['exterior', 'damage_detail', 'odometer', 'other']);
+const PHOTO_KINDS = new Set(['exterior', 'damage_detail', 'odometer', 'repaired', 'other']);
 const PIPELINE_STATUSES = new Set([
   'docs_pending',
   'ready_to_notify',
@@ -662,6 +680,9 @@ export class ServiceCasesService {
       dto.damageInspectionNoteFileName === undefined &&
       dto.damageInspectionNoteIssuedOn === undefined &&
       dto.damageInspectionNoteNotes === undefined &&
+      dto.damagePaymentAcceptancePdfUrl === undefined &&
+      dto.damagePaymentAcceptanceFileName === undefined &&
+      dto.damagePaymentAcceptanceNotes === undefined &&
       dto.lockSection === undefined;
 
     if (row.workflowType !== ServiceCaseWorkflowType.damage && !vehicleMovableOnly) {
@@ -798,14 +819,50 @@ export class ServiceCasesService {
       const url = dto.damageInspectionNotePdfUrl?.trim() || null;
       data.damageInspectionNotePdfUrl = url;
       if (url) {
-        data.damageInspectionNoteReceivedAt = new Date();
+        const receivedAt = new Date();
+        data.damageInspectionNoteReceivedAt = receivedAt;
+        const fileName =
+          dto.damageInspectionNoteFileName?.trim() ||
+          row.damageInspectionNoteFileName ||
+          null;
+        if (dto.damageInspectionNoteFileName !== undefined) {
+          data.damageInspectionNoteFileName = fileName;
+        }
+        const mode =
+          dto.damageInspectionMode !== undefined
+            ? dto.damageInspectionMode
+            : row.damageInspectionMode;
+        const issuedOn =
+          dto.damageInspectionNoteIssuedOn !== undefined
+            ? dto.damageInspectionNoteIssuedOn?.trim() || null
+            : row.damageInspectionNoteIssuedOn
+              ? row.damageInspectionNoteIssuedOn.toISOString().slice(0, 10)
+              : null;
+        const notes =
+          dto.damageInspectionNoteNotes !== undefined
+            ? dto.damageInspectionNoteNotes?.trim() || null
+            : row.damageInspectionNoteNotes;
+        const prevNotes = this.parseDamageInspectionNotes(row.damageInspectionNotesJson);
+        const entry: DamageInspectionNoteItem = {
+          id: `insp_${Date.now()}`,
+          pdfUrl: url,
+          fileName: fileName ?? undefined,
+          mode: mode ?? null,
+          issuedOn,
+          receivedAt: receivedAt.toISOString(),
+          notes,
+        };
+        data.damageInspectionNotesJson = [entry, ...prevNotes].slice(
+          0,
+          30,
+        ) as unknown as Prisma.InputJsonValue;
+
         const current =
           (data.damageInsurerPipelineStatus as DamageInsurerPipelineStatus | undefined) ??
           row.damageInsurerPipelineStatus;
         const currentIdx = current ? PIPELINE_ORDER.indexOf(current) : -1;
         const noteIdx = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.inspection_note);
         const quoteIdx = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.quote_ready);
-        // Advance to inspection_note unless already at quote_ready / payment_accepted.
         if (currentIdx < 0 || currentIdx < noteIdx) {
           data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.inspection_note;
         } else if (current === DamageInsurerPipelineStatus.reinspection_requested) {
@@ -820,7 +877,7 @@ export class ServiceCasesService {
         }
       }
     }
-    if (dto.damageInspectionNoteFileName !== undefined) {
+    if (dto.damageInspectionNoteFileName !== undefined && dto.damageInspectionNotePdfUrl === undefined) {
       data.damageInspectionNoteFileName = dto.damageInspectionNoteFileName?.trim() || null;
     }
     if (dto.damageInspectionNoteIssuedOn !== undefined) {
@@ -836,6 +893,30 @@ export class ServiceCasesService {
     }
     if (dto.damageInspectionNoteNotes !== undefined) {
       data.damageInspectionNoteNotes = dto.damageInspectionNoteNotes?.trim() || null;
+    }
+    if (dto.damagePaymentAcceptancePdfUrl !== undefined) {
+      const url = dto.damagePaymentAcceptancePdfUrl?.trim() || null;
+      data.damagePaymentAcceptancePdfUrl = url;
+      if (url) {
+        data.damagePaymentAcceptanceReceivedAt = new Date();
+        if (
+          !dto.damageInsurerPipelineStatus &&
+          row.damageInsurerPipelineStatus !== DamageInsurerPipelineStatus.payment_accepted
+        ) {
+          data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.payment_accepted;
+        }
+      } else {
+        data.damagePaymentAcceptanceReceivedAt = null;
+        if (dto.damagePaymentAcceptanceFileName === undefined) {
+          data.damagePaymentAcceptanceFileName = null;
+        }
+      }
+    }
+    if (dto.damagePaymentAcceptanceFileName !== undefined) {
+      data.damagePaymentAcceptanceFileName = dto.damagePaymentAcceptanceFileName?.trim() || null;
+    }
+    if (dto.damagePaymentAcceptanceNotes !== undefined) {
+      data.damagePaymentAcceptanceNotes = dto.damagePaymentAcceptanceNotes?.trim() || null;
     }
 
     if (dto.agreeInsurer === true) {
@@ -1483,7 +1564,10 @@ export class ServiceCasesService {
         dto.damageInspectionNotePdfUrl !== undefined ||
         dto.damageInspectionNoteFileName !== undefined ||
         dto.damageInspectionNoteIssuedOn !== undefined ||
-        dto.damageInspectionNoteNotes !== undefined,
+        dto.damageInspectionNoteNotes !== undefined ||
+        dto.damagePaymentAcceptancePdfUrl !== undefined ||
+        dto.damagePaymentAcceptanceFileName !== undefined ||
+        dto.damagePaymentAcceptanceNotes !== undefined,
       documents: dto.damageDocuments !== undefined,
       photos: dto.damagePhotos !== undefined,
       pipeline:
@@ -2601,6 +2685,30 @@ export class ServiceCasesService {
     };
   }
 
+  private parseDamageInspectionNotes(raw: unknown): DamageInspectionNoteItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamageInspectionNoteItem[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.pdfUrl !== 'string' || typeof o.receivedAt !== 'string') {
+        continue;
+      }
+      const mode =
+        o.mode === 'photos' || o.mode === 'on_site' ? (o.mode as DamageInspectionMode) : null;
+      out.push({
+        id: o.id,
+        pdfUrl: o.pdfUrl,
+        fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
+        mode,
+        issuedOn: typeof o.issuedOn === 'string' ? o.issuedOn : null,
+        receivedAt: o.receivedAt,
+        notes: typeof o.notes === 'string' ? o.notes : null,
+      });
+    }
+    return out;
+  }
+
   private parseDamageDocuments(raw: unknown): DamageDocumentItem[] {
     if (!Array.isArray(raw)) return [];
     const out: DamageDocumentItem[] = [];
@@ -2751,6 +2859,11 @@ export class ServiceCasesService {
       damageInspectionNoteIssuedOn?: Date | null;
       damageInspectionNoteReceivedAt?: Date | null;
       damageInspectionNoteNotes?: string | null;
+      damageInspectionNotesJson?: unknown;
+      damagePaymentAcceptancePdfUrl?: string | null;
+      damagePaymentAcceptanceFileName?: string | null;
+      damagePaymentAcceptanceReceivedAt?: Date | null;
+      damagePaymentAcceptanceNotes?: string | null;
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
@@ -2849,6 +2962,33 @@ export class ServiceCasesService {
         : null,
       damageInspectionNoteReceivedAt: row.damageInspectionNoteReceivedAt?.toISOString() ?? null,
       damageInspectionNoteNotes: row.damageInspectionNoteNotes ?? null,
+      damageInspectionNotes: (() => {
+        const hist = this.parseDamageInspectionNotes(row.damageInspectionNotesJson);
+        if (hist.length) return hist;
+        if (row.damageInspectionNotePdfUrl) {
+          return [
+            {
+              id: 'legacy_inspection_note',
+              pdfUrl: row.damageInspectionNotePdfUrl,
+              fileName: row.damageInspectionNoteFileName ?? undefined,
+              mode: row.damageInspectionMode ?? null,
+              issuedOn: row.damageInspectionNoteIssuedOn
+                ? row.damageInspectionNoteIssuedOn.toISOString().slice(0, 10)
+                : null,
+              receivedAt:
+                row.damageInspectionNoteReceivedAt?.toISOString() ??
+                row.updatedAt.toISOString(),
+              notes: row.damageInspectionNoteNotes ?? null,
+            },
+          ];
+        }
+        return [];
+      })(),
+      damagePaymentAcceptancePdfUrl: row.damagePaymentAcceptancePdfUrl ?? null,
+      damagePaymentAcceptanceFileName: row.damagePaymentAcceptanceFileName ?? null,
+      damagePaymentAcceptanceReceivedAt:
+        row.damagePaymentAcceptanceReceivedAt?.toISOString() ?? null,
+      damagePaymentAcceptanceNotes: row.damagePaymentAcceptanceNotes ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       workOrders: (row.workOrders ?? []).map((wo) => {

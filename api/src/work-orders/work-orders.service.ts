@@ -169,6 +169,19 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageInspectionNoteIssuedOn: string | null;
   damageInspectionNoteReceivedAt: string | null;
   damageInspectionNoteNotes: string | null;
+  damageInspectionNotes: Array<{
+    id: string;
+    pdfUrl: string;
+    fileName?: string;
+    mode?: 'photos' | 'on_site' | null;
+    issuedOn?: string | null;
+    receivedAt: string;
+    notes?: string | null;
+  }>;
+  damagePaymentAcceptancePdfUrl: string | null;
+  damagePaymentAcceptanceFileName: string | null;
+  damagePaymentAcceptanceReceivedAt: string | null;
+  damagePaymentAcceptanceNotes: string | null;
   quoteSummary: {
     status: string | null;
     version: number | null;
@@ -604,6 +617,11 @@ export class WorkOrdersService {
             damageInspectionNoteIssuedOn: true,
             damageInspectionNoteReceivedAt: true,
             damageInspectionNoteNotes: true,
+            damageInspectionNotesJson: true,
+            damagePaymentAcceptancePdfUrl: true,
+            damagePaymentAcceptanceFileName: true,
+            damagePaymentAcceptanceReceivedAt: true,
+            damagePaymentAcceptanceNotes: true,
             sourceTicket: {
               select: {
                 subject: true,
@@ -732,6 +750,14 @@ export class WorkOrdersService {
       damageInspectionNoteReceivedAt:
         row.serviceCase.damageInspectionNoteReceivedAt?.toISOString() ?? null,
       damageInspectionNoteNotes: row.serviceCase.damageInspectionNoteNotes ?? null,
+      damageInspectionNotes: this.parseDamageInspectionNotes(
+        row.serviceCase.damageInspectionNotesJson,
+      ),
+      damagePaymentAcceptancePdfUrl: row.serviceCase.damagePaymentAcceptancePdfUrl ?? null,
+      damagePaymentAcceptanceFileName: row.serviceCase.damagePaymentAcceptanceFileName ?? null,
+      damagePaymentAcceptanceReceivedAt:
+        row.serviceCase.damagePaymentAcceptanceReceivedAt?.toISOString() ?? null,
+      damagePaymentAcceptanceNotes: row.serviceCase.damagePaymentAcceptanceNotes ?? null,
       quoteSummary: primary
         ? {
             status: primary.status,
@@ -1622,10 +1648,48 @@ export class WorkOrdersService {
     return out;
   }
 
+  private parseDamageInspectionNotes(raw: unknown): Array<{
+    id: string;
+    pdfUrl: string;
+    fileName?: string;
+    mode?: 'photos' | 'on_site' | null;
+    issuedOn?: string | null;
+    receivedAt: string;
+    notes?: string | null;
+  }> {
+    if (!Array.isArray(raw)) return [];
+    const out: Array<{
+      id: string;
+      pdfUrl: string;
+      fileName?: string;
+      mode?: 'photos' | 'on_site' | null;
+      issuedOn?: string | null;
+      receivedAt: string;
+      notes?: string | null;
+    }> = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.pdfUrl !== 'string' || typeof o.receivedAt !== 'string') {
+        continue;
+      }
+      out.push({
+        id: o.id,
+        pdfUrl: o.pdfUrl,
+        fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
+        mode: o.mode === 'photos' || o.mode === 'on_site' ? o.mode : null,
+        issuedOn: typeof o.issuedOn === 'string' ? o.issuedOn : null,
+        receivedAt: o.receivedAt,
+        notes: typeof o.notes === 'string' ? o.notes : null,
+      });
+    }
+    return out;
+  }
+
   private parseDamagePhotos(raw: unknown): DamagePhotoItem[] {
     if (!Array.isArray(raw)) return [];
     const out: DamagePhotoItem[] = [];
-    const kinds = new Set(['exterior', 'damage_detail', 'odometer', 'other']);
+    const kinds = new Set(['exterior', 'damage_detail', 'odometer', 'repaired', 'other']);
     for (const item of raw) {
       if (!item || typeof item !== 'object') continue;
       const o = item as Record<string, unknown>;

@@ -6,6 +6,7 @@ import { uploadDocumentFile } from "@/lib/document-upload";
 import {
   DAMAGE_KIND_TO_FLEET_DOC,
   DAMAGE_PHOTO_KINDS,
+  DAMAGE_PHOTO_KINDS_INITIAL,
   DAMAGE_PIPELINE_STATUSES,
   damageClaimStatusLabel,
   damagePayerLabel,
@@ -22,6 +23,7 @@ import {
   type DamageInsurerMailLogItem,
   type DamageInsurerPipelineStatus,
   type DamageInspectionMode,
+  type DamageInspectionNoteItem,
   type DamageInsuranceType,
   type DamagePayerType,
   type DamagePhotoItem,
@@ -111,7 +113,15 @@ export function DamageClaimPanel({
   const [inspectionNoteFileName, setInspectionNoteFileName] = useState<string | null>(null);
   const [inspectionNoteIssuedOn, setInspectionNoteIssuedOn] = useState("");
   const [inspectionNoteNotes, setInspectionNoteNotes] = useState("");
+  const [inspectionNotesHistory, setInspectionNotesHistory] = useState<DamageInspectionNoteItem[]>(
+    [],
+  );
+  const [paymentAcceptancePdfUrl, setPaymentAcceptancePdfUrl] = useState<string | null>(null);
+  const [paymentAcceptanceFileName, setPaymentAcceptanceFileName] = useState<string | null>(null);
+  const [paymentAcceptanceNotes, setPaymentAcceptanceNotes] = useState("");
   const [reinspectionNote, setReinspectionNote] = useState("");
+  const [repairedPhotoKind] = useState<DamagePhotoKind>("repaired");
+  const repairedFileRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<DamageDocumentItem[]>([]);
   const [photos, setPhotos] = useState<DamagePhotoItem[]>([]);
   const [locks, setLocks] = useState<DamageSectionLocks>({});
@@ -147,6 +157,10 @@ export function DamageClaimPanel({
     setInspectionNoteFileName(serviceCase.damageInspectionNoteFileName ?? null);
     setInspectionNoteIssuedOn(serviceCase.damageInspectionNoteIssuedOn ?? "");
     setInspectionNoteNotes(serviceCase.damageInspectionNoteNotes ?? "");
+    setInspectionNotesHistory(serviceCase.damageInspectionNotes ?? []);
+    setPaymentAcceptancePdfUrl(serviceCase.damagePaymentAcceptancePdfUrl ?? null);
+    setPaymentAcceptanceFileName(serviceCase.damagePaymentAcceptanceFileName ?? null);
+    setPaymentAcceptanceNotes(serviceCase.damagePaymentAcceptanceNotes ?? "");
     const mergedDocs = mergeDamageDocuments(
       documentKindsForInsurance(serviceCase.damageInsuranceType),
       serviceCase.damageDocuments,
@@ -177,7 +191,19 @@ export function DamageClaimPanel({
     damageInsurerPipelineStatus: pipeline || serviceCase?.damageInsurerPipelineStatus,
     damageInsurerAgreedAt: agreedAt,
   });
-  const docsReceived = useMemo(() => docs.filter((d) => d.received).length, [docs]);
+  const docsReceived = useMemo(() => docs.filter((d) => !!d.url || d.received).length, [docs]);
+  const initialPhotos = useMemo(
+    () => photos.filter((p) => p.kind !== "repaired"),
+    [photos],
+  );
+  const repairedPhotos = useMemo(
+    () => photos.filter((p) => p.kind === "repaired"),
+    [photos],
+  );
+  const reinspectionLog = useMemo(
+    () => mailLog.filter((m) => m.kind === "reinspection"),
+    [mailLog],
+  );
   const hasWo = fromWorkOrder || (serviceCase?.workOrders?.length ?? 0) > 0;
   const isClientPayer = payer === "client";
   const isInsurerPayer = payer === "insurer" || (!payer && !isClientPayer);
@@ -695,28 +721,16 @@ export function DamageClaimPanel({
                   key={doc.kind}
                   className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2"
                 >
-                  <label className="flex min-w-[10rem] flex-1 items-center gap-2 text-sm text-zinc-200">
-                    <input
-                      type="checkbox"
-                      disabled={disabled || sectionLocked("documents")}
-                      checked={doc.received}
-                      onChange={(e) => {
-                        const received = e.target.checked;
-                        setDocs((prev) =>
-                          prev.map((d) =>
-                            d.kind === doc.kind
-                              ? {
-                                  ...d,
-                                  received,
-                                  uploadedAt: received ? new Date().toISOString() : d.uploadedAt,
-                                }
-                              : d,
-                          ),
-                        );
-                      }}
-                    />
-                    {doc.label ?? doc.kind}
-                  </label>
+                  <div className="flex min-w-[10rem] flex-1 flex-col gap-0.5">
+                    <span className="text-sm text-zinc-200">{doc.label ?? doc.kind}</span>
+                    <span
+                      className={`text-[10px] ${
+                        doc.url ? "text-emerald-400" : "text-zinc-500"
+                      }`}
+                    >
+                      {doc.url ? "Cu fișier" : "Fără fișier — încarcă sau importă din flotă"}
+                    </span>
+                  </div>
                   <input
                     className={`${OPS_INPUT_CLASS} max-w-[10rem] flex-1 py-1.5 text-xs`}
                     disabled={disabled || sectionLocked("documents")}
@@ -794,7 +808,7 @@ export function DamageClaimPanel({
                           onClick={() => {
                             const nextDocs = docs.map((d) =>
                               d.kind === doc.kind
-                                ? { ...d, url: undefined, fileName: undefined }
+                                ? { ...d, url: undefined, fileName: undefined, received: false }
                                 : d,
                             );
                             setDocs(nextDocs);
@@ -839,11 +853,11 @@ export function DamageClaimPanel({
         </section>
       ) : null}
 
-      {/* Photos */}
+      {/* Photos — initial damage gallery */}
       <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            Galerie poze ({photos.length})
+            Galerie poze ({initialPhotos.length})
           </h4>
           <div className="flex items-center gap-2">
             <SectionLockBadge locks={locks} section="photos" />
@@ -859,9 +873,9 @@ export function DamageClaimPanel({
             ) : null}
           </div>
         </div>
-        {photos.length ? (
+        {initialPhotos.length ? (
           <ul className="grid gap-2 sm:grid-cols-2">
-            {photos.map((p) => (
+            {initialPhotos.map((p) => (
               <li
                 key={p.id}
                 className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-950/50 px-2 py-1.5 text-xs"
@@ -901,7 +915,7 @@ export function DamageClaimPanel({
                 value={photoKind}
                 onChange={(e) => setPhotoKind(e.target.value as DamagePhotoKind)}
               >
-                {DAMAGE_PHOTO_KINDS.map((k) => (
+                {DAMAGE_PHOTO_KINDS_INITIAL.map((k) => (
                   <option key={k.kind} value={k.kind}>
                     {k.label}
                   </option>
@@ -1076,7 +1090,37 @@ export function DamageClaimPanel({
               placeholder="ex. nr. dosar constatare asigurător"
             />
           </label>
-          {inspectionNotePdfUrl ? (
+          {inspectionNotesHistory.length ? (
+            <ul className="space-y-1.5 rounded border border-zinc-800 bg-zinc-950/40 p-2">
+              <li className="text-[10px] uppercase tracking-wide text-zinc-500">
+                Istoric note ({inspectionNotesHistory.length})
+              </li>
+              {inspectionNotesHistory.map((n, idx) => (
+                <li key={n.id} className="flex flex-wrap items-center gap-2 text-xs text-zinc-300">
+                  <span className="font-mono text-zinc-500">#{inspectionNotesHistory.length - idx}</span>
+                  <a
+                    href={n.pdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-emerald-400 hover:underline"
+                  >
+                    {n.fileName ?? "PDF notă"}
+                  </a>
+                  <span className="text-zinc-500">
+                    {new Date(n.receivedAt).toLocaleString("ro-RO", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
+                  </span>
+                  {n.mode ? (
+                    <span className="text-zinc-500">
+                      · {n.mode === "on_site" ? "inspector" : "pe poze"}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : inspectionNotePdfUrl ? (
             <p className="text-xs text-zinc-300">
               PDF pe dosar:{" "}
               <a
@@ -1087,15 +1131,6 @@ export function DamageClaimPanel({
               >
                 {inspectionNoteFileName ?? "deschide"}
               </a>
-              {serviceCase.damageInspectionNoteReceivedAt ? (
-                <span className="ml-2 text-zinc-500">
-                  · primit{" "}
-                  {new Date(serviceCase.damageInspectionNoteReceivedAt).toLocaleString("ro-RO", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
-                </span>
-              ) : null}
             </p>
           ) : (
             <p className="text-xs text-amber-400/90">Așteptăm nota de la asigurător.</p>
@@ -1120,7 +1155,11 @@ export function DamageClaimPanel({
                 Salvează constatare
               </button>
               <label className="cursor-pointer rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
-                {uploading ? "Se încarcă…" : inspectionNotePdfUrl ? "Înlocuiește PDF" : "Încarcă PDF notă"}
+                {uploading
+                  ? "Se încarcă…"
+                  : inspectionNotesHistory.length || inspectionNotePdfUrl
+                    ? "Adaugă PDF notă"
+                    : "Încarcă PDF notă"}
                 <input
                   type="file"
                   accept="application/pdf,image/*"
@@ -1149,6 +1188,7 @@ export function DamageClaimPanel({
                           setInspectionNoteFileName(
                             next.damageInspectionNoteFileName ?? up.name,
                           );
+                          setInspectionNotesHistory(next.damageInspectionNotes ?? []);
                           setPipeline(next.damageInsurerPipelineStatus ?? "inspection_note");
                         }
                       } catch (err) {
@@ -1161,34 +1201,28 @@ export function DamageClaimPanel({
                   }}
                 />
               </label>
-              {inspectionNotePdfUrl ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  className="text-[11px] text-rose-400 hover:underline disabled:opacity-50"
-                  onClick={() =>
-                    void (async () => {
-                      const next = await patch(
-                        {
-                          damageInspectionNotePdfUrl: null,
-                          damageInspectionNoteFileName: null,
-                        },
-                        "PDF notă de constatare șters.",
-                      );
-                      if (next) {
-                        setInspectionNotePdfUrl(null);
-                        setInspectionNoteFileName(null);
-                      }
-                    })()
-                  }
-                >
-                  Șterge PDF
-                </button>
-              ) : null}
             </div>
           ) : null}
           {canWrite ? (
             <div className="space-y-2 border-t border-zinc-800 pt-3">
+              <p className="text-[11px] text-zinc-500">
+                Reconstatările pot fi multiple — fiecare solicitare e păstrată în istoric.
+              </p>
+              {reinspectionLog.length ? (
+                <ul className="space-y-1 text-[11px] text-zinc-400">
+                  {reinspectionLog.map((m, idx) => (
+                    <li key={m.id}>
+                      #{reinspectionLog.length - idx} ·{" "}
+                      {new Date(m.at).toLocaleString("ro-RO", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}{" "}
+                      · {m.status}
+                      {m.note ? ` · ${m.note}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <label className="block">
                 <span className={OPS_LABEL_CLASS}>Motiv reconstatare (opțional)</span>
                 <input
@@ -1234,6 +1268,7 @@ export function DamageClaimPanel({
                       onUpdated?.(next);
                       setMailLog(next.damageInsurerMailLog ?? []);
                       setPipeline(next.damageInsurerPipelineStatus ?? "reinspection_requested");
+                      setReinspectionNote("");
                       setOk(
                         next.damageInsurerMailLog?.[0]?.status === "stubbed"
                           ? "Reconstatare înregistrată (SMTP neconfigurat)."
@@ -1247,6 +1282,7 @@ export function DamageClaimPanel({
                 className="rounded-lg border border-amber-600/50 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
               >
                 Solicită reconstatare
+                {reinspectionLog.length ? ` (#${reinspectionLog.length + 1})` : ""}
               </button>
             </div>
           ) : null}
@@ -1454,6 +1490,211 @@ export function DamageClaimPanel({
         </section>
       ) : null}
 
+      {/* Accept plată — document de la asigurător, după Deviz */}
+      {!isClientPayer ? (
+        <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Accept plată
+          </h4>
+          <p className="text-[11px] text-zinc-500">
+            Document emis de asigurător (accept / acord plată). Nu e un simplu buton — încarcă PDF-ul
+            primit pe mail; pipeline trece la Accept plată.
+          </p>
+          <label className="block">
+            <span className={OPS_LABEL_CLASS}>Notă / nr. referință (opțional)</span>
+            <input
+              className={OPS_INPUT_CLASS}
+              disabled={disabled}
+              value={paymentAcceptanceNotes}
+              onChange={(e) => setPaymentAcceptanceNotes(e.target.value)}
+              placeholder="ex. nr. accept / data"
+            />
+          </label>
+          {paymentAcceptancePdfUrl ? (
+            <p className="text-xs text-zinc-300">
+              PDF pe dosar:{" "}
+              <a
+                href={paymentAcceptancePdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-400 hover:underline"
+              >
+                {paymentAcceptanceFileName ?? "deschide"}
+              </a>
+            </p>
+          ) : (
+            <p className="text-xs text-amber-400/90">Așteptăm documentul de accept plată.</p>
+          )}
+          {canWrite ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  void patch(
+                    { damagePaymentAcceptanceNotes: paymentAcceptanceNotes.trim() || null },
+                    "Notă accept plată salvată.",
+                  )
+                }
+                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Salvează notă
+              </button>
+              <label className="cursor-pointer rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
+                {uploading
+                  ? "Se încarcă…"
+                  : paymentAcceptancePdfUrl
+                    ? "Înlocuiește PDF"
+                    : "Încarcă PDF accept plată"}
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  disabled={disabled || uploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    void (async () => {
+                      setUploading(true);
+                      setError(null);
+                      try {
+                        const up = await uploadDocumentFile(file, "Accept plată asigurător");
+                        const next = await patch(
+                          {
+                            damagePaymentAcceptancePdfUrl: up.url,
+                            damagePaymentAcceptanceFileName: up.name,
+                            damagePaymentAcceptanceNotes: paymentAcceptanceNotes.trim() || null,
+                          },
+                          "Accept plată înregistrat pe dosar.",
+                        );
+                        if (next) {
+                          setPaymentAcceptancePdfUrl(
+                            next.damagePaymentAcceptancePdfUrl ?? up.url,
+                          );
+                          setPaymentAcceptanceFileName(
+                            next.damagePaymentAcceptanceFileName ?? up.name,
+                          );
+                          setPipeline(next.damageInsurerPipelineStatus ?? "payment_accepted");
+                        }
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Upload eșuat.");
+                      } finally {
+                        setUploading(false);
+                        e.target.value = "";
+                      }
+                    })();
+                  }}
+                />
+              </label>
+              {paymentAcceptancePdfUrl ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  className="text-[11px] text-rose-400 hover:underline disabled:opacity-50"
+                  onClick={() =>
+                    void (async () => {
+                      const next = await patch(
+                        {
+                          damagePaymentAcceptancePdfUrl: null,
+                          damagePaymentAcceptanceFileName: null,
+                        },
+                        "PDF accept plată șters.",
+                      );
+                      if (next) {
+                        setPaymentAcceptancePdfUrl(null);
+                        setPaymentAcceptanceFileName(null);
+                      }
+                    })()
+                  }
+                >
+                  Șterge PDF
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* Foto auto reparat — după accept plată / reparație */}
+      {!isClientPayer ? (
+        <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Foto auto reparat ({repairedPhotos.length})
+          </h4>
+          <p className="text-[11px] text-zinc-500">
+            Ultimul pas — multe societăți cer poze cu vehiculul reparat (după Accept plată / reparație).
+          </p>
+          {repairedPhotos.length ? (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {repairedPhotos.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-950/50 px-2 py-1.5 text-xs"
+                >
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="truncate text-emerald-400 hover:underline"
+                  >
+                    {p.caption ?? "Auto reparat"}
+                  </a>
+                  {canWrite ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => void removePhoto(p.id)}
+                      className="shrink-0 text-rose-400 hover:underline disabled:opacity-50"
+                    >
+                      Șterge
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-zinc-500">Nicio poză cu auto reparat încă.</p>
+          )}
+          {canWrite ? (
+            <input
+              ref={repairedFileRef}
+              type="file"
+              accept="image/*,.pdf"
+              disabled={disabled || uploading}
+              className="text-xs text-zinc-400"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                if (!file) return;
+                void (async () => {
+                  setUploading(true);
+                  setError(null);
+                  try {
+                    const up = await uploadDocumentFile(file, "Auto reparat");
+                    const nextPhotos: DamagePhotoItem[] = [
+                      ...photos,
+                      {
+                        id: `photo_${Date.now()}`,
+                        url: up.url,
+                        kind: repairedPhotoKind,
+                        caption: up.name,
+                        uploadedAt: new Date().toISOString(),
+                      },
+                    ];
+                    const saved = await patch({ damagePhotos: nextPhotos }, "Poză auto reparat adăugată.");
+                    if (saved) setPhotos(saved.damagePhotos ?? nextPhotos);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Upload eșuat.");
+                  } finally {
+                    setUploading(false);
+                    if (repairedFileRef.current) repairedFileRef.current.value = "";
+                  }
+                })();
+              }}
+            />
+          ) : null}
+        </section>
+      ) : null}
+
       {/* Pipeline */}
       {isInsurerPayer && !isClientPayer ? (
         <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
@@ -1518,24 +1759,11 @@ export function DamageClaimPanel({
               >
                 Actualizează pipeline
               </button>
-              {pipeline !== "payment_accepted" ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    setPipeline("payment_accepted");
-                    void patch(
-                      { damageInsurerPipelineStatus: "payment_accepted" },
-                      "Accept plată înregistrat.",
-                    );
-                  }}
-                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                >
-                  Accept plată
-                </button>
-              ) : null}
             </div>
           ) : null}
+          <p className="text-[11px] text-zinc-500">
+            Accept plată se înregistrează prin PDF-ul din rubrica de mai sus (nu din pipeline).
+          </p>
         </section>
       ) : null}
 
@@ -1591,6 +1819,11 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteReceivedAt?: string | null;
   damageInspectionNoteNotes?: string | null;
+  damageInspectionNotes?: DamageInspectionNoteItem[];
+  damagePaymentAcceptancePdfUrl?: string | null;
+  damagePaymentAcceptanceFileName?: string | null;
+  damagePaymentAcceptanceReceivedAt?: string | null;
+  damagePaymentAcceptanceNotes?: string | null;
 }): ServiceCaseRecord {
   return {
     id: wo.serviceCaseId,
@@ -1630,6 +1863,11 @@ export function serviceCaseFromWorkOrderDamage(wo: {
     damageInspectionNoteIssuedOn: wo.damageInspectionNoteIssuedOn ?? null,
     damageInspectionNoteReceivedAt: wo.damageInspectionNoteReceivedAt ?? null,
     damageInspectionNoteNotes: wo.damageInspectionNoteNotes ?? null,
+    damageInspectionNotes: wo.damageInspectionNotes ?? [],
+    damagePaymentAcceptancePdfUrl: wo.damagePaymentAcceptancePdfUrl ?? null,
+    damagePaymentAcceptanceFileName: wo.damagePaymentAcceptanceFileName ?? null,
+    damagePaymentAcceptanceReceivedAt: wo.damagePaymentAcceptanceReceivedAt ?? null,
+    damagePaymentAcceptanceNotes: wo.damagePaymentAcceptanceNotes ?? null,
     createdAt: wo.createdAt,
     updatedAt: wo.updatedAt,
     workOrders: [],

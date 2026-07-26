@@ -178,6 +178,19 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteReceivedAt?: string | null;
   damageInspectionNoteNotes?: string | null;
+  damageInspectionNotes?: {
+    id: string;
+    pdfUrl: string;
+    fileName?: string;
+    mode?: "photos" | "on_site" | null;
+    issuedOn?: string | null;
+    receivedAt: string;
+    notes?: string | null;
+  }[];
+  damagePaymentAcceptancePdfUrl?: string | null;
+  damagePaymentAcceptanceFileName?: string | null;
+  damagePaymentAcceptanceReceivedAt?: string | null;
+  damagePaymentAcceptanceNotes?: string | null;
 };
 
 export type ServiceTimesResult = WorkOrderDetail & {

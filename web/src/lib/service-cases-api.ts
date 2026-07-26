@@ -90,7 +90,17 @@ export const DAMAGE_KIND_TO_FLEET_DOC: Partial<Record<DamageDocumentKind, string
   registration_certificate: "cert_inmatriculare",
 };
 
-export type DamagePhotoKind = "exterior" | "damage_detail" | "odometer" | "other";
+export type DamagePhotoKind = "exterior" | "damage_detail" | "odometer" | "repaired" | "other";
+
+export type DamageInspectionNoteItem = {
+  id: string;
+  pdfUrl: string;
+  fileName?: string;
+  mode?: DamageInspectionMode | null;
+  issuedOn?: string | null;
+  receivedAt: string;
+  notes?: string | null;
+};
 
 export type DamageSectionKey = "claim_info" | "documents" | "photos" | "pipeline";
 
@@ -147,6 +157,9 @@ export type PatchDamageClaimInput = {
   /** YYYY-MM-DD */
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteNotes?: string | null;
+  damagePaymentAcceptancePdfUrl?: string | null;
+  damagePaymentAcceptanceFileName?: string | null;
+  damagePaymentAcceptanceNotes?: string | null;
   lockSection?: { section: DamageSectionKey | string; lock: boolean };
 };
 
@@ -195,6 +208,15 @@ export const DAMAGE_PIPELINE_STATUSES: {
 ];
 
 export const DAMAGE_PHOTO_KINDS: { kind: DamagePhotoKind; label: string }[] = [
+  { kind: "exterior", label: "Exterior" },
+  { kind: "damage_detail", label: "Detaliu avarie" },
+  { kind: "odometer", label: "Odometru" },
+  { kind: "repaired", label: "Auto reparat" },
+  { kind: "other", label: "Altele" },
+];
+
+/** Tipuri pentru galeria inițială (înainte de reparație). */
+export const DAMAGE_PHOTO_KINDS_INITIAL: { kind: DamagePhotoKind; label: string }[] = [
   { kind: "exterior", label: "Exterior" },
   { kind: "damage_detail", label: "Detaliu avarie" },
   { kind: "odometer", label: "Odometru" },
@@ -400,6 +422,11 @@ export type ServiceCaseRecord = {
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteReceivedAt?: string | null;
   damageInspectionNoteNotes?: string | null;
+  damageInspectionNotes?: DamageInspectionNoteItem[];
+  damagePaymentAcceptancePdfUrl?: string | null;
+  damagePaymentAcceptanceFileName?: string | null;
+  damagePaymentAcceptanceReceivedAt?: string | null;
+  damagePaymentAcceptanceNotes?: string | null;
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
