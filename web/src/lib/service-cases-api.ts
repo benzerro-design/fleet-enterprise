@@ -139,6 +139,7 @@ export type PatchDamageClaimInput = {
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
+  damageInsurerId?: string | null;
   damageClaimStatus?: DamageClaimStatus | null;
   damagePayerType?: DamagePayerType | null;
   damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
@@ -401,6 +402,7 @@ export type ServiceCaseRecord = {
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
+  damageInsurerId?: string | null;
   damageClaimStatus?: DamageClaimStatus | null;
   damageInsurerAgreedAt?: string | null;
   damageInsurerAgreedByUserId?: string | null;

@@ -147,6 +147,13 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
         phase: "live",
         activePrefixes: ["/fleet/suppliers"],
       },
+      {
+        kind: "link",
+        label: "Asigurători",
+        href: "/fleet/insurers",
+        phase: "live",
+        activePrefixes: ["/fleet/insurers"],
+      },
       { kind: "link", label: "Portal furnizori", href: "/fleet/partner", phase: "live", activePrefixes: ["/fleet/partner"] },
       {
         kind: "link",

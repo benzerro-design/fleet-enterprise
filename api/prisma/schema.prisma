@@ -57,6 +57,7 @@ model Tenant {
   workOrderMessages      WorkOrderMessage[]
   mobilityAssignments    MobilityAssignment[]
   roadsideInterventions  RoadsideIntervention[]
+  insurers               Insurer[]
 }
 
 enum ClientStatus {
@@ -1102,6 +1103,25 @@ model Supplier {
   @@index([tenantId, category])
 }
 
+/// Catalog asigurători (daune) — separat de Furnizori.
+model Insurer {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  email       String?
+  phone       String?
+  notes       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceCases ServiceCase[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, active])
+}
+
 /// Servicii prestate de un furnizor — legătură la catalog tenant (TenantServiceType).
 model SupplierService {
   id            String            @id @default(cuid())
@@ -1290,6 +1310,8 @@ model ServiceCase {
   damageInsuranceType          DamageInsuranceType?
   damageClaimNumber            String?
   damageInsurerName            String?
+  /// FK catalog asigurători (opțional; name/email denormalizate pe dosar).
+  damageInsurerId              String?
   damageClaimStatus            DamageClaimStatus?
   damageInsurerAgreedAt        DateTime?
   damageInsurerAgreedByUserId  String?
@@ -1335,6 +1357,7 @@ model ServiceCase {
   client                 Client                  @relation(fields: [clientId], references: [id], onDelete: Restrict)
   vehicle                Vehicle?                @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   supplier               Supplier?               @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  damageInsurer          Insurer?                @relation(fields: [damageInsurerId], references: [id], onDelete: SetNull)
   serviceType            TenantServiceType?      @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
   workOrders             MaintenanceWorkOrder[]
   appointments           ServiceAppointment[]
@@ -1346,6 +1369,7 @@ model ServiceCase {
   @@index([vehicleId])
   @@index([sourceTicketId])
   @@index([serviceTypeId])
+  @@index([damageInsurerId])
   @@index([tenantId, status])
   @@index([tenantId, currentStage])
 }

@@ -153,6 +153,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageInsuranceType: DamageInsuranceType | null;
   damageClaimNumber: string | null;
   damageInsurerName: string | null;
+  damageInsurerId: string | null;
   damageClaimStatus: DamageClaimStatus | null;
   damageInsurerAgreedAt: string | null;
   damageDocuments: DamageDocumentItem[];
@@ -601,6 +602,7 @@ export class WorkOrdersService {
             damageInsuranceType: true,
             damageClaimNumber: true,
             damageInsurerName: true,
+            damageInsurerId: true,
             damageClaimStatus: true,
             damageInsurerAgreedAt: true,
             damageDocumentsJson: true,
@@ -731,6 +733,7 @@ export class WorkOrdersService {
       damageInsuranceType: row.serviceCase.damageInsuranceType ?? null,
       damageClaimNumber: row.serviceCase.damageClaimNumber ?? null,
       damageInsurerName: row.serviceCase.damageInsurerName ?? null,
+      damageInsurerId: row.serviceCase.damageInsurerId ?? null,
       damageClaimStatus: row.serviceCase.damageClaimStatus ?? null,
       damageInsurerAgreedAt: row.serviceCase.damageInsurerAgreedAt?.toISOString() ?? null,
       damageDocuments: this.parseDamageDocuments(row.serviceCase.damageDocumentsJson),

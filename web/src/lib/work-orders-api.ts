@@ -126,6 +126,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageInsuranceType?: "RCA" | "CASCO" | "BOTH" | "UNKNOWN" | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
+  damageInsurerId?: string | null;
   damageClaimStatus?: string | null;
   damageInsurerAgreedAt?: string | null;
   damageDocuments?: {

@@ -251,6 +251,7 @@ export type ServiceCaseRecord = {
   damageInsuranceType: DamageInsuranceType | null;
   damageClaimNumber: string | null;
   damageInsurerName: string | null;
+  damageInsurerId: string | null;
   damageClaimStatus: DamageClaimStatus | null;
   damageInsurerAgreedAt: string | null;
   damageInsurerAgreedByUserId: string | null;
@@ -288,6 +289,7 @@ export type PatchDamageClaimInput = {
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
+  damageInsurerId?: string | null;
   damageClaimStatus?: DamageClaimStatus | null;
   damagePayerType?: DamagePayerType | null;
   damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
@@ -663,6 +665,7 @@ export class ServiceCasesService {
       dto.damageInsuranceType === undefined &&
       dto.damageClaimNumber === undefined &&
       dto.damageInsurerName === undefined &&
+      dto.damageInsurerId === undefined &&
       dto.damageClaimStatus === undefined &&
       dto.damagePayerType === undefined &&
       dto.damageInsurerPipelineStatus === undefined &&
@@ -721,6 +724,27 @@ export class ServiceCasesService {
     }
     if (dto.damageInsurerName !== undefined) {
       data.damageInsurerName = dto.damageInsurerName?.trim() || null;
+    }
+    if (dto.damageInsurerId !== undefined) {
+      const insurerId = dto.damageInsurerId?.trim() || null;
+      if (!insurerId) {
+        data.damageInsurerId = null;
+      } else {
+        const insurer = await this.prisma.insurer.findFirst({
+          where: { id: insurerId, tenantId: tenant.id, active: true },
+          select: { id: true, name: true, email: true },
+        });
+        if (!insurer) {
+          throw new BadRequestException('damageInsurerId not found in catalog (or inactive)');
+        }
+        data.damageInsurerId = insurer.id;
+        if (dto.damageInsurerName === undefined) {
+          data.damageInsurerName = insurer.name;
+        }
+        if (dto.damageInsurerEmail === undefined && insurer.email) {
+          data.damageInsurerEmail = insurer.email;
+        }
+      }
     }
     if (dto.damageClaimStatus !== undefined) data.damageClaimStatus = dto.damageClaimStatus;
     if (dto.damagePayerType !== undefined) {
@@ -1553,6 +1577,7 @@ export class ServiceCasesService {
         dto.damageInsuranceType !== undefined ||
         dto.damageClaimNumber !== undefined ||
         dto.damageInsurerName !== undefined ||
+        dto.damageInsurerId !== undefined ||
         dto.damageClaimStatus !== undefined ||
         dto.damagePayerType !== undefined ||
         dto.damageInsurerAgreementNotes !== undefined ||
@@ -2839,6 +2864,7 @@ export class ServiceCasesService {
       damageInsuranceType?: DamageInsuranceType | null;
       damageClaimNumber?: string | null;
       damageInsurerName?: string | null;
+      damageInsurerId?: string | null;
       damageClaimStatus?: DamageClaimStatus | null;
       damageInsurerAgreedAt?: Date | null;
       damageInsurerAgreedByUserId?: string | null;
@@ -2940,6 +2966,7 @@ export class ServiceCasesService {
       damageInsuranceType: row.damageInsuranceType ?? null,
       damageClaimNumber: row.damageClaimNumber ?? null,
       damageInsurerName: row.damageInsurerName ?? null,
+      damageInsurerId: row.damageInsurerId ?? null,
       damageClaimStatus: row.damageClaimStatus ?? null,
       damageInsurerAgreedAt: row.damageInsurerAgreedAt?.toISOString() ?? null,
       damageInsurerAgreedByUserId: row.damageInsurerAgreedByUserId ?? null,

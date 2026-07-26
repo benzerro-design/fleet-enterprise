@@ -36,6 +36,7 @@ import {
   type VehicleMovableState,
 } from "@/lib/service-cases-api";
 import { documentsBrowserBase } from "@/lib/fleet-api";
+import { insurersBrowserBase, type InsurerRecord } from "@/lib/insurers-api";
 
 type Props = {
   serviceCase: ServiceCaseRecord | null | undefined;
@@ -95,7 +96,9 @@ export function DamageClaimPanel({
   const [payer, setPayer] = useState<DamagePayerType | "">("");
   const [insuranceType, setInsuranceType] = useState<DamageInsuranceType | "">("");
   const [claimNumber, setClaimNumber] = useState("");
+  const [insurerId, setInsurerId] = useState("");
   const [insurerName, setInsurerName] = useState("");
+  const [insurerCatalog, setInsurerCatalog] = useState<InsurerRecord[]>([]);
   const [claimStatus, setClaimStatus] = useState<DamageClaimStatus>("open");
   const [pipeline, setPipeline] = useState<DamageInsurerPipelineStatus | "">("");
   const [agreementNotes, setAgreementNotes] = useState("");
@@ -139,6 +142,7 @@ export function DamageClaimPanel({
     setPayer(serviceCase.damagePayerType ?? "");
     setInsuranceType(serviceCase.damageInsuranceType ?? "");
     setClaimNumber(serviceCase.damageClaimNumber ?? "");
+    setInsurerId(serviceCase.damageInsurerId ?? "");
     setInsurerName(serviceCase.damageInsurerName ?? "");
     setClaimStatus(serviceCase.damageClaimStatus ?? "open");
     setPipeline(serviceCase.damageInsurerPipelineStatus ?? "");
@@ -180,6 +184,26 @@ export function DamageClaimPanel({
       ),
     );
   }, [serviceCase]);
+
+  useEffect(() => {
+    if (!isDamage) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${insurersBrowserBase}?active=true&pageSize=200`, {
+          headers: fleetJsonHeaders(),
+        });
+        if (!res.ok || cancelled) return;
+        const payload = (await res.json()) as { items?: InsurerRecord[] };
+        if (!cancelled) setInsurerCatalog(payload.items ?? []);
+      } catch {
+        /* catalog optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDamage]);
 
   useEffect(() => {
     setDocs((prev) => mergeDamageDocuments(documentKindsForInsurance(insuranceType), prev));
@@ -275,6 +299,7 @@ export function DamageClaimPanel({
         damagePayerType: payer || null,
         damageInsuranceType: insuranceType || null,
         damageClaimNumber: claimNumber.trim() || null,
+        damageInsurerId: insurerId.trim() || null,
         damageInsurerName: insurerName.trim() || null,
         damageClaimStatus: claimStatus,
         damageInsurerAgreementNotes: agreementNotes.trim() || null,
@@ -601,17 +626,42 @@ export function DamageClaimPanel({
             />
           </label>
           <label className="block">
-            <span className={OPS_LABEL_CLASS}>Asigurător</span>
+            <span className={OPS_LABEL_CLASS}>Asigurător (catalog)</span>
+            <select
+              className={OPS_INPUT_CLASS}
+              disabled={disabled || sectionLocked("claim_info") || isClientPayer}
+              value={insurerId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setInsurerId(id);
+                const hit = insurerCatalog.find((i) => i.id === id);
+                if (hit) {
+                  setInsurerName(hit.name);
+                  if (hit.email) setInsurerEmail(hit.email);
+                }
+              }}
+            >
+              <option value="">— text liber / necunoscut —</option>
+              {insurerCatalog.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                  {i.email ? ` (${i.email})` : ""}
+                </option>
+              ))}
+            </select>
+            <span className="mt-0.5 block text-[10px] text-zinc-500">
+              Catalog: Flotă → Asigurători. Poți lăsa gol și completa nume/email liber.
+            </span>
+          </label>
+          <label className="block">
+            <span className={OPS_LABEL_CLASS}>Nume pe dosar</span>
             <input
               className={OPS_INPUT_CLASS}
               disabled={disabled || sectionLocked("claim_info") || isClientPayer}
               value={insurerName}
               onChange={(e) => setInsurerName(e.target.value)}
-              placeholder="Nume societate (text liber)"
+              placeholder="Nume societate"
             />
-            <span className="mt-0.5 block text-[10px] text-zinc-500">
-              Catalogul de asigurători vine într-un modul separat; deocamdată nume liber.
-            </span>
           </label>
           <label className="block">
             <span className={OPS_LABEL_CLASS}>Email asigurător</span>
@@ -1803,6 +1853,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
+  damageInsurerId?: string | null;
   damageClaimStatus?: string | null;
   damageInsurerAgreedAt?: string | null;
   damageDocuments?: DamageDocumentItem[];
@@ -1845,6 +1896,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
     damageInsuranceType: wo.damageInsuranceType ?? null,
     damageClaimNumber: wo.damageClaimNumber ?? null,
     damageInsurerName: wo.damageInsurerName ?? null,
+    damageInsurerId: wo.damageInsurerId ?? null,
     damageClaimStatus: (wo.damageClaimStatus as DamageClaimStatus | null) ?? null,
     damageInsurerAgreedAt: wo.damageInsurerAgreedAt ?? null,
     damagePayerType: wo.damagePayerType ?? null,

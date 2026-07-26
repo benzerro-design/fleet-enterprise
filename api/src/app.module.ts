@@ -13,6 +13,7 @@ import { OpsModule } from './ops/ops.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ServiceCasesModule } from './service-cases/service-cases.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
+import { InsurersModule } from './insurers/insurers.module';
 import { WorkOrdersModule } from './work-orders/work-orders.module';
 import { MobilityModule } from './mobility/mobility.module';
 import { RoadsideModule } from './roadside/roadside.module';
@@ -20,7 +21,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { PartnerModule } from './partner/partner.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, IamModule, BotModule, ClientsModule, CrmModule, DriversModule, FleetModule, OpsModule, ServiceCasesModule, SuppliersModule, WorkOrdersModule, AppointmentsModule, MobilityModule, RoadsideModule, TenantModule, PartnerModule],
+  imports: [PrismaModule, AuthModule, IamModule, BotModule, ClientsModule, CrmModule, DriversModule, FleetModule, OpsModule, ServiceCasesModule, SuppliersModule, InsurersModule, WorkOrdersModule, AppointmentsModule, MobilityModule, RoadsideModule, TenantModule, PartnerModule],
   controllers: [AppController],
   providers: [AppService],
 })
