@@ -10,6 +10,7 @@ import { TenantId } from '../fleet/tenant-id.decorator';
 import type {
   AdvanceServiceCaseInput,
   CreateServiceAppointmentInput,
+  DecideDamageReinspectionInput,
   PatchDamageClaimInput,
   PostApprovalInput,
   RequestDamageReinspectionInput,
@@ -120,6 +121,24 @@ export class ServiceCasesController {
       tenantSlug,
       id,
       body ?? {},
+      actorUserId,
+      access,
+    );
+  }
+
+  @Post(':id/damage-claim/decide-reinspection')
+  @Roles(...FLEET_WRITE_ROLES)
+  decideDamageReinspection(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: DecideDamageReinspectionInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.serviceCases.decideDamageReinspection(
+      tenantSlug,
+      id,
+      body,
       actorUserId,
       access,
     );

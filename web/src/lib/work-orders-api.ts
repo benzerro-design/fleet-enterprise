@@ -182,6 +182,9 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageInspectionNoteNotes?: string | null;
   damageInspectionNotes?: {
     id: string;
+    kind?: "inspection_note" | "pvs";
+    sequence?: number;
+    requestId?: string;
     pdfUrl: string;
     fileName?: string;
     mode?: "photos" | "on_site" | null;

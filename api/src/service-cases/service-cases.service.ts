@@ -197,8 +197,17 @@ export type DamagePhotoItem = {
   uploadedByLabel?: string;
 };
 
+export type DamageReinspectionRequestStatus = 'pending' | 'approved' | 'rejected';
+
+/** Notă constatare sau PVS (document PDF pe istoric). */
 export type DamageInspectionNoteItem = {
   id: string;
+  /** Lipsă / inspection_note = notă inițială; pvs = Proces Verbal Suplimentar. */
+  kind?: 'inspection_note' | 'pvs';
+  /** Număr PVS (1, 2, …) — doar pentru kind=pvs. */
+  sequence?: number;
+  /** Cererea de reconstatare legată (la PVS). */
+  requestId?: string;
   pdfUrl: string;
   fileName?: string;
   mode?: DamageInspectionMode | null;
@@ -206,6 +215,25 @@ export type DamageInspectionNoteItem = {
   receivedAt: string;
   notes?: string | null;
 };
+
+/** Solicitare reconstatare — poate fi aprobată sau respinsă de asigurător. */
+export type DamageReinspectionRequestItem = {
+  id: string;
+  kind: 'reinspection_request';
+  sequence: number;
+  status: DamageReinspectionRequestStatus;
+  explanation: string;
+  photoIds: string[];
+  sentAt: string;
+  decidedAt?: string;
+  rejectionReason?: string;
+  linkedPvsId?: string;
+  mailLogId?: string;
+};
+
+export type DamageConstatareHistoryItem =
+  | DamageInspectionNoteItem
+  | DamageReinspectionRequestItem;
 
 export type DamageSectionKey = 'claim_info' | 'documents' | 'photos' | 'pipeline';
 
@@ -275,7 +303,8 @@ export type ServiceCaseRecord = {
   damageInspectionNoteIssuedOn: string | null;
   damageInspectionNoteReceivedAt: string | null;
   damageInspectionNoteNotes: string | null;
-  damageInspectionNotes: DamageInspectionNoteItem[];
+  /** Istoric constatare: note PDF, solicitări reconstatare, PVS. */
+  damageInspectionNotes: DamageConstatareHistoryItem[];
   damagePaymentAcceptancePdfUrl: string | null;
   damagePaymentAcceptanceFileName: string | null;
   damagePaymentAcceptanceReceivedAt: string | null;
@@ -310,6 +339,10 @@ export type PatchDamageClaimInput = {
   /** YYYY-MM-DD */
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteNotes?: string | null;
+  /** inspection_note (default) | pvs — la upload PDF pe constatare. */
+  damageInspectionDocKind?: 'inspection_note' | 'pvs' | null;
+  /** La upload PVS: id-ul cererii approved legate. */
+  damagePvsLinkedRequestId?: string | null;
   damagePaymentAcceptancePdfUrl?: string | null;
   damagePaymentAcceptanceFileName?: string | null;
   damagePaymentAcceptanceNotes?: string | null;
@@ -330,7 +363,15 @@ export type SendDamageAvizareToInsurerInput = {
 };
 
 export type RequestDamageReinspectionInput = {
+  /** Explicații / motiv — obligatoriu. */
   note?: string | null;
+  photoIds?: string[];
+};
+
+export type DecideDamageReinspectionInput = {
+  requestId: string;
+  decision: 'approved' | 'rejected';
+  rejectionReason?: string | null;
 };
 
 const PIPELINE_ORDER: DamageInsurerPipelineStatus[] = [
@@ -868,20 +909,70 @@ export class ServiceCasesService {
           dto.damageInspectionNoteNotes !== undefined
             ? dto.damageInspectionNoteNotes?.trim() || null
             : row.damageInspectionNoteNotes;
-        const prevNotes = this.parseDamageInspectionNotes(row.damageInspectionNotesJson);
-        const entry: DamageInspectionNoteItem = {
-          id: `insp_${Date.now()}`,
-          pdfUrl: url,
-          fileName: fileName ?? undefined,
-          mode: mode ?? null,
-          issuedOn,
-          receivedAt: receivedAt.toISOString(),
-          notes,
-        };
-        data.damageInspectionNotesJson = [entry, ...prevNotes].slice(
-          0,
-          30,
-        ) as unknown as Prisma.InputJsonValue;
+        const docKind =
+          dto.damageInspectionDocKind === 'pvs' ? 'pvs' : 'inspection_note';
+        const prevNotes = this.parseDamageConstatareHistory(row.damageInspectionNotesJson);
+
+        if (docKind === 'pvs') {
+          const requestId = dto.damagePvsLinkedRequestId?.trim() || null;
+          if (!requestId) {
+            throw new BadRequestException(
+              'damagePvsLinkedRequestId is required when uploading PVS',
+            );
+          }
+          const reqIdx = prevNotes.findIndex(
+            (h) => h.kind === 'reinspection_request' && h.id === requestId,
+          );
+          if (reqIdx < 0) {
+            throw new BadRequestException('Cererea de reconstatare nu a fost găsită');
+          }
+          const req = prevNotes[reqIdx] as DamageReinspectionRequestItem;
+          if (req.status !== 'approved') {
+            throw new BadRequestException(
+              'PVS se încarcă doar pe o solicitare aprobată de asigurător',
+            );
+          }
+          if (req.linkedPvsId) {
+            throw new BadRequestException('Această solicitare are deja un PVS legat');
+          }
+          const pvsSequence =
+            prevNotes.filter((h): h is DamageInspectionNoteItem => h.kind === 'pvs')
+              .length + 1;
+          const pvsId = `pvs_${Date.now()}`;
+          const pvsEntry: DamageInspectionNoteItem = {
+            id: pvsId,
+            kind: 'pvs',
+            sequence: pvsSequence,
+            requestId,
+            pdfUrl: url,
+            fileName: fileName ?? undefined,
+            mode: mode ?? null,
+            issuedOn,
+            receivedAt: receivedAt.toISOString(),
+            notes,
+          };
+          const nextHistory = [...prevNotes];
+          nextHistory[reqIdx] = { ...req, linkedPvsId: pvsId };
+          data.damageInspectionNotesJson = [pvsEntry, ...nextHistory].slice(
+            0,
+            50,
+          ) as unknown as Prisma.InputJsonValue;
+        } else {
+          const entry: DamageInspectionNoteItem = {
+            id: `insp_${Date.now()}`,
+            kind: 'inspection_note',
+            pdfUrl: url,
+            fileName: fileName ?? undefined,
+            mode: mode ?? null,
+            issuedOn,
+            receivedAt: receivedAt.toISOString(),
+            notes,
+          };
+          data.damageInspectionNotesJson = [entry, ...prevNotes].slice(
+            0,
+            50,
+          ) as unknown as Prisma.InputJsonValue;
+        }
 
         const current =
           (data.damageInsurerPipelineStatus as DamageInsurerPipelineStatus | undefined) ??
@@ -1434,6 +1525,7 @@ export class ServiceCasesService {
     const row = await this.prisma.serviceCase.findFirst({
       where: { id: caseId, tenantId: tenant.id },
       include: {
+        vehicle: { select: { registrationNumber: true, brand: true, model: true } },
         workOrders: {
           select: { id: true, supplierId: true, displayNumber: true },
           orderBy: { createdAt: 'desc' },
@@ -1463,24 +1555,80 @@ export class ServiceCasesService {
       throw new BadRequestException('Plătitor client — nu se solicită reconstatare');
     }
 
+    const explanation = dto.note?.trim() || '';
+    if (explanation.length < 5) {
+      throw new BadRequestException(
+        'Completează explicațiile pentru reconstatare (minim 5 caractere)',
+      );
+    }
+
     const to = row.damageInsurerEmail?.trim();
     if (!to) {
       throw new BadRequestException('Completează emailul asigurătorului pe dosar');
     }
 
+    const photos = this.parseDamagePhotos(row.damagePhotosJson);
+    const photoIdSet = new Set((dto.photoIds ?? []).map((id) => id.trim()).filter(Boolean));
+    const selectedPhotos = photos.filter((p) => photoIdSet.has(p.id));
+    if (photoIdSet.size > 0 && selectedPhotos.length !== photoIdSet.size) {
+      throw new BadRequestException('Unele poze selectate nu mai există pe dosar');
+    }
+
+    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
+    const absolutize = (url: string) => {
+      const u = url.trim();
+      if (!u) return u;
+      if (/^https?:\/\//i.test(u)) return u;
+      if (!webOrigin) return u;
+      return `${webOrigin}${u.startsWith('/') ? '' : '/'}${u}`;
+    };
+
+    const attachmentLines: string[] = [];
+    const attachmentUrls: string[] = [];
+    for (const p of selectedPhotos) {
+      const abs = absolutize(p.url);
+      attachmentUrls.push(abs);
+      const kindLabel =
+        p.kind === 'exterior'
+          ? 'Exterior'
+          : p.kind === 'damage_detail'
+            ? 'Detaliu avarie'
+            : p.kind === 'odometer'
+              ? 'Odometru'
+              : 'Poză';
+      attachmentLines.push(
+        `- Poză: ${kindLabel}${p.caption ? ` · ${p.caption}` : ''} — ${abs}`,
+      );
+    }
+
     const wo = row.workOrders[0];
     const insurerLabel = row.damageInsurerName?.trim() || 'asigurător';
     const claim = row.damageClaimNumber?.trim() || caseId.slice(-6).toUpperCase();
-    const subject = `Solicitare reconstatare daună ${claim} — ${row.title}`;
+    const vehicleLabel = [
+      row.vehicle?.registrationNumber,
+      [row.vehicle?.brand, row.vehicle?.model].filter(Boolean).join(' '),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const prevHistory = this.parseDamageConstatareHistory(row.damageInspectionNotesJson);
+    const sequence =
+      prevHistory.filter((h) => h.kind === 'reinspection_request').length + 1;
+    const subject = `Solicitare reconstatare #${sequence} daună ${claim} — ${row.title}`;
     const bodyLines = [
       `Bună ziua,`,
       ``,
-      `Solicităm reconstatare pentru dosarul de daună ${claim} (${insurerLabel}).`,
+      `Solicităm reconstatare (#${sequence}) pentru dosarul de daună ${claim} (${insurerLabel}).`,
+      vehicleLabel ? `Vehicul: ${vehicleLabel}.` : null,
       wo?.displayNumber ? `Comandă service: ${wo.displayNumber}.` : null,
       row.damageInspectionNotePdfUrl
-        ? `Notă de constatare existentă pe dosar: ${row.damageInspectionNotePdfUrl}`
+        ? `Notă de constatare existentă pe dosar: ${absolutize(row.damageInspectionNotePdfUrl)}`
         : null,
-      dto.note?.trim() ? `Motiv / notă: ${dto.note.trim()}` : null,
+      ``,
+      `Explicații:`,
+      explanation,
+      attachmentLines.length ? `` : null,
+      attachmentLines.length ? `Poze atașate / linkuri:` : null,
+      ...attachmentLines,
       ``,
       `Cu stimă,`,
       `Fleet Enterprise`,
@@ -1507,12 +1655,25 @@ export class ServiceCasesService {
       subject,
       status,
       kind: 'reinspection',
-      note: dto.note?.trim() || undefined,
+      note: explanation,
       pdfUrl: row.damageInspectionNotePdfUrl?.trim() || undefined,
+      attachmentUrls: attachmentUrls.length ? attachmentUrls : undefined,
       error,
     };
     const prevLog = this.parseDamageInsurerMailLog(row.damageInsurerMailLogJson);
     const nextLog = [logItem, ...prevLog].slice(0, 50);
+
+    const requestItem: DamageReinspectionRequestItem = {
+      id: `recon_${Date.now()}`,
+      kind: 'reinspection_request',
+      sequence,
+      status: 'pending',
+      explanation,
+      photoIds: selectedPhotos.map((p) => p.id),
+      sentAt: logItem.at,
+      mailLogId: logItem.id,
+    };
+    const nextHistory = [requestItem, ...prevHistory].slice(0, 50);
 
     const current = row.damageInsurerPipelineStatus;
     const nextPipeline =
@@ -1524,6 +1685,7 @@ export class ServiceCasesService {
       where: { id: caseId },
       data: {
         damageInsurerMailLogJson: nextLog as unknown as Prisma.InputJsonValue,
+        damageInspectionNotesJson: nextHistory as unknown as Prisma.InputJsonValue,
         damageInsurerPipelineStatus: nextPipeline,
       },
       include: this.caseInclude(),
@@ -1537,11 +1699,11 @@ export class ServiceCasesService {
           kind: CrmTicketEventKind.damage_claim_update,
           body:
             status === 'sent'
-              ? `Reconstatare solicitată către asigurător (${to}).`
+              ? `Reconstatare #${sequence} solicitată către asigurător (${to}).`
               : status === 'stubbed'
-                ? `Reconstatare înregistrată (SMTP neconfigurat) — ${to}.`
+                ? `Reconstatare #${sequence} înregistrată (SMTP neconfigurat) — ${to}.`
                 : `Solicitare reconstatare eșuată — ${error ?? 'eroare'}.`,
-          payload: { serviceCaseId: caseId, mail: logItem },
+          payload: { serviceCaseId: caseId, mail: logItem, request: requestItem },
           actorUserId: actorUserId ?? null,
         },
       });
@@ -1553,12 +1715,142 @@ export class ServiceCasesService {
       action: 'service_case.damage_reinspection_request',
       entityType: 'service_case',
       entityId: caseId,
-      meta: { to, status },
+      meta: {
+        to,
+        status,
+        sequence,
+        photoIds: requestItem.photoIds,
+        requestId: requestItem.id,
+      },
     });
 
     if (status === 'failed') {
       throw new BadRequestException(error || 'Solicitarea de reconstatare a eșuat');
     }
+
+    return this.toRecord(updated);
+  }
+
+  async decideDamageReinspection(
+    tenantSlug: string,
+    caseId: string,
+    dto: DecideDamageReinspectionInput,
+    actorUserId?: string | null,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const row = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+      include: {
+        workOrders: {
+          select: { id: true, supplierId: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Service case not found');
+    if (access) {
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        const partnerWo = row.workOrders.find((w) =>
+          allowedSupplierIds(access).includes(w.supplierId ?? ''),
+        );
+        if (!partnerWo) {
+          throw new ForbiddenException('No partner work order on this damage case');
+        }
+        assertPartnerSupplierId(access, partnerWo.supplierId);
+      } else {
+        assertServiceCaseWrite(access, row.clientId);
+      }
+    }
+    if (row.workflowType !== ServiceCaseWorkflowType.damage) {
+      throw new BadRequestException('Reconstatarea se aplică doar pe workflow daună');
+    }
+
+    const decision = dto.decision;
+    if (decision !== 'approved' && decision !== 'rejected') {
+      throw new BadRequestException('decision must be approved or rejected');
+    }
+    const requestId = dto.requestId?.trim();
+    if (!requestId) {
+      throw new BadRequestException('requestId is required');
+    }
+    if (decision === 'rejected') {
+      const reason = dto.rejectionReason?.trim() || '';
+      if (reason.length < 3) {
+        throw new BadRequestException('Motivul refuzului e obligatoriu (minim 3 caractere)');
+      }
+    }
+
+    const history = this.parseDamageConstatareHistory(row.damageInspectionNotesJson);
+    const idx = history.findIndex(
+      (h) => h.kind === 'reinspection_request' && h.id === requestId,
+    );
+    if (idx < 0) {
+      throw new BadRequestException('Cererea de reconstatare nu a fost găsită');
+    }
+    const req = history[idx] as DamageReinspectionRequestItem;
+    if (req.status !== 'pending') {
+      throw new BadRequestException('Cererea nu mai este în așteptare');
+    }
+
+    const decidedAt = new Date().toISOString();
+    const updatedReq: DamageReinspectionRequestItem = {
+      ...req,
+      status: decision,
+      decidedAt,
+      rejectionReason:
+        decision === 'rejected' ? dto.rejectionReason!.trim() : undefined,
+    };
+    const nextHistory = [...history];
+    nextHistory[idx] = updatedReq;
+
+    const hasPending = nextHistory.some(
+      (h) => h.kind === 'reinspection_request' && h.status === 'pending',
+    );
+    let nextPipeline = row.damageInsurerPipelineStatus;
+    if (decision === 'rejected' && !hasPending) {
+      if (nextPipeline === DamageInsurerPipelineStatus.reinspection_requested) {
+        nextPipeline = DamageInsurerPipelineStatus.inspection_note;
+      }
+    }
+
+    const updated = await this.prisma.serviceCase.update({
+      where: { id: caseId },
+      data: {
+        damageInspectionNotesJson: nextHistory as unknown as Prisma.InputJsonValue,
+        damageInsurerPipelineStatus: nextPipeline,
+      },
+      include: this.caseInclude(),
+    });
+
+    if (row.sourceTicketId) {
+      await this.prisma.crmTicketEvent.create({
+        data: {
+          tenantId: tenant.id,
+          ticketId: row.sourceTicketId,
+          kind: CrmTicketEventKind.damage_claim_update,
+          body:
+            decision === 'approved'
+              ? `Reconstatare #${req.sequence} aprobată de asigurător — așteptăm PVS.`
+              : `Reconstatare #${req.sequence} respinsă: ${updatedReq.rejectionReason}`,
+          payload: { serviceCaseId: caseId, request: updatedReq },
+          actorUserId: actorUserId ?? null,
+        },
+      });
+    }
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_case.damage_reinspection_decide',
+      entityType: 'service_case',
+      entityId: caseId,
+      meta: { requestId, decision, sequence: req.sequence },
+    });
 
     return this.toRecord(updated);
   }
@@ -2712,19 +3004,51 @@ export class ServiceCasesService {
     };
   }
 
-  private parseDamageInspectionNotes(raw: unknown): DamageInspectionNoteItem[] {
+  private parseDamageConstatareHistory(raw: unknown): DamageConstatareHistoryItem[] {
     if (!Array.isArray(raw)) return [];
-    const out: DamageInspectionNoteItem[] = [];
+    const out: DamageConstatareHistoryItem[] = [];
     for (const item of raw) {
       if (!item || typeof item !== 'object') continue;
       const o = item as Record<string, unknown>;
-      if (typeof o.id !== 'string' || typeof o.pdfUrl !== 'string' || typeof o.receivedAt !== 'string') {
+      if (typeof o.id !== 'string') continue;
+
+      if (o.kind === 'reinspection_request') {
+        const status =
+          o.status === 'pending' || o.status === 'approved' || o.status === 'rejected'
+            ? o.status
+            : null;
+        if (!status || typeof o.sentAt !== 'string') continue;
+        const photoIds = Array.isArray(o.photoIds)
+          ? o.photoIds.filter((id): id is string => typeof id === 'string')
+          : [];
+        out.push({
+          id: o.id,
+          kind: 'reinspection_request',
+          sequence: typeof o.sequence === 'number' && o.sequence > 0 ? o.sequence : 1,
+          status,
+          explanation: typeof o.explanation === 'string' ? o.explanation : '',
+          photoIds,
+          sentAt: o.sentAt,
+          decidedAt: typeof o.decidedAt === 'string' ? o.decidedAt : undefined,
+          rejectionReason:
+            typeof o.rejectionReason === 'string' ? o.rejectionReason : undefined,
+          linkedPvsId: typeof o.linkedPvsId === 'string' ? o.linkedPvsId : undefined,
+          mailLogId: typeof o.mailLogId === 'string' ? o.mailLogId : undefined,
+        });
+        continue;
+      }
+
+      if (typeof o.pdfUrl !== 'string' || typeof o.receivedAt !== 'string') {
         continue;
       }
       const mode =
         o.mode === 'photos' || o.mode === 'on_site' ? (o.mode as DamageInspectionMode) : null;
+      const kind = o.kind === 'pvs' ? 'pvs' : 'inspection_note';
       out.push({
         id: o.id,
+        kind,
+        sequence: typeof o.sequence === 'number' && o.sequence > 0 ? o.sequence : undefined,
+        requestId: typeof o.requestId === 'string' ? o.requestId : undefined,
         pdfUrl: o.pdfUrl,
         fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
         mode,
@@ -2734,6 +3058,13 @@ export class ServiceCasesService {
       });
     }
     return out;
+  }
+
+  /** @deprecated use parseDamageConstatareHistory — kept for callers expecting PDF notes only */
+  private parseDamageInspectionNotes(raw: unknown): DamageInspectionNoteItem[] {
+    return this.parseDamageConstatareHistory(raw).filter(
+      (h): h is DamageInspectionNoteItem => h.kind !== 'reinspection_request',
+    );
   }
 
   private parseDamageDocuments(raw: unknown): DamageDocumentItem[] {
@@ -2993,12 +3324,13 @@ export class ServiceCasesService {
       damageInspectionNoteReceivedAt: row.damageInspectionNoteReceivedAt?.toISOString() ?? null,
       damageInspectionNoteNotes: row.damageInspectionNoteNotes ?? null,
       damageInspectionNotes: (() => {
-        const hist = this.parseDamageInspectionNotes(row.damageInspectionNotesJson);
+        const hist = this.parseDamageConstatareHistory(row.damageInspectionNotesJson);
         if (hist.length) return hist;
         if (row.damageInspectionNotePdfUrl) {
           return [
             {
               id: 'legacy_inspection_note',
+              kind: 'inspection_note' as const,
               pdfUrl: row.damageInspectionNotePdfUrl,
               fileName: row.damageInspectionNoteFileName ?? undefined,
               mode: row.damageInspectionMode ?? null,

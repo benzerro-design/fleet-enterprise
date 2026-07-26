@@ -172,6 +172,9 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageInspectionNoteNotes: string | null;
   damageInspectionNotes: Array<{
     id: string;
+    kind?: 'inspection_note' | 'pvs';
+    sequence?: number;
+    requestId?: string;
     pdfUrl: string;
     fileName?: string;
     mode?: 'photos' | 'on_site' | null;
@@ -1654,6 +1657,9 @@ export class WorkOrdersService {
 
   private parseDamageInspectionNotes(raw: unknown): Array<{
     id: string;
+    kind?: 'inspection_note' | 'pvs';
+    sequence?: number;
+    requestId?: string;
     pdfUrl: string;
     fileName?: string;
     mode?: 'photos' | 'on_site' | null;
@@ -1664,6 +1670,9 @@ export class WorkOrdersService {
     if (!Array.isArray(raw)) return [];
     const out: Array<{
       id: string;
+      kind?: 'inspection_note' | 'pvs';
+      sequence?: number;
+      requestId?: string;
       pdfUrl: string;
       fileName?: string;
       mode?: 'photos' | 'on_site' | null;
@@ -1674,11 +1683,15 @@ export class WorkOrdersService {
     for (const item of raw) {
       if (!item || typeof item !== 'object') continue;
       const o = item as Record<string, unknown>;
+      if (o.kind === 'reinspection_request') continue;
       if (typeof o.id !== 'string' || typeof o.pdfUrl !== 'string' || typeof o.receivedAt !== 'string') {
         continue;
       }
       out.push({
         id: o.id,
+        kind: o.kind === 'pvs' ? 'pvs' : 'inspection_note',
+        sequence: typeof o.sequence === 'number' ? o.sequence : undefined,
+        requestId: typeof o.requestId === 'string' ? o.requestId : undefined,
         pdfUrl: o.pdfUrl,
         fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
         mode: o.mode === 'photos' || o.mode === 'on_site' ? o.mode : null,

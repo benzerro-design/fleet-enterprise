@@ -92,8 +92,14 @@ export const DAMAGE_KIND_TO_FLEET_DOC: Partial<Record<DamageDocumentKind, string
 
 export type DamagePhotoKind = "exterior" | "damage_detail" | "odometer" | "repaired" | "other";
 
+export type DamageReinspectionRequestStatus = "pending" | "approved" | "rejected";
+
+/** Notă constatare sau PVS. */
 export type DamageInspectionNoteItem = {
   id: string;
+  kind?: "inspection_note" | "pvs";
+  sequence?: number;
+  requestId?: string;
   pdfUrl: string;
   fileName?: string;
   mode?: DamageInspectionMode | null;
@@ -101,6 +107,36 @@ export type DamageInspectionNoteItem = {
   receivedAt: string;
   notes?: string | null;
 };
+
+export type DamageReinspectionRequestItem = {
+  id: string;
+  kind: "reinspection_request";
+  sequence: number;
+  status: DamageReinspectionRequestStatus;
+  explanation: string;
+  photoIds: string[];
+  sentAt: string;
+  decidedAt?: string;
+  rejectionReason?: string;
+  linkedPvsId?: string;
+  mailLogId?: string;
+};
+
+export type DamageConstatareHistoryItem =
+  | DamageInspectionNoteItem
+  | DamageReinspectionRequestItem;
+
+export function isReinspectionRequest(
+  item: DamageConstatareHistoryItem,
+): item is DamageReinspectionRequestItem {
+  return item.kind === "reinspection_request";
+}
+
+export function isInspectionPdfDoc(
+  item: DamageConstatareHistoryItem,
+): item is DamageInspectionNoteItem {
+  return item.kind !== "reinspection_request";
+}
 
 export type DamageSectionKey = "claim_info" | "documents" | "photos" | "pipeline";
 
@@ -160,6 +196,8 @@ export type PatchDamageClaimInput = {
   /** YYYY-MM-DD */
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteNotes?: string | null;
+  damageInspectionDocKind?: "inspection_note" | "pvs" | null;
+  damagePvsLinkedRequestId?: string | null;
   damagePaymentAcceptancePdfUrl?: string | null;
   damagePaymentAcceptanceFileName?: string | null;
   damagePaymentAcceptanceNotes?: string | null;
@@ -426,7 +464,7 @@ export type ServiceCaseRecord = {
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteReceivedAt?: string | null;
   damageInspectionNoteNotes?: string | null;
-  damageInspectionNotes?: DamageInspectionNoteItem[];
+  damageInspectionNotes?: DamageConstatareHistoryItem[];
   damagePaymentAcceptancePdfUrl?: string | null;
   damagePaymentAcceptanceFileName?: string | null;
   damagePaymentAcceptanceReceivedAt?: string | null;
