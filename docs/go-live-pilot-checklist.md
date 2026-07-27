@@ -134,6 +134,15 @@ node scripts/smoke-staging-service-flow.mjs --write   # creează tichet+WO pe de
 4. GitHub **Settings → Secrets → Actions**: `WEB_ORIGIN` același URL (pentru deploy API viitor)
 5. După modificare env: așteaptă revizie nouă sau **Redeploy** dacă login eșuează cu CORS (rar — web folosește proxy server-side)
 
+### Pas A2 — SMTP Gmail (avizare / reconstatare / deviz)
+
+Vezi ghidul scurt: [`docs/smtp-gmail.md`](./smtp-gmail.md).
+
+1. Generează **App Password** Gmail  
+2. Secret Manager: `SMTP_USER`, `SMTP_PASS`  
+3. GitHub Actions secret: `SMTP_FROM`  
+4. Redeploy API → pe dosar, mail = **sent** (nu stubbed)
+
 ### Pas B — Browser cu admin demo (≈ 15 min) → 4.1–4.5, 4.11–4.12
 
 | Pas | Unde în app | Bifează |

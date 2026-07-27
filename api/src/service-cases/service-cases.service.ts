@@ -1249,7 +1249,19 @@ export class ServiceCasesService {
     let error: string | undefined;
     if (this.partnerMail.isConfigured()) {
       try {
-        await this.partnerMail.send({ to, subject, body });
+        const attachments = pdfUrl
+          ? await this.partnerMail.fetchAttachmentsFromUrls([pdfUrl], { maxFiles: 1 })
+          : [];
+        const bodyWithAttachNote =
+          attachments.length > 0
+            ? `${body}\n\n(Fișierul PDF este atașat acestui email.)`
+            : body;
+        await this.partnerMail.send({
+          to,
+          subject,
+          body: bodyWithAttachNote,
+          attachments,
+        });
         status = 'sent';
       } catch (e) {
         status = 'failed';
@@ -1441,13 +1453,17 @@ export class ServiceCasesService {
       `Cu stimă,`,
       `Fleet Enterprise`,
     ].filter((l) => l != null) as string[];
-    const body = bodyLines.join('\n');
+    let body = bodyLines.join('\n');
 
     let status: DamageInsurerMailLogItem['status'] = 'stubbed';
     let error: string | undefined;
     if (this.partnerMail.isConfigured()) {
       try {
-        await this.partnerMail.send({ to, subject, body });
+        const attachments = await this.partnerMail.fetchAttachmentsFromUrls(attachmentUrls);
+        if (attachments.length > 0) {
+          body += `\n\n(${attachments.length} fișier(e) atașate acestui email; linkurile de mai sus rămân ca rezervă.)`;
+        }
+        await this.partnerMail.send({ to, subject, body, attachments });
         status = 'sent';
       } catch (e) {
         status = 'failed';
@@ -1645,13 +1661,22 @@ export class ServiceCasesService {
       `Cu stimă,`,
       `Fleet Enterprise`,
     ].filter((l) => l != null) as string[];
-    const body = bodyLines.join('\n');
+    let body = bodyLines.join('\n');
+
+    const fetchUrls = [...attachmentUrls];
+    if (row.damageInspectionNotePdfUrl?.trim()) {
+      fetchUrls.unshift(absolutize(row.damageInspectionNotePdfUrl));
+    }
 
     let status: DamageInsurerMailLogItem['status'] = 'stubbed';
     let error: string | undefined;
     if (this.partnerMail.isConfigured()) {
       try {
-        await this.partnerMail.send({ to, subject, body });
+        const attachments = await this.partnerMail.fetchAttachmentsFromUrls(fetchUrls);
+        if (attachments.length > 0) {
+          body += `\n\n(${attachments.length} fișier(e) atașate acestui email; linkurile de mai sus rămân ca rezervă.)`;
+        }
+        await this.partnerMail.send({ to, subject, body, attachments });
         status = 'sent';
       } catch (e) {
         status = 'failed';

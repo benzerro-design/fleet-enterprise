@@ -55,5 +55,5 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-secrets DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest \
-            --set-env-vars WEB_ORIGIN=${{ secrets.WEB_ORIGIN }},NODE_ENV=production,GCS_BUCKET=fleet-enterprise-trip-sheets,BOT_ENABLED=true
+            --set-secrets DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,SMTP_USER=SMTP_USER:latest,SMTP_PASS=SMTP_PASS:latest \
+            --set-env-vars WEB_ORIGIN=${{ secrets.WEB_ORIGIN }},NODE_ENV=production,GCS_BUCKET=fleet-enterprise-trip-sheets,BOT_ENABLED=true,SMTP_HOST=smtp.gmail.com,SMTP_PORT=465,SMTP_SECURE=true,SMTP_FROM=${{ secrets.SMTP_FROM }}
