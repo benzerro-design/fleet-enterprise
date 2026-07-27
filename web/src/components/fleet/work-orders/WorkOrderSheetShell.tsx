@@ -302,7 +302,7 @@ export function WorkOrderSheetShell({
   }
 
   return (
-    <div className="space-y-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950/80">
+    <div className="space-y-0 rounded-xl border border-zinc-700 bg-zinc-950/80">
       <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/60 px-2 py-2">
         <div className={`grid min-w-[640px] gap-1.5 ${isDamageWo ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2"}`}>
           {toolbarGroups.map((g) => {

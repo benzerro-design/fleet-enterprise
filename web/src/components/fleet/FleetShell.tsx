@@ -60,7 +60,7 @@ export function FleetShell({
   }, [menuOpen, closeMenu]);
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-zinc-950">
+    <div data-fleet-shell className="flex h-dvh max-h-dvh overflow-hidden bg-zinc-950">
       {/* Desktop sidebar */}
       <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
         <div className="shrink-0 border-b border-zinc-800 px-4 py-4">
@@ -107,7 +107,7 @@ export function FleetShell({
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
-          <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+          <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
             {children}
           </div>
         </div>
