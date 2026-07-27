@@ -35,25 +35,20 @@ SMTP_FROM=adresa.ta@gmail.com
 
 Restart Nest, apoi **Trimite avizare** pe un dosar — în log trebuie `sent`, nu `stubbed`.
 
-## 4. Staging (Cloud Run + Secret Manager)
+## 4. Staging (GitHub Secrets → Cloud Run)
 
-Din terminal (proiectul GCP corect selectat):
+GitHub → **Settings → Secrets and variables → Actions** — adaugă:
 
-```bash
-# o dată — creează / actualizează secretele
-echo -n 'adresa.ta@gmail.com' | gcloud secrets create SMTP_USER --data-file=-
-# dacă există deja: gcloud secrets versions add SMTP_USER --data-file=-
+| Secret | Valoare |
+|--------|---------|
+| `SMTP_FROM` | `adresa.ta@gmail.com` |
+| `SMTP_USER` | aceeași adresă |
+| `SMTP_PASS` | parola de aplicație |
 
-echo -n 'PAROLA_APP_16_CARACTERE' | gcloud secrets create SMTP_PASS --data-file=-
-```
+Workflow-ul setează pe Cloud Run host Gmail (`465` / secure) + aceste secrete.
+Fără ele, deploy-ul **trece**, iar mailurile rămân `stubbed`.
 
-GitHub → **Settings → Secrets → Actions**:
-
-- `SMTP_FROM` = `adresa.ta@gmail.com` (aceeași ca user)
-
-Workflow-ul API (`main.yml`) montează `SMTP_USER` / `SMTP_PASS` din Secret Manager și setează host/port/secure/`SMTP_FROM`.
-
-Asigură-te că service account-ul de deploy Cloud Run are `roles/secretmanager.secretAccessor` pe `SMTP_USER` și `SMTP_PASS`.
+După deploy reușit, pe un dosar: status mail **sent**.
 
 ## 5. Atașamente binare
 
