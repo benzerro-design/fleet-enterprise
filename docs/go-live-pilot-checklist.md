@@ -139,9 +139,8 @@ node scripts/smoke-staging-service-flow.mjs --write   # creează tichet+WO pe de
 Vezi ghidul scurt: [`docs/smtp-gmail.md`](./smtp-gmail.md).
 
 1. Generează **App Password** Gmail  
-2. Secret Manager: `SMTP_USER`, `SMTP_PASS`  
-3. GitHub Actions secret: `SMTP_FROM`  
-4. Redeploy API → pe dosar, mail = **sent** (nu stubbed)
+2. GitHub Actions secrets: `SMTP_FROM`, `SMTP_USER`, `SMTP_PASS`  
+3. Redeploy API (sau Re-run failed) → pe dosar, mail = **sent** (nu stubbed)
 
 ### Pas B — Browser cu admin demo (≈ 15 min) → 4.1–4.5, 4.11–4.12
 
