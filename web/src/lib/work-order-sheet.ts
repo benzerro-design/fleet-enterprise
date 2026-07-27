@@ -29,10 +29,141 @@ function fmt(iso: string | null | undefined): string | null {
   return d.toLocaleString("ro-RO", { dateStyle: "short", timeStyle: "short" });
 }
 
+const DAMAGE_PIPELINE_RANK: Record<string, number> = {
+  docs_pending: 0,
+  ready_to_notify: 1,
+  notified: 2,
+  inspection_note: 3,
+  reinspection_requested: 3,
+  quote_ready: 4,
+  payment_accepted: 5,
+};
+
+function damagePipelineRank(status: string | null | undefined): number {
+  if (!status) return -1;
+  return DAMAGE_PIPELINE_RANK[status] ?? -1;
+}
+
+function buildDamageWorkOrderMilestones(
+  wo: WorkOrderDetail,
+  opts?: { canMarkReady?: boolean },
+): WorkOrderMilestone[] {
+  const qs = wo.quoteSummary;
+  const pipeline = wo.damageInsurerPipelineStatus ?? null;
+  const rank = damagePipelineRank(pipeline);
+  const mail = wo.damageInsurerMailLog ?? [];
+  const avizareAt = mail.find((m) => m.kind === "avizare" && m.status !== "failed")?.at ?? null;
+  const quoteMailAt = mail.find((m) => (m.kind === "quote" || !m.kind) && m.status !== "failed")
+    ?.at;
+  const quoteSubmitted = qs.status === "submitted" || qs.status === "approved" || rank >= 4;
+  const quoteApproved =
+    qs.status === "approved" ||
+    pipeline === "payment_accepted" ||
+    !!wo.damageInsurerAgreedAt;
+  const verifyingDone = rank >= 2 || !!wo.damageInspectionNotePdfUrl;
+  const verifyingActive = verifyingDone && !quoteSubmitted;
+  const invoiced = !!qs.invoicedAt;
+  const done = wo.status === "done";
+  const repairActive =
+    quoteApproved &&
+    !wo.readyAt &&
+    (wo.status === "in_progress" || wo.status === "waiting_parts" || !!wo.inServiceAt);
+
+  return [
+    {
+      id: "open",
+      label: "Comandă deschisă",
+      done: wo.status !== "draft",
+      active: false,
+      date: fmt(wo.createdAt),
+    },
+    {
+      id: "received",
+      label: "Vehicul recepționat",
+      done: !!wo.inServiceAt,
+      active: !wo.inServiceAt && wo.status !== "done",
+      date: fmt(wo.inServiceAt),
+    },
+    {
+      id: "verifying",
+      label: "Verificare",
+      done: verifyingDone,
+      active: verifyingActive,
+      date: fmt(
+        wo.damageInspectionNoteReceivedAt ??
+          avizareAt ??
+          (verifyingDone ? wo.updatedAt : null),
+      ),
+    },
+    {
+      id: "quote_sent",
+      label: "Deviz trimis",
+      done: quoteSubmitted,
+      active: quoteSubmitted && !quoteApproved,
+      date: fmt(
+        qs.submittedAt ??
+          quoteMailAt ??
+          (wo.damageInsurerQuotePdfUrl ? wo.updatedAt : null),
+      ),
+    },
+    {
+      id: "quote_approved",
+      label: "Deviz aprobat",
+      done: quoteApproved,
+      active: false,
+      date: fmt(
+        qs.approvedAt ??
+          wo.damagePaymentAcceptanceReceivedAt ??
+          wo.damageInsurerAgreedAt,
+      ),
+    },
+    {
+      id: "repair_in_progress",
+      label: "În lucru",
+      done: quoteApproved && (!!wo.readyAt || wo.status === "done"),
+      active: repairActive,
+      date: fmt(wo.readyAt ?? wo.inServiceAt),
+    },
+    {
+      id: "work_ready",
+      label: "Lucrare gata",
+      done: !!wo.readyAt,
+      active: quoteApproved && !wo.readyAt,
+      date: fmt(wo.readyAt),
+      canToggle: opts?.canMarkReady && quoteApproved && !wo.readyAt,
+    },
+    {
+      id: "invoiced",
+      label: "Facturat",
+      done: invoiced,
+      active: !!wo.readyAt && !invoiced,
+      date: fmt(qs.invoicedAt),
+    },
+    {
+      id: "out_service",
+      label: "Out service",
+      done: !!wo.outServiceAt,
+      active: invoiced && !wo.outServiceAt,
+      date: fmt(wo.outServiceAt),
+    },
+    {
+      id: "closed",
+      label: "Comandă închisă",
+      done,
+      active: false,
+      date: fmt(wo.completedAt),
+    },
+  ];
+}
+
 export function buildWorkOrderMilestones(
   wo: WorkOrderDetail,
   opts?: { canMarkReady?: boolean },
 ): WorkOrderMilestone[] {
+  if (wo.workflowType === "damage") {
+    return buildDamageWorkOrderMilestones(wo, opts);
+  }
+
   const qs = wo.quoteSummary;
   const submitted = qs.status === "submitted" || qs.status === "approved";
   const approved = qs.status === "approved";

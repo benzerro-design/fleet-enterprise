@@ -29,6 +29,8 @@ import {
   ServiceOrderType,
   PostApprovalPath,
   VehicleMovableState,
+  WorkOrderQuoteLineApproval,
+  WorkOrderQuoteLineType,
   WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { PartnerNotificationService } from '../partner/partner-notification.service';
@@ -1146,7 +1148,12 @@ export class ServiceCasesService {
       meta: dto,
     });
 
-    return this.toRecord(updated);
+    await this.syncWorkOrdersFromDamageClaim(tenant.id, caseId, updated, actorUserId);
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded ?? updated);
   }
 
   async sendDamageQuoteToInsurer(
@@ -1310,7 +1317,12 @@ export class ServiceCasesService {
       throw new BadRequestException(error || 'Trimiterea către asigurător a eșuat');
     }
 
-    return this.toRecord(updated);
+    await this.syncWorkOrdersFromDamageClaim(tenant.id, caseId, updated, actorUserId);
+    const reloaded = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+      include: this.caseInclude(),
+    });
+    return this.toRecord(reloaded ?? updated);
   }
 
   async sendDamageAvizareToInsurer(
@@ -1853,6 +1865,181 @@ export class ServiceCasesService {
     });
 
     return this.toRecord(updated);
+  }
+
+  /**
+   * Aliniază quote WO + Lucrare gata cu pipeline-ul de daună:
+   * - quote_ready → quote submitted (sau stub)
+   * - payment_accepted / agreed → quote approved
+   * - poze `repaired` + aprobare asigurător → readyAt (Lucrare gata)
+   */
+  private async syncWorkOrdersFromDamageClaim(
+    tenantId: string,
+    caseId: string,
+    snapshot: {
+      workflowType: ServiceCaseWorkflowType;
+      damageInsurerPipelineStatus: DamageInsurerPipelineStatus | null;
+      damagePhotosJson: unknown;
+      damageInsurerAgreedAt: Date | null;
+      sourceTicketId: string | null;
+    },
+    actorUserId?: string | null,
+  ): Promise<void> {
+    if (snapshot.workflowType !== ServiceCaseWorkflowType.damage) return;
+
+    const rank = snapshot.damageInsurerPipelineStatus
+      ? PIPELINE_ORDER.indexOf(snapshot.damageInsurerPipelineStatus)
+      : -1;
+    const quoteReadyRank = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.quote_ready);
+    const paymentRank = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.payment_accepted);
+    const insurerApproved =
+      rank >= paymentRank || !!snapshot.damageInsurerAgreedAt;
+    const photos = this.parseDamagePhotos(snapshot.damagePhotosJson);
+    const hasRepaired = photos.some((p) => p.kind === 'repaired');
+
+    if (rank < quoteReadyRank && !insurerApproved && !hasRepaired) return;
+
+    const wos = await this.prisma.maintenanceWorkOrder.findMany({
+      where: { serviceCaseId: caseId, tenantId },
+      include: {
+        quotes: {
+          orderBy: { version: 'desc' },
+          include: { lines: { select: { id: true } } },
+        },
+      },
+    });
+
+    for (const wo of wos) {
+      let primary = wo.quotes[0] ?? null;
+
+      if (rank >= quoteReadyRank || insurerApproved) {
+        if (!primary) {
+          primary = await this.prisma.workOrderQuote.create({
+            data: {
+              tenantId,
+              workOrderId: wo.id,
+              version: 1,
+              status: insurerApproved
+                ? WorkOrderQuoteStatus.approved
+                : WorkOrderQuoteStatus.submitted,
+              submittedAt: new Date(),
+              approvedAt: insurerApproved ? new Date() : null,
+              approvedByUserId: insurerApproved ? actorUserId ?? null : null,
+              notes: 'Sincronizat din dosarul de daună (deviz / accept asigurător)',
+              lines: {
+                create: [
+                  {
+                    tenantId,
+                    sortOrder: 0,
+                    lineType: WorkOrderQuoteLineType.other,
+                    description: 'Deviz / referință asigurător (dosar daună)',
+                    quantity: 1,
+                    unitNetCents: 0,
+                    vatRatePercent: 0,
+                    approvalStatus: insurerApproved
+                      ? WorkOrderQuoteLineApproval.approved
+                      : WorkOrderQuoteLineApproval.pending,
+                  },
+                ],
+              },
+            },
+            include: { lines: { select: { id: true } } },
+          });
+        } else if (primary.status === WorkOrderQuoteStatus.draft) {
+          await this.prisma.workOrderQuote.update({
+            where: { id: primary.id },
+            data: {
+              status: insurerApproved
+                ? WorkOrderQuoteStatus.approved
+                : WorkOrderQuoteStatus.submitted,
+              submittedAt: primary.submittedAt ?? new Date(),
+              approvedAt: insurerApproved ? new Date() : primary.approvedAt,
+              approvedByUserId: insurerApproved
+                ? actorUserId ?? null
+                : primary.approvedByUserId,
+              approvedNetCents: insurerApproved ? primary.totalNetCents : primary.approvedNetCents,
+              approvedVatCents: insurerApproved ? primary.totalVatCents : primary.approvedVatCents,
+            },
+          });
+          if (insurerApproved && primary.lines.length) {
+            await this.prisma.workOrderQuoteLine.updateMany({
+              where: { quoteId: primary.id },
+              data: { approvalStatus: WorkOrderQuoteLineApproval.approved },
+            });
+          }
+          primary = {
+            ...primary,
+            status: insurerApproved
+              ? WorkOrderQuoteStatus.approved
+              : WorkOrderQuoteStatus.submitted,
+          };
+        } else if (
+          insurerApproved &&
+          primary.status === WorkOrderQuoteStatus.submitted
+        ) {
+          await this.prisma.workOrderQuote.update({
+            where: { id: primary.id },
+            data: {
+              status: WorkOrderQuoteStatus.approved,
+              approvedAt: new Date(),
+              approvedByUserId: actorUserId ?? null,
+              approvedNetCents: primary.totalNetCents,
+              approvedVatCents: primary.totalVatCents,
+            },
+          });
+          if (primary.lines.length) {
+            await this.prisma.workOrderQuoteLine.updateMany({
+              where: { quoteId: primary.id },
+              data: { approvalStatus: WorkOrderQuoteLineApproval.approved },
+            });
+          }
+          primary = { ...primary, status: WorkOrderQuoteStatus.approved };
+        }
+
+        if (insurerApproved) {
+          await this.prisma.serviceCase.update({
+            where: { id: caseId },
+            data: {
+              awaitingPostApproval: true,
+              currentStage: ServiceCaseStage.approval,
+            },
+          });
+        }
+      }
+
+      if (hasRepaired && insurerApproved && !wo.readyAt) {
+        const readyAt = new Date();
+        await this.prisma.maintenanceWorkOrder.update({
+          where: { id: wo.id },
+          data: { readyAt },
+        });
+        if (snapshot.sourceTicketId) {
+          await this.prisma.crmTicketEvent.create({
+            data: {
+              tenantId,
+              ticketId: snapshot.sourceTicketId,
+              kind: CrmTicketEventKind.workflow_advance,
+              body: `Lucrare gata (automat) — poze auto reparat pe dosar (${readyAt.toLocaleString('ro-RO')}).`,
+              payload: {
+                workOrderId: wo.id,
+                readyAt: readyAt.toISOString(),
+                milestone: 'work_ready',
+                source: 'damage_repaired_photos',
+              },
+              actorUserId: actorUserId ?? null,
+            },
+          });
+        }
+        await this.audit.log({
+          tenantId,
+          actorUserId,
+          action: 'work_order.mark_ready_auto_repaired_photos',
+          entityType: 'maintenance_work_order',
+          entityId: wo.id,
+          meta: { readyAt: readyAt.toISOString(), serviceCaseId: caseId },
+        });
+      }
+    }
   }
 
   private assertDamageSectionKey(section: string): DamageSectionKey {

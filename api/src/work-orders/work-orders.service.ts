@@ -939,7 +939,14 @@ export class WorkOrdersService {
       where: { id, tenantId: tenant.id },
       include: {
         vehicle: { select: { clientId: true } },
-        serviceCase: { select: { sourceTicketId: true } },
+        serviceCase: {
+          select: {
+            sourceTicketId: true,
+            workflowType: true,
+            damageInsurerPipelineStatus: true,
+            damageInsurerAgreedAt: true,
+          },
+        },
         quotes: { where: { status: 'approved' }, take: 1 },
       },
     });
@@ -954,8 +961,14 @@ export class WorkOrdersService {
     if (wo.readyAt) {
       throw new BadRequestException('Work is already marked ready');
     }
-    if (!wo.quotes[0]) {
-      throw new BadRequestException('Approved quote required before marking work ready');
+    const damageApproved =
+      wo.serviceCase.workflowType === 'damage' &&
+      (wo.serviceCase.damageInsurerPipelineStatus === 'payment_accepted' ||
+        !!wo.serviceCase.damageInsurerAgreedAt);
+    if (!wo.quotes[0] && !damageApproved) {
+      throw new BadRequestException(
+        'Approved quote (or accept plată pe dosar daună) required before marking work ready',
+      );
     }
 
     const readyAt = new Date();

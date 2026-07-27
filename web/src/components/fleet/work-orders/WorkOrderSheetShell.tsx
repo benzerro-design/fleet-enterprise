@@ -604,6 +604,12 @@ export function WorkOrderSheetShell({
               </li>
             ))}
           </ul>
+          {isDamageWo ? (
+            <p className="mt-2 text-[10px] leading-snug text-zinc-500">
+              Daună: Verificare / Deviz urmează dosarul. Lucrare gata — bifează manual sau urcă poze
+              «auto reparat» pe Dosar.
+            </p>
+          ) : null}
         </div>
 
         <div className={panelClass()}>
