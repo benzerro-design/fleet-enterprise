@@ -15,10 +15,48 @@ export type MailSendInput = {
   subject: string;
   body: string;
   attachments?: MailAttachment[];
+  /** Display name for From header (envelope remains SMTP_FROM address). */
+  fromName?: string | null;
+  replyTo?: string | null;
+  cc?: string[];
 };
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MiB / fișier
 const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 MiB total (sub limita Gmail ~25MB)
+
+function extractEmail(addr: string): string {
+  const m = /<([^>]+)>/.exec(addr);
+  return (m?.[1] ?? addr).trim().toLowerCase();
+}
+
+function isEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function encodeDisplayName(name: string): string {
+  const clean = name.replace(/[\r\n"]/g, '').trim();
+  if (!clean) return '';
+  if (/^[\x20-\x7E]*$/.test(clean)) return `"${clean}"`;
+  return `=?UTF-8?B?${Buffer.from(clean, 'utf8').toString('base64')}?=`;
+}
+
+function formatFromHeader(envelopeEmail: string, displayName?: string | null): string {
+  const email = extractEmail(envelopeEmail);
+  const encoded = displayName ? encodeDisplayName(displayName) : '';
+  return encoded ? `${encoded} <${email}>` : email;
+}
+
+function uniqueEmails(list: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of list) {
+    const e = extractEmail(raw);
+    if (!e || !isEmail(e) || seen.has(e)) continue;
+    seen.add(e);
+    out.push(e);
+  }
+  return out;
+}
 
 @Injectable()
 export class PartnerMailService {
@@ -36,23 +74,39 @@ export class PartnerMailService {
     const host = process.env.SMTP_HOST!.trim();
     const port = parseInt(process.env.SMTP_PORT ?? '587', 10);
     const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-    const from = process.env.SMTP_FROM!.trim();
+    const smtpFrom = process.env.SMTP_FROM!.trim();
+    const envelopeFrom = extractEmail(smtpFrom);
     const user = process.env.SMTP_USER?.trim();
     const pass = process.env.SMTP_PASS?.trim();
-    const to = input.to.trim().toLowerCase();
+    const to = extractEmail(input.to);
+    if (!to || !isEmail(to)) throw new Error('Invalid recipient');
 
+    const cc = uniqueEmails(input.cc ?? []).filter((e) => e !== to);
     const attachments = this.normalizeAttachments(input.attachments ?? []);
     const message = this.buildMimeMessage({
-      from,
+      from: formatFromHeader(smtpFrom, input.fromName),
       to,
+      cc,
+      replyTo: input.replyTo ? extractEmail(input.replyTo) : null,
       subject: input.subject,
       body: input.body,
       attachments,
     });
 
-    await this.smtpSend({ host, port, secure, user, pass, from, to, message });
+    await this.smtpSend({
+      host,
+      port,
+      secure,
+      user,
+      pass,
+      envelopeFrom,
+      recipients: [to, ...cc],
+      message,
+    });
     this.logger.log(
-      `SMTP sent → ${to}: ${input.subject}` +
+      `SMTP sent → ${to}` +
+        (cc.length ? ` (cc: ${cc.join(', ')})` : '') +
+        `: ${input.subject}` +
         (attachments.length ? ` (${attachments.length} atașament(e))` : ''),
     );
   }
@@ -130,6 +184,8 @@ export class PartnerMailService {
   private buildMimeMessage(opts: {
     from: string;
     to: string;
+    cc: string[];
+    replyTo: string | null;
     subject: string;
     body: string;
     attachments: MailAttachment[];
@@ -137,6 +193,8 @@ export class PartnerMailService {
     const headers = [
       `From: ${opts.from}`,
       `To: ${opts.to}`,
+      ...(opts.cc.length ? [`Cc: ${opts.cc.join(', ')}`] : []),
+      ...(opts.replyTo && isEmail(opts.replyTo) ? [`Reply-To: ${opts.replyTo}`] : []),
       `Subject: ${this.encodeSubject(opts.subject)}`,
       'MIME-Version: 1.0',
     ];
@@ -224,13 +282,14 @@ export class PartnerMailService {
     secure: boolean;
     user?: string;
     pass?: string;
-    from: string;
-    to: string;
+    envelopeFrom: string;
+    recipients: string[];
     message: string;
   }): Promise<void> {
     return new Promise((resolve, reject) => {
       let stage = 'greet';
       let buf = '';
+      let rcptIndex = 0;
       let socket: net.Socket | tls.TLSSocket = opts.secure
         ? tls.connect({ host: opts.host, port: opts.port, servername: opts.host })
         : net.connect({ host: opts.host, port: opts.port });
@@ -287,7 +346,7 @@ export class PartnerMailService {
             write(`AUTH PLAIN ${cred}\r\n`);
           } else {
             stage = 'mail';
-            write(`MAIL FROM:<${opts.from}>\r\n`);
+            write(`MAIL FROM:<${opts.envelopeFrom}>\r\n`);
           }
           return;
         }
@@ -314,19 +373,27 @@ export class PartnerMailService {
         if (stage === 'auth') {
           if (!snapshot.includes('235')) return fail(new Error('SMTP auth failed'));
           stage = 'mail';
-          write(`MAIL FROM:<${opts.from}>\r\n`);
+          write(`MAIL FROM:<${opts.envelopeFrom}>\r\n`);
           return;
         }
 
         if (stage === 'mail') {
           if (!snapshot.includes('250')) return fail(new Error('SMTP MAIL FROM failed'));
           stage = 'rcpt';
-          write(`RCPT TO:<${opts.to}>\r\n`);
+          rcptIndex = 0;
+          write(`RCPT TO:<${opts.recipients[0]}>\r\n`);
           return;
         }
 
         if (stage === 'rcpt') {
-          if (!snapshot.includes('250')) return fail(new Error('SMTP RCPT TO failed'));
+          if (!snapshot.includes('250')) {
+            return fail(new Error(`SMTP RCPT TO failed for ${opts.recipients[rcptIndex]}`));
+          }
+          rcptIndex += 1;
+          if (rcptIndex < opts.recipients.length) {
+            write(`RCPT TO:<${opts.recipients[rcptIndex]}>\r\n`);
+            return;
+          }
           stage = 'data';
           write('DATA\r\n');
           return;

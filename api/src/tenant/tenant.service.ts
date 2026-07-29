@@ -13,6 +13,11 @@ import {
   type TenantServiceTypeRow,
 } from './tenant-service-types';
 import {
+  parseTenantMailSettings,
+  parseTenantMailSettingsPatch,
+  type TenantMailSettings,
+} from './mail-settings';
+import {
   parseWorkOrderSettings,
   parseWorkOrderSettingsPatch,
   type WorkOrderSettings,
@@ -195,6 +200,64 @@ export class TenantService {
       tenantId: tenant.id,
       actorUserId,
       action: 'work_order_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: next,
+    });
+
+    return next;
+  }
+
+  async getMailSettings(tenantSlug: string): Promise<TenantMailSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { mailSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseTenantMailSettings(tenant.mailSettings);
+  }
+
+  async setMailSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<TenantMailSettings> {
+    let patch: Partial<TenantMailSettings>;
+    try {
+      patch = parseTenantMailSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid settings');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, mailSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    if (patch.ccMemberUserIds) {
+      const memberships = await this.prisma.tenantMembership.findMany({
+        where: { tenantId: tenant.id, userId: { in: patch.ccMemberUserIds } },
+        select: { userId: true },
+      });
+      const ok = new Set(memberships.map((m) => m.userId));
+      patch.ccMemberUserIds = patch.ccMemberUserIds.filter((id) => ok.has(id));
+    }
+
+    const next: TenantMailSettings = {
+      ...parseTenantMailSettings(tenant.mailSettings),
+      ...patch,
+    };
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { mailSettings: next as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'mail_settings_update',
       entityType: 'tenant',
       entityId: tenant.id,
       meta: next,

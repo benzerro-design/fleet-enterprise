@@ -35,6 +35,7 @@ import {
 } from '@prisma/client';
 import { PartnerNotificationService } from '../partner/partner-notification.service';
 import { PartnerMailService } from '../partner/partner-mail.service';
+import { parseTenantMailSettings } from '../tenant/mail-settings';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -1227,6 +1228,11 @@ export class ServiceCasesService {
     const insurerLabel = row.damageInsurerName?.trim() || 'asigurător';
     const claim = row.damageClaimNumber?.trim() || caseId.slice(-6).toUpperCase();
     const subject = `Deviz daună ${claim} — ${row.title}`;
+    const mailOpts = await this.resolveDamageMailOptions(
+      tenant.id,
+      tenant.mailSettings,
+      actorUserId,
+    );
     const bodyLines = [
       `Bună ziua,`,
       ``,
@@ -1241,7 +1247,7 @@ export class ServiceCasesService {
       `Origine: ${origin === DamageQuoteOrigin.received_from_insurer ? 'deviz primit/încărcat de la asigurător' : 'deviz întocmit de service / flotă'}.`,
       ``,
       `Cu stimă,`,
-      `Fleet Enterprise`,
+      mailOpts.signature,
     ].filter((l) => l != null) as string[];
     const body = bodyLines.join('\n');
 
@@ -1261,6 +1267,9 @@ export class ServiceCasesService {
           subject,
           body: bodyWithAttachNote,
           attachments,
+          fromName: mailOpts.fromName,
+          replyTo: mailOpts.replyTo,
+          cc: mailOpts.cc,
         });
         status = 'sent';
       } catch (e) {
@@ -1439,6 +1448,11 @@ export class ServiceCasesService {
     const insurerLabel = row.damageInsurerName?.trim() || 'asigurător';
     const claim = row.damageClaimNumber?.trim() || caseId.slice(-6).toUpperCase();
     const subject = `Avizare daună ${claim} — ${row.title}`;
+    const mailOpts = await this.resolveDamageMailOptions(
+      tenant.id,
+      tenant.mailSettings,
+      actorUserId,
+    );
     const bodyLines = [
       `Bună ziua,`,
       ``,
@@ -1451,7 +1465,7 @@ export class ServiceCasesService {
       dto.note?.trim() ? `Notă: ${dto.note.trim()}` : null,
       ``,
       `Cu stimă,`,
-      `Fleet Enterprise`,
+      mailOpts.signature,
     ].filter((l) => l != null) as string[];
     let body = bodyLines.join('\n');
 
@@ -1463,7 +1477,15 @@ export class ServiceCasesService {
         if (attachments.length > 0) {
           body += `\n\n(${attachments.length} fișier(e) atașate acestui email; linkurile de mai sus rămân ca rezervă.)`;
         }
-        await this.partnerMail.send({ to, subject, body, attachments });
+        await this.partnerMail.send({
+          to,
+          subject,
+          body,
+          attachments,
+          fromName: mailOpts.fromName,
+          replyTo: mailOpts.replyTo,
+          cc: mailOpts.cc,
+        });
         status = 'sent';
       } catch (e) {
         status = 'failed';
@@ -1642,6 +1664,11 @@ export class ServiceCasesService {
     const sequence =
       prevHistory.filter((h) => h.kind === 'reinspection_request').length + 1;
     const subject = `Solicitare reconstatare #${sequence} daună ${claim} — ${row.title}`;
+    const mailOpts = await this.resolveDamageMailOptions(
+      tenant.id,
+      tenant.mailSettings,
+      actorUserId,
+    );
     const bodyLines = [
       `Bună ziua,`,
       ``,
@@ -1659,7 +1686,7 @@ export class ServiceCasesService {
       ...attachmentLines,
       ``,
       `Cu stimă,`,
-      `Fleet Enterprise`,
+      mailOpts.signature,
     ].filter((l) => l != null) as string[];
     let body = bodyLines.join('\n');
 
@@ -1676,7 +1703,15 @@ export class ServiceCasesService {
         if (attachments.length > 0) {
           body += `\n\n(${attachments.length} fișier(e) atașate acestui email; linkurile de mai sus rămân ca rezervă.)`;
         }
-        await this.partnerMail.send({ to, subject, body, attachments });
+        await this.partnerMail.send({
+          to,
+          subject,
+          body,
+          attachments,
+          fromName: mailOpts.fromName,
+          replyTo: mailOpts.replyTo,
+          cc: mailOpts.cc,
+        });
         status = 'sent';
       } catch (e) {
         status = 'failed';
@@ -3339,6 +3374,50 @@ export class ServiceCasesService {
         uploadedByLabel: p.uploadedByLabel || undefined,
       };
     });
+  }
+
+  private async resolveDamageMailOptions(
+    tenantId: string,
+    mailSettingsRaw: unknown,
+    actorUserId?: string | null,
+  ): Promise<{
+    fromName: string | null;
+    replyTo: string | null;
+    cc: string[];
+    signature: string;
+  }> {
+    const settings = parseTenantMailSettings(mailSettingsRaw);
+    const ccSet = new Set(settings.defaultCcEmails.map((e) => e.toLowerCase()));
+
+    if (settings.ccMemberUserIds.length > 0) {
+      const users = await this.prisma.user.findMany({
+        where: {
+          id: { in: settings.ccMemberUserIds },
+          memberships: { some: { tenantId } },
+        },
+        select: { email: true },
+      });
+      for (const u of users) {
+        const e = u.email?.trim().toLowerCase();
+        if (e) ccSet.add(e);
+      }
+    }
+
+    if (settings.ccActorOnSend && actorUserId) {
+      const actor = await this.prisma.user.findUnique({
+        where: { id: actorUserId },
+        select: { email: true },
+      });
+      const e = actor?.email?.trim().toLowerCase();
+      if (e) ccSet.add(e);
+    }
+
+    return {
+      fromName: settings.fromName,
+      replyTo: settings.replyTo,
+      cc: [...ccSet],
+      signature: settings.signature?.trim() || 'Fleet Enterprise',
+    };
   }
 
   private parseDamageInsurerMailLog(raw: unknown): DamageInsurerMailLogItem[] {

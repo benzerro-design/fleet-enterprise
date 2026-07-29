@@ -100,6 +100,23 @@ export class TenantController {
     return this.tenant.setWorkOrderSettings(tenantSlug, body, actorUserId);
   }
 
+  @Get('mail-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getMailSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getMailSettings(tenantSlug);
+  }
+
+  @Patch('mail-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchMailSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setMailSettings(tenantSlug, body, actorUserId);
+  }
+
   @Get('service-types/active')
   @Roles(...FLEET_READ_ROLES)
   listActiveServiceTypes(@TenantId() tenantSlug: string) {

@@ -16,6 +16,8 @@ model Tenant {
   iamStrategyMap     Json?
   /// Setări comenzi service (Setup → WO). Null = defaults (km obligatorii + update odometru flotă).
   workOrderSettings  Json?
+  /// Setări email outbound (Setup → Email): From display, Reply-To, semnătură, CC membri.
+  mailSettings       Json?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   auditLogs          AuditLog[]

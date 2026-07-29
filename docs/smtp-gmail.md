@@ -3,6 +3,9 @@
 Mailurile de daună (avizare, reconstatare, deviz) și notificările partener folosesc
 `PartnerMailService`. Fără `SMTP_HOST` + `SMTP_FROM`, statusul rămâne **stubbed**.
 
+În UI: **Setup → Email** (From afișat, Reply-To, semnătură, CC membri). Envelope-ul
+rămâne `SMTP_FROM` — setările tenant nu înlocuiesc autentificarea Gmail.
+
 ## 1. Parolă pentru aplicații (Gmail)
 
 1. Cont Google cu **verificare în 2 pași** activă.
