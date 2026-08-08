@@ -1,7 +1,6 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { persistUpload } from "@/lib/upload-storage";
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_MIME = "application/pdf";
@@ -46,11 +45,12 @@ export async function POST(req: Request) {
     : "fara_numar_factura";
   const finalName = `${stamp}-${inv}-${original}`;
 
-  const publicDir = path.join(process.cwd(), "public", "uploads", "invoices");
-  await mkdir(publicDir, { recursive: true });
-  const abs = path.join(publicDir, finalName);
-  await writeFile(abs, bytes);
+  const { url } = await persistUpload({
+    kind: "invoices",
+    fileName: finalName,
+    bytes,
+    contentType: ct,
+  });
 
-  const fileUrl = `/uploads/invoices/${finalName}`;
-  return NextResponse.json({ url: fileUrl, name: original });
+  return NextResponse.json({ url, name: original });
 }

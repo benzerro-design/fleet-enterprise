@@ -1,7 +1,6 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { persistUpload } from "@/lib/upload-storage";
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED = new Set([
@@ -48,10 +47,12 @@ export async function POST(req: Request) {
   const tag = label ? sanitizeFilename(label).replace(/\.+/g, "_") : "doc";
   const finalName = `${stamp}-${tag}-${original}`;
 
-  const publicDir = path.join(process.cwd(), "public", "uploads", "documents");
-  await mkdir(publicDir, { recursive: true });
-  await writeFile(path.join(publicDir, finalName), bytes);
+  const { url } = await persistUpload({
+    kind: "documents",
+    fileName: finalName,
+    bytes,
+    contentType: ct,
+  });
 
-  const fileUrl = `/uploads/documents/${finalName}`;
-  return NextResponse.json({ url: fileUrl, name: original });
+  return NextResponse.json({ url, name: original });
 }

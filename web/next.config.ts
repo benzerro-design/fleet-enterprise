@@ -11,6 +11,15 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: webRoot,
   },
+  /** Servește `/uploads/...` din GCS (sau disc local) via API route — nu din filesystem ephemeral. */
+  async rewrites() {
+    return [
+      {
+        source: "/uploads/:kind/:file",
+        destination: "/api/uploads/file/:kind/:file",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

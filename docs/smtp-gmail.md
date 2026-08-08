@@ -58,5 +58,9 @@ După deploy reușit, pe un dosar: status mail **sent**.
 Avizare / reconstatare / deviz descarcă fișierele de pe `WEB_ORIGIN` (ex. `/uploads/documents/...`)
 și le trimit ca **atașamente MIME** (max ~8 MB/fișier, ~20 MB total). Linkurile rămân în body ca rezervă.
 
-Dacă un fișier nu poate fi descărcat (404 după redeploy web fără volum persistent), mailul pleacă tot
-cu linkuri — verifică că upload-urile sunt accesibile public pe URL-ul web.
+Upload-urile web (documente / poze / facturi) se salvează în **GCS** (`GCS_BUCKET`, același bucket ca trip-sheets,
+prefix `uploads/...`) pe staging; URL-ul rămâne `/uploads/...` și e servit prin rewrite → API route.
+Fără `GCS_BUCKET` (dev local) rămâne `public/uploads/`.
+
+Dacă un fișier nu poate fi descărcat, mailul pleacă tot cu linkuri — verifică `GCS_BUCKET` pe `fleet-web-stg`
+și că service account-ul Cloud Run poate citi/scrie obiecte pe bucket.

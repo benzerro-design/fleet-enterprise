@@ -55,4 +55,4 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars API_URL=${{ secrets.API_URL }},NODE_ENV=production
+            --set-env-vars API_URL=${{ secrets.API_URL }},NODE_ENV=production,GCS_BUCKET=fleet-enterprise-trip-sheets
