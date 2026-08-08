@@ -1916,7 +1916,7 @@ export class ServiceCasesService {
       nextHistory[idx] = updatedReq;
       nextHistory = [pvsEntry, ...nextHistory].slice(0, 50);
     } else {
-      nextHistory[idx] = {
+      const rejectedReq: DamageReinspectionRequestItem = {
         ...req,
         status: 'rejected',
         decidedAt,
@@ -1924,6 +1924,7 @@ export class ServiceCasesService {
         approvalDocUrl: undefined,
         approvalDocFileName: undefined,
       };
+      nextHistory[idx] = rejectedReq;
     }
 
     const hasPending = nextHistory.some(
