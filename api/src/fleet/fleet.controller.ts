@@ -195,6 +195,17 @@ export class FleetController {
     return this.fleet.patchVehicleCiv(tenantId, vehicleId, dto, actorUserId);
   }
 
+  @Post('vehicles/:vehicleId/civ/extract-preview')
+  @Roles(MembershipRole.tenant_admin)
+  extractCivPreview(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.fleet.extractCivPreview(tenantId, vehicleId, body, access);
+  }
+
   @Get('vehicles/:vehicleId/acquisition')
   @Roles(...FLEET_READ_ROLES)
   getVehicleAcquisition(

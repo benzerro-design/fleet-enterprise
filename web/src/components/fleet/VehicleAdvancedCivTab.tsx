@@ -49,6 +49,9 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
   const [civMentions, setCivMentions] = useState(initial.civMentions ?? "");
   const [profileForm, setProfileForm] = useState(() => profileToFormState(initial.civProfile));
   const [importMode, setImportMode] = useState(false);
+  const [ocrText, setOcrText] = useState("");
+  const [extractPending, setExtractPending] = useState(false);
+  const [extractInfo, setExtractInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -117,6 +120,79 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
     });
   }
 
+  async function onExtractFromScan(opts?: { useFileUrl?: boolean }) {
+    setExtractPending(true);
+    setError(null);
+    setExtractInfo(null);
+    try {
+      const body: { text?: string; fileUrl?: string; format?: string } = {
+        format: "unknown",
+      };
+      if (ocrText.trim()) body.text = ocrText.trim();
+      if (opts?.useFileUrl && initial.importSource?.fileUrl) {
+        body.fileUrl = initial.importSource.fileUrl;
+      }
+      if (!body.text && !body.fileUrl) {
+        setError("Lipește text OCR sau folosește extragerea din fișierul CIV.");
+        return;
+      }
+      const res = await fetch(
+        `${fleetBrowserBase}/vehicles/${vehicle.id}/civ/extract-preview`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify(body),
+        },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+          else if (Array.isArray(j.message)) msg = j.message.join(", ");
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const preview = (await res.json()) as {
+        civProfile: VehicleCivProfile;
+        civSeries: string | null;
+        civIssuedOn: string | null;
+        civRarOffice: string | null;
+        civMentions: string | null;
+        vin: string | null;
+        matched: { rubric: string; target: string; value: string }[];
+        formatUsed: string;
+      };
+      setProfileForm((prev) => {
+        const next = { ...prev };
+        for (const f of CIV_PROFILE_FIELDS) {
+          const v = preview.civProfile[f.key];
+          if (v != null && v !== "") next[f.key] = String(v);
+        }
+        return next;
+      });
+      if (preview.civSeries) setCivSeries(preview.civSeries);
+      if (preview.civIssuedOn) setCivIssuedOn(preview.civIssuedOn.slice(0, 10));
+      if (preview.civRarOffice) setCivRarOffice(preview.civRarOffice);
+      if (preview.civMentions) setCivMentions(preview.civMentions);
+      setImportMode(true);
+      setExtractInfo(
+        `Mapate ${preview.matched.length} câmpuri (format detectat: ${preview.formatUsed}).` +
+          (preview.vin
+            ? ` VIN detectat: ${preview.vin} — completează-l în Basic Info dacă lipsește.`
+            : "") +
+          " Verifică valorile, apoi Salvează.",
+      );
+    } catch {
+      setError("Rețea sau server indisponibil.");
+    } finally {
+      setExtractPending(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -152,19 +228,71 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
             ) : null}
           </div>
           {importMode && write ? (
-            <p className="mt-3 text-xs text-zinc-500">
-              Deschide scanul alături și completează rubricile de mai jos. La salvare, legăm importul de documentul CIV.
-              (OCR automat — planificat pentru integrarea viitoare.)
-            </p>
+            <div className="mt-3 space-y-3">
+              <p className="text-xs text-zinc-500">
+                Extrage rubricile din text OCR (sau încearcă din fișierul PDF dacă are text
+                selectabil). Verifică preview-ul pe formular, apoi salvează.
+              </p>
+              <textarea
+                value={ocrText}
+                onChange={(e) => setOcrText(e.target.value)}
+                rows={5}
+                placeholder={"Ex.:\nD.1 Marcă Volkswagen\nE WVWZZZ...\nP.3 Motorină\n..."}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={extractPending || !ocrText.trim()}
+                  onClick={() => void onExtractFromScan()}
+                  className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/60 disabled:opacity-50"
+                >
+                  {extractPending ? "Se mapează…" : "Extrage din text"}
+                </button>
+                <button
+                  type="button"
+                  disabled={extractPending || !initial.importSource?.fileUrl}
+                  onClick={() => void onExtractFromScan({ useFileUrl: true })}
+                  className="rounded-lg border border-violet-700/50 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/40 disabled:opacity-50"
+                >
+                  Încearcă din fișierul CIV
+                </button>
+              </div>
+              {extractInfo ? (
+                <p className="text-xs text-emerald-300/90">{extractInfo}</p>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 text-sm text-zinc-500">
-          Nu există document CIV încărcat.{" "}
-          <Link href={`/fleet/documents/new?vehicleId=${vehicle.id}`} className="text-violet-400 hover:underline">
-            Adaugă document CIV
-          </Link>{" "}
-          pentru a activa importul asistat.
+        <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 text-sm text-zinc-500">
+          <p>
+            Nu există document CIV încărcat.{" "}
+            <Link href={`/fleet/documents/new?vehicleId=${vehicle.id}`} className="text-violet-400 hover:underline">
+              Adaugă document CIV
+            </Link>{" "}
+            pentru import din scan, sau lipește text OCR mai jos.
+          </p>
+          {write ? (
+            <div className="space-y-2">
+              <textarea
+                value={ocrText}
+                onChange={(e) => setOcrText(e.target.value)}
+                rows={4}
+                placeholder="Lipește text OCR din CIV…"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              />
+              <button
+                type="button"
+                disabled={extractPending || !ocrText.trim()}
+                onClick={() => void onExtractFromScan()}
+                className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-3 py-1.5 text-xs text-emerald-100 disabled:opacity-50"
+              >
+                {extractPending ? "Se mapează…" : "Extrage din text"}
+              </button>
+              {extractInfo ? <p className="text-xs text-emerald-300/90">{extractInfo}</p> : null}
+            </div>
+          ) : null}
         </div>
       )}
 

@@ -43,7 +43,9 @@ import {
   CIV_PROFILE_FIELDS,
   normalizeCivProfile,
   civProfileFilledCount,
+  type CivDocumentFormat,
 } from './vehicle-civ-fields';
+import { mapCivExtractTextToPreview, type CivExtractPreview } from './civ-extract';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ITP_PROFILE_DEFAULT_OFFSETS = [
@@ -514,6 +516,111 @@ export class FleetService {
       civTotalFields: CIV_PROFILE_FIELDS.length,
       importSource: await this.findCivImportSource(vehicleId),
     };
+  }
+
+  /**
+   * Preview mapare CIV din text OCR / fișier (nu persistă).
+   * Body: { text?, fileUrl?, format?: '2024'|'2016'|'1993'|'unknown' }
+   */
+  async extractCivPreview(
+    tenantSlug: string,
+    vehicleId: string,
+    body: unknown,
+    access?: AccessContext,
+  ): Promise<CivExtractPreview> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
+    const row = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true },
+    });
+    if (!row) throw new NotFoundException('Vehicle not found');
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new BadRequestException('Invalid body');
+    }
+    const o = body as Record<string, unknown>;
+    let text = typeof o.text === 'string' ? o.text : '';
+    const fileUrl = typeof o.fileUrl === 'string' ? o.fileUrl.trim() : '';
+    const formatRaw = typeof o.format === 'string' ? o.format : 'unknown';
+    const format: CivDocumentFormat =
+      formatRaw === '2024' ||
+      formatRaw === '2016' ||
+      formatRaw === '1993' ||
+      formatRaw === 'unknown'
+        ? formatRaw
+        : 'unknown';
+
+    let source: 'text' | 'file' = 'text';
+    if (!text.trim() && fileUrl) {
+      text = await this.fetchCivTextFromUrl(fileUrl);
+      source = 'file';
+    }
+    if (!text.trim()) {
+      throw new BadRequestException(
+        'Lipește textul OCR din CIV sau furnizează fileUrl către un PDF/text lizibil',
+      );
+    }
+
+    const preview = mapCivExtractTextToPreview(text, format, source);
+    if (preview.matched.length === 0) {
+      throw new BadRequestException(
+        'Nu am putut mapa nicio rubrică. Verifică textul (ex. „D.1 Marcă …”, „E …”, „P.3 …”) sau formatul CIV.',
+      );
+    }
+    return preview;
+  }
+
+  private async fetchCivTextFromUrl(rawUrl: string): Promise<string> {
+    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
+    let url = rawUrl.trim();
+    if (url.startsWith('/') && webOrigin) {
+      url = `${webOrigin}${url}`;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      throw new BadRequestException('fileUrl trebuie să fie absolut sau relative pe WEB_ORIGIN');
+    }
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 25_000);
+      const res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
+      clearTimeout(timer);
+      if (!res.ok) {
+        throw new BadRequestException(`Nu am putut descărca scanul (HTTP ${res.status})`);
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0 || buf.length > 12 * 1024 * 1024) {
+        throw new BadRequestException('Fișier CIV invalid sau prea mare');
+      }
+      const ct = res.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? '';
+      if (ct.startsWith('text/') || ct.includes('json')) {
+        return buf.toString('utf8');
+      }
+      const asUtf = buf.toString('utf8');
+      if (/D\.1|P\.3|Număr de identificare|CARTE DE IDENTITATE/i.test(asUtf)) {
+        return asUtf;
+      }
+      // PDF text-ish: strings in parentheses
+      const latin = buf.toString('latin1');
+      const chunks: string[] = [];
+      for (const m of latin.matchAll(/\((?:\\.|[^\\)]){2,120}\)/g)) {
+        const inner = m[0]
+          .slice(1, -1)
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '')
+          .replace(/\\(.)/g, '$1');
+        if (/[A-Za-zăâîșțĂÂÎȘȚ0-9.]/.test(inner)) chunks.push(inner);
+      }
+      const scraped = chunks.join('\n');
+      if (/D\.1|P\.3|\bE\b|Marcă|marca/i.test(scraped)) return scraped;
+      throw new BadRequestException(
+        'Scanul pare imagine/PDF fără text extractibil. Folosește OCR extern și lipește textul aici.',
+      );
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Descărcare scan CIV eșuată',
+      );
+    }
   }
 
   async patchVehicleCiv(
