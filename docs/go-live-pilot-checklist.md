@@ -24,7 +24,9 @@
 | 1.2 | Web Cloud Run `fleet-web-stg` — login se încarcă | [x] |
 | 1.3 | `DATABASE_URL` (Neon) — migrări la zi: `npm run db:migrate` din `api/` | [x] |
 | 1.4 | `GCS_BUCKET=fleet-enterprise-trip-sheets` pe `fleet-api` (persistă în deploy workflow) | [x] |
-| 1.5 | IAM: SA Cloud Run → `roles/storage.objectAdmin` pe bucket | [x] |
+| 1.4b | `GCS_BUCKET` pe `fleet-web-stg` (upload-uri documente/poze persistente) | ☐ |
+| 1.5 | IAM: SA Cloud Run → `roles/storage.objectAdmin` pe bucket (API **și** web) | [x] |
+| 1.5b | Vision API enabled pe proiect + SA API `roles/cloudvision.user` (OCR CIV) | ☐ |
 | 1.6 | `WEB_ORIGIN` = URL web staging; `JWT_SECRET` setat | [x] |
 
 ---

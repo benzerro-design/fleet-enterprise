@@ -230,17 +230,25 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
           {importMode && write ? (
             <div className="mt-3 space-y-3">
               <p className="text-xs text-zinc-500">
-                Extrage rubricile din text OCR (sau încearcă din fișierul PDF dacă are text
-                selectabil). Verifică preview-ul pe formular, apoi salvează.
+                Extrage din scanul CIV (Cloud Vision pe imagine/PDF) sau lipește text OCR. Verifică
+                câmpurile pe formular, apoi Salvează.
               </p>
               <textarea
                 value={ocrText}
                 onChange={(e) => setOcrText(e.target.value)}
                 rows={5}
-                placeholder={"Ex.:\nD.1 Marcă Volkswagen\nE WVWZZZ...\nP.3 Motorină\n..."}
+                placeholder={"Opțional — text OCR:\nD.1 Marcă Volkswagen\nE WVWZZZ...\nP.3 Motorină\n..."}
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
               />
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={extractPending || !initial.importSource?.fileUrl}
+                  onClick={() => void onExtractFromScan({ useFileUrl: true })}
+                  className="rounded-lg border border-violet-700/50 bg-violet-950/40 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+                >
+                  {extractPending ? "OCR…" : "OCR din fișierul CIV"}
+                </button>
                 <button
                   type="button"
                   disabled={extractPending || !ocrText.trim()}
@@ -248,14 +256,6 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
                   className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/60 disabled:opacity-50"
                 >
                   {extractPending ? "Se mapează…" : "Extrage din text"}
-                </button>
-                <button
-                  type="button"
-                  disabled={extractPending || !initial.importSource?.fileUrl}
-                  onClick={() => void onExtractFromScan({ useFileUrl: true })}
-                  className="rounded-lg border border-violet-700/50 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/40 disabled:opacity-50"
-                >
-                  Încearcă din fișierul CIV
                 </button>
               </div>
               {extractInfo ? (

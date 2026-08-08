@@ -46,6 +46,7 @@ import {
   type CivDocumentFormat,
 } from './vehicle-civ-fields';
 import { mapCivExtractTextToPreview, type CivExtractPreview } from './civ-extract';
+import { CivOcrService } from './civ-ocr.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ITP_PROFILE_DEFAULT_OFFSETS = [
@@ -189,6 +190,7 @@ export class FleetService {
     private readonly reminders: RemindersService,
     private readonly clients: ClientsService,
     private readonly odometerSync: VehicleOdometerSyncService,
+    private readonly civOcr: CivOcrService,
   ) {}
 
   async listVehiclesPaged(
@@ -612,8 +614,12 @@ export class FleetService {
       }
       const scraped = chunks.join('\n');
       if (/D\.1|P\.3|\bE\b|Marcă|marca/i.test(scraped)) return scraped;
+
+      const ocr = await this.civOcr.extractText(buf, ct || 'application/octet-stream');
+      if (ocr?.trim()) return ocr;
+
       throw new BadRequestException(
-        'Scanul pare imagine/PDF fără text extractibil. Folosește OCR extern și lipește textul aici.',
+        'Nu am putut citi text din scan (OCR Vision indisponibil sau eșuat). Lipește textul OCR manual.',
       );
     } catch (e) {
       if (e instanceof BadRequestException) throw e;
