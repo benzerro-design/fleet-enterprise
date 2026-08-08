@@ -3,16 +3,29 @@ export type VehicleCivProfile = Record<string, string | number | null>;
 
 export type CivFieldKind = 'text' | 'number' | 'year';
 
+export type CivFieldGroupId =
+  | 'identificare'
+  | 'mase'
+  | 'dimensiuni'
+  | 'motor'
+  | 'mediu'
+  | 'capacitate'
+  | 'roți';
+
 export type CivFieldDef = {
   key: string;
+  /** Rubrică canonică pe formatul CIV 2024 (Ordin 211/28/391/2024). */
   rubric: string;
   label: string;
   kind: CivFieldKind;
-  group: 'identificare' | 'mase' | 'dimensiuni' | 'motor' | 'mediu' | 'capacitate' | 'roți' | 'altele';
+  group: CivFieldGroupId;
   unit?: string;
 };
 
-export const CIV_FIELD_GROUPS: { id: CivFieldDef['group']; label: string }[] = [
+/** Format document CIV (instrucțiuni RAR / Anexa 2). */
+export type CivDocumentFormat = '2024' | '2016' | '1993' | 'unknown';
+
+export const CIV_FIELD_GROUPS: { id: CivFieldGroupId; label: string }[] = [
   { id: 'identificare', label: 'Identificare (pag. 1)' },
   { id: 'mase', label: 'Mase și remorcare' },
   { id: 'dimensiuni', label: 'Dimensiuni' },
@@ -20,10 +33,13 @@ export const CIV_FIELD_GROUPS: { id: CivFieldDef['group']; label: string }[] = [
   { id: 'mediu', label: 'Mediu și omologare' },
   { id: 'capacitate', label: 'Capacitate și performanță' },
   { id: 'roți', label: 'Roți, suspensie, rezervor' },
-  { id: 'altele', label: 'Altele' },
 ];
 
-/** Rubrici CIV standard (format 2024+) — valorile se stochează în Vehicle.civProfile. */
+/**
+ * Rubrici CIV standard (format 2024+) — valorile se stochează în Vehicle.civProfile.
+ * Sursă: Anexa 1 la Instrucțiunile CIV (RAR), consolidate cu Ordinul 211/28/391/2024.
+ * VIN (E), serie CIV, dată eliberare, reprezentanță RAR, Mențiuni = coloane dedicate pe Vehicle.
+ */
 export const CIV_PROFILE_FIELDS: CivFieldDef[] = [
   { key: 'brand', rubric: 'D.1', label: 'Marcă', kind: 'text', group: 'identificare' },
   { key: 'typeVariantVersion', rubric: 'D.2', label: 'Tip – variantă – versiune', kind: 'text', group: 'identificare' },
@@ -78,6 +94,153 @@ export const CIV_PROFILE_FIELDS: CivFieldDef[] = [
   { key: 'suspensionRear', rubric: '19.2', label: 'Suspensie spate', kind: 'text', group: 'roți' },
   { key: 'fuelTankCapacityL', rubric: 'W', label: 'Capacitate rezervor', kind: 'number', group: 'roți', unit: 'l' },
 ];
+
+/**
+ * Aliasuri de rubrici pe CIV 2016 → cheie civProfile (model 2024).
+ * Numerele care s-au renumerotat (Anexa 2 RAR). Codurile literă (D.1, P.3…) rămân identice.
+ */
+export const CIV_RUBRIC_ALIASES_2016: Record<string, string> = {
+  '2': 'manufactureYear',
+  '3': 'usageCategory',
+  '4': 'vehicleClass',
+  // '5' pe 2016 = Caroserie, dar și „5. Număr național de registru” rămâne 5 pe 2024 —
+  // nu mapăm bare „5” → bodyType (coliziune). Folosește eticheta „Caroserie” / format+context.
+  '7': 'maxTrainMassKg',
+  '8': 'actualMassKg',
+  '9': 'maxCouplingMassKg',
+  '10': 'lengthMm',
+  '11': 'widthMm',
+  '12': 'heightMm',
+  '13': 'wheelbaseMm',
+  '14': 'engineCode',
+  '15': 'propulsionSystem',
+  '16': 'electricMotorPowerKw',
+  '17': 'nationalEmissionCode',
+  '18': 'driveType',
+  '19.1': 'tyresFront',
+  '19.2': 'tyresRear',
+  '20.1': 'suspensionFront',
+  '20.2': 'suspensionRear',
+  caroserie: 'bodyType',
+};
+
+/**
+ * Etichete / coduri pe CIV-uri foarte vechi (instrucțiuni 1993) → cheie.
+ * Cheile sunt normalizate (fără diacritice, lower-case) — vezi `normalizeCivRubricToken`.
+ */
+export const CIV_RUBRIC_ALIASES_1993: Record<string, string> = {
+  marca: 'brand',
+  tipul: 'typeVariantVersion',
+  varianta: 'typeVariantVersion',
+  caroseria: 'bodyType',
+  anul_fabricatiei: 'manufactureYear',
+  numarul_de_omologare: 'nationalRegisterNumber',
+  proprie: 'curbMassKg',
+  total_max_autorizata: 'maxTechnicalMassKg',
+  sarcina_pe_carligul_de_remorcare: 'maxCouplingMassKg',
+  remorcabila_cu_disp_de_franare: 'maxBrakedTrailerMassKg',
+  remorcabila_fara_disp_de_franare: 'maxUnbrakedTrailerMassKg',
+  tipul_motor: 'engineCode',
+  serie: 'engineSerial',
+  cilindree: 'engineCapacityCm3',
+  putere_max: 'enginePowerKw',
+  sursa_de_energie: 'fuelType',
+  turatie: 'engineRpm',
+  numarul_axelor: 'axleCount',
+  tractiunea: 'driveType',
+  in_mers: 'movingNoiseDb',
+  in_stationare: 'stationaryNoiseDb',
+  vit_max_constructiva: 'maxSpeedKmh',
+  capacitatea_rezervorului: 'fuelTankCapacityL',
+  culoarea: 'color',
+};
+
+/** Ținte în afara civProfile (coloane Vehicle / meta CIV). */
+export type CivMetaTarget =
+  | { kind: 'vin' }
+  | { kind: 'civSeries' }
+  | { kind: 'civIssuedOn' }
+  | { kind: 'civRarOffice' }
+  | { kind: 'civMentions' };
+
+export type CivRubricResolution =
+  | { kind: 'profile'; field: CivFieldDef }
+  | CivMetaTarget
+  | null;
+
+const PROFILE_BY_KEY = new Map(CIV_PROFILE_FIELDS.map((f) => [f.key, f]));
+
+export function normalizeCivRubricToken(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+const PROFILE_BY_RUBRIC_2024 = new Map(
+  CIV_PROFILE_FIELDS.map((f) => [normalizeCivRubricToken(f.rubric), f]),
+);
+
+/** Meta / identificare care nu stau în civProfile. */
+const META_BY_RUBRIC: Record<string, CivMetaTarget> = {
+  e: { kind: 'vin' },
+  vin: { kind: 'vin' },
+  numar_de_identificare: { kind: 'vin' },
+  numar_de_identificare_vehicul: { kind: 'vin' },
+  serie_civ: { kind: 'civSeries' },
+  x: { kind: 'civSeries' },
+  y: { kind: 'civSeries' },
+  data_eliberare: { kind: 'civIssuedOn' },
+  reprezentanta_rar: { kind: 'civRarOffice' },
+  mentiuni: { kind: 'civMentions' },
+};
+
+/**
+ * Rezolvă o rubrică citită (OCR / import) către câmpul Fleet.
+ * Important: numerele 1–20 diferă între 2016 și 2024 — pentru `unknown` mapăm
+ * doar coduri stabile (litere: D.1, P.3…) + 2024; aliasurile numerice 2016 cer `format: '2016'`.
+ */
+export function resolveCivRubric(
+  rawRubric: string,
+  format: CivDocumentFormat = 'unknown',
+): CivRubricResolution {
+  const token = normalizeCivRubricToken(rawRubric);
+  if (!token) return null;
+
+  const meta = META_BY_RUBRIC[token];
+  if (meta) return meta;
+
+  if (format === '2016') {
+    const key2016 = CIV_RUBRIC_ALIASES_2016[token];
+    if (key2016) {
+      const field = PROFILE_BY_KEY.get(key2016);
+      if (field) return { kind: 'profile', field };
+    }
+  }
+
+  if (format === '1993') {
+    const key1993 = CIV_RUBRIC_ALIASES_1993[token];
+    if (key1993) {
+      const field = PROFILE_BY_KEY.get(key1993);
+      if (field) return { kind: 'profile', field };
+    }
+  }
+
+  const by2024 = PROFILE_BY_RUBRIC_2024.get(token);
+  if (by2024) return { kind: 'profile', field: by2024 };
+
+  // Coduri literă stabile pe toate formatele (dacă OCR a citit „d1” / „p.3”).
+  if (format === 'unknown' || format === '2016' || format === '1993') {
+    const letterish = token.replace(/_/g, '.');
+    const again = PROFILE_BY_RUBRIC_2024.get(letterish);
+    if (again) return { kind: 'profile', field: again };
+  }
+
+  return null;
+}
 
 export function normalizeCivProfile(raw: unknown): VehicleCivProfile {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};

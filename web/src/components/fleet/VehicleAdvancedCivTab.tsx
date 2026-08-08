@@ -179,7 +179,7 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
 
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-8">
         <div className="grid gap-4 sm:grid-cols-2">
-          <FieldInput label="Serie CIV (X)" value={civSeries} onChange={setCivSeries} disabled={!write} mono />
+          <FieldInput label="Serie CIV" value={civSeries} onChange={setCivSeries} disabled={!write} mono />
           <FieldInput label="Dată eliberare" type="date" value={civIssuedOn} onChange={setCivIssuedOn} disabled={!write} />
           <FieldInput
             label="Reprezentanță RAR"
