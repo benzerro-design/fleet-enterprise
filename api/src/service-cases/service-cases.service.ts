@@ -230,6 +230,9 @@ export type DamageReinspectionRequestItem = {
   sentAt: string;
   decidedAt?: string;
   rejectionReason?: string;
+  /** Document de aprobare / PVS de la asigurător (la approved). */
+  approvalDocUrl?: string;
+  approvalDocFileName?: string;
   linkedPvsId?: string;
   mailLogId?: string;
 };
@@ -375,6 +378,9 @@ export type DecideDamageReinspectionInput = {
   requestId: string;
   decision: 'approved' | 'rejected';
   rejectionReason?: string | null;
+  /** Obligatoriu la approved — PDF/imagine document asigurător (aprobare / PVS). */
+  approvalDocumentUrl?: string | null;
+  approvalDocumentFileName?: string | null;
 };
 
 const PIPELINE_ORDER: DamageInsurerPipelineStatus[] = [
@@ -1856,6 +1862,17 @@ export class ServiceCasesService {
         throw new BadRequestException('Motivul refuzului e obligatoriu (minim 3 caractere)');
       }
     }
+    const approvalUrl =
+      decision === 'approved' ? dto.approvalDocumentUrl?.trim() || '' : '';
+    const approvalFileName =
+      decision === 'approved'
+        ? dto.approvalDocumentFileName?.trim() || null
+        : null;
+    if (decision === 'approved' && !approvalUrl) {
+      throw new BadRequestException(
+        'La aprobare încarcă documentul de la asigurător (PDF/aprobare/PVS)',
+      );
+    }
 
     const history = this.parseDamageConstatareHistory(row.damageInspectionNotesJson);
     const idx = history.findIndex(
@@ -1870,21 +1887,52 @@ export class ServiceCasesService {
     }
 
     const decidedAt = new Date().toISOString();
-    const updatedReq: DamageReinspectionRequestItem = {
-      ...req,
-      status: decision,
-      decidedAt,
-      rejectionReason:
-        decision === 'rejected' ? dto.rejectionReason!.trim() : undefined,
-    };
-    const nextHistory = [...history];
-    nextHistory[idx] = updatedReq;
+    let nextHistory = [...history];
+    let linkedPvsId: string | undefined;
+
+    if (decision === 'approved') {
+      const pvsSequence =
+        history.filter((h): h is DamageInspectionNoteItem => h.kind === 'pvs').length + 1;
+      linkedPvsId = `pvs_${Date.now()}`;
+      const pvsEntry: DamageInspectionNoteItem = {
+        id: linkedPvsId,
+        kind: 'pvs',
+        sequence: pvsSequence,
+        requestId,
+        pdfUrl: approvalUrl,
+        fileName: approvalFileName ?? undefined,
+        receivedAt: decidedAt,
+        notes: `Document aprobare reconstatare #${req.sequence}`,
+      };
+      const updatedReq: DamageReinspectionRequestItem = {
+        ...req,
+        status: 'approved',
+        decidedAt,
+        approvalDocUrl: approvalUrl,
+        approvalDocFileName: approvalFileName ?? undefined,
+        linkedPvsId,
+        rejectionReason: undefined,
+      };
+      nextHistory[idx] = updatedReq;
+      nextHistory = [pvsEntry, ...nextHistory].slice(0, 50);
+    } else {
+      nextHistory[idx] = {
+        ...req,
+        status: 'rejected',
+        decidedAt,
+        rejectionReason: dto.rejectionReason!.trim(),
+        approvalDocUrl: undefined,
+        approvalDocFileName: undefined,
+      };
+    }
 
     const hasPending = nextHistory.some(
       (h) => h.kind === 'reinspection_request' && h.status === 'pending',
     );
     let nextPipeline = row.damageInsurerPipelineStatus;
-    if (decision === 'rejected' && !hasPending) {
+    if (decision === 'approved') {
+      nextPipeline = DamageInsurerPipelineStatus.inspection_note;
+    } else if (decision === 'rejected' && !hasPending) {
       if (nextPipeline === DamageInsurerPipelineStatus.reinspection_requested) {
         nextPipeline = DamageInsurerPipelineStatus.inspection_note;
       }
@@ -1895,6 +1943,13 @@ export class ServiceCasesService {
       data: {
         damageInspectionNotesJson: nextHistory as unknown as Prisma.InputJsonValue,
         damageInsurerPipelineStatus: nextPipeline,
+        ...(decision === 'approved'
+          ? {
+              damageInspectionNotePdfUrl: approvalUrl,
+              damageInspectionNoteFileName: approvalFileName,
+              damageInspectionNoteReceivedAt: new Date(decidedAt),
+            }
+          : {}),
       },
       include: this.caseInclude(),
     });
@@ -1907,9 +1962,16 @@ export class ServiceCasesService {
           kind: CrmTicketEventKind.damage_claim_update,
           body:
             decision === 'approved'
-              ? `Reconstatare #${req.sequence} aprobată de asigurător — așteptăm PVS.`
-              : `Reconstatare #${req.sequence} respinsă: ${updatedReq.rejectionReason}`,
-          payload: { serviceCaseId: caseId, request: updatedReq },
+              ? `Reconstatare #${req.sequence} aprobată — document asigurător înregistrat (PVS${
+                  history.filter((h) => h.kind === 'pvs').length + 1
+                }).`
+              : `Reconstatare #${req.sequence} respinsă: ${dto.rejectionReason!.trim()}`,
+          payload: {
+            serviceCaseId: caseId,
+            requestId,
+            decision,
+            linkedPvsId: linkedPvsId ?? null,
+          },
           actorUserId: actorUserId ?? null,
         },
       });
@@ -1921,7 +1983,13 @@ export class ServiceCasesService {
       action: 'service_case.damage_reinspection_decide',
       entityType: 'service_case',
       entityId: caseId,
-      meta: { requestId, decision, sequence: req.sequence },
+      meta: {
+        requestId,
+        decision,
+        sequence: req.sequence,
+        linkedPvsId: linkedPvsId ?? null,
+        hasApprovalDoc: Boolean(approvalUrl),
+      },
     });
 
     return this.toRecord(updated);
@@ -3279,6 +3347,10 @@ export class ServiceCasesService {
           decidedAt: typeof o.decidedAt === 'string' ? o.decidedAt : undefined,
           rejectionReason:
             typeof o.rejectionReason === 'string' ? o.rejectionReason : undefined,
+          approvalDocUrl:
+            typeof o.approvalDocUrl === 'string' ? o.approvalDocUrl : undefined,
+          approvalDocFileName:
+            typeof o.approvalDocFileName === 'string' ? o.approvalDocFileName : undefined,
           linkedPvsId: typeof o.linkedPvsId === 'string' ? o.linkedPvsId : undefined,
           mailLogId: typeof o.mailLogId === 'string' ? o.mailLogId : undefined,
         });

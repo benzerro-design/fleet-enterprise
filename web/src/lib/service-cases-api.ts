@@ -118,6 +118,8 @@ export type DamageReinspectionRequestItem = {
   sentAt: string;
   decidedAt?: string;
   rejectionReason?: string;
+  approvalDocUrl?: string;
+  approvalDocFileName?: string;
   linkedPvsId?: string;
   mailLogId?: string;
 };
