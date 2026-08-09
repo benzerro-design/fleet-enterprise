@@ -4,23 +4,34 @@ import { GoogleAuth } from 'google-auth-library';
 type VisionAnnotateResponse = {
   responses?: Array<{
     fullTextAnnotation?: { text?: string };
-    error?: { message?: string };
+    error?: { message?: string; status?: string };
   }>;
+  error?: { message?: string; status?: string };
 };
 
 type VisionFileAnnotateResponse = {
   responses?: Array<{
     responses?: Array<{
       fullTextAnnotation?: { text?: string };
-      error?: { message?: string };
+      error?: { message?: string; status?: string };
     }>;
+    error?: { message?: string; status?: string };
   }>;
+  error?: { message?: string; status?: string };
+};
+
+export type CivOcrResult = {
+  text: string | null;
+  /** Motiv scurt pentru UI / log când text e null */
+  error?: string;
 };
 
 /**
  * OCR CIV via Cloud Vision REST (ADC pe Cloud Run).
  * Fără `@google-cloud/vision` — păstrează imaginea Docker mică.
  * Dezactivează cu CIV_OCR=off.
+ *
+ * Ops: activează Vision API + `roles/cloudvision.user` pe SA-ul Cloud Run API.
  */
 @Injectable()
 export class CivOcrService {
@@ -34,10 +45,11 @@ export class CivOcrService {
 
   /**
    * Extrage text din imagine (jpeg/png/webp/gif) sau PDF (primele pagini).
-   * Returnează null dacă OCR e dezactivat / eșuează.
    */
-  async extractText(buf: Buffer, contentType: string): Promise<string | null> {
-    if (!this.isEnabled()) return null;
+  async extractText(buf: Buffer, contentType: string): Promise<CivOcrResult> {
+    if (!this.isEnabled()) {
+      return { text: null, error: 'CIV_OCR=off pe API' };
+    }
     const ct = (contentType || '').split(';')[0].trim().toLowerCase();
     try {
       if (ct === 'application/pdf' || buf.slice(0, 5).toString('utf8') === '%PDF-') {
@@ -46,13 +58,29 @@ export class CivOcrService {
       if (ct.startsWith('image/') || this.looksLikeImage(buf)) {
         return await this.ocrImage(buf);
       }
-      return null;
+      return { text: null, error: `Tip fișier neacceptat pentru OCR: ${ct || 'unknown'}` };
     } catch (e) {
-      this.logger.warn(
-        `CIV Vision OCR failed: ${e instanceof Error ? e.message : 'error'}`,
-      );
-      return null;
+      const msg = e instanceof Error ? e.message : 'Vision OCR error';
+      this.logger.warn(`CIV Vision OCR failed: ${msg}`);
+      return { text: null, error: this.humanizeVisionError(msg) };
     }
+  }
+
+  private humanizeVisionError(msg: string): string {
+    const m = msg.toLowerCase();
+    if (m.includes('403') || m.includes('permission') || m.includes('denied')) {
+      return 'Vision API: permisiune lipsă (activează vision.googleapis.com + roles/cloudvision.user pe SA API)';
+    }
+    if (m.includes('404') || m.includes('was not found') || m.includes('has not been used')) {
+      return 'Vision API nu e activată pe proiectul GCP (Enable Cloud Vision API)';
+    }
+    if (m.includes('billing')) {
+      return 'Vision API: billing proiect GCP inactiv';
+    }
+    if (m.includes('429') || m.includes('quota')) {
+      return 'Vision API: cotă depășită — reîncearcă mai târziu';
+    }
+    return msg.length > 220 ? `${msg.slice(0, 220)}…` : msg;
   }
 
   private looksLikeImage(buf: Buffer): boolean {
@@ -82,11 +110,11 @@ export class CivOcrService {
     const client = await this.getAuth().getClient();
     const token = await client.getAccessToken();
     const value = typeof token === 'string' ? token : token?.token;
-    if (!value) throw new Error('No Google access token for Vision');
+    if (!value) throw new Error('No Google access token for Vision (ADC / Cloud Run SA)');
     return value;
   }
 
-  private async ocrImage(buf: Buffer): Promise<string | null> {
+  private async ocrImage(buf: Buffer): Promise<CivOcrResult> {
     const token = await this.accessToken();
     const res = await fetch('https://vision.googleapis.com/v1/images:annotate', {
       method: 'POST',
@@ -105,18 +133,47 @@ export class CivOcrService {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`Vision images:annotate HTTP ${res.status} ${body.slice(0, 200)}`);
+      throw new Error(`Vision images:annotate HTTP ${res.status} ${body.slice(0, 280)}`);
     }
     const json = (await res.json()) as VisionAnnotateResponse;
+    if (json.error?.message) throw new Error(json.error.message);
     const first = json.responses?.[0];
     if (first?.error?.message) throw new Error(first.error.message);
-    const text = first?.fullTextAnnotation?.text?.trim();
-    return text || null;
+    const text = first?.fullTextAnnotation?.text?.trim() || null;
+    if (!text) {
+      return { text: null, error: 'Vision nu a găsit text pe imagine (scan neclar?)' };
+    }
+    return { text };
   }
 
-  private async ocrPdf(buf: Buffer): Promise<string | null> {
+  private async ocrPdf(buf: Buffer): Promise<CivOcrResult> {
+    // Încerc 4 pagini, apoi 2 dacă eșuează (PDF-uri mari / limită sync).
+    const attempts = [
+      [1, 2, 3, 4],
+      [1, 2],
+      [1],
+    ];
+    let lastErr: string | null = null;
+    for (const pages of attempts) {
+      try {
+        const result = await this.ocrPdfPages(buf, pages);
+        if (result.text) return result;
+        lastErr = result.error ?? 'Vision PDF: fără text pe paginile cerute';
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : 'Vision PDF error';
+        this.logger.warn(`Vision PDF pages=[${pages.join(',')}]: ${lastErr}`);
+      }
+    }
+    return {
+      text: null,
+      error: this.humanizeVisionError(
+        lastErr ?? 'Vision PDF OCR eșuat — încearcă JPEG/PNG cu paginile CIV',
+      ),
+    };
+  }
+
+  private async ocrPdfPages(buf: Buffer, pages: number[]): Promise<CivOcrResult> {
     const token = await this.accessToken();
-    // Sync file annotation — CIV are tipic 4 pagini (A5 împăturit).
     const res = await fetch('https://vision.googleapis.com/v1/files:annotate', {
       method: 'POST',
       headers: {
@@ -131,21 +188,27 @@ export class CivOcrService {
               content: buf.toString('base64'),
             },
             features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-            pages: [1, 2, 3, 4],
+            pages,
           },
         ],
       }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`Vision files:annotate HTTP ${res.status} ${body.slice(0, 200)}`);
+      throw new Error(`Vision files:annotate HTTP ${res.status} ${body.slice(0, 280)}`);
     }
     const json = (await res.json()) as VisionFileAnnotateResponse;
+    if (json.error?.message) throw new Error(json.error.message);
     const parts: string[] = [];
+    let pageErr: string | null = null;
     for (const fileResp of json.responses ?? []) {
+      if (fileResp.error?.message) {
+        pageErr = fileResp.error.message;
+        continue;
+      }
       for (const pageResp of fileResp.responses ?? []) {
         if (pageResp.error?.message) {
-          this.logger.warn(`Vision PDF page error: ${pageResp.error.message}`);
+          pageErr = pageResp.error.message;
           continue;
         }
         const t = pageResp.fullTextAnnotation?.text?.trim();
@@ -153,6 +216,12 @@ export class CivOcrService {
       }
     }
     const text = parts.join('\n\n').trim();
-    return text || null;
+    if (text) return { text };
+    return {
+      text: null,
+      error: pageErr
+        ? this.humanizeVisionError(pageErr)
+        : 'Vision PDF: fără text (document scanat neclar sau API fără răspuns)',
+    };
   }
 }

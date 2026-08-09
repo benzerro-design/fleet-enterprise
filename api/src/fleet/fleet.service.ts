@@ -591,10 +591,12 @@ export class FleetService {
       // Scan / PDF: Vision OCR înaintea scrape-ului din stream-uri (mojibake).
       if (isPdf || ct.startsWith('image/')) {
         const ocr = await this.civOcr.extractText(buf, ct || 'application/octet-stream');
-        if (ocr?.trim() && isReadableCivOcrText(ocr)) return ocr;
-        if (ocr?.trim() && ocr.trim().length >= 40) {
-          // OCR a returnat ceva — chiar dacă markerii sunt slabi, e mai bun decât PDF binary
-          return ocr;
+        if (ocr.text?.trim() && isReadableCivOcrText(ocr.text)) return ocr.text;
+        if (ocr.text?.trim() && ocr.text.trim().length >= 40) return ocr.text;
+        if (ocr.error) {
+          throw new BadRequestException(
+            `${ocr.error}. Alternativ: lipește text OCR manual sau încarcă JPEG/PNG cu paginile CIV.`,
+          );
         }
       }
 
@@ -613,13 +615,15 @@ export class FleetService {
           if (isPlausibleCivValue(inner, { maxLen: 120 })) chunks.push(inner);
         }
         const scraped = chunks.join('\n');
-        // NU accepta pe `\bE\b` — prinde gunoi din stream PDF.
         if (isReadableCivOcrText(scraped)) return scraped;
       }
 
       if (!isPdf && !ct.startsWith('image/')) {
         const ocr = await this.civOcr.extractText(buf, ct || 'application/octet-stream');
-        if (ocr?.trim()) return ocr;
+        if (ocr.text?.trim()) return ocr.text;
+        if (ocr.error) {
+          throw new BadRequestException(ocr.error);
+        }
       }
 
       throw new BadRequestException(
