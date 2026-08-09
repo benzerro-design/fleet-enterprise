@@ -261,11 +261,34 @@ export function DocumentForm(props: Props) {
         </OpsFormPrimaryBand>
         <OpsFormSection number={4} title="Fișier document">
           <div className="grid grid-cols-1 gap-3">
-            <OpsFormField label="Upload" hint="PDF sau imagine, max 10MB.">
-              <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" disabled={uploading || pending} onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)} className={`${OPS_INPUT_CLASS} file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:text-zinc-200`} />
+            <OpsFormField label="Upload" hint="PDF sau imagine, max 10MB. Alege fișierul, așteaptă confirmarea, apoi Salvează.">
+              <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf" disabled={uploading || pending} onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)} className={`${OPS_INPUT_CLASS} file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:text-zinc-200`} />
+              {uploading ? <p className="mt-1 text-xs text-zinc-400">Se încarcă fișierul…</p> : null}
+              {fileUrl ? (
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                  <span className="rounded-md border border-emerald-800/50 bg-emerald-950/30 px-2 py-1 text-emerald-200">
+                    Fișier atașat
+                  </span>
+                  <a href={fileUrl} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">
+                    {fileName || "Deschide fișier"}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFileUrl("");
+                      setFileName("");
+                    }}
+                    className="text-zinc-400 hover:text-zinc-200"
+                  >
+                    Elimină
+                  </button>
+                </div>
+              ) : !uploading ? (
+                <p className="mt-1 text-xs text-amber-200/80">Niciun fișier atașat încă — Browse nu salvează singur; trebuie Salvează după upload.</p>
+              ) : null}
             </OpsFormField>
             <OpsFormField label="URL fișier (alternativ)">
-              <input value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} placeholder="https://…" className={OPS_INPUT_CLASS} />
+              <input value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} placeholder="https://… sau /uploads/…" className={OPS_INPUT_CLASS} />
             </OpsFormField>
           </div>
         </OpsFormSection>
@@ -274,8 +297,8 @@ export function DocumentForm(props: Props) {
           submitLabel={isEdit ? "Salvează modificările" : "Creează documentul"}
           pendingLabel="Se salvează…"
           cancelHref="/fleet/documents"
-          pending={pending}
-          disabled={props.vehicles.length === 0 || (!isEdit && !boundVehicleId)}
+          pending={pending || uploading}
+          disabled={props.vehicles.length === 0 || (!isEdit && !boundVehicleId) || uploading}
         />
       </form>
     );

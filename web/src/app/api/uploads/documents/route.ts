@@ -10,9 +10,34 @@ const ALLOWED = new Set([
   "image/webp",
 ]);
 
+const EXT_CONTENT_TYPE: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+};
+
 function sanitizeFilename(name: string): string {
   const base = name.replace(/[^a-zA-Z0-9._-]/g, "_");
   return base.length > 0 ? base : "document.bin";
+}
+
+function resolveContentType(file: File): string | null {
+  const declared = (file.type || "").trim().toLowerCase();
+  if (ALLOWED.has(declared)) return declared;
+  // Windows / unii browsere trimit PDF ca octet-stream sau fără MIME.
+  const ext = file.name.includes(".")
+    ? `.${file.name.split(".").pop()!.toLowerCase()}`
+    : "";
+  const fromExt = EXT_CONTENT_TYPE[ext];
+  if (
+    fromExt &&
+    (!declared || declared === "application/octet-stream" || declared === "binary/octet-stream")
+  ) {
+    return fromExt;
+  }
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -33,8 +58,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Fișier invalid (max 10MB)." }, { status: 400 });
   }
 
-  const ct = maybeFile.type || "application/octet-stream";
-  if (!ALLOWED.has(ct)) {
+  const ct = resolveContentType(maybeFile);
+  if (!ct) {
     return NextResponse.json(
       { message: "Tip neacceptat. Permise: PDF, JPEG, PNG, WebP." },
       { status: 400 },
