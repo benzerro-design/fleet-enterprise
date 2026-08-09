@@ -244,18 +244,31 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
           {importMode && write ? (
             <div className="mt-3 space-y-3">
               <p className="text-xs text-zinc-500">
-                Extrage din scanul CIV (Cloud Vision pe imagine/PDF) sau lipește text OCR. Verifică
-                câmpurile pe formular, apoi Salvează.
+                Extrage din scanul CIV (Cloud Vision pe imagine/PDF) sau lipește text OCR. După OCR,
+                textul apare mai jos — copiază-l dacă e nevoie de calibrare.
               </p>
+              <label className="block text-xs font-medium text-zinc-400">Text OCR (editabil / copiabil)</label>
               <textarea
                 value={ocrText}
                 onChange={(e) => setOcrText(e.target.value)}
-                rows={5}
+                rows={10}
                 placeholder={
-                  "Lipește aici text OCR real din CIV (opțional).\nExemplu format: Marca FORD / Numărul de identificare WF0…"
+                  "După „OCR din fișierul CIV” textul apare aici.\nSau lipește manual text OCR din CIV."
                 }
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
               />
+              {ocrDump ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard.writeText(ocrDump)}
+                    className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
+                  >
+                    Copiază text OCR
+                  </button>
+                  <span className="text-[11px] text-zinc-500">{ocrDump.length} caractere</span>
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"

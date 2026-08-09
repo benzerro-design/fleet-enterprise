@@ -25,6 +25,8 @@ export type CivExtractPreview = {
   unmatchedLines: string[];
   formatUsed: CivDocumentFormat;
   source: 'text' | 'file';
+  /** Textul OCR brut (pentru verificare în UI). */
+  ocrText?: string;
 };
 
 const LABEL_STRIP =
@@ -543,6 +545,7 @@ export function mapCivExtractTextToPreview(
     unmatchedLines: unmatchedLines.slice(0, 40),
     formatUsed,
     source,
+    ocrText: text.slice(0, 6000),
   };
 }
 

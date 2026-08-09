@@ -26,8 +26,10 @@ jobs:
     steps:
       - name: Free disk space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost || true
-          sudo docker image prune -af || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost \
+            /usr/share/swift /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/lib/jvm /usr/share/gradle /usr/share/kotlin || true
+          sudo docker system prune -af || true
           df -h /
 
       - name: Checkout
@@ -45,6 +47,8 @@ jobs:
         run: gcloud auth configure-docker ${{ env.AR_REGION }}-docker.pkg.dev --quiet
 
       - name: Build image
+        env:
+          DOCKER_BUILDKIT: "1"
         run: |
           docker build --progress=plain -f api/Dockerfile \
             -t ${{ env.AR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }} \

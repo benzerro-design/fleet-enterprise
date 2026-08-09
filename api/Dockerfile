@@ -1,7 +1,8 @@
 # ---------- deps ----------
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 COPY prisma ./prisma
 RUN npm ci
@@ -9,15 +10,20 @@ RUN npm ci
 # ---------- builder ----------
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+ENV NODE_OPTIONS=--max-old-space-size=3072
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate
-RUN npm run build
+RUN npx prisma generate \
+  && npm run build \
+  && npm prune --omit=dev \
+  && rm -rf /root/.npm
 
 # ---------- runner ----------
 FROM node:20-bookworm-slim AS runner
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
