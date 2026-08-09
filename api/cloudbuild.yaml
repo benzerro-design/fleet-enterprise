@@ -1,0 +1,17 @@
+# Cloud Build for API image. CLOUD_LOGGING_ONLY avoids the default GCS log bucket
+# (GHA SA cannot stream those logs → sync submit used to exit 1 after a successful build).
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _IMAGE: europe-west1-docker.pkg.dev/hybrid-entropy-494218-u2/fleet/fleet-api:latest
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

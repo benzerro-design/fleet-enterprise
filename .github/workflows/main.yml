@@ -35,8 +35,8 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # Async + poll: SA nu poate streama logurile din bucket-ul default Cloud Build,
-      # iar `gcloud builds submit` (sync) ieșea cu exit 1 deși build-ul ajungea SUCCESS.
+      # Async + poll (SA cannot stream default GCS build logs).
+      # E2_HIGHCPU_8 + CLOUD_LOGGING_ONLY: closer to old ~2–3m GHA docker times.
       - name: Build and push image (Cloud Build)
         run: |
           set -euo pipefail
@@ -44,12 +44,12 @@ jobs:
           echo "Building ${IMAGE_URI}"
           BUILD_ID="$(gcloud builds submit api \
             --project="${PROJECT_ID}" \
-            --tag="${IMAGE_URI}" \
-            --timeout=1200s \
+            --config=api/cloudbuild.yaml \
+            --substitutions="_IMAGE=${IMAGE_URI}" \
             --async \
             --format='value(id)')"
           echo "Build ID: ${BUILD_ID}"
-          for i in $(seq 1 150); do
+          for i in $(seq 1 180); do
             STATUS="$(gcloud builds describe "${BUILD_ID}" --project="${PROJECT_ID}" --format='value(status)')"
             echo "poll=${i} status=${STATUS}"
             case "${STATUS}" in
@@ -61,7 +61,7 @@ jobs:
                 exit 1
                 ;;
             esac
-            sleep 10
+            sleep 5
           done
           echo "Timed out waiting for build ${BUILD_ID}"
           exit 1
