@@ -120,7 +120,8 @@ function setProfile(
 }
 
 /**
- * Al doilea pas: regex pe tot textul — salvează CIV-urile vechi unde OCR rupe liniile.
+ * Al doilea pas: regex pe tot textul — CIV vechi (OCR rupe liniile).
+ * Ordine: tip/variantă cu „/”, apoi motor, apoi fallback-uri stricte.
  */
 function applyFullTextHeuristics(fullText: string, state: MutableExtract, formatUsed: CivDocumentFormat) {
   const t = fullText.replace(/\r\n/g, '\n');
@@ -128,48 +129,73 @@ function applyFullTextHeuristics(fullText: string, state: MutableExtract, format
   if (!state.vin) {
     const vinNear =
       /num[aă]r(?:ul)?\s+de\s+identificare[^A-HJ-NPR-Z0-9]{0,40}([A-HJ-NPR-Z0-9]{17})/i.exec(t) ||
-      /\b([A-HJ-NPR-Z0-9]{17})\b/i.exec(t);
+      /\b(WF0[A-HJ-NPR-Z0-9]{14}|WVW[A-HJ-NPR-Z0-9]{14}|UU1[A-HJ-NPR-Z0-9]{14}|U5Y[A-HJ-NPR-Z0-9]{14}|[A-HJ-NPR-Z0-9]{17})\b/i.exec(
+        t,
+      );
     if (vinNear && isPlausibleVin(vinNear[1])) {
       state.vin = vinNear[1].toUpperCase();
       state.matched.push({ rubric: 'E', target: 'vin', value: state.vin });
     }
   }
 
-  const brand = /\bmarca\b\s*[:.\-–]?\s*([A-ZĂÂÎȘȚ][A-Za-zăâîșțĂÂÎȘȚ0-9 \-]{1,30})/i.exec(t);
-  if (brand) setProfile(state, 'brand', brand[1].trim().split(/\s{2,}/)[0]!, 'Marca', formatUsed);
+  const brand = /\bmarca\b\s*[:.\-–]?\s*([A-ZĂÂÎȘȚ][A-Za-zăâîșțĂÂÎȘȚ]{1,20})\b/i.exec(t);
+  if (brand) setProfile(state, 'brand', brand[1].trim(), 'Marca', formatUsed);
 
-  const tip = /\btipul(?:\s*\/\s*varianta(?:\s*\/\s*versiunea)?)?\b\s*[:.\-–]?\s*([^\n]{3,80})/i.exec(t);
-  if (tip) setProfile(state, 'typeVariantVersion', tip[1].trim(), 'Tipul', formatUsed);
+  // Tip/variantă/versiune — cere pattern cu „/” (ex. JA8/KVJA1J/…/Fiesta), nu „Cilindree…”
+  const tipSlash =
+    /\b(?:tipul\s*\/\s*varianta(?:\s*\/\s*versiunea)?|tip\s*[–\-]\s*variant[aă])\b\s*[:.\-–]?\s*([A-Z0-9][A-Z0-9./\-]{6,80})/i.exec(
+      t,
+    ) ||
+    /\b([A-Z0-9]{2,6}\/[A-Z0-9]{2,12}\/[A-Z0-9./\-]{2,40})/i.exec(t);
+  if (tipSlash && looksLikeTypeVariant(tipSlash[1])) {
+    overwriteProfile(state, 'typeVariantVersion', tipSlash[1].trim(), 'Tipul', formatUsed);
+  }
 
   const caroserie = /\bcaroseria\b\s*[:.\-–]?\s*([^\n]{2,60})/i.exec(t);
-  if (caroserie) setProfile(state, 'bodyType', caroserie[1].trim(), 'Caroseria', formatUsed);
+  if (caroserie && !/cilindree/i.test(caroserie[1])) {
+    setProfile(state, 'bodyType', caroserie[1].trim(), 'Caroseria', formatUsed);
+  }
 
-  const year =
-    /anul\s+fabrica[tț]iei[^0-9]{0,20}((?:19|20)\d{2})/i.exec(t) ||
-    /\b((?:19|20)\d{2})\b/.exec(t);
-  // year alone too loose — only with label
   const yearLabeled = /anul\s+fabrica[tț]iei[^0-9]{0,20}((?:19|20)\d{2})/i.exec(t);
   if (yearLabeled) {
     setProfile(state, 'manufactureYear', yearLabeled[1], 'Anul fabricatiei', formatUsed);
   }
-  void year;
 
-  const cilindree = /cilindree(?:\s*\(cm3\))?[^0-9]{0,15}(\d{3,5})/i.exec(t);
+  const cilindree = /cilindree(?:\s*\(cm\s*3\))?[^0-9]{0,15}(\d{3,5})/i.exec(t);
   if (cilindree) setProfile(state, 'engineCapacityCm3', cilindree[1], 'Cilindree', formatUsed);
 
-  const putere = /putere\s*max[^0-9]{0,20}(\d+[.,]?\d*)/i.exec(t);
-  if (putere) setProfile(state, 'enginePowerKw', putere[1].replace(',', '.'), 'Putere max', formatUsed);
+  // Putere: preferă zecimal (51.5); evită „min-1” / numere de pagină
+  const putereDec =
+    /putere\s*max(?:ima)?[\s\S]{0,40}?(\d{1,3}[.,]\d+)\s*(?:\/|\s*kW|\s|$)/i.exec(t);
+  const putereInt =
+    /putere\s*max(?:ima)?[\s\S]{0,40}?(\d{2,3})\s*(?:\/|\s*kW)/i.exec(t);
+  if (putereDec) {
+    overwriteProfile(state, 'enginePowerKw', putereDec[1].replace(',', '.'), 'Putere max', formatUsed);
+  } else if (putereInt) {
+    const n = Number(putereInt[1]);
+    if (n >= 20 && n <= 800) {
+      overwriteProfile(state, 'enginePowerKw', n, 'Putere max', formatUsed);
+    }
+  }
 
   const fuel =
     /sursa\s+de\s+energie\s*[:.\-–]?\s*(MOTORINA|MOTORINĂ|BENZINA|BENZINĂ|GPL|ELECTRIC|HIBRID[ĂA]?)/i.exec(
       t,
     ) || /\b(MOTORINA|MOTORINĂ|BENZINA|BENZINĂ)\b/i.exec(t);
-  if (fuel) setProfile(state, 'fuelType', fuel[1].replace(/Ă/g, 'A').replace(/ă/g, 'a'), 'Sursa de energie', formatUsed);
+  if (fuel) {
+    setProfile(
+      state,
+      'fuelType',
+      fuel[1].replace(/Ă/g, 'A').replace(/ă/g, 'a'),
+      'Sursa de energie',
+      formatUsed,
+    );
+  }
 
-  const color = /\bculoarea?\b\s*[:.\-–]?\s*([A-ZĂÂÎȘȚa-zăâîșț]{3,20})/i.exec(t);
+  const color = /\bculoarea?\b\s*[:.\-–]?\s*([A-ZĂÂÎȘȚa-zăâîșț]{3,20})\b/i.exec(t);
   if (color) setProfile(state, 'color', color[1], 'Culoarea', formatUsed);
 
-  const drive = /\btractiunea\b\s*[:.\-–]?\s*(FATA|FAȚA|SPATE|INTEGRALA|INTEGRALĂ|4X4)/i.exec(t);
+  const drive = /\btractiunea\b\s*[:.\-–]?\s*(FATA|FAȚA|SPATE|INTEGRALA|INTEGRALĂ|4X4)\b/i.exec(t);
   if (drive) setProfile(state, 'driveType', drive[1], 'Tractiunea', formatUsed);
 
   const axles = /num[aă]rul?\s+axelor[^0-9]{0,10}(\d)/i.exec(t);
@@ -179,51 +205,137 @@ function applyFullTextHeuristics(fullText: string, state: MutableExtract, format
   if (vmax) setProfile(state, 'maxSpeedKmh', vmax[1], 'Vit. max constructiva', formatUsed);
 
   const tank = /capacitatea\s+rezervorului[^0-9]{0,15}(\d+[.,]?\d*)/i.exec(t);
-  if (tank) setProfile(state, 'fuelTankCapacityL', tank[1].replace(',', '.'), 'Capacitatea rezervorului', formatUsed);
-
-  const engineCode = /\btipul\b\s*[:.\-–]?\s*([A-Z0-9]{3,10})\b/i.exec(
-    t.split(/motorul/i)[1] ?? '',
-  );
-  // Cod motor pe CIV vechi: "Tipul: KVJA" în secțiunea Motorul
-  const motorBlock = /motorul[\s\S]{0,400}/i.exec(t)?.[0] ?? '';
-  const tipMotor = /tipul\s*[:.\-–]?\s*([A-Z0-9]{3,12})/i.exec(motorBlock);
-  if (tipMotor) setProfile(state, 'engineCode', tipMotor[1], 'Tipul motor', formatUsed);
-  void engineCode;
-
-  const serieMotor =
-    /(?:serie\s*motor|serie)\s*[:.\-–]?\s*([A-Z0-9]{5,20})\b/i.exec(motorBlock) ||
-    /\bserie\s*[:.\-–]?\s*(CD\d{4,8}|[A-Z0-9]{6,16})\b/i.exec(t);
-  if (serieMotor && serieMotor[1].toUpperCase() !== state.vin) {
-    setProfile(state, 'engineSerial', serieMotor[1], 'Serie motor', formatUsed);
+  if (tank) {
+    setProfile(state, 'fuelTankCapacityL', tank[1].replace(',', '.'), 'Capacitatea rezervorului', formatUsed);
   }
 
-  // Mase tipice CIV vechi
+  const motorBlock = /motorul[\s\S]{0,500}/i.exec(t)?.[0] ?? '';
+  const tipMotor = /(?:^|[^\w])tipul\s*[:.\-–]?\s*([A-Z]{2,6}\d{0,4})\b/i.exec(motorBlock);
+  if (tipMotor && looksLikeEngineCode(tipMotor[1])) {
+    overwriteProfile(state, 'engineCode', tipMotor[1].toUpperCase(), 'Tipul motor', formatUsed);
+  } else {
+    // curăță mapări greșite tip „Cilindree139”
+    const bad = state.civProfile.engineCode;
+    if (typeof bad === 'string' && /cilindree/i.test(bad)) {
+      delete state.civProfile.engineCode;
+      state.matched = state.matched.filter((m) => m.target !== 'engineCode');
+    }
+  }
+
+  const serieMotor =
+    /serie\s*[:.\-–]?\s*(CD\d{4,10}|[A-Z]{1,3}\d{4,12})\b/i.exec(motorBlock) ||
+    /\bserie\s*motor\s*[:.\-–]?\s*([A-Z0-9]{5,20})\b/i.exec(t);
+  if (serieMotor && serieMotor[1].toUpperCase() !== state.vin) {
+    setProfile(state, 'engineSerial', serieMotor[1].toUpperCase(), 'Serie motor', formatUsed);
+  }
+
   const proprie = /proprie[^0-9]{0,15}(\d{3,5})/i.exec(t);
   if (proprie) setProfile(state, 'curbMassKg', proprie[1], 'proprie', formatUsed);
   const totala = /total[aă]\s*max\.?\s*autorizata[^0-9]{0,15}(\d{3,5})/i.exec(t);
   if (totala) setProfile(state, 'maxTechnicalMassKg', totala[1], 'total max autorizata', formatUsed);
 
-  const lungime = /\bL\s*[:.\-–]?\s*(\d{3,5})\b/.exec(t) || /lungime[^0-9]{0,10}(\d{3,5})/i.exec(t);
-  if (lungime) setProfile(state, 'lengthMm', lungime[1], '9', formatUsed);
-  const latime = /\bl\s*[:.\-–]?\s*(\d{3,4})\b/.exec(t) || /l[aă]țime[^0-9]{0,10}(\d{3,4})/i.exec(t);
-  if (latime) setProfile(state, 'widthMm', latime[1], '10', formatUsed);
-  const inaltime = /\bh\s*[:.\-–]?\s*(\d{3,4})\b/.exec(t) || /în[aă]lțime[^0-9]{0,10}(\d{3,4})/i.exec(t);
-  if (inaltime) setProfile(state, 'heightMm', inaltime[1], '11', formatUsed);
+  // Dimensiuni: L / l / h pe același bloc (OCR CIV vechi)
+  const dimsTriple =
+    /\bL\s*[:.\-]?\s*(\d{3,5})\b[\s\S]{0,60}?\bl\s*[:.\-]?\s*(\d{3,4})\b[\s\S]{0,60}?\bh\s*[:.\-]?\s*(\d{3,4})\b/i.exec(
+      t,
+    );
+  if (dimsTriple) {
+    overwriteProfile(state, 'lengthMm', dimsTriple[1], '9', formatUsed);
+    overwriteProfile(state, 'widthMm', dimsTriple[2], '10', formatUsed);
+    overwriteProfile(state, 'heightMm', dimsTriple[3], '11', formatUsed);
+  } else {
+    const lungime = /\bL\s*[:.\-]?\s*(\d{3,5})\b/.exec(t) || /lungime[^0-9]{0,10}(\d{3,5})/i.exec(t);
+    if (lungime) setProfile(state, 'lengthMm', lungime[1], '9', formatUsed);
+    const latime =
+      /l[aă]țime[^0-9]{0,10}(\d{3,4})/i.exec(t) ||
+      /(?:^|[^\w])l\s*[:.\-]?\s*(\d{3,4})\b/.exec(t);
+    if (latime) setProfile(state, 'widthMm', latime[1], '10', formatUsed);
+    const inaltime =
+      /în[aă]lțime[^0-9]{0,10}(\d{3,4})/i.exec(t) || /\bh\s*[:.\-]?\s*(\d{3,4})\b/.exec(t);
+    if (inaltime) setProfile(state, 'heightMm', inaltime[1], '11', formatUsed);
+  }
 
-  // Serie CIV tip J 459513
+  const wheelbase =
+    /(?:distan[tț]a?\s+[iî]ntre\s+axe|ampatament|wheelbase)[^0-9]{0,15}(\d{3,5})/i.exec(t) ||
+    /\bA\s*[:.\-]?\s*(\d{3,5})\b/.exec(t);
+  if (wheelbase) setProfile(state, 'wheelbaseMm', wheelbase[1], '12', formatUsed);
+
   if (!state.civSeries) {
-    const serieCiv = /\b([A-Z]\s?\d{5,7})\b/.exec(t);
-    if (serieCiv && !isPlausibleVin(serieCiv[1].replace(/\s/g, ''))) {
-      state.civSeries = serieCiv[1].replace(/\s+/g, ' ').trim();
-      state.matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: state.civSeries });
+    const serie = pickCivSeries(t);
+    if (serie) {
+      state.civSeries = serie;
+      state.matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: serie });
+    }
+  } else if (!isPlausibleCivSeries(state.civSeries)) {
+    const serie = pickCivSeries(t);
+    if (serie) {
+      state.matched = state.matched.filter((m) => m.target !== 'civSeries');
+      state.civSeries = serie;
+      state.matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: serie });
+    } else {
+      state.civSeries = null;
+      state.matched = state.matched.filter((m) => m.target !== 'civSeries');
     }
   }
 
-  // Denumire comercială din tip (ex. …/Fiesta)
-  const commercial = /\/\s*(Fiesta|Focus|Golf|Octavia|Logan|Sandero|Clio|Megane|Passat)\b/i.exec(t);
+  // Curăță tip greșit „Cilindree…”
+  const badTip = state.civProfile.typeVariantVersion;
+  if (typeof badTip === 'string' && (/cilindree/i.test(badTip) || !looksLikeTypeVariant(badTip))) {
+    delete state.civProfile.typeVariantVersion;
+    state.matched = state.matched.filter((m) => m.target !== 'typeVariantVersion');
+    if (tipSlash && looksLikeTypeVariant(tipSlash[1])) {
+      overwriteProfile(state, 'typeVariantVersion', tipSlash[1].trim(), 'Tipul', formatUsed);
+    }
+  }
+
+  const commercial =
+    /\/\s*(Fiesta|Focus|Golf|Octavia|Logan|Sandero|Clio|Megane|Passat|Polo|Fabia)\b/i.exec(t);
   if (commercial) {
     setProfile(state, 'commercialName', commercial[1], 'D.3', formatUsed);
   }
+}
+
+function looksLikeTypeVariant(v: string): boolean {
+  const s = v.trim();
+  if (s.length < 6) return false;
+  if (/cilindree|motorina|benzina|putere|marca/i.test(s)) return false;
+  return /\//.test(s) || /^[A-Z0-9]{2,8}-[A-Z0-9]/i.test(s);
+}
+
+function looksLikeEngineCode(v: string): boolean {
+  const s = v.trim().toUpperCase();
+  if (/CILINDREE|MOTOR|PUTERE/.test(s)) return false;
+  return /^[A-Z]{2,6}\d{0,4}$/.test(s) && s.length >= 3 && s.length <= 10;
+}
+
+function isPlausibleCivSeries(raw: string): boolean {
+  const s = raw.replace(/\s+/g, '').toUpperCase();
+  // Serie tipărită CIV: literă + 6 cifre (ex. J459513). Respinge B66171 din OCR + nr. înmatriculare.
+  if (!/^[A-HJ-NP-Z]\d{6}$/.test(s)) return false;
+  if (s.startsWith('B66')) return false;
+  return true;
+}
+
+function pickCivSeries(t: string): string | null {
+  const all = [...t.matchAll(/\b([A-HJ-NP-Z])\s?(\d{6})\b/gi)];
+  const scored = all
+    .map((m) => ({ letter: m[1]!.toUpperCase(), num: m[2]!, raw: `${m[1]!.toUpperCase()} ${m[2]}` }))
+    .filter((x) => isPlausibleCivSeries(`${x.letter}${x.num}`));
+  const preferJ = scored.find((x) => x.letter === 'J');
+  if (preferJ) return preferJ.raw;
+  return scored[0]?.raw ?? null;
+}
+
+function overwriteProfile(
+  state: MutableExtract,
+  key: string,
+  value: string | number,
+  rubric: string,
+  formatUsed: CivDocumentFormat,
+) {
+  delete state.civProfile[key];
+  state.matched = state.matched.filter((m) => m.target !== key);
+  setProfile(state, key, value, rubric, formatUsed);
 }
 
 /**
@@ -368,8 +480,12 @@ export function mapCivExtractTextToPreview(
       continue;
     }
     if (resolved.kind === 'civSeries') {
-      state.civSeries = value;
-      state.matched.push({ rubric: rubricRaw, target: 'civSeries', value });
+      if (!isPlausibleCivSeries(value)) {
+        unmatchedLines.push(line);
+        continue;
+      }
+      state.civSeries = value.replace(/\s+/g, ' ').trim();
+      state.matched.push({ rubric: rubricRaw, target: 'civSeries', value: state.civSeries });
       continue;
     }
     if (resolved.kind === 'civIssuedOn') {
@@ -389,6 +505,14 @@ export function mapCivExtractTextToPreview(
     }
     if (resolved.kind === 'profile') {
       const field = resolved.field;
+      if (field.key === 'typeVariantVersion' && !looksLikeTypeVariant(value)) {
+        unmatchedLines.push(line);
+        continue;
+      }
+      if (field.key === 'engineCode' && !looksLikeEngineCode(value)) {
+        unmatchedLines.push(line);
+        continue;
+      }
       let stored: string | number = value;
       if (field.kind === 'number' || field.kind === 'year') {
         const n = Number(value.replace(',', '.').replace(/[^\d.-]/g, ''));

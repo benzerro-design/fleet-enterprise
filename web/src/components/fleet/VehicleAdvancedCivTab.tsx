@@ -165,7 +165,11 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
         vin: string | null;
         matched: { rubric: string; target: string; value: string }[];
         formatUsed: string;
+        ocrText?: string;
       };
+      if (preview.ocrText?.trim()) {
+        setOcrText(preview.ocrText.trim());
+      }
       setProfileForm((prev) => {
         const next = { ...prev };
         for (const f of CIV_PROFILE_FIELDS) {
@@ -184,7 +188,7 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
           (preview.vin
             ? ` VIN detectat: ${preview.vin} — completează-l în Basic Info dacă lipsește.`
             : "") +
-          " Verifică valorile, apoi Salvează.",
+          " Verifică valorile (și textul OCR de mai sus), apoi Salvează.",
       );
     } catch {
       setError("Rețea sau server indisponibil.");
