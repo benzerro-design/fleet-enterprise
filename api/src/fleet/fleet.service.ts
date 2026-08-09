@@ -29,6 +29,7 @@ import type {
 } from './vehicle-acquisition.types';
 import { buildVehicleMobilityPayload } from './vehicle-mobility';
 import { parseWebUploadUrl, readWebUploadFromGcs } from '../storage/web-upload-storage';
+import { isPlausibleCivValue, isReadableCivOcrText } from './civ-text-quality';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
 import { vehicleClientScope } from '../iam/client-access';
@@ -567,7 +568,7 @@ export class FleetService {
     const preview = mapCivExtractTextToPreview(text, format, source);
     if (preview.matched.length === 0) {
       throw new BadRequestException(
-        'Nu am putut mapa nicio rubrică. Verifică textul (ex. „D.1 Marcă …”, „E …”, „P.3 …”) sau formatul CIV.',
+        'Nu am putut mapa nicio rubrică validă. Pentru CIV scanat: asigură-te că Vision OCR e activ, sau lipește text OCR curat (ex. „Marca FORD”, „Numarul de identificare WF0…”).',
       );
     }
     return preview;
@@ -581,31 +582,48 @@ export class FleetService {
       }
       const ct = ctRaw.split(';')[0]?.trim().toLowerCase() ?? '';
       if (ct.startsWith('text/') || ct.includes('json')) {
-        return buf.toString('utf8');
+        const t = buf.toString('utf8');
+        if (isReadableCivOcrText(t)) return t;
+        throw new BadRequestException('Textul din fișier nu arată a CIV lizibil.');
       }
-      const asUtf = buf.toString('utf8');
-      if (/D\.1|P\.3|Număr de identificare|CARTE DE IDENTITATE/i.test(asUtf)) {
-        return asUtf;
-      }
-      // PDF text-ish: strings in parentheses
-      const latin = buf.toString('latin1');
-      const chunks: string[] = [];
-      for (const m of latin.matchAll(/\((?:\\.|[^\\)]){2,120}\)/g)) {
-        const inner = m[0]
-          .slice(1, -1)
-          .replace(/\\n/g, '\n')
-          .replace(/\\r/g, '')
-          .replace(/\\(.)/g, '$1');
-        if (/[A-Za-zăâîșțĂÂÎȘȚ0-9.]/.test(inner)) chunks.push(inner);
-      }
-      const scraped = chunks.join('\n');
-      if (/D\.1|P\.3|\bE\b|Marcă|marca/i.test(scraped)) return scraped;
 
-      const ocr = await this.civOcr.extractText(buf, ct || 'application/octet-stream');
-      if (ocr?.trim()) return ocr;
+      const isPdf = ct === 'application/pdf' || buf.slice(0, 5).toString('utf8') === '%PDF-';
+      // Scan / PDF: Vision OCR înaintea scrape-ului din stream-uri (mojibake).
+      if (isPdf || ct.startsWith('image/')) {
+        const ocr = await this.civOcr.extractText(buf, ct || 'application/octet-stream');
+        if (ocr?.trim() && isReadableCivOcrText(ocr)) return ocr;
+        if (ocr?.trim() && ocr.trim().length >= 40) {
+          // OCR a returnat ceva — chiar dacă markerii sunt slabi, e mai bun decât PDF binary
+          return ocr;
+        }
+      }
+
+      const asUtf = buf.toString('utf8');
+      if (isReadableCivOcrText(asUtf)) return asUtf;
+
+      if (isPdf) {
+        const latin = buf.toString('latin1');
+        const chunks: string[] = [];
+        for (const m of latin.matchAll(/\((?:\\.|[^\\)]){4,120}\)/g)) {
+          const inner = m[0]
+            .slice(1, -1)
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '')
+            .replace(/\\(.)/g, '$1');
+          if (isPlausibleCivValue(inner, { maxLen: 120 })) chunks.push(inner);
+        }
+        const scraped = chunks.join('\n');
+        // NU accepta pe `\bE\b` — prinde gunoi din stream PDF.
+        if (isReadableCivOcrText(scraped)) return scraped;
+      }
+
+      if (!isPdf && !ct.startsWith('image/')) {
+        const ocr = await this.civOcr.extractText(buf, ct || 'application/octet-stream');
+        if (ocr?.trim()) return ocr;
+      }
 
       throw new BadRequestException(
-        'Nu am putut citi text din scan (OCR Vision indisponibil sau eșuat). Lipește textul OCR manual.',
+        'Nu am putut citi text din scan (OCR Vision indisponibil sau eșuat). Lipește textul OCR manual sau încarcă o imagine/PDF mai clară.',
       );
     } catch (e) {
       if (e instanceof BadRequestException) throw e;

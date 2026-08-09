@@ -230,16 +230,37 @@ export function resolveCivRubric(
   }
 
   const by2024 = PROFILE_BY_RUBRIC_2024.get(token);
-  if (by2024) return { kind: 'profile', field: by2024 };
+  if (by2024 && !isAmbiguousRubricToken(token, format)) {
+    return { kind: 'profile', field: by2024 };
+  }
 
-  // Coduri literă stabile pe toate formatele (dacă OCR a citit „d1” / „p.3”).
+  // Coduri literă stabile (dacă OCR a citit „d1” / „p.3”).
   if (format === 'unknown' || format === '2016' || format === '1993') {
     const letterish = token.replace(/_/g, '.');
     const again = PROFILE_BY_RUBRIC_2024.get(letterish);
-    if (again) return { kind: 'profile', field: again };
+    if (again && !isAmbiguousRubricToken(letterish, format)) {
+      return { kind: 'profile', field: again };
+    }
+  }
+
+  // Pe format unknown / 1993: etichete text (marca, cilindree, …).
+  if (format === 'unknown' || format === '1993') {
+    const key1993 = CIV_RUBRIC_ALIASES_1993[token];
+    if (key1993) {
+      const field = PROFILE_BY_KEY.get(key1993);
+      if (field) return { kind: 'profile', field };
+    }
   }
 
   return null;
+}
+
+/** Rubrici 1 / 9 / L / G — ambigue între formatele CIV; pe `unknown` le ignorăm. */
+function isAmbiguousRubricToken(token: string, format: CivDocumentFormat): boolean {
+  if (format === '2024' || format === '2016') return false;
+  if (/^\d+(\.\d+)?$/.test(token)) return true;
+  if (/^[a-z]$/.test(token)) return true;
+  return false;
 }
 
 export function normalizeCivProfile(raw: unknown): VehicleCivProfile {

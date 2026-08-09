@@ -1,10 +1,15 @@
 import {
   CIV_PROFILE_FIELDS,
+  CIV_RUBRIC_ALIASES_1993,
   normalizeCivRubricToken,
   resolveCivRubric,
   type CivDocumentFormat,
   type VehicleCivProfile,
 } from './vehicle-civ-fields';
+import {
+  isPlausibleCivValue,
+  isPlausibleVin,
+} from './civ-text-quality';
 
 export type CivExtractMatch = {
   rubric: string;
@@ -97,6 +102,26 @@ export function mapCivExtractTextToPreview(
   let civMentions: string | null = null;
   let vin: string | null = null;
 
+  const label1993 = [
+    'Numarul de identificare',
+    'Numărul de identificare',
+    'Marca',
+    'Tipul',
+    'Varianta',
+    'Caroseria',
+    'Anul fabricatiei',
+    'Anul fabricației',
+    'Cilindree',
+    'Culoarea',
+    'Tractiunea',
+    'Tracțiunea',
+    'Sursa de energie',
+    'Capacitatea rezervorului',
+    'Vit. max constructiva',
+    'Numarul axelor',
+    ...Object.keys(CIV_RUBRIC_ALIASES_1993).map((k) => k.replace(/_/g, ' ')),
+  ];
+
   const rubricAlts = [
     ...CIV_PROFILE_FIELDS.map((f) => f.rubric),
     'E',
@@ -110,6 +135,7 @@ export function mapCivExtractTextToPreview(
     'Reprezentanta RAR',
     'Mențiuni',
     'Mentiuni',
+    ...label1993,
   ];
 
   // Longer rubrics first (18.1 before 18, D.1 before D)
@@ -117,17 +143,22 @@ export function mapCivExtractTextToPreview(
   const rubricUnion = sortedRubrics
     .map((r) => r.replace(/\./g, '\\.').replace(/\s+/g, '\\s+'))
     .join('|');
+  // Optional leading "6." style index (CIV vechi)
   const lineRe = new RegExp(
-    `^(${rubricUnion})\\b\\s*[:.\\-–]?\\s*(.*)$`,
+    `^(?:\\d{1,2}\\.\\s*)?(${rubricUnion})\\b\\s*[:.\\-–]?\\s*(.*)$`,
     'i',
   );
 
   for (const line of lines) {
+    if (!isPlausibleCivValue(line, { maxLen: 400 })) {
+      unmatchedLines.push(line);
+      continue;
+    }
+
     const m = lineRe.exec(line);
     if (!m) {
-      // VIN standalone 17 chars
       const vinOnly = /\b([A-HJ-NPR-Z0-9]{17})\b/i.exec(line);
-      if (vinOnly && !vin) {
+      if (vinOnly && !vin && isPlausibleVin(vinOnly[1])) {
         vin = vinOnly[1].toUpperCase();
         matched.push({ rubric: 'E', target: 'vin', value: vin });
         continue;
@@ -138,7 +169,7 @@ export function mapCivExtractTextToPreview(
 
     const rubricRaw = m[1].trim();
     const value = cleanValue(m[2] ?? '');
-    if (!value) {
+    if (!value || !isPlausibleCivValue(value)) {
       unmatchedLines.push(line);
       continue;
     }
@@ -151,6 +182,10 @@ export function mapCivExtractTextToPreview(
 
     if (resolved.kind === 'vin') {
       const v = value.replace(/\s+/g, '').toUpperCase();
+      if (!isPlausibleVin(v)) {
+        unmatchedLines.push(line);
+        continue;
+      }
       vin = v;
       matched.push({ rubric: rubricRaw, target: 'vin', value: v });
       continue;
@@ -180,13 +215,12 @@ export function mapCivExtractTextToPreview(
       let stored: string | number = value;
       if (field.kind === 'number' || field.kind === 'year') {
         const n = Number(value.replace(',', '.').replace(/[^\d.-]/g, ''));
-        if (!Number.isFinite(n)) {
+        if (!Number.isFinite(n) || !isSaneNumericCivField(field.key, n)) {
           unmatchedLines.push(line);
           continue;
         }
         stored = n;
       }
-      // Don't overwrite richer earlier match
       if (civProfile[field.key] == null || civProfile[field.key] === '') {
         civProfile[field.key] = stored;
         matched.push({ rubric: rubricRaw, target: field.key, value: String(stored) });
@@ -194,7 +228,6 @@ export function mapCivExtractTextToPreview(
     }
   }
 
-  // Mentions: if a block after "Mențiuni" without rubric — already handled by line match.
   void normalizeCivRubricToken;
 
   return {
@@ -209,4 +242,30 @@ export function mapCivExtractTextToPreview(
     formatUsed,
     source,
   };
+}
+
+function isSaneNumericCivField(key: string, n: number): boolean {
+  if (key === 'manufactureYear') return n >= 1950 && n <= 2100;
+  if (key.endsWith('Kg') || key.includes('Mass') || key.includes('mass')) {
+    return n >= 10 && n <= 200_000;
+  }
+  if (
+    key.endsWith('Mm') ||
+    key.includes('length') ||
+    key.includes('width') ||
+    key.includes('height') ||
+    key.includes('wheelbase')
+  ) {
+    return n >= 100 && n <= 50_000;
+  }
+  if (key.includes('Cm3') || key === 'engineCapacityCm3') return n >= 50 && n <= 20_000;
+  if (key === 'enginePowerKw') return n >= 1 && n <= 2000;
+  if (key.includes('Kmh') || key === 'maxSpeedKmh') return n >= 20 && n <= 450;
+  if (key.includes('Noise') || key.includes('noise')) return n >= 20 && n <= 120;
+  if (key === 'axleCount') return n >= 1 && n <= 10;
+  if (key.includes('Seats') || key.includes('seats')) return n >= 1 && n <= 100;
+  if (key === 'fuelTankCapacityL') return n >= 5 && n <= 2000;
+  if (key === 'co2Gkm') return n >= 0 && n <= 1000;
+  if (key === 'powerToMassRatio') return n > 0 && n <= 5;
+  return Number.isFinite(n);
 }
