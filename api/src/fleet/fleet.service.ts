@@ -571,7 +571,11 @@ export class FleetService {
         'Nu am putut mapa nicio rubrică validă. Pentru CIV scanat: asigură-te că Vision OCR e activ, sau lipește text OCR curat (ex. „Marca FORD”, „Numarul de identificare WF0…”).',
       );
     }
-    return preview;
+    // Forțăm ocrText pe răspuns (UI trebuie să poată copia textul Vision).
+    return {
+      ...preview,
+      ocrText: (text || preview.ocrText || '').slice(0, 8000),
+    };
   }
 
   private async fetchCivTextFromUrl(rawUrl: string): Promise<string> {

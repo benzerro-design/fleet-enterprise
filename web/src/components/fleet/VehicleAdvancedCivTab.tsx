@@ -50,6 +50,7 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
   const [profileForm, setProfileForm] = useState(() => profileToFormState(initial.civProfile));
   const [importMode, setImportMode] = useState(false);
   const [ocrText, setOcrText] = useState("");
+  const [ocrDump, setOcrDump] = useState<string | null>(null);
   const [extractPending, setExtractPending] = useState(false);
   const [extractInfo, setExtractInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -128,7 +129,8 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
       const body: { text?: string; fileUrl?: string; format?: string } = {
         format: "unknown",
       };
-      if (ocrText.trim()) body.text = ocrText.trim();
+      // La OCR din fișier nu trimite text vechi din cutie — vrem textul Vision proaspăt.
+      if (!opts?.useFileUrl && ocrText.trim()) body.text = ocrText.trim();
       if (opts?.useFileUrl && initial.importSource?.fileUrl) {
         body.fileUrl = initial.importSource.fileUrl;
       }
@@ -167,8 +169,15 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
         formatUsed: string;
         ocrText?: string;
       };
-      if (preview.ocrText?.trim()) {
-        setOcrText(preview.ocrText.trim());
+      const dump = (preview.ocrText ?? "").trim();
+      if (dump) {
+        setOcrText(dump);
+        setOcrDump(dump);
+      } else {
+        setOcrDump(null);
+        setError(
+          "Maparea a rulat, dar API-ul nu a returnat textul OCR. Reîncearcă după refresh hard (Ctrl+F5) sau trimite un screenshot din Network → extract-preview.",
+        );
       }
       setProfileForm((prev) => {
         const next = { ...prev };
@@ -188,7 +197,8 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
           (preview.vin
             ? ` VIN detectat: ${preview.vin} — completează-l în Basic Info dacă lipsește.`
             : "") +
-          " Verifică valorile (și textul OCR de mai sus), apoi Salvează.",
+          (dump ? " Textul OCR e în cutie (poți copia)." : "") +
+          " Verifică valorile, apoi Salvează.",
       );
     } catch {
       setError("Rețea sau server indisponibil.");
