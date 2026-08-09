@@ -28,6 +28,7 @@ import type {
   VehiclePhotosPayload,
 } from './vehicle-acquisition.types';
 import { buildVehicleMobilityPayload } from './vehicle-mobility';
+import { parseWebUploadUrl, readWebUploadFromGcs } from '../storage/web-upload-storage';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
 import { vehicleClientScope } from '../iam/client-access';
@@ -573,27 +574,12 @@ export class FleetService {
   }
 
   private async fetchCivTextFromUrl(rawUrl: string): Promise<string> {
-    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
-    let url = rawUrl.trim();
-    if (url.startsWith('/') && webOrigin) {
-      url = `${webOrigin}${url}`;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      throw new BadRequestException('fileUrl trebuie să fie absolut sau relative pe WEB_ORIGIN');
-    }
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 25_000);
-      const res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
-      clearTimeout(timer);
-      if (!res.ok) {
-        throw new BadRequestException(`Nu am putut descărca scanul (HTTP ${res.status})`);
-      }
-      const buf = Buffer.from(await res.arrayBuffer());
+      const { buf, contentType: ctRaw } = await this.loadCivScanBytes(rawUrl);
       if (buf.length === 0 || buf.length > 12 * 1024 * 1024) {
         throw new BadRequestException('Fișier CIV invalid sau prea mare');
       }
-      const ct = res.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? '';
+      const ct = ctRaw.split(';')[0]?.trim().toLowerCase() ?? '';
       if (ct.startsWith('text/') || ct.includes('json')) {
         return buf.toString('utf8');
       }
@@ -623,10 +609,58 @@ export class FleetService {
       );
     } catch (e) {
       if (e instanceof BadRequestException) throw e;
+      const msg = e instanceof Error ? e.message : 'Descărcare scan CIV eșuată';
       throw new BadRequestException(
-        e instanceof Error ? e.message : 'Descărcare scan CIV eșuată',
+        msg === 'fetch failed'
+          ? 'Nu am putut descărca scanul CIV (rețea Cloud Run). Reîncearcă după redeploy API sau lipește text OCR.'
+          : msg,
       );
     }
+  }
+
+  /**
+   * Preferă GCS pentru `/uploads/...` (același bucket ca web).
+   * HTTP pe WEB_ORIGIN rămâne fallback (dev / URL externe).
+   */
+  private async loadCivScanBytes(
+    rawUrl: string,
+  ): Promise<{ buf: Buffer; contentType: string }> {
+    const uploadRef = parseWebUploadUrl(rawUrl);
+    if (uploadRef) {
+      const fromGcs = await readWebUploadFromGcs(uploadRef);
+      if (fromGcs) {
+        return { buf: fromGcs.data, contentType: fromGcs.contentType };
+      }
+    }
+
+    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
+    let url = rawUrl.trim();
+    if (url.startsWith('/') && webOrigin) {
+      url = `${webOrigin}${url}`;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      throw new BadRequestException(
+        uploadRef
+          ? 'Scan CIV negăsit în GCS. Reîncarcă documentul CIV (cu fișier) și reîncearcă.'
+          : 'fileUrl trebuie să fie absolut sau relative pe WEB_ORIGIN',
+      );
+    }
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25_000);
+    let res: Response;
+    try {
+      res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) {
+      throw new BadRequestException(`Nu am putut descărca scanul (HTTP ${res.status})`);
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const contentType =
+      res.headers.get('content-type')?.split(';')[0]?.trim() || 'application/octet-stream';
+    return { buf, contentType };
   }
 
   async patchVehicleCiv(
