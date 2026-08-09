@@ -14,7 +14,6 @@ jobs:
 
     permissions:
       contents: read
-      actions: write
 
     env:
       PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -28,15 +27,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Runner Docker was ~2–2.5m historically; Cloud Build added ~4m overhead.
-      - name: Free disk space
-        run: |
-          set -euo pipefail
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
-          docker system prune -af || true
-          df -h
-
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -48,18 +38,19 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.AR_REGION }}-docker.pkg.dev --quiet
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # Same style as web deploy: plain docker build/push (no Buildx GHA cache export).
+      # Last run spent ~87s only exporting mode=max cache + 33s freeing disk.
+      - name: Build image
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${AR_REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE}:${GITHUB_SHA}"
+          docker build -f api/Dockerfile -t "${IMAGE_URI}" api
 
-      - name: Build and push image
-        uses: docker/build-push-action@v6
-        with:
-          context: api
-          file: api/Dockerfile
-          push: true
-          tags: ${{ env.AR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
-          cache-from: type=gha,scope=fleet-api
-          cache-to: type=gha,mode=max,scope=fleet-api
+      - name: Push image
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${AR_REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE}:${GITHUB_SHA}"
+          docker push "${IMAGE_URI}"
 
       - name: Deploy to Cloud Run
         run: |
