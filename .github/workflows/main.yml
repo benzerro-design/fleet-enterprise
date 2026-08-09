@@ -14,6 +14,7 @@ jobs:
 
     permissions:
       contents: read
+      actions: write
 
     env:
       PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -27,6 +28,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Runner Docker was ~2–2.5m historically; Cloud Build added ~4m overhead.
+      - name: Free disk space
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          docker system prune -af || true
+          df -h
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -35,36 +45,21 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # Async + poll (SA cannot stream default GCS build logs).
-      # E2_HIGHCPU_8 + CLOUD_LOGGING_ONLY: closer to old ~2–3m GHA docker times.
-      - name: Build and push image (Cloud Build)
-        run: |
-          set -euo pipefail
-          IMAGE_URI="${AR_REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE}:${GITHUB_SHA}"
-          echo "Building ${IMAGE_URI}"
-          BUILD_ID="$(gcloud builds submit api \
-            --project="${PROJECT_ID}" \
-            --config=api/cloudbuild.yaml \
-            --substitutions="_IMAGE=${IMAGE_URI}" \
-            --async \
-            --format='value(id)')"
-          echo "Build ID: ${BUILD_ID}"
-          for i in $(seq 1 180); do
-            STATUS="$(gcloud builds describe "${BUILD_ID}" --project="${PROJECT_ID}" --format='value(status)')"
-            echo "poll=${i} status=${STATUS}"
-            case "${STATUS}" in
-              SUCCESS)
-                exit 0
-                ;;
-              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
-                gcloud builds describe "${BUILD_ID}" --project="${PROJECT_ID}" --format=json || true
-                exit 1
-                ;;
-            esac
-            sleep 5
-          done
-          echo "Timed out waiting for build ${BUILD_ID}"
-          exit 1
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.AR_REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: api
+          file: api/Dockerfile
+          push: true
+          tags: ${{ env.AR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=fleet-api
+          cache-to: type=gha,mode=max,scope=fleet-api
 
       - name: Deploy to Cloud Run
         run: |

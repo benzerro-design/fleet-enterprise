@@ -7,3 +7,7 @@ npm-debug.log
 .env.*
 coverage
 .cursor
+scripts
+test
+*.md
+cloudbuild.yaml
