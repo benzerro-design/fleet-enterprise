@@ -33,13 +33,13 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.16.0",
-    "@google-cloud/vision": "^4.3.3",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.0.1",
     "@prisma/client": "6.19.3",
     "bcrypt": "^6.0.0",
+    "google-auth-library": "^9.15.1",
     "pdfkit": "^0.18.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
