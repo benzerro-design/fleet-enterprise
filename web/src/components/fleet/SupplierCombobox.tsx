@@ -10,10 +10,13 @@ import {
 type Props = {
   value: string;
   onChange: (supplierId: string, supplier: SupplierRecord | null) => void;
+  /** Dacă e setat, filtrează după categorie. Omit pentru toți furnizorii activi. */
   category?: SupplierCategory;
   serviceTypeCode?: string;
   disabled?: boolean;
   className?: string;
+  /** Default 100 — pe costuri vrem lista completă, nu doar 30. */
+  pageSize?: number;
 };
 
 export function SupplierCombobox({
@@ -23,9 +26,11 @@ export function SupplierCombobox({
   serviceTypeCode,
   disabled,
   className = "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2",
+  pageSize = 100,
 }: Props) {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<SupplierRecord[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -34,14 +39,17 @@ export function SupplierCombobox({
       setLoading(true);
       const params = new URLSearchParams();
       params.set("status", "active");
-      params.set("pageSize", "30");
+      params.set("pageSize", String(Math.min(Math.max(1, pageSize), 200)));
       if (q.trim()) params.set("q", q.trim());
       if (category) params.set("category", category);
       if (serviceTypeCode) params.set("serviceTypeCode", serviceTypeCode);
       void fetch(`${suppliersBrowserBase}?${params}`)
-        .then((r) => (r.ok ? r.json() : { items: [] }))
-        .then((j: { items?: SupplierRecord[] }) => {
-          if (!cancelled) setItems(j.items ?? []);
+        .then((r) => (r.ok ? r.json() : { items: [], total: 0 }))
+        .then((j: { items?: SupplierRecord[]; total?: number }) => {
+          if (!cancelled) {
+            setItems(j.items ?? []);
+            setTotal(typeof j.total === "number" ? j.total : (j.items?.length ?? 0));
+          }
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -51,7 +59,7 @@ export function SupplierCombobox({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [q, category, serviceTypeCode]);
+  }, [q, category, serviceTypeCode, pageSize]);
 
   return (
     <div className="space-y-2">
@@ -80,7 +88,17 @@ export function SupplierCombobox({
           </option>
         ))}
       </select>
-      {loading ? <p className="text-xs text-zinc-500">Se încarcă…</p> : null}
+      {loading ? (
+        <p className="text-xs text-zinc-500">Se încarcă…</p>
+      ) : (
+        <p className="text-xs text-zinc-500">
+          {items.length === 0
+            ? "Niciun furnizor activ găsit."
+            : total > items.length
+              ? `Afișate ${items.length} din ${total} — rafinează căutarea.`
+              : `${items.length} furnizor${items.length === 1 ? "" : "i"} activ${items.length === 1 ? "" : "i"}.`}
+        </p>
+      )}
     </div>
   );
 }

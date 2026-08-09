@@ -534,7 +534,6 @@ export function CostForm(props: Props) {
                   setSupplierId(id);
                   if (row) setProvider(row.legalName);
                 }}
-                category={isItp ? "itp" : isFuel ? "fuel" : "service_auto"}
               />
             </OpsFormField>
             <OpsFormField label="Nr. factură">
@@ -616,7 +615,6 @@ export function CostForm(props: Props) {
             setSupplierId(id);
             if (row) setProvider(row.legalName);
           }}
-          category={isItp ? "itp" : isFuel ? "fuel" : "service_auto"}
         />
       </div>
       <div className="space-y-2">
