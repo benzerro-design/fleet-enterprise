@@ -267,5 +267,8 @@ function isSaneNumericCivField(key: string, n: number): boolean {
   if (key === 'fuelTankCapacityL') return n >= 5 && n <= 2000;
   if (key === 'co2Gkm') return n >= 0 && n <= 1000;
   if (key === 'powerToMassRatio') return n > 0 && n <= 5;
-  return Number.isFinite(n);
+  if (key === 'engineRpm' || key.includes('Rpm') || key.includes('rpm')) {
+    return n >= 500 && n <= 20_000;
+  }
+  return Number.isFinite(n) && n >= 0;
 }
