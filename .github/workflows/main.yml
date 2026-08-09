@@ -47,10 +47,15 @@ jobs:
             --timeout=1200s
 
       # Doar imaginea: env/secrets rămân pe serviciu (re-set le poate rupe deploy-ul).
+      # --project e obligatoriu: altfel gcloud poate ținti alt proiect decât cel din Cloud Build.
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy ${{ env.SERVICE }} \
-            --image ${{ env.AR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }} \
-            --region ${{ env.REGION }} \
-            --platform managed \
+          set -euo pipefail
+          IMAGE_URI="${AR_REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE}:${GITHUB_SHA}"
+          echo "Deploying ${IMAGE_URI}"
+          gcloud run deploy "${SERVICE}" \
+            --project="${PROJECT_ID}" \
+            --image="${IMAGE_URI}" \
+            --region="${REGION}" \
+            --platform=managed \
             --quiet
