@@ -46,24 +46,11 @@ jobs:
             --tag="${IMAGE_URI}" \
             --timeout=1200s
 
+      # Doar imaginea: env/secrets rămân pe serviciu (re-set le poate rupe deploy-ul).
       - name: Deploy to Cloud Run
         run: |
-          # SMTP_* din GitHub Secrets (opțional). Fără ele, mailurile rămân stubbed —
-          # nu montăm SMTP din Secret Manager (deploy eșua dacă secretele GCP lipseau).
-          ENV_VARS="WEB_ORIGIN=${{ secrets.WEB_ORIGIN }},NODE_ENV=production,GCS_BUCKET=fleet-enterprise-trip-sheets,BOT_ENABLED=true,SMTP_HOST=smtp.gmail.com,SMTP_PORT=465,SMTP_SECURE=true"
-          if [ -n "${{ secrets.SMTP_FROM }}" ]; then
-            ENV_VARS="${ENV_VARS},SMTP_FROM=${{ secrets.SMTP_FROM }}"
-          fi
-          if [ -n "${{ secrets.SMTP_USER }}" ]; then
-            ENV_VARS="${ENV_VARS},SMTP_USER=${{ secrets.SMTP_USER }}"
-          fi
-          if [ -n "${{ secrets.SMTP_PASS }}" ]; then
-            ENV_VARS="${ENV_VARS},SMTP_PASS=${{ secrets.SMTP_PASS }}"
-          fi
           gcloud run deploy ${{ env.SERVICE }} \
             --image ${{ env.AR_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --platform managed \
-            --allow-unauthenticated \
-            --set-secrets DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest \
-            --set-env-vars "${ENV_VARS}"
+            --quiet
