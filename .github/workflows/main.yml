@@ -35,19 +35,37 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # Build pe Cloud Build (evită „No space left” pe runner-ul GitHub Actions).
+      # Async + poll: SA nu poate streama logurile din bucket-ul default Cloud Build,
+      # iar `gcloud builds submit` (sync) ieșea cu exit 1 deși build-ul ajungea SUCCESS.
       - name: Build and push image (Cloud Build)
         run: |
           set -euo pipefail
           IMAGE_URI="${AR_REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE}:${GITHUB_SHA}"
           echo "Building ${IMAGE_URI}"
-          gcloud builds submit api \
+          BUILD_ID="$(gcloud builds submit api \
             --project="${PROJECT_ID}" \
             --tag="${IMAGE_URI}" \
-            --timeout=1200s
+            --timeout=1200s \
+            --async \
+            --format='value(id)')"
+          echo "Build ID: ${BUILD_ID}"
+          for i in $(seq 1 150); do
+            STATUS="$(gcloud builds describe "${BUILD_ID}" --project="${PROJECT_ID}" --format='value(status)')"
+            echo "poll=${i} status=${STATUS}"
+            case "${STATUS}" in
+              SUCCESS)
+                exit 0
+                ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                gcloud builds describe "${BUILD_ID}" --project="${PROJECT_ID}" --format=json || true
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "Timed out waiting for build ${BUILD_ID}"
+          exit 1
 
-      # Doar imaginea: env/secrets rămân pe serviciu (re-set le poate rupe deploy-ul).
-      # --project e obligatoriu: altfel gcloud poate ținti alt proiect decât cel din Cloud Build.
       - name: Deploy to Cloud Run
         run: |
           set -euo pipefail
