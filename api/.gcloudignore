@@ -1,0 +1,12 @@
+# Used by `gcloud builds submit` (not Docker). Keep in sync with .dockerignore.
+node_modules
+dist
+npm-debug.log
+.git
+.gitignore
+.env
+.env.*
+coverage
+.cursor
+scripts
+*.md
