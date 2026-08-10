@@ -427,11 +427,6 @@ function applyModernUeCivHeuristics(
   const seats = /\bS\.?\s*1\.?\s*Num[aă]r(?:ul)?\s+(?:de\s+)?locuri[^0-9]{0,20}(\d{1,2})/i.exec(t);
   if (seats) overwriteProfile(state, 'seats', seats[1], 'S.1', formatUsed);
 
-  const vmax =
-    /\bT\.?\s*Viteza?\s+maxim[aă][^0-9]{0,30}(\d{2,3})/i.exec(t) ||
-    /Viteza?\s+maxim[aă]\s+constructiv[aă][^0-9]{0,20}(\d{2,3})/i.exec(t);
-  if (vmax) overwriteProfile(state, 'maxSpeedKmh', vmax[1], 'T', formatUsed);
-
   const drive =
     /\b(?:18\.?\s*)?(?:Trac[tț]iune|Tractiunea)\s*:?\s*\n?\s*(FATA|FAȚA|SPATE|INTEGRALA|INTEGRALĂ|4X4)\b/i.exec(
       t,
@@ -440,26 +435,33 @@ function applyModernUeCivHeuristics(
     overwriteProfile(state, 'driveType', drive[1].replace(/Ț/g, 'T').replace(/ț/g, 't'), '18', formatUsed);
   }
 
-  const tank =
-    /\bW\.?\s*.{0,40}?[Rr]ezervor[^0-9]{0,20}(\d{2,3}(?:[.,]\d+)?)/i.exec(t) ||
-    /Capacitatea?\s+(?:rezervorului|bazinului)[^0-9]{0,20}(\d{2,3})/i.exec(t);
-  if (tank) {
-    overwriteProfile(state, 'fuelTankCapacityL', tank[1].replace(',', '.'), 'W', formatUsed);
-  }
-
   const length =
-    /\b(?:10\.?\s*)?(?:Lungime|Length)\s*:?\s*\n?\s*(\d{3,5})\b/i.exec(t) ||
-    /\b10\.\s*[^\n]{0,40}?(\d{4})\b/.exec(t);
+    /\b(?:10\.?\s*)?Lungime\s*\(?mm\)?\s*:?\s*\n?\s*(\d{3,5})\b/i.exec(t);
   if (length && Number(length[1]) >= 2500) {
     overwriteProfile(state, 'lengthMm', length[1], '10', formatUsed);
   }
-  const width = /\b(?:11\.?\s*)?(?:L[aă]țime|Latime|Width)\s*:?\s*\n?\s*(\d{3,4})\b/i.exec(t);
+  const width =
+    /\b(?:11\.?\s*)?L[aăâ][tțţ]ime\s*\(?mm\)?\s*:?\s*\n?\s*(\d{3,4})\b/i.exec(t);
   if (width && Number(width[1]) >= 1200 && Number(width[1]) <= 2600) {
     overwriteProfile(state, 'widthMm', width[1], '11', formatUsed);
   }
-  const height = /\b(?:12\.?\s*)?(?:În[aă]lțime|Inaltime|Height)\s*:?\s*\n?\s*(\d{3,4})\b/i.exec(t);
+  const height =
+    /\b(?:12\.?\s*)?(?:În[aă]l[tțţ]ime|Inaltime)\s*\(?mm\)?\s*:?\s*\n?\s*(\d{3,4})\b/i.exec(t);
   if (height && Number(height[1]) >= 1000 && Number(height[1]) <= 3000) {
     overwriteProfile(state, 'heightMm', height[1], '12', formatUsed);
+  }
+
+  const vmax =
+    /\bT\.?\s*\n?\s*Vitez[aă]\s+maxim[aă][^0-9]{0,80}?(\d{2,3})\b/i.exec(t);
+  if (vmax && Number(vmax[1]) >= 80 && Number(vmax[1]) <= 350) {
+    overwriteProfile(state, 'maxSpeedKmh', vmax[1], 'T', formatUsed);
+  }
+
+  // Pe OCR 2 coloane, lângă W apare uneori masa remorcabilă (580); rezervorul real e ~30–80 L.
+  const tank =
+    /W\.?\s*Capacitate\s+rezervor[^0-9]{0,120}?(\d{2})\b/i.exec(t);
+  if (tank && Number(tank[1]) >= 25 && Number(tank[1]) <= 90) {
+    overwriteProfile(state, 'fuelTankCapacityL', tank[1], 'W', formatUsed);
   }
 
   const issued =
