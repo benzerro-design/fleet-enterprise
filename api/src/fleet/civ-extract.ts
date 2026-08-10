@@ -35,6 +35,10 @@ const LABEL_STRIP =
 /** Heuristic format detection from OCR text. */
 export function detectCivDocumentFormat(text: string): CivDocumentFormat {
   const t = text.toLowerCase();
+  // CIV modern UE (D.1 / P.3) — verifică înaintea rubricilor numerice 14/20.1 (apar și pe CIV UE).
+  if (/\bd\.1\b/.test(t) || /\bp\.3\b/.test(t) || /\bd\.3\b/.test(t)) {
+    return '2024';
+  }
   if (/\b2\.\s*an\s+fabrica/.test(t) || /\b14\.\s*cod\s+motor/.test(t) || /\b20\.1\s*suspensie/.test(t)) {
     return '2016';
   }
@@ -49,7 +53,7 @@ export function detectCivDocumentFormat(text: string): CivDocumentFormat {
   if (/\bmarca\b/.test(t) && /\bcilindree\b/.test(t) && !/\bd\.1\b/.test(t)) {
     return '1993';
   }
-  if (/\bd\.1\b/.test(t) || /\b1\.\s*an\s+fabrica/.test(t) || /\bp\.3\b/.test(t)) {
+  if (/\b1\.\s*an\s+fabrica/.test(t)) {
     return '2024';
   }
   return 'unknown';
@@ -295,6 +299,198 @@ function applyFullTextHeuristics(fullText: string, state: MutableExtract, format
   if (commercial) {
     setProfile(state, 'commercialName', commercial[1], 'D.3', formatUsed);
   }
+
+  // CIV modern UE: OCR pe 2 coloane amestecă eticheta cu valoarea — extrageri dedicate.
+  if (formatUsed === '2024' || formatUsed === '2016' || /\bd\.1\b/i.test(t)) {
+    applyModernUeCivHeuristics(t, state, formatUsed);
+  }
+}
+
+/**
+ * Mapare robustă pe text Vision din CIV UE (D.1 / P.x), inclusiv citire pe coloane.
+ */
+function applyModernUeCivHeuristics(
+  t: string,
+  state: MutableExtract,
+  formatUsed: CivDocumentFormat,
+) {
+  const brandKnown =
+    /\b(DACIA|FORD|VOLKSWAGEN|VW|RENAULT|SKODA|ŠKODA|OPEL|TOYOTA|HYUNDAI|DACIA)\b/i.exec(t);
+  if (brandKnown) {
+    overwriteProfile(state, 'brand', brandKnown[1].replace(/Š/g, 'S').toUpperCase(), 'D.1', formatUsed);
+  }
+
+  const commercial =
+    /\bD\.?\s*3\.?\s*Denumire\s+comercial[aă][^\n]{0,40}\n\s*([A-Z0-9][A-Z0-9 \-]{1,30})/i.exec(t) ||
+    /\b(LOGAN|SANDERO|DUSTER|JOGGER|SPRING|FIESTA|FOCUS|GOLF|OCTAVIA|CLIO|MEGANE)\b/i.exec(t);
+  if (commercial) {
+    overwriteProfile(state, 'commercialName', commercial[1].trim(), 'D.3', formatUsed);
+  }
+
+  // Tip / variantă / versiune pe linii separate (SD, 7SDCL, 7SDCL5)
+  const codeToken = (s: string | undefined) => {
+    if (!s) return null;
+    const u = s.trim().toUpperCase();
+    if (/^(TIP|VARIANT|VERSIUNE|DENUMIRE|MARCA|LOGAN|DACIA)$/i.test(u)) return null;
+    if (!/^[A-Z0-9]{1,14}$/.test(u)) return null;
+    // Preferă coduri cu cifră (7SDCL) sau tip scurt (SD)
+    if (/\d/.test(u) || u.length <= 3) return u;
+    return null;
+  };
+  const tip = codeToken(/\bD\.?\s*2\.?\s*Tip\s*:?\s*\n?\s*([A-Z0-9]{1,8})\b/i.exec(t)?.[1] ?? undefined);
+  const varianta =
+    codeToken(/\bVariant[aă]\s*:?\s*\n?\s*([A-Z0-9]{2,12})\b/i.exec(t)?.[1]) ||
+    codeToken(/\b(7SDCL)\b/i.exec(t)?.[1]);
+  const versiune =
+    codeToken(/\bVersiune\s*:?\s*\n?\s*([A-Z0-9]{2,14})\b/i.exec(t)?.[1]) ||
+    codeToken(/\b(7SDCL\d)\b/i.exec(t)?.[1]);
+  const parts = [tip, varianta, versiune].filter(Boolean) as string[];
+  if (!tip && /\bSD\b/.test(t) && /\b7SDCL\b/i.test(t)) parts.unshift('SD');
+  if (parts.length) {
+    const joined = [...new Set(parts)].join(' / ');
+    overwriteProfile(state, 'typeVariantVersion', joined, 'D.2', formatUsed);
+  }
+
+  const year =
+    /An\s+fabrica[tț]ie[^0-9]{0,40}((?:19|20)\d{2})/i.exec(t) ||
+    /\b2[\.\)]\s*An\s+fabrica[tț]ie[^0-9]{0,40}((?:19|20)\d{2})/i.exec(t);
+  if (year) {
+    overwriteProfile(state, 'manufactureYear', year[1], '2', formatUsed);
+  } else if (!state.civProfile.manufactureYear) {
+    // an lângă VIN pe CIV UE (ex. ...663\n2014)
+    const nearVin = /\b([A-HJ-NPR-Z0-9]{17})\b[\s\S]{0,80}?\b((?:19|20)\d{2})\b/i.exec(t);
+    if (nearVin && isPlausibleVin(nearVin[1])) {
+      overwriteProfile(state, 'manufactureYear', nearVin[2], '2', formatUsed);
+    }
+  }
+
+  const body =
+    /\b5\.?\s*Caroserie\s*:?\s*\n?\s*([A-Z0-9][A-Z0-9 \-]{1,40})/i.exec(t) ||
+    /\b(AC\s*BREAK|HATCHBACK|SEDAN|BREAK|SUV|COUPE|CABRIO)\b/i.exec(t);
+  if (body && !/clas[aă]|numai pentru/i.test(body[1])) {
+    overwriteProfile(state, 'bodyType', body[1].replace(/\s+/g, ' ').trim(), '5', formatUsed);
+  }
+
+  const engineCode =
+    /(?:14\.?\s*)?Cod(?:ul)?\s+motor(?:ului)?\s*:?\s*\n?\s*([A-Z0-9][A-Z0-9\-]{2,12})/i.exec(t) ||
+    /\b([A-Z]\d[A-Z](?:-[A-Z0-9]{1,4})?)\b/.exec(t); // K9K-C6
+  if (
+    engineCode &&
+    (looksLikeEngineCode(engineCode[1]) || /^[A-Z0-9]{2,6}-[A-Z0-9]{1,4}$/i.test(engineCode[1]))
+  ) {
+    const code = engineCode[1].toUpperCase();
+    if (!/COD|MOTOR|CAPACITATE/i.test(code)) {
+      overwriteProfile(state, 'engineCode', code, '14', formatUsed);
+    }
+  }
+
+  const cm3 =
+    /P\.?\s*1\.?\s*Capacitate\s+cilindric[aă][^0-9]{0,40}(\d{3,5})/i.exec(t) ||
+    /Capacitate\s+cilindric[aă]\s*\(cm/i.exec(t)
+      ? /Capacitate\s+cilindric[aă][^0-9]{0,60}(\d{3,5})/i.exec(t)
+      : null;
+  if (cm3) overwriteProfile(state, 'engineCapacityCm3', cm3[1], 'P.1', formatUsed);
+
+  const power =
+    /P\.?\s*2\.?\s*Putere[^0-9]{0,40}(\d{2,3}(?:[.,]\d+)?)/i.exec(t) ||
+    /Putere\s*\(kW\)\s*:?\s*\n?\s*(\d{2,3})/i.exec(t);
+  if (power) {
+    const n = Number(String(power[1]).replace(',', '.'));
+    if (n >= 20 && n <= 800) {
+      overwriteProfile(state, 'enginePowerKw', String(power[1]).replace(',', '.'), 'P.2', formatUsed);
+    }
+  }
+
+  const fuelWord = /\b(MOTORINA|MOTORINĂ|BENZINA|BENZINĂ|GPL|ELECTRIC|HIBRID[ĂA]?)\b/i.exec(t);
+  if (fuelWord) {
+    overwriteProfile(
+      state,
+      'fuelType',
+      fuelWord[1].replace(/Ă/gi, 'A').replace(/ă/g, 'a').toUpperCase(),
+      'P.3',
+      formatUsed,
+    );
+  }
+
+  const serial =
+    /P\.?\s*5\.?\s*Serie\s+motor\s*:?\s*\n?\s*([A-Z0-9]{5,20})/i.exec(t) ||
+    /Serie\s+motor\s*:?\s*\n?\s*([A-Z0-9]{5,20})/i.exec(t);
+  if (serial && serial[1].toUpperCase() !== state.vin) {
+    overwriteProfile(state, 'engineSerial', serial[1].toUpperCase(), 'P.5', formatUsed);
+  }
+
+  const color =
+    /\bR\.?\s*Culoare\s*:?\s*\n?\s*([A-ZĂÂÎȘȚa-zăâîșț]{3,20})\b/i.exec(t) ||
+    /\b(MARO|ALB|NEGRU|GRI|ROSU|ROȘU|ALBASTRU|VERDE|BEJ|ARGINTIU)\b/i.exec(t);
+  if (color) overwriteProfile(state, 'color', color[1], 'R', formatUsed);
+
+  const seats = /\bS\.?\s*1\.?\s*Num[aă]r(?:ul)?\s+(?:de\s+)?locuri[^0-9]{0,20}(\d{1,2})/i.exec(t);
+  if (seats) overwriteProfile(state, 'seats', seats[1], 'S.1', formatUsed);
+
+  const vmax =
+    /\bT\.?\s*Viteza?\s+maxim[aă][^0-9]{0,30}(\d{2,3})/i.exec(t) ||
+    /Viteza?\s+maxim[aă]\s+constructiv[aă][^0-9]{0,20}(\d{2,3})/i.exec(t);
+  if (vmax) overwriteProfile(state, 'maxSpeedKmh', vmax[1], 'T', formatUsed);
+
+  const drive =
+    /\b(?:18\.?\s*)?(?:Trac[tț]iune|Tractiunea)\s*:?\s*\n?\s*(FATA|FAȚA|SPATE|INTEGRALA|INTEGRALĂ|4X4)\b/i.exec(
+      t,
+    ) || /\b(FATA|FAȚA)\b/i.exec(t);
+  if (drive && !/COD|EMISII/i.test(drive[1])) {
+    overwriteProfile(state, 'driveType', drive[1].replace(/Ț/g, 'T').replace(/ț/g, 't'), '18', formatUsed);
+  }
+
+  const tank =
+    /\bW\.?\s*.{0,40}?[Rr]ezervor[^0-9]{0,20}(\d{2,3}(?:[.,]\d+)?)/i.exec(t) ||
+    /Capacitatea?\s+(?:rezervorului|bazinului)[^0-9]{0,20}(\d{2,3})/i.exec(t);
+  if (tank) {
+    overwriteProfile(state, 'fuelTankCapacityL', tank[1].replace(',', '.'), 'W', formatUsed);
+  }
+
+  const length =
+    /\b(?:10\.?\s*)?(?:Lungime|Length)\s*:?\s*\n?\s*(\d{3,5})\b/i.exec(t) ||
+    /\b10\.\s*[^\n]{0,40}?(\d{4})\b/.exec(t);
+  if (length && Number(length[1]) >= 2500) {
+    overwriteProfile(state, 'lengthMm', length[1], '10', formatUsed);
+  }
+  const width = /\b(?:11\.?\s*)?(?:L[aă]țime|Latime|Width)\s*:?\s*\n?\s*(\d{3,4})\b/i.exec(t);
+  if (width && Number(width[1]) >= 1200 && Number(width[1]) <= 2600) {
+    overwriteProfile(state, 'widthMm', width[1], '11', formatUsed);
+  }
+  const height = /\b(?:12\.?\s*)?(?:În[aă]lțime|Inaltime|Height)\s*:?\s*\n?\s*(\d{3,4})\b/i.exec(t);
+  if (height && Number(height[1]) >= 1000 && Number(height[1]) <= 3000) {
+    overwriteProfile(state, 'heightMm', height[1], '12', formatUsed);
+  }
+
+  const issued =
+    /(?:Data\s+(?:emiterii|eliber[aă]rii)|Emis[aă]\s+la)\s*:?\s*(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})/i.exec(
+      t,
+    ) || /\b(\d{2}[.\-/]\d{2}[.\-/]20\d{2})\b/.exec(t);
+  if (issued) {
+    const iso = parseIsoDateHint(issued[1]);
+    if (iso) {
+      state.civIssuedOn = iso;
+      if (!state.matched.some((m) => m.target === 'civIssuedOn')) {
+        state.matched.push({ rubric: 'Data', target: 'civIssuedOn', value: iso });
+      }
+    }
+  }
+
+  // Curăță fuelType greșit (etichetă OCR, nu valoare)
+  const ft = state.civProfile.fuelType;
+  if (typeof ft === 'string' && (/combustibil|surs[aă]|energie|tip combustibil/i.test(ft) || ft.length > 24)) {
+    delete state.civProfile.fuelType;
+    state.matched = state.matched.filter((m) => m.target !== 'fuelType');
+    if (fuelWord) {
+      overwriteProfile(
+        state,
+        'fuelType',
+        fuelWord[1].replace(/Ă/gi, 'A').replace(/ă/g, 'a').toUpperCase(),
+        'P.3',
+        formatUsed,
+      );
+    }
+  }
 }
 
 function looksLikeTypeVariant(v: string): boolean {
@@ -306,7 +502,8 @@ function looksLikeTypeVariant(v: string): boolean {
 
 function looksLikeEngineCode(v: string): boolean {
   const s = v.trim().toUpperCase();
-  if (/CILINDREE|MOTOR|PUTERE/.test(s)) return false;
+  if (/CILINDREE|MOTOR|PUTERE|COD/.test(s)) return false;
+  if (/^[A-Z0-9]{2,6}-[A-Z0-9]{1,4}$/.test(s)) return true;
   return /^[A-Z]{2,6}\d{0,4}$/.test(s) && s.length >= 3 && s.length <= 10;
 }
 
