@@ -221,7 +221,8 @@ function applyEmptyFieldFallbacks(
   if (empty('manufactureYear')) {
     const y =
       /An\s+fabrica\w*\s*:?[\s\S]{0,80}?((?:19|20)\d{2})/i.exec(t) ||
-      /fabrica\w*[\s\S]{0,40}?((?:19|20)\d{2})/i.exec(t);
+      /fabrica\w*[\s\S]{0,40}?((?:19|20)\d{2})/i.exec(t) ||
+      /\b[A-HJ-NPR-Z0-9]{17}\b[\s\S]{0,120}?\b((?:19|20)\d{2})\b/i.exec(t);
     if (y && Number(y[1]) >= 1980 && Number(y[1]) <= 2035) {
       ctx.setMeta('manufactureYear', y[1]!, 'An fabricație');
     }
