@@ -358,7 +358,7 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
               {CIV_PROFILE_FIELDS.filter((f) => f.group === group.id).map((f) => (
                 <FieldInput
                   key={f.key}
-                  label={`${f.rubric} — ${f.label}${f.unit ? ` (${f.unit})` : ""}`}
+                  label={`${f.label}${f.unit ? ` (${f.unit})` : ""}`}
                   value={profileForm[f.key] ?? ""}
                   onChange={(v) => setProfileForm((prev) => ({ ...prev, [f.key]: v }))}
                   disabled={!write}
