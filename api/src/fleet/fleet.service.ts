@@ -523,8 +523,9 @@ export class FleetService {
   }
 
   /**
-   * Preview mapare CIV din text OCR / fișier (nu persistă).
-   * Body: { text?, fileUrl?, format?: '2024'|'2016'|'1993'|'unknown' }
+   * Preview mapare CIV din text OCR / fișiere față+verso.
+   * Body: { text?, fileUrl?, fileUrlVerso?, format?: '2024'|'2016'|'1993'|'unknown' }
+   * Persistă VIN în Basic Info dacă e gol (opțiunea B).
    */
   async extractCivPreview(
     tenantSlug: string,
@@ -532,19 +533,7 @@ export class FleetService {
     body: unknown,
     access?: AccessContext,
   ): Promise<CivExtractPreview> {
-    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
-    const row = await this.prisma.vehicle.findFirst({
-      where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      select: { id: true },
-    });
-    if (!row) throw new NotFoundException('Vehicle not found');
-
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      throw new BadRequestException('Invalid body');
-    }
-    const o = body as Record<string, unknown>;
-    let text = typeof o.text === 'string' ? o.text : '';
-    const fileUrl = typeof o.fileUrl === 'string' ? o.fileUrl.trim() : '';
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
     const formatRaw = typeof o.format === 'string' ? o.format : 'unknown';
     const format: CivDocumentFormat =
       formatRaw === '2024' ||
@@ -555,26 +544,53 @@ export class FleetService {
         : 'unknown';
 
     let source: 'text' | 'file' = 'text';
-    if (!text.trim() && fileUrl) {
-      text = await this.fetchCivTextFromUrl(fileUrl);
+    if (!text.trim() && (fileUrl || fileUrlVerso)) {
+      const parts: string[] = [];
+      if (fileUrl) {
+        const front = await this.fetchCivTextFromUrl(fileUrl);
+        parts.push(`=== CIV FAȚĂ ===\n${front}`);
+      }
+      if (fileUrlVerso) {
+        const verso = await this.fetchCivTextFromUrl(fileUrlVerso);
+        parts.push(`=== CIV VERSO ===\n${verso}`);
+      }
+      text = parts.join('\n\n');
       source = 'file';
     }
     if (!text.trim()) {
       throw new BadRequestException(
-        'Lipește textul OCR din CIV sau furnizează fileUrl către un PDF/text lizibil',
+        'Lipește textul OCR din CIV sau furnizează fileUrl / fileUrlVerso către scanurile CIV',
       );
     }
 
     const preview = mapCivExtractTextToPreview(text, format, source);
+    if (preview.mappingSkipped) {
+      return {
+        ...preview,
+        ocrText: (text || preview.ocrText || '').slice(0, 8000),
+      };
+    }
     if (preview.matched.length === 0) {
       throw new BadRequestException(
-        'Nu am putut mapa nicio rubrică validă. Pentru CIV scanat: asigură-te că Vision OCR e activ, sau lipește text OCR curat (ex. „Marca FORD”, „Numarul de identificare WF0…”).',
+        'Nu am putut mapa nicio rubrică validă. Pentru CIV scanat: asigură-te că Vision OCR e activ, sau lipește text OCR curat (ex. „Marcă: DACIA”).',
       );
     }
-    // Forțăm ocrText pe răspuns (UI trebuie să poată copia textul Vision).
+
+    let vinAutoSaved = false;
+    const detectedVin = preview.vin?.replace(/\s+/g, '').toUpperCase() ?? null;
+    const existingVin = row.vin?.replace(/\s+/g, '').toUpperCase() ?? '';
+    if (detectedVin && !existingVin) {
+      await this.prisma.vehicle.update({
+        where: { id: vehicleId },
+        data: { vin: detectedVin },
+      });
+      vinAutoSaved = true;
+    }
+
     return {
       ...preview,
       ocrText: (text || preview.ocrText || '').slice(0, 8000),
+      vinAutoSaved,
     };
   }
 
@@ -706,7 +722,7 @@ export class FleetService {
         where: {
           id: dto.civImportedFromDocumentId,
           vehicleId,
-          documentTypeCode: 'civ',
+          documentTypeCode: { in: ['civ', 'civ_fata', 'civ_verso'] },
         },
       });
       if (!doc) throw new NotFoundException('CIV document not found for this vehicle');
@@ -1421,22 +1437,36 @@ export class FleetService {
   }
 
   private async findCivImportSource(vehicleId: string): Promise<CivImportSource> {
-    const doc = await this.prisma.vehicleDocument.findFirst({
+    const docs = await this.prisma.vehicleDocument.findMany({
       where: {
         vehicleId,
-        documentTypeCode: 'civ',
+        documentTypeCode: { in: ['civ', 'civ_fata', 'civ_verso'] },
         fileUrl: { not: null },
       },
       orderBy: { createdAt: 'desc' },
     });
-    if (!doc?.fileUrl) return null;
+    if (!docs.length) return null;
+
+    const front =
+      docs.find((d) => d.documentTypeCode === 'civ_fata') ??
+      docs.find((d) => d.documentTypeCode === 'civ') ??
+      docs[0]!;
+    const verso =
+      docs.find((d) => d.documentTypeCode === 'civ_verso' && d.id !== front.id) ?? null;
+
+    if (!front.fileUrl) return null;
     return {
-      documentId: doc.id,
-      title: doc.title,
-      fileUrl: doc.fileUrl,
-      fileName: doc.fileName,
-      expiresOn: doc.expiresOn ? doc.expiresOn.toISOString() : null,
-      uploadedAt: doc.createdAt.toISOString(),
+      documentId: front.id,
+      title: verso
+        ? `CIV față + verso (${front.title}${verso.title ? ` / ${verso.title}` : ''})`
+        : front.title,
+      fileUrl: front.fileUrl,
+      fileName: front.fileName,
+      fileUrlVerso: verso?.fileUrl ?? null,
+      fileNameVerso: verso?.fileName ?? null,
+      documentIdVerso: verso?.id ?? null,
+      expiresOn: front.expiresOn ? front.expiresOn.toISOString() : null,
+      uploadedAt: front.createdAt.toISOString(),
     };
   }
 

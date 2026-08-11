@@ -98,14 +98,7 @@ export const CIV_LABEL_FIELDS: CivLabelFieldSpec[] = [
     key: 'civSeries',
     kind: 'civSeries',
     labels: ['Serie CIV', 'Seria CIV', 'Seria C.I.V.', 'Serie C.I.V.'],
-    validate: (v) => {
-      const s = v.replace(/\s+/g, '').toUpperCase();
-      // Serie tipărită CIV uzuală; respinge serii motor (ex. R196021) și VIN.
-      if (isPlausibleVin(s)) return false;
-      if (/^[A-HJ-NP-Z]\d{6}$/.test(s)) return true;
-      if (/^[A-Z]{1,3}\d{5,8}$/.test(s) && !/^R\d/.test(s)) return true;
-      return false;
-    },
+    validate: (v) => isCivSeriesCode(v),
   },
   {
     key: 'civIssuedOn',
@@ -248,13 +241,12 @@ export const CIV_LABEL_FIELDS: CivLabelFieldSpec[] = [
     key: 'maxTechnicalMassKg',
     kind: 'profile',
     fieldKind: 'number',
+    // App: „Masă maximă tehnic admisă” ↔ CIV: formularea completă (excepție motociclete).
     labels: [
+      'Masă maximă tehnic admisibilă, cu excepția motocicletelor',
+      'Masa maximă tehnic admisibilă, cu excepția motocicletelor',
       'Masă maximă tehnic admisă',
       'Masa maximă tehnic admisă',
-      'Masă maximă tehnic admisibilă',
-      'Masa maximă tehnic admisibilă',
-      'Masă maximă tehnic admisibilă, cu excepția motocicletelor',
-      'MTMA',
     ],
     validate: (v) => isPositiveNumber(v, 200, 80000),
   },
@@ -572,11 +564,19 @@ export type CivLabelPair = {
   label: string;
   labelNorm: string;
   value: string;
-  source: 'same-line' | 'next-line';
+  source: 'same-line';
 };
 
+/** Serie CIV pe față: 1 literă + 6 cifre (sub barcode / QR). */
+export function isCivSeriesCode(raw: string): boolean {
+  const s = raw.replace(/\s+/g, '').toUpperCase();
+  if (isPlausibleVin(s)) return false;
+  return /^[A-HJ-NP-Z]\d{6}$/.test(s);
+}
+
 /**
- * Extrage perechi etichetă: / valoare din text OCR (layout stânga/dreapta).
+ * Extrage perechi etichetă: / valoare din text OCR.
+ * Doar pe aceeași linie (etichetă stânga cu ":" → valoare dreapta). Fără fallback pe linia următoare.
  */
 export function extractCivLabelValuePairs(text: string): CivLabelPair[] {
   const lines = text
@@ -604,41 +604,7 @@ export function extractCivLabelValuePairs(text: string): CivLabelPair[] {
     label = label.replace(/^[A-Z]\.?\d{0,2}\.?\s+/i, '').trim();
     label = label.replace(/^\d{1,2}(?:\.\d+)?\.?\s+/i, '').trim();
 
-    let value = (m[2] ?? '').trim();
-    let source: CivLabelPair['source'] = 'same-line';
-
-    if (isEmptyCivValue(value)) {
-      const next = lines[i + 1];
-      const prev = lines[i - 1];
-      const nextIsPair = next ? /^(.{2,90}?)\s*:\s*/.test(next) : false;
-      const prevIsPair = prev ? /^(.{2,90}?)\s*:\s*/.test(prev) : false;
-
-      if (next && !nextIsPair && !isEmptyCivValue(next)) {
-        const nextIsKnownLabel = CIV_LABEL_FIELDS.some((f) =>
-          f.labels.some((l) => {
-            const nn = normalizeCivLabel(next);
-            const ln = normalizeCivLabel(l);
-            return nn === ln || nn.startsWith(ln + ' ');
-          }),
-        );
-        if (!nextIsKnownLabel) {
-          value = next.trim();
-          source = 'next-line';
-        }
-      }
-
-      // OCR pe 2 coloane: uneori valoarea e pe rândul de deasupra etichetei (ex. DACIA apoi „Marcă:”).
-      if (isEmptyCivValue(value) && prev && !prevIsPair && !isEmptyCivValue(prev)) {
-        const prevIsKnownLabel = CIV_LABEL_FIELDS.some((f) =>
-          f.labels.some((l) => normalizeCivLabel(prev) === normalizeCivLabel(l)),
-        );
-        if (!prevIsKnownLabel && !looksLikeLabelNotValue(prev) && prev.length <= 60) {
-          value = prev.trim();
-          source = 'next-line';
-        }
-      }
-    }
-
+    const value = (m[2] ?? '').trim();
     if (isEmptyCivValue(value)) continue;
     if (looksLikeLabelNotValue(value) && value.length > 20) continue;
 
@@ -646,7 +612,7 @@ export function extractCivLabelValuePairs(text: string): CivLabelPair[] {
       label,
       labelNorm: normalizeCivLabel(label),
       value,
-      source,
+      source: 'same-line',
     });
   }
 
@@ -763,6 +729,23 @@ export function findVinInText(text: string): string | null {
       text,
     );
   if (m && isPlausibleVin(m[1]!)) return m[1]!.toUpperCase();
+  return null;
+}
+
+/**
+ * Serie CIV pe față: literă + 6 cifre, preferat lângă „Serie CIV” / barcode.
+ * Nu caută pe verso (caller transmite doar textul feței).
+ */
+export function findCivSeriesInFrontText(text: string): string | null {
+  const nearLabel =
+    /(?:serie|seria)\s*c\.?\s*i\.?\s*v\.?\s*[:\s]*([A-HJ-NP-Z]\d{6})\b/i.exec(text) ||
+    /\b([A-HJ-NP-Z]\d{6})\b[\s\S]{0,40}?(?:serie|seria)\s*c\.?\s*i\.?\s*v/i.exec(text);
+  if (nearLabel && isCivSeriesCode(nearLabel[1]!)) return nearLabel[1]!.toUpperCase();
+
+  // Sub barcode: literă + 6 cifre izolată (evită coincidențe tip R196021 = serie motor pe verso).
+  const candidates = [...text.matchAll(/\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) => m[1]!.toUpperCase());
+  const unique = [...new Set(candidates)].filter(isCivSeriesCode);
+  if (unique.length === 1) return unique[0]!;
   return null;
 }
 

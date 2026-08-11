@@ -5,6 +5,7 @@ import {
 } from './vehicle-civ-fields';
 import {
   extractCivLabelValuePairs,
+  findCivSeriesInFrontText,
   findVinInText,
   mapCivPairsToFields,
   parseCivIssuedOnIso,
@@ -29,14 +30,41 @@ export type CivExtractPreview = {
   source: 'text' | 'file';
   /** Textul OCR brut (pentru verificare în UI). */
   ocrText?: string;
+  /** True dacă formatul e CIV vechi — maparea modernă nu se aplică. */
+  mappingSkipped?: boolean;
+  mappingSkipReason?: string;
+  /** VIN scris automat în Basic Info (dacă era gol). */
+  vinAutoSaved?: boolean;
 };
 
+/** Format modern UE (Ordin 2016 / 2024) — același algoritm pe etichete. */
+export function isModernCivFormat(format: CivDocumentFormat): boolean {
+  return format === '2016' || format === '2024';
+}
+
 /**
- * Detectare format doar informativă (UI / debug). Maparea NU depinde de indici.
+ * Detectare variantă CIV.
+ * - 2016: layout UE cu D.1 / P.x (ex. Logan emis 2022)
+ * - 2024: același layout tehnic, fără rubrici proprietar (Ordin 211/2024)
+ * - 1993: grilă veche, fără D.1
  */
 export function detectCivDocumentFormat(text: string): CivDocumentFormat {
   const t = text.toLowerCase();
-  if (/\bd\.1\b/.test(t) || /\bp\.3\b/.test(t) || /\bd\.3\b/.test(t)) return '2024';
+  const hasUeCodes = /\bd\.1\b/.test(t) || /\bp\.3\b/.test(t) || /\bd\.3\b/.test(t);
+  if (hasUeCodes) {
+    // 2024: fără câmpuri proprietar tipice pe stocul vechi 2016.
+    const hasOwnerBlock =
+      /\bproprietar\b/.test(t) ||
+      /\btitular\b/.test(t) ||
+      /\bnume\s+si\s+prenume\b/.test(t) ||
+      /\bcnp\b/.test(t);
+    if (!hasOwnerBlock && (/\bvehicle identity card\b/.test(t) || /\bmentiuni\b/.test(t))) {
+      // Heuristică slabă: preferăm 2016 dacă e ambiguu (majoritatea scanurilor actuale).
+      // Marcăm 2024 doar când lipsește clar blocul proprietar ȘI există indicii post-2024.
+      if (/\bfara\s+date\s+proprietar\b/.test(t) || /\bno\s+owner\b/.test(t)) return '2024';
+    }
+    return '2016';
+  }
   if (/\bmarca\b/.test(t) && /\bcilindree\b/.test(t) && !/\bd\.1\b/.test(t)) return '1993';
   if (/\b14\.\s*cod\s+motor/.test(t) || /\b20\.1\s*suspensie/.test(t)) return '2016';
   return 'unknown';
@@ -52,9 +80,49 @@ function coerceProfileValue(key: string, raw: string): string | number {
   return raw.trim();
 }
 
+function emptyModernPreview(
+  formatUsed: CivDocumentFormat,
+  source: 'text' | 'file',
+  text: string,
+  reason: string,
+): CivExtractPreview {
+  return {
+    civProfile: {},
+    civSeries: null,
+    civIssuedOn: null,
+    civRarOffice: null,
+    civMentions: null,
+    vin: null,
+    matched: [],
+    unmatchedLines: [],
+    formatUsed,
+    source,
+    ocrText: text.slice(0, 8000),
+    mappingSkipped: true,
+    mappingSkipReason: reason,
+  };
+}
+
+/**
+ * Separă textul feței când OCR-ul e concatenat față+verso.
+ */
+export function splitCivFrontText(combined: string): string {
+  const m = /===\s*CIV\s+VERSO\s*===/i.exec(combined);
+  if (!m || m.index == null) {
+    const alt = /===\s*CIV\s+FA[TȚ][AĂ]\s*===/i.exec(combined);
+    if (alt && alt.index != null) {
+      const after = combined.slice(alt.index + alt[0].length);
+      const verso = /===\s*CIV\s+VERSO\s*===/i.exec(after);
+      return verso && verso.index != null ? after.slice(0, verso.index) : after;
+    }
+    return combined;
+  }
+  return combined.slice(0, m.index);
+}
+
 /**
  * Mapează text OCR CIV pe câmpurile formularului: denumire (stânga, cu ":") → valoare (dreapta).
- * Indicii de rubrică (17 vs 18, D.1…) sunt ignorate la mapare.
+ * Doar pentru CIV modern (2016/2024). CIV vechi → mappingSkipped.
  */
 export function mapCivExtractTextToPreview(
   text: string,
@@ -63,6 +131,27 @@ export function mapCivExtractTextToPreview(
 ): CivExtractPreview {
   const formatUsed =
     formatHint !== 'unknown' ? formatHint : detectCivDocumentFormat(text);
+
+  if (formatUsed === '1993') {
+    return emptyModernPreview(
+      formatUsed,
+      source,
+      text,
+      'CIV vechi (format pre-2016): algoritmul pe etichete nu se aplică. Mapare separată — în lucru.',
+    );
+  }
+  if (!isModernCivFormat(formatUsed) && formatUsed === 'unknown') {
+    // Dacă totuși avem perechi etichetă:, încercăm ca modern; altfel skip.
+    const probe = extractCivLabelValuePairs(text);
+    if (probe.length < 3) {
+      return emptyModernPreview(
+        formatUsed,
+        source,
+        text,
+        'Format CIV nerecunoscut. Încarcă CIV modern (2016+) față+verso sau lipește text OCR cu etichete „Marcă: …”.',
+      );
+    }
+  }
 
   const pairs = extractCivLabelValuePairs(text);
   const hits = mapCivPairsToFields(pairs);
@@ -87,7 +176,7 @@ export function mapCivExtractTextToPreview(
       continue;
     }
     if (hit.kind === 'civSeries') {
-      civSeries = hit.value.trim();
+      civSeries = hit.value.trim().toUpperCase().replace(/\s+/g, '');
       continue;
     }
     if (hit.kind === 'civIssuedOn') {
@@ -114,12 +203,28 @@ export function mapCivExtractTextToPreview(
     }
   }
 
-  // Fallback-uri pe denumiri/semantice — doar dacă eticheta:valoare a lăsat gol (OCR 2 coloane).
+  if (!civSeries) {
+    const front = splitCivFrontText(text);
+    const series = findCivSeriesInFrontText(front);
+    if (series) {
+      civSeries = series;
+      matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: series });
+    }
+  }
+
+  // Fallback-uri pe denumiri/semantice — doar dacă eticheta:valoare a lăsat gol.
   applyEmptyFieldFallbacks(text, {
     civProfile,
     matched,
     setMeta: (key, value, rubric) => {
-      if (key === 'brand' || key === 'homologationCategory' || key === 'usageCategory' || key === 'bodyType' || key === 'driveType' || key === 'manufactureYear') {
+      if (
+        key === 'brand' ||
+        key === 'homologationCategory' ||
+        key === 'usageCategory' ||
+        key === 'bodyType' ||
+        key === 'driveType' ||
+        key === 'manufactureYear'
+      ) {
         if (civProfile[key] == null || civProfile[key] === '') {
           civProfile[key] = coerceProfileValue(key, value);
           matched.push({ rubric, target: key, value });
@@ -137,21 +242,11 @@ export function mapCivExtractTextToPreview(
     },
   });
 
-  // Tip/variantă/versiune pe linii separate (fără ":" pe același rând) — doar dacă lipsesc.
-  if (!civProfile.typeVariantVersion) {
-    const composed = composeTypeVariantFromLooseLines(text);
-    if (composed) {
-      civProfile.typeVariantVersion = composed;
-      matched.push({
-        rubric: 'Tip / variantă / versiune',
-        target: 'typeVariantVersion',
-        value: composed,
-      });
-    }
-  }
-
   const unmatchedLines = pairs
-    .filter((p) => !hits.some((h) => normalizeLoose(h.label) === normalizeLoose(p.label) && h.value === p.value))
+    .filter(
+      (p) =>
+        !hits.some((h) => normalizeLoose(h.label) === normalizeLoose(p.label) && h.value === p.value),
+    )
     .map((p) => `${p.label}: ${p.value}`)
     .slice(0, 40);
 
@@ -164,7 +259,7 @@ export function mapCivExtractTextToPreview(
     vin,
     matched,
     unmatchedLines,
-    formatUsed,
+    formatUsed: isModernCivFormat(formatUsed) ? formatUsed : '2016',
     source,
     ocrText: text.slice(0, 8000),
   };
@@ -182,14 +277,14 @@ function applyEmptyFieldFallbacks(
   const empty = (key: string) => ctx.civProfile[key] == null || ctx.civProfile[key] === '';
 
   if (empty('brand')) {
-    const brand = /\b(DACIA|FORD|VOLKSWAGEN|RENAULT|SKODA|OPEL|TOYOTA|HYUNDAI|BMW|AUDI|PEUGEOT|CITROEN|FIAT|SEAT|MERCEDES[-\s]?BENZ)\b/i.exec(
-      t,
-    );
+    const brand =
+      /\b(DACIA|FORD|VOLKSWAGEN|RENAULT|SKODA|OPEL|TOYOTA|HYUNDAI|BMW|AUDI|PEUGEOT|CITROEN|FIAT|SEAT|MERCEDES[-\s]?BENZ)\b/i.exec(
+        t,
+      );
     if (brand) ctx.setMeta('brand', brand[1]!.replace(/\s+/g, ' ').toUpperCase(), 'Marcă');
   }
 
   if (empty('homologationCategory')) {
-    // Evită „M2/M3” din eticheta Clasă; preferă M1 pe CIV autoturism.
     const cat =
       /\bCategorie\s*:?\s*[\s\S]{0,40}?\b((?:M|N|O|L)\d{0,2})\b/i.exec(t) ||
       /\bAUTOTURISM\s*((?:M|N)\d)\b/i.exec(t) ||
@@ -244,39 +339,4 @@ function normalizeLoose(s: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
-}
-
-/** Uneori Tip / Variantă / Versiune apar pe rânduri fără valoare pe aceeași linie. */
-function composeTypeVariantFromLooseLines(text: string): string | null {
-  const lines = text
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const codes: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
-    if (/^tip\s*:?\s*$/i.test(line) || /^d\.?\s*2\.?\s*tip\s*:?\s*$/i.test(line)) {
-      const n = lines[i + 1];
-      if (n && /^[A-Z0-9]{1,8}$/i.test(n) && !/variant|versiune/i.test(n)) codes.push(n.toUpperCase());
-    }
-    if (/^variant[aă]\s*:?\s*$/i.test(line)) {
-      const n = lines[i + 1];
-      if (n && /^[A-Z0-9]{2,14}$/i.test(n) && /\d/.test(n)) codes.push(n.toUpperCase());
-    }
-    if (/^versiune\s*:?\s*$/i.test(line)) {
-      const n = lines[i + 1];
-      if (n && /^[A-Z0-9]{2,14}$/i.test(n) && /\d/.test(n)) codes.push(n.toUpperCase());
-    }
-  }
-  // Fallback tipic Dacia: SD + 7SDCL + 7SDCL5 în text
-  if (!codes.length) {
-    if (/\bSD\b/.test(text) && /\b7SDCL\b/i.test(text)) {
-      const v = /\b(7SDCL\d?)\b/i.exec(text)?.[1];
-      return ['SD', '7SDCL', v?.toUpperCase()].filter(Boolean).join(' / ');
-    }
-    return null;
-  }
-  return [...new Set(codes)].join(' / ');
 }

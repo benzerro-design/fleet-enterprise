@@ -103,7 +103,12 @@ async function documentWhere(
     parts.push({ vehicle: { tenantId, ...clientVehicle } });
   }
   if (f.documentTypeCode?.trim()) {
-    parts.push({ documentTypeCode: f.documentTypeCode.trim() });
+    const code = f.documentTypeCode.trim();
+    if (code === 'civ') {
+      parts.push({ documentTypeCode: { in: ['civ', 'civ_fata', 'civ_verso'] } });
+    } else {
+      parts.push({ documentTypeCode: code });
+    }
   }
   if (f.q?.trim()) {
     const q = f.q.trim();

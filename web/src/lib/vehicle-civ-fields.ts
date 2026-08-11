@@ -23,6 +23,7 @@ export type CivFieldDef = {
 };
 
 /** Format document CIV (instrucțiuni RAR / Anexa 2). */
+/** Format document CIV (instrucțiuni RAR). 1993 = vechi; 2016/2024 = modern UE. */
 export type CivDocumentFormat = "2024" | "2016" | "1993" | "unknown";
 
 export const CIV_FIELD_GROUPS: { id: CivFieldGroupId; label: string }[] = [

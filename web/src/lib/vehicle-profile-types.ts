@@ -5,6 +5,9 @@ export type CivImportSource = {
   title: string;
   fileUrl: string;
   fileName: string | null;
+  fileUrlVerso?: string | null;
+  fileNameVerso?: string | null;
+  documentIdVerso?: string | null;
   expiresOn: string | null;
   uploadedAt: string;
 } | null;

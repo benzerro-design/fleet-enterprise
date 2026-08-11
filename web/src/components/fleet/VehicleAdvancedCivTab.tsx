@@ -126,13 +126,16 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
     setError(null);
     setExtractInfo(null);
     try {
-      const body: { text?: string; fileUrl?: string; format?: string } = {
+      const body: { text?: string; fileUrl?: string; fileUrlVerso?: string; format?: string } = {
         format: "unknown",
       };
       // La OCR din fișier nu trimite text vechi din cutie — vrem textul Vision proaspăt.
       if (!opts?.useFileUrl && ocrText.trim()) body.text = ocrText.trim();
       if (opts?.useFileUrl && initial.importSource?.fileUrl) {
         body.fileUrl = initial.importSource.fileUrl;
+        if (initial.importSource.fileUrlVerso) {
+          body.fileUrlVerso = initial.importSource.fileUrlVerso;
+        }
       }
       if (!body.text && !body.fileUrl) {
         setError("Lipește text OCR sau folosește extragerea din fișierul CIV.");
@@ -168,7 +171,16 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
         matched: { rubric: string; target: string; value: string }[];
         formatUsed: string;
         ocrText?: string;
+        mappingSkipped?: boolean;
+        mappingSkipReason?: string;
+        vinAutoSaved?: boolean;
       };
+      if (preview.mappingSkipped) {
+        setOcrDump(preview.ocrText?.trim() || null);
+        if (preview.ocrText?.trim()) setOcrText(preview.ocrText.trim());
+        setError(preview.mappingSkipReason ?? "Format CIV neacceptat pentru maparea curentă.");
+        return;
+      }
       const dump = (preview.ocrText ?? "").trim();
       if (dump) {
         setOcrText(dump);
@@ -192,14 +204,18 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
       if (preview.civRarOffice) setCivRarOffice(preview.civRarOffice);
       if (preview.civMentions) setCivMentions(preview.civMentions);
       setImportMode(true);
+      const vinNote = preview.vin
+        ? preview.vinAutoSaved
+          ? ` VIN ${preview.vin} salvat automat în Basic Info.`
+          : ` VIN detectat: ${preview.vin} (Basic Info avea deja VIN).`
+        : "";
       setExtractInfo(
         `Mapate ${preview.matched.length} câmpuri (format detectat: ${preview.formatUsed}).` +
-          (preview.vin
-            ? ` VIN detectat: ${preview.vin} — completează-l în Basic Info dacă lipsește.`
-            : "") +
+          vinNote +
           (dump ? " Textul OCR e în cutie (poți copia)." : "") +
           " Verifică valorile, apoi Salvează.",
       );
+      if (preview.vinAutoSaved) router.refresh();
     } catch {
       setError("Rețea sau server indisponibil.");
     } finally {
@@ -229,8 +245,18 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
               rel="noreferrer"
               className="rounded-lg border border-violet-700/50 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-950/40"
             >
-              Deschide scan CIV
+              Deschide CIV față
             </a>
+            {initial.importSource.fileUrlVerso ? (
+              <a
+                href={initial.importSource.fileUrlVerso}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-violet-700/50 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-950/40"
+              >
+                Deschide CIV verso
+              </a>
+            ) : null}
             {write ? (
               <button
                 type="button"
@@ -244,8 +270,8 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
           {importMode && write ? (
             <div className="mt-3 space-y-3">
               <p className="text-xs text-zinc-500">
-                Extrage din scanul CIV (Cloud Vision pe imagine/PDF) sau lipește text OCR. După OCR,
-                textul apare mai jos — copiază-l dacă e nevoie de calibrare.
+                Extrage din CIV față + verso (Cloud Vision) sau lipește text OCR. Serie CIV se citește
+                doar de pe față (literă + 6 cifre sub barcode).
               </p>
               <label className="block text-xs font-medium text-zinc-400">Text OCR (editabil / copiabil)</label>
               <textarea
@@ -276,7 +302,11 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
                   onClick={() => void onExtractFromScan({ useFileUrl: true })}
                   className="rounded-lg border border-violet-700/50 bg-violet-950/40 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
                 >
-                  {extractPending ? "OCR…" : "OCR din fișierul CIV"}
+                  {extractPending
+                    ? "OCR…"
+                    : initial.importSource?.fileUrlVerso
+                      ? "OCR din CIV față + verso"
+                      : "OCR din fișierul CIV"}
                 </button>
                 <button
                   type="button"

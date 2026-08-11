@@ -16,6 +16,10 @@ export type CivImportSource = {
   title: string;
   fileUrl: string;
   fileName: string | null;
+  /** Scan verso (document separat civ_verso), dacă există. */
+  fileUrlVerso?: string | null;
+  fileNameVerso?: string | null;
+  documentIdVerso?: string | null;
   expiresOn: string | null;
   uploadedAt: string;
 } | null;

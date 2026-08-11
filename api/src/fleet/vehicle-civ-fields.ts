@@ -22,7 +22,11 @@ export type CivFieldDef = {
   unit?: string;
 };
 
-/** Format document CIV (instrucțiuni RAR / Anexa 2). */
+/** Format document CIV (instrucțiuni RAR / Anexa 2).
+ * - 1993: layout vechi (grilă) — algoritm separat
+ * - 2016: Ordin 26/36/542/2016 (D.1, P.x…) — ex. Logan emis 2022
+ * - 2024: Ordin 211/2024 (același layout tehnic, fără proprietar)
+ */
 export type CivDocumentFormat = '2024' | '2016' | '1993' | 'unknown';
 
 export const CIV_FIELD_GROUPS: { id: CivFieldGroupId; label: string }[] = [
