@@ -534,6 +534,20 @@ export class FleetService {
     access?: AccessContext,
   ): Promise<CivExtractPreview> {
     await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    const row = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, vin: true },
+    });
+    if (!row) throw new NotFoundException('Vehicle not found');
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new BadRequestException('Invalid body');
+    }
+    const o = body as Record<string, unknown>;
+    let text = typeof o.text === 'string' ? o.text : '';
+    const fileUrl = typeof o.fileUrl === 'string' ? o.fileUrl.trim() : '';
+    const fileUrlVerso =
+      typeof o.fileUrlVerso === 'string' ? o.fileUrlVerso.trim() : '';
     const formatRaw = typeof o.format === 'string' ? o.format : 'unknown';
     const format: CivDocumentFormat =
       formatRaw === '2024' ||
