@@ -111,11 +111,35 @@ function splitFrontIntoPage1And4(front: string): { page1: string; page4: string 
   const inmatriculare = /\bNum[aă]r\s+de\s+[iî]nmatriculare\b/i.exec(front);
   const glossary = /A\.\s*Registration\s+number/i.exec(front);
 
-  // Dacă Mențiuni e înaintea blocului proprietar → OCR a citit p4 apoi p1.
-  if (mentiuni && proprietar && mentiuni.index! < proprietar.index!) {
-    const page4 = front.slice(0, proprietar.index!).trim();
-    const page1 = front.slice(proprietar.index!).trim();
-    return { page1, page4 };
+  // Dacă Mențiuni e înaintea blocului p1 → OCR a citit p4 (stânga) apoi p1 (dreapta).
+  // Taie la „Număr de înmatriculare” / REGISTRUL, nu la Proprietar — altfel A./barcode/Serie CIV
+  // rămân greșit în page4 și Serie CIV nu se mai găsește.
+  {
+    const page1Landmark = Math.min(
+      proprietar?.index ?? Number.POSITIVE_INFINITY,
+      inmatriculare?.index ?? Number.POSITIVE_INFINITY,
+    );
+    if (
+      mentiuni &&
+      Number.isFinite(page1Landmark) &&
+      mentiuni.index! < page1Landmark
+    ) {
+      const rarHeader = /\bREGISTRUL\s+AUTO\s+ROM[AÂ]N\b/i.exec(front)?.index;
+      const page1StartCandidates = [
+        inmatriculare?.index,
+        rarHeader,
+        proprietar?.index,
+      ].filter(
+        (n): n is number => typeof n === 'number' && n > mentiuni.index!,
+      );
+      const page1Start =
+        page1StartCandidates.length > 0
+          ? Math.min(...page1StartCandidates)
+          : page1Landmark;
+      const page4 = front.slice(0, page1Start).trim();
+      const page1 = front.slice(page1Start).trim();
+      return { page1, page4 };
+    }
   }
 
   // Proprietar / înmatriculare înainte → p1 apoi p4.
@@ -251,7 +275,9 @@ export function splitCivBookPages(combined: string): CivBookPages {
   }
 
   const techText = [page2, page3].filter(Boolean).join('\n\n').trim();
-  const seriesText = page1.trim() || frontRaw;
+  // Serie CIV e pe față (barcode / sub QR). Căutăm pe tot scanul față — serie motor e pe verso.
+  // page1 trunchiat greșit (split p4|p1) nu trebuie să ascundă codul.
+  const seriesText = (frontRaw || page1).trim();
   const mentionsText = extractMentionsBody(page4);
 
   return {

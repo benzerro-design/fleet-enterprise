@@ -761,6 +761,14 @@ export function findCivSeriesInFrontText(text: string): string | null {
     if (isCivSeriesCode(c)) return c;
   }
 
+  // Literă pe o linie, 6 cifre pe următoarea (OCR barcode fragmentat).
+  const lineBroken = [
+    ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])\s*\n\s*(\d{6})\b/gi),
+  ].map((m) => `${m[1]}${m[2]}`.toUpperCase());
+  for (const c of lineBroken) {
+    if (isCivSeriesCode(c)) return c;
+  }
+
   const candidates = [...withoutEngine.matchAll(/\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) =>
     m[1]!.toUpperCase(),
   );

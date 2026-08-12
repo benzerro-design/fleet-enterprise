@@ -30,13 +30,17 @@ export type CivExtractPreview = {
   unmatchedLines: string[];
   formatUsed: CivDocumentFormat;
   source: 'text' | 'file';
-  /** Textul OCR brut (pentru verificare în UI). */
+  /** Textul OCR (pentru verificare în UI). */
   ocrText?: string;
   /** True dacă formatul e CIV vechi — maparea modernă nu se aplică. */
   mappingSkipped?: boolean;
   mappingSkipReason?: string;
   /** VIN scris automat în Basic Info (dacă era gol). */
   vinAutoSaved?: boolean;
+  /** Diagnostic: există marker / text verso. */
+  hasVerso?: boolean;
+  /** Perechi etichetă:valoare din pag. 2–3. */
+  techPairCount?: number;
 };
 
 /** Format modern UE (Ordin 2016 / 2024) — același algoritm pe etichete. */
@@ -85,6 +89,7 @@ function emptyModernPreview(
   text: string,
   reason: string,
 ): CivExtractPreview {
+  const pages = splitCivBookPages(text);
   return {
     civProfile: {},
     civSeries: null,
@@ -96,9 +101,11 @@ function emptyModernPreview(
     unmatchedLines: [],
     formatUsed,
     source,
-    ocrText: text.slice(0, 8000),
+    ocrText: text.slice(0, 100_000),
     mappingSkipped: true,
     mappingSkipReason: reason,
+    hasVerso: Boolean(pages.versoRaw.trim()) || /===\s*CIV\s+VERSO\s*===/i.test(text),
+    techPairCount: 0,
   };
 }
 
@@ -167,8 +174,13 @@ export function mapCivExtractTextToPreview(
     }
   }
 
-  // Doar paginile 2–3 pentru etichete tehnice (ignoră glossarul EN de pe p4).
-  const pairs = extractCivLabelValuePairs(techText || stripEnglishCivGlossary(text));
+  // Doar paginile 2–3 pentru etichete tehnice. NU cădea pe față/proprietari când verso lipsește
+  // (altfel „Mapate 13” din fallback-uri + perechi greșite de pe p1).
+  const pairSource =
+    techText ||
+    pages.versoRaw.trim() ||
+    (!pages.frontRaw.trim() ? stripEnglishCivGlossary(text) : '');
+  const pairs = extractCivLabelValuePairs(pairSource);
   const hits = mapCivPairsToFields(pairs);
 
   const civProfile: VehicleCivProfile = {};
@@ -244,7 +256,26 @@ export function mapCivExtractTextToPreview(
     matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: series });
   }
 
-  applyEmptyFieldFallbacks(techText || stripEnglishCivGlossary(text), {
+  // Tip / Denumire comercială: pe verso uneori „VEHICUL LOGAN” e deasupra etichetei goale D.3.
+  if (!civProfile.commercialName) {
+    const commercial =
+      /\bVEHICUL\s+([A-Z][A-Z0-9][A-Z0-9\- ]{0,28})\b/i.exec(pairSource) ||
+      /\bD\.?\s*3\.?\s*Denumire\s+comercial\w*\s*:?\s*([A-Z][A-Z0-9\- ]{1,30})/i.exec(pairSource);
+    if (commercial) {
+      const name = commercial[1]!.replace(/\s+/g, ' ').trim().toUpperCase();
+      if (name && !/^(CONTINUARE|IDENTIFICARE|CONSTRUCTIVE)$/i.test(name)) {
+        civProfile.commercialName = name;
+        matched.push({
+          rubric: 'Denumire comercială',
+          target: 'commercialName',
+          value: name,
+        });
+      }
+    }
+  }
+
+  const fallbackText = pairSource || techText;
+  applyEmptyFieldFallbacks(fallbackText, {
     civProfile,
     matched,
     setMeta: (key, value, rubric) => {
@@ -303,7 +334,10 @@ export function mapCivExtractTextToPreview(
     unmatchedLines,
     formatUsed: isModernCivFormat(formatUsed) ? formatUsed : '2016',
     source,
-    ocrText: text.slice(0, 8000),
+    // Limita mare: „Extrage din text” pe text trunchiat pierde VERSO → mapare slabă.
+    ocrText: text.slice(0, 100_000),
+    hasVerso: Boolean(pages.versoRaw.trim()) || /===\s*CIV\s+VERSO\s*===/i.test(text),
+    techPairCount: pairs.length,
   };
 }
 

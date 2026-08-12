@@ -174,6 +174,8 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
         mappingSkipped?: boolean;
         mappingSkipReason?: string;
         vinAutoSaved?: boolean;
+        hasVerso?: boolean;
+        techPairCount?: number;
       };
       if (preview.mappingSkipped) {
         setOcrDump(preview.ocrText?.trim() || null);
@@ -209,9 +211,18 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
           ? ` VIN ${preview.vin} salvat automat în Basic Info.`
           : ` VIN detectat: ${preview.vin} (Basic Info avea deja VIN).`
         : "";
+      const versoNote =
+        preview.hasVerso === false
+          ? " Atenție: lipsește textul VERSO — rulează „OCR din CIV față + verso”, nu doar Extrage din text."
+          : typeof preview.techPairCount === "number" && preview.techPairCount < 8
+            ? ` Puține perechi pe verso (${preview.techPairCount}) — verifică scanul verso / scroll în cutia OCR dupăă „=== CIV VERSO ===”.`
+            : typeof preview.techPairCount === "number"
+              ? ` Verso: ${preview.techPairCount} perechi etichetă:valoare.`
+              : "";
       setExtractInfo(
         `Mapate ${preview.matched.length} câmpuri (format detectat: ${preview.formatUsed}).` +
           vinNote +
+          versoNote +
           (dump ? " Textul OCR e în cutie (poți copia)." : "") +
           " Verifică valorile, apoi Salvează.",
       );

@@ -146,14 +146,16 @@ export function mergeOrphanValueAboveEmptyLabel(text: string): string {
     const cur = lines[i]!.trim();
     const next = (lines[i + 1] ?? '').trim();
     const emptyLabel = /^(.{2,90}?):\s*$/.exec(next);
+    const vehiculName = /^VEHICUL\s+([A-Z][A-Z0-9][A-Z0-9\- ]{0,28})$/i.exec(cur);
     const curIsOrphanValue =
       !!cur &&
       !cur.includes(':') &&
       cur.length <= 48 &&
-      !/^(DATE|IDENTIFICARE|CONSTRUCTIVE|VEHICUL|CONTINUARE|MEN[TȚ]IUNI)\b/i.test(cur);
-    if (emptyLabel && curIsOrphanValue) {
+      !/^(DATE|IDENTIFICARE|CONSTRUCTIVE|CONTINUARE|MEN[TȚ]IUNI)\b/i.test(cur);
+    if (emptyLabel && (curIsOrphanValue || vehiculName)) {
       const label = emptyLabel[1]!.trim();
-      out.push(`${label}: ${cur}`);
+      const value = vehiculName ? vehiculName[1]!.trim() : cur;
+      out.push(`${label}: ${value}`);
       i += 1;
       continue;
     }

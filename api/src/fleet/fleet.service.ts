@@ -579,10 +579,10 @@ export class FleetService {
 
     const preview = mapCivExtractTextToPreview(text, format, source);
     if (preview.mappingSkipped) {
-      return {
-        ...preview,
-        ocrText: (text || preview.ocrText || '').slice(0, 8000),
-      };
+    return {
+      ...preview,
+      ocrText: (text || preview.ocrText || '').slice(0, 100_000),
+    };
     }
     if (preview.matched.length === 0) {
       throw new BadRequestException(
@@ -603,7 +603,7 @@ export class FleetService {
 
     return {
       ...preview,
-      ocrText: (text || preview.ocrText || '').slice(0, 8000),
+      ocrText: (text || preview.ocrText || '').slice(0, 100_000),
       vinAutoSaved,
     };
   }
