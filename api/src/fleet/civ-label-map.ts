@@ -364,8 +364,12 @@ export const CIV_LABEL_FIELDS: CivLabelFieldSpec[] = [
     kind: 'profile',
     fieldKind: 'text',
     labels: ['Cod motor', 'Codul motorului', 'Tipul motor'],
-    validate: (v) =>
-      /^[A-Z0-9][A-Z0-9\-]{2,14}$/i.test(v.trim()) && !/cilindree|putere|codul/i.test(v),
+    validate: (v) => {
+      const compact = v.replace(/\s+/g, '');
+      return (
+        /^[A-Z0-9][A-Z0-9\-]{2,14}$/i.test(compact) && !/cilindree|putere|codul/i.test(v)
+      );
+    },
   },
   {
     key: 'engineCapacityCm3',
@@ -697,6 +701,10 @@ export function mapCivPairsToFields(pairs: CivLabelPair[]): CivLabelMapHit[] {
         if (num) value = num[1]!.replace(',', '.');
       }
       if (field.kind === 'vin') value = value.replace(/\s+/g, '').toUpperCase();
+      if (field.key === 'engineCode') value = value.replace(/\s+/g, '');
+      if (field.key === 'commercialName') {
+        value = value.replace(/^VEHICUL\s+/i, '').trim();
+      }
       if (field.validate && !field.validate(value)) continue;
       if (!isPlausibleCivValue(value, { maxLen: field.key === 'civMentions' ? 2000 : 180 })) continue;
 
@@ -735,25 +743,32 @@ export function findVinInText(text: string): string | null {
  * Nu caută pe verso (caller transmite doar textul feței).
  */
 export function findCivSeriesInFrontText(text: string): string | null {
+  // Nu confunda cu serie motor (ex. R196021 pe pag. 3).
+  const withoutEngine = text.replace(
+    /serie\s*motor[\s\S]{0,40}?[A-Z0-9]{4,20}/gi,
+    ' ',
+  );
+
   const nearLabel =
-    /(?:serie|seria)\s*c\.?\s*i\.?\s*v\.?\s*[:\s]*([A-HJ-NP-Z]\d{6})\b/i.exec(text) ||
-    /\b([A-HJ-NP-Z]\d{6})\b[\s\S]{0,40}?(?:serie|seria)\s*c\.?\s*i\.?\s*v/i.exec(text);
+    /(?:serie|seria)\s*c\.?\s*i\.?\s*v\.?\s*[:\s]*([A-HJ-NP-Z]\d{6})\b/i.exec(withoutEngine) ||
+    /\b([A-HJ-NP-Z]\d{6})\b[\s\S]{0,40}?(?:serie|seria)\s*c\.?\s*i\.?\s*v/i.exec(withoutEngine);
   if (nearLabel && isCivSeriesCode(nearLabel[1]!)) return nearLabel[1]!.toUpperCase();
 
-  // OCR uneori: „P 5 4 1 9 8 1” sub barcode.
   const compactSpaced = [
-    ...text.matchAll(/\b([A-HJ-NP-Z])\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\b/gi),
+    ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\b/gi),
   ].map((m) => `${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}${m[6]}${m[7]}`.toUpperCase());
   for (const c of compactSpaced) {
     if (isCivSeriesCode(c)) return c;
   }
 
-  // Sub barcode: literă + 6 cifre izolată (evită coincidențe tip R196021 = serie motor pe verso).
-  const candidates = [...text.matchAll(/\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) => m[1]!.toUpperCase());
+  const candidates = [...withoutEngine.matchAll(/\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) =>
+    m[1]!.toUpperCase(),
+  );
   const unique = [...new Set([...candidates, ...compactSpaced])].filter(isCivSeriesCode);
-  if (unique.length === 1) return unique[0]!;
+  // Pe CIV moderne seria tipărită e frecvent P###### — preferă față de R###### (serie motor).
   const pSeries = unique.filter((s) => s.startsWith('P'));
   if (pSeries.length === 1) return pSeries[0]!;
+  if (unique.length === 1 && !unique[0]!.startsWith('R')) return unique[0]!;
   return null;
 }
 

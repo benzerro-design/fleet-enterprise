@@ -1,20 +1,39 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleAuth } from 'google-auth-library';
+import { rebuildCivOcrTextFromVision } from './civ-ocr-layout';
+
+type VisionFullTextAnnotation = {
+  text?: string;
+  pages?: Array<{
+    width?: number;
+    height?: number;
+    blocks?: Array<{
+      paragraphs?: Array<{
+        words?: Array<{
+          boundingBox?: { vertices?: Array<{ x?: number; y?: number }> };
+          symbols?: Array<{
+            text?: string;
+            property?: { detectedBreak?: { type?: string } };
+          }>;
+        }>;
+      }>;
+    }>;
+  }>;
+};
+
+type VisionPageResponse = {
+  fullTextAnnotation?: VisionFullTextAnnotation;
+  error?: { message?: string; status?: string };
+};
 
 type VisionAnnotateResponse = {
-  responses?: Array<{
-    fullTextAnnotation?: { text?: string };
-    error?: { message?: string; status?: string };
-  }>;
+  responses?: VisionPageResponse[];
   error?: { message?: string; status?: string };
 };
 
 type VisionFileAnnotateResponse = {
   responses?: Array<{
-    responses?: Array<{
-      fullTextAnnotation?: { text?: string };
-      error?: { message?: string; status?: string };
-    }>;
+    responses?: VisionPageResponse[];
     error?: { message?: string; status?: string };
   }>;
   error?: { message?: string; status?: string };
@@ -28,10 +47,8 @@ export type CivOcrResult = {
 
 /**
  * OCR CIV via Cloud Vision REST (ADC pe Cloud Run).
- * Fără `@google-cloud/vision` — păstrează imaginea Docker mică.
- * Dezactivează cu CIV_OCR=off.
- *
- * Ops: activează Vision API + `roles/cloudvision.user` pe SA-ul Cloud Run API.
+ * Textul e reconstruit pe linii din bounding box (etichetă:valoare pe aceeași linie),
+ * inclusiv split stânga/dreapta pe scan tip carte (2 pagini pe o imagine).
  */
 @Injectable()
 export class CivOcrService {
@@ -43,9 +60,6 @@ export class CivOcrService {
     return flag !== 'off' && flag !== '0' && flag !== 'false';
   }
 
-  /**
-   * Extrage text din imagine (jpeg/png/webp/gif) sau PDF (primele pagini).
-   */
   async extractText(buf: Buffer, contentType: string): Promise<CivOcrResult> {
     if (!this.isEnabled()) {
       return { text: null, error: 'CIV_OCR=off pe API' };
@@ -114,6 +128,13 @@ export class CivOcrService {
     return value;
   }
 
+  private textFromAnnotation(ann: VisionFullTextAnnotation | undefined): string | null {
+    if (!ann) return null;
+    const rebuilt = rebuildCivOcrTextFromVision(ann);
+    if (rebuilt?.trim()) return rebuilt.trim();
+    return ann.text?.trim() || null;
+  }
+
   private async ocrImage(buf: Buffer): Promise<CivOcrResult> {
     const token = await this.accessToken();
     const res = await fetch('https://vision.googleapis.com/v1/images:annotate', {
@@ -139,7 +160,7 @@ export class CivOcrService {
     if (json.error?.message) throw new Error(json.error.message);
     const first = json.responses?.[0];
     if (first?.error?.message) throw new Error(first.error.message);
-    const text = first?.fullTextAnnotation?.text?.trim() || null;
+    const text = this.textFromAnnotation(first?.fullTextAnnotation);
     if (!text) {
       return { text: null, error: 'Vision nu a găsit text pe imagine (scan neclar?)' };
     }
@@ -147,7 +168,6 @@ export class CivOcrService {
   }
 
   private async ocrPdf(buf: Buffer): Promise<CivOcrResult> {
-    // Încerc 4 pagini, apoi 2 dacă eșuează (PDF-uri mari / limită sync).
     const attempts = [
       [1, 2, 3, 4],
       [1, 2],
@@ -211,7 +231,7 @@ export class CivOcrService {
           pageErr = pageResp.error.message;
           continue;
         }
-        const t = pageResp.fullTextAnnotation?.text?.trim();
+        const t = this.textFromAnnotation(pageResp.fullTextAnnotation);
         if (t) parts.push(t);
       }
     }
