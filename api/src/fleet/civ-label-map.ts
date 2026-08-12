@@ -41,7 +41,11 @@ export function normalizeCivLabel(raw: string): string {
 
 function isEmptyCivValue(raw: string): boolean {
   const v = raw.trim();
-  return !v || v === '-' || v === '—' || v === '–' || /^-+$/.test(v);
+  if (!v) return true;
+  // „-” pe CIV = lipsă; OCR confundă uneori cu ) ( . ; /
+  if (v === '-' || v === '—' || v === '–' || /^-+$/.test(v)) return true;
+  if (/^[)(\]\[}{.;,:\/\\|_*]+$/.test(v)) return true;
+  return false;
 }
 
 function isYear(v: string): boolean {
@@ -49,7 +53,11 @@ function isYear(v: string): boolean {
 }
 
 function isPositiveNumber(v: string, min: number, max: number): boolean {
-  const n = Number(String(v).replace(',', '.').replace(/\s/g, ''));
+  const cleaned = String(v)
+    .replace(/\s/g, '')
+    .replace(',', '.')
+    .replace(/[^\d.-]/g, '');
+  const n = Number(cleaned);
   return Number.isFinite(n) && n >= min && n <= max;
 }
 
@@ -444,8 +452,14 @@ export const CIV_LABEL_FIELDS: CivLabelFieldSpec[] = [
     key: 'emissionStandard',
     kind: 'profile',
     fieldKind: 'text',
-    labels: ['Normă poluare', 'Norma de poluare', 'Normă de poluare CE'],
-    validate: (v) => isPlausibleCivValue(v, { maxLen: 40 }),
+    labels: ['Normă poluare', 'Norma de poluare', 'Normă de poluare CE', 'Norma de poluare CE'],
+    validate: (v) => {
+      const t = v.trim();
+      if (isEmptyCivValue(t)) return false;
+      // Respinge OCR „)” pentru „-”; cere literă/cifră (Euro 5, E5, …).
+      if (!/[A-Za-z0-9]/.test(t)) return false;
+      return isPlausibleCivValue(t, { maxLen: 40 });
+    },
   },
   {
     key: 'nationalEmissionCode',
@@ -695,6 +709,11 @@ export function mapCivPairsToFields(pairs: CivLabelPair[]): CivLabelMapHit[] {
       if (score < MIN_SCORE) continue;
 
       let value = pair.value.trim();
+      // Numere: „2634 ;” / „1670 kg” → extrage partea numerică înainte de validare.
+      if (field.fieldKind === 'number' || field.fieldKind === 'year') {
+        const num = value.match(/-?\d+(?:[.,]\d+)?/);
+        if (num) value = num[0]!.replace(',', '.');
+      }
       // CO2: extrage numărul
       if (field.key === 'co2Gkm') {
         const num = value.match(/(\d{1,3}(?:[.,]\d+)?)/);
@@ -705,6 +724,7 @@ export function mapCivPairsToFields(pairs: CivLabelPair[]): CivLabelMapHit[] {
       if (field.key === 'commercialName') {
         value = value.replace(/^VEHICUL\s+/i, '').trim();
       }
+      if (isEmptyCivValue(value)) continue;
       if (field.validate && !field.validate(value)) continue;
       if (!isPlausibleCivValue(value, { maxLen: field.key === 'civMentions' ? 2000 : 180 })) continue;
 
