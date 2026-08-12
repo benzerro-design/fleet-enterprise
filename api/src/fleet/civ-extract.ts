@@ -9,7 +9,9 @@ import {
   findVinInText,
   mapCivPairsToFields,
   parseCivIssuedOnIso,
+  type CivLabelPair,
 } from './civ-label-map';
+import { splitCivBookPages, stripEnglishCivGlossary } from './civ-pages';
 
 export type CivExtractMatch = {
   rubric: string;
@@ -52,15 +54,12 @@ export function detectCivDocumentFormat(text: string): CivDocumentFormat {
   const t = text.toLowerCase();
   const hasUeCodes = /\bd\.1\b/.test(t) || /\bp\.3\b/.test(t) || /\bd\.3\b/.test(t);
   if (hasUeCodes) {
-    // 2024: fără câmpuri proprietar tipice pe stocul vechi 2016.
     const hasOwnerBlock =
       /\bproprietar\b/.test(t) ||
       /\btitular\b/.test(t) ||
       /\bnume\s+si\s+prenume\b/.test(t) ||
       /\bcnp\b/.test(t);
     if (!hasOwnerBlock && (/\bvehicle identity card\b/.test(t) || /\bmentiuni\b/.test(t))) {
-      // Heuristică slabă: preferăm 2016 dacă e ambiguu (majoritatea scanurilor actuale).
-      // Marcăm 2024 doar când lipsește clar blocul proprietar ȘI există indicii post-2024.
       if (/\bfara\s+date\s+proprietar\b/.test(t) || /\bno\s+owner\b/.test(t)) return '2024';
     }
     return '2016';
@@ -103,26 +102,37 @@ function emptyModernPreview(
   };
 }
 
-/**
- * Separă textul feței când OCR-ul e concatenat față+verso.
- */
+/** @deprecated folosește splitCivBookPages().seriesText */
 export function splitCivFrontText(combined: string): string {
-  const m = /===\s*CIV\s+VERSO\s*===/i.exec(combined);
-  if (!m || m.index == null) {
-    const alt = /===\s*CIV\s+FA[TȚ][AĂ]\s*===/i.exec(combined);
-    if (alt && alt.index != null) {
-      const after = combined.slice(alt.index + alt[0].length);
-      const verso = /===\s*CIV\s+VERSO\s*===/i.exec(after);
-      return verso && verso.index != null ? after.slice(0, verso.index) : after;
-    }
-    return combined;
-  }
-  return combined.slice(0, m.index);
+  return splitCivBookPages(combined).seriesText;
 }
 
 /**
- * Mapează text OCR CIV pe câmpurile formularului: denumire (stânga, cu ":") → valoare (dreapta).
- * Doar pentru CIV modern (2016/2024). CIV vechi → mappingSkipped.
+ * Compune Tip / Variantă / Versiune din perechi separate de pe pagina 2.
+ */
+function composeTypeVariantVersion(pairs: CivLabelPair[]): string | null {
+  let tip: string | null = null;
+  let varianta: string | null = null;
+  let versiune: string | null = null;
+  for (const p of pairs) {
+    const n = p.labelNorm;
+    if (n === 'tip' || n === 'd 2 tip' || /^d\.?\s*2\.?\s*tip$/.test(n)) {
+      if (/^[A-Z0-9]{1,8}$/i.test(p.value.trim())) tip = p.value.trim().toUpperCase();
+    } else if (n === 'varianta' || n === 'variantă' || n.startsWith('varianta')) {
+      if (/^[A-Z0-9]{2,14}$/i.test(p.value.trim())) varianta = p.value.trim().toUpperCase();
+    } else if (n === 'versiune') {
+      if (/^[A-Z0-9]{2,14}$/i.test(p.value.trim())) versiune = p.value.trim().toUpperCase();
+    }
+  }
+  const parts = [tip, varianta, versiune].filter(Boolean);
+  return parts.length ? parts.join(' / ') : null;
+}
+
+/**
+ * Mapează text OCR CIV pe câmpuri:
+ * - Serie CIV ← pagina 1 (față)
+ * - Tehnice ← paginile 2–3 (verso), etichetă: valoare
+ * - Mențiuni ← pagina 4 (fără glossar englez)
  */
 export function mapCivExtractTextToPreview(
   text: string,
@@ -140,20 +150,25 @@ export function mapCivExtractTextToPreview(
       'CIV vechi (format pre-2016): algoritmul pe etichete nu se aplică. Mapare separată — în lucru.',
     );
   }
+
+  const pages = splitCivBookPages(text);
+  const techText = pages.techText.trim();
+  const seriesText = pages.seriesText.trim();
+
   if (!isModernCivFormat(formatUsed) && formatUsed === 'unknown') {
-    // Dacă totuși avem perechi etichetă:, încercăm ca modern; altfel skip.
-    const probe = extractCivLabelValuePairs(text);
+    const probe = extractCivLabelValuePairs(techText || stripEnglishCivGlossary(text));
     if (probe.length < 3) {
       return emptyModernPreview(
         formatUsed,
         source,
         text,
-        'Format CIV nerecunoscut. Încarcă CIV modern (2016+) față+verso sau lipește text OCR cu etichete „Marcă: …”.',
+        'Format CIV nerecunoscut. Încarcă CIV modern (2016+) față+verso (pag. 1–4).',
       );
     }
   }
 
-  const pairs = extractCivLabelValuePairs(text);
+  // Doar paginile 2–3 pentru etichete tehnice (ignoră glossarul EN de pe p4).
+  const pairs = extractCivLabelValuePairs(techText || stripEnglishCivGlossary(text));
   const hits = mapCivPairsToFields(pairs);
 
   const civProfile: VehicleCivProfile = {};
@@ -161,10 +176,19 @@ export function mapCivExtractTextToPreview(
   let civSeries: string | null = null;
   let civIssuedOn: string | null = null;
   let civRarOffice: string | null = null;
-  let civMentions: string | null = null;
+  let civMentions: string | null = pages.mentionsText || null;
   let vin: string | null = null;
 
+  if (civMentions) {
+    matched.push({ rubric: 'Mențiuni', target: 'civMentions', value: civMentions });
+  }
+
   for (const hit of hits) {
+    // Serie CIV nu se ia din p2–3 (risc serie motor).
+    if (hit.kind === 'civSeries') continue;
+    // Mențiuni deja din p4.
+    if (hit.kind === 'civMentions') continue;
+
     matched.push({
       rubric: hit.label,
       target: hit.key,
@@ -175,10 +199,6 @@ export function mapCivExtractTextToPreview(
       vin = hit.value.replace(/\s+/g, '').toUpperCase();
       continue;
     }
-    if (hit.kind === 'civSeries') {
-      civSeries = hit.value.trim().toUpperCase().replace(/\s+/g, '');
-      continue;
-    }
     if (hit.kind === 'civIssuedOn') {
       civIssuedOn = parseCivIssuedOnIso(hit.value) ?? hit.value.trim();
       continue;
@@ -187,33 +207,44 @@ export function mapCivExtractTextToPreview(
       civRarOffice = hit.value.trim();
       continue;
     }
-    if (hit.kind === 'civMentions') {
-      civMentions = hit.value.trim();
-      continue;
-    }
     if (hit.kind === 'profile') {
       civProfile[hit.key] = coerceProfileValue(hit.key, hit.value);
     }
   }
 
+  // Tip / Variantă / Versiune pe linii separate pe pagina 2 (nu un singur câmp pe CIV).
+  {
+    const composed = composeTypeVariantVersion(pairs);
+    if (composed) {
+      civProfile.typeVariantVersion = composed;
+      if (!matched.some((m) => m.target === 'typeVariantVersion')) {
+        matched.push({
+          rubric: 'Tip / variantă / versiune',
+          target: 'typeVariantVersion',
+          value: composed,
+        });
+      } else {
+        const row = matched.find((m) => m.target === 'typeVariantVersion');
+        if (row) row.value = composed;
+      }
+    }
+  }
+
   if (!vin) {
-    vin = findVinInText(text);
+    vin = findVinInText(techText) ?? findVinInText(text);
     if (vin) {
       matched.push({ rubric: 'Număr de identificare', target: 'vin', value: vin });
     }
   }
 
-  if (!civSeries) {
-    const front = splitCivFrontText(text);
-    const series = findCivSeriesInFrontText(front);
-    if (series) {
-      civSeries = series;
-      matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: series });
-    }
+  // Serie CIV exclusiv din pagina 1 (sub barcode).
+  const series = findCivSeriesInFrontText(seriesText);
+  if (series) {
+    civSeries = series;
+    matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: series });
   }
 
-  // Fallback-uri pe denumiri/semantice — doar dacă eticheta:valoare a lăsat gol.
-  applyEmptyFieldFallbacks(text, {
+  applyEmptyFieldFallbacks(techText || stripEnglishCivGlossary(text), {
     civProfile,
     matched,
     setMeta: (key, value, rubric) => {
@@ -242,8 +273,7 @@ export function mapCivExtractTextToPreview(
     },
   });
 
-  // Corecție: SEAT din engleza „seat” vs VIN Dacia (UU1).
-  const vinForBrand = vin ?? findVinInText(text);
+  const vinForBrand = vin ?? findVinInText(techText);
   if (
     vinForBrand?.startsWith('UU1') &&
     String(civProfile.brand ?? '')
@@ -353,27 +383,18 @@ function normalizeLoose(s: string): string {
 const CIV_BRAND_PATTERN =
   '(DACIA|FORD|VOLKSWAGEN|VW|RENAULT|SKODA|OPEL|TOYOTA|HYUNDAI|BMW|AUDI|PEUGEOT|CITROEN|FIAT|SEAT|MERCEDES[\\s-]?BENZ)';
 
-/**
- * Marca: doar lângă eticheta Marcă / D.1 sau din WMI VIN.
- * Evită falsuri tip SEAT din engleza „driver's seat” pe verso.
- */
+/** Marca doar lângă eticheta Marcă / D.1 sau din WMI VIN — pe text tehnic (p2–3). */
 function resolveCivBrandFallback(text: string): string | null {
-  const front = splitCivFrontText(text);
-  const nearLabel =
-    new RegExp(
-      `(?:D\\.?\\s*1\\.?\\s*)?(?:Marca|Make)\\s*:?\\s*${CIV_BRAND_PATTERN}\\b`,
-      'i',
-    ).exec(front) ||
-    new RegExp(
-      `(?:D\\.?\\s*1\\.?\\s*)?(?:Marca|Make)\\s*:?\\s*${CIV_BRAND_PATTERN}\\b`,
-      'i',
-    ).exec(text);
+  const nearLabel = new RegExp(
+    `(?:D\\.?\\s*1\\.?\\s*)?(?:Marca)\\s*:?\\s*${CIV_BRAND_PATTERN}\\b`,
+    'i',
+  ).exec(text);
   if (nearLabel) {
     const b = nearLabel[1]!.replace(/\s+/g, ' ').toUpperCase();
     return b === 'VW' ? 'VOLKSWAGEN' : b;
   }
 
-  const vin = findVinInText(front) ?? findVinInText(text);
+  const vin = findVinInText(text);
   if (vin?.startsWith('UU1')) return 'DACIA';
   if (vin?.startsWith('WF0') || vin?.startsWith('WFO')) return 'FORD';
   if (vin?.startsWith('WVW') || vin?.startsWith('WV1')) return 'VOLKSWAGEN';

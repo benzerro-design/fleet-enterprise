@@ -161,10 +161,6 @@ export const CIV_LABEL_FIELDS: CivLabelFieldSpec[] = [
       'Tip - variantă - versiune',
       'Tip / variantă / versiune',
       'Tipul / varianta / versiunea',
-      'Tip',
-      'Variantă',
-      'Varianta',
-      'Versiune',
     ],
     validate: (v) =>
       isPlausibleCivValue(v, { maxLen: 80 }) &&
@@ -744,10 +740,20 @@ export function findCivSeriesInFrontText(text: string): string | null {
     /\b([A-HJ-NP-Z]\d{6})\b[\s\S]{0,40}?(?:serie|seria)\s*c\.?\s*i\.?\s*v/i.exec(text);
   if (nearLabel && isCivSeriesCode(nearLabel[1]!)) return nearLabel[1]!.toUpperCase();
 
+  // OCR uneori: „P 5 4 1 9 8 1” sub barcode.
+  const compactSpaced = [
+    ...text.matchAll(/\b([A-HJ-NP-Z])\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\b/gi),
+  ].map((m) => `${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}${m[6]}${m[7]}`.toUpperCase());
+  for (const c of compactSpaced) {
+    if (isCivSeriesCode(c)) return c;
+  }
+
   // Sub barcode: literă + 6 cifre izolată (evită coincidențe tip R196021 = serie motor pe verso).
   const candidates = [...text.matchAll(/\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) => m[1]!.toUpperCase());
-  const unique = [...new Set(candidates)].filter(isCivSeriesCode);
+  const unique = [...new Set([...candidates, ...compactSpaced])].filter(isCivSeriesCode);
   if (unique.length === 1) return unique[0]!;
+  const pSeries = unique.filter((s) => s.startsWith('P'));
+  if (pSeries.length === 1) return pSeries[0]!;
   return null;
 }
 

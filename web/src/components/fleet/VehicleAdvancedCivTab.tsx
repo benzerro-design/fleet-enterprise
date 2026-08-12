@@ -270,8 +270,8 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
           {importMode && write ? (
             <div className="mt-3 space-y-3">
               <p className="text-xs text-zinc-500">
-                Extrage din CIV față + verso (Cloud Vision) sau lipește text OCR. Serie CIV se citește
-                doar de pe față (literă + 6 cifre sub barcode).
+                Extrage din CIV față + verso (4 pagini: 1+4 pe față, 2+3 pe verso). Serie CIV de pe
+                pagina 1; date tehnice de pe 2–3; Mențiuni de pe 4 (fără glossarul englez).
               </p>
               <label className="block text-xs font-medium text-zinc-400">Text OCR (editabil / copiabil)</label>
               <textarea
