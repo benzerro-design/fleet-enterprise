@@ -761,6 +761,14 @@ export function findCivSeriesInFrontText(text: string): string | null {
     if (isCivSeriesCode(c)) return c;
   }
 
+  // „P 541981” / „P541981” — literă + 6 cifre (posibil spațiu).
+  const letterDigits = [
+    ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])\s*(\d{6})\b/gi),
+  ].map((m) => `${m[1]}${m[2]}`.toUpperCase());
+  for (const c of letterDigits) {
+    if (isCivSeriesCode(c)) return c;
+  }
+
   // Literă pe o linie, 6 cifre pe următoarea (OCR barcode fragmentat).
   const lineBroken = [
     ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])\s*\n\s*(\d{6})\b/gi),
@@ -772,7 +780,9 @@ export function findCivSeriesInFrontText(text: string): string | null {
   const candidates = [...withoutEngine.matchAll(/\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) =>
     m[1]!.toUpperCase(),
   );
-  const unique = [...new Set([...candidates, ...compactSpaced])].filter(isCivSeriesCode);
+  const unique = [...new Set([...candidates, ...compactSpaced, ...letterDigits, ...lineBroken])].filter(
+    isCivSeriesCode,
+  );
   // Pe CIV moderne seria tipărită e frecvent P###### — preferă față de R###### (serie motor).
   const pSeries = unique.filter((s) => s.startsWith('P'));
   if (pSeries.length === 1) return pSeries[0]!;

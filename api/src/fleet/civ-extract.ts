@@ -259,11 +259,17 @@ export function mapCivExtractTextToPreview(
   // Tip / Denumire comercială: pe verso uneori „VEHICUL LOGAN” e deasupra etichetei goale D.3.
   if (!civProfile.commercialName) {
     const commercial =
-      /\bVEHICUL\s+([A-Z][A-Z0-9][A-Z0-9\- ]{0,28})\b/i.exec(pairSource) ||
-      /\bD\.?\s*3\.?\s*Denumire\s+comercial\w*\s*:?\s*([A-Z][A-Z0-9\- ]{1,30})/i.exec(pairSource);
+      /\bVEHICUL\s+([A-Z][A-Z0-9\-]{1,24})\b/i.exec(pairSource) ||
+      /\bD\.?\s*3\.?\s*Denumire\s+comercial\w*\s*:?\s*([A-Z][A-Z0-9\-]{1,24})\b/i.exec(
+        pairSource,
+      );
     if (commercial) {
       const name = commercial[1]!.replace(/\s+/g, ' ').trim().toUpperCase();
-      if (name && !/^(CONTINUARE|IDENTIFICARE|CONSTRUCTIVE)$/i.test(name)) {
+      const blocked =
+        !name ||
+        /^(CONTINUARE|IDENTIFICARE|CONSTRUCTIVE|DATE|VEHICUL)$/i.test(name) ||
+        /\b(DATE|IDENTIFICARE|CONSTRUCTIVE)\b/i.test(name);
+      if (!blocked) {
         civProfile.commercialName = name;
         matched.push({
           rubric: 'Denumire comercială',

@@ -26,7 +26,11 @@ type VisionFullText = {
     blocks?: Array<{
       paragraphs?: Array<{
         words?: Array<{
-          boundingBox?: { vertices?: Vertex[] };
+          boundingBox?: {
+            vertices?: Vertex[];
+            /** PDF / files:annotate — coordonate 0–1; lipsesc adesea vertices pixel. */
+            normalizedVertices?: Vertex[];
+          };
           symbols?: Array<{ text?: string; property?: { detectedBreak?: { type?: string } } }>;
         }>;
       }>;
@@ -79,14 +83,54 @@ function boxOf(vertices: Vertex[] | undefined): {
   };
 }
 
+/** Preferă vertices pixel; pe PDF Vision trimite doar normalizedVertices (0–1). */
+function boxFromBounding(
+  boundingBox:
+    | {
+        vertices?: Vertex[];
+        normalizedVertices?: Vertex[];
+      }
+    | undefined,
+  pageWidth: number,
+  pageHeight: number,
+): ReturnType<typeof boxOf> {
+  const pixel = boxOf(boundingBox?.vertices);
+  // vertices uneori există dar sunt tot normalizate (0–1) pe PDF.
+  if (pixel && (pixel.maxX > 1.5 || pixel.maxY > 1.5 || pageWidth <= 1)) {
+    return pixel;
+  }
+  const norm = boundingBox?.normalizedVertices;
+  if (norm?.length && pageWidth > 1 && pageHeight > 1) {
+    const scaled = norm.map((v) => ({
+      x: (v.x ?? 0) * pageWidth,
+      y: (v.y ?? 0) * pageHeight,
+    }));
+    return boxOf(scaled);
+  }
+  // vertices deja 0–1 fără normalizedVertices explicit
+  if (pixel && pageWidth > 1 && pageHeight > 1 && pixel.maxX <= 1.5 && pixel.maxY <= 1.5) {
+    return {
+      cx: pixel.cx * pageWidth,
+      cy: pixel.cy * pageHeight,
+      minX: pixel.minX * pageWidth,
+      maxX: pixel.maxX * pageWidth,
+      minY: pixel.minY * pageHeight,
+      maxY: pixel.maxY * pageHeight,
+    };
+  }
+  return pixel;
+}
+
 function collectWords(page: NonNullable<VisionFullText['pages']>[number]): VisionWord[] {
   const out: VisionWord[] = [];
+  const width = page.width ?? 0;
+  const height = page.height ?? 0;
   for (const block of page.blocks ?? []) {
     for (const para of block.paragraphs ?? []) {
       for (const word of para.words ?? []) {
         const text = wordText(word);
         if (!text) continue;
-        const box = boxOf(word.boundingBox?.vertices);
+        const box = boxFromBounding(word.boundingBox, width, height);
         if (!box) continue;
         out.push({ text, ...box });
       }
