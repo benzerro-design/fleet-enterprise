@@ -217,31 +217,21 @@ export function DocumentForm(props: Props) {
           return;
         }
         const baseTitle = title.trim() || "CIV";
-        const reminderPayload = {
+        const created = await postDocument({
+          vehicleId: boundVehicleId,
+          documentTypeCode: "civ",
+          title: baseTitle,
+          expiresOn: expiryIso,
+          fileUrl: civFront.url,
+          fileName: civFront.name,
+          fileUrlVerso: civVerso.url,
+          fileNameVerso: civVerso.name,
           reminderOffsetsDays: dayOffsets,
           dueOdometerKm: kmDue,
           reminderOffsetsKm: kmOffsets,
           syncReminderAction: false,
-        };
-        await postDocument({
-          vehicleId: boundVehicleId,
-          documentTypeCode: "civ_fata",
-          title: `${baseTitle} — față`,
-          expiresOn: expiryIso,
-          fileUrl: civFront.url,
-          fileName: civFront.name,
-          ...reminderPayload,
         });
-        const verso = await postDocument({
-          vehicleId: boundVehicleId,
-          documentTypeCode: "civ_verso",
-          title: `${baseTitle} — verso`,
-          expiresOn: expiryIso,
-          fileUrl: civVerso.url,
-          fileName: civVerso.name,
-          ...reminderPayload,
-        });
-        if (verso.reminderSyncFailed) {
+        if (created.reminderSyncFailed) {
           router.push("/fleet/documents?reminderSync=failed");
         } else {
           router.push("/fleet/documents");
@@ -465,7 +455,7 @@ export function DocumentForm(props: Props) {
         </OpsFormSection>
         {!isCivCreate ? <OpsFormCollapsible title="5. Termene & remindere (pliable)">{reminderBlock}</OpsFormCollapsible> : null}
         <OpsFormStickyActions
-          submitLabel={isEdit ? "Salvează modificările" : isCivCreate ? "Creează CIV față + verso" : "Creează documentul"}
+          submitLabel={isEdit ? "Salvează modificările" : isCivCreate ? "Creează documentul CIV" : "Creează documentul"}
           pendingLabel="Se salvează…"
           cancelHref="/fleet/documents"
           pending={pending || uploading}
@@ -586,7 +576,7 @@ export function DocumentForm(props: Props) {
             : isEdit
               ? "Salvează"
               : isCivCreate
-                ? "Adaugă CIV față + verso"
+                ? "Adaugă document CIV"
                 : "Adaugă document"}
         </button>
         <Link

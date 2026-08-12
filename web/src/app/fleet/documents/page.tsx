@@ -34,6 +34,8 @@ type DocumentRow = {
   expiresOn: string | null;
   fileUrl: string | null;
   fileName: string | null;
+  fileUrlVerso?: string | null;
+  fileNameVerso?: string | null;
   reminder?: DocumentReminderSummary;
   createdAt: string;
 };
@@ -286,7 +288,17 @@ export default async function DocumentsPage({ searchParams }: Props) {
                           rel="noreferrer"
                           className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:bg-zinc-800"
                         >
-                          Deschide fișier
+                          {row.fileUrlVerso ? "Față" : "Deschide fișier"}
+                        </a>
+                      ) : null}
+                      {row.fileUrlVerso ? (
+                        <a
+                          href={row.fileUrlVerso}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:bg-zinc-800"
+                        >
+                          Verso
                         </a>
                       ) : null}
                       {write ? (

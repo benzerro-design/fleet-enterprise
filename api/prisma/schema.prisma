@@ -722,6 +722,9 @@ model VehicleDocument {
   expiresOn           DateTime?
   fileUrl             String?
   fileName            String?
+  /** Al doilea scan pentru CIV (verso); față rămâne în fileUrl. */
+  fileUrlVerso        String?
+  fileNameVerso       String?
   /** Zile înainte de expirare când se activează remindere (ex. [60, 30, 7, 1, 0]). */
   reminderOffsetsDays Json?
   dueOdometerKm       Int?

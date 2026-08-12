@@ -147,6 +147,8 @@ export const CIV_LABEL_FIELDS: CivLabelFieldSpec[] = [
       const t = v.trim();
       if (!t || /\d/.test(t)) return false; // mărci fără cifre; respinge coduri motor
       if (/clas[aă]|categorie|an fabric|cod|motor/i.test(t)) return false;
+      // Evită engleza „seat” din „driver's seat”; permite marca SEAT (majuscule).
+      if (/^seats?$/i.test(t) && t !== 'SEAT') return false;
       return /^[A-ZĂÂÎȘȚ][A-Za-zăâîșțĂÂÎȘȚ \-]{1,24}$/.test(t);
     },
   },

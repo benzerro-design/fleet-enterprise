@@ -34,6 +34,8 @@ export type CreateDocumentInput = {
   expiresOn?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
+  fileUrlVerso?: string | null;
+  fileNameVerso?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
@@ -166,6 +168,8 @@ function toDocRow(row: {
   expiresOn: Date | null;
   fileUrl: string | null;
   fileName: string | null;
+  fileUrlVerso?: string | null;
+  fileNameVerso?: string | null;
   reminderOffsetsDays: unknown;
   dueOdometerKm: number | null;
   reminderOffsetsKm: unknown;
@@ -186,6 +190,8 @@ function toDocRow(row: {
     expiresOn: row.expiresOn ? row.expiresOn.toISOString() : null,
     fileUrl: row.fileUrl,
     fileName: row.fileName,
+    fileUrlVerso: row.fileUrlVerso ?? null,
+    fileNameVerso: row.fileNameVerso ?? null,
     reminderOffsetsDays,
     dueOdometerKm: row.dueOdometerKm,
     reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
@@ -328,6 +334,8 @@ export class DocumentsService {
           dto.expiresOn === undefined ? null : dto.expiresOn ? new Date(dto.expiresOn) : null,
         fileUrl: dto.fileUrl ?? null,
         fileName: dto.fileName ?? null,
+        fileUrlVerso: dto.fileUrlVerso ?? null,
+        fileNameVerso: dto.fileNameVerso ?? null,
         reminderOffsetsDays: reminderOffsetsForDb(reminderOffsets),
         dueOdometerKm: dto.dueOdometerKm ?? null,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
@@ -397,6 +405,8 @@ export class DocumentsService {
               : null,
         fileUrl: dto.fileUrl === undefined ? undefined : dto.fileUrl,
         fileName: dto.fileName === undefined ? undefined : dto.fileName,
+        fileUrlVerso: dto.fileUrlVerso === undefined ? undefined : dto.fileUrlVerso,
+        fileNameVerso: dto.fileNameVerso === undefined ? undefined : dto.fileNameVerso,
         reminderOffsetsDays: reminderOffsetsForDb(dto.reminderOffsetsDays),
         dueOdometerKm: dto.dueOdometerKm,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),

@@ -181,6 +181,18 @@ function assertCreateDocumentDto(body: unknown): CreateDocumentInput {
     'fileUrl' in body ? (body.fileUrl === null ? null : optionalString(body.fileUrl)) : undefined;
   const fileName =
     'fileName' in body ? (body.fileName === null ? null : optionalString(body.fileName)) : undefined;
+  const fileUrlVerso =
+    'fileUrlVerso' in body
+      ? body.fileUrlVerso === null
+        ? null
+        : optionalString(body.fileUrlVerso)
+      : undefined;
+  const fileNameVerso =
+    'fileNameVerso' in body
+      ? body.fileNameVerso === null
+        ? null
+        : optionalString(body.fileNameVerso)
+      : undefined;
   const reminderOffsetsDays = parseReminderOffsetsField(body, 'reminderOffsetsDays');
   const syncReminderAction =
     'syncReminderAction' in body ? optionalBoolean(body.syncReminderAction) : undefined;
@@ -191,6 +203,8 @@ function assertCreateDocumentDto(body: unknown): CreateDocumentInput {
     expiresOn,
     fileUrl,
     fileName,
+    fileUrlVerso,
+    fileNameVerso,
     reminderOffsetsDays,
     dueOdometerKm: optionalNullableNonNegativeInt(body.dueOdometerKm, 'dueOdometerKm'),
     reminderOffsetsKm: parseReminderOffsetsKmField(body, 'reminderOffsetsKm'),
@@ -218,6 +232,12 @@ function assertPatchDocumentDto(body: unknown): PatchDocumentInput {
   }
   if ('fileName' in body) {
     dto.fileName = body.fileName === null ? null : optionalString(body.fileName);
+  }
+  if ('fileUrlVerso' in body) {
+    dto.fileUrlVerso = body.fileUrlVerso === null ? null : optionalString(body.fileUrlVerso);
+  }
+  if ('fileNameVerso' in body) {
+    dto.fileNameVerso = body.fileNameVerso === null ? null : optionalString(body.fileNameVerso);
   }
   if ('reminderOffsetsDays' in body) {
     dto.reminderOffsetsDays = parseReminderOffsetsField(body, 'reminderOffsetsDays');

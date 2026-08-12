@@ -1461,6 +1461,23 @@ export class FleetService {
     });
     if (!docs.length) return null;
 
+    // Preferă un singur document CIV cu față (+ verso opțional pe același rând).
+    const unified = docs.find((d) => d.documentTypeCode === 'civ' && d.fileUrl);
+    if (unified?.fileUrl) {
+      return {
+        documentId: unified.id,
+        title: unified.title,
+        fileUrl: unified.fileUrl,
+        fileName: unified.fileName,
+        fileUrlVerso: unified.fileUrlVerso ?? null,
+        fileNameVerso: unified.fileNameVerso ?? null,
+        documentIdVerso: null,
+        expiresOn: unified.expiresOn ? unified.expiresOn.toISOString() : null,
+        uploadedAt: unified.createdAt.toISOString(),
+      };
+    }
+
+    // Legacy: două înregistrări civ_fata + civ_verso.
     const front =
       docs.find((d) => d.documentTypeCode === 'civ_fata') ??
       docs.find((d) => d.documentTypeCode === 'civ') ??
@@ -1476,8 +1493,8 @@ export class FleetService {
         : front.title,
       fileUrl: front.fileUrl,
       fileName: front.fileName,
-      fileUrlVerso: verso?.fileUrl ?? null,
-      fileNameVerso: verso?.fileName ?? null,
+      fileUrlVerso: verso?.fileUrl ?? front.fileUrlVerso ?? null,
+      fileNameVerso: verso?.fileName ?? front.fileNameVerso ?? null,
       documentIdVerso: verso?.id ?? null,
       expiresOn: front.expiresOn ? front.expiresOn.toISOString() : null,
       uploadedAt: front.createdAt.toISOString(),

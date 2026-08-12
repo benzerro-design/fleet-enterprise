@@ -23,6 +23,8 @@ type DocumentRow = {
   expiresOn: string | null;
   fileUrl: string | null;
   fileName: string | null;
+  fileUrlVerso?: string | null;
+  fileNameVerso?: string | null;
   reminderOffsetsDays: number[] | null;
   reminder: DocumentReminderSummary;
   createdAt: string;
@@ -121,14 +123,26 @@ export default async function DocumentDetailPage({
             </div>
             <div className="sm:col-span-2">
               <dt className="text-xs uppercase text-zinc-500">Fișier</dt>
-              <dd className="mt-1">
+              <dd className="mt-1 flex flex-wrap gap-3">
                 {row.fileUrl ? (
                   <a className="text-emerald-400 hover:underline" href={row.fileUrl} target="_blank" rel="noreferrer">
-                    {row.fileName ?? "Deschide document"}
+                    {row.documentTypeCode === "civ" || row.fileUrlVerso
+                      ? `Față — ${row.fileName ?? "deschide"}`
+                      : (row.fileName ?? "Deschide document")}
                   </a>
                 ) : (
                   "—"
                 )}
+                {row.fileUrlVerso ? (
+                  <a
+                    className="text-emerald-400 hover:underline"
+                    href={row.fileUrlVerso}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Verso — {row.fileNameVerso ?? "deschide"}
+                  </a>
+                ) : null}
               </dd>
             </div>
           </dl>

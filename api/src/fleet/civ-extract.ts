@@ -242,6 +242,18 @@ export function mapCivExtractTextToPreview(
     },
   });
 
+  // Corecție: SEAT din engleza „seat” vs VIN Dacia (UU1).
+  const vinForBrand = vin ?? findVinInText(text);
+  if (
+    vinForBrand?.startsWith('UU1') &&
+    String(civProfile.brand ?? '')
+      .toUpperCase()
+      .replace(/\s+/g, '') === 'SEAT'
+  ) {
+    civProfile.brand = 'DACIA';
+    matched.push({ rubric: 'Marcă (din VIN)', target: 'brand', value: 'DACIA' });
+  }
+
   const unmatchedLines = pairs
     .filter(
       (p) =>
@@ -277,11 +289,8 @@ function applyEmptyFieldFallbacks(
   const empty = (key: string) => ctx.civProfile[key] == null || ctx.civProfile[key] === '';
 
   if (empty('brand')) {
-    const brand =
-      /\b(DACIA|FORD|VOLKSWAGEN|RENAULT|SKODA|OPEL|TOYOTA|HYUNDAI|BMW|AUDI|PEUGEOT|CITROEN|FIAT|SEAT|MERCEDES[-\s]?BENZ)\b/i.exec(
-        t,
-      );
-    if (brand) ctx.setMeta('brand', brand[1]!.replace(/\s+/g, ' ').toUpperCase(), 'Marcă');
+    const brand = resolveCivBrandFallback(t);
+    if (brand) ctx.setMeta('brand', brand, 'Marcă');
   }
 
   if (empty('homologationCategory')) {
@@ -339,4 +348,38 @@ function normalizeLoose(s: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+const CIV_BRAND_PATTERN =
+  '(DACIA|FORD|VOLKSWAGEN|VW|RENAULT|SKODA|OPEL|TOYOTA|HYUNDAI|BMW|AUDI|PEUGEOT|CITROEN|FIAT|SEAT|MERCEDES[\\s-]?BENZ)';
+
+/**
+ * Marca: doar lângă eticheta Marcă / D.1 sau din WMI VIN.
+ * Evită falsuri tip SEAT din engleza „driver's seat” pe verso.
+ */
+function resolveCivBrandFallback(text: string): string | null {
+  const front = splitCivFrontText(text);
+  const nearLabel =
+    new RegExp(
+      `(?:D\\.?\\s*1\\.?\\s*)?(?:Marca|Make)\\s*:?\\s*${CIV_BRAND_PATTERN}\\b`,
+      'i',
+    ).exec(front) ||
+    new RegExp(
+      `(?:D\\.?\\s*1\\.?\\s*)?(?:Marca|Make)\\s*:?\\s*${CIV_BRAND_PATTERN}\\b`,
+      'i',
+    ).exec(text);
+  if (nearLabel) {
+    const b = nearLabel[1]!.replace(/\s+/g, ' ').toUpperCase();
+    return b === 'VW' ? 'VOLKSWAGEN' : b;
+  }
+
+  const vin = findVinInText(front) ?? findVinInText(text);
+  if (vin?.startsWith('UU1')) return 'DACIA';
+  if (vin?.startsWith('WF0') || vin?.startsWith('WFO')) return 'FORD';
+  if (vin?.startsWith('WVW') || vin?.startsWith('WV1')) return 'VOLKSWAGEN';
+  if (vin?.startsWith('VF1')) return 'RENAULT';
+  if (vin?.startsWith('TMB')) return 'SKODA';
+  if (vin?.startsWith('VSS')) return 'SEAT';
+
+  return null;
 }

@@ -2,7 +2,7 @@ export const DOCUMENT_TYPE_OPTIONS = [
   { value: "rca", label: "RCA" },
   { value: "casco", label: "CASCO" },
   { value: "cert_inmatriculare", label: "Certificat înmatriculare" },
-  { value: "civ", label: "CIV (față + verso)" },
+  { value: "civ", label: "CIV" },
   { value: "itp_cert", label: "Certificat ITP" },
   { value: "licenta_transport", label: "Licență transport" },
   { value: "altul", label: "Alt document" },
