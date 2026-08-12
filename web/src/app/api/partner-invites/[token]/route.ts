@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { proxyUpstreamResponse } from "@/lib/api-proxy-response";
 
 const COOKIE = "fleet_access";
 
@@ -18,7 +19,8 @@ async function proxy(req: NextRequest, token: string, suffix: string) {
   const out = new Headers();
   const rct = res.headers.get("content-type");
   if (rct) out.set("Content-Type", rct);
-  return new NextResponse(await res.arrayBuffer(), { status: res.status, headers: out });
+  const buf = await res.arrayBuffer();
+  return proxyUpstreamResponse(res, buf, out);
 }
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ token: string }> }) {

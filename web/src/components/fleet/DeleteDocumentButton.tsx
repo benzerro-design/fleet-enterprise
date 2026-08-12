@@ -17,12 +17,14 @@ export function DeleteDocumentButton({ documentId, label, redirectTo }: Props) {
     setError(null);
     try {
       const res = await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
-      if (res.status === 204 || res.status === 404) {
+      // 204 = deleted; 404 = already gone. res.ok covers edge proxies that remap status.
+      if (res.ok || res.status === 204 || res.status === 404) {
         if (redirectTo) router.push(redirectTo);
         router.refresh();
         return;
       }
-      setError((await res.text()) || `Eroare ${res.status}`);
+      const body = (await res.text()).trim();
+      setError(body || `Eroare ${res.status}`);
     } catch {
       setError("Rețea sau server indisponibil.");
     } finally {

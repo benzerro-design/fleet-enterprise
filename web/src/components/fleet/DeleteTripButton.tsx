@@ -21,7 +21,7 @@ export function DeleteTripButton({ tripId, label, redirectTo }: Props) {
     setError(null);
     try {
       const res = await fetch(`/api/trips/${tripId}`, { method: "DELETE" });
-      if (res.status === 204 || res.status === 404) {
+      if (res.ok || res.status === 204 || res.status === 404) {
         if (redirectTo) router.push(redirectTo);
         router.refresh();
         return;

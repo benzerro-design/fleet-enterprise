@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { proxyUpstreamResponse } from "@/lib/api-proxy-response";
 
 const COOKIE = "fleet_access";
 
@@ -40,7 +41,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path?: string[] 
   if (cd) outHeaders.set("Content-Disposition", cd);
 
   const buf = await upstream.arrayBuffer();
-  return new NextResponse(buf, { status: upstream.status, headers: outHeaders });
+  return proxyUpstreamResponse(upstream, buf, outHeaders);
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
