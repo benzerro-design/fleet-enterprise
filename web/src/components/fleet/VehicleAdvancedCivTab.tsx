@@ -282,8 +282,8 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
             <div className="mt-3 space-y-3">
               <p className="text-xs text-zinc-500">
                 Extrage din CIV față + verso (carte 4 pagini). Modern 2016/2024: Serie pe pag. 1,
-                tehnice pe 2–3, Mențiuni pe 4. CIV 1993: tehnice din Secțiunea A (coloana stângă
-                pag. 2). Același formular pentru ambele formate.
+                tehnice pe 2–3, Mențiuni pe 4. CIV 1993: doar Secțiunea A (etichetă albastră →
+                valoare neagră pe același rând); Modificări → Mențiuni. Același formular.
               </p>
               <label className="block text-xs font-medium text-zinc-400">Text OCR (editabil / copiabil)</label>
               <textarea

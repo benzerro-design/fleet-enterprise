@@ -69,6 +69,15 @@ if (p.civProfile.brand !== 'FORD') throw new Error(`brand=${p.civProfile.brand}`
 if (p.vin !== 'WF0JXXGAJJCD17215') throw new Error(`vin=${p.vin}`);
 if (p.civSeries !== 'J459513') throw new Error(`series=${p.civSeries}`);
 if (p.civProfile.curbMassKg !== 1195) throw new Error(`curb=${p.civProfile.curbMassKg}`);
-if (p.civProfile.commercialName !== 'FIESTA') throw new Error(`commercial=${p.civProfile.commercialName}`);
+if (p.civProfile.maxTechnicalMassKg !== 1540) throw new Error(`mtma=${p.civProfile.maxTechnicalMassKg}`);
+if (!String(p.civProfile.typeVariantVersion ?? '').includes('JA8')) {
+  throw new Error(`tip=${p.civProfile.typeVariantVersion}`);
+}
+if (p.civProfile.usageCategory !== 'AUTOTURISM M1') {
+  throw new Error(`usage=${p.civProfile.usageCategory}`);
+}
+if (!p.civMentions || !/CO2|Filtru/i.test(p.civMentions)) {
+  throw new Error(`mentions=${p.civMentions}`);
+}
 if ((p.matched.length ?? 0) < 15) throw new Error(`matched=${p.matched.length}`);
 console.log('OK');

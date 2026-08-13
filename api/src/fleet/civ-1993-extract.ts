@@ -105,13 +105,22 @@ function pushMatch(
 }
 
 /**
- * Parsează Secțiunea A (și blocul Modificări) → civProfile.
+ * Parsează Secțiunea A → civProfile (echivalențe CIV 1993 → formular app).
+ *
+ * Regulă: etichetă (text albastru pe CIV) → următoarea valoare (text negru).
+ * Fără culoare Vision: aproximăm pe etichete cunoscute + tokenul numeric/alfanumeric următor.
+ * Doar Secțiunea A — nimic după separatorul vertical A|B.
+ *
+ * Fără corespondent (ignorate): sarcină utilă, mijloc/senilă pe axe, locuri față/scaune,
+ * „sau” anvelope, presiune cuplă, data/nr. primei înmatriculări.
  */
 export function mapCiv1993SectionAToProfile(sectionA: string): {
   profile: VehicleCivProfile;
   matched: Civ1993ExtractResult['matched'];
   vin: string | null;
   techPairCount: number;
+  /** Bloc „Modificări…” → Mențiuni în app. */
+  modificationsMentions: string | null;
 } {
   const text = sectionA;
   const profile: VehicleCivProfile = {};
@@ -130,135 +139,126 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     pushMatch(matched, profile, key, rubric, raw.replace(/\s+/g, ' ').trim());
   };
 
-  // 1. Categoria — „AUTOTURISM M1” (OCR: Categoda, MI)
+  /** Valoare neagră imediat după etichetă albastră (pe același rând / imediat după). */
+  const valueAfter = (labelRe: RegExp, valueRe: RegExp): string | null => {
+    const m = labelRe.exec(text);
+    if (!m || m.index == null) return null;
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 80);
+    const v = valueRe.exec(after);
+    return v?.[1] ? v[1].replace(/\s+/g, ' ').trim() : null;
+  };
+
+  // 1. Categoria → Categorie de folosință (nu omologare separată)
   const categoria = pick(text, [
-    /(?:^|\n)\s*1\.?\s*Categor\w*\s*[:\s]+([^\n]+)/i,
-    /\bCategor\w*\s*[:\s]+([A-ZĂÂÎȘȚ][^\n]{2,40})/i,
+    /(?:^|\n)\s*1\.?\s*Categor\w*\s*[:\s]+([^\n]+?)(?=\s+\d+\s*$|\s*$|\s+2\.?\s*Carose)/i,
+    /\bCategor\w*\s*[:\s]+([A-ZĂÂÎȘȚ][^\n]{2,40}?)(?=\s+\d+\s|$)/i,
   ]);
   if (categoria) {
-    techPairCount++;
-    const m1 = /\b((?:M|N|O|L)\d{0,2}|MI)\b/i.exec(categoria);
-    if (m1) {
-      const cat = m1[1]!.toUpperCase() === 'MI' ? 'M1' : m1[1]!.toUpperCase();
-      pushMatch(matched, profile, 'homologationCategory', 'Categoria (omologare)', cat);
-    }
     const usage = categoria
       .replace(/\bMI\b/i, 'M1')
       .replace(/\s+/g, ' ')
+      .replace(/\s+\d+\s*$/, '')
       .trim()
       .toUpperCase();
-    pushMatch(matched, profile, 'usageCategory', 'Categoria', usage);
+    set('usageCategory', 'Categorie de folosință', usage);
   }
 
+  // 2. Caroserie
   set(
     'bodyType',
     'Caroserie',
     pick(text, [
-      /(?:^|\n)\s*2\.?\s*Carose\w*\s*[:\s]+([^\n]+)/i,
-      /\bCarose\w*\s*[:\s]+([A-Z0-9][^\n]{2,50})/i,
+      /(?:^|\n)\s*2\.?\s*Carose\w*\s*[:\s]+([^\n]+?)(?=\s+\d+\s*$|\s*$|\s+3\.?\s*Marca)/i,
+      /\bCarose\w*\s*[:\s]+([A-Z0-9][^\n]{2,50}?)(?=\s+\d+\s|$)/i,
     ]),
   );
 
+  // 3. Marca
   set(
     'brand',
     'Marcă',
     pick(text, [
-      /(?:^|\n)\s*3\.?\s*Marca\s*[:\s]+([A-ZĂÂÎȘȚ][A-ZĂÂÎȘȚa-zăâîșț\- ]{1,30})/i,
-      /\bMarca\s+([A-Z]{2,20})\b/i,
+      /(?:^|\n)\s*3\.?\s*Marca\s*[:\s]+([A-ZĂÂÎȘȚ][A-ZĂÂÎȘȚa-zăâîșț\- ]{1,30}?)(?=\s+\d+\s*$|\s*$|\s+4\.?\s*Tipul)/i,
       /\bMarca\s*[:\s]+([A-Z]{2,20})\b/i,
+      /\bMarca\s+([A-Z]{2,20})\b/i,
     ]),
   );
 
+  // 4. Tipul / Varianta → Tip – variantă – versiune (tot șirul, inclusiv Fiesta)
   const tipVar = pick(text, [
     /(?:^|\n)\s*4\.?\s*Tipul\s*\/?\s*Var\w*\s*[:\s]+([^\n]+)/i,
+    /(?:^|\n)\s*4\.?\s*Tipul\s*[:\s]+([A-Z0-9][^\n]*?(?:Fiesta|[A-Z0-9]{4,}))/i,
     /\bTipul\s*\/?\s*Var\w*\s*[:\s]+([^\n]+)/i,
-    /(?:^|\n)\s*4\.?\s*Tipul\s*[:\s]+([^\n]+)/i,
-    /\bTipul\s+([A-Z0-9][^\n]{3,60})/i,
+    /\bTipul\s+([A-Z0-9][A-Z0-9.\-\/\s]{4,80}?Fiesta)\b/i,
+    /\bTipul\s+([A-Z0-9][A-Z0-9.\-\/\s]{4,60})/i,
   ]);
   if (tipVar) {
-    techPairCount++;
-    const parts = tipVar.split(/\s*\/\s*/).map((p) => p.trim()).filter(Boolean);
-    const commercial = parts.length >= 2 ? parts[parts.length - 1]! : null;
-    const typeParts =
-      commercial && parts.length > 1 ? parts.slice(0, -1) : parts;
-    if (typeParts.length) {
-      pushMatch(
-        matched,
-        profile,
-        'typeVariantVersion',
-        'Tipul / Varianta',
-        typeParts.join(' / '),
-      );
-    }
-    if (commercial && /^[A-Za-z][A-Za-z0-9\- ]{1,24}$/.test(commercial) && !/^\d+$/.test(commercial)) {
-      pushMatch(matched, profile, 'commercialName', 'Denumire comercială', commercial.toUpperCase());
-    }
+    set(
+      'typeVariantVersion',
+      'Tip – variantă – versiune',
+      tipVar
+        .replace(/\s+Vananla\s*/i, ' ')
+        .replace(/\s+\d+\s*$/, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s*\/\s*$/, '')
+        .trim(),
+    );
   }
 
-  const omologAn = pick(text, [
-    /(?:^|\n)\s*5\.?\s*Nr\.?\s*omologare[^\n]{0,40}?Anul[^\n]{0,20}?[:\s]+([^\n]+)/i,
-    /\bNr\.?\s*omologare[^\n]{0,30}?\/?[^\n]{0,20}Anul[^\n]{0,15}[:\s]+([^\n]+)/i,
-    /\bomologa([A-Z0-9]{10,24})\s*\/\s*((?:19|20)\d{2})\b/i,
-    /([A-Z0-9]{10,24})\s*\/\s*((?:19|20)\d{2})\b/,
-  ]);
-  if (omologAn) {
-    // pick returns only group 1 — handle dual capture via dedicated regex
-  }
+  // 5. Nr. omologare / Anul — anul e după „/”, înainte de separatorul A|B (deja tăiat în COL A)
   {
     const dual =
       /\bomologa([A-Z0-9]{10,24})\s*\/\s*((?:19|20)\d{2})\b/i.exec(text) ||
       /\b([A-Z0-9]{12,24})\s*\/\s*((?:19|20)\d{2})\b/.exec(text);
     if (dual) {
-      set('nationalRegisterNumber', 'Nr. omologare', dual[1]);
-      set('manufactureYear', 'Anul fabricației', dual[2], true);
-    } else if (omologAn) {
-      const bits = omologAn.split(/\s*\/\s*/).map((x) => x.trim());
-      if (bits[0] && /[A-Z0-9]/i.test(bits[0])) {
-        set('nationalRegisterNumber', 'Nr. omologare', bits[0].replace(/^omologa/i, ''));
-      }
-      const yearBit = bits.find((b) => /^(19|20)\d{2}$/.test(b)) ?? bits[1];
-      if (yearBit) set('manufactureYear', 'Anul fabricației', yearBit, true);
+      set('nationalRegisterNumber', 'Număr național de registru', dual[1]);
+      set('manufactureYear', 'An fabricație', dual[2], true);
     } else {
       set(
-        'manufactureYear',
-        'Anul fabricației',
-        pick(text, [/\bAnul\s+(?:de\s+)?fabrica\w*\s*[:\s\/]*((?:19|20)\d{2})\b/i, /\/\s*((?:19|20)\d{2})\b/]),
-        true,
+        'nationalRegisterNumber',
+        'Număr național de registru',
+        pick(text, [
+          /\bNr\.?\s*(?:de\s+)?omologare\s*[:\s]+([A-Z0-9]{6,24})\b/i,
+          /\bomologa([A-Z0-9]{10,24})\b/i,
+        ]),
       );
       set(
-        'nationalRegisterNumber',
-        'Nr. omologare',
-        pick(text, [/\bNr\.?\s*omologare\s*[:\s]+([A-Z0-9]{6,24})\b/i, /\bomologa([A-Z0-9]{10,24})\b/i]),
+        'manufactureYear',
+        'An fabricație',
+        pick(text, [
+          /\bAnul\s+(?:de\s+)?fabrica\w*\s*[:\s\/]*((?:19|20)\d{2})\b/i,
+          /\/\s*((?:19|20)\d{2})\b/,
+        ]),
+        true,
       );
     }
   }
 
+  // 6. Nr. identificare → VIN
   let vin =
     pick(text, [
-      /(?:^|\n)\s*6\.?\s*Nr\.?\s*identificare\s*[:\s]+([A-HJ-NPR-Z0-9O]{17})\b/i,
-      /\bNr\.?\s*identificare\s*[:\s]+([A-HJ-NPR-Z0-9O]{17})\b/i,
+      /(?:^|\n)\s*6\.?\s*(?:Nr\.?\s*|Numarul\s+de\s+)?identificare\s*[:\s]+([A-HJ-NPR-Z0-9O]{17})\b/i,
       /\bNumarul\s+de\s+([A-HJ-NPR-Z0-9O]{17})\b/i,
       /\b([A-HJ-NPR-Z0-9O]{17})\b/,
     ])
       ?.replace(/\s+/g, '')
       .toUpperCase()
-      .replace(/^WFO/, 'WF0') // OCR O↔0 pe WMI Ford
+      .replace(/^WFO/, 'WF0')
       .replace(/^UUO/, 'UU0') ?? null;
-  // VIN valid fără O/I/Q
   if (vin && !/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
     vin = vin.replace(/O/g, '0').replace(/I/g, '1').replace(/Q/g, '0');
   }
   if (vin && !/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) vin = null;
   if (vin) {
     techPairCount++;
-    matched.push({ rubric: 'Nr. identificare', target: 'vin', value: vin });
+    matched.push({ rubric: 'VIN', target: 'vin', value: vin });
   }
 
-  // 7. Mase
-  set('curbMassKg', 'Masă proprie', pick(text, [/\bProprie\s*[:\s]*(\d{3,5})\b/i]), true);
+  // 7. Mase — doar corespondentele din tabel (fără sarcină utilă / mijloc / senilă)
+  set('curbMassKg', 'Masă în ordine de mers', valueAfter(/\bProprie\b/i, /^\s*[:\s]*(\d{3,5})\b/) ?? pick(text, [/\bProprie\s*[:\s]*(\d{3,5})\b/i]), true);
   set(
     'maxTechnicalMassKg',
-    'Total max. autorizată',
+    'Masă maximă tehnic admisă',
     pick(text, [
       /\bTotal[ae]?\s*max\.?\s*autoriz\w*\s*[:\s]*(\d{3,5})\b/i,
       /\bTotal[ae]?\s*max\s*[:\s]*(\d{3,5})\b/i,
@@ -267,48 +267,52 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
   );
   set(
     'maxCouplingMassKg',
-    'Sarcina pe cârlig',
-    pick(text, [/\bSarcina\s+pe\s+c[aâ]rlig\w*\s*[:\s]*(\d{1,4})\b/i, /\bc[aâ]rlig\w*\s*[:\s]*(\d{1,4})\b/i]),
+    'Masă max. punct cuplare',
+    pick(text, [
+      /\bSarcina\s+pe\s+c[aâ]rlig\w*\s*[:\s]*(\d{1,4})\b/i,
+      /\bc[aâ]rlig\w*\s*(?:de\s+remorcare)?\s*[:\s]*(\d{1,4})\b/i,
+    ]),
     true,
   );
   set(
     'axle1MaxMassKg',
-    'MTMA axa față',
+    'MTMA axa 1',
     pick(text, [/\bFat[ah]\s*[:\s]*(\d{3,4})\b/i, /\bFa[tț][aă]\s*[:\s]*(\d{3,4})\b/i]),
     true,
   );
   set(
     'axle2MaxMassKg',
-    'MTMA axa spate',
+    'MTMA axa 2',
     pick(text, [/\bSpate\s*[:\s]*(\d{3,4})\b/i]),
     true,
   );
   set(
     'maxBrakedTrailerMassKg',
-    'Remorcabilă cu frână',
+    'Masă remorcabilă cu frână',
     pick(text, [
-      /Remorcabila?\s+cu\s+(?:dispozitiv\s+de\s+)?fr[aâ]nare\s*[:\s]*(\d{2,5})/i,
+      /Remorcabila?\s+cu\s+(?:disp\.?\s*(?:de\s+)?fr[aâ]nare|dispozitiv\s+de\s+fr[aâ]nare)\s*[:\s]*(\d{2,5})/i,
       /Remorcabil\s+cu\s*[:\s]*(\d{2,5})/i,
-      /cu\s+dispozitiv\s+de\s+fr[aâ]nare\s*[:\s]*(\d{2,5})/i,
     ]),
     true,
   );
   set(
     'maxUnbrakedTrailerMassKg',
-    'Remorcabilă fără frână',
+    'Masă remorcabilă fără frână',
     pick(text, [
-      /Remorcabila?\s+f[aă]r[aă]\s+(?:dispozitiv\s+de\s+)?fr[aâ]nare\s*[:\s]*(\d{2,5})/i,
+      /Remorcabila?\s+f[aă]r[aă]\s+(?:disp\.?\s*(?:de\s+)?fr[aâ]nare|dispozitiv\s+de\s+fr[aâ]nare)\s*[:\s]*(\d{2,5})/i,
       /Remorcabila?\s+fara\s*[:\s]*(\d{2,5})/i,
-      /f[aă]r[aă]\s+dispozitiv\s+(?:de\s+)?fr[aâ]nare\s*[:\s]*(\d{2,5})/i,
     ]),
     true,
   );
 
-  // 8. Locuri
+  // 8. Locuri — total + în picioare (ignoră în față / pe scaune)
   set(
     'seatsIncludingDriver',
-    'Nr. locuri total',
-    pick(text, [/\b(?:Nr\.?\s*locuri[^\n]{0,40}?)?\bTotal\s*[:\s]*(\d{1,2})\b/i, /\blocuri[^\n]{0,20}Total\s*[:\s]*(\d{1,2})\b/i]),
+    'Număr locuri (cu șofer)',
+    pick(text, [
+      /\blocuri[^\n]{0,30}?\b[Tt]otal\s*[:\s]*(\d{1,2})\b/,
+      /\b[Tt]otal\s*[:\s]*(\d{1,2})\b[^\n]{0,20}?(?:in\s+fata|pe\s+scaune)/i,
+    ]),
     true,
   );
   set(
@@ -317,136 +321,158 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     pick(text, [/\b(?:[Ii]n\s+)?picioare\s*[:\s]*(\d{1,2})\b/i]),
     true,
   );
-  if (typeof profile.standingPlaces === 'number' && profile.standingPlaces > 40) {
+  if (typeof profile.standingPlaces === 'number' && (profile.standingPlaces > 40 || profile.standingPlaces < 0)) {
     delete profile.standingPlaces;
     const idx = matched.findIndex((m) => m.target === 'standingPlaces');
     if (idx >= 0) matched.splice(idx, 1);
   }
 
-  // 9. Dimensiuni L l h — OCR: „L 3958 1722 h 1481”
-  const dims = /\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text);
+  // 9. Dimensiuni pe același rând: L (albastru) valoare (negru) l valoare h valoare
+  const dims =
+    /\bL\s*[:\s]*(\d{3,5})\s+l\s*[:\s]*(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
+    /\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text);
   if (dims) {
     set('lengthMm', 'Lungime', dims[1], true);
     set('widthMm', 'Lățime', dims[2], true);
     set('heightMm', 'Înălțime', dims[3], true);
   } else {
-    set('lengthMm', 'Lungime', pick(text, [/\bL\s*[:\s]*(\d{3,5})\b/, /\bLungime\s*[:\s]*(\d{3,5})\b/i]), true);
-    set('widthMm', 'Lățime', pick(text, [/\bl\s*[:\s]*(\d{3,5})\b/, /\bL[aă][tț]ime\s*[:\s]*(\d{3,5})\b/i]), true);
-    set('heightMm', 'Înălțime', pick(text, [/\bh\s*[:\s]*(\d{3,5})\b/, /\b[IiÎî]n[aă]l[tț]ime\s*[:\s]*(\d{3,5})\b/i]), true);
+    set('lengthMm', 'Lungime', pick(text, [/\bL\s*[:\s]*(\d{3,5})\b/]), true);
+    set('widthMm', 'Lățime', pick(text, [/\bl\s*[:\s]*(\d{3,5})\b/]), true);
+    set('heightMm', 'Înălțime', pick(text, [/\bh\s*[:\s]*(\d{3,5})\b/]), true);
   }
 
-  // 10. Motor
+  // 10. Motor — Tipul după „Motorul”; Putere / Turație: turația după „/” (înainte de A|B)
+  const motorBlock =
+    /(?:^|\n)\s*10\.?\s*Motorul[\s\S]{0,280}?(?=(?:^|\n)\s*11\.?\s*|\bNumarul\s+axelor\b|\baxelor\b)/i.exec(
+      text,
+    )?.[0] ?? text;
   set(
     'engineCode',
-    'Tip motor',
-    pick(text, [
-      /(?:^|\n)\s*10\.?\s*Motorul[^\n]{0,40}?Tipul\s*[:\s]*([A-Z0-9\-]{3,12})\b/i,
-      /\bMotorul[^\n]{0,30}?Tipul\s*[:\s]*([A-Z0-9\-]{3,12})\b/i,
-      /\bTipul\s*[:\s]*(KVJA|[A-Z]{3,5}\d{0,2}[A-Z0-9]{0,4})\b/,
-      /\bTipul\s+(KVJA)\b/i,
+    'Cod motor',
+    pick(motorBlock, [
+      /\bTipul\s*[:\s]*([A-Z0-9\-]{3,12})\b/i,
+      /\bTipul\s+(KVJA|[A-Z]{3,5}\d?[A-Z0-9]{0,4})\b/i,
     ]),
   );
-  set(
-    'engineSerial',
-    'Serie motor',
-    pick(text, [/\bSerie\s*[:\s]*([A-Z0-9]{5,20})\b/i]),
-  );
+  set('engineSerial', 'Serie motor', pick(motorBlock, [/\bSerie\s*[:\s]*([A-Z0-9]{5,20})\b/i]));
   set(
     'engineCapacityCm3',
-    'Cilindree',
-    pick(text, [
-      /\bCilindree\s*(?:\([^)]*\))?\s*[:\s]*(\d{3,5})\b/i,
-      /\bCilindree\s*(\d{3,5})\b/i,
-    ]),
+    'Capacitate cilindrică',
+    pick(motorBlock, [/\bCilindree\s*(?:\([^)]*\))?\s*[:\s]*(\d{3,5})\b/i, /\bCilindree\s*(\d{3,5})\b/i]),
     true,
   );
-  const putereTuratie = pick(text, [
-    /Putere\s*max\w*\s*(?:\([^)]*\))?\s*\/?\s*Tura[tț]ie[^\n]{0,20}[:\s]*([^\n]+)/i,
-    /Putere\s*max\w*[^\n]{0,15}[:\s]*([\d.,]+\s*\/\s*\d+)/i,
-    /Putere\s+Turatie[^\n]{0,40}?([\d.,]+\s*\/\s*\d{3,5})/i,
-    /([\d.,]+)\s*\/\s*(4000|3500|3750|3000|4500)\b/,
-  ]);
-  if (putereTuratie) {
-    const parts = putereTuratie.split(/\s*\/\s*/);
-    set('enginePowerKw', 'Putere max', parts[0] ?? null, true);
-    set('engineRpm', 'Turație', parts[1] ?? null, true);
-  } else {
-    set('enginePowerKw', 'Putere max', pick(text, [/\bPutere\s*max\w*\s*(?:\([^)]*\))?\s*[:\s]*([\d.,]+)\b/i]), true);
-    set('engineRpm', 'Turație', pick(text, [/\bTura[tț]ie\s*(?:\([^)]*\))?\s*[:\s]*(\d{3,5})\b/i]), true);
+  // Putere / Turație: turația e după „/”, înainte de separatorul A|B
+  {
+    const pt =
+      /Putere[^\n]{0,50}?([\d.,]+)\s*\/\s*(\d{3,5})/i.exec(motorBlock) ||
+      /([\d.,]+)\s*\/\s*(4000|3500|3750|3000|4500)\b/.exec(motorBlock);
+    if (pt) {
+      set('enginePowerKw', 'Putere', pt[1], true);
+      set('engineRpm', 'Turație nominală', pt[2], true);
+    } else {
+      set('enginePowerKw', 'Putere', pick(motorBlock, [/\bPutere\s*max\w*\s*(?:\([^)]*\))?\s*[:\s]*([\d.,]+)\b/i]), true);
+      set('engineRpm', 'Turație nominală', pick(motorBlock, [/\bTura[tț]ie\s*(?:\([^)]*\))?\s*[:\s]*(\d{3,5})\b/i]), true);
+    }
   }
   set(
     'fuelType',
-    'Sursă energie',
+    'Combustibil / sursă energie',
     pick(text, [
       /\bSursa\s+de\s+energie\s*[:\s]*([A-ZĂÂÎȘȚa-zăâîșț]{4,20})\b/i,
       /\bSursa\s+de\s+(MOTORINA|BENZINA|GPL|ELECTRIC|HIBRID\w*)\b/i,
     ]),
   );
 
+  // 11–12. Axe apoi Tracțiune (pe același rând după valoarea axelor)
+  set(
+    'axleCount',
+    'Număr axe',
+    pick(text, [
+      /\b(?:11\.?\s*)?(?:Nr\.?\s*|Numarul\s+)axelor?\s*[:\s]*(\d)\b/i,
+      /\baxelor\s+Numarul\s*(\d)/i,
+    ]),
+    true,
+  );
   set(
     'driveType',
     'Tracțiune',
     pick(text, [
       /\b(?:12\.?\s*)?Trac[tț]iune[a]?\s*[:\s]*(FATA|FAȚA|SPATE|INTEGRALA|4X4)\b/i,
       /\bTractiunea\s+(FATA|SPATE|INTEGRALA)\b/i,
+      /\baxelor?\s*[:\s]*\d\s+\d*\s*Trac[tț]iune[a]?\s*[:\s]*(FATA|SPATE|INTEGRALA)\b/i,
     ]),
   );
 
-  set(
-    'axleCount',
-    'Nr. axe',
-    pick(text, [
-      /\b(?:11\.?\s*)?Nr\.?\s*axe(?:lor)?\s*[:\s]*(\d)\b/i,
-      /\bNumarul\s+axelor\s*[:\s]*(\d)\b/i,
-      /\baxelor\s+Numarul\s+(\d)\b/i,
-      /\baxelor\s+Numarul\s*(\d)/i,
-    ]),
-    true,
-  );
-
+  // 13. Anvelope — față / spate; ignoră alternativele după „sau”
   const tyresFront = pick(text, [
-    /(?:13\.?\s*)?Dimensiunea\s+anvelopelor[^\n]{0,40}?Fa[tț][aă]\s*[:\s]*([^\n]+?)(?=\s+sau\s+|\s+Mijloc|\s+Spate|$)/i,
-    /\bFa[tț][aă]\s*[:\s]*(\d{3}\s*\/\s*\d{2}\s*R\s*\d{2}[^\n]{0,30}?)(?=\s+sau\s+|\s+Spate|$)/i,
+    /(?:13\.?\s*)?Dimens\w*\s+anvelopelor[^\n]{0,40}?Fa[tțah]+\s*[:\s]*([^\n]+?)(?=\s+sau\s+|\s+Mijloc|\s+[Ss]pate|$)/i,
+    /\bFa[tțah]+\s*[:\s]*(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}[^\n]{0,24}?)(?=\s+sau\s+|\s+[Ss]pate|$)/i,
   ]);
-  if (tyresFront) set('tyresFront', 'Anvelope față', tyresFront.replace(/\s+sau\s+.*$/i, '').trim());
-
+  if (tyresFront) {
+    set('tyresFront', 'Anvelope/jante față', tyresFront.replace(/\s+sau\s+[\s\S]*$/i, '').trim());
+  }
   const tyresRear = pick(text, [
-    /\bSpate\s*[:\s]*(\d{3}\s*\/\s*\d{2}\s*R\s*\d{2}[^\n]{0,40}?)(?=\s+sau\s+|$)/i,
+    /\b[Ss]pate\s*[:\s]*(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}[^\n]{0,40}?)(?=\s+sau\s+|$)/i,
   ]);
-  if (tyresRear) set('tyresRear', 'Anvelope spate', tyresRear.replace(/\s+sau\s+.*$/i, '').trim());
+  if (tyresRear) {
+    set('tyresRear', 'Anvelope/jante spate', tyresRear.replace(/\s+sau\s+[\s\S]*$/i, '').trim());
+  }
 
-  set('movingNoiseDb', 'Zgomot în mers', pick(text, [/\b(?:[Ii]n\s+)?mers\s*[:\s]*(\d{2,3})\b/i]), true);
+  // 14. Zgomot
+  set('movingNoiseDb', 'Nivel sonor în mers', pick(text, [/\b(?:[Ii]n\s+)?mers\s*[:\s]*(\d{2,3})\b/i]), true);
   set(
     'stationaryNoiseDb',
-    'Zgomot în staționare',
+    'Nivel sonor staționare',
     pick(text, [/\b(?:[Ii]n\s+)?sta[tț]ionare\s*[:\s]*(\d{2,3})\b/i]),
     true,
   );
+
+  // 15. Presiune cuplă — fără corespondent (ignorat)
+  // 16. Vit. max
   set(
     'maxSpeedKmh',
-    'Viteză max',
+    'Viteză maximă',
     pick(text, [/\bVit\.?\s*max\w*\s*(?:\([^)]*\))?\s*[:\s]*(\d{2,3})\b/i]),
     true,
   );
+  // 17. Rezervor — între vit. max și separatorul A|B (deja în COL A)
   set(
     'fuelTankCapacityL',
     'Capacitate rezervor',
-    pick(text, [/\bCapacitatea\s+rezervorului\s*(?:\([^)]*\))?\s*[:\s]*([\d.,]+)\b/i]),
+    pick(text, [
+      /\bCapacitatea\s+rezervorului\s*(?:\([^)]*\))?\s*[:\s]*([\d.,]+)\b/i,
+      /\bCapacitatea\s+rezervorului\s*(?:\([^)]*\))?\s*([\d.,]+)\b/i,
+    ]),
     true,
   );
+  // 18. Culoare
   set(
     'color',
     'Culoare',
     pick(text, [/\b(?:18\.?\s*)?Culoarea?\s*[:\s]*([A-ZĂÂÎȘȚa-zăâîșț]{3,20})\b/i]),
   );
+  // 19. Data / nr. primei înm. — fără corespondent
 
-  // Modificări: CO2
+  // Modificări… → Mențiuni
+  let modificationsMentions: string | null = null;
+  const mod =
+    /Modific[aă]ri[^:\n]*:\s*([\s\S]*?)(?=\n\s*===|\n\s*\d+\.\s*[A-Z]|$)/i.exec(text) ||
+    /Modific[aă]ri[^\n]*\n([\s\S]*?)(?=\n\s*===|\n\s*1\.?\s*Categor|$)/i.exec(text);
+  if (mod?.[1]) {
+    const body = mod[1]
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !/^-+$/.test(l) && !/^===\s*COL/i.test(l))
+      .join('\n')
+      .trim();
+    if (body.length >= 3) modificationsMentions = body.slice(0, 2000);
+  }
   const co2 = pick(text, [/\bCO\s*2\s*[:\s]*(\d{2,3})\s*(?:g\s*\/\s*km)?/i, /\bCO₂\s*[:\s]*(\d{2,3})/i]);
   set('co2Gkm', 'CO₂', co2, true);
 
   if (!vin) vin = findVinInText(text);
 
-  return { profile, matched, vin, techPairCount };
+  return { profile, matched, vin, techPairCount, modificationsMentions };
 }
 
 /**
@@ -459,20 +485,22 @@ export function mapCiv1993TextToPreview(
   const pages = splitCivBookPages(text);
   const verso = pages.versoRaw || pages.techText || text;
   const sectionA = extractCiv1993SectionA(verso);
-  const { profile, matched, vin, techPairCount } = mapCiv1993SectionAToProfile(sectionA);
+  const first = mapCiv1993SectionAToProfile(sectionA);
 
-  // Fallback: dacă Secțiunea A e săracă, încearcă tot verso/combined.
-  let civProfile = profile;
-  let allMatched = matched;
-  let techCount = techPairCount;
-  let usedVin = vin;
-  if (techPairCount < 5) {
+  let civProfile = first.profile;
+  let allMatched = [...first.matched];
+  let techCount = first.techPairCount;
+  let usedVin = first.vin;
+  let modificationsMentions = first.modificationsMentions;
+
+  if (techCount < 5) {
     const again = mapCiv1993SectionAToProfile(extractCiv1993SectionA(text));
-    if (again.techPairCount > techPairCount) {
+    if (again.techPairCount > techCount) {
       civProfile = again.profile;
-      allMatched = again.matched;
+      allMatched = [...again.matched];
       techCount = again.techPairCount;
-      usedVin = again.vin ?? vin;
+      usedVin = again.vin ?? usedVin;
+      modificationsMentions = again.modificationsMentions ?? modificationsMentions;
     }
   }
 
@@ -485,17 +513,18 @@ export function mapCiv1993TextToPreview(
   if (!usedVin) {
     usedVin = findVinInText(sectionA) ?? findVinInText(text);
     if (usedVin) {
-      allMatched.push({ rubric: 'Nr. identificare', target: 'vin', value: usedVin });
+      allMatched.push({ rubric: 'VIN', target: 'vin', value: usedVin });
     }
   }
 
-  // Mențiuni pe p4 — pe 1993 rareori populate
-  let civMentions = pages.mentionsText || null;
-  if (civMentions && /radieri|sec[tț]iunea/i.test(civMentions) && civMentions.length < 20) {
-    civMentions = null;
+  // Mențiuni = bloc Modificări din Secțiunea A (nu p4 pe 1993 tipic).
+  let civMentions = modificationsMentions;
+  if (!civMentions && pages.mentionsText) {
+    const m = pages.mentionsText.trim();
+    if (m && !/radieri|sec[tț]iunea/i.test(m)) civMentions = m;
   }
   if (civMentions) {
-    allMatched.push({ rubric: 'Mențiuni', target: 'civMentions', value: civMentions });
+    allMatched.push({ rubric: 'Mențiuni (Modificări)', target: 'civMentions', value: civMentions });
   }
 
   return {
