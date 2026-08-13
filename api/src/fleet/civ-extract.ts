@@ -12,6 +12,7 @@ import {
   type CivLabelPair,
 } from './civ-label-map';
 import { splitCivBookPages, stripEnglishCivGlossary } from './civ-pages';
+import { looksLikeCiv1993, mapCiv1993TextToPreview } from './civ-1993-extract';
 
 export type CivExtractMatch = {
   rubric: string;
@@ -68,6 +69,7 @@ export function detectCivDocumentFormat(text: string): CivDocumentFormat {
     }
     return '2016';
   }
+  if (looksLikeCiv1993(text)) return '1993';
   if (/\bmarca\b/.test(t) && /\bcilindree\b/.test(t) && !/\bd\.1\b/.test(t)) return '1993';
   if (/\b14\.\s*cod\s+motor/.test(t) || /\b20\.1\s*suspensie/.test(t)) return '2016';
   return 'unknown';
@@ -149,13 +151,31 @@ export function mapCivExtractTextToPreview(
   const formatUsed =
     formatHint !== 'unknown' ? formatHint : detectCivDocumentFormat(text);
 
-  if (formatUsed === '1993') {
-    return emptyModernPreview(
-      formatUsed,
+  if (formatUsed === '1993' || (formatUsed === 'unknown' && looksLikeCiv1993(text))) {
+    const r = mapCiv1993TextToPreview(text, source);
+    if (r.matched.length === 0) {
+      return emptyModernPreview(
+        '1993',
+        source,
+        text,
+        'CIV 1993 detectat, dar nu am putut mapa Secțiunea A. Verifică scanul verso (pag. 2, coloana stângă).',
+      );
+    }
+    return {
+      civProfile: r.civProfile,
+      civSeries: r.civSeries,
+      civIssuedOn: r.civIssuedOn,
+      civRarOffice: r.civRarOffice,
+      civMentions: r.civMentions,
+      vin: r.vin,
+      matched: r.matched,
+      unmatchedLines: r.unmatchedLines,
+      formatUsed: '1993',
       source,
-      text,
-      'CIV vechi (format pre-2016): algoritmul pe etichete nu se aplică. Mapare separată — în lucru.',
-    );
+      ocrText: text.slice(0, 100_000),
+      hasVerso: Boolean(splitCivBookPages(text).versoRaw.trim()) || /===\s*CIV\s+VERSO\s*===/i.test(text),
+      techPairCount: r.techPairCount,
+    };
   }
 
   const pages = splitCivBookPages(text);
@@ -169,7 +189,7 @@ export function mapCivExtractTextToPreview(
         formatUsed,
         source,
         text,
-        'Format CIV nerecunoscut. Încarcă CIV modern (2016+) față+verso (pag. 1–4).',
+        'Format CIV nerecunoscut. Încarcă CIV modern (2016+) față+verso (pag. 1–4) sau CIV 1993 cu Secțiunea A.',
       );
     }
   }

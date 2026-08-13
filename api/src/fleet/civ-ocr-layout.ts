@@ -210,11 +210,20 @@ export function mergeOrphanValueAboveEmptyLabel(text: string): string {
 
 /**
  * Reconstruiește text pe linii; pe spread lat împarte stânga/dreapta (două pagini CIV).
+ * Pe CIV 1993 (Secțiunea A|B|C|omologare) împarte în 4 coloane și marchează COL A…D.
  */
 export function rebuildCivOcrTextFromVision(fullText: VisionFullText | null | undefined): string | null {
   if (!fullText?.pages?.length) {
     return fullText?.text?.trim() || null;
   }
+
+  const rawHint = (fullText.text ?? '').toLowerCase();
+  const looks1993 =
+    !/\bd\.?\s*1\b/.test(rawHint) &&
+    ((/\bcategoria\b/.test(rawHint) && /\bcaroserie\b/.test(rawHint)) ||
+      (/\bmarca\b/.test(rawHint) && /\bcilindree\b/.test(rawHint)) ||
+      /\bsectiunea\s*a\b/.test(rawHint) ||
+      /\btipul\s*\/?\s*varianta\b/.test(rawHint));
 
   const pageTexts: string[] = [];
   for (const page of fullText.pages) {
@@ -224,14 +233,61 @@ export function rebuildCivOcrTextFromVision(fullText: VisionFullText | null | un
     if (!words.length) continue;
 
     const isSpread = width > 0 && height > 0 && width / height >= 1.25;
-    if (isSpread) {
+    if (isSpread && looks1993 && width / height >= 1.35) {
+      // Verso 1993: A | B | C | omologare (sau față: p4 | p1 pe 2 coloane — tot OK, A≈p4).
+      const colW = width / 4;
+      const cols = [0, 1, 2, 3].map((i) =>
+        words.filter((w) => w.cx >= i * colW && w.cx < (i + 1) * colW),
+      );
+      const labels = ['A', 'B', 'C', 'D'];
+      const parts: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        const t = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(cols[i]!)));
+        if (t.trim()) parts.push(`=== COL ${labels[i]} ===\n${t.trim()}`);
+      }
+      if (parts.length) pageTexts.push(parts.join('\n\n'));
+    } else if (isSpread) {
       const mid = width / 2;
       const left = words.filter((w) => w.cx < mid);
       const right = words.filter((w) => w.cx >= mid);
+      // Pe pagina 2 singură (scan doar p2): A|B — jumătatea stângă e Secțiunea A.
+      if (looks1993) {
+        const leftMid = mid / 2;
+        const sectionA = left.filter((w) => w.cx < leftMid);
+        const sectionB = left.filter((w) => w.cx >= leftMid);
+        const aText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(sectionA)));
+        const bText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(sectionB)));
+        const rightText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(right)));
+        const parts = [
+          aText.trim() ? `=== COL A ===\n${aText.trim()}` : '',
+          bText.trim() ? `=== COL B ===\n${bText.trim()}` : '',
+          rightText.trim() ? `=== COL C ===\n${rightText.trim()}` : '',
+        ].filter(Boolean);
+        if (parts.length) {
+          pageTexts.push(parts.join('\n\n'));
+          continue;
+        }
+      }
       const leftText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(left)));
       const rightText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(right)));
       const parts = [leftText, rightText].filter(Boolean);
       if (parts.length) pageTexts.push(parts.join('\n\n'));
+    } else if (looks1993 && width > 0) {
+      // O singură pagină lată (doar p2): împarte A|B.
+      const mid = width / 2;
+      const a = words.filter((w) => w.cx < mid);
+      const b = words.filter((w) => w.cx >= mid);
+      const aText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(a)));
+      const bText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(b)));
+      const parts = [
+        aText.trim() ? `=== COL A ===\n${aText.trim()}` : '',
+        bText.trim() ? `=== COL B ===\n${bText.trim()}` : '',
+      ].filter(Boolean);
+      if (parts.length) pageTexts.push(parts.join('\n\n'));
+      else {
+        const t = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(words)));
+        if (t) pageTexts.push(t);
+      }
     } else {
       const t = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(words)));
       if (t) pageTexts.push(t);
