@@ -20,6 +20,30 @@ export type Civ1993ExtractResult = {
   sectionAText: string;
 };
 
+function nearNumber(
+  text: string,
+  labelRe: RegExp,
+  opts: { min: number; max: number; window?: number },
+): string | null {
+  const m = labelRe.exec(text);
+  if (!m || m.index == null) return null;
+  const win = opts.window ?? 120;
+  const after = text.slice(m.index + m[0].length, m.index + m[0].length + win);
+  for (const n of after.matchAll(/(\d{2,5}(?:[.,]\d+)?)/g)) {
+    const v = Number(String(n[1]).replace(',', '.'));
+    if (Number.isFinite(v) && v >= opts.min && v <= opts.max) return String(Math.round(v));
+  }
+  return null;
+}
+
+function normalizeTyreSize(raw: string): string {
+  return raw
+    .replace(/\s+/g, ' ')
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/\s*R\s*/i, ' R')
+    .trim();
+}
+
 function stripDiacritics(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '');
 }
@@ -70,7 +94,8 @@ export function extractCiv1993SectionA(versoOrCombined: string): string {
   let cut = t.length;
   for (const re of cutMarkers) {
     const m = re.exec(t);
-    if (m?.index != null && m.index > 60 && m.index < cut) cut = m.index;
+    // Nu tăia prea devreme (omologare scursă din coloana dreaptă pe primele linii).
+    if (m?.index != null && m.index > 400 && m.index < cut) cut = m.index;
   }
   t = t.slice(0, cut);
 
@@ -307,7 +332,8 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'axle1MaxMassKg',
     'MTMA axa 1',
     pick(text, [
-      /\b(?:Fath|Fata|Fala)\s*[:\s]*(\d{3,4})\b/i,
+      // Nu include „Fala” — e etichetă anvelope pe CIV 1993
+      /\b(?:Fath|Fata)\s*[:\s]*(\d{3,4})\b/i,
     ]),
     true,
   );
@@ -330,22 +356,24 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'maxBrakedTrailerMassKg',
     'Masă remorcabilă cu frână',
     pick(text, [
+      /Remorcabil\w*\s+cu\s+(\d{2,5})\s+Remorcabil\w*\s+fara/i,
       /Remorcabila?\s+cu\s+(?:disp\.?\s*(?:de\s+)?franare|dispozitiv\s+de\s+franare)\s*[:\s]*(\d{2,5})/i,
       /Remorcabila?\s+cu\s*[:\s]*(\d{2,5})/i,
       /Remorcabila?\s+cu\s+(\d{2,5})\b/i,
-      /Remorcabil\w*\s+cu\b[\s\S]{0,40}?(\d{2,5})\b/i,
-    ]),
+    ]) ??
+      nearNumber(text, /Remorcabil\w*\s+cu\b/i, { min: 200, max: 3500, window: 100 }),
     true,
   );
   set(
     'maxUnbrakedTrailerMassKg',
     'Masă remorcabilă fără frână',
     pick(text, [
+      /Remorcabil\w*\s+cu\s+\d{2,5}\s+Remorcabil\w*\s+fara\s+(\d{2,5})/i,
       /Remorcabila?\s+fara\s+(?:disp\.?\s*(?:de\s+)?franare|dispozitiv\s+de\s+franare)\s*[:\s]*(\d{2,5})/i,
       /Remorcabila?\s+fara\s*[:\s]*(\d{2,5})/i,
       /Remorcabila?\s+fara\s+(\d{2,5})\b/i,
-      /Remorcabil\w*\s+fara\b[\s\S]{0,40}?(\d{2,5})\b/i,
-    ]),
+    ]) ??
+      nearNumber(text, /Remorcabil\w*\s+fara\b/i, { min: 100, max: 3500, window: 100 }),
     true,
   );
 
@@ -371,34 +399,39 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     if (idx >= 0) matched.splice(idx, 1);
   }
 
-  // 9. Dimensiuni — OCR: „Dimensiunile ( mm ) de L 3958 1722 h 1481” (uneori pe 2 linii)
+  // 9. Dimensiuni — OCR: „Dimensiunile ( mm ) de L 3958 1722 h 1481”
   const dims =
+    /\b(?:gabarit\s+)?Dimensiun\w*[\s\S]{0,50}?\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(
+      text,
+    ) ||
+    /\bde\s+L\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
     /\bL\s*[:\s]*(\d{3,5})\s+l\s*[:\s]*(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
     /\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
-    /\bDimensiun\w*[\s\S]{0,60}?\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
     /\bL\s+(\d{3,5})\s+(\d{3,5})\s+h\s+(\d{3,5})\b/i.exec(text) ||
     /\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+(\d{3,5})\b/i.exec(text) ||
-    // L pe o linie, l/h pe următoarea
-    /\bL\s*[:\s]*(\d{3,5})\D{0,20}(\d{3,5})\D{0,20}h?\s*[:\s]*(\d{3,5})\b/i.exec(text);
+    // lipit: L3958 1722h1481
+    /\bL\s*[:\s]*(\d{3,5})\D{0,8}(\d{3,5})\D{0,8}h?\s*[:\s]*(\d{3,5})\b/i.exec(text);
   if (dims) {
     const L = Number(dims[1]);
     const W = Number(dims[2]);
     const H = Number(dims[3]);
-    // Sanity: lungime tipică auto > lățime > înălțime (mm)
     if (L >= 2000 && L <= 20000) set('lengthMm', 'Lungime', dims[1], true);
     if (W >= 1000 && W <= 4000) set('widthMm', 'Lățime', dims[2], true);
     if (H >= 800 && H <= 4500) set('heightMm', 'Înălțime', dims[3], true);
-  } else {
+  }
+  if (profile.lengthMm == null) {
     set(
       'lengthMm',
       'Lungime',
-      pick(text, [
-        /\bDimensiun\w*[\s\S]{0,40}?\bL\s*[:\s]*(\d{3,5})\b/i,
-        /\bLungime\s*[:\s]*(\d{3,5})\b/i,
-        /\bL\s*[:\s]*(\d{4,5})\b/,
-      ]),
+      nearNumber(text, /\b(?:Dimensiun\w*|gabarit|de\s+L|\bL)\b/i, {
+        min: 2500,
+        max: 12000,
+        window: 80,
+      }) ?? pick(text, [/\bLungime\s*[:\s]*(\d{3,5})\b/i, /\bL\s*[:\s]*(\d{4,5})\b/]),
       true,
     );
+  }
+  if (profile.widthMm == null) {
     set(
       'widthMm',
       'Lățime',
@@ -406,9 +439,12 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
         /\bLatime\s*[:\s]*(\d{3,5})\b/i,
         /\bL\s*[:\s]*\d{3,5}\s+l\s*[:\s]*(\d{3,5})\b/i,
         /\bL\s*[:\s]*\d{3,5}\s+(\d{3,4})\s+h\b/i,
+        /\bL\s*[:\s]*\d{4,5}\D+(\d{3,4})\D+h?\s*\d{3,4}/i,
       ]),
       true,
     );
+  }
+  if (profile.heightMm == null) {
     set(
       'heightMm',
       'Înălțime',
@@ -439,20 +475,16 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'engineCapacityCm3',
     'Capacitate cilindrică',
     pick(text, [
-      // „Cilindree1399” lipit (fără spațiu) — frecvent pe Vision
       /\bCilindree\s*(?:\([^)]*\))?\s*[:\s]*(\d{3,5})\b/i,
       /\bCilindree\s*(\d{3,5})\b/i,
       /\bCilindree(\d{3,5})\b/i,
-      /\bMotorul[\s\S]{0,80}?Cilindree\s*[:\s]*(\d{3,5})\b/i,
-      /\bMotorul[\s\S]{0,80}?Cilindree(\d{3,5})\b/i,
+      /\bMotorul[\s\S]{0,100}?Cilindree\s*[:\s]*(\d{3,5})\b/i,
+      /\bMotorul[\s\S]{0,100}?Cilindree(\d{3,5})\b/i,
       /\bcm\s*\)?\s*Cilindree\s*[:\s]*(\d{3,5})\b/i,
       /\bcm\s*\)?\s*Cilindree(\d{3,5})\b/i,
-      // etichetă goală în COL A, cifră imediat după pe verso brut
-      /\bCilindree\s*(?:\([^)]*\))?\s*[:\s]*\n\s*(\d{3,5})\b/i,
-    ]),
+    ]) ?? nearNumber(text, /\bCilindree\b/i, { min: 500, max: 8000, window: 50 }),
     true,
   );
-  // Sanity cm³
   if (
     typeof profile.engineCapacityCm3 === 'number' &&
     (profile.engineCapacityCm3 < 50 || profile.engineCapacityCm3 > 20000)
@@ -502,32 +534,65 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     ]),
   );
 
-  // 13. Anvelope — OCR: „Fala 195/50…”, valoare uneori înainte de „spate”
+  // 13. Anvelope — strict Față + Mijloc-spate; ignoră variantele de după „sau”
   {
-    const tyreRe = /(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}(?:\s+\d{2}\s*[A-Z])?)/gi;
-    const anvIdx = /\banvelop/i.exec(text)?.index ?? /\bDimens/i.exec(text)?.index ?? 0;
-    const anvEnd = Math.min(text.length, anvIdx + 350);
-    const anvSlice = text.slice(anvIdx, anvEnd);
-    // Taie „Anv. opt” / modificări
-    const cutOpt = /\bAnv\.?\s*opt/i.exec(anvSlice)?.index;
-    const slice = cutOpt != null ? anvSlice.slice(0, cutOpt) : anvSlice;
-    const sizes = [...slice.matchAll(tyreRe)].map((m) => m[1]!.replace(/\s+/g, ' ').trim());
-    const front =
-      pick(text, [
-        /\bFa(?:ta|ță|tă|la|lă|tah)?\s*[:\s]*(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}[^\n]{0,20}?)(?=\s+sau\s+|$)/i,
-        /\bFala?\s+(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}(?:\s+\d{2}\s*[A-Z])?)/i,
-      ]) ?? sizes[0] ?? null;
-    if (front) set('tyresFront', 'Anvelope/jante față', front.replace(/\s+sau\s+[\s\S]*$/i, '').trim());
+    const tyreRe = /(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}(?:\s+\d{2}\s*[A-Z])?)/i;
+    const beforeSau = (chunk: string) => chunk.split(/\bsau\b/i)[0] ?? chunk;
 
-    const rearExplicit = pick(text, [
-      /\bspate\s*[:\s]*(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}[^\n]{0,20}?)(?=\s+sau\s+|$)/i,
-    ]);
-    // Valoare pe linia de deasupra „spate”
-    const rearAbove =
-      /(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}(?:\s+\d{2}\s*[A-Z])?)\s*\n\s*spate\b/i.exec(text)?.[1] ??
-      null;
-    const rear = rearExplicit ?? rearAbove ?? (sizes.length >= 2 ? sizes[1] : null);
-    if (rear) set('tyresRear', 'Anvelope/jante spate', rear.replace(/\s+sau\s+[\s\S]*$/i, '').trim());
+    // Față / Fala — NU potrivi „in fata 2” (locuri)!
+    let front: string | null = null;
+    const frontLine =
+      /\bFala\b\s*[:\s]*([^\n]{0,60})/i.exec(text) ||
+      /\banvelop\w*\s+Fata\s*[:\s]*([^\n]{0,60})/i.exec(text) ||
+      /\bFata\s*:\s*([^\n]{0,60})/i.exec(text) ||
+      /\bFata\s+(\d{3}\s*\/\s*\d{2}[^\n]{0,40})/i.exec(text);
+    if (frontLine?.[1]) {
+      const m = tyreRe.exec(beforeSau(frontLine[1]));
+      if (m) front = normalizeTyreSize(m[1]!);
+    }
+
+    // Mijloc-spate / Myloc / Spate: (cu două puncte) — nu „in spate” generic
+    let rear: string | null = null;
+    const midLine =
+      /\b(?:Myloc|Mijloc|Mi[jI]loc)[^\d\n]{0,20}([^\n]{0,50})/i.exec(text) ||
+      /\bSpate\s*:\s*([^\n]{0,50})/i.exec(text) ||
+      /(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}(?:\s+\d{2}\s*[A-Z])?)\s*(?:\n|,)?\s*spate\b/i.exec(text);
+    if (midLine?.[1]) {
+      const m = tyreRe.exec(beforeSau(midLine[1]));
+      if (m) rear = normalizeTyreSize(m[1]!);
+    }
+    if (!rear) {
+      const rearAbove =
+        /(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}(?:\s+\d{2}\s*[A-Z])?)\s*\n\s*spate\b/i.exec(text)?.[1] ??
+        null;
+      if (rearAbove) rear = normalizeTyreSize(beforeSau(rearAbove));
+    }
+
+    // Fallback: în blocul anvelope, prima mărime înainte de „sau” = față;
+    // următoarea mărime după Myloc/spate, tot înainte de „sau” = spate.
+    if (!front || !rear) {
+      const anvIdx =
+        /\b(?:Fata|Fala|anvelop|Dimens)/i.exec(text)?.index ??
+        /\b13\b/.exec(text)?.index ??
+        0;
+      const anvEnd = Math.min(text.length, anvIdx + 400);
+      let slice = text.slice(anvIdx, anvEnd);
+      const cutOpt = /\bAnv\.?\s*opt/i.exec(slice)?.index;
+      if (cutOpt != null) slice = slice.slice(0, cutOpt);
+      // Taie fiecare segment la „sau” ca să nu luăm variante opționale
+      const primaryChunks = slice.split(/\bsau\b/i).filter((_, i) => i % 2 === 0);
+      const primaryText = primaryChunks.join(' ');
+      const sizes = [...primaryText.matchAll(/(\d{3}\s*\/\s*\d{2}\s*R?\s*\d{2}(?:\s+\d{2}\s*[A-Z])?)/gi)].map(
+        (m) => normalizeTyreSize(m[1]!),
+      );
+      if (!front && sizes[0]) front = sizes[0];
+      if (!rear && sizes[1]) rear = sizes[1];
+      // Dacă există un singur size primar, față = spate (aceeași anvelopă)
+      if (front && !rear) rear = front;
+    }
+
+    if (front) set('tyresFront', 'Anvelope/jante față', front);
+    if (rear) set('tyresRear', 'Anvelope/jante spate', rear);
   }
 
   // 14. Zgomot
@@ -632,8 +697,8 @@ export function mapCiv1993TextToPreview(
   if (techCount < 5) {
     mergeFrom(mapCiv1993SectionAToProfile(extractCiv1993SectionA(text)));
   }
-  // Completează câmpurile critice lipsă din textul brut (valori căzute în COL B/C).
-  const criticalMissing = [
+  // Completează câmpurile critice lipsă din textul brut (valori pe alt rând / COL B).
+  const criticalKeys = [
     'maxTechnicalMassKg',
     'maxBrakedTrailerMassKg',
     'maxUnbrakedTrailerMassKg',
@@ -642,7 +707,10 @@ export function mapCiv1993TextToPreview(
     'heightMm',
     'engineCapacityCm3',
     'curbMassKg',
-  ].some((k) => civProfile[k] == null || civProfile[k] === '');
+    'tyresFront',
+    'tyresRear',
+  ] as const;
+  const criticalMissing = criticalKeys.some((k) => civProfile[k] == null || civProfile[k] === '');
   if (criticalMissing) {
     mergeFrom(mapCiv1993SectionAToProfile(stripDiacritics(verso)));
     mergeFrom(mapCiv1993SectionAToProfile(stripDiacritics(text)));

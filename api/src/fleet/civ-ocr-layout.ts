@@ -239,11 +239,10 @@ export function rebuildCivOcrTextFromVision(fullText: VisionFullText | null | un
 
     const isSpread = width > 0 && height > 0 && width / height >= 1.25;
     if (looks1993) {
-      // CIV 1993 pe spread: jumătatea stângă = Secțiunea A (+B), dreapta = omologare.
-      // NU folosi 4 coloane (taie „1540” de pe „Totala max”) și NU amesteca tot Y
-      // pe pagină (interleave cu ștampile din dreapta → „Totala autorizala max 1540”).
+      // CIV 1993: stânga = grilă tehnică (~0–50%), dreapta = omologare (~52%+).
+      // mid 0.48 exclude coloana C; 0.58 o includea și amesteca liniile (strică Remorcabil/L/cm³).
       if (isSpread || width > 0) {
-        const mid = width * 0.58; // puțin peste mijloc: capturează valori pe linia A|B
+        const mid = width * 0.48;
         const left = words.filter((w) => w.cx < mid);
         const right = words.filter((w) => w.cx >= mid);
         const leftText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(left)));

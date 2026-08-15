@@ -93,6 +93,15 @@ if (p.civProfile.maxUnbrakedTrailerMassKg !== 550) throw new Error(`unbraked=${p
 if (p.civProfile.lengthMm !== 3958) throw new Error(`L=${p.civProfile.lengthMm}`);
 if (p.civProfile.widthMm !== 1722) throw new Error(`l=${p.civProfile.widthMm}`);
 if (p.civProfile.engineCapacityCm3 !== 1399) throw new Error(`cm3=${p.civProfile.engineCapacityCm3}`);
+if (!String(p.civProfile.tyresFront ?? '').includes('195/50')) {
+  throw new Error(`tyresF=${p.civProfile.tyresFront}`);
+}
+if (!String(p.civProfile.tyresRear ?? '').includes('195/50')) {
+  throw new Error(`tyresR=${p.civProfile.tyresRear}`);
+}
+if (String(p.civProfile.tyresFront ?? '').includes('175/65')) {
+  throw new Error(`tyresF took optional sau: ${p.civProfile.tyresFront}`);
+}
 if (!String(p.civProfile.typeVariantVersion ?? '').includes('JA8')) {
   throw new Error(`tip=${p.civProfile.typeVariantVersion}`);
 }
@@ -115,5 +124,14 @@ for (const [k, want] of Object.entries({
   engineCapacityCm3: 1399,
 })) {
   if (f.civProfile[k] !== want) throw new Error(`fiesta ${k}=${f.civProfile[k]} want ${want}`);
+}
+if (!String(f.civProfile.tyresFront ?? '').includes('195/50')) {
+  throw new Error(`fiesta tyresF=${f.civProfile.tyresFront}`);
+}
+if (!String(f.civProfile.tyresRear ?? '').includes('195/50')) {
+  throw new Error(`fiesta tyresR=${f.civProfile.tyresRear}`);
+}
+if (String(f.civProfile.tyresFront ?? '').includes('175/65')) {
+  throw new Error(`fiesta tyresF optional: ${f.civProfile.tyresFront}`);
 }
 console.log('OK fiesta+split');
