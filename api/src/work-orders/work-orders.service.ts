@@ -189,26 +189,6 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damagePaymentAcceptanceFileName: string | null;
   damagePaymentAcceptanceReceivedAt: string | null;
   damagePaymentAcceptanceNotes: string | null;
-  damagePaymentAcceptances: Array<{
-    id: string;
-    sequence: number;
-    roundId: string;
-    pdfUrl: string;
-    fileName?: string;
-    receivedAt: string;
-    notes?: string | null;
-  }>;
-  damageSettlementRounds: Array<{
-    id: string;
-    sequence: number;
-    status: 'active' | 'closed';
-    openedAt: string;
-    closedAt?: string;
-    openReason?: string | null;
-    reinspectionRequestIds: string[];
-    quoteVersion?: number | null;
-    paymentAcceptanceId?: string | null;
-  }>;
   quoteSummary: {
     status: string | null;
     version: number | null;
@@ -651,8 +631,6 @@ export class WorkOrdersService {
             damagePaymentAcceptanceFileName: true,
             damagePaymentAcceptanceReceivedAt: true,
             damagePaymentAcceptanceNotes: true,
-            damagePaymentAcceptancesJson: true,
-            damageSettlementRoundsJson: true,
             sourceTicket: {
               select: {
                 subject: true,
@@ -794,12 +772,6 @@ export class WorkOrdersService {
       damagePaymentAcceptanceReceivedAt:
         row.serviceCase.damagePaymentAcceptanceReceivedAt?.toISOString() ?? null,
       damagePaymentAcceptanceNotes: row.serviceCase.damagePaymentAcceptanceNotes ?? null,
-      damagePaymentAcceptances: Array.isArray(row.serviceCase.damagePaymentAcceptancesJson)
-        ? (row.serviceCase.damagePaymentAcceptancesJson as WorkOrderDetail['damagePaymentAcceptances'])
-        : [],
-      damageSettlementRounds: Array.isArray(row.serviceCase.damageSettlementRoundsJson)
-        ? (row.serviceCase.damageSettlementRoundsJson as WorkOrderDetail['damageSettlementRounds'])
-        : [],
       quoteSummary: primary
         ? {
             status: primary.status,

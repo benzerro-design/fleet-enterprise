@@ -13,7 +13,6 @@ import type {
   DecideDamageReinspectionInput,
   PatchDamageClaimInput,
   PostApprovalInput,
-  OpenSettlementRoundInput,
   RequestDamageReinspectionInput,
   SendDamageAvizareToInsurerInput,
   SendDamageQuoteToInsurerInput,
@@ -101,24 +100,6 @@ export class ServiceCasesController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.serviceCases.sendDamageAvizareToInsurer(
-      tenantSlug,
-      id,
-      body ?? {},
-      actorUserId,
-      access,
-    );
-  }
-
-  @Post(':id/damage-claim/open-settlement-round')
-  @Roles(...FLEET_WRITE_ROLES)
-  openSettlementRound(
-    @TenantId() tenantSlug: string,
-    @Param('id') id: string,
-    @Body() body: OpenSettlementRoundInput,
-    @CurrentUserId() actorUserId: string,
-    @CurrentAccess() access: AccessContext,
-  ) {
-    return this.serviceCases.openSettlementRound(
       tenantSlug,
       id,
       body ?? {},

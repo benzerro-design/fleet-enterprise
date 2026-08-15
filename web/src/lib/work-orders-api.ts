@@ -199,8 +199,6 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damagePaymentAcceptanceFileName?: string | null;
   damagePaymentAcceptanceReceivedAt?: string | null;
   damagePaymentAcceptanceNotes?: string | null;
-  damagePaymentAcceptances?: import("@/lib/service-cases-api").DamagePaymentAcceptanceItem[];
-  damageSettlementRounds?: import("@/lib/service-cases-api").DamageSettlementRound[];
 };
 
 export type ServiceTimesResult = WorkOrderDetail & {

@@ -1358,15 +1358,11 @@ model ServiceCase {
   damageInspectionNoteNotes         String?
   /// Istoric note de constatare (1..n, inclusiv după reconstatări).
   damageInspectionNotesJson         Json?
-  /// Accept plată de la asigurător (document PDF) — câmpuri „curente” (ultima / runda activă).
+  /// Accept plată de la asigurător (document PDF).
   damagePaymentAcceptancePdfUrl     String?
   damagePaymentAcceptanceFileName   String?
   damagePaymentAcceptanceReceivedAt DateTime?
   damagePaymentAcceptanceNotes      String?
-  /// Istoric accept plată: array DamagePaymentAcceptanceItem.
-  damagePaymentAcceptancesJson      Json?
-  /// Runde de decontare (reconstatare + deviz + accept): array DamageSettlementRound.
-  damageSettlementRoundsJson        Json?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
