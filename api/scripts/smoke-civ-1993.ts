@@ -98,6 +98,24 @@ if (rq.profile.maxBrakedTrailerMassKg !== 750) {
 if (rq.profile.maxUnbrakedTrailerMassKg !== 550) {
   throw new Error(`rem after disp unbraked=${rq.profile.maxUnbrakedTrailerMassKg}`);
 }
+if (rq.profile.standingPlaces != null) {
+  throw new Error(`standingPlaces should be empty for AUTOTURISM, got ${rq.profile.standingPlaces}`);
+}
+
+const standNoise = mapCiv1993SectionAToProfile(`
+1 Categoda AUTOTURISM M1 1
+de Numarul locuri total 5 in fata 2 pe Scaune 5 in picioare 80
+`);
+if (standNoise.profile.standingPlaces != null) {
+  throw new Error(`standing noise 80 leaked: ${standNoise.profile.standingPlaces}`);
+}
+const standNoise8 = mapCiv1993SectionAToProfile(`
+AUTOTURISM M1
+in picioare 8
+`);
+if (standNoise8.profile.standingPlaces != null) {
+  throw new Error(`standing noise 8 leaked: ${standNoise8.profile.standingPlaces}`);
+}
 
 const fmt = detectCivDocumentFormat(sample);
 const p = mapCivExtractTextToPreview(sample, 'unknown', 'text');

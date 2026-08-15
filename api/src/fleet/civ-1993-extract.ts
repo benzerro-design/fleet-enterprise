@@ -442,16 +442,31 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     ]),
     true,
   );
-  set(
-    'standingPlaces',
-    'Locuri în picioare',
-    pick(text, [/\b(?:[Ii]n\s+)?picioare\s*[:\s]*(\d{1,2})\b/i]),
-    true,
-  );
-  if (typeof profile.standingPlaces === 'number' && (profile.standingPlaces > 40 || profile.standingPlaces < 0)) {
-    delete profile.standingPlaces;
-    const idx = matched.findIndex((m) => m.target === 'standingPlaces');
-    if (idx >= 0) matched.splice(idx, 1);
+  // „în picioare” pe autoturism e gol; Vision inventă 8/80 din zgomot pe câmpul gol.
+  {
+    const usage = String(profile.usageCategory ?? '');
+    const isPassengerCar =
+      /\bAUTOTURISM\b/i.test(usage) ||
+      /\bM1\b/i.test(usage) ||
+      /\bAUTOTURISM\b/i.test(text);
+    if (!isPassengerCar) {
+      set(
+        'standingPlaces',
+        'Locuri în picioare',
+        pick(text, [
+          /\b(?:[Ii]n\s+)?picioare\s*[:\s]*(\d{1,2})\b/i,
+        ]),
+        true,
+      );
+      if (
+        typeof profile.standingPlaces === 'number' &&
+        (profile.standingPlaces > 80 || profile.standingPlaces < 0)
+      ) {
+        delete profile.standingPlaces;
+        const idx = matched.findIndex((m) => m.target === 'standingPlaces');
+        if (idx >= 0) matched.splice(idx, 1);
+      }
+    }
   }
 
   // 9. Dimensiuni — OCR: „Dimensiunile ( mm ) de L 3958 1722 h 1481”
