@@ -36,12 +36,14 @@ import {
   type DamageSectionKey,
   type DamageSectionLocks,
   type PatchDamageClaimInput,
+  type QuoteSummary,
   type ServiceCaseRecord,
   type VehicleMovableState,
 } from "@/lib/service-cases-api";
 import Link from "next/link";
 import { documentsBrowserBase, fleetBrowserBase } from "@/lib/fleet-api";
 import { insurersBrowserBase, type InsurerRecord } from "@/lib/insurers-api";
+import { workOrdersBrowserBase } from "@/lib/work-orders-api";
 
 type Props = {
   serviceCase: ServiceCaseRecord | null | undefined;
@@ -132,6 +134,8 @@ export function DamageClaimPanel({
   const [paymentViewId, setPaymentViewId] = useState<"new" | string>("new");
   /** null = alege automat ultima reconstatare (ca tab-urile să fie vizibile). */
   const [reinspectionViewId, setReinspectionViewId] = useState<"new" | string | null>(null);
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+  const [woQuotesExtra, setWoQuotesExtra] = useState<QuoteSummary[]>([]);
   const [reinspectionNote, setReinspectionNote] = useState("");
   const [reinspectionPhotoIds, setReinspectionPhotoIds] = useState<Set<string>>(new Set());
   const [rejectionDrafts, setRejectionDrafts] = useState<Record<string, string>>({});
@@ -306,9 +310,82 @@ export function DamageClaimPanel({
   const primaryWo = serviceCase?.workOrders?.[0] ?? null;
   const primaryQuote =
     primaryWo?.latestQuote ?? primaryWo?.approvedQuote ?? primaryWo?.pendingQuote ?? null;
+  const insurerQuoteVersions = useMemo(() => {
+    const fromWo = primaryWo?.quotes?.length ? primaryWo.quotes : woQuotesExtra;
+    const list = [...fromWo];
+    if (!list.length && primaryQuote) list.push(primaryQuote);
+    const byId = new Map<string, QuoteSummary>();
+    for (const q of list) {
+      if (q?.id) byId.set(q.id, q);
+    }
+    return [...byId.values()].sort((a, b) => a.version - b.version);
+  }, [primaryWo?.quotes, woQuotesExtra, primaryQuote]);
+  const selectedInsurerQuote =
+    insurerQuoteVersions.find((q) => q.id === selectedQuoteId) ??
+    insurerQuoteVersions[insurerQuoteVersions.length - 1] ??
+    null;
   const hasWo = fromWorkOrder || (serviceCase?.workOrders?.length ?? 0) > 0;
   const isClientPayer = payer === "client";
   const isInsurerPayer = payer === "insurer" || (!payer && !isClientPayer);
+
+  useEffect(() => {
+    const woId = primaryWo?.id;
+    if (!woId) {
+      setWoQuotesExtra([]);
+      return;
+    }
+    if ((primaryWo?.quotes?.length ?? 0) > 0) {
+      setWoQuotesExtra([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${workOrdersBrowserBase}/${woId}/quotes`, {
+          headers: fleetJsonHeaders(),
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as Array<{
+          id: string;
+          workOrderId: string;
+          version: number;
+          status: string;
+          totalGrossCents?: number;
+          totalNetCents?: number;
+          totalVatCents?: number;
+          currency: string;
+          invoicedAt?: string | null;
+          invoiceNumber?: string | null;
+          invoiceDate?: string | null;
+          invoiceAttachmentUrl?: string | null;
+          costEntryId?: string | null;
+        }>;
+        if (cancelled || !Array.isArray(data)) return;
+        const items = data.map(
+          (q): QuoteSummary => ({
+            id: q.id,
+            workOrderId: q.workOrderId,
+            version: q.version,
+            status: q.status as QuoteSummary["status"],
+            totalGrossCents:
+              q.totalGrossCents ?? (q.totalNetCents ?? 0) + (q.totalVatCents ?? 0),
+            currency: q.currency,
+            invoicedAt: q.invoicedAt ?? null,
+            invoiceNumber: q.invoiceNumber ?? null,
+            invoiceDate: q.invoiceDate ?? null,
+            invoiceAttachmentUrl: q.invoiceAttachmentUrl ?? null,
+            costEntryId: q.costEntryId ?? null,
+          }),
+        );
+        setWoQuotesExtra(items);
+      } catch {
+        /* optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryWo?.id, primaryWo?.quotes?.length]);
 
   function sectionLocked(section: DamageSectionKey): boolean {
     return !!locks[section];
@@ -2011,14 +2088,43 @@ export function DamageClaimPanel({
             Deviz asigurător
           </h4>
           <p className="text-[11px] text-zinc-500">
-            Un singur deviz de reparație pe tab Comandă (WorkOrderQuote). Dosarul orientează
-            trimiterea sau primirea PDF-ului — nu un al doilea set de linii.
+            Versiunile de pe Comandă (Deviz 1, 2…). Alege tab-ul pentru trimitere; liniile se
+            editează pe Comandă, nu aici.
           </p>
+          {insurerQuoteVersions.length ? (
+            <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-2">
+              {insurerQuoteVersions.map((q) => {
+                const selected = selectedInsurerQuote?.id === q.id;
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => setSelectedQuoteId(q.id)}
+                    className={`rounded-t-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      selected
+                        ? "border-zinc-600 border-b-zinc-950 bg-zinc-950 text-zinc-100"
+                        : "border-transparent text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                    }`}
+                  >
+                    Deviz {q.version}
+                    <span className="ml-1.5 text-[10px] font-normal text-zinc-400">
+                      {quoteStatusLabel(q.status)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-amber-400/90">
+              Niciun deviz pe comandă încă — creează-l pe tab Comandă.
+            </p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/50 p-3">
               <p className="text-xs font-medium text-zinc-200">A. Întocmit de noi</p>
               <p className="text-[11px] text-zinc-500">
-                Construiești liniile pe Comandă, apoi trimiți PDF-ul către asigurător de aici.
+                Construiești liniile pe Comandă, apoi trimiți PDF-ul versiunii selectate către
+                asigurător.
               </p>
               {primaryWo ? (
                 <p className="text-xs text-zinc-300">
@@ -2036,10 +2142,11 @@ export function DamageClaimPanel({
                       {primaryWo.displayNumber ? ` ${primaryWo.displayNumber}` : ""}
                     </Link>
                   )}
-                  {primaryQuote ? (
+                  {selectedInsurerQuote ? (
                     <span className="text-zinc-500">
                       {" "}
-                      · quote v{primaryQuote.version} · {quoteStatusLabel(primaryQuote.status)}
+                      · Deviz {selectedInsurerQuote.version} ·{" "}
+                      {quoteStatusLabel(selectedInsurerQuote.status)}
                     </span>
                   ) : (
                     <span className="text-zinc-500"> · fără quote încă</span>
@@ -2050,6 +2157,16 @@ export function DamageClaimPanel({
                   Nu există încă o comandă legată de dosar.
                 </p>
               )}
+              {selectedInsurerQuote && primaryWo ? (
+                <a
+                  href={`${workOrdersBrowserBase}/${primaryWo.id}/quotes/${selectedInsurerQuote.id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-xs text-sky-400 hover:underline"
+                >
+                  PDF Deviz {selectedInsurerQuote.version}
+                </a>
+              ) : null}
               <label className="block">
                 <span className={OPS_LABEL_CLASS}>Notă la trimitere (opțional)</span>
                 <input
@@ -2063,7 +2180,7 @@ export function DamageClaimPanel({
               {canWrite ? (
                 <button
                   type="button"
-                  disabled={pending || !insurerEmail.trim()}
+                  disabled={pending || !insurerEmail.trim() || !selectedInsurerQuote}
                   onClick={() => {
                     void (async () => {
                       setPending(true);
@@ -2083,7 +2200,10 @@ export function DamageClaimPanel({
                           {
                             method: "POST",
                             headers: fleetJsonHeaders(),
-                            body: JSON.stringify({ note: sendNote.trim() || null }),
+                            body: JSON.stringify({
+                              note: sendNote.trim() || null,
+                              quoteId: selectedInsurerQuote?.id ?? null,
+                            }),
                           },
                         );
                         if (!res.ok) {
@@ -2105,8 +2225,8 @@ export function DamageClaimPanel({
                         setQuoteOrigin(next.damageQuoteOrigin ?? "prepared_by_us");
                         setOk(
                           next.damageInsurerMailLog?.[0]?.status === "stubbed"
-                            ? "Înregistrat (SMTP neconfigurat pe server) — verifică logul."
-                            : "Deviz trimis către asigurător.",
+                            ? `Înregistrat Deviz ${selectedInsurerQuote?.version ?? ""} (SMTP neconfigurat).`
+                            : `Deviz ${selectedInsurerQuote?.version ?? ""} trimis către asigurător.`,
                         );
                       } finally {
                         setPending(false);
@@ -2115,15 +2235,18 @@ export function DamageClaimPanel({
                   }}
                   className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                 >
-                  Trimite către asigurător
+                  Trimite Deviz {selectedInsurerQuote?.version ?? ""} către asigurător
                 </button>
               ) : null}
             </div>
             <div className="space-y-2 rounded-md border border-zinc-800 bg-zinc-950/50 p-3">
               <p className="text-xs font-medium text-zinc-200">B. Primit de la asigurător</p>
               <p className="text-[11px] text-zinc-500">
-                Încarcă PDF-ul primit pe mail. Rămâne referință pe dosar (și pe Comandă) — nu
-                rescriem automat liniile Audatex.
+                Încarcă PDF-ul primit pe mail
+                {selectedInsurerQuote
+                  ? ` (context: Deviz ${selectedInsurerQuote.version})`
+                  : ""}
+                . Rămâne referință pe dosar — nu rescriem automat liniile Audatex.
               </p>
               {insurerPdfUrl ? (
                 <p className="text-xs text-zinc-300">
@@ -2737,6 +2860,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
           quoteFromSummary?.status === "approved" ? quoteFromSummary : null,
         pendingQuote:
           quoteFromSummary?.status === "submitted" ? quoteFromSummary : null,
+        quotes: quoteFromSummary ? [quoteFromSummary] : [],
       },
     ],
     appointments: [],

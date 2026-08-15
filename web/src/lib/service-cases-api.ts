@@ -398,6 +398,8 @@ export type WorkOrderRecord = {
   latestQuote: QuoteSummary | null;
   approvedQuote?: QuoteSummary | null;
   pendingQuote?: QuoteSummary | null;
+  /** Toate versiunile de deviz pe comandă (Deviz 1, 2, …). */
+  quotes?: QuoteSummary[];
 };
 
 export type ServiceAppointmentStatus =

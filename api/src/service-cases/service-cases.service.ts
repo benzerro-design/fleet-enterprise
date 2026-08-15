@@ -3316,7 +3316,7 @@ export class ServiceCasesService {
           supplier: { select: { legalName: true } },
           quotes: {
             orderBy: { version: 'desc' as const },
-            take: 5,
+            take: 30,
             select: {
               id: true,
               workOrderId: true,
@@ -3882,6 +3882,7 @@ export class ServiceCasesService {
           latestQuote: toSummary(display),
           approvedQuote: toSummary(approved ?? null),
           pendingQuote: toSummary(submitted ?? null),
+          quotes: quotes.map((q) => toSummary(q)!).filter(Boolean),
         };
       }),
       appointments: (row.appointments ?? []).map((a) => this.toAppointmentRecord(a)),
