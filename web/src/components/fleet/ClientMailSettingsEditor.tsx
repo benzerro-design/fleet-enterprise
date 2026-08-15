@@ -12,9 +12,11 @@ import {
 type Props = {
   clientId: string;
   canWrite: boolean;
+  /** În Setup → Email: fără titlu mare / padding dublu. */
+  embedded?: boolean;
 };
 
-export function ClientMailSettingsEditor({ clientId, canWrite }: Props) {
+export function ClientMailSettingsEditor({ clientId, canWrite, embedded = false }: Props) {
   const [settings, setSettings] = useState<ClientMailSettings>(DEFAULT_CLIENT_MAIL_SETTINGS);
   const [draft, setDraft] = useState<ClientMailSettings>(DEFAULT_CLIENT_MAIL_SETTINGS);
   const [members, setMembers] = useState<ClientMailSettingsPayload["members"]>([]);
@@ -127,21 +129,27 @@ export function ClientMailSettingsEditor({ clientId, canWrite }: Props) {
   }
 
   if (loading) {
-    return <p className="p-4 text-sm text-zinc-500">Se încarcă corespondența…</p>;
+    return (
+      <p className={`${embedded ? "p-3" : "p-4"} text-sm text-zinc-500`}>
+        Se încarcă corespondența…
+      </p>
+    );
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div>
-        <h2 className="text-sm font-medium text-zinc-200">Corespondență daună (CC)</h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          Cine din partea acestui client intră în CC la mailurile către asigurător (avizare,
-          reconstatare, deviz). Se combină automat cu CC-ul flotă din Setup → Email.
-        </p>
-      </div>
+    <div className={`space-y-6 ${embedded ? "p-3 sm:p-4" : "p-4 sm:p-6"}`}>
+      {!embedded ? (
+        <div>
+          <h2 className="text-sm font-medium text-zinc-200">Corespondență daună (CC)</h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Cine din partea acestui client intră în CC la mailurile către asigurător (avizare,
+            reconstatare, deviz). Se combină automat cu CC-ul flotă din Setup → Email.
+          </p>
+        </div>
+      ) : null}
 
       {error ? <p className="text-sm text-rose-400">{error}</p> : null}
-      {saved ? <p className="text-sm text-emerald-400">Salvat.</p> : null}
+      {saved ? <p className="text-sm text-emerald-400">Salvat (CC client).</p> : null}
 
       <div className="space-y-2">
         <p className="text-sm font-medium text-zinc-100">Utilizatori client în CC</p>

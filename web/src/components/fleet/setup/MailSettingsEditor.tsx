@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ClientMailSettingsEditor } from "@/components/fleet/ClientMailSettingsEditor";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
+import { clientsBrowserBase } from "@/lib/clients-api";
 import {
   mailSettingsBrowserBase,
   type TenantMailSettings,
@@ -14,6 +16,12 @@ type Member = {
   role: string;
 };
 
+type ClientOption = {
+  id: string;
+  code: string;
+  legalName: string;
+};
+
 type Props = {
   initial: TenantMailSettings;
 };
@@ -22,6 +30,8 @@ export function MailSettingsEditor({ initial }: Props) {
   const [settings, setSettings] = useState(initial);
   const [draft, setDraft] = useState(initial);
   const [members, setMembers] = useState<Member[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [ccExtraText, setCcExtraText] = useState(initial.defaultCcEmails.join(", "));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,10 +41,27 @@ export function MailSettingsEditor({ initial }: Props) {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch("/api/tenant/members", { headers: fleetJsonHeaders() });
-        if (!res.ok) return;
-        const data = (await res.json()) as { members?: Member[] };
-        if (!cancelled) setMembers(data.members ?? []);
+        const [memRes, cliRes] = await Promise.all([
+          fetch("/api/tenant/members", { headers: fleetJsonHeaders() }),
+          fetch(`${clientsBrowserBase}?pageSize=200&status=active`, {
+            headers: fleetJsonHeaders(),
+          }),
+        ]);
+        if (memRes.ok) {
+          const data = (await memRes.json()) as { members?: Member[] };
+          if (!cancelled) setMembers(data.members ?? []);
+        }
+        if (cliRes.ok) {
+          const data = (await cliRes.json()) as {
+            items?: Array<{ id: string; code: string; legalName: string }>;
+          };
+          if (!cancelled) {
+            const list = (data.items ?? [])
+              .map((c) => ({ id: c.id, code: c.code, legalName: c.legalName }))
+              .sort((a, b) => a.legalName.localeCompare(b.legalName, "ro"));
+            setClients(list);
+          }
+        }
       } catch {
         /* ignore */
       }
@@ -52,13 +79,23 @@ export function MailSettingsEditor({ initial }: Props) {
     [members],
   );
 
+  const selectedClient = useMemo(
+    () => clients.find((c) => c.id === selectedClientId) ?? null,
+    [clients, selectedClientId],
+  );
+
   const dirty = useMemo(
-    () => JSON.stringify(draft) !== JSON.stringify(settings) || ccExtraText !== settings.defaultCcEmails.join(", "),
+    () =>
+      JSON.stringify(draft) !== JSON.stringify(settings) ||
+      ccExtraText !== settings.defaultCcEmails.join(", "),
     [draft, settings, ccExtraText],
   );
 
   function parseCcExtra(text: string): string[] {
-    const parts = text.split(/[,;\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const parts = text
+      .split(/[,;\s]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
     const out: string[] = [];
     const seen = new Set<string>();
     for (const e of parts) {
@@ -115,7 +152,7 @@ export function MailSettingsEditor({ initial }: Props) {
   return (
     <div className="max-w-2xl space-y-4">
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
-      {saved ? <p className="text-sm text-emerald-400">Salvat.</p> : null}
+      {saved ? <p className="text-sm text-emerald-400">Salvat (setări flotă).</p> : null}
 
       <div className="space-y-6 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
         <div>
@@ -149,7 +186,10 @@ export function MailSettingsEditor({ initial }: Props) {
             value={draft.replyTo ?? ""}
             disabled={pending}
             onChange={(e) =>
-              setDraft((d) => ({ ...d, replyTo: e.target.value.trim() ? e.target.value.trim() : null }))
+              setDraft((d) => ({
+                ...d,
+                replyTo: e.target.value.trim() ? e.target.value.trim() : null,
+              }))
             }
           />
           <span className="block text-xs text-zinc-500">
@@ -182,10 +222,8 @@ export function MailSettingsEditor({ initial }: Props) {
         <div>
           <h2 className="text-sm font-medium text-zinc-200">CC flotă pe trimiteri daună</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Copii operaționale (admin / viewer flotă + adrese libere) la avizare, reconstatare și
-            deviz. CC pe utilizatorii unui client se configurează pe{" "}
-            <span className="text-zinc-400">Client → Corespondență</span> — se unesc automat la
-            trimitere după clientul dosarului.
+            Copii operaționale pe toate dosarele (admin / viewer flotă + adrese libere). CC pe
+            utilizatorii unui client: secțiunea de mai jos (filtru pe client).
           </p>
         </div>
 
@@ -260,7 +298,7 @@ export function MailSettingsEditor({ initial }: Props) {
           onClick={() => void save()}
           className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
         >
-          {pending ? "Se salvează…" : "Salvează"}
+          {pending ? "Se salvează…" : "Salvează setări flotă"}
         </button>
         {dirty ? (
           <button
@@ -277,6 +315,51 @@ export function MailSettingsEditor({ initial }: Props) {
             Anulează
           </button>
         ) : null}
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-amber-900/30 bg-amber-950/10 p-5">
+        <div>
+          <h2 className="text-sm font-medium text-zinc-200">CC pe client</h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Alege clientul (Alpha, Beta, …), apoi bifează userii / adresele care intră în CC când
+            dosarul de daună e al acelui client. Salvezi separat în formularul de mai jos.
+          </p>
+        </div>
+
+        <label className="block space-y-1 text-sm text-zinc-300">
+          <span className="font-medium text-zinc-100">Client</span>
+          <select
+            className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+          >
+            <option value="">— Selectează clientul —</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.legalName} ({c.code})
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {selectedClientId ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/50">
+            <div className="border-b border-zinc-800 px-4 py-2 text-xs text-zinc-500">
+              Setări CC pentru{" "}
+              <span className="font-medium text-zinc-300">
+                {selectedClient?.legalName ?? selectedClientId}
+              </span>
+            </div>
+            <ClientMailSettingsEditor
+              key={selectedClientId}
+              clientId={selectedClientId}
+              canWrite
+              embedded
+            />
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500">Selectează un client ca să editezi CC-ul aferent.</p>
+        )}
       </div>
     </div>
   );
