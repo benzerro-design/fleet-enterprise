@@ -630,12 +630,18 @@ export function WorkOrderSheetShell({
               </div>
             ) : null}
             {isDamageWo ? (
-              <div>
+              <div
+                className={
+                  wo.damageEventOn
+                    ? ""
+                    : "rounded border border-amber-800/40 bg-amber-950/20 px-2 py-1.5"
+                }
+              >
                 Data eveniment:{" "}
                 {wo.damageEventOn ? (
                   <span className="text-zinc-200">{formatDateRo(wo.damageEventOn)}</span>
                 ) : (
-                  <span className="text-amber-400/90">necompletată</span>
+                  <span className="text-amber-300">necompletată — completează pe Dosar daună</span>
                 )}
                 {" · "}
                 <button

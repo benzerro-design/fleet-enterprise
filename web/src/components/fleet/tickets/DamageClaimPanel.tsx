@@ -668,6 +668,24 @@ export function DamageClaimPanel({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block sm:col-span-2">
+            <span className={OPS_LABEL_CLASS}>
+              Data evenimentului (accident / daună)
+              {!eventOn ? <span className="text-amber-400"> *</span> : null}
+            </span>
+            <input
+              type="date"
+              lang="ro"
+              className={OPS_INPUT_CLASS}
+              disabled={disabled || sectionLocked("claim_info")}
+              value={eventOn}
+              onChange={(e) => setEventOn(e.target.value)}
+            />
+            <span className="mt-0.5 block text-[10px] text-zinc-500">
+              Data producerii evenimentului — obligatorie pe dosarul de daună (PV constatare /
+              asigurător). Format calendar: alege ziua din picker.
+            </span>
+          </label>
           <label className="block">
             <span className={OPS_LABEL_CLASS}>Deplasabilitate</span>
             <select
@@ -680,16 +698,6 @@ export function DamageClaimPanel({
               <option value="movable">Deplasabilă</option>
               <option value="immovable">Nedeplasabilă</option>
             </select>
-          </label>
-          <label className="block">
-            <span className={OPS_LABEL_CLASS}>Data eveniment</span>
-            <input
-              type="date"
-              className={OPS_INPUT_CLASS}
-              disabled={disabled || sectionLocked("claim_info")}
-              value={eventOn}
-              onChange={(e) => setEventOn(e.target.value)}
-            />
           </label>
           <label className="block">
             <span className={OPS_LABEL_CLASS}>
@@ -854,6 +862,15 @@ export function DamageClaimPanel({
           </div>
         ) : null}
       </section>
+
+      {!isClientPayer && canWrite ? (
+        <a
+          href="#damage-reinspection"
+          className="block rounded-lg border border-amber-800/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100 hover:bg-amber-950/35"
+        >
+          Reconstatare / constatare suplimentară — disponibilă oricând pe dosar →
+        </a>
+      ) : null}
 
       {/* Documents — insurer path */}
       {!isClientPayer ? (
@@ -1461,11 +1478,30 @@ export function DamageClaimPanel({
               </label>
             </div>
           ) : null}
+        </section>
+      ) : null}
+
+      {/* Reconstatare — disponibilă oricând pe traseul asigurător (Norma ASF 20/2017). */}
+      {!isClientPayer ? (
+        <section
+          id="damage-reinspection"
+          className="space-y-3 rounded-lg border border-amber-800/40 bg-amber-950/15 p-3"
+        >
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-200/90">
+            Reconstatare (constatare suplimentară)
+          </h4>
+          <p className="text-[11px] text-zinc-400">
+            Poți solicita reconstatare în orice stadiu al dosarului (inclusiv în timpul reparației
+            sau după accept plată) când apar avarii ascunse, omisiuni față de constatarea inițială
+            sau schimbări de soluție tehnică. În practică RCA/CASCO, unitatea reparatoare sau
+            păgubitul cere în scris; asigurătorul întocmește PV suplimentar (Norma ASF nr. 20/2017
+            — termen tipic 3 zile lucrătoare de la solicitare).
+          </p>
           {canWrite ? (
-            <div className="space-y-3 border-t border-zinc-800 pt-3">
+            <div className="space-y-3">
               <p className="text-[11px] text-zinc-500">
-                Solicitare reconstatare pe mail (poze + explicații). La aprobare încarci documentul
-                asigurător (aprobare / PVS); la refuz scrii motivul.
+                Solicitare pe mail (poze + explicații). La aprobare încarci documentul asigurător
+                (aprobare / PVS); la refuz scrii motivul.
               </p>
               {reinspectionRequests.length ? (
                 <ul className="space-y-2">

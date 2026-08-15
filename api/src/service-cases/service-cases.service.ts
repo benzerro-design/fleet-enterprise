@@ -1633,6 +1633,8 @@ export class ServiceCasesService {
     if (row.damagePayerType === DamagePayerType.client) {
       throw new BadRequestException('Plătitor client — nu se solicită reconstatare');
     }
+    // Permis oricând pe pipeline (docs_pending … payment_accepted): avarii ascunse /
+    // omisiuni / schimbare soluție tehnică — Norma ASF 20/2017 art. 19 alin. (10)-(11).
 
     const explanation = dto.note?.trim() || '';
     if (explanation.length < 5) {

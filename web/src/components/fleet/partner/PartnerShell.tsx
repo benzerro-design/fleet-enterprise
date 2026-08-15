@@ -96,7 +96,8 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
         <PartnerTopBar ctx={topBarCtx} />
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
-          <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          {/* Scroll pe FleetPageMain (fleet-scroll-pane), ca pe shell-ul flotă — fără overflow dublu. */}
+          <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             {children}
           </div>
         </div>
