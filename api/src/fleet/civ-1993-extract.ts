@@ -45,11 +45,20 @@ function num(raw: string | null | undefined): number | null {
 export function extractCiv1993SectionA(versoOrCombined: string): string {
   let t = versoOrCombined.replace(/\r\n/g, '\n');
 
-  const colA = /===\s*COL\s*A\s*===([\s\S]*?)(?===\s*COL\s*[BCD]\s*===|$)/i.exec(t);
-  if (colA?.[1]?.trim()) return colA[1].trim();
-
-  const secA = /sec[tț]iunea\s*a\b([\s\S]*?)(?=sec[tț]iunea\s*[bc]\b|omologare\s+de\s+tip|$)/i.exec(t);
-  if (secA?.[1]?.trim() && secA[1].length > 80) return secA[1].trim();
+  // Dacă există markeri COL, unește A+B în ordinea din document (fără a pierde
+  // valorile intercalate pe linia verticală). Nu ne oprim la primul COL B.
+  if (/===\s*COL\s*[A-D]\s*===/i.test(t)) {
+    t = t
+      .replace(/===\s*COL\s*[AB]\s*===/gi, '\n')
+      .replace(/===\s*COL\s*[CD]\s*===[\s\S]*$/i, '\n');
+  } else {
+    const secA = /sec[tț]iunea\s*a\b([\s\S]*?)(?=sec[tț]iunea\s*[bc]\b|omologare\s+de\s+tip|$)/i.exec(
+      t,
+    );
+    if (secA?.[1]?.trim() && secA[1].length > 80) {
+      t = secA[1].trim();
+    }
+  }
 
   // Taie la Secțiunea B / C / Omologare dacă apar după începutul grilei.
   const cutMarkers = [
@@ -67,7 +76,7 @@ export function extractCiv1993SectionA(versoOrCombined: string): string {
 
   // Dacă e față+verso concatenat, preferă partea cu Marca / Categoria.
   const marca = /\b3\.?\s*Marca\b|\bMarca\b/i.exec(t);
-  const cat = /\b1\.?\s*Categoria\b|\bCategoria\b/i.exec(t);
+  const cat = /\b1\.?\s*Categoria\b|\bCategoria\b|\bCategoda\b/i.exec(t);
   if (marca || cat) {
     const start = Math.min(marca?.index ?? Infinity, cat?.index ?? Infinity);
     if (Number.isFinite(start) && start > 0 && start < t.length) {
@@ -122,7 +131,10 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
   /** Bloc „Modificări…” → Mențiuni în app. */
   modificationsMentions: string | null;
 } {
-  const text = sectionA;
+  // Vision OCR pe CIV 1993 alternează Totală/Totala, Remorcabilă/Remorcabila etc.
+  // Match-uim pe text fără diacritice; Mențiuni rămân pe original.
+  const textOrig = sectionA;
+  const text = stripDiacritics(sectionA);
   const profile: VehicleCivProfile = {};
   const matched: Civ1993ExtractResult['matched'] = [];
   let techPairCount = 0;
@@ -143,7 +155,7 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
   const valueAfter = (labelRe: RegExp, valueRe: RegExp): string | null => {
     const m = labelRe.exec(text);
     if (!m || m.index == null) return null;
-    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 80);
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 120);
     const v = valueRe.exec(after);
     return v?.[1] ? v[1].replace(/\s+/g, ' ').trim() : null;
   };
@@ -254,7 +266,7 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     matched.push({ rubric: 'VIN', target: 'vin', value: vin });
   }
 
-  // 7. Mase — OCR: „Totala max 1540”, „Earligul … remorcare 50”, „Remorcabil cu 750”
+  // 7. Mase — OCR: „Totala/Totală max 1540”, „Earligul … remorcare 50”, „Remorcabil(ă) cu 750”
   set(
     'curbMassKg',
     'Masă în ordine de mers',
@@ -265,10 +277,16 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'maxTechnicalMassKg',
     'Masă maximă tehnic admisă',
     pick(text, [
-      /\bTotal[ae]?\s*max\.?\s*autoriz\w*\s*[:\s]*(\d{3,5})\b/i,
-      /\bTotal[ae]?\s*max\s*[:\s]*(\d{3,5})\b/i,
-      /\bTotal[ae]?\s*max\s+(\d{3,5})\b/i,
-      /\bProprie\s+\d{3,5}\s+Total[ae]?\s*max\s+(\d{3,5})\b/i,
+      // Ordine corectă
+      /\bProprie\s+\d{3,5}\s+Totala?\s*max\s+(\d{3,5})\b/i,
+      /\bTotala?\s*max\.?\s*autoriz\w*\s*[:\s]*(\d{3,5})\b/i,
+      /\bTotala?\s*max\s*[:\s]*(\d{3,5})\b/i,
+      /\bTotala?\s*max\s+(\d{3,5})\b/i,
+      // OCR amestecat cu dreapta: „Totala autorizala max 1540”
+      /\bTotala?\s+autoriz\w*\s+max\s+(\d{3,5})\b/i,
+      /\bTotala?\s*max\.?\s*autoriz\w*\s+(\d{3,5})\b/i,
+      // „Totala max” apoi cifra pe aceeași zonă (nu lua 50/850 de pe rândurile următoare)
+      /\bTotala?\s*max\b(?:\s+autoriz\w*)?\s*[:\s]*(\d{3,5})\b/i,
     ]),
     true,
   );
@@ -276,10 +294,11 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'maxCouplingMassKg',
     'Masă max. punct cuplare',
     pick(text, [
-      /\bSarcina\s+pe\s+c[aâ]rlig\w*\s*[:\s]*(\d{1,4})\b/i,
-      /\bc[aâ]rlig\w*\s*(?:de\s+remorcare)?\s*[:\s]*(\d{1,4})\b/i,
+      /\bSarcina\s+pe\s+c[aâ]?rlig\w*\s*[:\s]*(\d{1,4})\b/i,
+      /\bc[aâ]?rlig\w*\s*(?:de\s+remorcare)?\s*[:\s]*(\d{1,4})\b/i,
       /\b(?:c|e)?[aâ]?rlig\w*\s+Sarcina\s+de\s+remorcare\s*[:\s]*(\d{1,4})\b/i,
       /\bSarcina\s+de\s+remorcare\s*[:\s]*(\d{1,4})\b/i,
+      /\bEarligul\s+Sarcina\s+de\s+remorcare\s*[:\s]*(\d{1,4})\b/i,
       /\bremorcare\s*[:\s]*(\d{1,4})\b/i,
     ]),
     true,
@@ -288,7 +307,7 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'axle1MaxMassKg',
     'MTMA axa 1',
     pick(text, [
-      /\b(?:Fath|Fata|Fa[tț][aă])\s*[:\s]*(\d{3,4})\b/i,
+      /\b(?:Fath|Fata|Fala)\s*[:\s]*(\d{3,4})\b/i,
     ]),
     true,
   );
@@ -311,9 +330,10 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'maxBrakedTrailerMassKg',
     'Masă remorcabilă cu frână',
     pick(text, [
-      /Remorcabila?\s+cu\s+(?:disp\.?\s*(?:de\s+)?fr[aâ]nare|dispozitiv\s+de\s+fr[aâ]nare)\s*[:\s]*(\d{2,5})/i,
-      /Remorcabil\s+cu\s*[:\s]*(\d{2,5})/i,
-      /Remorcabil\s+cu\s+(\d{2,5})\b/i,
+      /Remorcabila?\s+cu\s+(?:disp\.?\s*(?:de\s+)?franare|dispozitiv\s+de\s+franare)\s*[:\s]*(\d{2,5})/i,
+      /Remorcabila?\s+cu\s*[:\s]*(\d{2,5})/i,
+      /Remorcabila?\s+cu\s+(\d{2,5})\b/i,
+      /Remorcabil\w*\s+cu\b[\s\S]{0,40}?(\d{2,5})\b/i,
     ]),
     true,
   );
@@ -321,9 +341,10 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'maxUnbrakedTrailerMassKg',
     'Masă remorcabilă fără frână',
     pick(text, [
-      /Remorcabila?\s+f[aă]r[aă]\s+(?:disp\.?\s*(?:de\s+)?fr[aâ]nare|dispozitiv\s+de\s+fr[aâ]nare)\s*[:\s]*(\d{2,5})/i,
+      /Remorcabila?\s+fara\s+(?:disp\.?\s*(?:de\s+)?franare|dispozitiv\s+de\s+franare)\s*[:\s]*(\d{2,5})/i,
       /Remorcabila?\s+fara\s*[:\s]*(\d{2,5})/i,
       /Remorcabila?\s+fara\s+(\d{2,5})\b/i,
+      /Remorcabil\w*\s+fara\b[\s\S]{0,40}?(\d{2,5})\b/i,
     ]),
     true,
   );
@@ -350,20 +371,50 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     if (idx >= 0) matched.splice(idx, 1);
   }
 
-  // 9. Dimensiuni — OCR: „Dimensiunile ( mm ) de L 3958 1722 h 1481”
+  // 9. Dimensiuni — OCR: „Dimensiunile ( mm ) de L 3958 1722 h 1481” (uneori pe 2 linii)
   const dims =
     /\bL\s*[:\s]*(\d{3,5})\s+l\s*[:\s]*(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
     /\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
-    /\bDimensiun\w*[^\n]{0,40}?\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
-    /\bL\s+(\d{3,5})\s+(\d{3,5})\s+h\s+(\d{3,5})\b/i.exec(text);
+    /\bDimensiun\w*[\s\S]{0,60}?\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+h\s*[:\s]*(\d{3,5})\b/i.exec(text) ||
+    /\bL\s+(\d{3,5})\s+(\d{3,5})\s+h\s+(\d{3,5})\b/i.exec(text) ||
+    /\bL\s*[:\s]*(\d{3,5})\s+(\d{3,5})\s+(\d{3,5})\b/i.exec(text) ||
+    // L pe o linie, l/h pe următoarea
+    /\bL\s*[:\s]*(\d{3,5})\D{0,20}(\d{3,5})\D{0,20}h?\s*[:\s]*(\d{3,5})\b/i.exec(text);
   if (dims) {
-    set('lengthMm', 'Lungime', dims[1], true);
-    set('widthMm', 'Lățime', dims[2], true);
-    set('heightMm', 'Înălțime', dims[3], true);
+    const L = Number(dims[1]);
+    const W = Number(dims[2]);
+    const H = Number(dims[3]);
+    // Sanity: lungime tipică auto > lățime > înălțime (mm)
+    if (L >= 2000 && L <= 20000) set('lengthMm', 'Lungime', dims[1], true);
+    if (W >= 1000 && W <= 4000) set('widthMm', 'Lățime', dims[2], true);
+    if (H >= 800 && H <= 4500) set('heightMm', 'Înălțime', dims[3], true);
   } else {
-    set('lengthMm', 'Lungime', pick(text, [/\bL\s*[:\s]*(\d{3,5})\b/, /\bLungime\s*[:\s]*(\d{3,5})\b/i]), true);
-    set('widthMm', 'Lățime', pick(text, [/\bl\s*[:\s]*(\d{3,5})\b/, /\bL[aă][tț]ime\s*[:\s]*(\d{3,5})\b/i]), true);
-    set('heightMm', 'Înălțime', pick(text, [/\bh\s*[:\s]*(\d{3,5})\b/, /\b[IiÎî]n[aă]l[tț]ime\s*[:\s]*(\d{3,5})\b/i]), true);
+    set(
+      'lengthMm',
+      'Lungime',
+      pick(text, [
+        /\bDimensiun\w*[\s\S]{0,40}?\bL\s*[:\s]*(\d{3,5})\b/i,
+        /\bLungime\s*[:\s]*(\d{3,5})\b/i,
+        /\bL\s*[:\s]*(\d{4,5})\b/,
+      ]),
+      true,
+    );
+    set(
+      'widthMm',
+      'Lățime',
+      pick(text, [
+        /\bLatime\s*[:\s]*(\d{3,5})\b/i,
+        /\bL\s*[:\s]*\d{3,5}\s+l\s*[:\s]*(\d{3,5})\b/i,
+        /\bL\s*[:\s]*\d{3,5}\s+(\d{3,4})\s+h\b/i,
+      ]),
+      true,
+    );
+    set(
+      'heightMm',
+      'Înălțime',
+      pick(text, [/\bh\s*[:\s]*(\d{3,5})\b/i, /\bInaltime\s*[:\s]*(\d{3,5})\b/i]),
+      true,
+    );
   }
 
   // 10. Motor — pe scan Tipul/Serie apar ADESORI pe linia de deasupra „10 Motorul”
@@ -388,11 +439,28 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     'engineCapacityCm3',
     'Capacitate cilindrică',
     pick(text, [
+      // „Cilindree1399” lipit (fără spațiu) — frecvent pe Vision
       /\bCilindree\s*(?:\([^)]*\))?\s*[:\s]*(\d{3,5})\b/i,
       /\bCilindree\s*(\d{3,5})\b/i,
+      /\bCilindree(\d{3,5})\b/i,
+      /\bMotorul[\s\S]{0,80}?Cilindree\s*[:\s]*(\d{3,5})\b/i,
+      /\bMotorul[\s\S]{0,80}?Cilindree(\d{3,5})\b/i,
+      /\bcm\s*\)?\s*Cilindree\s*[:\s]*(\d{3,5})\b/i,
+      /\bcm\s*\)?\s*Cilindree(\d{3,5})\b/i,
+      // etichetă goală în COL A, cifră imediat după pe verso brut
+      /\bCilindree\s*(?:\([^)]*\))?\s*[:\s]*\n\s*(\d{3,5})\b/i,
     ]),
     true,
   );
+  // Sanity cm³
+  if (
+    typeof profile.engineCapacityCm3 === 'number' &&
+    (profile.engineCapacityCm3 < 50 || profile.engineCapacityCm3 > 20000)
+  ) {
+    delete profile.engineCapacityCm3;
+    const idx = matched.findIndex((m) => m.target === 'engineCapacityCm3');
+    if (idx >= 0) matched.splice(idx, 1);
+  }
   {
     const pt =
       /Putere[^\n]{0,50}?([\d.,]+)\s*\/\s*(\d{3,5})/i.exec(text) ||
@@ -497,13 +565,13 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
   );
   // 19. Data / nr. primei înm. — fără corespondent
 
-  // Modificări… → Mențiuni; CO₂ din Mențiuni (OCR: „C02: 107”)
+  // Modificări… → Mențiuni; CO₂ din Mențiuni (OCR: „C02: 107”) — pe text original
   let modificationsMentions: string | null = null;
   const mod =
     /Modific[aă]ri[\s\S]{0,200}?((?:C0\s*2|CO\s*2|CO₂|C02)\s*:\s*[\s\S]*?)(?=\n\s*-?\d+-?\s*\n|\n\s*OMOLOGARE|\n\s*J\s+\d|\n\s*===|$)/i.exec(
-      text,
+      textOrig,
     ) ||
-    /Modific[aă]ri[^:\n]*:\s*([\s\S]*?)(?=\n\s*===|\n\s*OMOLOGARE|$)/i.exec(text);
+    /Modific[aă]ri[^:\n]*:\s*([\s\S]*?)(?=\n\s*===|\n\s*OMOLOGARE|$)/i.exec(textOrig);
   if (mod?.[1]) {
     const body = mod[1]
       .split(/\r?\n/)
@@ -513,16 +581,16 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
       .trim();
     if (body.length >= 3) modificationsMentions = body.slice(0, 2000);
   }
-  const co2Source = `${modificationsMentions ?? ''}\n${text}`;
+  const co2Source = stripDiacritics(`${modificationsMentions ?? ''}\n${textOrig}`);
   const co2 = pick(co2Source, [
     /\bC0\s*2\s*[:\s]*(\d{2,3})\b/i,
     /\bC02\s*[:\s]*(\d{2,3})\b/i,
     /\bCO\s*2\s*[:\s]*(\d{2,3})\s*(?:g\s*\/\s*km)?/i,
-    /\bCO₂\s*[:\s]*(\d{2,3})/i,
+    /\bCO2\s*[:\s]*(\d{2,3})/i,
   ]);
   set('co2Gkm', 'CO₂', co2, true);
 
-  if (!vin) vin = findVinInText(text);
+  if (!vin) vin = findVinInText(text) ?? findVinInText(textOrig);
 
   return { profile, matched, vin, techPairCount, modificationsMentions };
 }
@@ -545,15 +613,39 @@ export function mapCiv1993TextToPreview(
   let usedVin = first.vin;
   let modificationsMentions = first.modificationsMentions;
 
-  if (techCount < 5) {
-    const again = mapCiv1993SectionAToProfile(extractCiv1993SectionA(text));
-    if (again.techPairCount > techCount) {
-      civProfile = again.profile;
-      allMatched = [...again.matched];
-      techCount = again.techPairCount;
-      usedVin = again.vin ?? usedVin;
-      modificationsMentions = again.modificationsMentions ?? modificationsMentions;
+  const mergeFrom = (other: ReturnType<typeof mapCiv1993SectionAToProfile>) => {
+    for (const [k, v] of Object.entries(other.profile)) {
+      if (v == null || v === '') continue;
+      if (civProfile[k] != null && civProfile[k] !== '') continue;
+      civProfile[k] = v;
+      const m = other.matched.find((x) => x.target === k);
+      if (m) allMatched.push(m);
+      techCount++;
     }
+    if (!usedVin && other.vin) usedVin = other.vin;
+    if (!modificationsMentions && other.modificationsMentions) {
+      modificationsMentions = other.modificationsMentions;
+    }
+  };
+
+  // Dacă COL A a tăiat prea agresiv, reîncearcă pe tot verso / tot documentul.
+  if (techCount < 5) {
+    mergeFrom(mapCiv1993SectionAToProfile(extractCiv1993SectionA(text)));
+  }
+  // Completează câmpurile critice lipsă din textul brut (valori căzute în COL B/C).
+  const criticalMissing = [
+    'maxTechnicalMassKg',
+    'maxBrakedTrailerMassKg',
+    'maxUnbrakedTrailerMassKg',
+    'lengthMm',
+    'widthMm',
+    'heightMm',
+    'engineCapacityCm3',
+    'curbMassKg',
+  ].some((k) => civProfile[k] == null || civProfile[k] === '');
+  if (criticalMissing) {
+    mergeFrom(mapCiv1993SectionAToProfile(stripDiacritics(verso)));
+    mergeFrom(mapCiv1993SectionAToProfile(stripDiacritics(text)));
   }
 
   const seriesText = pages.seriesText || pages.frontRaw || text;
