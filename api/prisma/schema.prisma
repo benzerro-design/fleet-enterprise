@@ -1358,11 +1358,13 @@ model ServiceCase {
   damageInspectionNoteNotes         String?
   /// Istoric note de constatare (1..n, inclusiv după reconstatări).
   damageInspectionNotesJson         Json?
-  /// Accept plată de la asigurător (document PDF).
+  /// Accept plată de la asigurător (document PDF) — câmpuri curente (ultimul).
   damagePaymentAcceptancePdfUrl     String?
   damagePaymentAcceptanceFileName   String?
   damagePaymentAcceptanceReceivedAt DateTime?
   damagePaymentAcceptanceNotes      String?
+  /// Istoric Accept plată: array { id, sequence, pdfUrl, fileName?, receivedAt, notes? }.
+  damagePaymentAcceptancesJson      Json?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1407,6 +1409,9 @@ model MaintenanceWorkOrder {
   visit2OdometerKmIn Int?
   visit2OdometerKmOut Int?
   repairPathNote String?
+  /// Etapă reparație suplimentară (după omisiune + deviz aprobat v2+) — solicitată de partener.
+  supplementRepairAt DateTime?
+  supplementQuoteVersion Int?
   serviceOrderType ServiceOrderType       @default(M)
   readyAt          DateTime?
   /// Dată estimativă finalizare reparație — obligatorie înainte de trimitere deviz spre aprobare (partener).

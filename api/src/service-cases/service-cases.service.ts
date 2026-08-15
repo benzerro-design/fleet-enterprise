@@ -241,6 +241,16 @@ export type DamageConstatareHistoryItem =
   | DamageInspectionNoteItem
   | DamageReinspectionRequestItem;
 
+/** Accept plată pe istoric (Accept 1, 2, …). */
+export type DamagePaymentAcceptanceItem = {
+  id: string;
+  sequence: number;
+  pdfUrl: string;
+  fileName?: string;
+  receivedAt: string;
+  notes?: string | null;
+};
+
 export type DamageSectionKey = 'claim_info' | 'documents' | 'photos' | 'pipeline';
 
 export type DamageSectionLock = {
@@ -317,6 +327,7 @@ export type ServiceCaseRecord = {
   damagePaymentAcceptanceFileName: string | null;
   damagePaymentAcceptanceReceivedAt: string | null;
   damagePaymentAcceptanceNotes: string | null;
+  damagePaymentAcceptances: DamagePaymentAcceptanceItem[];
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
@@ -1040,13 +1051,51 @@ export class ServiceCasesService {
       const url = dto.damagePaymentAcceptancePdfUrl?.trim() || null;
       data.damagePaymentAcceptancePdfUrl = url;
       if (url) {
-        data.damagePaymentAcceptanceReceivedAt = new Date();
+        const receivedAt = new Date();
+        data.damagePaymentAcceptanceReceivedAt = receivedAt;
         if (
           !dto.damageInsurerPipelineStatus &&
           row.damageInsurerPipelineStatus !== DamageInsurerPipelineStatus.payment_accepted
         ) {
           data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.payment_accepted;
         }
+        const notes =
+          dto.damagePaymentAcceptanceNotes !== undefined
+            ? dto.damagePaymentAcceptanceNotes?.trim() || null
+            : row.damagePaymentAcceptanceNotes;
+        const fileName =
+          dto.damagePaymentAcceptanceFileName !== undefined
+            ? dto.damagePaymentAcceptanceFileName?.trim() || undefined
+            : row.damagePaymentAcceptanceFileName ?? undefined;
+        const prev = this.parsePaymentAcceptances(row.damagePaymentAcceptancesJson);
+        const legacySeed =
+          prev.length === 0 && row.damagePaymentAcceptancePdfUrl?.trim()
+            ? [
+                {
+                  id: `accept_legacy_${row.id.slice(-8)}`,
+                  sequence: 1,
+                  pdfUrl: row.damagePaymentAcceptancePdfUrl.trim(),
+                  fileName: row.damagePaymentAcceptanceFileName ?? undefined,
+                  receivedAt:
+                    row.damagePaymentAcceptanceReceivedAt?.toISOString() ??
+                    row.createdAt.toISOString(),
+                  notes: row.damagePaymentAcceptanceNotes ?? null,
+                } satisfies DamagePaymentAcceptanceItem,
+              ]
+            : [];
+        const base = prev.length ? prev : legacySeed;
+        // Înlocuiește ultima înregistrare dacă e același sequence „curent”, altfel adaugă.
+        const nextItem: DamagePaymentAcceptanceItem = {
+          id: `accept_${Date.now()}`,
+          sequence: base.length ? Math.max(...base.map((a) => a.sequence)) + 1 : 1,
+          pdfUrl: url,
+          fileName,
+          receivedAt: receivedAt.toISOString(),
+          notes,
+        };
+        // Fiecare upload PDF = accept nou în istoric (Accept 1, 2, …).
+        const nextAcceptances: DamagePaymentAcceptanceItem[] = [nextItem, ...base].slice(0, 30);
+        data.damagePaymentAcceptancesJson = nextAcceptances as unknown as Prisma.InputJsonValue;
       } else {
         data.damagePaymentAcceptanceReceivedAt = null;
         if (dto.damagePaymentAcceptanceFileName === undefined) {
@@ -3413,6 +3462,26 @@ export class ServiceCasesService {
     );
   }
 
+  private parsePaymentAcceptances(raw: unknown): DamagePaymentAcceptanceItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamagePaymentAcceptanceItem[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.pdfUrl !== 'string') continue;
+      if (typeof o.receivedAt !== 'string') continue;
+      out.push({
+        id: o.id,
+        sequence: typeof o.sequence === 'number' && o.sequence > 0 ? o.sequence : out.length + 1,
+        pdfUrl: o.pdfUrl,
+        fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
+        receivedAt: o.receivedAt,
+        notes: typeof o.notes === 'string' ? o.notes : null,
+      });
+    }
+    return out.sort((a, b) => b.sequence - a.sequence);
+  }
+
   private parseDamageDocuments(raw: unknown): DamageDocumentItem[] {
     if (!Array.isArray(raw)) return [];
     const out: DamageDocumentItem[] = [];
@@ -3615,6 +3684,7 @@ export class ServiceCasesService {
       damagePaymentAcceptanceFileName?: string | null;
       damagePaymentAcceptanceReceivedAt?: Date | null;
       damagePaymentAcceptanceNotes?: string | null;
+      damagePaymentAcceptancesJson?: unknown;
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
@@ -3745,6 +3815,25 @@ export class ServiceCasesService {
       damagePaymentAcceptanceReceivedAt:
         row.damagePaymentAcceptanceReceivedAt?.toISOString() ?? null,
       damagePaymentAcceptanceNotes: row.damagePaymentAcceptanceNotes ?? null,
+      damagePaymentAcceptances: (() => {
+        const parsed = this.parsePaymentAcceptances(row.damagePaymentAcceptancesJson);
+        if (parsed.length) return parsed;
+        if (row.damagePaymentAcceptancePdfUrl?.trim()) {
+          return [
+            {
+              id: `accept_legacy_${row.id.slice(-8)}`,
+              sequence: 1,
+              pdfUrl: row.damagePaymentAcceptancePdfUrl.trim(),
+              fileName: row.damagePaymentAcceptanceFileName ?? undefined,
+              receivedAt:
+                row.damagePaymentAcceptanceReceivedAt?.toISOString() ??
+                row.createdAt.toISOString(),
+              notes: row.damagePaymentAcceptanceNotes ?? null,
+            },
+          ];
+        }
+        return [];
+      })(),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       workOrders: (row.workOrders ?? []).map((wo) => {

@@ -557,7 +557,7 @@ export function WorkOrderQuotePanel({
           <span className="shrink-0 text-sm font-semibold text-zinc-200">Deviz</span>
           {activeQuote ? (
             <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
-              v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
+              Deviz {activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
             </span>
           ) : (
             <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">Ciornă</span>
@@ -654,31 +654,43 @@ export function WorkOrderQuotePanel({
       ) : null}
 
       {activeTab === "quote" && quotes.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {quotes.map((q) => (
-            <button
-              key={q.id}
-              type="button"
-              onClick={() => {
-                setActiveId(q.id);
-                if (q.status === "draft") {
-                  setLines(linesFromQuote(q));
-                  setNotes(q.notes ?? "");
-                }
-                if (q.costInvoiceNumber) setInvoiceNumber(q.costInvoiceNumber);
-                if (q.costInvoiceDate) setInvoiceDate(q.costInvoiceDate.slice(0, 10));
-                if (q.invoiceAttachmentUrl) setInvoiceAttachmentUrl(q.invoiceAttachmentUrl);
-                setEditingDraftId(null);
-                setLineDecisions({});
-              }}
-              className={`rounded-full border px-2.5 py-1 text-xs ${
-                activeId === q.id ? "border-sky-500/60 bg-sky-950/40" : "border-zinc-700"
-              } ${statusBadgeClass(q.status)}`}
-              title={`${q.lines.length} linii · ${formatMoneyCents(q.totalGrossCents, q.currency)} · ${quoteStatusLabel(q.status)}`}
-            >
-              v{q.version} · {quoteStatusLabel(q.status)}
-            </button>
-          ))}
+        <div className="mt-4 flex flex-wrap gap-1.5 border-b border-zinc-800 pb-3">
+          {[...quotes]
+            .sort((a, b) => a.version - b.version)
+            .map((q) => {
+              const selected = activeId === q.id;
+              return (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveId(q.id);
+                    if (q.status === "draft") {
+                      setLines(linesFromQuote(q));
+                      setNotes(q.notes ?? "");
+                    }
+                    if (q.costInvoiceNumber) setInvoiceNumber(q.costInvoiceNumber);
+                    if (q.costInvoiceDate) setInvoiceDate(q.costInvoiceDate.slice(0, 10));
+                    if (q.invoiceAttachmentUrl) setInvoiceAttachmentUrl(q.invoiceAttachmentUrl);
+                    setEditingDraftId(null);
+                    setLineDecisions({});
+                  }}
+                  className={`rounded-t-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    selected
+                      ? "border-zinc-600 border-b-zinc-950 bg-zinc-950 text-zinc-100"
+                      : "border-transparent text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                  }`}
+                  title={`${q.lines.length} linii · ${formatMoneyCents(q.totalGrossCents, q.currency)}`}
+                >
+                  Deviz {q.version}
+                  <span
+                    className={`ml-1.5 rounded border px-1 py-0.5 text-[10px] font-normal ${statusBadgeClass(q.status)}`}
+                  >
+                    {quoteStatusLabel(q.status)}
+                  </span>
+                </button>
+              );
+            })}
         </div>
       ) : null}
 

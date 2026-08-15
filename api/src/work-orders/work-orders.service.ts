@@ -138,6 +138,9 @@ export type WorkOrderDetail = WorkOrderListRow & {
   visit2OdometerKmOut: number | null;
   repairPathNote: string | null;
   readyAt: string | null;
+  /** Etapă suplimentară după deviz aprobat v2+ (partener). */
+  supplementRepairAt: string | null;
+  supplementQuoteVersion: number | null;
   /** Transformare din Acțiuni (mentenanță/cost/document) pe tichetul sursă. */
   ticketSettlement: WorkOrderTicketSettlement | null;
   /** Cost generat din devizul aprobat. */
@@ -173,22 +176,47 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageInspectionNoteIssuedOn: string | null;
   damageInspectionNoteReceivedAt: string | null;
   damageInspectionNoteNotes: string | null;
-  damageInspectionNotes: Array<{
-    id: string;
-    kind?: 'inspection_note' | 'pvs';
-    sequence?: number;
-    requestId?: string;
-    pdfUrl: string;
-    fileName?: string;
-    mode?: 'photos' | 'on_site' | null;
-    issuedOn?: string | null;
-    receivedAt: string;
-    notes?: string | null;
-  }>;
+  damageInspectionNotes: Array<
+    | {
+        id: string;
+        kind?: 'inspection_note' | 'pvs';
+        sequence?: number;
+        requestId?: string;
+        pdfUrl: string;
+        fileName?: string;
+        mode?: 'photos' | 'on_site' | null;
+        issuedOn?: string | null;
+        receivedAt: string;
+        notes?: string | null;
+      }
+    | {
+        id: string;
+        kind: 'reinspection_request';
+        sequence: number;
+        status: 'pending' | 'approved' | 'rejected';
+        explanation: string;
+        photoIds: string[];
+        sentAt: string;
+        decidedAt?: string;
+        rejectionReason?: string;
+        approvalDocUrl?: string;
+        approvalDocFileName?: string;
+        linkedPvsId?: string;
+        mailLogId?: string;
+      }
+  >;
   damagePaymentAcceptancePdfUrl: string | null;
   damagePaymentAcceptanceFileName: string | null;
   damagePaymentAcceptanceReceivedAt: string | null;
   damagePaymentAcceptanceNotes: string | null;
+  damagePaymentAcceptances: Array<{
+    id: string;
+    sequence: number;
+    pdfUrl: string;
+    fileName?: string;
+    receivedAt: string;
+    notes?: string | null;
+  }>;
   quoteSummary: {
     status: string | null;
     version: number | null;
@@ -631,6 +659,8 @@ export class WorkOrdersService {
             damagePaymentAcceptanceFileName: true,
             damagePaymentAcceptanceReceivedAt: true,
             damagePaymentAcceptanceNotes: true,
+            damagePaymentAcceptancesJson: true,
+            createdAt: true,
             sourceTicket: {
               select: {
                 subject: true,
@@ -703,6 +733,8 @@ export class WorkOrdersService {
       visit2OdometerKmOut: row.visit2OdometerKmOut ?? null,
       repairPathNote: row.repairPathNote ?? null,
       readyAt: row.readyAt?.toISOString() ?? null,
+      supplementRepairAt: row.supplementRepairAt?.toISOString() ?? null,
+      supplementQuoteVersion: row.supplementQuoteVersion ?? null,
       estimatedRepairAt: row.estimatedRepairAt?.toISOString() ?? null,
       ticketSettlement,
       hasQuoteCost,
@@ -772,6 +804,10 @@ export class WorkOrdersService {
       damagePaymentAcceptanceReceivedAt:
         row.serviceCase.damagePaymentAcceptanceReceivedAt?.toISOString() ?? null,
       damagePaymentAcceptanceNotes: row.serviceCase.damagePaymentAcceptanceNotes ?? null,
+      damagePaymentAcceptances: this.parseDamagePaymentAcceptances(
+        row.serviceCase.damagePaymentAcceptancesJson,
+        row.serviceCase,
+      ),
       quoteSummary: primary
         ? {
             status: primary.status,
@@ -1008,6 +1044,108 @@ export class WorkOrdersService {
       entityType: 'maintenance_work_order',
       entityId: id,
       meta: { readyAt: readyAt.toISOString() },
+    });
+
+    return this.getById(tenantSlug, id);
+  }
+
+  /**
+   * Etapă reparație suplimentară (omisiune / avarie ascunsă) — pe același WO,
+   * după ce există un deviz aprobat v2+. Nu resetează Tila de la zero.
+   */
+  async startSupplementRepair(
+    tenantSlug: string,
+    id: string,
+    dto: { note?: string | null } = {},
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderDetail> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: {
+        vehicle: { select: { clientId: true } },
+        serviceCase: { select: { sourceTicketId: true, workflowType: true } },
+        quotes: {
+          where: { status: WorkOrderQuoteStatus.approved },
+          orderBy: { version: 'desc' },
+          take: 5,
+          select: { version: true },
+        },
+      },
+    });
+    if (!wo) throw new NotFoundException('Work order not found');
+    if (access) {
+      try {
+        this.assertWorkOrderWrite(access, wo);
+      } catch {
+        throw new ForbiddenException('Cannot start supplement repair');
+      }
+    }
+    if (!wo.inServiceAt) {
+      throw new BadRequestException(
+        'Mașina trebuie să fie In service pentru o etapă suplimentară pe aceeași comandă',
+      );
+    }
+    if (wo.outServiceAt && !wo.visit2InServiceAt) {
+      throw new BadRequestException(
+        'Mașina a ieșit din service — folosește reprogramare / vizita 2, nu etapă pe Tila curentă',
+      );
+    }
+    const topQuote = wo.quotes[0];
+    if (!topQuote || topQuote.version < 2) {
+      throw new BadRequestException(
+        'Este nevoie de un Deviz aprobat v2+ (supliment) înainte de etapa suplimentară',
+      );
+    }
+    if (wo.supplementRepairAt && !wo.readyAt) {
+      throw new BadRequestException('Există deja o etapă suplimentară activă');
+    }
+
+    const note = dto.note?.trim();
+    const noteLine = `Etapă suplimentară (deviz v${topQuote.version})${note ? `: ${note}` : ''}`;
+    const prevNote = wo.repairPathNote?.trim();
+    const at = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.maintenanceWorkOrder.update({
+        where: { id },
+        data: {
+          readyAt: null,
+          status: MaintenanceWorkOrderStatus.in_progress,
+          supplementRepairAt: at,
+          supplementQuoteVersion: topQuote.version,
+          repairPathNote: prevNote ? `${prevNote}\n${noteLine}` : noteLine,
+        },
+      });
+      const ticketId = wo.serviceCase.sourceTicketId;
+      if (ticketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `${noteLine} — ${at.toLocaleString('ro-RO')}.`,
+            payload: {
+              workOrderId: id,
+              supplementQuoteVersion: topQuote.version,
+              milestone: 'supplement_repair',
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order.start_supplement_repair',
+      entityType: 'maintenance_work_order',
+      entityId: id,
+      meta: { quoteVersion: topQuote.version },
     });
 
     return this.getById(tenantSlug, id);
@@ -1676,35 +1814,38 @@ export class WorkOrdersService {
     return out;
   }
 
-  private parseDamageInspectionNotes(raw: unknown): Array<{
-    id: string;
-    kind?: 'inspection_note' | 'pvs';
-    sequence?: number;
-    requestId?: string;
-    pdfUrl: string;
-    fileName?: string;
-    mode?: 'photos' | 'on_site' | null;
-    issuedOn?: string | null;
-    receivedAt: string;
-    notes?: string | null;
-  }> {
+  private parseDamageInspectionNotes(raw: unknown): WorkOrderDetail['damageInspectionNotes'] {
     if (!Array.isArray(raw)) return [];
-    const out: Array<{
-      id: string;
-      kind?: 'inspection_note' | 'pvs';
-      sequence?: number;
-      requestId?: string;
-      pdfUrl: string;
-      fileName?: string;
-      mode?: 'photos' | 'on_site' | null;
-      issuedOn?: string | null;
-      receivedAt: string;
-      notes?: string | null;
-    }> = [];
+    const out: WorkOrderDetail['damageInspectionNotes'] = [];
     for (const item of raw) {
       if (!item || typeof item !== 'object') continue;
       const o = item as Record<string, unknown>;
-      if (o.kind === 'reinspection_request') continue;
+      if (o.kind === 'reinspection_request') {
+        if (typeof o.id !== 'string' || typeof o.sentAt !== 'string') continue;
+        const status =
+          o.status === 'approved' || o.status === 'rejected' || o.status === 'pending'
+            ? o.status
+            : 'pending';
+        out.push({
+          id: o.id,
+          kind: 'reinspection_request',
+          sequence: typeof o.sequence === 'number' && o.sequence > 0 ? o.sequence : out.length + 1,
+          status,
+          explanation: typeof o.explanation === 'string' ? o.explanation : '',
+          photoIds: Array.isArray(o.photoIds)
+            ? o.photoIds.filter((x): x is string => typeof x === 'string')
+            : [],
+          sentAt: o.sentAt,
+          decidedAt: typeof o.decidedAt === 'string' ? o.decidedAt : undefined,
+          rejectionReason: typeof o.rejectionReason === 'string' ? o.rejectionReason : undefined,
+          approvalDocUrl: typeof o.approvalDocUrl === 'string' ? o.approvalDocUrl : undefined,
+          approvalDocFileName:
+            typeof o.approvalDocFileName === 'string' ? o.approvalDocFileName : undefined,
+          linkedPvsId: typeof o.linkedPvsId === 'string' ? o.linkedPvsId : undefined,
+          mailLogId: typeof o.mailLogId === 'string' ? o.mailLogId : undefined,
+        });
+        continue;
+      }
       if (typeof o.id !== 'string' || typeof o.pdfUrl !== 'string' || typeof o.receivedAt !== 'string') {
         continue;
       }
@@ -1722,6 +1863,51 @@ export class WorkOrdersService {
       });
     }
     return out;
+  }
+
+  private parseDamagePaymentAcceptances(
+    raw: unknown,
+    sc: {
+      id: string;
+      damagePaymentAcceptancePdfUrl: string | null;
+      damagePaymentAcceptanceFileName: string | null;
+      damagePaymentAcceptanceReceivedAt: Date | null;
+      damagePaymentAcceptanceNotes: string | null;
+      createdAt: Date;
+    },
+  ): WorkOrderDetail['damagePaymentAcceptances'] {
+    if (Array.isArray(raw)) {
+      const out: WorkOrderDetail['damagePaymentAcceptances'] = [];
+      for (const item of raw) {
+        if (!item || typeof item !== 'object') continue;
+        const o = item as Record<string, unknown>;
+        if (typeof o.id !== 'string' || typeof o.pdfUrl !== 'string') continue;
+        if (typeof o.receivedAt !== 'string') continue;
+        out.push({
+          id: o.id,
+          sequence: typeof o.sequence === 'number' && o.sequence > 0 ? o.sequence : out.length + 1,
+          pdfUrl: o.pdfUrl,
+          fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
+          receivedAt: o.receivedAt,
+          notes: typeof o.notes === 'string' ? o.notes : null,
+        });
+      }
+      if (out.length) return out.sort((a, b) => b.sequence - a.sequence);
+    }
+    if (sc.damagePaymentAcceptancePdfUrl?.trim()) {
+      return [
+        {
+          id: `accept_legacy_${sc.id.slice(-8)}`,
+          sequence: 1,
+          pdfUrl: sc.damagePaymentAcceptancePdfUrl.trim(),
+          fileName: sc.damagePaymentAcceptanceFileName ?? undefined,
+          receivedAt:
+            sc.damagePaymentAcceptanceReceivedAt?.toISOString() ?? sc.createdAt.toISOString(),
+          notes: sc.damagePaymentAcceptanceNotes ?? null,
+        },
+      ];
+    }
+    return [];
   }
 
   private parseDamagePhotos(raw: unknown): DamagePhotoItem[] {

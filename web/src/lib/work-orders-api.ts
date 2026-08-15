@@ -105,6 +105,9 @@ export type WorkOrderDetail = WorkOrderListRow & {
   visit2OdometerKmIn: number | null;
   visit2OdometerKmOut: number | null;
   repairPathNote: string | null;
+  /** Etapă suplimentară după Deviz aprobat v2+. */
+  supplementRepairAt?: string | null;
+  supplementQuoteVersion?: number | null;
   ticketSettlement: WorkOrderTicketSettlement | null;
   hasQuoteCost: boolean;
   vehicle: WorkOrderVehicleSnapshot;
@@ -183,22 +186,47 @@ export type WorkOrderDetail = WorkOrderListRow & {
   damageInspectionNoteIssuedOn?: string | null;
   damageInspectionNoteReceivedAt?: string | null;
   damageInspectionNoteNotes?: string | null;
-  damageInspectionNotes?: {
-    id: string;
-    kind?: "inspection_note" | "pvs";
-    sequence?: number;
-    requestId?: string;
-    pdfUrl: string;
-    fileName?: string;
-    mode?: "photos" | "on_site" | null;
-    issuedOn?: string | null;
-    receivedAt: string;
-    notes?: string | null;
-  }[];
+  damageInspectionNotes?: Array<
+    | {
+        id: string;
+        kind?: "inspection_note" | "pvs";
+        sequence?: number;
+        requestId?: string;
+        pdfUrl: string;
+        fileName?: string;
+        mode?: "photos" | "on_site" | null;
+        issuedOn?: string | null;
+        receivedAt: string;
+        notes?: string | null;
+      }
+    | {
+        id: string;
+        kind: "reinspection_request";
+        sequence: number;
+        status: "pending" | "approved" | "rejected";
+        explanation: string;
+        photoIds: string[];
+        sentAt: string;
+        decidedAt?: string;
+        rejectionReason?: string;
+        approvalDocUrl?: string;
+        approvalDocFileName?: string;
+        linkedPvsId?: string;
+        mailLogId?: string;
+      }
+  >;
   damagePaymentAcceptancePdfUrl?: string | null;
   damagePaymentAcceptanceFileName?: string | null;
   damagePaymentAcceptanceReceivedAt?: string | null;
   damagePaymentAcceptanceNotes?: string | null;
+  damagePaymentAcceptances?: {
+    id: string;
+    sequence: number;
+    pdfUrl: string;
+    fileName?: string;
+    receivedAt: string;
+    notes?: string | null;
+  }[];
 };
 
 export type ServiceTimesResult = WorkOrderDetail & {

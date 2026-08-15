@@ -29,6 +29,7 @@ import {
   type DamageInspectionMode,
   type DamageInsuranceType,
   type DamagePayerType,
+  type DamagePaymentAcceptanceItem,
   type DamagePhotoItem,
   type DamagePhotoKind,
   type DamageQuoteOrigin,
@@ -127,6 +128,10 @@ export function DamageClaimPanel({
   const [paymentAcceptancePdfUrl, setPaymentAcceptancePdfUrl] = useState<string | null>(null);
   const [paymentAcceptanceFileName, setPaymentAcceptanceFileName] = useState<string | null>(null);
   const [paymentAcceptanceNotes, setPaymentAcceptanceNotes] = useState("");
+  const [paymentAcceptances, setPaymentAcceptances] = useState<DamagePaymentAcceptanceItem[]>([]);
+  const [paymentViewId, setPaymentViewId] = useState<"new" | string>("new");
+  /** null = alege automat ultima reconstatare (ca tab-urile să fie vizibile). */
+  const [reinspectionViewId, setReinspectionViewId] = useState<"new" | string | null>(null);
   const [reinspectionNote, setReinspectionNote] = useState("");
   const [reinspectionPhotoIds, setReinspectionPhotoIds] = useState<Set<string>>(new Set());
   const [rejectionDrafts, setRejectionDrafts] = useState<Record<string, string>>({});
@@ -174,6 +179,27 @@ export function DamageClaimPanel({
     setPaymentAcceptancePdfUrl(serviceCase.damagePaymentAcceptancePdfUrl ?? null);
     setPaymentAcceptanceFileName(serviceCase.damagePaymentAcceptanceFileName ?? null);
     setPaymentAcceptanceNotes(serviceCase.damagePaymentAcceptanceNotes ?? "");
+    const accepts = serviceCase.damagePaymentAcceptances?.length
+      ? [...serviceCase.damagePaymentAcceptances].sort((a, b) => b.sequence - a.sequence)
+      : serviceCase.damagePaymentAcceptancePdfUrl
+        ? [
+            {
+              id: `accept_legacy_${serviceCase.id.slice(-8)}`,
+              sequence: 1,
+              pdfUrl: serviceCase.damagePaymentAcceptancePdfUrl,
+              fileName: serviceCase.damagePaymentAcceptanceFileName ?? undefined,
+              receivedAt:
+                serviceCase.damagePaymentAcceptanceReceivedAt ?? serviceCase.createdAt,
+              notes: serviceCase.damagePaymentAcceptanceNotes ?? null,
+            } satisfies DamagePaymentAcceptanceItem,
+          ]
+        : [];
+    setPaymentAcceptances(accepts);
+    setPaymentViewId((prev) => {
+      if (prev === "new") return "new";
+      if (accepts.some((a) => a.id === prev)) return prev;
+      return accepts[0]?.id ?? "new";
+    });
     const mergedDocs = mergeDamageDocuments(
       documentKindsForInsurance(serviceCase.damageInsuranceType),
       serviceCase.damageDocuments,
@@ -266,6 +292,17 @@ export function DamageClaimPanel({
         .sort((a, b) => b.sequence - a.sequence),
     [inspectionNotesHistory],
   );
+  /** null = ultima reconstatare (tab vizibil); „new” = formular solicitare. */
+  const resolvedReinspectionViewId =
+    reinspectionViewId ?? reinspectionRequests[0]?.id ?? "new";
+  const activeReinspection =
+    resolvedReinspectionViewId !== "new"
+      ? reinspectionRequests.find((r) => r.id === resolvedReinspectionViewId) ?? null
+      : null;
+  const activePaymentAccept =
+    paymentViewId !== "new"
+      ? paymentAcceptances.find((a) => a.id === paymentViewId) ?? null
+      : null;
   const primaryWo = serviceCase?.workOrders?.[0] ?? null;
   const primaryQuote =
     primaryWo?.latestQuote ?? primaryWo?.approvedQuote ?? primaryWo?.pendingQuote ?? null;
@@ -1501,408 +1538,467 @@ export function DamageClaimPanel({
             <div className="space-y-3">
               <p className="text-[11px] text-zinc-500">
                 Solicitare pe mail (poze + explicații). La aprobare încarci documentul asigurător
-                (aprobare / PVS); la refuz scrii motivul.
+                (aprobare / PVS); la refuz scrii motivul. Istoricul pe tab-uri (#1, #2…).
               </p>
-              {reinspectionRequests.length ? (
-                <ul className="space-y-2">
-                  {reinspectionRequests.map((req) => (
-                    <li
-                      key={req.id}
-                      className="space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2 text-xs"
+              <div className="flex flex-wrap gap-1 border-b border-amber-900/40 pb-2">
+                {reinspectionRequests.map((req) => (
+                  <button
+                    key={req.id}
+                    type="button"
+                    onClick={() => setReinspectionViewId(req.id)}
+                    className={`rounded px-2 py-1 text-[11px] ${
+                      resolvedReinspectionViewId === req.id
+                        ? "bg-amber-900/50 text-amber-100"
+                        : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                    }`}
+                  >
+                    #{req.sequence}
+                    {req.status === "pending"
+                      ? " · așteptare"
+                      : req.status === "approved"
+                        ? " · OK"
+                        : " · refuz"}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setReinspectionViewId("new")}
+                  className={`rounded px-2 py-1 text-[11px] ${
+                    resolvedReinspectionViewId === "new"
+                      ? "bg-amber-900/50 text-amber-100"
+                      : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                  }`}
+                >
+                  + Nouă
+                </button>
+              </div>
+              {activeReinspection ? (
+                <div className="space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-zinc-500">#{activeReinspection.sequence}</span>
+                    <span
+                      className={
+                        activeReinspection.status === "pending"
+                          ? "rounded bg-amber-950/50 px-1.5 py-0.5 text-amber-200"
+                          : activeReinspection.status === "approved"
+                            ? "rounded bg-emerald-950/50 px-1.5 py-0.5 text-emerald-200"
+                            : "rounded bg-rose-950/50 px-1.5 py-0.5 text-rose-200"
+                      }
                     >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-zinc-500">#{req.sequence}</span>
-                        <span
-                          className={
-                            req.status === "pending"
-                              ? "rounded bg-amber-950/50 px-1.5 py-0.5 text-amber-200"
-                              : req.status === "approved"
-                                ? "rounded bg-emerald-950/50 px-1.5 py-0.5 text-emerald-200"
-                                : "rounded bg-rose-950/50 px-1.5 py-0.5 text-rose-200"
-                          }
-                        >
-                          {req.status === "pending"
-                            ? "În așteptare"
-                            : req.status === "approved"
-                              ? "Aprobată"
-                              : "Respinsă"}
-                        </span>
-                        <span className="text-zinc-500">
-                          {new Date(req.sentAt).toLocaleString("ro-RO", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}
-                        </span>
-                      </div>
-                      <p className="text-zinc-300">{req.explanation}</p>
-                      {req.photoIds.length ? (
-                        <p className="text-[10px] text-zinc-500">
-                          {req.photoIds.length} poză(e) în pachet
-                        </p>
-                      ) : null}
-                      {req.status === "rejected" && req.rejectionReason ? (
-                        <p className="text-rose-300/90">Refuz: {req.rejectionReason}</p>
-                      ) : null}
-                      {req.status === "approved" && (req.approvalDocUrl || req.linkedPvsId) ? (
-                        <p className="text-emerald-300/90">
-                          Document asigurător înregistrat
-                          {req.approvalDocFileName ? ` · ${req.approvalDocFileName}` : ""}.
-                          {req.approvalDocUrl ? (
-                            <>
-                              {" "}
-                              <a
-                                href={req.approvalDocUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="underline hover:text-emerald-100"
-                              >
-                                Deschide
-                              </a>
-                            </>
-                          ) : null}
-                        </p>
-                      ) : null}
-                      {req.status === "pending" ? (
-                        <div className="space-y-2">
-                          <label className="block">
-                            <span className={OPS_LABEL_CLASS}>
-                              Document aprobare / PVS (obligatoriu la Aprobată)
-                            </span>
-                            <input
-                              type="file"
-                              accept="application/pdf,image/*"
-                              disabled={disabled || uploading || pending}
-                              className="mt-1 block w-full text-xs text-zinc-400 file:mr-2 file:rounded file:border-0 file:bg-zinc-800 file:px-2 file:py-1 file:text-zinc-200"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0] ?? null;
-                                setApprovalFiles((prev) => ({ ...prev, [req.id]: file }));
-                              }}
-                            />
-                            {approvalFiles[req.id] ? (
-                              <span className="mt-0.5 block text-[10px] text-zinc-500">
-                                Selectat: {approvalFiles[req.id]!.name}
-                              </span>
-                            ) : null}
-                          </label>
-                          <div className="flex flex-wrap items-end gap-2">
-                            <button
-                              type="button"
-                              disabled={pending || uploading || !approvalFiles[req.id]}
-                              className="rounded border border-emerald-700/50 px-2 py-1 text-emerald-200 hover:bg-emerald-950/40 disabled:opacity-50"
-                              onClick={() => {
-                                void (async () => {
-                                  const file = approvalFiles[req.id];
-                                  if (!file) {
-                                    setError(
-                                      "Selectează documentul de aprobare de la asigurător",
-                                    );
-                                    return;
-                                  }
-                                  setPending(true);
-                                  setUploading(true);
-                                  setError(null);
-                                  try {
-                                    const up = await uploadDocumentFile(
-                                      file,
-                                      `Aprobare reconstatare #${req.sequence}`,
-                                    );
-                                    const res = await fetch(
-                                      `${serviceCasesBrowserBase}/${serviceCase!.id}/damage-claim/decide-reinspection`,
-                                      {
-                                        method: "POST",
-                                        headers: fleetJsonHeaders(),
-                                        body: JSON.stringify({
-                                          requestId: req.id,
-                                          decision: "approved",
-                                          approvalDocumentUrl: up.url,
-                                          approvalDocumentFileName: up.name,
-                                        }),
-                                      },
-                                    );
-                                    if (!res.ok) {
-                                      let msg = `HTTP ${res.status}`;
-                                      try {
-                                        const j = (await res.json()) as {
-                                          message?: string | string[];
-                                        };
-                                        if (j.message)
-                                          msg = Array.isArray(j.message)
-                                            ? j.message.join(", ")
-                                            : j.message;
-                                      } catch {
-                                        /* ignore */
-                                      }
-                                      setError(msg);
-                                      return;
-                                    }
-                                    const next = (await res.json()) as ServiceCaseRecord;
-                                    onUpdated?.(next);
-                                    setInspectionNotePdfUrl(
-                                      next.damageInspectionNotePdfUrl ?? up.url,
-                                    );
-                                    setInspectionNotesHistory(next.damageInspectionNotes ?? []);
-                                    setPipeline(
-                                      next.damageInsurerPipelineStatus ?? "inspection_note",
-                                    );
-                                    setApprovalFiles((prev) => {
-                                      const copy = { ...prev };
-                                      delete copy[req.id];
-                                      return copy;
-                                    });
-                                    setOk(
-                                      `Reconstatare #${req.sequence} aprobată — document asigurător salvat.`,
-                                    );
-                                  } finally {
-                                    setPending(false);
-                                    setUploading(false);
-                                  }
-                                })();
-                              }}
-                            >
-                              {uploading ? "Se încarcă…" : "Aprobată + document"}
-                            </button>
-                            <label className="min-w-[12rem] flex-1">
-                              <span className={OPS_LABEL_CLASS}>Motiv refuz</span>
-                              <input
-                                className={OPS_INPUT_CLASS}
-                                disabled={disabled}
-                                value={rejectionDrafts[req.id] ?? ""}
-                                onChange={(e) =>
-                                  setRejectionDrafts((prev) => ({
-                                    ...prev,
-                                    [req.id]: e.target.value,
-                                  }))
-                                }
-                                placeholder="minim 3 caractere"
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              disabled={
-                                pending || (rejectionDrafts[req.id]?.trim().length ?? 0) < 3
-                              }
-                              className="rounded border border-rose-700/50 px-2 py-1 text-rose-200 hover:bg-rose-950/40 disabled:opacity-50"
-                              onClick={() => {
-                                void (async () => {
-                                  setPending(true);
-                                  setError(null);
-                                  try {
-                                    const res = await fetch(
-                                      `${serviceCasesBrowserBase}/${serviceCase!.id}/damage-claim/decide-reinspection`,
-                                      {
-                                        method: "POST",
-                                        headers: fleetJsonHeaders(),
-                                        body: JSON.stringify({
-                                          requestId: req.id,
-                                          decision: "rejected",
-                                          rejectionReason:
-                                            rejectionDrafts[req.id]?.trim() || null,
-                                        }),
-                                      },
-                                    );
-                                    if (!res.ok) {
-                                      let msg = `HTTP ${res.status}`;
-                                      try {
-                                        const j = (await res.json()) as {
-                                          message?: string | string[];
-                                        };
-                                        if (j.message)
-                                          msg = Array.isArray(j.message)
-                                            ? j.message.join(", ")
-                                            : j.message;
-                                      } catch {
-                                        /* ignore */
-                                      }
-                                      setError(msg);
-                                      return;
-                                    }
-                                    const next = (await res.json()) as ServiceCaseRecord;
-                                    onUpdated?.(next);
-                                    setInspectionNotesHistory(next.damageInspectionNotes ?? []);
-                                    setPipeline(next.damageInsurerPipelineStatus ?? pipeline);
-                                    setOk("Reconstatare marcată ca respinsă.");
-                                  } finally {
-                                    setPending(false);
-                                  }
-                                })();
-                              }}
-                            >
-                              Respinsă
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                      {req.status === "approved" && !req.linkedPvsId ? (
-                        <label className="inline-block cursor-pointer rounded border border-sky-700/50 px-2 py-1 text-sky-200 hover:bg-sky-950/30">
-                          {uploading ? "Se încarcă…" : "Încarcă PVS (legacy)"}
-                          <input
-                            type="file"
-                            accept="application/pdf,image/*"
-                            className="hidden"
-                            disabled={disabled || uploading}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              void (async () => {
-                                setUploading(true);
-                                setError(null);
-                                try {
-                                  const up = await uploadDocumentFile(
-                                    file,
-                                    `PVS reconstatare #${req.sequence}`,
-                                  );
-                                  const next = await patch(
-                                    {
-                                      damageInspectionNotePdfUrl: up.url,
-                                      damageInspectionNoteFileName: up.name,
-                                      damageInspectionDocKind: "pvs",
-                                      damagePvsLinkedRequestId: req.id,
-                                    },
-                                    `PVS înregistrat pentru reconstatare #${req.sequence}.`,
-                                  );
-                                  if (next) {
-                                    setInspectionNotePdfUrl(
-                                      next.damageInspectionNotePdfUrl ?? up.url,
-                                    );
-                                    setInspectionNotesHistory(next.damageInspectionNotes ?? []);
-                                    setPipeline(
-                                      next.damageInsurerPipelineStatus ?? "inspection_note",
-                                    );
-                                  }
-                                } catch (err) {
-                                  setError(err instanceof Error ? err.message : "Upload eșuat.");
-                                } finally {
-                                  setUploading(false);
-                                  e.target.value = "";
-                                }
-                              })();
-                            }}
-                          />
-                        </label>
-                      ) : null}
-                      {req.status === "approved" && req.linkedPvsId ? (
-                        <p className="text-[10px] text-emerald-400/90">PVS legat pe dosar.</p>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : reinspectionLog.length ? (
-                <ul className="space-y-1 text-[11px] text-zinc-400">
-                  {reinspectionLog.map((m, idx) => (
-                    <li key={m.id}>
-                      Mail #{reinspectionLog.length - idx} ·{" "}
-                      {new Date(m.at).toLocaleString("ro-RO", {
+                      {activeReinspection.status === "pending"
+                        ? "În așteptare"
+                        : activeReinspection.status === "approved"
+                          ? "Aprobată"
+                          : "Respinsă"}
+                    </span>
+                    <span className="text-zinc-500">
+                      {new Date(activeReinspection.sentAt).toLocaleString("ro-RO", {
                         dateStyle: "short",
                         timeStyle: "short",
-                      })}{" "}
-                      · {m.status}
-                      {m.note ? ` · ${m.note}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <label className="block">
-                <span className={OPS_LABEL_CLASS}>Explicații reconstatare</span>
-                <textarea
-                  className={`${OPS_INPUT_CLASS} min-h-[4rem]`}
-                  disabled={disabled}
-                  value={reinspectionNote}
-                  onChange={(e) => setReinspectionNote(e.target.value)}
-                  placeholder="Descrie de ce e nevoie de reconstatare (obligatoriu)"
-                />
-              </label>
-              {photos.length ? (
-                <div>
-                  <p className={`${OPS_LABEL_CLASS} mb-1`}>Poze în pachet</p>
-                  <ul className="max-h-36 space-y-1 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/40 p-2">
-                    {photos.map((p) => (
-                      <li key={p.id}>
-                        <label className="flex items-start gap-2 text-xs text-zinc-300">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            disabled={disabled}
-                            checked={reinspectionPhotoIds.has(p.id)}
-                            onChange={(e) => {
-                              setReinspectionPhotoIds((prev) => {
-                                const next = new Set(prev);
-                                if (e.target.checked) next.add(p.id);
-                                else next.delete(p.id);
-                                return next;
-                              });
-                            }}
-                          />
-                          <span>
-                            {DAMAGE_PHOTO_KINDS.find((k) => k.kind === p.kind)?.label ?? p.kind}
-                            {p.caption ? ` · ${p.caption}` : ""}
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-zinc-300">{activeReinspection.explanation}</p>
+                  {activeReinspection.photoIds.length ? (
+                    <p className="text-[10px] text-zinc-500">
+                      {activeReinspection.photoIds.length} poză(e) în pachet
+                    </p>
+                  ) : null}
+                  {activeReinspection.status === "rejected" &&
+                  activeReinspection.rejectionReason ? (
+                    <p className="text-rose-300/90">
+                      Refuz: {activeReinspection.rejectionReason}
+                    </p>
+                  ) : null}
+                  {activeReinspection.status === "approved" &&
+                  (activeReinspection.approvalDocUrl || activeReinspection.linkedPvsId) ? (
+                    <p className="text-emerald-300/90">
+                      Document asigurător înregistrat
+                      {activeReinspection.approvalDocFileName
+                        ? ` · ${activeReinspection.approvalDocFileName}`
+                        : ""}
+                      .
+                      {activeReinspection.approvalDocUrl ? (
+                        <>
+                          {" "}
+                          <a
+                            href={activeReinspection.approvalDocUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline hover:text-emerald-100"
+                          >
+                            Deschide
+                          </a>
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {activeReinspection.status === "pending" ? (
+                    <div className="space-y-2">
+                      <label className="block">
+                        <span className={OPS_LABEL_CLASS}>
+                          Document aprobare / PVS (obligatoriu la Aprobată)
+                        </span>
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          disabled={disabled || uploading || pending}
+                          className="mt-1 block w-full text-xs text-zinc-400 file:mr-2 file:rounded file:border-0 file:bg-zinc-800 file:px-2 file:py-1 file:text-zinc-200"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            setApprovalFiles((prev) => ({
+                              ...prev,
+                              [activeReinspection.id]: file,
+                            }));
+                          }}
+                        />
+                        {approvalFiles[activeReinspection.id] ? (
+                          <span className="mt-0.5 block text-[10px] text-zinc-500">
+                            Selectat: {approvalFiles[activeReinspection.id]!.name}
                           </span>
+                        ) : null}
+                      </label>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <button
+                          type="button"
+                          disabled={
+                            pending || uploading || !approvalFiles[activeReinspection.id]
+                          }
+                          className="rounded border border-emerald-700/50 px-2 py-1 text-emerald-200 hover:bg-emerald-950/40 disabled:opacity-50"
+                          onClick={() => {
+                            void (async () => {
+                              const req = activeReinspection;
+                              const file = approvalFiles[req.id];
+                              if (!file) {
+                                setError(
+                                  "Selectează documentul de aprobare de la asigurător",
+                                );
+                                return;
+                              }
+                              setPending(true);
+                              setUploading(true);
+                              setError(null);
+                              try {
+                                const up = await uploadDocumentFile(
+                                  file,
+                                  `Aprobare reconstatare #${req.sequence}`,
+                                );
+                                const res = await fetch(
+                                  `${serviceCasesBrowserBase}/${serviceCase!.id}/damage-claim/decide-reinspection`,
+                                  {
+                                    method: "POST",
+                                    headers: fleetJsonHeaders(),
+                                    body: JSON.stringify({
+                                      requestId: req.id,
+                                      decision: "approved",
+                                      approvalDocumentUrl: up.url,
+                                      approvalDocumentFileName: up.name,
+                                    }),
+                                  },
+                                );
+                                if (!res.ok) {
+                                  let msg = `HTTP ${res.status}`;
+                                  try {
+                                    const j = (await res.json()) as {
+                                      message?: string | string[];
+                                    };
+                                    if (j.message)
+                                      msg = Array.isArray(j.message)
+                                        ? j.message.join(", ")
+                                        : j.message;
+                                  } catch {
+                                    /* ignore */
+                                  }
+                                  setError(msg);
+                                  return;
+                                }
+                                const next = (await res.json()) as ServiceCaseRecord;
+                                onUpdated?.(next);
+                                setInspectionNotePdfUrl(
+                                  next.damageInspectionNotePdfUrl ?? up.url,
+                                );
+                                setInspectionNotesHistory(next.damageInspectionNotes ?? []);
+                                setPipeline(
+                                  next.damageInsurerPipelineStatus ?? "inspection_note",
+                                );
+                                setApprovalFiles((prev) => {
+                                  const copy = { ...prev };
+                                  delete copy[req.id];
+                                  return copy;
+                                });
+                                setOk(
+                                  `Reconstatare #${req.sequence} aprobată — document asigurător salvat.`,
+                                );
+                              } finally {
+                                setPending(false);
+                                setUploading(false);
+                              }
+                            })();
+                          }}
+                        >
+                          {uploading ? "Se încarcă…" : "Aprobată + document"}
+                        </button>
+                        <label className="min-w-[12rem] flex-1">
+                          <span className={OPS_LABEL_CLASS}>Motiv refuz</span>
+                          <input
+                            className={OPS_INPUT_CLASS}
+                            disabled={disabled}
+                            value={rejectionDrafts[activeReinspection.id] ?? ""}
+                            onChange={(e) =>
+                              setRejectionDrafts((prev) => ({
+                                ...prev,
+                                [activeReinspection.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="minim 3 caractere"
+                          />
                         </label>
-                      </li>
-                    ))}
-                  </ul>
+                        <button
+                          type="button"
+                          disabled={
+                            pending ||
+                            (rejectionDrafts[activeReinspection.id]?.trim().length ?? 0) < 3
+                          }
+                          className="rounded border border-rose-700/50 px-2 py-1 text-rose-200 hover:bg-rose-950/40 disabled:opacity-50"
+                          onClick={() => {
+                            void (async () => {
+                              const req = activeReinspection;
+                              setPending(true);
+                              setError(null);
+                              try {
+                                const res = await fetch(
+                                  `${serviceCasesBrowserBase}/${serviceCase!.id}/damage-claim/decide-reinspection`,
+                                  {
+                                    method: "POST",
+                                    headers: fleetJsonHeaders(),
+                                    body: JSON.stringify({
+                                      requestId: req.id,
+                                      decision: "rejected",
+                                      rejectionReason:
+                                        rejectionDrafts[req.id]?.trim() || null,
+                                    }),
+                                  },
+                                );
+                                if (!res.ok) {
+                                  let msg = `HTTP ${res.status}`;
+                                  try {
+                                    const j = (await res.json()) as {
+                                      message?: string | string[];
+                                    };
+                                    if (j.message)
+                                      msg = Array.isArray(j.message)
+                                        ? j.message.join(", ")
+                                        : j.message;
+                                  } catch {
+                                    /* ignore */
+                                  }
+                                  setError(msg);
+                                  return;
+                                }
+                                const next = (await res.json()) as ServiceCaseRecord;
+                                onUpdated?.(next);
+                                setInspectionNotesHistory(next.damageInspectionNotes ?? []);
+                                setPipeline(next.damageInsurerPipelineStatus ?? pipeline);
+                                setOk("Reconstatare marcată ca respinsă.");
+                              } finally {
+                                setPending(false);
+                              }
+                            })();
+                          }}
+                        >
+                          Respinsă
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {activeReinspection.status === "approved" &&
+                  !activeReinspection.linkedPvsId ? (
+                    <label className="inline-block cursor-pointer rounded border border-sky-700/50 px-2 py-1 text-sky-200 hover:bg-sky-950/30">
+                      {uploading ? "Se încarcă…" : "Încarcă PVS (legacy)"}
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        className="hidden"
+                        disabled={disabled || uploading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          void (async () => {
+                            const req = activeReinspection;
+                            setUploading(true);
+                            setError(null);
+                            try {
+                              const up = await uploadDocumentFile(
+                                file,
+                                `PVS reconstatare #${req.sequence}`,
+                              );
+                              const next = await patch(
+                                {
+                                  damageInspectionNotePdfUrl: up.url,
+                                  damageInspectionNoteFileName: up.name,
+                                  damageInspectionDocKind: "pvs",
+                                  damagePvsLinkedRequestId: req.id,
+                                },
+                                `PVS înregistrat pentru reconstatare #${req.sequence}.`,
+                              );
+                              if (next) {
+                                setInspectionNotePdfUrl(
+                                  next.damageInspectionNotePdfUrl ?? up.url,
+                                );
+                                setInspectionNotesHistory(next.damageInspectionNotes ?? []);
+                                setPipeline(
+                                  next.damageInsurerPipelineStatus ?? "inspection_note",
+                                );
+                              }
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : "Upload eșuat.");
+                            } finally {
+                              setUploading(false);
+                              e.target.value = "";
+                            }
+                          })();
+                        }}
+                      />
+                    </label>
+                  ) : null}
+                  {activeReinspection.status === "approved" &&
+                  activeReinspection.linkedPvsId ? (
+                    <p className="text-[10px] text-emerald-400/90">PVS legat pe dosar.</p>
+                  ) : null}
                 </div>
-              ) : (
-                <p className="text-[11px] text-zinc-500">
-                  Adaugă poze în galerie ca să le incluzi în solicitare.
-                </p>
-              )}
-              <button
-                type="button"
-                disabled={
-                  pending || !insurerEmail.trim() || reinspectionNote.trim().length < 5
-                }
-                onClick={() => {
-                  void (async () => {
-                    setPending(true);
-                    setError(null);
-                    setOk(null);
-                    try {
-                      const res = await fetch(
-                        `${serviceCasesBrowserBase}/${serviceCase!.id}/damage-claim/request-reinspection`,
-                        {
-                          method: "POST",
-                          headers: fleetJsonHeaders(),
-                          body: JSON.stringify({
-                            note: reinspectionNote.trim(),
-                            photoIds: [...reinspectionPhotoIds],
-                          }),
-                        },
-                      );
-                      if (!res.ok) {
-                        let msg = `HTTP ${res.status}`;
-                        try {
-                          const j = (await res.json()) as { message?: string | string[] };
-                          if (j.message)
-                            msg = Array.isArray(j.message) ? j.message.join(", ") : j.message;
-                        } catch {
-                          /* ignore */
-                        }
-                        setError(msg);
-                        return;
-                      }
-                      const next = (await res.json()) as ServiceCaseRecord;
-                      onUpdated?.(next);
-                      setMailLog(next.damageInsurerMailLog ?? []);
-                      setInspectionNotesHistory(next.damageInspectionNotes ?? []);
-                      setPipeline(next.damageInsurerPipelineStatus ?? "reinspection_requested");
-                      setReinspectionNote("");
-                      setOk(
-                        next.damageInsurerMailLog?.[0]?.status === "stubbed"
-                          ? "Reconstatare înregistrată (SMTP neconfigurat)."
-                          : "Reconstatare solicitată către asigurător.",
-                      );
-                    } finally {
-                      setPending(false);
+              ) : null}
+              {resolvedReinspectionViewId === "new" ? (
+                <>
+                  {!reinspectionRequests.length && reinspectionLog.length ? (
+                    <ul className="space-y-1 text-[11px] text-zinc-400">
+                      {reinspectionLog.map((m, idx) => (
+                        <li key={m.id}>
+                          Mail #{reinspectionLog.length - idx} ·{" "}
+                          {new Date(m.at).toLocaleString("ro-RO", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}{" "}
+                          · {m.status}
+                          {m.note ? ` · ${m.note}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <label className="block">
+                    <span className={OPS_LABEL_CLASS}>Explicații reconstatare</span>
+                    <textarea
+                      className={`${OPS_INPUT_CLASS} min-h-[4rem]`}
+                      disabled={disabled}
+                      value={reinspectionNote}
+                      onChange={(e) => setReinspectionNote(e.target.value)}
+                      placeholder="Descrie de ce e nevoie de reconstatare (obligatoriu)"
+                    />
+                  </label>
+                  {photos.length ? (
+                    <div>
+                      <p className={`${OPS_LABEL_CLASS} mb-1`}>Poze în pachet</p>
+                      <ul className="max-h-36 space-y-1 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/40 p-2">
+                        {photos.map((p) => (
+                          <li key={p.id}>
+                            <label className="flex items-start gap-2 text-xs text-zinc-300">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                disabled={disabled}
+                                checked={reinspectionPhotoIds.has(p.id)}
+                                onChange={(e) => {
+                                  setReinspectionPhotoIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(p.id);
+                                    else next.delete(p.id);
+                                    return next;
+                                  });
+                                }}
+                              />
+                              <span>
+                                {DAMAGE_PHOTO_KINDS.find((k) => k.kind === p.kind)?.label ??
+                                  p.kind}
+                                {p.caption ? ` · ${p.caption}` : ""}
+                              </span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-zinc-500">
+                      Adaugă poze în galerie ca să le incluzi în solicitare.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={
+                      pending || !insurerEmail.trim() || reinspectionNote.trim().length < 5
                     }
-                  })();
-                }}
-                className="rounded-lg border border-amber-600/50 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
-              >
-                Trimite solicitare reconstatare
-                {reinspectionRequests.length
-                  ? ` (#${reinspectionRequests.length + 1})`
-                  : ""}
-              </button>
+                    onClick={() => {
+                      void (async () => {
+                        setPending(true);
+                        setError(null);
+                        setOk(null);
+                        try {
+                          const res = await fetch(
+                            `${serviceCasesBrowserBase}/${serviceCase!.id}/damage-claim/request-reinspection`,
+                            {
+                              method: "POST",
+                              headers: fleetJsonHeaders(),
+                              body: JSON.stringify({
+                                note: reinspectionNote.trim(),
+                                photoIds: [...reinspectionPhotoIds],
+                              }),
+                            },
+                          );
+                          if (!res.ok) {
+                            let msg = `HTTP ${res.status}`;
+                            try {
+                              const j = (await res.json()) as {
+                                message?: string | string[];
+                              };
+                              if (j.message)
+                                msg = Array.isArray(j.message)
+                                  ? j.message.join(", ")
+                                  : j.message;
+                            } catch {
+                              /* ignore */
+                            }
+                            setError(msg);
+                            return;
+                          }
+                          const next = (await res.json()) as ServiceCaseRecord;
+                          onUpdated?.(next);
+                          setMailLog(next.damageInsurerMailLog ?? []);
+                          setInspectionNotesHistory(next.damageInspectionNotes ?? []);
+                          setPipeline(
+                            next.damageInsurerPipelineStatus ?? "reinspection_requested",
+                          );
+                          setReinspectionNote("");
+                          const created = (next.damageInspectionNotes ?? [])
+                            .filter(isReinspectionRequest)
+                            .sort((a, b) => b.sequence - a.sequence)[0];
+                          if (created) setReinspectionViewId(created.id);
+                          setOk(
+                            next.damageInsurerMailLog?.[0]?.status === "stubbed"
+                              ? "Reconstatare înregistrată (SMTP neconfigurat)."
+                              : "Reconstatare solicitată către asigurător.",
+                          );
+                        } finally {
+                          setPending(false);
+                        }
+                      })();
+                    }}
+                    className="rounded-lg border border-amber-600/50 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
+                  >
+                    Trimite solicitare reconstatare
+                    {reinspectionRequests.length
+                      ? ` (#${reinspectionRequests.length + 1})`
+                      : ""}
+                  </button>
+                </>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -2148,120 +2244,167 @@ export function DamageClaimPanel({
             Accept plată
           </h4>
           <p className="text-[11px] text-zinc-500">
-            Document emis de asigurător (accept / acord plată). Nu e un simplu buton — încarcă PDF-ul
-            primit pe mail; pipeline trece la Accept plată.
+            Document emis de asigurător (accept / acord plată). Istoric pe tab-uri — fiecare PDF
+            nou = Accept următor.
           </p>
-          <label className="block">
-            <span className={OPS_LABEL_CLASS}>Notă / nr. referință (opțional)</span>
-            <input
-              className={OPS_INPUT_CLASS}
-              disabled={disabled}
-              value={paymentAcceptanceNotes}
-              onChange={(e) => setPaymentAcceptanceNotes(e.target.value)}
-              placeholder="ex. nr. accept / data"
-            />
-          </label>
-          {paymentAcceptancePdfUrl ? (
-            <p className="text-xs text-zinc-300">
-              PDF pe dosar:{" "}
-              <a
-                href={paymentAcceptancePdfUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-emerald-400 hover:underline"
+          <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-2">
+            {paymentAcceptances.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setPaymentViewId(a.id)}
+                className={`rounded px-2 py-1 text-[11px] ${
+                  paymentViewId === a.id
+                    ? "bg-zinc-700 text-zinc-100"
+                    : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                }`}
               >
-                {paymentAcceptanceFileName ?? "deschide"}
-              </a>
-            </p>
-          ) : (
-            <p className="text-xs text-amber-400/90">Așteptăm documentul de accept plată.</p>
-          )}
-          {canWrite ? (
-            <div className="flex flex-wrap items-center gap-2">
+                Accept {a.sequence}
+              </button>
+            ))}
+            {canWrite ? (
               <button
                 type="button"
-                disabled={pending}
-                onClick={() =>
-                  void patch(
-                    { damagePaymentAcceptanceNotes: paymentAcceptanceNotes.trim() || null },
-                    "Notă accept plată salvată.",
-                  )
-                }
-                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                onClick={() => {
+                  setPaymentViewId("new");
+                  setPaymentAcceptanceNotes("");
+                }}
+                className={`rounded px-2 py-1 text-[11px] ${
+                  paymentViewId === "new"
+                    ? "bg-zinc-700 text-zinc-100"
+                    : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                }`}
               >
-                Salvează notă
+                + Nou
               </button>
-              <label className="cursor-pointer rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
-                {uploading
-                  ? "Se încarcă…"
-                  : paymentAcceptancePdfUrl
-                    ? "Înlocuiește PDF"
-                    : "Încarcă PDF accept plată"}
-                <input
-                  type="file"
-                  accept="application/pdf,image/*"
-                  className="hidden"
-                  disabled={disabled || uploading}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    void (async () => {
-                      setUploading(true);
-                      setError(null);
-                      try {
-                        const up = await uploadDocumentFile(file, "Accept plată asigurător");
-                        const next = await patch(
-                          {
-                            damagePaymentAcceptancePdfUrl: up.url,
-                            damagePaymentAcceptanceFileName: up.name,
-                            damagePaymentAcceptanceNotes: paymentAcceptanceNotes.trim() || null,
-                          },
-                          "Accept plată înregistrat pe dosar.",
-                        );
-                        if (next) {
-                          setPaymentAcceptancePdfUrl(
-                            next.damagePaymentAcceptancePdfUrl ?? up.url,
-                          );
-                          setPaymentAcceptanceFileName(
-                            next.damagePaymentAcceptanceFileName ?? up.name,
-                          );
-                          setPipeline(next.damageInsurerPipelineStatus ?? "payment_accepted");
-                        }
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : "Upload eșuat.");
-                      } finally {
-                        setUploading(false);
-                        e.target.value = "";
-                      }
-                    })();
-                  }}
-                />
-              </label>
-              {paymentAcceptancePdfUrl ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  className="text-[11px] text-rose-400 hover:underline disabled:opacity-50"
-                  onClick={() =>
-                    void (async () => {
-                      const next = await patch(
-                        {
-                          damagePaymentAcceptancePdfUrl: null,
-                          damagePaymentAcceptanceFileName: null,
-                        },
-                        "PDF accept plată șters.",
-                      );
-                      if (next) {
-                        setPaymentAcceptancePdfUrl(null);
-                        setPaymentAcceptanceFileName(null);
-                      }
-                    })()
-                  }
+            ) : null}
+          </div>
+          {activePaymentAccept ? (
+            <div className="space-y-2 text-xs">
+              <p className="text-zinc-300">
+                PDF:{" "}
+                <a
+                  href={activePaymentAccept.pdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-400 hover:underline"
                 >
-                  Șterge PDF
-                </button>
+                  {activePaymentAccept.fileName ?? "deschide"}
+                </a>
+                <span className="text-zinc-500">
+                  {" · "}
+                  {new Date(activePaymentAccept.receivedAt).toLocaleString("ro-RO", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })}
+                </span>
+              </p>
+              {activePaymentAccept.notes ? (
+                <p className="text-zinc-400">Notă: {activePaymentAccept.notes}</p>
               ) : null}
             </div>
+          ) : null}
+          {paymentViewId === "new" && canWrite ? (
+            <>
+              <label className="block">
+                <span className={OPS_LABEL_CLASS}>Notă / nr. referință (opțional)</span>
+                <input
+                  className={OPS_INPUT_CLASS}
+                  disabled={disabled}
+                  value={paymentAcceptanceNotes}
+                  onChange={(e) => setPaymentAcceptanceNotes(e.target.value)}
+                  placeholder="ex. nr. accept / data"
+                />
+              </label>
+              {!paymentAcceptances.length ? (
+                <p className="text-xs text-amber-400/90">Așteptăm documentul de accept plată.</p>
+              ) : (
+                <p className="text-xs text-zinc-500">
+                  Încarcă un PDF nou pentru Accept {paymentAcceptances.length + 1}.
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="cursor-pointer rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
+                  {uploading ? "Se încarcă…" : "Încarcă PDF accept plată"}
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    disabled={disabled || uploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      void (async () => {
+                        setUploading(true);
+                        setError(null);
+                        try {
+                          const up = await uploadDocumentFile(file, "Accept plată asigurător");
+                          const next = await patch(
+                            {
+                              damagePaymentAcceptancePdfUrl: up.url,
+                              damagePaymentAcceptanceFileName: up.name,
+                              damagePaymentAcceptanceNotes:
+                                paymentAcceptanceNotes.trim() || null,
+                            },
+                            "Accept plată înregistrat pe dosar.",
+                          );
+                          if (next) {
+                            setPaymentAcceptancePdfUrl(
+                              next.damagePaymentAcceptancePdfUrl ?? up.url,
+                            );
+                            setPaymentAcceptanceFileName(
+                              next.damagePaymentAcceptanceFileName ?? up.name,
+                            );
+                            const accepts = next.damagePaymentAcceptances?.length
+                              ? [...next.damagePaymentAcceptances].sort(
+                                  (a, b) => b.sequence - a.sequence,
+                                )
+                              : [];
+                            setPaymentAcceptances(accepts);
+                            if (accepts[0]) setPaymentViewId(accepts[0].id);
+                            setPipeline(
+                              next.damageInsurerPipelineStatus ?? "payment_accepted",
+                            );
+                          }
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Upload eșuat.");
+                        } finally {
+                          setUploading(false);
+                          e.target.value = "";
+                        }
+                      })();
+                    }}
+                  />
+                </label>
+              </div>
+            </>
+          ) : null}
+          {paymentViewId !== "new" &&
+          canWrite &&
+          activePaymentAccept &&
+          activePaymentAccept.pdfUrl === paymentAcceptancePdfUrl ? (
+            <button
+              type="button"
+              disabled={pending}
+              className="text-[11px] text-rose-400 hover:underline disabled:opacity-50"
+              onClick={() =>
+                void (async () => {
+                  const next = await patch(
+                    {
+                      damagePaymentAcceptancePdfUrl: null,
+                      damagePaymentAcceptanceFileName: null,
+                    },
+                    "PDF accept plată curent șters (istoricul rămâne).",
+                  );
+                  if (next) {
+                    setPaymentAcceptancePdfUrl(null);
+                    setPaymentAcceptanceFileName(null);
+                  }
+                })()
+              }
+            >
+              Șterge PDF curent (scalari)
+            </button>
           ) : null}
         </section>
       ) : null}
@@ -2496,6 +2639,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   damagePaymentAcceptanceFileName?: string | null;
   damagePaymentAcceptanceReceivedAt?: string | null;
   damagePaymentAcceptanceNotes?: string | null;
+  damagePaymentAcceptances?: DamagePaymentAcceptanceItem[];
 }): ServiceCaseRecord {
   const quoteFromSummary =
     wo.quoteSummary?.status && wo.quoteSummary.version != null
@@ -2563,6 +2707,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
     damagePaymentAcceptanceFileName: wo.damagePaymentAcceptanceFileName ?? null,
     damagePaymentAcceptanceReceivedAt: wo.damagePaymentAcceptanceReceivedAt ?? null,
     damagePaymentAcceptanceNotes: wo.damagePaymentAcceptanceNotes ?? null,
+    damagePaymentAcceptances: wo.damagePaymentAcceptances ?? [],
     createdAt: wo.createdAt,
     updatedAt: wo.updatedAt,
     // Include the current WO so Dosar (opened from WO sheet) can link Comandă / quote.

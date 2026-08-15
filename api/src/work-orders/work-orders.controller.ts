@@ -171,6 +171,24 @@ export class WorkOrdersController {
     return this.workOrders.markReady(tenantSlug, id, actorUserId, access);
   }
 
+  @Post(':id/start-supplement-repair')
+  @Roles(...FLEET_WRITE_ROLES)
+  startSupplementRepair(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: { note?: string | null },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.workOrders.startSupplementRepair(
+      tenantSlug,
+      id,
+      body ?? {},
+      actorUserId,
+      access,
+    );
+  }
+
   @Patch(':id/service-times')
   @Roles(...FLEET_WRITE_ROLES)
   recordServiceTimes(

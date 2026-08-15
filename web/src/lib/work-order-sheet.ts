@@ -60,6 +60,7 @@ function buildDamageWorkOrderMilestones(
     qs.status === "approved" ||
     pipeline === "payment_accepted" ||
     !!wo.damageInsurerAgreedAt;
+  const supplementActive = !!wo.supplementRepairAt && !wo.readyAt;
   const verifyingDone = rank >= 2 || !!wo.damageInspectionNotePdfUrl;
   const verifyingActive = verifyingDone && !quoteSubmitted;
   const invoiced = !!qs.invoicedAt;
@@ -119,15 +120,17 @@ function buildDamageWorkOrderMilestones(
     },
     {
       id: "repair_in_progress",
-      label: "În lucru",
-      done: quoteApproved && (!!wo.readyAt || wo.status === "done"),
+      label: supplementActive
+        ? `În lucru (supliment v${wo.supplementQuoteVersion ?? "?"})`
+        : "În lucru",
+      done: quoteApproved && (!!wo.readyAt || wo.status === "done") && !supplementActive,
       active: repairActive,
-      date: fmt(wo.readyAt ?? wo.inServiceAt),
+      date: fmt(wo.supplementRepairAt ?? wo.readyAt ?? wo.inServiceAt),
     },
     {
       id: "work_ready",
       label: "Lucrare gata",
-      done: !!wo.readyAt,
+      done: !!wo.readyAt && !supplementActive,
       active: quoteApproved && !wo.readyAt,
       date: fmt(wo.readyAt),
       canToggle: opts?.canMarkReady && quoteApproved && !wo.readyAt,

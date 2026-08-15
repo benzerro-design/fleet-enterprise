@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
 import { WorkOrderMessageThread } from "@/components/fleet/work-orders/WorkOrderMessageThread";
 import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
@@ -28,13 +28,16 @@ import {
   DamageClaimPanel,
   serviceCaseFromWorkOrderDamage,
 } from "@/components/fleet/tickets/DamageClaimPanel";
-import { isDamageInsurerReady } from "@/lib/service-cases-api";
+import {
+  isDamageInsurerReady,
+  serviceCasesBrowserBase,
+  type ServiceCaseRecord,
+} from "@/lib/service-cases-api";
 import { appointmentStatusLabel } from "@/lib/appointments-api";
 import {
   DEFAULT_WORK_ORDER_SETTINGS,
   type WorkOrderSettings,
 } from "@/lib/work-order-settings";
-import { serviceCasesBrowserBase } from "@/lib/service-cases-api";
 
 type Props = {
   wo: WorkOrderDetail;
@@ -97,8 +100,30 @@ export function WorkOrderSheetShell({
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [sheetView, setSheetView] = useState<"comanda" | "dosar">("comanda");
+  /** Dosar pe WO: același ServiceCase ca pe tichet (nu mapare parțială din WO). */
+  const [dosarServiceCase, setDosarServiceCase] = useState<ServiceCaseRecord | null>(null);
   const requireKm = workOrderSettings.requireServiceKm;
   const isDamageWo = wo.workflowType === "damage";
+
+  useEffect(() => {
+    if (!isDamageWo || sheetView !== "dosar") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${serviceCasesBrowserBase}/${wo.serviceCaseId}`, {
+          headers: fleetJsonHeaders(),
+        });
+        if (!res.ok || cancelled) return;
+        const next = (await res.json()) as ServiceCaseRecord;
+        if (!cancelled) setDosarServiceCase(next);
+      } catch {
+        /* fallback: mapare din WO */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDamageWo, sheetView, wo.serviceCaseId, wo.updatedAt]);
   const damageGateReady = isDamageInsurerReady({
     damagePayerType: wo.damagePayerType,
     damageInsurerPipelineStatus: wo.damageInsurerPipelineStatus,
@@ -270,6 +295,36 @@ export function WorkOrderSheetShell({
     }
   }
 
+  async function startSupplementRepair() {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${wo.id}/start-supplement-repair`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const canStartSupplement =
+    canWrite &&
+    isDamageWo &&
+    !!wo.inServiceAt &&
+    !(wo.outServiceAt && !wo.visit2InServiceAt) &&
+    (wo.quoteSummary.version ?? 0) >= 2 &&
+    wo.quoteSummary.status === "approved" &&
+    !(wo.supplementRepairAt && !wo.readyAt);
+
   const navActions: { label: string; href: string }[] = isPartner
     ? [
         { label: "← Inbox", href: "/fleet/partner/work-orders" },
@@ -427,12 +482,15 @@ export function WorkOrderSheetShell({
       {isDamageWo && sheetView === "dosar" ? (
         <div className="border-b border-zinc-800 px-4 py-4">
           <DamageClaimPanel
-            serviceCase={serviceCaseFromWorkOrderDamage(wo)}
+            serviceCase={dosarServiceCase ?? serviceCaseFromWorkOrderDamage(wo)}
             canWrite={canWrite}
             compact
             fromWorkOrder
             registrationNumber={wo.registrationNumber}
-            onUpdated={() => router.refresh()}
+            onUpdated={(next) => {
+              setDosarServiceCase(next);
+              router.refresh();
+            }}
           />
         </div>
       ) : null}
@@ -590,6 +648,15 @@ export function WorkOrderSheetShell({
 
         <div className={`${panelClass()} bg-zinc-900/40`}>
           {panelTitle("Stare (Tila)")}
+          {wo.supplementRepairAt && !wo.readyAt ? (
+            <p className="mb-2 rounded border border-amber-800/40 bg-amber-950/25 px-2 py-1.5 text-[11px] text-amber-100">
+              Etapă suplimentară activă
+              {wo.supplementQuoteVersion != null
+                ? ` (deviz v${wo.supplementQuoteVersion})`
+                : ""}
+              — Tila continuă de la „Deviz aprobat / În lucru”.
+            </p>
+          ) : null}
           <ul className="space-y-1">
             {milestones.map((m) => (
               <li key={m.id} className={`flex items-center gap-2 text-[11px] ${m.done || m.active ? "" : "opacity-50"}`}>
@@ -613,10 +680,21 @@ export function WorkOrderSheetShell({
               </li>
             ))}
           </ul>
+          {canStartSupplement ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void startSupplementRepair()}
+              className="mt-2 w-full rounded border border-amber-700/50 px-2 py-1.5 text-[11px] text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
+            >
+              Începe etapă suplimentară (deviz v{wo.quoteSummary.version})
+            </button>
+          ) : null}
           {isDamageWo ? (
             <p className="mt-2 text-[10px] leading-snug text-zinc-500">
               Daună: Verificare / Deviz urmează dosarul. Lucrare gata — bifează manual sau urcă poze
-              «auto reparat» pe Dosar.
+              «auto reparat» pe Dosar. După Deviz aprobat v2+, partenerul poate deschide o etapă
+              suplimentară pe aceeași comandă.
             </p>
           ) : null}
         </div>

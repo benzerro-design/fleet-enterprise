@@ -124,6 +124,15 @@ export type DamageReinspectionRequestItem = {
   mailLogId?: string;
 };
 
+export type DamagePaymentAcceptanceItem = {
+  id: string;
+  sequence: number;
+  pdfUrl: string;
+  fileName?: string;
+  receivedAt: string;
+  notes?: string | null;
+};
+
 export type DamageConstatareHistoryItem =
   | DamageInspectionNoteItem
   | DamageReinspectionRequestItem;
@@ -475,6 +484,8 @@ export type ServiceCaseRecord = {
   damagePaymentAcceptanceFileName?: string | null;
   damagePaymentAcceptanceReceivedAt?: string | null;
   damagePaymentAcceptanceNotes?: string | null;
+  /** Istoric Accept plată (Accept 1, 2, …). */
+  damagePaymentAcceptances?: DamagePaymentAcceptanceItem[];
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
