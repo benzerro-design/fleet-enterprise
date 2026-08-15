@@ -3,6 +3,7 @@
  * npx tsx scripts/smoke-civ-1993.ts
  */
 import { mapCivExtractTextToPreview, detectCivDocumentFormat } from '../src/fleet/civ-extract';
+import { mapCiv1993SectionAToProfile } from '../src/fleet/civ-1993-extract';
 import { readFileSync } from 'fs';
 
 const sample = `
@@ -57,6 +58,26 @@ Spate: 195/50 R15 82 H
 Modificari: CO2: 107 g/km; Filtru de particule.
 `;
 
+// Also exercise Fiesta OCR quirks: Vit . max con- / Carosena … 2
+const vitQuirk = `
+2 Carosena AB berlina cu hayon 2
+3 Marca FORD 3
+Remorcabil cu 750 Remorcabila fara 550
+disp . de franare disp , de franare
+9 gabarit Dimensiunile ( mm ) de L 3958 1722 h 1481 9
+10 Motorul ( cm Cilindree1399 Putere Turatie ( max min - 1 ) 51.5 / 4000 10
+16 Vit . max con- 162 17 Capacitatea 42.8 16 17
+structiva ( km / h ) rezervorului
+`;
+const q = mapCiv1993SectionAToProfile(vitQuirk);
+if (q.profile.maxSpeedKmh !== 162) throw new Error(`quirk speed=${q.profile.maxSpeedKmh}`);
+if (String(q.profile.bodyType ?? '') !== 'AB berlina cu hayon') {
+  throw new Error(`quirk body=${q.profile.bodyType}`);
+}
+if (q.profile.widthMm !== 1722) throw new Error(`quirk width=${q.profile.widthMm}`);
+if (q.profile.maxBrakedTrailerMassKg !== 750) throw new Error(`quirk braked=${q.profile.maxBrakedTrailerMassKg}`);
+if (q.profile.engineCapacityCm3 !== 1399) throw new Error(`quirk cm3=${q.profile.engineCapacityCm3}`);
+
 const fmt = detectCivDocumentFormat(sample);
 const p = mapCivExtractTextToPreview(sample, 'unknown', 'text');
 console.log({
@@ -78,6 +99,8 @@ console.log({
   height: p.civProfile.heightMm,
   cm3: p.civProfile.engineCapacityCm3,
   engine: p.civProfile.engineCode,
+  speed: p.civProfile.maxSpeedKmh,
+  body: p.civProfile.bodyType,
   co2: p.civProfile.co2Gkm,
   color: p.civProfile.color,
 });
@@ -93,6 +116,13 @@ if (p.civProfile.maxUnbrakedTrailerMassKg !== 550) throw new Error(`unbraked=${p
 if (p.civProfile.lengthMm !== 3958) throw new Error(`L=${p.civProfile.lengthMm}`);
 if (p.civProfile.widthMm !== 1722) throw new Error(`l=${p.civProfile.widthMm}`);
 if (p.civProfile.engineCapacityCm3 !== 1399) throw new Error(`cm3=${p.civProfile.engineCapacityCm3}`);
+if (p.civProfile.maxSpeedKmh !== 162) throw new Error(`speed=${p.civProfile.maxSpeedKmh}`);
+if (String(p.civProfile.bodyType ?? '').includes(' 2')) {
+  throw new Error(`body has row num: ${p.civProfile.bodyType}`);
+}
+if (!String(p.civProfile.bodyType ?? '').toLowerCase().includes('berlina')) {
+  throw new Error(`body=${p.civProfile.bodyType}`);
+}
 if (!String(p.civProfile.tyresFront ?? '').includes('195/50')) {
   throw new Error(`tyresF=${p.civProfile.tyresFront}`);
 }
@@ -122,8 +152,12 @@ for (const [k, want] of Object.entries({
   lengthMm: 3958,
   widthMm: 1722,
   engineCapacityCm3: 1399,
+  maxSpeedKmh: 162,
 })) {
   if (f.civProfile[k] !== want) throw new Error(`fiesta ${k}=${f.civProfile[k]} want ${want}`);
+}
+if (String(f.civProfile.bodyType ?? '').trim() !== 'AB berlina cu hayon') {
+  throw new Error(`fiesta body=${f.civProfile.bodyType}`);
 }
 if (!String(f.civProfile.tyresFront ?? '').includes('195/50')) {
   throw new Error(`fiesta tyresF=${f.civProfile.tyresFront}`);
