@@ -179,6 +179,28 @@ export class ClientsController {
     await this.attachments.deleteDocument(tenantSlug, id, documentId, actorUserId);
   }
 
+  @Get(':id/mail-settings')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  getMailSettings(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.getMailSettings(tenantSlug, id, access);
+  }
+
+  @Patch(':id/mail-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchMailSettings(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.patchMailSettings(tenantSlug, id, body, actorUserId, access);
+  }
+
   @Get(':id')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   get(

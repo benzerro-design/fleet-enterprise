@@ -36,6 +36,7 @@ import {
 import { PartnerNotificationService } from '../partner/partner-notification.service';
 import { PartnerMailService } from '../partner/partner-mail.service';
 import { parseTenantMailSettings } from '../tenant/mail-settings';
+import { parseClientMailSettings } from '../clients/client-mail-settings';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -1310,6 +1311,7 @@ export class ServiceCasesService {
       tenant.id,
       tenant.mailSettings,
       actorUserId,
+      row.clientId,
     );
     const bodyLines = [
       `Bună ziua,`,
@@ -1530,6 +1532,7 @@ export class ServiceCasesService {
       tenant.id,
       tenant.mailSettings,
       actorUserId,
+      row.clientId,
     );
     const bodyLines = [
       `Bună ziua,`,
@@ -1748,6 +1751,7 @@ export class ServiceCasesService {
       tenant.id,
       tenant.mailSettings,
       actorUserId,
+      row.clientId,
     );
     const bodyLines = [
       `Bună ziua,`,
@@ -3548,6 +3552,7 @@ export class ServiceCasesService {
     tenantId: string,
     mailSettingsRaw: unknown,
     actorUserId?: string | null,
+    clientId?: string | null,
   ): Promise<{
     fromName: string | null;
     replyTo: string | null;
@@ -3568,6 +3573,32 @@ export class ServiceCasesService {
       for (const u of users) {
         const e = u.email?.trim().toLowerCase();
         if (e) ccSet.add(e);
+      }
+    }
+
+    if (clientId) {
+      const client = await this.prisma.client.findFirst({
+        where: { id: clientId, tenantId },
+        select: { mailSettings: true },
+      });
+      if (client) {
+        const clientSettings = parseClientMailSettings(client.mailSettings);
+        for (const e of clientSettings.ccEmails) {
+          ccSet.add(e.toLowerCase());
+        }
+        if (clientSettings.ccMemberUserIds.length > 0) {
+          const users = await this.prisma.user.findMany({
+            where: {
+              id: { in: clientSettings.ccMemberUserIds },
+              clientMemberships: { some: { tenantId, clientId } },
+            },
+            select: { email: true },
+          });
+          for (const u of users) {
+            const e = u.email?.trim().toLowerCase();
+            if (e) ccSet.add(e);
+          }
+        }
       }
     }
 

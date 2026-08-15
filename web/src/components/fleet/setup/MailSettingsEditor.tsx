@@ -44,6 +44,14 @@ export function MailSettingsEditor({ initial }: Props) {
     };
   }, []);
 
+  const fleetMembers = useMemo(
+    () =>
+      members.filter(
+        (m) => m.role === "tenant_admin" || m.role === "tenant_viewer",
+      ),
+    [members],
+  );
+
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(settings) || ccExtraText !== settings.defaultCcEmails.join(", "),
     [draft, settings, ccExtraText],
@@ -172,9 +180,12 @@ export function MailSettingsEditor({ initial }: Props) {
 
       <div className="space-y-6 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
         <div>
-          <h2 className="text-sm font-medium text-zinc-200">CC pe trimiteri daună</h2>
+          <h2 className="text-sm font-medium text-zinc-200">CC flotă pe trimiteri daună</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Copii la avizare, reconstatare și trimite deviz. Folosește emailurile de login ale membrilor.
+            Copii operaționale (admin / viewer flotă + adrese libere) la avizare, reconstatare și
+            deviz. CC pe utilizatorii unui client se configurează pe{" "}
+            <span className="text-zinc-400">Client → Corespondență</span> — se unesc automat la
+            trimitere după clientul dosarului.
           </p>
         </div>
 
@@ -195,12 +206,14 @@ export function MailSettingsEditor({ initial }: Props) {
         </label>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium text-zinc-100">Membri în CC</p>
-          {members.length === 0 ? (
-            <p className="text-xs text-zinc-500">Nu s-au putut încărca membrii (sau lista e goală).</p>
+          <p className="text-sm font-medium text-zinc-100">Membri flotă în CC</p>
+          {fleetMembers.length === 0 ? (
+            <p className="text-xs text-zinc-500">
+              Nu s-au putut încărca membrii flotă (sau lista e goală).
+            </p>
           ) : (
             <ul className="max-h-56 space-y-1 overflow-y-auto rounded border border-zinc-800 p-2">
-              {members.map((m) => (
+              {fleetMembers.map((m) => (
                 <li key={m.userId}>
                   <label className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900">
                     <input
@@ -214,7 +227,10 @@ export function MailSettingsEditor({ initial }: Props) {
                       <span className="font-medium text-zinc-100">
                         {m.displayName?.trim() || m.email}
                       </span>
-                      <span className="mt-0.5 block text-xs text-zinc-500">{m.email}</span>
+                      <span className="mt-0.5 block text-xs text-zinc-500">
+                        {m.email}
+                        {m.role ? ` · ${m.role}` : ""}
+                      </span>
                     </span>
                   </label>
                 </li>
@@ -224,7 +240,7 @@ export function MailSettingsEditor({ initial }: Props) {
         </div>
 
         <label className="block space-y-1 text-sm text-zinc-300">
-          <span className="font-medium text-zinc-100">CC suplimentar (adrese libere)</span>
+          <span className="font-medium text-zinc-100">CC suplimentar flotă (adrese libere)</span>
           <input
             type="text"
             className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"

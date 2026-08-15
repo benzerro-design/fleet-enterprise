@@ -21,8 +21,13 @@ import {
 import { DriversService, type DriverRecord } from '../drivers/drivers.service';
 import type { AccessContext } from '../iam/access-context.types';
 import { clientIdsFilter } from '../iam/client-access';
+import {
+  parseClientMailSettings,
+  parseClientMailSettingsPatch,
+  type ClientMailSettings,
+} from './client-mail-settings';
 
-export type { ClientSubscriptionRow, DriverRecord };
+export type { ClientSubscriptionRow, DriverRecord, ClientMailSettings };
 
 const MAX_PAGE_SIZE = 200;
 const REMINDER_SCAN_LIMIT = 500;
@@ -509,6 +514,88 @@ export class ClientsService {
     });
 
     return this.toRecord(row, row._count.vehicles);
+  }
+
+  async getMailSettings(
+    tenantSlug: string,
+    id: string,
+    access?: AccessContext,
+  ): Promise<ClientMailSettings & { members: Array<{
+    userId: string;
+    email: string;
+    displayName: string | null;
+    role: string;
+  }> }> {
+    const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
+    const memberships = await this.prisma.clientMembership.findMany({
+      where: { clientId: row.id, tenantId: row.tenantId },
+      include: { user: { select: { id: true, email: true, displayName: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return {
+      ...parseClientMailSettings(row.mailSettings),
+      members: memberships.map((m) => ({
+        userId: m.userId,
+        email: m.user.email,
+        displayName: m.user.displayName,
+        role: m.role,
+      })),
+    };
+  }
+
+  async patchMailSettings(
+    tenantSlug: string,
+    id: string,
+    body: unknown,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ClientMailSettings> {
+    const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
+    let patch: Partial<ClientMailSettings>;
+    try {
+      patch = parseClientMailSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid body');
+    }
+
+    if (patch.ccMemberUserIds) {
+      const memberships = await this.prisma.clientMembership.findMany({
+        where: { clientId: row.id, tenantId: row.tenantId, userId: { in: patch.ccMemberUserIds } },
+        select: { userId: true },
+      });
+      const ok = new Set(memberships.map((m) => m.userId));
+      patch.ccMemberUserIds = patch.ccMemberUserIds.filter((uid) => ok.has(uid));
+    }
+
+    const next: ClientMailSettings = {
+      ...parseClientMailSettings(row.mailSettings),
+      ...patch,
+    };
+
+    await this.prisma.client.update({
+      where: { id: row.id },
+      data: { mailSettings: next as unknown as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: row.tenantId,
+      actorUserId,
+      action: 'client.mail_settings_update',
+      entityType: 'client',
+      entityId: row.id,
+      meta: {
+        ccMemberCount: next.ccMemberUserIds.length,
+        ccEmailCount: next.ccEmails.length,
+      },
+    });
+
+    return next;
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string): Promise<void> {

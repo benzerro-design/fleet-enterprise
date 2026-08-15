@@ -15,12 +15,15 @@ import type { ClientProfileTab, ClientSummaryPayload } from "@/lib/clients-api";
 import { clientOpsQuery } from "@/lib/clients-api";
 import { ClientSubscriptionTab } from "@/components/fleet/ClientSubscriptionTab";
 import { ClientDriversTab } from "@/components/fleet/ClientDriversTab";
+import { ClientMailSettingsEditor } from "@/components/fleet/ClientMailSettingsEditor";
+import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 
 const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "overview", label: "Prezentare" },
   { id: "vehicles", label: "Vehicule" },
   { id: "drivers", label: "Șoferi" },
   { id: "subscription", label: "Abonament" },
+  { id: "mail", label: "Corespondență" },
 ];
 
 function formatDate(iso: string): string {
@@ -64,7 +67,7 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
 
   const active = useMemo((): ClientProfileTab => {
     const t = searchParams.get("tab");
-    if (t === "vehicles" || t === "subscription" || t === "drivers") return t;
+    if (t === "vehicles" || t === "subscription" || t === "drivers" || t === "mail") return t;
     return "overview";
   }, [searchParams]);
 
@@ -105,6 +108,7 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
         <QuickLink href={`/fleet/clients/${client.id}?tab=vehicles`} label="Vehicule client" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=drivers`} label="Șoferi client" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=subscription`} label="Abonament" />
+        <QuickLink href={`/fleet/clients/${client.id}?tab=mail`} label="Corespondență daună" />
       </div>
 
       <div className="border-b border-zinc-800 px-4 pt-4">
@@ -114,11 +118,7 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
               key={tab.id}
               type="button"
               onClick={() => setTab(tab.id)}
-              className={`rounded-t-lg border px-4 py-2 text-sm transition-colors ${
-                active === tab.id
-                  ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
-                  : "border-transparent text-zinc-400 hover:text-zinc-200"
-              }`}
+              className={fleetSheetTabClass(active === tab.id)}
             >
               {tab.label}
             </button>
@@ -180,6 +180,8 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
           <ClientSubscriptionTab subscriptions={subscriptions ?? []} />
         ) : active === "drivers" ? (
           <ClientDriversTab clientCode={client.code} drivers={drivers ?? []} canWrite={canWrite} />
+        ) : active === "mail" ? (
+          <ClientMailSettingsEditor clientId={client.id} canWrite={canWrite} />
         ) : (
           <>
             {vehicles.length === 0 ? (
