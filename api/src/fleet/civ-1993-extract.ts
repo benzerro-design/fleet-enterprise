@@ -101,7 +101,7 @@ export function extractCiv1993SectionA(versoOrCombined: string): string {
 
   // Dacă e față+verso concatenat, preferă partea cu Marca / Categoria.
   const marca = /\b3\.?\s*Marca\b|\bMarca\b/i.exec(t);
-  const cat = /\b1\.?\s*Categoria\b|\bCategoria\b|\bCategoda\b/i.exec(t);
+  const cat = /\b1\.?\s*Categoria\b|\bCategoria\b|\bCategoda\b|\bCateg\w*\b/i.exec(t);
   if (marca || cat) {
     const start = Math.min(marca?.index ?? Infinity, cat?.index ?? Infinity);
     if (Number.isFinite(start) && start > 0 && start < t.length) {
@@ -186,17 +186,23 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
   };
 
   // 1. Categoria → Categorie de folosință (nu omologare separată)
+  // OCR: „Categoda” (fără r), „AUTOTURISM MI/MT” (M1 citit greșit)
   const categoria = pick(text, [
-    /(?:^|\n)\s*1\.?\s*Categor\w*\s*[:\s]+([^\n]+?)(?=\s+\d+\s*$|\s*$|\s+2\.?\s*Carose)/i,
-    /\bCategor\w*\s*[:\s]+([A-ZĂÂÎȘȚ][^\n]{2,40}?)(?=\s+\d+\s|$)/i,
+    /(?:^|\n)\s*1\.?\s*Categ\w*\s*[:\s]+([^\n]+?)(?=\s+\d+\s*$|\s*$|\s+2\.?\s*Carose)/im,
+    /\bCateg\w*\s*[:\s]+([A-Z][^\n]{2,40}?)(?=\s+\d+\s*$|\s+\d+\s|\s*$)/im,
+    /\bCateg\w*\s+([A-Z]+(?:\s+M[I1TL])?)/i,
+    /(\bAUTOTURISM\s+M[I1TL]\b)/i,
   ]);
   if (categoria) {
-    const usage = categoria
-      .replace(/\bMI\b/i, 'M1')
+    let usage = categoria
+      .replace(/\bAUTOTURISM\s+M[I1TL]\b/i, 'AUTOTURISM M1')
+      .replace(/\bM[I1TL]\b/i, 'M1')
       .replace(/\s+/g, ' ')
       .replace(/\s+\d+\s*$/, '')
       .trim()
       .toUpperCase();
+    if (/^M[I1TL]$/i.test(usage)) usage = 'AUTOTURISM M1';
+    if (usage === 'AUTOTURISM') usage = 'AUTOTURISM M1';
     set('usageCategory', 'Categorie de folosință', usage);
   }
 
@@ -362,47 +368,68 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     ]),
     true,
   );
-  set(
-    'maxBrakedTrailerMassKg',
-    'Masă remorcabilă cu frână',
-    pick(text, [
-      /Remorcabil\w*\s+cu\s+(\d{2,5})\s+Remorcabil\w*\s+fara/i,
-      /Remorcabila?\s+cu\s+(?:disp\.?\s*(?:de\s+)?franare|dispozitiv\s+de\s+franare)\s*[:\s]*(\d{2,5})/i,
-      /Remorcabila?\s+cu\s*[:\s]*(\d{2,5})/i,
-      /Remorcabila?\s+cu\s+(\d{2,5})\b/i,
-      /Remorcabil\w*\s+cu[\s\S]{0,60}?(\d{2,5})\b/i,
-    ]) ??
-      nearNumber(text, /Remorcabil\w*\s+cu\b/i, { min: 200, max: 3500, window: 120 }),
-    true,
-  );
-  set(
-    'maxUnbrakedTrailerMassKg',
-    'Masă remorcabilă fără frână',
-    pick(text, [
-      /Remorcabil\w*\s+cu\s+\d{2,5}\s+Remorcabil\w*\s+fara\s+(\d{2,5})/i,
-      /Remorcabila?\s+fara\s+(?:disp\.?\s*(?:de\s+)?franare|dispozitiv\s+de\s+franare)\s*[:\s]*(\d{2,5})/i,
-      /Remorcabila?\s+fara\s*[:\s]*(\d{2,5})/i,
-      /Remorcabila?\s+fara\s+(\d{2,5})\b/i,
-      /Remorcabil\w*\s+fara[\s\S]{0,60}?(\d{2,5})\b/i,
-    ]) ??
-      nearNumber(text, /Remorcabil\w*\s+fara\b/i, { min: 100, max: 3500, window: 120 }),
-    true,
-  );
-  // Bloc Remorcabil…disp: două mase pe același segment (750 / 550)
-  if (profile.maxBrakedTrailerMassKg == null || profile.maxUnbrakedTrailerMassKg == null) {
-    const remBlock =
-      /Remorcabil[\s\S]{0,160}?(?:disp|franare|locuri)/i.exec(text)?.[0] ??
-      /Remorcabil[\s\S]{0,120}/i.exec(text)?.[0] ??
-      '';
-    const remNums = [...remBlock.matchAll(/\b(\d{2,4})\b/g)]
-      .map((m) => Number(m[1]))
-      .filter((n) => n >= 100 && n <= 3500);
-    if (profile.maxBrakedTrailerMassKg == null && remNums[0] != null) {
-      set('maxBrakedTrailerMassKg', 'Masă remorcabilă cu frână', String(remNums[0]), true);
+  // Remorcabile: întâi încearcă perechea pe linie / după disp; abia apoi etichete separate
+  // (altfel „fara … 750 550” ia greșit 750 ca masă fără frână).
+  {
+    let braked: string | null = null;
+    let unbraked: string | null = null;
+
+    const inlinePair =
+      /Remorca\w*\s+cu\s*[:\s]*(\d{2,5})\s+Remorca\w*\s+far[aă]?\s*[:\s]*(\d{2,5})/i.exec(text) ||
+      /Remorca\w*\s+cu\s+(\d{2,5})\D{0,40}far[aă]?\s+(\d{2,5})/i.exec(text);
+    if (inlinePair) {
+      braked = inlinePair[1];
+      unbraked = inlinePair[2];
     }
-    if (profile.maxUnbrakedTrailerMassKg == null && remNums[1] != null) {
-      set('maxUnbrakedTrailerMassKg', 'Masă remorcabilă fără frână', String(remNums[1]), true);
+
+    if (!braked || !unbraked) {
+      const remZone =
+        /Remorca[\s\S]{0,280}?(?=gabarit|Dimensiun|\blocuri\b|\b9\s+gabarit|\bNumarul\s+locuri|\bde\s+Numarul)/i.exec(
+          text,
+        )?.[0] ??
+        /Remorca[\s\S]{0,220}/i.exec(text)?.[0] ??
+        '';
+      const afterDisp = /disp[\s\S]{0,80}?(\d{3,4})\D+(\d{3,4})/i.exec(remZone);
+      const pairInZone =
+        afterDisp ||
+        /cu\D{0,50}(\d{3,4})\D{0,100}far[aă]?\D{0,50}(\d{3,4})/i.exec(remZone) ||
+        /(\d{3,4})\s+(\d{3,4})\s*$/m.exec(remZone.trim());
+      if (pairInZone) {
+        const a = Number(pairInZone[1]);
+        const b = Number(pairInZone[2]);
+        if (!braked && a >= 200 && a <= 3500) braked = String(a);
+        if (!unbraked && b >= 100 && b <= 3500 && b !== a) unbraked = String(b);
+      }
+      if (!braked || !unbraked) {
+        const remNums = [...remZone.matchAll(/\b(\d{3,4})\b/g)]
+          .map((m) => Number(m[1]))
+          .filter((n) => n >= 400 && n <= 2000 && n !== 1195 && n !== 1540);
+        if (!braked && remNums[0] != null) braked = String(remNums[0]);
+        if (!unbraked && remNums[1] != null && remNums[1] !== remNums[0]) {
+          unbraked = String(remNums[1]);
+        }
+      }
     }
+
+    if (!braked) {
+      braked =
+        pick(text, [
+          /Remorca\w*\s+cu\s*[:\s]*(\d{2,5})\b/i,
+          /Remorca\w*\s+cu\s+(?:disp\.?\s*(?:de\s+)?franare)[\s\S]{0,40}?(\d{2,5})\b/i,
+        ]) ?? nearNumber(text, /Remorca\w*\s+cu\b/i, { min: 200, max: 3500, window: 100 });
+    }
+    if (!unbraked) {
+      // Nu lua primul număr după „fara” dacă e același cu braked (cifrele sunt după ambele etichete)
+      const rawU =
+        pick(text, [
+          /Remorca\w*\s+far[aă]?\s*[:\s]*(\d{2,5})\b/i,
+          /Remorca\w*\s+far[aă]?\s+(?:disp\.?\s*(?:de\s+)?franare)[\s\S]{0,40}?(\d{2,5})\b/i,
+        ]) ?? nearNumber(text, /Remorca\w*\s+far/i, { min: 100, max: 3500, window: 100 });
+      if (rawU && rawU !== braked) unbraked = rawU;
+    }
+
+    if (braked) set('maxBrakedTrailerMassKg', 'Masă remorcabilă cu frână', braked, true);
+    if (unbraked) set('maxUnbrakedTrailerMassKg', 'Masă remorcabilă fără frână', unbraked, true);
   }
 
   // 8. Locuri — total + în picioare (ignoră în față / pe scaune)

@@ -78,6 +78,27 @@ if (q.profile.widthMm !== 1722) throw new Error(`quirk width=${q.profile.widthMm
 if (q.profile.maxBrakedTrailerMassKg !== 750) throw new Error(`quirk braked=${q.profile.maxBrakedTrailerMassKg}`);
 if (q.profile.engineCapacityCm3 !== 1399) throw new Error(`quirk cm3=${q.profile.engineCapacityCm3}`);
 
+// OCR: M1 citit ca MT; remorcabile cu cifre DUPĂ „disp”
+const remQuirk = `
+1 Categoda AUTOTURISM MT 1
+2 Carosena AB berlina cu hayon 2
+Remorcabil cu Remorcabila fara
+disp . de franare disp , de franare
+750 550
+de Numarul locuri total 5
+9 gabarit Dimensiunile ( mm ) de L 3958 1722 h 1481 9
+`;
+const rq = mapCiv1993SectionAToProfile(remQuirk);
+if (rq.profile.usageCategory !== 'AUTOTURISM M1') {
+  throw new Error(`usage MT→M1 got ${rq.profile.usageCategory}`);
+}
+if (rq.profile.maxBrakedTrailerMassKg !== 750) {
+  throw new Error(`rem after disp braked=${rq.profile.maxBrakedTrailerMassKg}`);
+}
+if (rq.profile.maxUnbrakedTrailerMassKg !== 550) {
+  throw new Error(`rem after disp unbraked=${rq.profile.maxUnbrakedTrailerMassKg}`);
+}
+
 const fmt = detectCivDocumentFormat(sample);
 const p = mapCivExtractTextToPreview(sample, 'unknown', 'text');
 console.log({
