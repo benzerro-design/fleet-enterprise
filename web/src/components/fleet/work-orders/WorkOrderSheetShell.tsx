@@ -103,6 +103,7 @@ export function WorkOrderSheetShell({
     damagePayerType: wo.damagePayerType,
     damageInsurerPipelineStatus: wo.damageInsurerPipelineStatus,
     damageInsurerAgreedAt: wo.damageInsurerAgreedAt,
+    damageSettlementRounds: wo.damageSettlementRounds,
   });
   const damageGateBlocked =
     isDamageWo &&

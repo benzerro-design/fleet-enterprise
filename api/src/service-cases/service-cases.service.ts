@@ -241,6 +241,42 @@ export type DamageConstatareHistoryItem =
   | DamageInspectionNoteItem
   | DamageReinspectionRequestItem;
 
+/** Accept plată pe istoric (o înregistrare per upload / rundă). */
+export type DamagePaymentAcceptanceItem = {
+  id: string;
+  sequence: number;
+  roundId: string;
+  pdfUrl: string;
+  fileName?: string;
+  receivedAt: string;
+  notes?: string | null;
+};
+
+export type DamageSettlementRoundStatus = 'active' | 'closed';
+
+/**
+ * Rundă de decontare pe dosar: reconstatare(e) + deviz + accept plată.
+ * Runda anterioară e arhivată; una singură e activă.
+ */
+export type DamageSettlementRound = {
+  id: string;
+  sequence: number;
+  status: DamageSettlementRoundStatus;
+  openedAt: string;
+  closedAt?: string;
+  openReason?: string | null;
+  reinspectionRequestIds: string[];
+  quoteVersion?: number | null;
+  paymentAcceptanceId?: string | null;
+};
+
+export type OpenSettlementRoundInput = {
+  /** Motiv omisiune / avarie ascunsă — obligatoriu. */
+  reason?: string | null;
+  /** Reintrare pe WO: status in_progress + note (default true). */
+  reopenWorkOrder?: boolean;
+};
+
 export type DamageSectionKey = 'claim_info' | 'documents' | 'photos' | 'pipeline';
 
 export type DamageSectionLock = {
@@ -317,6 +353,10 @@ export type ServiceCaseRecord = {
   damagePaymentAcceptanceFileName: string | null;
   damagePaymentAcceptanceReceivedAt: string | null;
   damagePaymentAcceptanceNotes: string | null;
+  /** Istoric accept plată (Accept 1, 2, …). */
+  damagePaymentAcceptances: DamagePaymentAcceptanceItem[];
+  /** Runde de decontare (Runda 1, 2, …). */
+  damageSettlementRounds: DamageSettlementRound[];
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
@@ -1039,7 +1079,9 @@ export class ServiceCasesService {
     if (dto.damagePaymentAcceptancePdfUrl !== undefined) {
       const url = dto.damagePaymentAcceptancePdfUrl?.trim() || null;
       data.damagePaymentAcceptancePdfUrl = url;
-      if (url) {
+      const { rounds, acceptances } = this.ensureSettlementState(row);
+      const active = this.activeSettlementRound(rounds);
+      if (url && active) {
         data.damagePaymentAcceptanceReceivedAt = new Date();
         if (
           !dto.damageInsurerPipelineStatus &&
@@ -1047,10 +1089,47 @@ export class ServiceCasesService {
         ) {
           data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.payment_accepted;
         }
-      } else {
+        const notes =
+          dto.damagePaymentAcceptanceNotes !== undefined
+            ? dto.damagePaymentAcceptanceNotes?.trim() || null
+            : row.damagePaymentAcceptanceNotes;
+        const fileName =
+          dto.damagePaymentAcceptanceFileName !== undefined
+            ? dto.damagePaymentAcceptanceFileName?.trim() || undefined
+            : row.damagePaymentAcceptanceFileName ?? undefined;
+        const existingIdx = acceptances.findIndex((a) => a.id === active.paymentAcceptanceId);
+        const receivedAt = new Date().toISOString();
+        if (existingIdx >= 0) {
+          acceptances[existingIdx] = {
+            ...acceptances[existingIdx],
+            pdfUrl: url,
+            fileName,
+            receivedAt,
+            notes,
+          };
+        } else {
+          const item: DamagePaymentAcceptanceItem = {
+            id: `accept_${Date.now()}`,
+            sequence: acceptances.length + 1,
+            roundId: active.id,
+            pdfUrl: url,
+            fileName,
+            receivedAt,
+            notes,
+          };
+          acceptances.unshift(item);
+          active.paymentAcceptanceId = item.id;
+        }
+        data.damagePaymentAcceptancesJson = acceptances as unknown as Prisma.InputJsonValue;
+        data.damageSettlementRoundsJson = rounds as unknown as Prisma.InputJsonValue;
+      } else if (!url) {
         data.damagePaymentAcceptanceReceivedAt = null;
         if (dto.damagePaymentAcceptanceFileName === undefined) {
           data.damagePaymentAcceptanceFileName = null;
+        }
+        if (active?.paymentAcceptanceId) {
+          active.paymentAcceptanceId = null;
+          data.damageSettlementRoundsJson = rounds as unknown as Prisma.InputJsonValue;
         }
       }
     }
@@ -1591,6 +1670,141 @@ export class ServiceCasesService {
     return this.toRecord(updated);
   }
 
+  /**
+   * Deschide o rundă nouă de decontare (omisiune / avarie ascunsă după accept).
+   * Închide runda activă, reîncepe pipeline-ul pe constatare/reconstatare,
+   * opțional reintrare pe WO (in_progress + postApproval reschedule).
+   */
+  async openSettlementRound(
+    tenantSlug: string,
+    caseId: string,
+    dto: OpenSettlementRoundInput = {},
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ServiceCaseRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const row = await this.prisma.serviceCase.findFirst({
+      where: { id: caseId, tenantId: tenant.id },
+      include: {
+        workOrders: {
+          select: { id: true, supplierId: true, status: true, readyAt: true, repairPathNote: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Service case not found');
+    if (access) {
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        const partnerWo = row.workOrders.find((w) =>
+          allowedSupplierIds(access).includes(w.supplierId ?? ''),
+        );
+        if (!partnerWo) {
+          throw new ForbiddenException('No partner work order on this damage case');
+        }
+        assertPartnerSupplierId(access, partnerWo.supplierId);
+      } else {
+        assertServiceCaseWrite(access, row.clientId);
+      }
+    }
+    if (row.workflowType !== ServiceCaseWorkflowType.damage) {
+      throw new BadRequestException('Rundele de decontare se aplică doar pe workflow daună');
+    }
+    if (row.damagePayerType === DamagePayerType.client) {
+      throw new BadRequestException('Plătitor client — fără runde asigurător');
+    }
+
+    const reason = dto.reason?.trim() || '';
+    if (reason.length < 5) {
+      throw new BadRequestException(
+        'Completează motivul rundei noi (omisiune / avarie ascunsă — minim 5 caractere)',
+      );
+    }
+
+    const { rounds, acceptances } = this.ensureSettlementState(row);
+    const now = new Date().toISOString();
+    const nextRounds = rounds.map((r) =>
+      r.status === 'active' ? { ...r, status: 'closed' as const, closedAt: now } : r,
+    );
+    const seq = nextRounds.reduce((m, r) => Math.max(m, r.sequence), 0) + 1;
+    const newRound: DamageSettlementRound = {
+      id: `round_${Date.now()}_${seq}`,
+      sequence: seq,
+      status: 'active',
+      openedAt: now,
+      openReason: reason,
+      reinspectionRequestIds: [],
+      quoteVersion: null,
+      paymentAcceptanceId: null,
+    };
+    nextRounds.push(newRound);
+
+    const reopenWo = dto.reopenWorkOrder !== false;
+    const noteLine = `Runda ${seq}: ${reason}`;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.serviceCase.update({
+        where: { id: caseId },
+        data: {
+          damageSettlementRoundsJson: nextRounds as unknown as Prisma.InputJsonValue,
+          damagePaymentAcceptancesJson: acceptances as unknown as Prisma.InputJsonValue,
+          damageInsurerPipelineStatus: DamageInsurerPipelineStatus.inspection_note,
+          awaitingPostApproval: false,
+          postApprovalPath: PostApprovalPath.reschedule,
+        },
+        include: this.caseInclude(),
+      });
+
+      if (reopenWo && row.workOrders.length) {
+        for (const wo of row.workOrders) {
+          const nextStatus =
+            wo.status === MaintenanceWorkOrderStatus.done ||
+            wo.status === MaintenanceWorkOrderStatus.cancelled
+              ? MaintenanceWorkOrderStatus.in_progress
+              : wo.status;
+          const prevNote = wo.repairPathNote?.trim();
+          await tx.maintenanceWorkOrder.update({
+            where: { id: wo.id },
+            data: {
+              status: nextStatus,
+              readyAt: null,
+              repairPathNote: prevNote ? `${prevNote}\n${noteLine}` : noteLine,
+            },
+          });
+        }
+      }
+
+      if (row.sourceTicketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: row.sourceTicketId,
+            kind: CrmTicketEventKind.damage_claim_update,
+            body: `Deschisă runda de decontare #${seq}: ${reason}`,
+            payload: { serviceCaseId: caseId, round: newRound },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+
+      return next;
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_case.damage_open_settlement_round',
+      entityType: 'service_case',
+      entityId: caseId,
+      meta: { sequence: seq, reason, reopenWo },
+    });
+
+    return this.toRecord(updated);
+  }
+
   async requestDamageReinspection(
     tenantSlug: string,
     caseId: string,
@@ -1779,10 +1993,18 @@ export class ServiceCasesService {
     const nextHistory = [requestItem, ...prevHistory].slice(0, 50);
 
     const current = row.damageInsurerPipelineStatus;
+    const { rounds } = this.ensureSettlementState(row);
+    const active = this.activeSettlementRound(rounds);
+    // Rundă fără accept (ex. rundă nouă) → pipeline trece la reconstatare chiar dacă
+    // runda anterioară era payment_accepted.
     const nextPipeline =
-      current === DamageInsurerPipelineStatus.payment_accepted
+      current === DamageInsurerPipelineStatus.payment_accepted && active?.paymentAcceptanceId
         ? current
         : DamageInsurerPipelineStatus.reinspection_requested;
+
+    if (active && !active.reinspectionRequestIds.includes(requestItem.id)) {
+      active.reinspectionRequestIds = [...active.reinspectionRequestIds, requestItem.id];
+    }
 
     const updated = await this.prisma.serviceCase.update({
       where: { id: caseId },
@@ -1790,6 +2012,7 @@ export class ServiceCasesService {
         damageInsurerMailLogJson: nextLog as unknown as Prisma.InputJsonValue,
         damageInspectionNotesJson: nextHistory as unknown as Prisma.InputJsonValue,
         damageInsurerPipelineStatus: nextPipeline,
+        damageSettlementRoundsJson: rounds as unknown as Prisma.InputJsonValue,
       },
       include: this.caseInclude(),
     });
@@ -3413,6 +3636,127 @@ export class ServiceCasesService {
     );
   }
 
+  private parsePaymentAcceptances(raw: unknown): DamagePaymentAcceptanceItem[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamagePaymentAcceptanceItem[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.roundId !== 'string') continue;
+      if (typeof o.pdfUrl !== 'string' || typeof o.receivedAt !== 'string') continue;
+      out.push({
+        id: o.id,
+        sequence: typeof o.sequence === 'number' && o.sequence > 0 ? o.sequence : out.length + 1,
+        roundId: o.roundId,
+        pdfUrl: o.pdfUrl,
+        fileName: typeof o.fileName === 'string' ? o.fileName : undefined,
+        receivedAt: o.receivedAt,
+        notes: typeof o.notes === 'string' ? o.notes : null,
+      });
+    }
+    return out;
+  }
+
+  private parseSettlementRounds(raw: unknown): DamageSettlementRound[] {
+    if (!Array.isArray(raw)) return [];
+    const out: DamageSettlementRound[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      if (typeof o.id !== 'string' || typeof o.openedAt !== 'string') continue;
+      const status = o.status === 'closed' ? 'closed' : 'active';
+      const reinspectionRequestIds = Array.isArray(o.reinspectionRequestIds)
+        ? o.reinspectionRequestIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      out.push({
+        id: o.id,
+        sequence: typeof o.sequence === 'number' && o.sequence > 0 ? o.sequence : out.length + 1,
+        status,
+        openedAt: o.openedAt,
+        closedAt: typeof o.closedAt === 'string' ? o.closedAt : undefined,
+        openReason: typeof o.openReason === 'string' ? o.openReason : null,
+        reinspectionRequestIds,
+        quoteVersion: typeof o.quoteVersion === 'number' ? o.quoteVersion : null,
+        paymentAcceptanceId:
+          typeof o.paymentAcceptanceId === 'string' ? o.paymentAcceptanceId : null,
+      });
+    }
+    return out.sort((a, b) => a.sequence - b.sequence);
+  }
+
+  /**
+   * Asigură cel puțin Runda 1 — bootstrap din date legacy (scalar accept + reconstatări).
+   */
+  private ensureSettlementState(row: {
+    createdAt: Date;
+    damageSettlementRoundsJson?: unknown;
+    damagePaymentAcceptancesJson?: unknown;
+    damagePaymentAcceptancePdfUrl?: string | null;
+    damagePaymentAcceptanceFileName?: string | null;
+    damagePaymentAcceptanceReceivedAt?: Date | null;
+    damagePaymentAcceptanceNotes?: string | null;
+    damageInspectionNotesJson?: unknown;
+  }): {
+    rounds: DamageSettlementRound[];
+    acceptances: DamagePaymentAcceptanceItem[];
+  } {
+    let rounds = this.parseSettlementRounds(row.damageSettlementRoundsJson);
+    let acceptances = this.parsePaymentAcceptances(row.damagePaymentAcceptancesJson);
+
+    if (!rounds.length) {
+      const history = this.parseDamageConstatareHistory(row.damageInspectionNotesJson);
+      const reconIds = history
+        .filter((h): h is DamageReinspectionRequestItem => h.kind === 'reinspection_request')
+        .map((h) => h.id);
+      const roundId = `round_${row.createdAt.getTime() || Date.now()}_1`;
+      let paymentAcceptanceId: string | null = null;
+      if (row.damagePaymentAcceptancePdfUrl?.trim()) {
+        const acceptId = `accept_legacy_${row.createdAt.getTime() || Date.now()}`;
+        paymentAcceptanceId = acceptId;
+        if (!acceptances.some((a) => a.id === acceptId)) {
+          acceptances = [
+            {
+              id: acceptId,
+              sequence: 1,
+              roundId,
+              pdfUrl: row.damagePaymentAcceptancePdfUrl.trim(),
+              fileName: row.damagePaymentAcceptanceFileName ?? undefined,
+              receivedAt:
+                row.damagePaymentAcceptanceReceivedAt?.toISOString() ??
+                row.createdAt.toISOString(),
+              notes: row.damagePaymentAcceptanceNotes ?? null,
+            },
+            ...acceptances,
+          ];
+        }
+      }
+      rounds = [
+        {
+          id: roundId,
+          sequence: 1,
+          status: 'active',
+          openedAt: row.createdAt.toISOString(),
+          openReason: null,
+          reinspectionRequestIds: reconIds,
+          quoteVersion: null,
+          paymentAcceptanceId,
+        },
+      ];
+    }
+
+    if (!rounds.some((r) => r.status === 'active') && rounds.length) {
+      rounds = rounds.map((r, i) =>
+        i === rounds.length - 1 ? { ...r, status: 'active' as const, closedAt: undefined } : r,
+      );
+    }
+
+    return { rounds, acceptances };
+  }
+
+  private activeSettlementRound(rounds: DamageSettlementRound[]): DamageSettlementRound | null {
+    return rounds.find((r) => r.status === 'active') ?? rounds[rounds.length - 1] ?? null;
+  }
+
   private parseDamageDocuments(raw: unknown): DamageDocumentItem[] {
     if (!Array.isArray(raw)) return [];
     const out: DamageDocumentItem[] = [];
@@ -3615,6 +3959,8 @@ export class ServiceCasesService {
       damagePaymentAcceptanceFileName?: string | null;
       damagePaymentAcceptanceReceivedAt?: Date | null;
       damagePaymentAcceptanceNotes?: string | null;
+      damagePaymentAcceptancesJson?: unknown;
+      damageSettlementRoundsJson?: unknown;
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
@@ -3745,6 +4091,13 @@ export class ServiceCasesService {
       damagePaymentAcceptanceReceivedAt:
         row.damagePaymentAcceptanceReceivedAt?.toISOString() ?? null,
       damagePaymentAcceptanceNotes: row.damagePaymentAcceptanceNotes ?? null,
+      ...(() => {
+        const settlement = this.ensureSettlementState(row);
+        return {
+          damagePaymentAcceptances: settlement.acceptances,
+          damageSettlementRounds: settlement.rounds,
+        };
+      })(),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       workOrders: (row.workOrders ?? []).map((wo) => {

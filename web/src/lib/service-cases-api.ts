@@ -128,6 +128,30 @@ export type DamageConstatareHistoryItem =
   | DamageInspectionNoteItem
   | DamageReinspectionRequestItem;
 
+export type DamagePaymentAcceptanceItem = {
+  id: string;
+  sequence: number;
+  roundId: string;
+  pdfUrl: string;
+  fileName?: string;
+  receivedAt: string;
+  notes?: string | null;
+};
+
+export type DamageSettlementRoundStatus = "active" | "closed";
+
+export type DamageSettlementRound = {
+  id: string;
+  sequence: number;
+  status: DamageSettlementRoundStatus;
+  openedAt: string;
+  closedAt?: string;
+  openReason?: string | null;
+  reinspectionRequestIds: string[];
+  quoteVersion?: number | null;
+  paymentAcceptanceId?: string | null;
+};
+
 export function isReinspectionRequest(
   item: DamageConstatareHistoryItem,
 ): item is DamageReinspectionRequestItem {
@@ -343,10 +367,18 @@ export function isDamageInsurerReady(sc: {
   damagePayerType?: DamagePayerType | null;
   damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
   damageInsurerAgreedAt?: string | null;
+  damageSettlementRounds?: DamageSettlementRound[] | null;
 }): boolean {
   if (sc.damagePayerType === "client") return !!sc.damageInsurerAgreedAt;
+  const rounds = sc.damageSettlementRounds ?? [];
+  const active = rounds.find((r) => r.status === "active");
+  if (active && active.sequence > 1) {
+    return !!active.paymentAcceptanceId;
+  }
   return (
-    sc.damageInsurerPipelineStatus === "payment_accepted" || !!sc.damageInsurerAgreedAt
+    sc.damageInsurerPipelineStatus === "payment_accepted" ||
+    !!sc.damageInsurerAgreedAt ||
+    !!active?.paymentAcceptanceId
   );
 }
 
@@ -475,6 +507,8 @@ export type ServiceCaseRecord = {
   damagePaymentAcceptanceFileName?: string | null;
   damagePaymentAcceptanceReceivedAt?: string | null;
   damagePaymentAcceptanceNotes?: string | null;
+  damagePaymentAcceptances?: DamagePaymentAcceptanceItem[];
+  damageSettlementRounds?: DamageSettlementRound[];
   createdAt: string;
   updatedAt: string;
   workOrders: WorkOrderRecord[];
