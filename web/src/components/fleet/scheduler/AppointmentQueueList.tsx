@@ -19,6 +19,8 @@ type Props = {
   onCancel?: (id: string) => void;
   onSupplierValidate?: (id: string) => void;
   onRequestCancel?: (id: string) => void;
+  /** Partener: deschide detaliu + edit dată alternativă. */
+  onProposeReschedule?: (id: string) => void;
   partnerMode?: boolean;
   compact?: boolean;
 };
@@ -32,6 +34,7 @@ export function AppointmentQueueList({
   onCancel,
   onSupplierValidate,
   onRequestCancel,
+  onProposeReschedule,
   partnerMode,
   compact,
 }: Props) {
@@ -113,6 +116,17 @@ export function AppointmentQueueList({
                       className="rounded-md bg-sky-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-sky-500"
                     >
                       Validează
+                    </button>
+                  ) : null}
+                  {partnerMode &&
+                  onProposeReschedule &&
+                  (a.status === "pending_supplier" || a.status === "needs_repropose") ? (
+                    <button
+                      type="button"
+                      onClick={() => onProposeReschedule(a.id)}
+                      className="rounded-md border border-amber-500/50 bg-amber-950/30 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-950/50"
+                    >
+                      Propune altă dată
                     </button>
                   ) : null}
                   {a.status === "scheduled" && onConfirm && !partnerMode ? (

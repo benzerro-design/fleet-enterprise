@@ -97,6 +97,7 @@ export function DamageClaimPanel({
 }: Props) {
   const isDamage = serviceCase?.workflowType === "damage";
   const [movable, setMovable] = useState<VehicleMovableState | "">("");
+  const [eventOn, setEventOn] = useState("");
   const [payer, setPayer] = useState<DamagePayerType | "">("");
   const [insuranceType, setInsuranceType] = useState<DamageInsuranceType | "">("");
   const [claimNumber, setClaimNumber] = useState("");
@@ -146,6 +147,7 @@ export function DamageClaimPanel({
   useEffect(() => {
     if (!serviceCase || serviceCase.workflowType !== "damage") return;
     setMovable(serviceCase.vehicleMovable ?? "");
+    setEventOn(serviceCase.damageEventOn ?? "");
     setPayer(serviceCase.damagePayerType ?? "");
     setInsuranceType(serviceCase.damageInsuranceType ?? "");
     setClaimNumber(serviceCase.damageClaimNumber ?? "");
@@ -335,6 +337,7 @@ export function DamageClaimPanel({
     await patch(
       {
         vehicleMovable: movable || null,
+        damageEventOn: eventOn.trim() || null,
         damagePayerType: payer || null,
         damageInsuranceType: insuranceType || null,
         damageClaimNumber: claimNumber.trim() || null,
@@ -677,6 +680,16 @@ export function DamageClaimPanel({
               <option value="movable">Deplasabilă</option>
               <option value="immovable">Nedeplasabilă</option>
             </select>
+          </label>
+          <label className="block">
+            <span className={OPS_LABEL_CLASS}>Data eveniment</span>
+            <input
+              type="date"
+              className={OPS_INPUT_CLASS}
+              disabled={disabled || sectionLocked("claim_info")}
+              value={eventOn}
+              onChange={(e) => setEventOn(e.target.value)}
+            />
           </label>
           <label className="block">
             <span className={OPS_LABEL_CLASS}>
@@ -2419,6 +2432,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
   createdAt: string;
   updatedAt: string;
   vehicleMovable?: VehicleMovableState | null;
+  damageEventOn?: string | null;
   damagePayerType?: DamagePayerType | null;
   damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
   damageInsuranceType?: DamageInsuranceType | null;
@@ -2485,6 +2499,7 @@ export function serviceCaseFromWorkOrderDamage(wo: {
     awaitingPostApproval: wo.awaitingPostApproval,
     postApprovalPath: wo.postApprovalPath,
     vehicleMovable: wo.vehicleMovable ?? null,
+    damageEventOn: wo.damageEventOn ?? null,
     damageInsuranceType: wo.damageInsuranceType ?? null,
     damageClaimNumber: wo.damageClaimNumber ?? null,
     damageInsurerName: wo.damageInsurerName ?? null,

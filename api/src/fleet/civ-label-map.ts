@@ -774,10 +774,17 @@ export function findCivSeriesInFrontText(text: string): string | null {
     /\b([A-HJ-NP-Z]\d{6})\b[\s\S]{0,40}?(?:serie|seria)\s*c\.?\s*i\.?\s*v/i.exec(withoutEngine);
   if (nearLabel && isCivSeriesCode(nearLabel[1]!)) return nearLabel[1]!.toUpperCase();
 
+  // „J 4 5 9 5 1 3” SAU „J 4 5 9 5 13” (Vision lipește ultimele două cifre).
   const compactSpaced = [
     ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\b/gi),
   ].map((m) => `${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}${m[6]}${m[7]}`.toUpperCase());
   for (const c of compactSpaced) {
+    if (isCivSeriesCode(c)) return c;
+  }
+  const gluedSpaced = [
+    ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])((?:\s+\d{1,2}){4,6})\b/gi),
+  ].map((m) => `${m[1]}${m[2]!.replace(/\s+/g, '')}`.toUpperCase());
+  for (const c of gluedSpaced) {
     if (isCivSeriesCode(c)) return c;
   }
 
@@ -800,9 +807,9 @@ export function findCivSeriesInFrontText(text: string): string | null {
   const candidates = [...withoutEngine.matchAll(/\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) =>
     m[1]!.toUpperCase(),
   );
-  const unique = [...new Set([...candidates, ...compactSpaced, ...letterDigits, ...lineBroken])].filter(
-    isCivSeriesCode,
-  );
+  const unique = [
+    ...new Set([...candidates, ...compactSpaced, ...gluedSpaced, ...letterDigits, ...lineBroken]),
+  ].filter(isCivSeriesCode);
   // Pe CIV moderne seria tipărită e frecvent P###### — preferă față de R###### (serie motor).
   const pSeries = unique.filter((s) => s.startsWith('P'));
   if (pSeries.length === 1) return pSeries[0]!;

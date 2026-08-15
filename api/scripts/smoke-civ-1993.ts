@@ -4,6 +4,7 @@
  */
 import { mapCivExtractTextToPreview, detectCivDocumentFormat } from '../src/fleet/civ-extract';
 import { mapCiv1993SectionAToProfile } from '../src/fleet/civ-1993-extract';
+import { findCivSeriesInFrontText } from '../src/fleet/civ-label-map';
 import { readFileSync } from 'fs';
 
 const sample = `
@@ -117,6 +118,25 @@ if (standNoise8.profile.standingPlaces != null) {
   throw new Error(`standing noise 8 leaked: ${standNoise8.profile.standingPlaces}`);
 }
 
+// OCR: tip pe o linie cu Fiesta; rezervor pe 2 linii; serie lipită „J 4 5 9 5 13”
+const tipTankSeries = `
+4 Tipul JA8 / KVJA1J / 5AEABH / Fiesta 4
+16 Vit . max con- 162 17 Capacitatea 42.8 16 17
+structiva ( km / h ) rezervorului
+J 4 5 9 5 13
+`;
+const tts = mapCiv1993SectionAToProfile(tipTankSeries);
+if (!String(tts.profile.typeVariantVersion ?? '').includes('Fiesta')) {
+  throw new Error(`tip+Fiesta got ${tts.profile.typeVariantVersion}`);
+}
+if (tts.profile.fuelTankCapacityL !== 42.8) {
+  throw new Error(`tank split=${tts.profile.fuelTankCapacityL}`);
+}
+{
+  const ser = findCivSeriesInFrontText('J 4 5 9 5 13');
+  if (ser !== 'J459513') throw new Error(`series glued=${ser}`);
+}
+
 const fmt = detectCivDocumentFormat(sample);
 const p = mapCivExtractTextToPreview(sample, 'unknown', 'text');
 console.log({
@@ -206,5 +226,18 @@ if (!String(f.civProfile.tyresRear ?? '').includes('195/50')) {
 }
 if (String(f.civProfile.tyresFront ?? '').includes('175/65')) {
   throw new Error(`fiesta tyresF optional: ${f.civProfile.tyresFront}`);
+}
+if (f.civProfile.fuelTankCapacityL !== 42.8 && f.civProfile.fuelTankCapacityL !== 42) {
+  // allow int if OCR drops decimal in some paths; Vision Fiesta = 42.8
+  const tank = Number(f.civProfile.fuelTankCapacityL);
+  if (!(tank >= 42 && tank <= 43)) {
+    throw new Error(`fiesta tank=${f.civProfile.fuelTankCapacityL}`);
+  }
+}
+if (!String(f.civProfile.typeVariantVersion ?? '').includes('Fiesta')) {
+  throw new Error(`fiesta tip=${f.civProfile.typeVariantVersion}`);
+}
+if (f.civSeries !== 'J459513') {
+  throw new Error(`fiesta series=${f.civSeries}`);
 }
 console.log('OK fiesta+split');

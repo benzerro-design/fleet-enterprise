@@ -35,6 +35,8 @@ export type CreateCostInput = {
   amountCents: number;
   fuelLiters?: number | null;
   fuelProductType?: 'diesel' | 'petrol' | 'hybrid' | 'electric' | 'lpg' | null;
+  /** Opțional — legătură alimentare ↔ cursă (doar Combustibil). */
+  tripId?: string | null;
   odometerKm?: number | null;
   invoiceNumber?: string | null;
   invoiceDate?: string | null;
@@ -206,6 +208,7 @@ function toCostRow(row: {
   amountCents: number;
   fuelLiters: number | null;
   fuelProductType: string | null;
+  tripId: string | null;
   odometerKm: number | null;
   invoiceNumber: string | null;
   invoiceDate: Date | null;
@@ -232,6 +235,7 @@ function toCostRow(row: {
     amountCents: row.amountCents,
     fuelLiters: row.fuelLiters,
     fuelProductType: row.fuelProductType,
+    tripId: row.tripId,
     odometerKm: row.odometerKm,
     invoiceNumber: row.invoiceNumber,
     invoiceDate: row.invoiceDate ? row.invoiceDate.toISOString() : null,
@@ -369,6 +373,13 @@ export class CostsService {
     await assertCostCreateWrite(this.prisma, tenantSlug, dto.vehicleId, dto.category, dto.notes, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
 
+    const tripId = await this.resolveTripIdForCost(
+      tenant.id,
+      dto.vehicleId,
+      dto.category,
+      dto.tripId,
+    );
+
     const provider = await providerLabelForSupplier(
       this.prisma,
       tenant.id,
@@ -386,6 +397,7 @@ export class CostsService {
         amountCents: Math.round(dto.amountCents),
         fuelLiters,
         fuelProductType,
+        tripId,
         odometerKm: dto.odometerKm ?? null,
         invoiceNumber: dto.invoiceNumber ?? null,
         invoiceDate:
@@ -522,6 +534,16 @@ export class CostsService {
       );
     }
 
+    let tripIdPatch: string | null | undefined = undefined;
+    if (dto.tripId !== undefined || dto.category !== undefined) {
+      tripIdPatch = await this.resolveTripIdForCost(
+        before.tenantId,
+        before.vehicleId,
+        nextCategory,
+        dto.tripId !== undefined ? dto.tripId : before.tripId,
+      );
+    }
+
     const data: Prisma.CostEntryUncheckedUpdateManyInput = {
       category: dto.category !== undefined ? dto.category.trim() : undefined,
       provider: providerPatch !== undefined ? providerPatch : dto.provider,
@@ -529,6 +551,7 @@ export class CostsService {
       amountCents: dto.amountCents !== undefined ? Math.round(dto.amountCents) : undefined,
       fuelLiters,
       fuelProductType,
+      tripId: tripIdPatch,
       odometerKm: dto.odometerKm,
       invoiceNumber: dto.invoiceNumber,
       invoiceDate:
@@ -722,5 +745,28 @@ export class CostsService {
       select: { civProfile: true },
     });
     return resolveVehicleFuelFromCivP3(normalizeCivProfile(vehicle?.civProfile ?? null));
+  }
+
+  /** Legătură trip doar pe Combustibil; trip trebuie să fie pe același vehicul + tenant. */
+  private async resolveTripIdForCost(
+    tenantId: string,
+    vehicleId: string,
+    category: string,
+    tripId: string | null | undefined,
+  ): Promise<string | null> {
+    if (!isFuelCostCategory(category)) return null;
+    if (tripId === undefined) return null;
+    const id = tripId?.trim() || null;
+    if (!id) return null;
+
+    const trip = await this.prisma.trip.findFirst({
+      where: { id, tenantId },
+      select: { id: true, vehicleId: true },
+    });
+    if (!trip) throw new BadRequestException('tripId not found in tenant');
+    if (trip.vehicleId !== vehicleId) {
+      throw new BadRequestException('tripId must belong to the same vehicle as the cost');
+    }
+    return trip.id;
   }
 }

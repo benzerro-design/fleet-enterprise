@@ -238,12 +238,13 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
   );
 
   // 4. Tipul / Varianta → Tip – variantă – versiune (tot șirul, inclusiv Fiesta)
+  // Nu folosi non-greedy + [A-Z0-9]{4,} — oprește la „JA8” și taie Fiesta.
   const tipVar = pick(text, [
     /(?:^|\n)\s*4\.?\s*Tipul\s*\/?\s*Var\w*\s*[:\s]+([^\n]+)/i,
-    /(?:^|\n)\s*4\.?\s*Tipul\s*[:\s]+([A-Z0-9][^\n]*?(?:Fiesta|[A-Z0-9]{4,}))/i,
+    /(?:^|\n)\s*4\.?\s*Tipul\s*[:\s]+([^\n]+)/i,
     /\bTipul\s*\/?\s*Var\w*\s*[:\s]+([^\n]+)/i,
     /\bTipul\s+([A-Z0-9][A-Z0-9.\-\/\s]{4,80}?Fiesta)\b/i,
-    /\bTipul\s+([A-Z0-9][A-Z0-9.\-\/\s]{4,60})/i,
+    /\bTipul\s+([A-Z0-9][A-Z0-9.\-\/\s]{8,80})/i,
   ]);
   if (tipVar) {
     set(
@@ -251,7 +252,7 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
       'Tip – variantă – versiune',
       tipVar
         .replace(/\s+Vananla\s*/i, ' ')
-        .replace(/\s+\d+\s*$/, '')
+        .replace(/\s+\d+\s*$/, '') // nr. rând dreapta
         .replace(/\s+/g, ' ')
         .replace(/\s*\/\s*$/, '')
         .trim(),
@@ -719,16 +720,28 @@ export function mapCiv1993SectionAToProfile(sectionA: string): {
     const idx = matched.findIndex((m) => m.target === 'maxSpeedKmh');
     if (idx >= 0) matched.splice(idx, 1);
   }
-  // 17. Rezervor — între vit. max și separatorul A|B (deja în COL A)
+  // 17. Rezervor — OCR: „17 Capacitatea 42.8” pe o linie, „rezervorului” pe următoarea
   set(
     'fuelTankCapacityL',
     'Capacitate rezervor',
     pick(text, [
       /\bCapacitatea\s+rezervorului\s*(?:\([^)]*\))?\s*[:\s]*([\d.,]+)\b/i,
       /\bCapacitatea\s+rezervorului\s*(?:\([^)]*\))?\s*([\d.,]+)\b/i,
-    ]),
+      /\b17\.?\s*Capacitatea\s*[:\s]*([\d.,]+)\b/i,
+      /\bCapacitatea\s*[:\s]*([\d.,]+)\b[\s\S]{0,60}?rezervor/i,
+      /\bCapacitatea\s+([\d.,]+)\b(?=[\s\S]{0,40}?rezervor)/i,
+    ]) ??
+      nearNumber(text, /\bCapacitatea\b/i, { min: 10, max: 200, window: 50 }),
     true,
   );
+  if (
+    typeof profile.fuelTankCapacityL === 'number' &&
+    (profile.fuelTankCapacityL < 5 || profile.fuelTankCapacityL > 500)
+  ) {
+    delete profile.fuelTankCapacityL;
+    const idx = matched.findIndex((m) => m.target === 'fuelTankCapacityL');
+    if (idx >= 0) matched.splice(idx, 1);
+  }
   // 18. Culoare
   set(
     'color',
@@ -825,8 +838,12 @@ export function mapCiv1993TextToPreview(
     mergeFrom(mapCiv1993SectionAToProfile(stripDiacritics(text)));
   }
 
-  const seriesText = pages.seriesText || pages.frontRaw || text;
-  const civSeries = findCivSeriesInFrontText(seriesText);
+  // Serie CIV: pe 1993 apare adesea pe verso lângă omologare („J 4 5 9 5 13”), nu doar pe față.
+  const civSeries =
+    findCivSeriesInFrontText(pages.seriesText || pages.frontRaw || '') ||
+    findCivSeriesInFrontText(text) ||
+    findCivSeriesInFrontText(sectionA) ||
+    findCivSeriesInFrontText(verso);
   if (civSeries) {
     allMatched.push({ rubric: 'Serie CIV', target: 'civSeries', value: civSeries });
   }

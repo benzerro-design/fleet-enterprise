@@ -127,6 +127,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   postApprovalPath: 'immediate' | 'reschedule' | null;
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;
+  linkedAppointmentStatus: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
   visit2InServiceAt: string | null;
@@ -148,6 +149,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   driverName: string | null;
   driverPhone: string | null;
   vehicleMovable: VehicleMovableState | null;
+  /** YYYY-MM-DD */
+  damageEventOn: string | null;
   damagePayerType: DamagePayerType | null;
   damageInsurerPipelineStatus: DamageInsurerPipelineStatus | null;
   damageInsuranceType: DamageInsuranceType | null;
@@ -600,6 +603,7 @@ export class WorkOrdersService {
             awaitingPostApproval: true,
             postApprovalPath: true,
             vehicleMovable: true,
+            damageEventOn: true,
             damagePayerType: true,
             damageInsurerPipelineStatus: true,
             damageInsuranceType: true,
@@ -688,6 +692,7 @@ export class WorkOrdersService {
       postApprovalPath: row.serviceCase.postApprovalPath ?? null,
       linkedAppointmentId: linked?.id ?? null,
       linkedAppointmentScheduledAt: linked?.scheduledAt.toISOString() ?? null,
+      linkedAppointmentStatus: linked?.status ?? null,
       inServiceAt: row.inServiceAt?.toISOString() ?? null,
       outServiceAt: row.outServiceAt?.toISOString() ?? null,
       visit2InServiceAt: row.visit2InServiceAt?.toISOString() ?? null,
@@ -731,6 +736,9 @@ export class WorkOrdersService {
       driverName: row.serviceCase.sourceTicket?.driver?.fullName ?? null,
       driverPhone: row.serviceCase.sourceTicket?.driver?.phone ?? null,
       vehicleMovable: row.serviceCase.vehicleMovable ?? null,
+      damageEventOn: row.serviceCase.damageEventOn
+        ? row.serviceCase.damageEventOn.toISOString().slice(0, 10)
+        : null,
       damagePayerType: row.serviceCase.damagePayerType ?? null,
       damageInsurerPipelineStatus: row.serviceCase.damageInsurerPipelineStatus ?? null,
       damageInsuranceType: row.serviceCase.damageInsuranceType ?? null,
@@ -1368,30 +1376,30 @@ export class WorkOrdersService {
     tenantId: string,
     serviceCaseId: string,
     plannedAt: Date | null,
-  ): Promise<{ id: string; scheduledAt: Date } | null> {
-    if (plannedAt) {
-      const exact = await this.prisma.serviceAppointment.findFirst({
-        where: {
-          tenantId,
-          serviceCaseId,
-          scheduledAt: plannedAt,
-          status: { not: 'cancelled' },
-        },
-        select: { id: true, scheduledAt: true },
-      });
-      if (exact) return exact;
-    }
-
-    return this.prisma.serviceAppointment.findFirst({
+  ): Promise<{ id: string; scheduledAt: Date; status: string } | null> {
+    const rows = await this.prisma.serviceAppointment.findMany({
       where: {
         tenantId,
         serviceCaseId,
         status: { not: 'cancelled' },
-        ...(plannedAt ? { scheduledAt: { gte: new Date(plannedAt.getTime() - 86_400_000) } } : {}),
       },
-      orderBy: { scheduledAt: 'asc' },
-      select: { id: true, scheduledAt: true },
+      orderBy: { scheduledAt: 'desc' },
+      select: { id: true, scheduledAt: true, status: true },
+      take: 12,
     });
+    if (!rows.length) return null;
+
+    const active = rows.find((r) =>
+      ['pending_supplier', 'needs_repropose', 'scheduled', 'confirmed'].includes(r.status),
+    );
+    if (active) return active;
+
+    if (plannedAt) {
+      const exact = rows.find((r) => r.scheduledAt.getTime() === plannedAt.getTime());
+      if (exact) return exact;
+    }
+
+    return rows[0] ?? null;
   }
 
   private async resolveTicketSettlement(

@@ -29,6 +29,7 @@ import {
   serviceCaseFromWorkOrderDamage,
 } from "@/components/fleet/tickets/DamageClaimPanel";
 import { isDamageInsurerReady } from "@/lib/service-cases-api";
+import { appointmentStatusLabel } from "@/lib/appointments-api";
 import {
   DEFAULT_WORK_ORDER_SETTINGS,
   type WorkOrderSettings,
@@ -504,6 +505,14 @@ export function WorkOrderSheetShell({
               </div>
             ) : null}
             <div>Programare: {fmtDate(wo.plannedAt ?? wo.linkedAppointmentScheduledAt)}</div>
+            {wo.linkedAppointmentScheduledAt && wo.linkedAppointmentStatus ? (
+              <div className="text-[11px] text-zinc-400">
+                Status programare:{" "}
+                <span className="text-amber-200/90">
+                  {appointmentStatusLabel(wo.linkedAppointmentStatus)}
+                </span>
+              </div>
+            ) : null}
             <div>
               Estimare finalizare:{" "}
               {wo.estimatedRepairAt ? (
@@ -618,6 +627,24 @@ export function WorkOrderSheetShell({
             {wo.ticketSubject ? (
               <div>
                 #{wo.ticketDisplayId}: {wo.ticketSubject}
+              </div>
+            ) : null}
+            {isDamageWo ? (
+              <div>
+                Data eveniment:{" "}
+                {wo.damageEventOn ? (
+                  <span className="text-zinc-200">{formatDateRo(wo.damageEventOn)}</span>
+                ) : (
+                  <span className="text-amber-400/90">necompletată</span>
+                )}
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => setSheetView("dosar")}
+                  className="text-sky-300 hover:underline"
+                >
+                  editează pe Dosar
+                </button>
               </div>
             ) : null}
             {wo.driverName ? (
@@ -790,40 +817,62 @@ export function WorkOrderSheetShell({
               <p className="text-xs text-amber-100">
                 {wo.repairPathNote ?? "Reprogramare — devizul aprobat rămâne valid"}
               </p>
+              <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-zinc-200">
+                {wo.linkedAppointmentScheduledAt ? (
+                  <>
+                    <p>
+                      Propunere programare:{" "}
+                      <span className="font-medium text-zinc-50">
+                        {fmtDate(wo.linkedAppointmentScheduledAt)}
+                      </span>
+                      {wo.linkedAppointmentStatus ? (
+                        <>
+                          {" · "}
+                          <span className="text-amber-200">
+                            {appointmentStatusLabel(wo.linkedAppointmentStatus)}
+                          </span>
+                        </>
+                      ) : null}
+                    </p>
+                    <p className="mt-1 text-[10px] text-zinc-500">
+                      {wo.linkedAppointmentStatus === "pending_supplier"
+                        ? "Așteaptă validarea partenerului sau o propunere alternativă de dată."
+                        : wo.linkedAppointmentStatus === "scheduled"
+                          ? "Validat de partener — așteaptă confirmarea managerului."
+                          : "Deschide programatorul pentru detalii / acțiuni."}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-amber-100/90">
+                    Nu există încă o programare legată — creează sau alege una din calendar.
+                  </p>
+                )}
+                <p className="mt-2">
+                  <Link
+                    href={
+                      schedulerLink ??
+                      (isPartner ? "/fleet/partner/appointments" : "/fleet/scheduler")
+                    }
+                    className="font-medium text-sky-300 hover:underline"
+                  >
+                    {wo.linkedAppointmentId
+                      ? "Deschide programarea în calendar →"
+                      : "Deschide programatorul →"}
+                  </Link>
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setRescheduleOpen((v) => !v)}
-                className="text-xs text-sky-300 hover:underline"
+                className="text-xs text-zinc-500 hover:text-zinc-300 hover:underline"
               >
-                {rescheduleOpen ? "Ascunde programare ▴" : "Programare reparație ▾"}
+                {rescheduleOpen ? "Ascunde detalii ▴" : "Detalii reprogramare ▾"}
               </button>
               {rescheduleOpen ? (
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
                   <p>
-                    Programează vizita de reparație din calendar
-                    {schedulerLink ? (
-                      <>
-                        {" · "}
-                        <Link href={schedulerLink} className="text-sky-300 hover:underline">
-                          deschide programatorul
-                        </Link>
-                      </>
-                    ) : (
-                      <>
-                        {" · "}
-                        <Link
-                          href={isPartner ? "/fleet/partner/appointments" : "/fleet/scheduler"}
-                          className="text-sky-300 hover:underline"
-                        >
-                          deschide programatorul
-                        </Link>
-                      </>
-                    )}
-                    .
-                  </p>
-                  <p className="mt-1 text-[10px] text-zinc-500">
-                    Partenerul validează propunerile pending; după confirmare duală folosești km In/Out vizită 2 pe
-                    această comandă.
+                    Partenerul validează propunerea (Validează) sau propune altă dată; după confirmare
+                    duală folosești km In/Out vizită 2 pe această comandă.
                   </p>
                 </div>
               ) : null}

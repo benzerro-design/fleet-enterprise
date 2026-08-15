@@ -37,6 +37,8 @@ type Props = {
   partnerMode?: boolean;
   /** Notifică shell-ul când e activă reprogramarea (pick din calendar). */
   onRescheduleEditingChange?: (editing: boolean) => void;
+  /** Deschide direct editarea datei (ex. din listă „Propune altă dată”). */
+  openInRescheduleMode?: boolean;
   /** Slot ales din calendar în timp ce editezi intervalul. */
   calendarPickAt?: string;
   onCalendarPickConsumed?: () => void;
@@ -60,6 +62,7 @@ export function SchedulerInspector({
   serviceTypeCode,
   partnerMode,
   onRescheduleEditingChange,
+  openInRescheduleMode,
   calendarPickAt,
   onCalendarPickConsumed,
   returnTicketId,
@@ -85,13 +88,18 @@ export function SchedulerInspector({
     if (!appointment) return;
     setEditScheduledAt(toDatetimeLocalValue(appointment.scheduledAt));
     setEditDurationMin(String(appointment.durationMin));
-    setEditing(false);
-    onRescheduleEditingChange?.(false);
+    if (openInRescheduleMode) {
+      setEditing(true);
+      onRescheduleEditingChange?.(true);
+    } else {
+      setEditing(false);
+      onRescheduleEditingChange?.(false);
+    }
     setError(null);
     setRequestingCancel(false);
     setCancelNote("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when appointment identity/time changes
-  }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when appointment identity/time/mode changes
+  }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin, openInRescheduleMode]);
 
   useEffect(() => {
     setError(null);
@@ -816,7 +824,7 @@ export function SchedulerInspector({
                   }}
                   className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
                 >
-                  {appointment.status === "needs_repropose" ? "Propune / repropune dată" : "Repropune dată"}
+                  {appointment.status === "needs_repropose" ? "Propune / repropune dată" : "Propune altă dată"}
                 </button>
               ) : null}
             </>

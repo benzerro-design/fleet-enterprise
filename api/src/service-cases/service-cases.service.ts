@@ -284,6 +284,8 @@ export type ServiceCaseRecord = {
   awaitingPostApproval: boolean;
   postApprovalPath: PostApprovalPath | null;
   vehicleMovable: VehicleMovableState | null;
+  /** YYYY-MM-DD — data evenimentului de daună. */
+  damageEventOn: string | null;
   damageInsuranceType: DamageInsuranceType | null;
   damageClaimNumber: string | null;
   damageInsurerName: string | null;
@@ -323,6 +325,8 @@ export type ServiceCaseRecord = {
 
 export type PatchDamageClaimInput = {
   vehicleMovable?: VehicleMovableState | null;
+  /** YYYY-MM-DD — data evenimentului de daună. */
+  damageEventOn?: string | null;
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
@@ -714,6 +718,7 @@ export class ServiceCasesService {
 
     const vehicleMovableOnly =
       dto.vehicleMovable !== undefined &&
+      dto.damageEventOn === undefined &&
       dto.damageInsuranceType === undefined &&
       dto.damageClaimNumber === undefined &&
       dto.damageInsurerName === undefined &&
@@ -769,6 +774,17 @@ export class ServiceCasesService {
         throw new BadRequestException('vehicleMovable must be movable or immovable');
       }
       data.vehicleMovable = dto.vehicleMovable;
+    }
+    if (dto.damageEventOn !== undefined) {
+      if (dto.damageEventOn === null || dto.damageEventOn === '') {
+        data.damageEventOn = null;
+      } else {
+        const d = new Date(`${dto.damageEventOn.trim()}T12:00:00.000Z`);
+        if (Number.isNaN(d.getTime())) {
+          throw new BadRequestException('damageEventOn must be YYYY-MM-DD');
+        }
+        data.damageEventOn = d;
+      }
     }
     if (dto.damageInsuranceType !== undefined) data.damageInsuranceType = dto.damageInsuranceType;
     if (dto.damageClaimNumber !== undefined) {
@@ -1105,6 +1121,13 @@ export class ServiceCasesService {
         if (dto.clientPayerConfirmed) parts.push('plătitor client confirmat');
         if (dto.damageClaimStatus) parts.push(`status: ${dto.damageClaimStatus}`);
         if (dto.damageClaimNumber?.trim()) parts.push(`nr. dosar: ${dto.damageClaimNumber.trim()}`);
+        if (dto.damageEventOn !== undefined) {
+          parts.push(
+            dto.damageEventOn?.trim()
+              ? `data eveniment: ${dto.damageEventOn.trim()}`
+              : 'data eveniment ștearsă',
+          );
+        }
         if (dto.damageInsurerPipelineStatus) {
           parts.push(`pipeline: ${dto.damageInsurerPipelineStatus}`);
         }
@@ -2184,6 +2207,7 @@ export class ServiceCasesService {
     const touches: Partial<Record<DamageSectionKey, boolean>> = {
       claim_info:
         dto.vehicleMovable !== undefined ||
+        dto.damageEventOn !== undefined ||
         dto.damageInsuranceType !== undefined ||
         dto.damageClaimNumber !== undefined ||
         dto.damageInsurerName !== undefined ||
@@ -3559,6 +3583,7 @@ export class ServiceCasesService {
       awaitingPostApproval?: boolean;
       postApprovalPath?: PostApprovalPath | null;
       vehicleMovable?: VehicleMovableState | null;
+      damageEventOn?: Date | null;
       damageInsuranceType?: DamageInsuranceType | null;
       damageClaimNumber?: string | null;
       damageInsurerName?: string | null;
@@ -3661,6 +3686,9 @@ export class ServiceCasesService {
       awaitingPostApproval: row.awaitingPostApproval ?? false,
       postApprovalPath: row.postApprovalPath ?? null,
       vehicleMovable: row.vehicleMovable ?? null,
+      damageEventOn: row.damageEventOn
+        ? row.damageEventOn.toISOString().slice(0, 10)
+        : null,
       damageInsuranceType: row.damageInsuranceType ?? null,
       damageClaimNumber: row.damageClaimNumber ?? null,
       damageInsurerName: row.damageInsurerName ?? null,

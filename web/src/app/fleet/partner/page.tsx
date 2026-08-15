@@ -63,8 +63,11 @@ async function loadPendingAppointments(
   q: ReturnType<typeof parsePartnerSupplierQuery>,
 ): Promise<CalendarAppointment[]> {
   try {
-    const from = new Date().toISOString();
-    const to = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+    // Aliniat cu /appointments/stats (pendingSupplier): include și sloturi în trecut
+    // care încă așteaptă validare — altfel KPI arată 1 iar lista e goală.
+    const dayMs = 24 * 60 * 60 * 1000;
+    const from = new Date(Date.now() - 365 * dayMs).toISOString();
+    const to = new Date(Date.now() + 365 * dayMs).toISOString();
     const base = partnerSupplierSearchParams(q);
     base.set("from", from);
     base.set("to", to);
@@ -327,7 +330,9 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                 </tr>
               </thead>
               <tbody>
-                {pendingAppts.slice(0, 6).map((row) => (
+                {pendingAppts.slice(0, 6).map((row) => {
+                  const past = new Date(row.scheduledAt).getTime() < Date.now();
+                  return (
                   <tr key={row.id} className="border-t border-zinc-800/80">
                     <td className="px-3 py-2 text-xs text-zinc-400">
                       {new Date(row.scheduledAt).toLocaleString("ro-RO", {
@@ -336,6 +341,9 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
+                      {past ? (
+                        <span className="ml-1.5 text-[10px] text-amber-400/90">(trecut)</span>
+                      ) : null}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-zinc-300">{row.registrationNumber}</td>
                     <td className="px-3 py-2 text-zinc-300">{row.title}</td>
@@ -348,7 +356,8 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

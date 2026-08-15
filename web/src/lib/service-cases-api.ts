@@ -176,6 +176,8 @@ export type DamageSectionLocks = Partial<Record<DamageSectionKey, DamageSectionL
 
 export type PatchDamageClaimInput = {
   vehicleMovable?: VehicleMovableState | null;
+  /** YYYY-MM-DD — data evenimentului de daună. */
+  damageEventOn?: string | null;
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;
@@ -441,6 +443,8 @@ export type ServiceCaseRecord = {
   awaitingPostApproval: boolean;
   postApprovalPath: PostApprovalPath | null;
   vehicleMovable?: VehicleMovableState | null;
+  /** YYYY-MM-DD */
+  damageEventOn?: string | null;
   damageInsuranceType?: DamageInsuranceType | null;
   damageClaimNumber?: string | null;
   damageInsurerName?: string | null;

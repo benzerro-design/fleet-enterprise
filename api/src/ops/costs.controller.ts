@@ -140,6 +140,7 @@ function assertCreateCostDto(body: unknown): CreateCostInput {
     amountCents,
     fuelLiters: optionalNullablePositiveFloat(body.fuelLiters, 'fuelLiters'),
     fuelProductType: optionalNullableFuelType(body.fuelProductType),
+    tripId: 'tripId' in body ? optionalNullableString(body.tripId) : undefined,
     odometerKm: optionalNullableNonNegativeInt(body.odometerKm, 'odometerKm'),
     invoiceNumber: optionalNullableString(body.invoiceNumber),
     invoiceDate:
@@ -178,6 +179,9 @@ function assertPatchCostDto(body: unknown): PatchCostInput {
   }
   if ('fuelProductType' in body) {
     dto.fuelProductType = optionalNullableFuelType(body.fuelProductType);
+  }
+  if ('tripId' in body) {
+    dto.tripId = optionalNullableString(body.tripId);
   }
   if ('odometerKm' in body) {
     dto.odometerKm = optionalNullableNonNegativeInt(body.odometerKm, 'odometerKm');

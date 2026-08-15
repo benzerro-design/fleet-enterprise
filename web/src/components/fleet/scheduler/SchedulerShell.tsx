@@ -112,6 +112,8 @@ export function SchedulerShell({
   /** Repropunere / edit interval — click pe slot umple data, nu deschide programare nouă. */
   const [rescheduleEditing, setRescheduleEditing] = useState(false);
   const [reschedulePickAt, setReschedulePickAt] = useState<string | undefined>();
+  /** Deschide inspectorul în modul „propune altă dată” (listă partener). */
+  const [proposeRescheduleForId, setProposeRescheduleForId] = useState<string | null>(null);
 
   const visibleSuppliers = useMemo(() => {
     if (!serviceTypeCode) return suppliers;
@@ -266,6 +268,7 @@ export function SchedulerShell({
     setCreateMode(false);
     setRescheduleEditing(false);
     setReschedulePickAt(undefined);
+    setProposeRescheduleForId(null);
     setCreatePrefillAt(undefined);
     setMobileDetail(false);
     syncUrlHistory({ select: null, clearTicketLink: true });
@@ -280,6 +283,17 @@ export function SchedulerShell({
     setCreateMode(false);
     setRescheduleEditing(false);
     setReschedulePickAt(undefined);
+    setProposeRescheduleForId(null);
+    if (isMobile) setMobileDetail(true);
+    syncUrlHistory({ select: id, clearTicketLink: !returnTicketId });
+  }
+
+  function proposeAlternateDate(id: string) {
+    setSelectedId(id);
+    setCreateMode(false);
+    setRescheduleEditing(true);
+    setReschedulePickAt(undefined);
+    setProposeRescheduleForId(id);
     if (isMobile) setMobileDetail(true);
     syncUrlHistory({ select: id, clearTicketLink: !returnTicketId });
   }
@@ -353,6 +367,9 @@ export function SchedulerShell({
                 onRequestCancel={
                   canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
                 }
+                onProposeReschedule={
+                  canWrite && partnerMode ? (id) => proposeAlternateDate(id) : undefined
+                }
                 partnerMode={partnerMode}
                 compact
               />
@@ -416,6 +433,9 @@ export function SchedulerShell({
             onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
             onRequestCancel={
               canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
+            }
+            onProposeReschedule={
+              canWrite && partnerMode ? (id) => proposeAlternateDate(id) : undefined
             }
             partnerMode={partnerMode}
           />
@@ -490,6 +510,7 @@ export function SchedulerShell({
                 setSelectedId(null);
                 setRescheduleEditing(false);
                 setReschedulePickAt(undefined);
+                setProposeRescheduleForId(null);
                 if (isMobile) setMobileDetail(true);
                 syncUrlHistory({ select: null, clearTicketLink: true });
               }}
@@ -528,6 +549,7 @@ export function SchedulerShell({
             canWrite={canWrite}
             createMode={createMode}
             partnerMode={partnerMode}
+            openInRescheduleMode={proposeRescheduleForId === selected?.id}
             onClose={clearSelection}
             onRescheduleEditingChange={setRescheduleEditing}
             calendarPickAt={reschedulePickAt}
@@ -542,6 +564,7 @@ export function SchedulerShell({
               void load(true);
               setRescheduleEditing(false);
               setReschedulePickAt(undefined);
+              setProposeRescheduleForId(null);
               if (linkTicketId && !returnTicketId) {
                 setCreateMode(false);
                 syncUrlHistory({ clearTicketLink: true });
@@ -565,6 +588,7 @@ export function SchedulerShell({
           mobile
           createMode={createMode}
           partnerMode={partnerMode}
+          openInRescheduleMode={proposeRescheduleForId === selected?.id}
           onClose={clearSelection}
           onRescheduleEditingChange={setRescheduleEditing}
           calendarPickAt={reschedulePickAt}
@@ -579,6 +603,7 @@ export function SchedulerShell({
             void load(true);
             setRescheduleEditing(false);
             setReschedulePickAt(undefined);
+            setProposeRescheduleForId(null);
             if (linkTicketId && !returnTicketId) {
               setCreateMode(false);
               setCreatePrefillAt(undefined);

@@ -50,6 +50,7 @@ type CostRecord = {
   notes: string | null;
   fuelLiters?: number | null;
   fuelProductType?: FuelTypeValue | null;
+  tripId?: string | null;
   nextDueOn?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;
@@ -64,6 +65,16 @@ type VehicleOption = {
   odometerKm?: number;
   fuelType?: string | null;
   civProfile?: Record<string, string | number | null>;
+};
+
+type TripOption = {
+  id: string;
+  reference: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  distanceKm: number | null;
+  odometerStartKm: number | null;
+  odometerEndKm: number | null;
 };
 
 type DriverPortalOpts = { driverPortal?: boolean };
@@ -120,6 +131,7 @@ export function CostForm(props: Props) {
         notes: "",
         fuelLiters: "",
         fuelProductType: "" as FuelTypeValue | "",
+        tripId: "",
         nextDueOn: "",
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
@@ -141,6 +153,7 @@ export function CostForm(props: Props) {
       notes: r.notes ?? "",
       fuelLiters: r.fuelLiters != null ? String(r.fuelLiters) : "",
       fuelProductType: (r.fuelProductType as FuelTypeValue | null) ?? ("" as const),
+      tripId: r.tripId ?? "",
       nextDueOn: toDateInputOrEmpty(r.nextDueOn ?? null),
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
@@ -166,6 +179,9 @@ export function CostForm(props: Props) {
   const [notes, setNotes] = useState(initial.notes);
   const [fuelLiters, setFuelLiters] = useState(initial.fuelLiters);
   const [fuelProductType, setFuelProductType] = useState<FuelTypeValue | "">(initial.fuelProductType);
+  const [tripId, setTripId] = useState(initial.tripId ?? "");
+  const [tripOptions, setTripOptions] = useState<TripOption[]>([]);
+  const [tripsLoading, setTripsLoading] = useState(false);
   const [nextDueOn, setNextDueOn] = useState(initial.nextDueOn);
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
@@ -202,6 +218,35 @@ export function CostForm(props: Props) {
     if (resolvedFuelFromCiv) setFuelProductType(resolvedFuelFromCiv);
     else setFuelProductType("");
   }, [isFuel, selectedVehicle?.id, resolvedFuelFromCiv]);
+
+  useEffect(() => {
+    if (!isFuel || !selectedVehicle?.registrationNumber) {
+      setTripOptions([]);
+      return;
+    }
+    let cancelled = false;
+    setTripsLoading(true);
+    const plate = encodeURIComponent(selectedVehicle.registrationNumber);
+    void fetch(`/api/trips?registrationNumber=${plate}&page=1&pageSize=50`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { items?: TripOption[] };
+        if (!cancelled) setTripOptions(Array.isArray(data.items) ? data.items : []);
+      })
+      .catch(() => {
+        if (!cancelled) setTripOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setTripsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isFuel, selectedVehicle?.id, selectedVehicle?.registrationNumber]);
+
+  useEffect(() => {
+    if (!isFuel) setTripId("");
+  }, [isFuel]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -306,6 +351,7 @@ export function CostForm(props: Props) {
       notes: notes.trim() || null,
       fuelLiters: isFuelCostCategory(category.trim()) ? liters : null,
       fuelProductType: isFuelCostCategory(category.trim()) && fuelProductType ? fuelProductType : null,
+      tripId: isFuelCostCategory(category.trim()) ? tripId.trim() || null : null,
       nextDueOn: nextDue,
       reminderOffsetsDays: dayOffsets,
       dueOdometerKm: kmDue,
@@ -490,7 +536,7 @@ export function CostForm(props: Props) {
                 >
                   {fuelProductTypeSelect(OPS_INPUT_CLASS)}
                 </OpsFormField>
-                <OpsFormField label="Litri alimentați" required hint="Cantitate alimentată — nu se alocă pe curse.">
+                <OpsFormField label="Litri alimentați" required hint="Cantitate la alimentare; L/100km pe segmente fill-to-fill.">
                   <input
                     type="number"
                     min={0}
@@ -501,6 +547,39 @@ export function CostForm(props: Props) {
                     placeholder="ex. 42,5"
                     className={OPS_INPUT_MONO_CLASS}
                   />
+                </OpsFormField>
+                <OpsFormField
+                  label="Cursă (opțional)"
+                  hint={
+                    tripsLoading
+                      ? "Se încarcă cursele vehiculului…"
+                      : "Leagă alimentarea de o cursă pentru Consum / FAZ."
+                  }
+                >
+                  <select
+                    value={tripId}
+                    onChange={(e) => setTripId(e.target.value)}
+                    className={OPS_INPUT_CLASS}
+                    disabled={!boundVehicleId || tripsLoading}
+                  >
+                    <option value="">— fără legătură —</option>
+                    {tripOptions.map((t) => {
+                      const start = t.startedAt.slice(0, 10);
+                      const ref = t.reference?.trim() || "fără ref.";
+                      const km =
+                        t.distanceKm != null
+                          ? `${t.distanceKm} km`
+                          : t.odometerStartKm != null && t.odometerEndKm != null
+                            ? `${t.odometerStartKm}→${t.odometerEndKm}`
+                            : "";
+                      return (
+                        <option key={t.id} value={t.id}>
+                          {start} · {ref}
+                          {km ? ` · ${km}` : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </OpsFormField>
               </>
             ) : null}
@@ -647,8 +726,31 @@ export function CostForm(props: Props) {
               className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2"
             />
           </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-amber-200/90">Cursă (opțional)</label>
+            <select
+              value={tripId}
+              onChange={(e) => setTripId(e.target.value)}
+              disabled={!boundVehicleId || tripsLoading}
+              className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2 disabled:opacity-70"
+            >
+              <option value="">— fără legătură —</option>
+              {tripOptions.map((t) => {
+                const start = t.startedAt.slice(0, 10);
+                const ref = t.reference?.trim() || "fără ref.";
+                return (
+                  <option key={t.id} value={t.id}>
+                    {start} · {ref}
+                  </option>
+                );
+              })}
+            </select>
+            <p className="text-xs text-zinc-500">
+              {tripsLoading ? "Se încarcă cursele…" : "Opțional — leagă alimentarea de o cursă."}
+            </p>
+          </div>
           <p className="text-xs text-zinc-500">
-            Litrii se înregistrează la alimentare; consumul L/100km se calculează pe segmente între alimentări, nu pe curse.
+            Litrii se înregistrează la alimentare; consumul L/100km se calculează pe segmente între alimentări.
           </p>
         </div>
       ) : null}

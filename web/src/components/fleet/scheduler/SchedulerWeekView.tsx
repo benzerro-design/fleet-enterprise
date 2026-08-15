@@ -445,7 +445,7 @@ export function SchedulerWeekView({
               ? " Click pe slot liber = alege data pentru repropunere."
               : " Click pe slot liber = programare nouă."
             : ""}
-          {partnerMode ? " Programările de validat: folosește Repropune dată (apoi click pe calendar)." : ""}
+          {partnerMode ? " Programările de validat: folosește Propune altă dată (apoi click pe calendar)." : ""}
         </p>
       ) : null}
       {ctxMenu ? (

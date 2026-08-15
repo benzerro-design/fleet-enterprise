@@ -93,6 +93,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   serviceCaseTitle: string;
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;
+  linkedAppointmentStatus: string | null;
   awaitingPostApproval: boolean;
   postApprovalPath: "immediate" | "reschedule" | null;
   inServiceAt: string | null;
@@ -113,6 +114,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   driverName: string | null;
   driverPhone: string | null;
   vehicleMovable?: "movable" | "immovable" | null;
+  /** YYYY-MM-DD */
+  damageEventOn?: string | null;
   damagePayerType?: "insurer" | "client" | null;
   damageInsurerPipelineStatus?:
     | "docs_pending"

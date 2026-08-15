@@ -4,6 +4,8 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 
 **IAM / useri / roluri (canonic):** [`identity-access-model.md`](identity-access-model.md) — orice epic care atinge accesul sau ierarhia trebuie aliniat la acest document înainte de implementare.
 
+**Extindere multi-verticală (Parc / Leasing ops / Rent-a-Car / Finance / integrări):** [`multi-vertical-fleet-architecture.md`](multi-vertical-fleet-architecture.md) — plan canonic; finețe operațională + viitor în [`multi-vertical-operational-deep-dive.md`](multi-vertical-operational-deep-dive.md). Nu înlocuiește scope-ul pilot Q3–Q4; fixează direcția după stabilizarea CIV.
+
 **ICP ales:** **client pilot** — o firmă reală (sau divizie internă) care folosește zilnic aplicația pentru evidența flotei, conformitate și raportare, **fără GPS/tracking în Q3–Q4**.
 
 ---
@@ -259,7 +261,7 @@ Acest document fixează **cum continuăm** după shell Variant C, FAZ-lite și o
 | Reguli date | Validare cursă: `odometerEndKm ≥ odometerStartKm`, `distanceKm` aliniat la delta odometru | ☑ livrat 2026-06 |
 | Tab Consum + KPI | `GET /trips/consumption`, segmente fill-to-fill L/100km, reconciliere km, filtre vehicul/tip energie | ☑ livrat 2026-06 |
 | Tip combustibil cost | `fuelProductType` pe Combustibil; infer din CIV P.3 | ☑ livrat 2026-06 |
-| Legătură cost ↔ cursă | `CostEntry.tripId?` opțional; la alimentare, opțional „cursă / perioadă” | ☐ backlog |
+| Legătură cost ↔ cursă | `CostEntry.tripId?` opțional; la alimentare, opțional „cursă / perioadă” | ☑ slice1 2026-08-15 |
 | KPI consum per vehicul | `GET /fleet/vehicles/:id/consumption?from&to` — reutilizare engine | ☐ backlog |
 | UI panou vehicul | Consum perioadă pe profil vehicul; FAZ păstrează agregarea zilnică | ☐ backlog |
 
