@@ -10,6 +10,15 @@ export const OPS_INPUT_CLASS =
 export const OPS_INPUT_MONO_CLASS = `${OPS_INPUT_CLASS} font-mono`;
 export const OPS_LABEL_CLASS = "mb-1 block text-[11px] font-medium text-zinc-400";
 
+/** Tab-uri tip Comandă / Dosar (activ = emerald pe fundal zinc). */
+export function fleetSheetTabClass(active: boolean): string {
+  return `rounded-t-lg border px-4 py-2 text-sm transition-colors ${
+    active
+      ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
+      : "border-transparent text-zinc-500 hover:text-zinc-200"
+  }`;
+}
+
 const PRIMARY_BAND: Record<OpsFormModuleKey, { border: string; bg: string; title: string }> = {
   maintenance: {
     border: "border-emerald-500/40",

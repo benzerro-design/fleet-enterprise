@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import { OPS_INPUT_CLASS, OPS_LABEL_CLASS, fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 import { InvoiceAttachmentField } from "@/components/fleet/work-orders/InvoiceAttachmentField";
 import { WorkOrderWarrantyPanel } from "@/components/fleet/work-orders/WorkOrderWarrantyPanel";
 import { formatDateRo, toDateInput, toIsoFromDateInput } from "@/lib/datetime-local";
@@ -654,7 +654,8 @@ export function WorkOrderQuotePanel({
       ) : null}
 
       {activeTab === "quote" && quotes.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-1.5 border-b border-zinc-800 pb-3">
+        <div className="mt-4 border-b border-zinc-800">
+          <div className="flex flex-wrap gap-2">
           {[...quotes]
             .sort((a, b) => a.version - b.version)
             .map((q) => {
@@ -675,22 +676,17 @@ export function WorkOrderQuotePanel({
                     setEditingDraftId(null);
                     setLineDecisions({});
                   }}
-                  className={`rounded-t-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    selected
-                      ? "border-zinc-600 border-b-zinc-950 bg-zinc-950 text-zinc-100"
-                      : "border-transparent text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
-                  }`}
+                  className={fleetSheetTabClass(selected)}
                   title={`${q.lines.length} linii · ${formatMoneyCents(q.totalGrossCents, q.currency)}`}
                 >
                   Deviz {q.version}
-                  <span
-                    className={`ml-1.5 rounded border px-1 py-0.5 text-[10px] font-normal ${statusBadgeClass(q.status)}`}
-                  >
+                  <span className="ml-1.5 text-[11px] font-normal opacity-80">
                     {quoteStatusLabel(q.status)}
                   </span>
                 </button>
               );
             })}
+          </div>
         </div>
       ) : null}
 

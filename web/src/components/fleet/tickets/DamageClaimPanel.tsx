@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import { OPS_INPUT_CLASS, OPS_LABEL_CLASS, fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 import { uploadDocumentFile } from "@/lib/document-upload";
 import {
   DAMAGE_KIND_TO_FLEET_DOC,
@@ -1617,37 +1617,33 @@ export function DamageClaimPanel({
                 Solicitare pe mail (poze + explicații). La aprobare încarci documentul asigurător
                 (aprobare / PVS); la refuz scrii motivul. Istoricul pe tab-uri (#1, #2…).
               </p>
-              <div className="flex flex-wrap gap-1 border-b border-amber-900/40 pb-2">
+              <div className="border-b border-zinc-800">
+                <div className="flex flex-wrap gap-2">
                 {reinspectionRequests.map((req) => (
                   <button
                     key={req.id}
                     type="button"
                     onClick={() => setReinspectionViewId(req.id)}
-                    className={`rounded px-2 py-1 text-[11px] ${
-                      resolvedReinspectionViewId === req.id
-                        ? "bg-amber-900/50 text-amber-100"
-                        : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-                    }`}
+                    className={fleetSheetTabClass(resolvedReinspectionViewId === req.id)}
                   >
                     #{req.sequence}
-                    {req.status === "pending"
-                      ? " · așteptare"
-                      : req.status === "approved"
-                        ? " · OK"
-                        : " · refuz"}
+                    <span className="ml-1.5 text-[11px] font-normal opacity-80">
+                      {req.status === "pending"
+                        ? "așteptare"
+                        : req.status === "approved"
+                          ? "OK"
+                          : "refuz"}
+                    </span>
                   </button>
                 ))}
                 <button
                   type="button"
                   onClick={() => setReinspectionViewId("new")}
-                  className={`rounded px-2 py-1 text-[11px] ${
-                    resolvedReinspectionViewId === "new"
-                      ? "bg-amber-900/50 text-amber-100"
-                      : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-                  }`}
+                  className={fleetSheetTabClass(resolvedReinspectionViewId === "new")}
                 >
                   + Nouă
                 </button>
+                </div>
               </div>
               {activeReinspection ? (
                 <div className="space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2 text-xs">
@@ -2092,7 +2088,8 @@ export function DamageClaimPanel({
             editează pe Comandă, nu aici.
           </p>
           {insurerQuoteVersions.length ? (
-            <div className="flex flex-wrap gap-1.5 border-b border-zinc-800 pb-2">
+            <div className="border-b border-zinc-800">
+              <div className="flex flex-wrap gap-2">
               {insurerQuoteVersions.map((q) => {
                 const selected = selectedInsurerQuote?.id === q.id;
                 return (
@@ -2100,19 +2097,16 @@ export function DamageClaimPanel({
                     key={q.id}
                     type="button"
                     onClick={() => setSelectedQuoteId(q.id)}
-                    className={`rounded-t-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      selected
-                        ? "border-zinc-600 border-b-zinc-950 bg-zinc-950 text-zinc-100"
-                        : "border-transparent text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
-                    }`}
+                    className={fleetSheetTabClass(selected)}
                   >
                     Deviz {q.version}
-                    <span className="ml-1.5 text-[10px] font-normal text-zinc-400">
+                    <span className="ml-1.5 text-[11px] font-normal opacity-80">
                       {quoteStatusLabel(q.status)}
                     </span>
                   </button>
                 );
               })}
+              </div>
             </div>
           ) : (
             <p className="text-[11px] text-amber-400/90">
@@ -2370,17 +2364,14 @@ export function DamageClaimPanel({
             Document emis de asigurător (accept / acord plată). Istoric pe tab-uri — fiecare PDF
             nou = Accept următor.
           </p>
-          <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-2">
+          <div className="border-b border-zinc-800">
+            <div className="flex flex-wrap gap-2">
             {paymentAcceptances.map((a) => (
               <button
                 key={a.id}
                 type="button"
                 onClick={() => setPaymentViewId(a.id)}
-                className={`rounded px-2 py-1 text-[11px] ${
-                  paymentViewId === a.id
-                    ? "bg-zinc-700 text-zinc-100"
-                    : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-                }`}
+                className={fleetSheetTabClass(paymentViewId === a.id)}
               >
                 Accept {a.sequence}
               </button>
@@ -2392,15 +2383,12 @@ export function DamageClaimPanel({
                   setPaymentViewId("new");
                   setPaymentAcceptanceNotes("");
                 }}
-                className={`rounded px-2 py-1 text-[11px] ${
-                  paymentViewId === "new"
-                    ? "bg-zinc-700 text-zinc-100"
-                    : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-                }`}
+                className={fleetSheetTabClass(paymentViewId === "new")}
               >
                 + Nou
               </button>
             ) : null}
+            </div>
           </div>
           {activePaymentAccept ? (
             <div className="space-y-2 text-xs">

@@ -28,6 +28,7 @@ import {
   DamageClaimPanel,
   serviceCaseFromWorkOrderDamage,
 } from "@/components/fleet/tickets/DamageClaimPanel";
+import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 import {
   isDamageInsurerReady,
   serviceCasesBrowserBase,
@@ -349,14 +350,6 @@ export function WorkOrderSheetShell({
     { label: "Navigare", items: navActions },
   ];
 
-  function sheetTabClass(active: boolean): string {
-    return `rounded-t-lg border px-4 py-2 text-sm transition-colors ${
-      active
-        ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
-        : "border-transparent text-zinc-500 hover:text-zinc-200"
-    }`;
-  }
-
   return (
     <div className="space-y-0 rounded-xl border border-zinc-700 bg-zinc-950/80">
       <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/60 px-2 py-2">
@@ -377,7 +370,7 @@ export function WorkOrderSheetShell({
                         type="button"
                         disabled={pending}
                         onClick={() => setSheetView("comanda")}
-                        className={sheetTabClass(sheetView === "comanda")}
+                        className={fleetSheetTabClass(sheetView === "comanda")}
                       >
                         Comandă
                       </button>
@@ -385,7 +378,7 @@ export function WorkOrderSheetShell({
                         type="button"
                         disabled={pending}
                         onClick={() => setSheetView("dosar")}
-                        className={sheetTabClass(sheetView === "dosar")}
+                        className={fleetSheetTabClass(sheetView === "dosar")}
                       >
                         Dosar daună
                       </button>
