@@ -562,7 +562,17 @@ export function WorkOrderQuotePanel({
           ) : (
             <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">Ciornă</span>
           )}
-          {canWrite && (isEditingDraft || quotes.length === 0 || !draftQuote) ? (
+          {canWrite && !draftQuote ? (
+            <button
+              type="button"
+              onClick={startNewDraft}
+              className={`${sheetBtnClass} border-emerald-600/50 bg-emerald-950/40 font-semibold text-emerald-100 hover:bg-emerald-950/60`}
+              title="Creează Deviz următor (v2, v3…) pe aceeași comandă"
+            >
+              Deviz nou
+            </button>
+          ) : null}
+          {canWrite && (isEditingDraft || quotes.length === 0 || isCreatingDraft) ? (
             <>
               <span className="h-5 w-px shrink-0 bg-zinc-700" />
               <button
