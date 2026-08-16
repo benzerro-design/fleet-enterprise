@@ -328,6 +328,41 @@ export function quoteLineTypeLabel(type: QuoteLineType | string): string {
   return map[type] ?? type;
 }
 
+export type PartsPriceOffer = {
+  providerId: string;
+  providerLabel: string;
+  unitNetCents: number;
+  currency: string;
+  availability: "in_stock" | "order" | "unknown";
+  stub: boolean;
+};
+
+export type PartsPriceVerifyLineResult = {
+  key: string;
+  partNumber: string | null;
+  quoteUnitNetCents: number;
+  offers: PartsPriceOffer[];
+  bestUnitNetCents: number | null;
+  deltaPercent: number | null;
+  suspect: boolean;
+  status: "ok" | "suspect" | "no_code" | "not_found" | "skipped";
+  message: string | null;
+};
+
+export type VerifyPartsPricesResult = {
+  suspectPercent: number;
+  stubCatalog: boolean;
+  providersUsed: Array<{ id: string; label: string }>;
+  lines: PartsPriceVerifyLineResult[];
+  summary: {
+    checked: number;
+    ok: number;
+    suspect: number;
+    noCode: number;
+    skipped: number;
+  };
+};
+
 export type WorkOrderListPayload = {
   items: WorkOrderListRow[];
   total: number;

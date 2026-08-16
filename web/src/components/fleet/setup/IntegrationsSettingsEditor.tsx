@@ -95,7 +95,7 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
           <span>
             <span className="font-medium text-zinc-100">Catalog piese activ</span>
             <span className="mt-0.5 block text-xs text-zinc-500">
-              Pregătește UI „Verifică preț” pe linii (când și Setup → WO o permite).
+              Activează lookup / „Verifică preț” pe linii (stub până la API Inter Cars). Activează și un provider mai jos.
             </span>
           </span>
         </label>

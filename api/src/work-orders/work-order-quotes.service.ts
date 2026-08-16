@@ -54,6 +54,11 @@ import {
   type QuoteImportPreview,
   type QuoteImportPreviewLine,
 } from './quote-import-parse';
+import {
+  buildPartsPriceVerifyResults,
+  type PartsPriceVerifyLineInput,
+  type PartsPriceVerifyLineResult,
+} from './parts-catalog-lookup';
 
 function formatMoney(cents: number): string {
   return `${(cents / 100).toFixed(2)} RON`;
@@ -95,6 +100,24 @@ export type QuoteImportApplyInput = {
   notes?: string | null;
   currency?: string;
   replaceExistingDraft?: boolean;
+};
+
+export type VerifyPartsPricesInput = {
+  lines: PartsPriceVerifyLineInput[];
+};
+
+export type VerifyPartsPricesResult = {
+  suspectPercent: number;
+  stubCatalog: boolean;
+  providersUsed: Array<{ id: string; label: string }>;
+  lines: PartsPriceVerifyLineResult[];
+  summary: {
+    checked: number;
+    ok: number;
+    suspect: number;
+    noCode: number;
+    skipped: number;
+  };
 };
 
 function reminderOffsetsForDb(
@@ -368,6 +391,86 @@ export class WorkOrderQuotesService {
     }
 
     return created;
+  }
+
+  private async assertPartsPriceVerifyEnabled(tenantSlug: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { workOrderSettings: true, integrationsSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const wo = parseWorkOrderSettings(tenant.workOrderSettings);
+    const integ = parseTenantIntegrationsSettings(tenant.integrationsSettings);
+    if (!wo.allowPartsPriceVerify) {
+      throw new BadRequestException(
+        'Verificarea prețului e dezactivată (Setup → WO → Permite verificare preț piese).',
+      );
+    }
+    if (!integ.partsCatalogEnabled) {
+      throw new BadRequestException(
+        'Catalogul de piese e dezactivat (Setup → Integrări → Catalog piese activ).',
+      );
+    }
+    const providers = integ.partsCatalogProviders.filter((p) => p.enabled);
+    if (!providers.length) {
+      throw new BadRequestException(
+        'Activează cel puțin un provider catalog (ex. Inter Cars) în Setup → Integrări.',
+      );
+    }
+    return { wo, integ, providers };
+  }
+
+  async verifyPartsPrices(
+    tenantSlug: string,
+    workOrderId: string,
+    dto: VerifyPartsPricesInput,
+    access?: AccessContext,
+  ): Promise<VerifyPartsPricesResult> {
+    const { wo, providers } = await this.assertPartsPriceVerifyEnabled(tenantSlug);
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+
+    const rawLines = Array.isArray(dto.lines) ? dto.lines : [];
+    if (!rawLines.length) {
+      throw new BadRequestException('Trimite cel puțin o linie pentru verificare');
+    }
+    if (rawLines.length > 120) {
+      throw new BadRequestException('Maxim 120 linii pe verificare');
+    }
+
+    const lines = buildPartsPriceVerifyResults(
+      rawLines,
+      providers,
+      wo.partsPriceSuspectPercent,
+    );
+
+    const summary = {
+      checked: 0,
+      ok: 0,
+      suspect: 0,
+      noCode: 0,
+      skipped: 0,
+    };
+    for (const line of lines) {
+      if (line.status === 'ok') {
+        summary.checked += 1;
+        summary.ok += 1;
+      } else if (line.status === 'suspect') {
+        summary.checked += 1;
+        summary.suspect += 1;
+      } else if (line.status === 'no_code' || line.status === 'not_found') {
+        summary.noCode += 1;
+      } else {
+        summary.skipped += 1;
+      }
+    }
+
+    return {
+      suspectPercent: wo.partsPriceSuspectPercent,
+      stubCatalog: true,
+      providersUsed: providers.map((p) => ({ id: p.id, label: p.label })),
+      lines,
+      summary,
+    };
   }
 
   async createDraft(

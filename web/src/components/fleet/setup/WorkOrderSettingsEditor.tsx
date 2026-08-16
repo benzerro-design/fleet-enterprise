@@ -228,7 +228,7 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
             <span>
               <span className="font-medium text-zinc-100">Permite verificare preț piese</span>
               <span className="mt-0.5 block text-xs text-zinc-500">
-                Pentru UI viitor „Verifică preț” (catalog activ în Integrări).
+                Buton „Verifică preț” pe deviz (necesită catalog activ în Integrări).
               </span>
             </span>
           </label>

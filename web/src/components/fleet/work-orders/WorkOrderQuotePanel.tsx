@@ -17,6 +17,8 @@ import {
   type QuoteLineApprovalStatus,
   type QuoteLineInput,
   type QuotePartsOrderStatus,
+  type PartsPriceVerifyLineResult,
+  type VerifyPartsPricesResult,
   type WorkOrderQuoteRecord,
   type WorkOrderQuoteStatus,
 } from "@/lib/work-orders-api";
@@ -190,6 +192,7 @@ type Props = {
   outServiceAt?: string | null;
   requirePartCode?: boolean;
   allowQuotePdfImport?: boolean;
+  allowPartsPriceVerify?: boolean;
   ticketSettlement?: {
     entityType: "maintenance" | "cost" | "document";
     entityId: string;
@@ -209,6 +212,7 @@ export function WorkOrderQuotePanel({
   outServiceAt = null,
   requirePartCode = true,
   allowQuotePdfImport = true,
+  allowPartsPriceVerify = true,
   ticketSettlement = null,
 }: Props) {
   const router = useRouter();
@@ -225,6 +229,8 @@ export function WorkOrderQuotePanel({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [priceVerify, setPriceVerify] = useState<VerifyPartsPricesResult | null>(null);
+  const [priceVerifyByKey, setPriceVerifyByKey] = useState<Record<string, PartsPriceVerifyLineResult>>({});
   const [estimatedDate, setEstimatedDate] = useState(() => toDateInput(estimatedRepairAt));
 
   useEffect(() => {
@@ -542,6 +548,66 @@ export function WorkOrderQuotePanel({
     setEditingDraftId(null);
     setLines([newLine()]);
     setNotes("");
+    setPriceVerify(null);
+    setPriceVerifyByKey({});
+  }
+
+  async function verifyPartsPrices() {
+    const quoteList = quotes ?? [];
+    const payloadLines =
+      isEditingDraft || isCreatingDraft || quoteList.length === 0
+        ? lines.map((line) => ({
+            key: line.key,
+            lineType: line.lineType,
+            partNumber: line.partNumber || null,
+            unitNetCents: leiToCents(line.unitNetLei) || 0,
+          }))
+        : (activeQuote?.lines ?? []).map((line) => ({
+            key: line.id,
+            lineType: line.lineType,
+            partNumber: line.partNumber,
+            unitNetCents: line.unitNetCents,
+          }));
+
+    if (!payloadLines.some((l) => l.lineType === "parts")) {
+      setError("Nu există linii de tip piese de verificat.");
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/quotes/verify-parts-prices`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ lines: payloadLines }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as VerifyPartsPricesResult;
+      setPriceVerify(data);
+      const byKey: Record<string, PartsPriceVerifyLineResult> = {};
+      for (const row of data.lines) byKey[row.key] = row;
+      setPriceVerifyByKey(byKey);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Verificare preț eșuată");
+      setPriceVerify(null);
+      setPriceVerifyByKey({});
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function applyCatalogPrice(lineKey: string) {
+    const hit = priceVerifyByKey[lineKey];
+    if (hit?.bestUnitNetCents == null) return;
+    setLines((prev) =>
+      prev.map((line) =>
+        line.key === lineKey ? { ...line, unitNetLei: centsToLei(hit.bestUnitNetCents!) } : line,
+      ),
+    );
   }
 
   if (quotes === undefined) {
@@ -610,6 +676,17 @@ export function WorkOrderQuotePanel({
               Import deviz PDF
             </button>
           ) : null}
+          {canWrite && allowPartsPriceVerify ? (
+            <button
+              type="button"
+              disabled={pending}
+              title="Compară prețurile pieselor cu catalogul (stub până la API real)"
+              onClick={() => void verifyPartsPrices()}
+              className={`${sheetBtnClass} border-amber-500/50 bg-amber-950/40 font-semibold text-amber-100`}
+            >
+              Verifică preț
+            </button>
+          ) : null}
           {activeQuote && activeQuote.status !== "draft" ? (
             <a
               href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
@@ -644,6 +721,16 @@ export function WorkOrderQuotePanel({
               className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-1.5 text-xs font-semibold text-violet-100"
             >
               Import PDF
+            </button>
+          ) : null}
+          {canWrite && allowPartsPriceVerify ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void verifyPartsPrices()}
+              className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-1.5 text-xs font-semibold text-amber-100"
+            >
+              Verifică preț
             </button>
           ) : null}
         </div>
@@ -688,6 +775,23 @@ export function WorkOrderQuotePanel({
       </div>
 
       {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
+
+      {priceVerify ? (
+        <div className="mt-3 rounded-lg border border-amber-800/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100/90">
+          <p>
+            Verificare catalog
+            {priceVerify.stubCatalog ? " (stub)" : ""}: {priceVerify.summary.ok} ok ·{" "}
+            <span className={priceVerify.summary.suspect ? "font-semibold text-amber-200" : ""}>
+              {priceVerify.summary.suspect} suspecte
+            </span>
+            {priceVerify.summary.noCode ? ` · ${priceVerify.summary.noCode} fără cod` : ""}
+            {" · "}prag {priceVerify.suspectPercent}%
+            {priceVerify.providersUsed.length
+              ? ` · ${priceVerify.providersUsed.map((p) => p.label).join(", ")}`
+              : ""}
+          </p>
+        </div>
+      ) : null}
 
       {activeTab === "warranty" ? (
         <WorkOrderWarrantyPanel
@@ -817,7 +921,12 @@ export function WorkOrderQuotePanel({
                       {line.partNumber ?? (line.partCodeExempt ? "fără cod" : "—")}
                     </td>
                     <td className="py-2 pr-2 font-mono">{line.quantity}</td>
-                    <td className="py-2 pr-2 font-mono">{formatMoneyCents(line.unitNetCents)}</td>
+                    <td className="py-2 pr-2 font-mono">
+                      {formatMoneyCents(line.unitNetCents)}
+                      {priceVerifyByKey[line.id] ? (
+                        <PriceVerifyHint result={priceVerifyByKey[line.id]} canApply={false} />
+                      ) : null}
+                    </td>
                     <td className="py-2 pr-2">{line.vatRatePercent}%</td>
                     <td className="py-2 pr-2 font-mono">{formatMoneyCents(line.lineNetCents)}</td>
                     <td className="py-2 pr-2">
@@ -1142,6 +1251,13 @@ export function WorkOrderQuotePanel({
                         className={`${OPS_INPUT_CLASS} w-28 font-mono`}
                         placeholder="0.00"
                       />
+                      {priceVerifyByKey[line.key] ? (
+                        <PriceVerifyHint
+                          result={priceVerifyByKey[line.key]}
+                          canApply={Boolean(isEditingDraft || isCreatingDraft)}
+                          onApply={() => applyCatalogPrice(line.key)}
+                        />
+                      ) : null}
                     </td>
                     <td className="py-2 pr-2">
                       <input
@@ -1249,5 +1365,52 @@ export function WorkOrderQuotePanel({
         <p className="mt-4 text-sm text-zinc-500">Nu există devize pentru această comandă.</p>
       ) : null}
     </section>
+  );
+}
+
+function PriceVerifyHint({
+  result,
+  canApply,
+  onApply,
+}: {
+  result: PartsPriceVerifyLineResult;
+  canApply: boolean;
+  onApply?: () => void;
+}) {
+  if (result.status === "skipped") return null;
+
+  const tone =
+    result.status === "suspect"
+      ? "text-amber-300"
+      : result.status === "ok"
+        ? "text-emerald-400/90"
+        : "text-zinc-500";
+
+  return (
+    <div className={`mt-1 space-y-0.5 text-[10px] leading-snug ${tone}`}>
+      <div title={result.message ?? undefined}>
+        {result.status === "suspect"
+          ? `Suspect +${result.deltaPercent}%`
+          : result.status === "ok"
+            ? result.deltaPercent != null && result.deltaPercent <= 0
+              ? "≤ catalog"
+              : "În prag"
+            : result.status === "no_code"
+              ? "Fără cod"
+              : "Fără ofertă"}
+        {result.bestUnitNetCents != null
+          ? ` · cat. ${formatMoneyCents(result.bestUnitNetCents)}`
+          : null}
+      </div>
+      {canApply && result.bestUnitNetCents != null && result.suspect ? (
+        <button
+          type="button"
+          onClick={onApply}
+          className="text-[10px] text-sky-300 underline hover:text-sky-200"
+        >
+          Aplică preț catalog
+        </button>
+      ) : null}
+    </div>
   );
 }

@@ -972,6 +972,7 @@ export function WorkOrderSheetShell({
         outServiceAt={wo.outServiceAt}
         requirePartCode={workOrderSettings.requirePartCode}
         allowQuotePdfImport={workOrderSettings.allowQuotePdfImport}
+        allowPartsPriceVerify={workOrderSettings.allowPartsPriceVerify}
         ticketSettlement={ticketSettlement}
       />
 

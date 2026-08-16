@@ -12,6 +12,7 @@ import {
   type PatchQuoteLinePartsInput,
   type QuoteImportApplyInput,
   type QuoteImportPreviewInput,
+  type VerifyPartsPricesInput,
   WorkOrderQuotesService,
   type PostCostInput,
   type UpsertQuoteInput,
@@ -49,6 +50,17 @@ export class WorkOrderQuotesController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.quotes.importApply(tenantSlug, workOrderId, body ?? { lines: [] }, actorUserId, access);
+  }
+
+  @Post('verify-parts-prices')
+  @Roles(...FLEET_WRITE_ROLES)
+  verifyPartsPrices(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Body() body: VerifyPartsPricesInput,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.verifyPartsPrices(tenantSlug, workOrderId, body ?? { lines: [] }, access);
   }
 
   @Get(':quoteId/pdf')
