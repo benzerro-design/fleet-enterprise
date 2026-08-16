@@ -194,6 +194,8 @@ type Props = {
   allowQuotePdfImport?: boolean;
   allowPartsPriceVerify?: boolean;
   allowPartsOrderLaunch?: boolean;
+  /** Lansare comenzi: admin client/tenant sau partener (nu dispatcher). */
+  canLaunchPartsOrders?: boolean;
   ticketSettlement?: {
     entityType: "maintenance" | "cost" | "document";
     entityId: string;
@@ -215,6 +217,7 @@ export function WorkOrderQuotePanel({
   allowQuotePdfImport = true,
   allowPartsPriceVerify = true,
   allowPartsOrderLaunch = false,
+  canLaunchPartsOrders = false,
   ticketSettlement = null,
 }: Props) {
   const router = useRouter();
@@ -964,6 +967,7 @@ export function WorkOrderQuotePanel({
             </span>
             {priceVerify.summary.noCode ? ` · ${priceVerify.summary.noCode} fără cod` : ""}
             {" · "}prag {priceVerify.suspectPercent}%
+            {priceVerify.suspectPercentSource === "client" ? " (client)" : ""}
             {priceVerify.providersUsed.length
               ? ` · ${priceVerify.providersUsed.map((p) => p.label).join(", ")}`
               : ""}
@@ -1059,7 +1063,7 @@ export function WorkOrderQuotePanel({
                 Comandă piese
               </span>
             ) : null}
-            {canWrite &&
+            {canLaunchPartsOrders &&
             allowPartsOrderLaunch &&
             activeQuote.status === "approved" &&
             activeQuote.lines.some(

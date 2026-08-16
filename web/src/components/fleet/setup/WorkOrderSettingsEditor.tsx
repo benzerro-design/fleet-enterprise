@@ -244,7 +244,8 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
             <span>
               <span className="font-medium text-zinc-100">Permite lansare comenzi piese</span>
               <span className="mt-0.5 block text-xs text-zinc-500">
-                Buton „Lansează comenzi piese” pe Deviz aprobat (necesită și Integrări).
+                Buton pe Deviz aprobat — doar admin client/tenant sau partener atelier (nu dispatcher).
+                Necesită și Setup → Integrări.
               </span>
             </span>
           </label>
@@ -252,7 +253,7 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
           <label className="space-y-1 text-sm text-zinc-300">
             <span className="font-medium text-zinc-100">Prag preț suspect (%)</span>
             <span className="block text-xs text-zinc-500">
-              % peste cel mai ieftin preț din catalog pentru flag la verificare.
+              % peste cel mai ieftin preț din catalog. Override opțional pe Client → Prețuri.
             </span>
             <input
               type="number"

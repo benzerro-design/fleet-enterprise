@@ -19,6 +19,7 @@ import { CivOcrService } from '../fleet/civ-ocr.service';
 import {
   assertApproveServiceQuote,
   assertClientFleetWrite,
+  canApproveServiceQuote,
 } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -36,6 +37,7 @@ import {
 } from '../ops/reminder-sync';
 import { normalizeReminderOffsets } from '../ops/document-reminders';
 import { normalizeReminderOffsetsKm } from '../ops/reminder-status';
+import { parseClientPricingSettings } from '../clients/client-pricing-settings';
 import { parseTenantIntegrationsSettings, interCarsHasCredentials } from '../tenant/integrations-settings';
 import { InterCarsClient } from '../tenant/intercars-client.service';
 import { parseWorkOrderSettings, type WorkOrderSettings } from '../tenant/work-order-settings';
@@ -130,6 +132,8 @@ export type VerifyPartsPricesInput = {
 
 export type VerifyPartsPricesResult = {
   suspectPercent: number;
+  /** De unde vine pragul folosit la verificare. */
+  suspectPercentSource: 'tenant' | 'client';
   stubCatalog: boolean;
   providersUsed: Array<{ id: string; label: string }>;
   lines: PartsPriceVerifyLineResult[];
@@ -182,7 +186,7 @@ export class WorkOrderQuotesService {
     tenantSlug: string,
     workOrderId: string,
     access?: AccessContext,
-    mode: 'write' | 'approve' = 'write',
+    mode: 'write' | 'approve' | 'parts_launch' = 'write',
   ) {
     const wo = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id: workOrderId, tenant: { slug: tenantSlug } },
@@ -195,6 +199,18 @@ export class WorkOrderQuotesService {
           throw new ForbiddenException('Partners cannot approve quotes');
         }
         assertApproveServiceQuote(access, wo.vehicle.clientId);
+      } else if (mode === 'parts_launch') {
+        // Lansare comenzi: partener (atelier) cu write SAU admin client / tenant_admin.
+        if (isPartnerUser(access)) {
+          assertPartnerSupplierId(access, wo.supplierId);
+          assertPartnerWrite(access);
+        } else if (!canApproveServiceQuote(access, wo.vehicle.clientId)) {
+          throw new ForbiddenException(
+            'Lansarea comenzilor de piese: doar admin client / tenant sau partenerul atelier.',
+          );
+        } else {
+          assertApproveServiceQuote(access, wo.vehicle.clientId);
+        }
       } else if (isPartnerUser(access)) {
         assertPartnerSupplierId(access, wo.supplierId);
         assertPartnerWrite(access);
@@ -447,10 +463,11 @@ export class WorkOrderQuotesService {
     tenantSlug: string,
     workOrderId: string,
     dto: VerifyPartsPricesInput,
+    actorUserId?: string,
     access?: AccessContext,
   ): Promise<VerifyPartsPricesResult> {
     const { wo, integ, providers } = await this.assertPartsPriceVerifyEnabled(tenantSlug);
-    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+    const workOrder = await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const rawLines = Array.isArray(dto.lines) ? dto.lines : [];
     if (!rawLines.length) {
@@ -459,6 +476,18 @@ export class WorkOrderQuotesService {
     if (rawLines.length > 120) {
       throw new BadRequestException('Maxim 120 linii pe verificare');
     }
+
+    const client = await this.prisma.client.findFirst({
+      where: { id: workOrder.vehicle.clientId, tenant: { slug: tenantSlug } },
+      select: { pricingSettings: true },
+    });
+    const clientPricing = parseClientPricingSettings(client?.pricingSettings);
+    const suspectPercent =
+      clientPricing.partsPriceSuspectPercent != null
+        ? clientPricing.partsPriceSuspectPercent
+        : wo.partsPriceSuspectPercent;
+    const suspectPercentSource: 'tenant' | 'client' =
+      clientPricing.partsPriceSuspectPercent != null ? 'client' : 'tenant';
 
     const partCodes = rawLines
       .filter((l) => (l.lineType ?? 'parts') === 'parts' && l.partNumber?.trim())
@@ -475,7 +504,7 @@ export class WorkOrderQuotesService {
     const lines = buildPartsPriceVerifyResults(
       rawLines,
       providers,
-      wo.partsPriceSuspectPercent,
+      suspectPercent,
       offersByPart,
       { allowStubFallback: integ.interCars.allowStubFallback },
     );
@@ -501,8 +530,31 @@ export class WorkOrderQuotesService {
       }
     }
 
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true },
+    });
+    if (tenant) {
+      await this.audit.log({
+        tenantId: tenant.id,
+        actorUserId,
+        action: 'work_order_quote.verify_parts_prices',
+        entityType: 'maintenance_work_order',
+        entityId: workOrderId,
+        meta: {
+          summary,
+          suspectPercent,
+          suspectPercentSource,
+          stubCatalog: !usedApi,
+          providersUsed: providers.map((p) => p.id),
+          lineCount: lines.length,
+        },
+      });
+    }
+
     return {
-      suspectPercent: wo.partsPriceSuspectPercent,
+      suspectPercent,
+      suspectPercentSource,
       stubCatalog: !usedApi,
       providersUsed: providers.map((p) => ({ id: p.id, label: p.label })),
       lines,
@@ -927,7 +979,7 @@ export class WorkOrderQuotesService {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'parts_launch');
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },

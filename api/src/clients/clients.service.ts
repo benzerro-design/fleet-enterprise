@@ -26,8 +26,13 @@ import {
   parseClientMailSettingsPatch,
   type ClientMailSettings,
 } from './client-mail-settings';
+import {
+  parseClientPricingSettings,
+  parseClientPricingSettingsPatch,
+  type ClientPricingSettings,
+} from './client-pricing-settings';
 
-export type { ClientSubscriptionRow, DriverRecord, ClientMailSettings };
+export type { ClientSubscriptionRow, DriverRecord, ClientMailSettings, ClientPricingSettings };
 
 const MAX_PAGE_SIZE = 200;
 const REMINDER_SCAN_LIMIT = 500;
@@ -593,6 +598,58 @@ export class ClientsService {
         ccMemberCount: next.ccMemberUserIds.length,
         ccEmailCount: next.ccEmails.length,
       },
+    });
+
+    return next;
+  }
+
+  async getPricingSettings(
+    tenantSlug: string,
+    id: string,
+    access?: AccessContext,
+  ): Promise<ClientPricingSettings> {
+    const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
+    return parseClientPricingSettings(row.pricingSettings);
+  }
+
+  async patchPricingSettings(
+    tenantSlug: string,
+    id: string,
+    body: unknown,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ClientPricingSettings> {
+    const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
+    let patch: Partial<ClientPricingSettings>;
+    try {
+      patch = parseClientPricingSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid body');
+    }
+
+    const next: ClientPricingSettings = {
+      ...parseClientPricingSettings(row.pricingSettings),
+      ...patch,
+    };
+
+    await this.prisma.client.update({
+      where: { id: row.id },
+      data: { pricingSettings: next as unknown as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: row.tenantId,
+      actorUserId,
+      action: 'client.pricing_settings_update',
+      entityType: 'client',
+      entityId: row.id,
+      meta: { partsPriceSuspectPercent: next.partsPriceSuspectPercent },
     });
 
     return next;

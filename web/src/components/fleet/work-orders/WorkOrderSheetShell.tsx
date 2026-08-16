@@ -974,6 +974,7 @@ export function WorkOrderSheetShell({
         allowQuotePdfImport={workOrderSettings.allowQuotePdfImport}
         allowPartsPriceVerify={workOrderSettings.allowPartsPriceVerify}
         allowPartsOrderLaunch={workOrderSettings.allowPartsOrderLaunch}
+        canLaunchPartsOrders={isPartner ? canWrite : canApprove}
         ticketSettlement={ticketSettlement}
       />
 

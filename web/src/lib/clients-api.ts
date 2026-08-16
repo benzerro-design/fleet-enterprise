@@ -63,7 +63,7 @@ export type ClientSummaryPayload = {
   drivers: DriverRecord[];
 };
 
-export type ClientProfileTab = "overview" | "vehicles" | "drivers" | "subscription" | "mail";
+export type ClientProfileTab = "overview" | "vehicles" | "drivers" | "subscription" | "mail" | "pricing";
 
 export type ClientSubscriptionRow = {
   assignmentId: string;

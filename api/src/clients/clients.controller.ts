@@ -201,6 +201,28 @@ export class ClientsController {
     return this.clients.patchMailSettings(tenantSlug, id, body, actorUserId, access);
   }
 
+  @Get(':id/pricing-settings')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  getPricingSettings(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.getPricingSettings(tenantSlug, id, access);
+  }
+
+  @Patch(':id/pricing-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchPricingSettings(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.patchPricingSettings(tenantSlug, id, body, actorUserId, access);
+  }
+
   @Get(':id')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   get(

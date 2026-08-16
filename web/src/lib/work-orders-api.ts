@@ -351,6 +351,7 @@ export type PartsPriceVerifyLineResult = {
 
 export type VerifyPartsPricesResult = {
   suspectPercent: number;
+  suspectPercentSource?: "tenant" | "client";
   stubCatalog: boolean;
   providersUsed: Array<{ id: string; label: string }>;
   lines: PartsPriceVerifyLineResult[];

@@ -59,9 +59,16 @@ export class WorkOrderQuotesController {
     @TenantId() tenantSlug: string,
     @Param('workOrderId') workOrderId: string,
     @Body() body: VerifyPartsPricesInput,
+    @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {
-    return this.quotes.verifyPartsPrices(tenantSlug, workOrderId, body ?? { lines: [] }, access);
+    return this.quotes.verifyPartsPrices(
+      tenantSlug,
+      workOrderId,
+      body ?? { lines: [] },
+      actorUserId,
+      access,
+    );
   }
 
   @Get(':quoteId/pdf')

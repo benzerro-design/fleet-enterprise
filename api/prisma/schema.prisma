@@ -85,6 +85,8 @@ model Client {
   notes     String?
   /** CC / opțiuni mail daună pe client (merge cu Tenant.mailSettings la trimitere). */
   mailSettings Json?
+  /** Override comercial pe client (ex. prag preț suspect la verificare catalog). */
+  pricingSettings Json?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)

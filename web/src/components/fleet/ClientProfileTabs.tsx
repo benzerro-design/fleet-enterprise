@@ -16,6 +16,7 @@ import { clientOpsQuery } from "@/lib/clients-api";
 import { ClientSubscriptionTab } from "@/components/fleet/ClientSubscriptionTab";
 import { ClientDriversTab } from "@/components/fleet/ClientDriversTab";
 import { ClientMailSettingsEditor } from "@/components/fleet/ClientMailSettingsEditor";
+import { ClientPricingSettingsEditor } from "@/components/fleet/ClientPricingSettingsEditor";
 import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 
 const TABS: { id: ClientProfileTab; label: string }[] = [
@@ -24,6 +25,7 @@ const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "drivers", label: "Șoferi" },
   { id: "subscription", label: "Abonament" },
   { id: "mail", label: "Corespondență" },
+  { id: "pricing", label: "Prețuri" },
 ];
 
 function formatDate(iso: string): string {
@@ -67,7 +69,15 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
 
   const active = useMemo((): ClientProfileTab => {
     const t = searchParams.get("tab");
-    if (t === "vehicles" || t === "subscription" || t === "drivers" || t === "mail") return t;
+    if (
+      t === "vehicles" ||
+      t === "subscription" ||
+      t === "drivers" ||
+      t === "mail" ||
+      t === "pricing"
+    ) {
+      return t;
+    }
     return "overview";
   }, [searchParams]);
 
@@ -182,6 +192,8 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
           <ClientDriversTab clientCode={client.code} drivers={drivers ?? []} canWrite={canWrite} />
         ) : active === "mail" ? (
           <ClientMailSettingsEditor clientId={client.id} canWrite={canWrite} />
+        ) : active === "pricing" ? (
+          <ClientPricingSettingsEditor clientId={client.id} canWrite={canWrite} />
         ) : (
           <>
             {vehicles.length === 0 ? (
