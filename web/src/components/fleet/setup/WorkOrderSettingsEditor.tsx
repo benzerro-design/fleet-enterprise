@@ -244,7 +244,7 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
             <span>
               <span className="font-medium text-zinc-100">Permite lansare comenzi piese</span>
               <span className="mt-0.5 block text-xs text-zinc-500">
-                După aprobare — stub până la conectori (Integrări).
+                Buton „Lansează comenzi piese” pe Deviz aprobat (necesită și Integrări).
               </span>
             </span>
           </label>

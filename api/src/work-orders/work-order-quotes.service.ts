@@ -36,7 +36,7 @@ import {
 } from '../ops/reminder-sync';
 import { normalizeReminderOffsets } from '../ops/document-reminders';
 import { normalizeReminderOffsetsKm } from '../ops/reminder-status';
-import { parseTenantIntegrationsSettings } from '../tenant/integrations-settings';
+import { parseTenantIntegrationsSettings, interCarsHasCredentials } from '../tenant/integrations-settings';
 import { InterCarsClient } from '../tenant/intercars-client.service';
 import { parseWorkOrderSettings, type WorkOrderSettings } from '../tenant/work-order-settings';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
@@ -89,6 +89,27 @@ export type ApproveQuoteInput = {
 export type PatchQuoteLinePartsInput = {
   partsOrderStatus?: QuotePartsOrderStatus;
   partsExpectedOn?: string | null;
+};
+
+export type LaunchPartsOrdersInput = {
+  /** Default: toate liniile parts aprobate cu status none. */
+  lineIds?: string[];
+  expectedOn?: string | null;
+  /** intercars = încearcă API + marchează ordered; manual = doar status local. */
+  channel?: 'intercars' | 'manual';
+};
+
+export type LaunchPartsOrdersResult = {
+  quote: WorkOrderQuoteRecord;
+  launched: number;
+  skipped: number;
+  channel: 'intercars' | 'manual';
+  interCars: {
+    attempted: boolean;
+    ok: boolean;
+    message: string | null;
+    externalId: string | null;
+  } | null;
 };
 
 export type QuoteImportPreviewInput = {
@@ -871,6 +892,172 @@ export class WorkOrderQuotesService {
     });
 
     return toQuoteRecord(quote);
+  }
+
+  private async assertPartsOrderLaunchEnabled(tenantSlug: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { workOrderSettings: true, integrationsSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const wo = parseWorkOrderSettings(tenant.workOrderSettings);
+    const integ = parseTenantIntegrationsSettings(tenant.integrationsSettings);
+    if (!wo.allowPartsOrderLaunch) {
+      throw new BadRequestException(
+        'Lansarea comenzilor e dezactivată (Setup → WO → Permite lansare comenzi piese).',
+      );
+    }
+    if (!integ.partsOrderLaunchEnabled) {
+      throw new BadRequestException(
+        'Lansarea comenzilor e dezactivată (Setup → Integrări → Lansare comenzi piese).',
+      );
+    }
+    return { tenant, wo, integ };
+  }
+
+  async launchPartsOrders(
+    tenantSlug: string,
+    workOrderId: string,
+    quoteId: string,
+    dto: LaunchPartsOrdersInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<LaunchPartsOrdersResult> {
+    const { integ } = await this.assertPartsOrderLaunchEnabled(tenantSlug);
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+
+    const existing = await this.prisma.workOrderQuote.findFirst({
+      where: { id: quoteId, workOrderId, tenantId: tenant.id },
+      include: { workOrder: true, ...this.quoteInclude() },
+    });
+    if (!existing) throw new NotFoundException('Quote not found');
+    if (existing.status !== WorkOrderQuoteStatus.approved) {
+      throw new BadRequestException('Comenzile de piese se lansează doar pe un deviz aprobat');
+    }
+
+    const requestedIds = Array.isArray(dto.lineIds)
+      ? new Set(dto.lineIds.filter((id) => typeof id === 'string' && id.trim()))
+      : null;
+
+    const candidates = existing.lines.filter((line) => {
+      if (line.lineType !== 'parts') return false;
+      if (line.approvalStatus === 'rejected') return false;
+      if (requestedIds && !requestedIds.has(line.id)) return false;
+      if (!requestedIds && line.partsOrderStatus !== QuotePartsOrderStatus.none) return false;
+      return true;
+    });
+
+    if (!candidates.length) {
+      throw new BadRequestException(
+        'Nicio linie eligibilă (piese aprobate, status „Nicio comandă” sau selecție goală)',
+      );
+    }
+
+    let expectedOn: Date | null | undefined = undefined;
+    if (dto.expectedOn !== undefined) {
+      if (dto.expectedOn === null || dto.expectedOn === '') {
+        expectedOn = null;
+      } else {
+        const parsed = new Date(dto.expectedOn);
+        if (Number.isNaN(parsed.getTime())) throw new BadRequestException('Dată estimată invalidă');
+        expectedOn = parsed;
+      }
+    }
+
+    const preferIc =
+      dto.channel === 'intercars' ||
+      (dto.channel !== 'manual' &&
+        integ.partsCatalogProviders.some((p) => p.id === 'intercars' && p.enabled) &&
+        interCarsHasCredentials(integ.interCars));
+
+    let channel: 'intercars' | 'manual' = preferIc ? 'intercars' : 'manual';
+    let interCarsResult: LaunchPartsOrdersResult['interCars'] = null;
+
+    if (channel === 'intercars') {
+      const withSku = candidates.filter((l) => l.partNumber?.trim());
+      if (!withSku.length) {
+        channel = 'manual';
+        interCarsResult = {
+          attempted: false,
+          ok: false,
+          message: 'Nicio linie cu cod piesă — lansare doar local (manual)',
+          externalId: null,
+        };
+      } else {
+        const ic = await this.interCars.createRequisition(integ.interCars, {
+          customNumber: `WO-${existing.workOrder.displayNumber || workOrderId.slice(0, 8)}-v${existing.version}`,
+          comments: `Fleet WO ${workOrderId} quote v${existing.version}`,
+          lines: withSku.map((l) => ({
+            sku: l.partNumber!.trim().toUpperCase().replace(/\s+/g, ''),
+            requiredQuantity: l.quantity > 0 ? l.quantity : 1,
+            unitPriceNet: Math.round(l.unitNetCents) / 100,
+          })),
+        });
+        interCarsResult = {
+          attempted: true,
+          ok: ic.ok,
+          message: ic.message,
+          externalId: ic.externalId,
+        };
+        if (!ic.ok) {
+          // tot marcăm ordered local — status operațional; mesajul IC rămâne în răspuns/audit
+          channel = 'manual';
+        }
+      }
+    }
+
+    const quote = await this.prisma.$transaction(async (tx) => {
+      for (const line of candidates) {
+        await tx.workOrderQuoteLine.update({
+          where: { id: line.id },
+          data: {
+            partsOrderStatus: QuotePartsOrderStatus.ordered,
+            ...(expectedOn !== undefined ? { partsExpectedOn: expectedOn } : {}),
+          },
+        });
+      }
+
+      if (
+        existing.workOrder.status !== MaintenanceWorkOrderStatus.done &&
+        existing.workOrder.status !== MaintenanceWorkOrderStatus.cancelled
+      ) {
+        await tx.maintenanceWorkOrder.update({
+          where: { id: workOrderId },
+          data: { status: MaintenanceWorkOrderStatus.waiting_parts },
+        });
+      }
+
+      return tx.workOrderQuote.findUniqueOrThrow({
+        where: { id: quoteId },
+        include: this.quoteInclude(),
+      });
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order_quote.launch_parts_orders',
+      entityType: 'work_order_quote',
+      entityId: quoteId,
+      meta: {
+        workOrderId,
+        launched: candidates.length,
+        channel,
+        lineIds: candidates.map((l) => l.id),
+        interCars: interCarsResult,
+      },
+    });
+
+    return {
+      quote: toQuoteRecord(quote),
+      launched: candidates.length,
+      skipped: existing.lines.filter((l) => l.lineType === 'parts').length - candidates.length,
+      channel,
+      interCars: interCarsResult,
+    };
   }
 
   async reject(

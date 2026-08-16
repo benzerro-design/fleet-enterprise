@@ -373,7 +373,9 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
 
         <div className="border-t border-zinc-800 pt-5">
           <h2 className="text-sm font-medium text-zinc-200">Comenzi piese</h2>
-          <p className="mt-1 text-xs text-zinc-500">Lansare după aprobare — INT-009.</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            După Deviz aprobat: buton lansare + status pe linii (ordered / in_stock / delivered).
+          </p>
         </div>
 
         <label className="flex items-start gap-3 text-sm text-zinc-300">
@@ -386,7 +388,9 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
           />
           <span>
             <span className="font-medium text-zinc-100">Lansare comenzi piese</span>
-            <span className="mt-0.5 block text-xs text-zinc-500">Flag tenant — UI în INT-009.</span>
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Activează lansarea din WO (necesită și Setup → WO). Canal Inter Cars dacă există credențiale.
+            </span>
           </span>
         </label>
       </div>

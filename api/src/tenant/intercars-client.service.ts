@@ -323,4 +323,106 @@ export class InterCarsClient {
       throw new Error(`Katalog auth HTTP ${res.status}: ${t.slice(0, 120)}`);
     }
   }
+
+  /**
+   * Best-effort create requisition pe Gateway IC.
+   * Linii fără SKU IC valid pot eșua — apelantul marchează tot status local.
+   */
+  async createRequisition(
+    cfg: InterCarsConnectorSettings,
+    input: {
+      customNumber: string;
+      comments?: string;
+      lines: Array<{
+        sku: string;
+        requiredQuantity: number;
+        unitPriceNet: number;
+      }>;
+    },
+  ): Promise<{ ok: boolean; message: string; externalId: string | null }> {
+    if (cfg.mode !== 'gateway') {
+      return {
+        ok: false,
+        message: 'Rechiziții IC doar pe mod Gateway (nu Katalog legacy)',
+        externalId: null,
+      };
+    }
+    if (!interCarsHasCredentials(cfg)) {
+      return { ok: false, message: 'Lipsă credențiale Inter Cars', externalId: null };
+    }
+    if (!input.lines.length) {
+      return { ok: false, message: 'Nicio linie pentru rechiziție', externalId: null };
+    }
+
+    try {
+      const token = await this.getAccessToken(cfg);
+      const base = this.resolveBase(cfg);
+      const url = `${base}/sales/1.0.0/sales/requisition`;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30_000);
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            customNumber: input.customNumber.slice(0, 40),
+            comments: input.comments?.slice(0, 400) || undefined,
+            lines: input.lines.map((l) => ({
+              sku: l.sku,
+              requiredQuantity: l.requiredQuantity,
+              unitPriceNet: l.unitPriceNet,
+              unitPriceGross: Math.round(l.unitPriceNet * 1.19 * 100) / 100,
+            })),
+          }),
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+
+      const text = await res.text();
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: `Rechiziție HTTP ${res.status}: ${text.slice(0, 200)}`,
+          externalId: null,
+        };
+      }
+
+      let externalId: string | null = null;
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        if (Array.isArray(parsed) && parsed[0] && typeof parsed[0] === 'object') {
+          const row = parsed[0] as Record<string, unknown>;
+          externalId =
+            (typeof row.id === 'string' && row.id) ||
+            (typeof row.requisitionId === 'string' && row.requisitionId) ||
+            null;
+        } else if (parsed && typeof parsed === 'object') {
+          const row = parsed as Record<string, unknown>;
+          externalId =
+            (typeof row.id === 'string' && row.id) ||
+            (typeof row.requisitionId === 'string' && row.requisitionId) ||
+            null;
+        }
+      } catch {
+        /* ignore */
+      }
+
+      return {
+        ok: true,
+        message: externalId ? `Rechiziție creată: ${externalId}` : 'Rechiziție acceptată de IC',
+        externalId,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Eroare rechiziție';
+      this.logger.warn(`Inter Cars requisition failed: ${msg}`);
+      return { ok: false, message: msg, externalId: null };
+    }
+  }
 }

@@ -193,6 +193,7 @@ type Props = {
   requirePartCode?: boolean;
   allowQuotePdfImport?: boolean;
   allowPartsPriceVerify?: boolean;
+  allowPartsOrderLaunch?: boolean;
   ticketSettlement?: {
     entityType: "maintenance" | "cost" | "document";
     entityId: string;
@@ -213,6 +214,7 @@ export function WorkOrderQuotePanel({
   requirePartCode = true,
   allowQuotePdfImport = true,
   allowPartsPriceVerify = true,
+  allowPartsOrderLaunch = false,
   ticketSettlement = null,
 }: Props) {
   const router = useRouter();
@@ -229,6 +231,11 @@ export function WorkOrderQuotePanel({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [launchOpen, setLaunchOpen] = useState(false);
+  const [launchExpectedOn, setLaunchExpectedOn] = useState("");
+  const [launchChannel, setLaunchChannel] = useState<"intercars" | "manual">("manual");
+  const [launchSelected, setLaunchSelected] = useState<Record<string, boolean>>({});
+  const [launchInfo, setLaunchInfo] = useState<string | null>(null);
   const [priceVerify, setPriceVerify] = useState<VerifyPartsPricesResult | null>(null);
   const [priceVerifyByKey, setPriceVerifyByKey] = useState<Record<string, PartsPriceVerifyLineResult>>({});
   const [estimatedDate, setEstimatedDate] = useState(() => toDateInput(estimatedRepairAt));
@@ -610,6 +617,76 @@ export function WorkOrderQuotePanel({
     );
   }
 
+  function openLaunchParts() {
+    if (!activeQuote) return;
+    const initial: Record<string, boolean> = {};
+    for (const line of activeQuote.lines) {
+      if (
+        line.lineType === "parts" &&
+        line.approvalStatus !== "rejected" &&
+        line.partsOrderStatus === "none"
+      ) {
+        initial[line.id] = true;
+      }
+    }
+    setLaunchSelected(initial);
+    setLaunchExpectedOn("");
+    setLaunchChannel("manual");
+    setLaunchInfo(null);
+    setLaunchOpen(true);
+  }
+
+  async function confirmLaunchParts() {
+    if (!activeQuote) return;
+    const lineIds = Object.entries(launchSelected)
+      .filter(([, on]) => on)
+      .map(([id]) => id);
+    if (!lineIds.length) {
+      setError("Selectează cel puțin o linie de piese.");
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setLaunchInfo(null);
+    try {
+      const res = await fetch(
+        `${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/launch-parts-orders`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({
+            lineIds,
+            expectedOn: launchExpectedOn || null,
+            channel: launchChannel,
+          }),
+        },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as {
+        launched: number;
+        channel: string;
+        interCars?: { attempted: boolean; ok: boolean; message: string | null } | null;
+      };
+      const icNote =
+        data.interCars?.attempted
+          ? data.interCars.ok
+            ? ` · IC OK${data.interCars.message ? `: ${data.interCars.message}` : ""}`
+            : ` · IC eșuat${data.interCars.message ? `: ${data.interCars.message}` : ""} (status local setat)`
+          : "";
+      setLaunchInfo(`Lansate ${data.launched} linii (${data.channel})${icNote}`);
+      setLaunchOpen(false);
+      await load();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Lansare comenzi eșuată");
+    } finally {
+      setPending(false);
+    }
+  }
+
   if (quotes === undefined) {
     return (
       <section className={sheetLayout ? "border-t border-zinc-800 p-4" : "mt-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"}>
@@ -754,6 +831,107 @@ export function WorkOrderQuotePanel({
         }}
       />
 
+      {launchOpen && activeQuote ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center">
+          <div
+            role="dialog"
+            aria-modal
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-950 p-4 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-100">Lansează comenzi piese</h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Marchează liniile ca „Comandate” și setează WO pe waiting_parts. Opțional încearcă
+                  rechiziție Inter Cars.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLaunchOpen(false)}
+                className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300"
+              >
+                Închide
+              </button>
+            </div>
+
+            <ul className="mt-4 max-h-48 space-y-2 overflow-y-auto text-sm">
+              {activeQuote.lines
+                .filter((l) => l.lineType === "parts" && l.approvalStatus !== "rejected")
+                .map((line) => (
+                  <li key={line.id}>
+                    <label className="flex items-start gap-2 text-zinc-300">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={Boolean(launchSelected[line.id])}
+                        disabled={line.partsOrderStatus !== "none"}
+                        onChange={(e) =>
+                          setLaunchSelected((s) => ({ ...s, [line.id]: e.target.checked }))
+                        }
+                      />
+                      <span>
+                        <span className="font-mono text-xs text-zinc-400">
+                          {line.partNumber ?? "fără cod"}
+                        </span>{" "}
+                        · {line.description}
+                        {line.partsOrderStatus !== "none" ? (
+                          <span className="ml-1 text-xs text-zinc-500">
+                            ({partsOrderLabels[line.partsOrderStatus]})
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+            </ul>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-xs text-zinc-400">
+                Canal
+                <select
+                  className={OPS_INPUT_CLASS}
+                  value={launchChannel}
+                  onChange={(e) =>
+                    setLaunchChannel(e.target.value as "intercars" | "manual")
+                  }
+                >
+                  <option value="manual">Manual (doar status)</option>
+                  <option value="intercars">Inter Cars (API + status)</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-xs text-zinc-400">
+                Dată estimată livrare
+                <input
+                  type="date"
+                  className={OPS_INPUT_CLASS}
+                  value={launchExpectedOn}
+                  onChange={(e) => setLaunchExpectedOn(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setLaunchOpen(false)}
+                className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
+              >
+                Anulează
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void confirmLaunchParts()}
+                className="rounded border border-amber-500/50 bg-amber-950/40 px-3 py-1.5 text-xs font-semibold text-amber-100 disabled:opacity-50"
+              >
+                Confirmă lansarea
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-3 flex gap-2 border-b border-zinc-800">
         {[
           { id: "quote" as const, label: "Deviz" },
@@ -881,7 +1059,26 @@ export function WorkOrderQuotePanel({
                 Comandă piese
               </span>
             ) : null}
+            {canWrite &&
+            allowPartsOrderLaunch &&
+            activeQuote.status === "approved" &&
+            activeQuote.lines.some(
+              (l) =>
+                l.lineType === "parts" &&
+                l.approvalStatus !== "rejected" &&
+                l.partsOrderStatus === "none",
+            ) ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => openLaunchParts()}
+                className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
+              >
+                Lansează comenzi piese
+              </button>
+            ) : null}
           </div>
+          {launchInfo ? <p className="text-sm text-amber-200/90">{launchInfo}</p> : null}
           {activeQuote.rejectionReason ? (
             <p className="text-sm text-red-300">Motiv respingere: {activeQuote.rejectionReason}</p>
           ) : null}

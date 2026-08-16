@@ -9,6 +9,7 @@ import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import {
   type ApproveQuoteInput,
+  type LaunchPartsOrdersInput,
   type PatchQuoteLinePartsInput,
   type QuoteImportApplyInput,
   type QuoteImportPreviewInput,
@@ -143,6 +144,26 @@ export class WorkOrderQuotesController {
       workOrderId,
       quoteId,
       lineId,
+      body ?? {},
+      actorUserId,
+      access,
+    );
+  }
+
+  @Post(':quoteId/launch-parts-orders')
+  @Roles(...FLEET_WRITE_ROLES)
+  launchPartsOrders(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Param('quoteId') quoteId: string,
+    @Body() body: LaunchPartsOrdersInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.launchPartsOrders(
+      tenantSlug,
+      workOrderId,
+      quoteId,
       body ?? {},
       actorUserId,
       access,
