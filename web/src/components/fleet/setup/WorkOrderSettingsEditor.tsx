@@ -193,6 +193,82 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
               />
             </label>
           </div>
+
+          <div>
+            <h2 className="text-sm font-medium text-zinc-200">Import · verificare · comenzi</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Reguli pe WO. Conectorii se activează separat în Setup → Integrări.
+            </p>
+          </div>
+
+          <label className="flex items-start gap-3 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={settings.allowQuotePdfImport}
+              disabled={pending}
+              onChange={(e) => void patch({ allowQuotePdfImport: e.target.checked })}
+            />
+            <span>
+              <span className="font-medium text-zinc-100">Permite Import PDF pe comandă</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                Buton „Import deviz PDF” (necesită și Integrări → Import Audatex).
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={settings.allowPartsPriceVerify}
+              disabled={pending}
+              onChange={(e) => void patch({ allowPartsPriceVerify: e.target.checked })}
+            />
+            <span>
+              <span className="font-medium text-zinc-100">Permite verificare preț piese</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                Pentru UI viitor „Verifică preț” (catalog activ în Integrări).
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={settings.allowPartsOrderLaunch}
+              disabled={pending}
+              onChange={(e) => void patch({ allowPartsOrderLaunch: e.target.checked })}
+            />
+            <span>
+              <span className="font-medium text-zinc-100">Permite lansare comenzi piese</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                După aprobare — stub până la conectori (Integrări).
+              </span>
+            </span>
+          </label>
+
+          <label className="space-y-1 text-sm text-zinc-300">
+            <span className="font-medium text-zinc-100">Prag preț suspect (%)</span>
+            <span className="block text-xs text-zinc-500">
+              % peste cel mai ieftin preț din catalog pentru flag la verificare.
+            </span>
+            <input
+              type="number"
+              min={0}
+              className="mt-1 w-full max-w-[8rem] rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              value={settings.partsPriceSuspectPercent}
+              disabled={pending}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  partsPriceSuspectPercent: parseInt(e.target.value, 10) || 0,
+                }))
+              }
+              onBlur={(e) => patchNumber("partsPriceSuspectPercent", e.target.value)}
+            />
+          </label>
         </div>
       ) : (
         <TypeSettingsPlaceholder code={tab} />

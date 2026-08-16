@@ -15,6 +15,7 @@ import {
   WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { CivOcrService } from '../fleet/civ-ocr.service';
 import {
   assertApproveServiceQuote,
   assertClientFleetWrite,
@@ -35,8 +36,10 @@ import {
 } from '../ops/reminder-sync';
 import { normalizeReminderOffsets } from '../ops/document-reminders';
 import { normalizeReminderOffsetsKm } from '../ops/reminder-status';
+import { parseTenantIntegrationsSettings } from '../tenant/integrations-settings';
 import { parseWorkOrderSettings, type WorkOrderSettings } from '../tenant/work-order-settings';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
+import { parseWebUploadUrl, readWebUploadFromGcs } from '../storage/web-upload-storage';
 import { costCategoryForWorkflow } from './work-order-cost.utils';
 import {
   computeApprovedTotals,
@@ -46,6 +49,11 @@ import {
   type WorkOrderQuoteRecord,
 } from './work-order-quotes.types';
 import { buildQuotePdfBuffer } from './work-order-quote-pdf';
+import {
+  parseQuoteTextToPreview,
+  type QuoteImportPreview,
+  type QuoteImportPreviewLine,
+} from './quote-import-parse';
 
 function formatMoney(cents: number): string {
   return `${(cents / 100).toFixed(2)} RON`;
@@ -77,6 +85,18 @@ export type PatchQuoteLinePartsInput = {
   partsExpectedOn?: string | null;
 };
 
+export type QuoteImportPreviewInput = {
+  text?: string | null;
+  fileUrl?: string | null;
+};
+
+export type QuoteImportApplyInput = {
+  lines: QuoteImportPreviewLine[];
+  notes?: string | null;
+  currency?: string;
+  replaceExistingDraft?: boolean;
+};
+
 function reminderOffsetsForDb(
   raw: number[] | null | undefined,
 ): Prisma.InputJsonValue | typeof Prisma.JsonNull {
@@ -102,6 +122,7 @@ export class WorkOrderQuotesService {
     private readonly audit: AuditService,
     private readonly reminders: RemindersService,
     private readonly partnerNotify: PartnerNotificationService,
+    private readonly civOcr: CivOcrService,
   ) {}
 
   private quoteInclude() {
@@ -157,6 +178,196 @@ export class WorkOrderQuotesService {
     });
     if (!row) throw new NotFoundException('Quote not found');
     return toQuoteRecord(row);
+  }
+
+  private async assertQuoteImportEnabled(tenantSlug: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { workOrderSettings: true, integrationsSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const wo = parseWorkOrderSettings(tenant.workOrderSettings);
+    const integ = parseTenantIntegrationsSettings(tenant.integrationsSettings);
+    if (!wo.allowQuotePdfImport || !integ.audatexImportEnabled) {
+      throw new BadRequestException(
+        'Import PDF dezactivat (Setup → WO / Integrări). Activează allowQuotePdfImport și audatexImportEnabled.',
+      );
+    }
+    return tenant;
+  }
+
+  private async loadImportFileBytes(
+    rawUrl: string,
+  ): Promise<{ buf: Buffer; contentType: string }> {
+    const uploadRef = parseWebUploadUrl(rawUrl);
+    if (uploadRef) {
+      const fromGcs = await readWebUploadFromGcs(uploadRef);
+      if (fromGcs) {
+        return { buf: fromGcs.data, contentType: fromGcs.contentType };
+      }
+    }
+
+    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
+    let url = rawUrl.trim();
+    if (url.startsWith('/') && webOrigin) {
+      url = `${webOrigin}${url}`;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      throw new BadRequestException(
+        uploadRef
+          ? 'Fișierul nu a fost găsit în storage. Reîncarcă PDF-ul și reîncearcă.'
+          : 'fileUrl trebuie să fie absolut sau relative pe WEB_ORIGIN',
+      );
+    }
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25_000);
+    let res: Response;
+    try {
+      res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) {
+      throw new BadRequestException(`Nu am putut descărca fișierul (HTTP ${res.status})`);
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const contentType =
+      res.headers.get('content-type')?.split(';')[0]?.trim() || 'application/octet-stream';
+    return { buf, contentType };
+  }
+
+  async importPreview(
+    tenantSlug: string,
+    workOrderId: string,
+    dto: QuoteImportPreviewInput,
+    access?: AccessContext,
+  ): Promise<QuoteImportPreview & { ocrError?: string | null }> {
+    await this.assertQuoteImportEnabled(tenantSlug);
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+
+    const pasted = typeof dto.text === 'string' ? dto.text.trim() : '';
+    let text = pasted;
+    let ocrError: string | null = null;
+
+    const fileUrl = typeof dto.fileUrl === 'string' ? dto.fileUrl.trim() : '';
+    if (fileUrl) {
+      const { buf, contentType } = await this.loadImportFileBytes(fileUrl);
+      const ocr = await this.civOcr.extractText(buf, contentType);
+      if (ocr.text?.trim()) {
+        text = ocr.text.trim();
+      } else {
+        ocrError = ocr.error ?? 'OCR fără text';
+        if (!text) {
+          throw new BadRequestException(
+            ocrError
+              ? `OCR eșuat: ${ocrError}. Lipește textul din PDF sau reîncearcă cu un scan mai clar.`
+              : 'Nu am putut extrage text din fișier. Lipește textul din PDF.',
+          );
+        }
+      }
+    }
+
+    if (!text || text.length < 20) {
+      throw new BadRequestException(
+        'Furnizează un PDF/imagine (fileUrl) sau lipește textul tabelului (min. 20 caractere).',
+      );
+    }
+
+    const preview = parseQuoteTextToPreview(text);
+    if (ocrError) {
+      preview.warnings = [
+        `OCR parțial / cu eroare (${ocrError}) — am folosit textul lipit.`,
+        ...preview.warnings,
+      ];
+    }
+    return { ...preview, ocrError };
+  }
+
+  async importApply(
+    tenantSlug: string,
+    workOrderId: string,
+    dto: QuoteImportApplyInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderQuoteRecord> {
+    await this.assertQuoteImportEnabled(tenantSlug);
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+
+    const rawLines = Array.isArray(dto.lines) ? dto.lines : [];
+    if (!rawLines.length) {
+      throw new BadRequestException('Selectează cel puțin o linie pentru import');
+    }
+
+    const lines: QuoteLineInput[] = rawLines.map((line, idx) => {
+      const description = String(line.description ?? '').trim();
+      const lineType = line.lineType === 'labor' || line.lineType === 'other' ? line.lineType : 'parts';
+      const partNumber =
+        typeof line.partNumber === 'string' && line.partNumber.trim()
+          ? line.partNumber.trim()
+          : null;
+      return {
+        lineType,
+        description,
+        quantity: Number(line.quantity) > 0 ? Number(line.quantity) : 1,
+        unitNetCents: Math.round(Number(line.unitNetCents) || 0),
+        vatRatePercent:
+          Number.isFinite(Number(line.vatRatePercent)) && Number(line.vatRatePercent) >= 0
+            ? Math.round(Number(line.vatRatePercent))
+            : 19,
+        partNumber,
+        partCodeExempt: lineType === 'parts' && !partNumber,
+        sortOrder: idx,
+      };
+    });
+
+    const notes =
+      (dto.notes?.trim() || '') ||
+      `Import PDF / Audatex (${new Date().toISOString().slice(0, 10)})`;
+
+    const existingDraft = await this.prisma.workOrderQuote.findFirst({
+      where: { workOrderId, status: WorkOrderQuoteStatus.draft },
+      select: { id: true },
+    });
+
+    if (existingDraft) {
+      if (dto.replaceExistingDraft === false) {
+        throw new BadRequestException('Există deja o ciornă — editeaz-o sau înlocuiește-o la import');
+      }
+      return this.updateDraft(
+        tenantSlug,
+        workOrderId,
+        existingDraft.id,
+        { lines, notes, currency: dto.currency },
+        actorUserId,
+        access,
+      );
+    }
+
+    const created = await this.createDraft(
+      tenantSlug,
+      workOrderId,
+      { lines, notes, currency: dto.currency },
+      actorUserId,
+      access,
+    );
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true },
+    });
+    if (tenant) {
+      await this.audit.log({
+        tenantId: tenant.id,
+        actorUserId,
+        action: 'work_order_quote.import_apply',
+        entityType: 'work_order_quote',
+        entityId: created.id,
+        meta: { workOrderId, lineCount: lines.length },
+      });
+    }
+
+    return created;
   }
 
   async createDraft(

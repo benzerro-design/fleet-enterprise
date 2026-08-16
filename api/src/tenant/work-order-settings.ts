@@ -11,6 +11,14 @@ export type WorkOrderSettings = {
   defaultPartsWarrantyKm: number;
   /** Garanție implicită manoperă, în luni. */
   defaultLaborWarrantyMonths: number;
+  /** Permite Import PDF → preview → ciornă pe WO (dacă și Integrări.audatexImportEnabled). */
+  allowQuotePdfImport: boolean;
+  /** Permite „Verifică preț” pe linii (când catalogul e activ în Integrări). */
+  allowPartsPriceVerify: boolean;
+  /** Permite lansare comenzi piese după aprobare (când e activ în Integrări). */
+  allowPartsOrderLaunch: boolean;
+  /** Prag % peste cel mai ieftin catalog pentru flag „preț suspect” (verificare). */
+  partsPriceSuspectPercent: number;
 };
 
 export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
@@ -20,6 +28,10 @@ export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
   defaultPartsWarrantyMonths: 12,
   defaultPartsWarrantyKm: 20000,
   defaultLaborWarrantyMonths: 6,
+  allowQuotePdfImport: true,
+  allowPartsPriceVerify: true,
+  allowPartsOrderLaunch: false,
+  partsPriceSuspectPercent: 25,
 };
 
 function parseNonNegativeInt(
@@ -59,6 +71,22 @@ export function parseWorkOrderSettings(raw: unknown): WorkOrderSettings {
     defaultLaborWarrantyMonths: parseNonNegativeInt(
       o.defaultLaborWarrantyMonths,
       DEFAULT_WORK_ORDER_SETTINGS.defaultLaborWarrantyMonths,
+    ),
+    allowQuotePdfImport:
+      typeof o.allowQuotePdfImport === 'boolean'
+        ? o.allowQuotePdfImport
+        : DEFAULT_WORK_ORDER_SETTINGS.allowQuotePdfImport,
+    allowPartsPriceVerify:
+      typeof o.allowPartsPriceVerify === 'boolean'
+        ? o.allowPartsPriceVerify
+        : DEFAULT_WORK_ORDER_SETTINGS.allowPartsPriceVerify,
+    allowPartsOrderLaunch:
+      typeof o.allowPartsOrderLaunch === 'boolean'
+        ? o.allowPartsOrderLaunch
+        : DEFAULT_WORK_ORDER_SETTINGS.allowPartsOrderLaunch,
+    partsPriceSuspectPercent: parseNonNegativeInt(
+      o.partsPriceSuspectPercent,
+      DEFAULT_WORK_ORDER_SETTINGS.partsPriceSuspectPercent,
     ),
   };
 }
@@ -112,6 +140,32 @@ export function parseWorkOrderSettingsPatch(body: unknown): Partial<WorkOrderSet
       throw new Error('defaultLaborWarrantyMonths must be a non-negative number');
     }
     patch.defaultLaborWarrantyMonths = Math.round(o.defaultLaborWarrantyMonths);
+  }
+  if (o.allowQuotePdfImport !== undefined) {
+    if (typeof o.allowQuotePdfImport !== 'boolean') throw new Error('allowQuotePdfImport must be boolean');
+    patch.allowQuotePdfImport = o.allowQuotePdfImport;
+  }
+  if (o.allowPartsPriceVerify !== undefined) {
+    if (typeof o.allowPartsPriceVerify !== 'boolean') {
+      throw new Error('allowPartsPriceVerify must be boolean');
+    }
+    patch.allowPartsPriceVerify = o.allowPartsPriceVerify;
+  }
+  if (o.allowPartsOrderLaunch !== undefined) {
+    if (typeof o.allowPartsOrderLaunch !== 'boolean') {
+      throw new Error('allowPartsOrderLaunch must be boolean');
+    }
+    patch.allowPartsOrderLaunch = o.allowPartsOrderLaunch;
+  }
+  if (o.partsPriceSuspectPercent !== undefined) {
+    if (
+      typeof o.partsPriceSuspectPercent !== 'number' ||
+      !Number.isFinite(o.partsPriceSuspectPercent) ||
+      o.partsPriceSuspectPercent < 0
+    ) {
+      throw new Error('partsPriceSuspectPercent must be a non-negative number');
+    }
+    patch.partsPriceSuspectPercent = Math.round(o.partsPriceSuspectPercent);
   }
   if (Object.keys(patch).length === 0) throw new Error('No settings to update');
   return patch;

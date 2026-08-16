@@ -971,6 +971,7 @@ export function WorkOrderSheetShell({
         workOrderStatus={wo.status}
         outServiceAt={wo.outServiceAt}
         requirePartCode={workOrderSettings.requirePartCode}
+        allowQuotePdfImport={workOrderSettings.allowQuotePdfImport}
         ticketSettlement={ticketSettlement}
       />
 

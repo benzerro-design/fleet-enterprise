@@ -21,5 +21,6 @@ import { VehicleFormBriefService } from './vehicle-form-brief.service';
     VehicleFormBriefService,
     CivOcrService,
   ],
+  exports: [CivOcrService],
 })
 export class FleetModule {}

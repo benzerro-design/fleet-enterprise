@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
+import { FleetModule } from '../fleet/fleet.module';
 import { PartnerModule } from '../partner/partner.module';
 import { OpsModule } from '../ops/ops.module';
 import { WorkOrderMessagesController } from './work-order-messages.controller';
@@ -13,7 +14,7 @@ import { WorkOrdersController } from './work-orders.controller';
 import { WorkOrdersService } from './work-orders.service';
 
 @Module({
-  imports: [AuthModule, AuditModule, OpsModule, PartnerModule],
+  imports: [AuthModule, AuditModule, OpsModule, PartnerModule, FleetModule],
   controllers: [
     WorkOrdersController,
     WorkOrderQuotesController,

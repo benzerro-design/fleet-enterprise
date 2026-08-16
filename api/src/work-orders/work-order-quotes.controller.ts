@@ -10,6 +10,8 @@ import { TenantId } from '../fleet/tenant-id.decorator';
 import {
   type ApproveQuoteInput,
   type PatchQuoteLinePartsInput,
+  type QuoteImportApplyInput,
+  type QuoteImportPreviewInput,
   WorkOrderQuotesService,
   type PostCostInput,
   type UpsertQuoteInput,
@@ -24,6 +26,29 @@ export class WorkOrderQuotesController {
   @Roles(...FLEET_READ_ROLES)
   list(@TenantId() tenantSlug: string, @Param('workOrderId') workOrderId: string) {
     return this.quotes.listByWorkOrder(tenantSlug, workOrderId);
+  }
+
+  @Post('import-preview')
+  @Roles(...FLEET_WRITE_ROLES)
+  importPreview(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Body() body: QuoteImportPreviewInput,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.importPreview(tenantSlug, workOrderId, body ?? {}, access);
+  }
+
+  @Post('import-apply')
+  @Roles(...FLEET_WRITE_ROLES)
+  importApply(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Body() body: QuoteImportApplyInput,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.importApply(tenantSlug, workOrderId, body ?? { lines: [] }, actorUserId, access);
   }
 
   @Get(':quoteId/pdf')

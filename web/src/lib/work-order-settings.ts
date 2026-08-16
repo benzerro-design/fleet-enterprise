@@ -5,6 +5,10 @@ export type WorkOrderSettings = {
   defaultPartsWarrantyMonths: number;
   defaultPartsWarrantyKm: number;
   defaultLaborWarrantyMonths: number;
+  allowQuotePdfImport: boolean;
+  allowPartsPriceVerify: boolean;
+  allowPartsOrderLaunch: boolean;
+  partsPriceSuspectPercent: number;
 };
 
 export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
@@ -14,6 +18,10 @@ export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
   defaultPartsWarrantyMonths: 12,
   defaultPartsWarrantyKm: 20000,
   defaultLaborWarrantyMonths: 6,
+  allowQuotePdfImport: true,
+  allowPartsPriceVerify: true,
+  allowPartsOrderLaunch: false,
+  partsPriceSuspectPercent: 25,
 };
 
 export const workOrderSettingsBrowserBase = "/api/tenant/work-order-settings";

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS, fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 import { InvoiceAttachmentField } from "@/components/fleet/work-orders/InvoiceAttachmentField";
+import { QuoteImportModal } from "@/components/fleet/work-orders/QuoteImportModal";
 import { WorkOrderWarrantyPanel } from "@/components/fleet/work-orders/WorkOrderWarrantyPanel";
 import { formatDateRo, toDateInput, toIsoFromDateInput } from "@/lib/datetime-local";
 import {
@@ -188,6 +189,7 @@ type Props = {
   workOrderStatus?: string;
   outServiceAt?: string | null;
   requirePartCode?: boolean;
+  allowQuotePdfImport?: boolean;
   ticketSettlement?: {
     entityType: "maintenance" | "cost" | "document";
     entityId: string;
@@ -206,6 +208,7 @@ export function WorkOrderQuotePanel({
   workOrderStatus = "",
   outServiceAt = null,
   requirePartCode = true,
+  allowQuotePdfImport = true,
   ticketSettlement = null,
 }: Props) {
   const router = useRouter();
@@ -221,6 +224,7 @@ export function WorkOrderQuotePanel({
   const [lineDecisions, setLineDecisions] = useState<Record<string, QuoteLineApprovalStatus | undefined>>({});
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [estimatedDate, setEstimatedDate] = useState(() => toDateInput(estimatedRepairAt));
 
   useEffect(() => {
@@ -264,7 +268,7 @@ export function WorkOrderQuotePanel({
       const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/quotes`);
       if (!res.ok) {
         setQuotes([]);
-        return;
+        return [] as WorkOrderQuoteRecord[];
       }
       const data = (await res.json()) as WorkOrderQuoteRecord[];
       setQuotes(data);
@@ -282,8 +286,10 @@ export function WorkOrderQuotePanel({
         setInvoiceDate(selected.costInvoiceDate.slice(0, 10));
       }
       if (selected?.invoiceAttachmentUrl) setInvoiceAttachmentUrl(selected.invoiceAttachmentUrl);
+      return data;
     } catch {
       setQuotes([]);
+      return [] as WorkOrderQuoteRecord[];
     }
   }, [workOrderId]);
 
@@ -593,11 +599,12 @@ export function WorkOrderQuotePanel({
             </>
           ) : null}
           <span className="min-w-2 flex-1" />
-          {canWrite ? (
+          {canWrite && allowQuotePdfImport ? (
             <button
               type="button"
-              disabled
-              title="Import deviz PDF — F5e (în curând)"
+              disabled={pending}
+              title="Import PDF / Audatex → preview → ciornă"
+              onClick={() => setImportOpen(true)}
               className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
             >
               Import deviz PDF
@@ -629,8 +636,36 @@ export function WorkOrderQuotePanel({
               Deviz nou
             </button>
           ) : null}
+          {canWrite && allowQuotePdfImport ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setImportOpen(true)}
+              className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-1.5 text-xs font-semibold text-violet-100"
+            >
+              Import PDF
+            </button>
+          ) : null}
         </div>
       )}
+
+      <QuoteImportModal
+        workOrderId={workOrderId}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onApplied={() => {
+          void load().then((data) => {
+            const draft = data.find((q) => q.status === "draft");
+            if (draft) {
+              setActiveId(draft.id);
+              setEditingDraftId(draft.id);
+              setLines(linesFromQuote(draft));
+              setNotes(draft.notes ?? "");
+              setActiveTab("quote");
+            }
+          });
+        }}
+      />
 
       <div className="mt-3 flex gap-2 border-b border-zinc-800">
         {[

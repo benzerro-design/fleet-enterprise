@@ -18,6 +18,11 @@ import {
   type TenantMailSettings,
 } from './mail-settings';
 import {
+  parseTenantIntegrationsSettings,
+  parseTenantIntegrationsSettingsPatch,
+  type TenantIntegrationsSettings,
+} from './integrations-settings';
+import {
   parseWorkOrderSettings,
   parseWorkOrderSettingsPatch,
   type WorkOrderSettings,
@@ -203,6 +208,59 @@ export class TenantService {
       entityType: 'tenant',
       entityId: tenant.id,
       meta: next,
+    });
+
+    return next;
+  }
+
+  async getIntegrationsSettings(tenantSlug: string): Promise<TenantIntegrationsSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { integrationsSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseTenantIntegrationsSettings(tenant.integrationsSettings);
+  }
+
+  async setIntegrationsSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<TenantIntegrationsSettings> {
+    let patch: Partial<TenantIntegrationsSettings>;
+    try {
+      patch = parseTenantIntegrationsSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid settings');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, integrationsSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const next: TenantIntegrationsSettings = {
+      ...parseTenantIntegrationsSettings(tenant.integrationsSettings),
+      ...patch,
+    };
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { integrationsSettings: next as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'integrations_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: {
+        audatexImportEnabled: next.audatexImportEnabled,
+        partsCatalogEnabled: next.partsCatalogEnabled,
+        partsOrderLaunchEnabled: next.partsOrderLaunchEnabled,
+      },
     });
 
     return next;

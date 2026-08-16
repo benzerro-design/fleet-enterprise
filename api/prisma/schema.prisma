@@ -18,6 +18,8 @@ model Tenant {
   workOrderSettings  Json?
   /// Setări email outbound (Setup → Email): From display, Reply-To, semnătură, CC membri.
   mailSettings       Json?
+  /// Integrări tenant (Setup → Integrări): Audatex import, catalog piese, etc.
+  integrationsSettings Json?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   auditLogs          AuditLog[]

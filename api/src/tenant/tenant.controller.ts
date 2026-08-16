@@ -117,6 +117,23 @@ export class TenantController {
     return this.tenant.setMailSettings(tenantSlug, body, actorUserId);
   }
 
+  @Get('integrations-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getIntegrationsSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getIntegrationsSettings(tenantSlug);
+  }
+
+  @Patch('integrations-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchIntegrationsSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setIntegrationsSettings(tenantSlug, body, actorUserId);
+  }
+
   @Get('service-types/active')
   @Roles(...FLEET_READ_ROLES)
   listActiveServiceTypes(@TenantId() tenantSlug: string) {
