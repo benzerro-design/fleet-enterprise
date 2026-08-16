@@ -12,7 +12,17 @@ async function loadSettings(): Promise<TenantIntegrationsSettings> {
   try {
     const res = await apiServerFetch("/tenant/integrations-settings");
     if (!res?.ok) return DEFAULT_TENANT_INTEGRATIONS_SETTINGS;
-    return (await res.json()) as TenantIntegrationsSettings;
+    const raw = (await res.json()) as Partial<TenantIntegrationsSettings>;
+    return {
+      ...DEFAULT_TENANT_INTEGRATIONS_SETTINGS,
+      ...raw,
+      partsCatalogProviders:
+        raw.partsCatalogProviders ?? DEFAULT_TENANT_INTEGRATIONS_SETTINGS.partsCatalogProviders,
+      interCars: {
+        ...DEFAULT_TENANT_INTEGRATIONS_SETTINGS.interCars,
+        ...(raw.interCars ?? {}),
+      },
+    };
   } catch {
     return DEFAULT_TENANT_INTEGRATIONS_SETTINGS;
   }

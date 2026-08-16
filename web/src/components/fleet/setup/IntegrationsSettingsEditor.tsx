@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import {
+  DEFAULT_TENANT_INTEGRATIONS_SETTINGS,
   integrationsSettingsBrowserBase,
+  type InterCarsApiMode,
+  type InterCarsEnvironment,
   type TenantIntegrationsSettings,
 } from "@/lib/integrations-settings";
 
@@ -11,13 +14,45 @@ type Props = {
   initial: TenantIntegrationsSettings;
 };
 
+type InterCarsDraft = {
+  mode: InterCarsApiMode;
+  environment: InterCarsEnvironment;
+  baseUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  clientSecret: string;
+  accessToken: string;
+  customerCode: string;
+  apiToken: string;
+  allowStubFallback: boolean;
+};
+
+function toDraft(s: TenantIntegrationsSettings): InterCarsDraft {
+  const ic = s.interCars ?? DEFAULT_TENANT_INTEGRATIONS_SETTINGS.interCars;
+  return {
+    mode: ic.mode,
+    environment: ic.environment,
+    baseUrl: ic.baseUrl ?? "",
+    tokenUrl: ic.tokenUrl ?? "",
+    clientId: ic.clientId ?? "",
+    clientSecret: "",
+    accessToken: "",
+    customerCode: ic.customerCode ?? "",
+    apiToken: "",
+    allowStubFallback: ic.allowStubFallback,
+  };
+}
+
 export function IntegrationsSettingsEditor({ initial }: Props) {
   const [settings, setSettings] = useState(initial);
+  const [icDraft, setIcDraft] = useState(() => toDraft(initial));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  async function patch(partial: Partial<TenantIntegrationsSettings>) {
+  const ic = settings.interCars ?? DEFAULT_TENANT_INTEGRATIONS_SETTINGS.interCars;
+
+  async function patch(partial: Record<string, unknown>) {
     setPending(true);
     setError(null);
     setSaved(false);
@@ -33,6 +68,7 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
       }
       const next = (await res.json()) as TenantIntegrationsSettings;
       setSettings(next);
+      setIcDraft(toDraft(next));
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
@@ -47,6 +83,50 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
     );
     void patch({ partsCatalogProviders: nextProviders });
   }
+
+  async function saveInterCars() {
+    const body: Record<string, unknown> = {
+      mode: icDraft.mode,
+      environment: icDraft.environment,
+      baseUrl: icDraft.baseUrl.trim() || null,
+      tokenUrl: icDraft.tokenUrl.trim() || null,
+      clientId: icDraft.clientId.trim() || null,
+      customerCode: icDraft.customerCode.trim() || null,
+      allowStubFallback: icDraft.allowStubFallback,
+    };
+    if (icDraft.clientSecret.trim()) body.clientSecret = icDraft.clientSecret.trim();
+    if (icDraft.accessToken.trim()) body.accessToken = icDraft.accessToken.trim();
+    if (icDraft.apiToken.trim()) body.apiToken = icDraft.apiToken.trim();
+    await patch({ interCars: body });
+  }
+
+  async function testInterCars() {
+    setPending(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const res = await fetch(`${integrationsSettingsBrowserBase}/intercars/test`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      const next = (await res.json()) as TenantIntegrationsSettings;
+      setSettings(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Test eșuat");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const testTone = useMemo(() => {
+    if (ic.lastTestOk === true) return "text-emerald-400";
+    if (ic.lastTestOk === false) return "text-red-400";
+    return "text-zinc-500";
+  }, [ic.lastTestOk]);
 
   return (
     <div className="max-w-2xl space-y-4">
@@ -72,7 +152,7 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
           <span>
             <span className="font-medium text-zinc-100">Import PDF / Audatex</span>
             <span className="mt-0.5 block text-xs text-zinc-500">
-              Activează OCR + mapare euristică pe WO → Comandă → Import deviz PDF.
+              Activează OCR + mapare pe WO → Comandă → Import deviz PDF.
             </span>
           </span>
         </label>
@@ -80,7 +160,7 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
         <div className="border-t border-zinc-800 pt-5">
           <h2 className="text-sm font-medium text-zinc-200">Catalog piese</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Conectori pentru lookup / verificare preț (stub — fără API real încă).
+            Lookup / „Verifică preț”. Cu credențiale Inter Cars → oferte reale; altfel stub (dacă e permis).
           </p>
         </div>
 
@@ -95,7 +175,7 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
           <span>
             <span className="font-medium text-zinc-100">Catalog piese activ</span>
             <span className="mt-0.5 block text-xs text-zinc-500">
-              Activează lookup / „Verifică preț” pe linii (stub până la API Inter Cars). Activează și un provider mai jos.
+              Activează și un provider mai jos (Inter Cars).
             </span>
           </span>
         </label>
@@ -119,11 +199,181 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
           ))}
         </ul>
 
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-medium text-zinc-100">Inter Cars — credențiale</h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              Gateway IC REST (recomandat) sau Katalog External (kh_kod + token). Secret-urile nu sunt reafișate după salvare.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs text-zinc-400">
+              Mod API
+              <select
+                className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+                value={icDraft.mode}
+                disabled={pending}
+                onChange={(e) =>
+                  setIcDraft((d) => ({ ...d, mode: e.target.value as InterCarsApiMode }))
+                }
+              >
+                <option value="gateway">Gateway IC REST</option>
+                <option value="katalog_legacy">Katalog External (legacy)</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-xs text-zinc-400">
+              Mediu
+              <select
+                className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+                value={icDraft.environment}
+                disabled={pending}
+                onChange={(e) =>
+                  setIcDraft((d) => ({
+                    ...d,
+                    environment: e.target.value as InterCarsEnvironment,
+                  }))
+                }
+              >
+                <option value="sandbox">Sandbox</option>
+                <option value="production">Production</option>
+              </select>
+            </label>
+          </div>
+
+          {icDraft.mode === "gateway" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-xs text-zinc-400 sm:col-span-2">
+                Base URL (opțional)
+                <input
+                  className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-sm text-zinc-100"
+                  placeholder="https://dev.gw.intercars.eu"
+                  value={icDraft.baseUrl}
+                  disabled={pending}
+                  onChange={(e) => setIcDraft((d) => ({ ...d, baseUrl: e.target.value }))}
+                />
+              </label>
+              <label className="space-y-1 text-xs text-zinc-400 sm:col-span-2">
+                Token URL (opțional)
+                <input
+                  className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-sm text-zinc-100"
+                  placeholder="…/token"
+                  value={icDraft.tokenUrl}
+                  disabled={pending}
+                  onChange={(e) => setIcDraft((d) => ({ ...d, tokenUrl: e.target.value }))}
+                />
+              </label>
+              <label className="space-y-1 text-xs text-zinc-400">
+                Client ID
+                <input
+                  className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-sm text-zinc-100"
+                  value={icDraft.clientId}
+                  disabled={pending}
+                  onChange={(e) => setIcDraft((d) => ({ ...d, clientId: e.target.value }))}
+                />
+              </label>
+              <label className="space-y-1 text-xs text-zinc-400">
+                Client secret {ic.clientSecretSet ? "(setat)" : ""}
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-sm text-zinc-100"
+                  placeholder={ic.clientSecretSet ? "••••••••" : ""}
+                  value={icDraft.clientSecret}
+                  disabled={pending}
+                  onChange={(e) => setIcDraft((d) => ({ ...d, clientSecret: e.target.value }))}
+                />
+              </label>
+              <label className="space-y-1 text-xs text-zinc-400 sm:col-span-2">
+                Access token (opțional, alternativă) {ic.accessTokenSet ? "(setat)" : ""}
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-sm text-zinc-100"
+                  placeholder={ic.accessTokenSet ? "••••••••" : "Bearer token"}
+                  value={icDraft.accessToken}
+                  disabled={pending}
+                  onChange={(e) => setIcDraft((d) => ({ ...d, accessToken: e.target.value }))}
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-xs text-zinc-400">
+                Customer code (kh_kod)
+                <input
+                  className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-sm text-zinc-100"
+                  value={icDraft.customerCode}
+                  disabled={pending}
+                  onChange={(e) => setIcDraft((d) => ({ ...d, customerCode: e.target.value }))}
+                />
+              </label>
+              <label className="space-y-1 text-xs text-zinc-400">
+                API token {ic.apiTokenSet ? "(setat)" : ""}
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-sm text-zinc-100"
+                  placeholder={ic.apiTokenSet ? "••••••••" : ""}
+                  value={icDraft.apiToken}
+                  disabled={pending}
+                  onChange={(e) => setIcDraft((d) => ({ ...d, apiToken: e.target.value }))}
+                />
+              </label>
+              <p className="sm:col-span-2 text-xs text-amber-200/80">
+                Modul legacy autentifică pe Katalog; quote de preț e pe Gateway — folosește Gateway pentru „Verifică preț” real.
+              </p>
+            </div>
+          )}
+
+          <label className="flex items-start gap-3 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={icDraft.allowStubFallback}
+              disabled={pending}
+              onChange={(e) => setIcDraft((d) => ({ ...d, allowStubFallback: e.target.checked }))}
+            />
+            <span>
+              <span className="font-medium text-zinc-100">Fallback stub</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                Dacă API lipsește/eșuează, folosește prețuri sintetice (ca înainte).
+              </span>
+            </span>
+          </label>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void saveInterCars()}
+              className="rounded border border-emerald-600/50 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-100 disabled:opacity-50"
+            >
+              Salvează Inter Cars
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void testInterCars()}
+              className="rounded border border-sky-600/50 bg-sky-950/40 px-3 py-1.5 text-xs font-semibold text-sky-100 disabled:opacity-50"
+            >
+              Test conexiune
+            </button>
+          </div>
+
+          {ic.lastTestAt ? (
+            <p className={`text-xs ${testTone}`}>
+              Ultimul test: {new Date(ic.lastTestAt).toLocaleString("ro-RO")} —{" "}
+              {ic.lastTestMessage ?? (ic.lastTestOk ? "OK" : "eșuat")}
+            </p>
+          ) : (
+            <p className="text-xs text-zinc-500">Niciun test rulat încă.</p>
+          )}
+        </div>
+
         <div className="border-t border-zinc-800 pt-5">
           <h2 className="text-sm font-medium text-zinc-200">Comenzi piese</h2>
-          <p className="mt-1 text-xs text-zinc-500">
-            Lansare comenzi după aprobare (stub până la conectori).
-          </p>
+          <p className="mt-1 text-xs text-zinc-500">Lansare după aprobare — INT-009.</p>
         </div>
 
         <label className="flex items-start gap-3 text-sm text-zinc-300">
@@ -136,9 +386,7 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
           />
           <span>
             <span className="font-medium text-zinc-100">Lansare comenzi piese</span>
-            <span className="mt-0.5 block text-xs text-zinc-500">
-              Flag tenant — UI de lansare vine în faza următoare.
-            </span>
+            <span className="mt-0.5 block text-xs text-zinc-500">Flag tenant — UI în INT-009.</span>
           </span>
         </label>
       </div>

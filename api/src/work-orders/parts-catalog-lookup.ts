@@ -8,6 +8,8 @@ export type PartsPriceOffer = {
   availability: 'in_stock' | 'order' | 'unknown';
   /** true = preț sintetic până la conector API real */
   stub: boolean;
+  sku?: string | null;
+  name?: string | null;
 };
 
 export type PartsPriceVerifyLineInput = {
@@ -39,8 +41,8 @@ function hashPart(partNumber: string): number {
 }
 
 /**
- * Stub catalog: prețuri deterministe pe cod piesă (fără API Inter Cars încă).
- * Oferte pe providerii activați din Integrări.
+ * Stub catalog: prețuri deterministe pe cod piesă.
+ * Folosit când API Inter Cars lipsește / eșuează și allowStubFallback.
  */
 export function lookupStubOffers(
   partNumber: string,
@@ -50,11 +52,9 @@ export function lookupStubOffers(
   if (!enabled.length) return [];
 
   const h = hashPart(partNumber.trim());
-  // Bază ~50–850 RON net, deterministă
   const baseCents = 5000 + (h % 80000);
 
   return enabled.map((p, idx) => {
-    // Variație ușoară pe provider (±0–12%)
     const factor = 1 + ((h >> (idx * 3)) % 13) / 100 - 0.04;
     const unitNetCents = Math.max(100, Math.round(baseCents * factor));
     const availability: PartsPriceOffer['availability'] =
@@ -74,8 +74,11 @@ export function buildPartsPriceVerifyResults(
   lines: PartsPriceVerifyLineInput[],
   providers: PartsCatalogProviderSetting[],
   suspectPercent: number,
+  offersByPartNumber?: Map<string, PartsPriceOffer[]>,
+  options?: { allowStubFallback?: boolean },
 ): PartsPriceVerifyLineResult[] {
   const threshold = Math.max(0, suspectPercent);
+  const allowStub = options?.allowStubFallback !== false;
   return lines.map((line, idx) => {
     const key = line.key?.trim() || `line-${idx}`;
     const quoteUnitNetCents = Math.round(Number(line.unitNetCents) || 0);
@@ -110,9 +113,15 @@ export function buildPartsPriceVerifyResults(
       };
     }
 
-    const offers = lookupStubOffers(partNumber, providers).sort(
-      (a, b) => a.unitNetCents - b.unitNetCents,
-    );
+    let offers =
+      offersByPartNumber?.get(partNumber) ??
+      offersByPartNumber?.get(partNumber.toUpperCase()) ??
+      [];
+    if (!offers.length && allowStub) {
+      offers = lookupStubOffers(partNumber, providers);
+    }
+    offers = [...offers].sort((a, b) => a.unitNetCents - b.unitNetCents);
+
     if (!offers.length) {
       return {
         key,
@@ -123,7 +132,9 @@ export function buildPartsPriceVerifyResults(
         deltaPercent: null,
         suspect: false,
         status: 'not_found',
-        message: 'Niciun provider catalog activ',
+        message: allowStub
+          ? 'Nicio ofertă catalog pentru acest cod'
+          : 'Nicio ofertă Inter Cars (stub dezactivat)',
       };
     }
 
@@ -134,6 +145,7 @@ export function buildPartsPriceVerifyResults(
         : null;
     const suspect =
       deltaPercent != null && deltaPercent > threshold && quoteUnitNetCents > bestUnitNetCents;
+    const fromApi = offers.some((o) => !o.stub);
 
     return {
       key,
@@ -145,10 +157,12 @@ export function buildPartsPriceVerifyResults(
       suspect,
       status: suspect ? 'suspect' : 'ok',
       message: suspect
-        ? `Preț cu ${deltaPercent}% peste cel mai ieftin catalog (prag ${threshold}%)`
+        ? `Preț cu ${deltaPercent}% peste cel mai ieftin catalog (prag ${threshold}%)${fromApi ? '' : ' · stub'}`
         : deltaPercent != null && deltaPercent <= 0
-          ? 'Preț la sau sub catalog'
-          : `În prag (±${threshold}% față de catalog)`,
+          ? fromApi
+            ? 'Preț la sau sub catalog'
+            : 'Preț la sau sub catalog (stub)'
+          : `În prag (±${threshold}% față de catalog)${fromApi ? '' : ' · stub'}`,
     };
   });
 }

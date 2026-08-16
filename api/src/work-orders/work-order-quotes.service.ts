@@ -37,6 +37,7 @@ import {
 import { normalizeReminderOffsets } from '../ops/document-reminders';
 import { normalizeReminderOffsetsKm } from '../ops/reminder-status';
 import { parseTenantIntegrationsSettings } from '../tenant/integrations-settings';
+import { InterCarsClient } from '../tenant/intercars-client.service';
 import { parseWorkOrderSettings, type WorkOrderSettings } from '../tenant/work-order-settings';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { parseWebUploadUrl, readWebUploadFromGcs } from '../storage/web-upload-storage';
@@ -146,6 +147,7 @@ export class WorkOrderQuotesService {
     private readonly reminders: RemindersService,
     private readonly partnerNotify: PartnerNotificationService,
     private readonly civOcr: CivOcrService,
+    private readonly interCars: InterCarsClient,
   ) {}
 
   private quoteInclude() {
@@ -426,7 +428,7 @@ export class WorkOrderQuotesService {
     dto: VerifyPartsPricesInput,
     access?: AccessContext,
   ): Promise<VerifyPartsPricesResult> {
-    const { wo, providers } = await this.assertPartsPriceVerifyEnabled(tenantSlug);
+    const { wo, integ, providers } = await this.assertPartsPriceVerifyEnabled(tenantSlug);
     await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const rawLines = Array.isArray(dto.lines) ? dto.lines : [];
@@ -437,10 +439,24 @@ export class WorkOrderQuotesService {
       throw new BadRequestException('Maxim 120 linii pe verificare');
     }
 
+    const partCodes = rawLines
+      .filter((l) => (l.lineType ?? 'parts') === 'parts' && l.partNumber?.trim())
+      .map((l) => String(l.partNumber).trim());
+
+    let offersByPart = new Map<string, import('./parts-catalog-lookup').PartsPriceOffer[]>();
+    const interCarsEnabled = providers.some((p) => p.id === 'intercars' && p.enabled);
+    let usedApi = false;
+    if (interCarsEnabled && partCodes.length) {
+      offersByPart = await this.interCars.lookupOffers(integ.interCars, partCodes);
+      usedApi = [...offersByPart.values()].some((list) => list.some((o) => !o.stub));
+    }
+
     const lines = buildPartsPriceVerifyResults(
       rawLines,
       providers,
       wo.partsPriceSuspectPercent,
+      offersByPart,
+      { allowStubFallback: integ.interCars.allowStubFallback },
     );
 
     const summary = {
@@ -466,7 +482,7 @@ export class WorkOrderQuotesService {
 
     return {
       suspectPercent: wo.partsPriceSuspectPercent,
-      stubCatalog: true,
+      stubCatalog: !usedApi,
       providersUsed: providers.map((p) => ({ id: p.id, label: p.label })),
       lines,
       summary,

@@ -134,6 +134,16 @@ export class TenantController {
     return this.tenant.setIntegrationsSettings(tenantSlug, body, actorUserId);
   }
 
+  @Post('integrations-settings/intercars/test')
+  @Roles(MembershipRole.tenant_admin)
+  testInterCars(
+    @TenantId() tenantSlug: string,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.testInterCarsConnection(tenantSlug, actorUserId);
+  }
+
   @Get('service-types/active')
   @Roles(...FLEET_READ_ROLES)
   listActiveServiceTypes(@TenantId() tenantSlug: string) {

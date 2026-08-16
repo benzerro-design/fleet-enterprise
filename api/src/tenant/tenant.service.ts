@@ -18,10 +18,14 @@ import {
   type TenantMailSettings,
 } from './mail-settings';
 import {
+  mergeInterCarsPatch,
   parseTenantIntegrationsSettings,
   parseTenantIntegrationsSettingsPatch,
+  toIntegrationsSettingsPublic,
   type TenantIntegrationsSettings,
+  type TenantIntegrationsSettingsPublic,
 } from './integrations-settings';
+import { InterCarsClient } from './intercars-client.service';
 import {
   parseWorkOrderSettings,
   parseWorkOrderSettingsPatch,
@@ -33,6 +37,7 @@ export class TenantService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly interCars: InterCarsClient,
   ) {}
 
   async listMembers(tenantSlug: string) {
@@ -213,21 +218,21 @@ export class TenantService {
     return next;
   }
 
-  async getIntegrationsSettings(tenantSlug: string): Promise<TenantIntegrationsSettings> {
+  async getIntegrationsSettings(tenantSlug: string): Promise<TenantIntegrationsSettingsPublic> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { slug: tenantSlug },
       select: { integrationsSettings: true },
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
-    return parseTenantIntegrationsSettings(tenant.integrationsSettings);
+    return toIntegrationsSettingsPublic(parseTenantIntegrationsSettings(tenant.integrationsSettings));
   }
 
   async setIntegrationsSettings(
     tenantSlug: string,
     body: unknown,
     actorUserId: string,
-  ): Promise<TenantIntegrationsSettings> {
-    let patch: Partial<TenantIntegrationsSettings>;
+  ): Promise<TenantIntegrationsSettingsPublic> {
+    let patch: ReturnType<typeof parseTenantIntegrationsSettingsPatch>;
     try {
       patch = parseTenantIntegrationsSettingsPatch(body);
     } catch (e) {
@@ -240,9 +245,16 @@ export class TenantService {
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
+    const current = parseTenantIntegrationsSettings(tenant.integrationsSettings);
+    const { interCars: interCarsPatch, ...rest } = patch as Partial<TenantIntegrationsSettings> & {
+      interCars?: Partial<TenantIntegrationsSettings['interCars']>;
+    };
     const next: TenantIntegrationsSettings = {
-      ...parseTenantIntegrationsSettings(tenant.integrationsSettings),
-      ...patch,
+      ...current,
+      ...rest,
+      interCars: interCarsPatch
+        ? mergeInterCarsPatch(current.interCars, interCarsPatch)
+        : current.interCars,
     };
 
     await this.prisma.tenant.update({
@@ -260,10 +272,51 @@ export class TenantService {
         audatexImportEnabled: next.audatexImportEnabled,
         partsCatalogEnabled: next.partsCatalogEnabled,
         partsOrderLaunchEnabled: next.partsOrderLaunchEnabled,
+        interCarsMode: next.interCars.mode,
+        interCarsEnvironment: next.interCars.environment,
       },
     });
 
-    return next;
+    return toIntegrationsSettingsPublic(next);
+  }
+
+  async testInterCarsConnection(
+    tenantSlug: string,
+    actorUserId: string,
+  ): Promise<TenantIntegrationsSettingsPublic> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, integrationsSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const current = parseTenantIntegrationsSettings(tenant.integrationsSettings);
+    const result = await this.interCars.testConnection(current.interCars);
+    const next: TenantIntegrationsSettings = {
+      ...current,
+      interCars: {
+        ...current.interCars,
+        lastTestAt: new Date().toISOString(),
+        lastTestOk: result.ok,
+        lastTestMessage: result.message.slice(0, 400),
+      },
+    };
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { integrationsSettings: next as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'integrations_intercars_test',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: { ok: result.ok, message: result.message.slice(0, 200) },
+    });
+
+    return toIntegrationsSettingsPublic(next);
   }
 
   async getMailSettings(tenantSlug: string): Promise<TenantMailSettings> {
