@@ -1,3 +1,8 @@
+import {
+  isLikelyAudatex,
+  parseAudatexQuoteText,
+} from './quote-import-audatex';
+
 export type QuoteImportLineType = 'labor' | 'parts' | 'other';
 
 export type QuoteImportPreviewLine = {
@@ -13,27 +18,26 @@ export type QuoteImportPreviewLine = {
 
 export type QuoteImportPreview = {
   formatDetected: 'audatex' | 'generic' | 'unknown';
+  parser: 'audatex-v1' | 'generic-v1' | 'none';
   sourceTextLength: number;
   warnings: string[];
+  summary: {
+    parts: number;
+    labor: number;
+    other: number;
+    lowConfidence: number;
+  };
   lines: QuoteImportPreviewLine[];
 };
 
 function detectFormat(text: string): QuoteImportPreview['formatDetected'] {
-  const u = text.toUpperCase();
-  if (
-    u.includes('AUDATEX') ||
-    u.includes('AXALTA') ||
-    /KALKULATION|REPARATURKALKULATION|OE[-\s]?NR/i.test(text)
-  ) {
-    return 'audatex';
-  }
+  if (isLikelyAudatex(text)) return 'audatex';
   if (text.trim().length < 40) return 'unknown';
   return 'generic';
 }
 
 function parseMoneyToCents(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, '').replace(/RON|EUR|LEI/gi, '');
-  // 1.234,56 or 1234.56 or 1234,56
   let normalized = cleaned;
   if (/,/.test(cleaned) && /\./.test(cleaned)) {
     normalized = cleaned.replace(/\./g, '').replace(',', '.');
@@ -57,19 +61,22 @@ function guessLineType(desc: string, partNumber: string | null): QuoteImportLine
   return 'other';
 }
 
-/**
- * Heuristică pe text OCR / PDF — preview editabil, nu import mut.
- * Audatex + tabele generice (cant × preț).
- */
-export function parseQuoteTextToPreview(text: string): QuoteImportPreview {
+function buildSummary(lines: QuoteImportPreviewLine[]): QuoteImportPreview['summary'] {
+  const summary = { parts: 0, labor: 0, other: 0, lowConfidence: 0 };
+  for (const line of lines) {
+    if (line.lineType === 'parts') summary.parts += 1;
+    else if (line.lineType === 'labor') summary.labor += 1;
+    else summary.other += 1;
+    if (line.confidence < 0.6) summary.lowConfidence += 1;
+  }
+  return summary;
+}
+
+function parseGeneric(text: string, formatDetected: QuoteImportPreview['formatDetected']): QuoteImportPreview {
   const warnings: string[] = [];
   const normalized = text.replace(/\r\n/g, '\n').replace(/\t/g, ' ');
-  const formatDetected = detectFormat(normalized);
   if (formatDetected === 'unknown') {
     warnings.push('Text prea scurt sau format nerecunoscut — verifică liniile manual.');
-  }
-  if (formatDetected === 'audatex') {
-    warnings.push('Format detectat: Audatex (mapare euristică — verifică cantități și prețuri).');
   }
 
   const lines: QuoteImportPreviewLine[] = [];
@@ -87,9 +94,7 @@ export function parseQuoteTextToPreview(text: string): QuoteImportPreview {
     const key = `${description}|${qty}|${unitCents}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const partMatch = description.match(
-      /\b([A-Z0-9][A-Z0-9./-]{4,})\b/,
-    );
+    const partMatch = description.match(/\b([A-Z0-9][A-Z0-9./-]{4,})\b/);
     const partNumber =
       partMatch && !/^(RON|EUR|LEI|TVA|AUDATEX)$/i.test(partMatch[1])
         ? partMatch[1]
@@ -101,15 +106,15 @@ export function parseQuoteTextToPreview(text: string): QuoteImportPreview {
       unitNetCents: unitCents,
       vatRatePercent: 19,
       partNumber,
-      confidence: formatDetected === 'audatex' ? 0.65 : 0.5,
+      confidence: 0.5,
       raw: m[0].slice(0, 200),
     });
     if (lines.length >= 80) break;
   }
 
-  // Fallback: lines with a trailing money amount
   if (lines.length === 0) {
-    const moneyLineRe = /^(.{10,160}?)\s+(\d{1,6}(?:[.,]\d{2})|\d{1,6}[.,]\d{3}[.,]\d{2})\s*(?:RON|EUR)?\s*$/gim;
+    const moneyLineRe =
+      /^(.{10,160}?)\s+(\d{1,6}(?:[.,]\d{2})|\d{1,6}[.,]\d{3}[.,]\d{2})\s*(?:RON|EUR)?\s*$/gim;
     while ((m = moneyLineRe.exec(normalized)) !== null) {
       const description = m[1].replace(/\s+/g, ' ').trim();
       const unitCents = parseMoneyToCents(m[2]);
@@ -143,8 +148,42 @@ export function parseQuoteTextToPreview(text: string): QuoteImportPreview {
 
   return {
     formatDetected,
+    parser: 'generic-v1',
     sourceTextLength: normalized.length,
     warnings,
+    summary: buildSummary(lines),
     lines,
   };
+}
+
+/**
+ * Heuristică pe text OCR / PDF — preview editabil.
+ * Audatex → parser dedicat v1; altfel generic.
+ */
+export function parseQuoteTextToPreview(text: string): QuoteImportPreview {
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\t/g, ' ');
+  const formatDetected = detectFormat(normalized);
+
+  if (formatDetected === 'audatex') {
+    const audatex = parseAudatexQuoteText(normalized);
+    if (audatex.lines.length > 0) {
+      return {
+        ...audatex,
+        parser: 'audatex-v1',
+        summary: buildSummary(audatex.lines),
+      };
+    }
+    const fallback = parseGeneric(normalized, 'audatex');
+    return {
+      ...fallback,
+      formatDetected: 'audatex',
+      warnings: [
+        ...audatex.warnings,
+        'Fallback la parser generic după Audatex fără linii.',
+        ...fallback.warnings,
+      ],
+    };
+  }
+
+  return parseGeneric(normalized, formatDetected);
 }
