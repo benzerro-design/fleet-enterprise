@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -127,6 +128,11 @@ export class WorkOrderWarrantyService {
         assertPartnerSupplierId(access, wo.supplierId);
       } else if (requireWrite) {
         assertClientFleetWrite(access, wo.vehicle.clientId);
+      } else if (!access.isTenantWide) {
+        const ids = access.allowedClientIds ?? [];
+        if (!ids.includes(wo.vehicle.clientId)) {
+          throw new ForbiddenException('Work order access denied');
+        }
       }
     }
     return wo;

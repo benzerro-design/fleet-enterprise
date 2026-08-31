@@ -10,6 +10,7 @@ import { fleetServerFetch } from "@/lib/fleet-server";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 import { SERVICE_ORDER_TYPES } from "@/lib/work-order-sheet";
+import { getAuthMeResult, isClientPortalUser } from "@/lib/auth-server";
 import {
   WORK_ORDER_STATUSES,
   type WorkOrderInbox,
@@ -106,6 +107,8 @@ function quickTabClass(active: boolean): string {
 
 export default async function WorkOrdersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  const auth = await getAuthMeResult();
+  const clientScoped = isClientPortalUser(auth);
   const [list, stats, clients, suppliers, vehicles] = await Promise.all([
     loadWorkOrders(sp),
     loadStats(sp.clientId),
@@ -235,6 +238,7 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
                 ))}
               </select>
             </div>
+            {!clientScoped ? (
             <div>
               <label className="text-xs text-zinc-500">Client</label>
               <select
@@ -250,6 +254,7 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
                 ))}
               </select>
             </div>
+            ) : null}
             <div>
               <label className="text-xs text-zinc-500">Partener</label>
               <select

@@ -105,18 +105,22 @@ export class WorkOrdersController {
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
     const requested = parseSupplierIdsQuery(supplierId, suppliers);
     const supplierIds = resolvePartnerSupplierIdsFilter(access, requested);
-    return this.workOrders.listPaged(tenantSlug, {
-      page,
-      pageSize,
-      q: q?.trim(),
-      status: parseStatus(status),
-      supplierIds,
-      vehicleId: vehicleId?.trim(),
-      clientId: clientId?.trim(),
-      inbox: parseInbox(inbox),
-      serviceCaseStage: parseServiceCaseStage(serviceCaseStage),
-      serviceOrderType: parseServiceOrderType(serviceOrderType),
-    });
+    return this.workOrders.listPaged(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        q: q?.trim(),
+        status: parseStatus(status),
+        supplierIds,
+        vehicleId: vehicleId?.trim(),
+        clientId: clientId?.trim(),
+        inbox: parseInbox(inbox),
+        serviceCaseStage: parseServiceCaseStage(serviceCaseStage),
+        serviceOrderType: parseServiceOrderType(serviceOrderType),
+      },
+      access,
+    );
   }
 
   @Get('stats')
@@ -130,7 +134,7 @@ export class WorkOrdersController {
   ) {
     const requested = parseSupplierIdsQuery(supplierId, suppliers);
     const supplierIds = resolvePartnerSupplierIdsFilter(access, requested);
-    return this.workOrders.getStats(tenantSlug, clientId?.trim(), supplierIds);
+    return this.workOrders.getStats(tenantSlug, clientId?.trim(), supplierIds, access);
   }
 
   @Get(':id')

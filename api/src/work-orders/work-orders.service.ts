@@ -24,7 +24,7 @@ import {
   WorkOrderWarrantyStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
-import { assertClientFleetWrite } from '../iam/client-access';
+import { assertClientAccess, assertClientFleetWrite, isTenantWideAccess } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
 import {
   assertPartnerSupplierId,
@@ -286,6 +286,34 @@ export class WorkOrdersService {
     assertClientFleetWrite(access, wo.vehicle.clientId);
   }
 
+  /** Listă / KPI: client_user vede doar WO-urile clienților săi (ca Programator). */
+  private workOrderClientScope(access?: AccessContext): Prisma.MaintenanceWorkOrderWhereInput {
+    if (!access || isTenantWideAccess(access) || isPartnerUser(access)) return {};
+    if (access.allowedClientIds.length === 0) {
+      return { vehicle: { clientId: { in: [] } } };
+    }
+    return { vehicle: { clientId: { in: access.allowedClientIds } } };
+  }
+
+  private assertClientIdQuery(access: AccessContext | undefined, clientId?: string): void {
+    if (!access || isTenantWideAccess(access) || isPartnerUser(access) || !clientId?.trim()) return;
+    if (!access.allowedClientIds.includes(clientId.trim())) {
+      throw new ForbiddenException('Client access denied');
+    }
+  }
+
+  private assertWorkOrderRead(
+    access: AccessContext,
+    wo: { supplierId: string | null; vehicle: { clientId: string } },
+  ): void {
+    if (isPartnerUser(access)) {
+      assertPartnerSupplierId(access, wo.supplierId);
+      return;
+    }
+    if (isTenantWideAccess(access)) return;
+    assertClientAccess(access, wo.vehicle.clientId);
+  }
+
   private listInclude() {
     return {
       vehicle: {
@@ -431,8 +459,14 @@ export class WorkOrdersService {
     };
   }
 
-  private listWhere(tenantId: string, params: WorkOrderListParams): Prisma.MaintenanceWorkOrderWhereInput {
+  private listWhere(
+    tenantId: string,
+    params: WorkOrderListParams,
+    access?: AccessContext,
+  ): Prisma.MaintenanceWorkOrderWhereInput {
     const parts: Prisma.MaintenanceWorkOrderWhereInput[] = [{ tenantId }];
+    const clientScope = this.workOrderClientScope(access);
+    if (Object.keys(clientScope).length > 0) parts.push(clientScope);
     if (params.status) parts.push({ status: params.status });
     if (params.supplierIds?.length) {
       parts.push({ supplierId: { in: params.supplierIds } });
@@ -487,15 +521,16 @@ export class WorkOrdersService {
     return { AND: parts };
   }
 
-  async listPaged(tenantSlug: string, params: WorkOrderListParams) {
+  async listPaged(tenantSlug: string, params: WorkOrderListParams, access?: AccessContext) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
     }
+    this.assertClientIdQuery(access, params.clientId);
     const pageSize = Math.min(Math.max(1, params.pageSize), MAX_PAGE_SIZE);
     const page = Math.max(1, params.page);
     const skip = (page - 1) * pageSize;
-    const where = this.listWhere(tenant.id, params);
+    const where = this.listWhere(tenant.id, params, access);
 
     const [total, rows] = await Promise.all([
       this.prisma.maintenanceWorkOrder.count({ where }),
@@ -520,9 +555,11 @@ export class WorkOrdersService {
     tenantSlug: string,
     clientId?: string,
     supplierIds?: string[],
+    access?: AccessContext,
   ): Promise<WorkOrderStats> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return { open: 0, inProgress: 0, waitingParts: 0, done: 0, pendingApproval: 0, readyUninvoiced: 0 };
+    this.assertClientIdQuery(access, clientId);
 
     const clientFilter: Prisma.MaintenanceWorkOrderWhereInput | undefined = clientId?.trim()
       ? {
@@ -537,13 +574,13 @@ export class WorkOrdersService {
       ? { supplierId: { in: supplierIds } }
       : undefined;
 
+    const scopeFilter = this.workOrderClientScope(access);
+    const extra = [clientFilter, supplierFilter, Object.keys(scopeFilter).length > 0 ? scopeFilter : undefined].filter(
+      Boolean,
+    ) as Prisma.MaintenanceWorkOrderWhereInput[];
     const base: Prisma.MaintenanceWorkOrderWhereInput = {
       tenantId: tenant.id,
-      ...(clientFilter || supplierFilter
-        ? {
-            AND: [clientFilter, supplierFilter].filter(Boolean) as Prisma.MaintenanceWorkOrderWhereInput[],
-          }
-        : {}),
+      ...(extra.length ? { AND: extra } : {}),
     };
 
     const [open, inProgress, waitingParts, done, pendingApproval, readyUninvoiced] = await Promise.all([
@@ -689,8 +726,8 @@ export class WorkOrdersService {
     });
     if (!row) throw new NotFoundException('Work order not found');
 
-    if (access && isPartnerUser(access)) {
-      assertPartnerSupplierId(access, row.supplierId);
+    if (access) {
+      this.assertWorkOrderRead(access, row);
     }
 
     if (!row.displayNumber) {

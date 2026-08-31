@@ -20,6 +20,7 @@ import {
   assertApproveServiceQuote,
   assertClientFleetWrite,
   canApproveServiceQuote,
+  isTenantWideAccess,
 } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -186,7 +187,7 @@ export class WorkOrderQuotesService {
     tenantSlug: string,
     workOrderId: string,
     access?: AccessContext,
-    mode: 'write' | 'approve' | 'parts_launch' = 'write',
+    mode: 'read' | 'write' | 'approve' | 'parts_launch' = 'write',
   ) {
     const wo = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id: workOrderId, tenant: { slug: tenantSlug } },
@@ -194,7 +195,15 @@ export class WorkOrderQuotesService {
     });
     if (!wo) throw new NotFoundException('Work order not found');
     if (access) {
-      if (mode === 'approve') {
+      if (mode === 'read') {
+        if (isPartnerUser(access)) {
+          assertPartnerSupplierId(access, wo.supplierId);
+        } else if (!isTenantWideAccess(access)) {
+          if (!access.allowedClientIds.includes(wo.vehicle.clientId)) {
+            throw new ForbiddenException('Work order access denied');
+          }
+        }
+      } else if (mode === 'approve') {
         if (isPartnerUser(access)) {
           throw new ForbiddenException('Partners cannot approve quotes');
         }
@@ -221,9 +230,14 @@ export class WorkOrderQuotesService {
     return wo;
   }
 
-  async listByWorkOrder(tenantSlug: string, workOrderId: string): Promise<WorkOrderQuoteRecord[]> {
+  async listByWorkOrder(
+    tenantSlug: string,
+    workOrderId: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderQuoteRecord[]> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return [];
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'read');
 
     const rows = await this.prisma.workOrderQuote.findMany({
       where: { tenantId: tenant.id, workOrderId },
@@ -1421,9 +1435,11 @@ export class WorkOrderQuotesService {
     tenantSlug: string,
     workOrderId: string,
     quoteId: string,
+    access?: AccessContext,
   ): Promise<{ buffer: Buffer; filename: string }> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'read');
 
     const row = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },

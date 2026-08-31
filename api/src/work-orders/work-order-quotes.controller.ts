@@ -26,8 +26,12 @@ export class WorkOrderQuotesController {
 
   @Get()
   @Roles(...FLEET_READ_ROLES)
-  list(@TenantId() tenantSlug: string, @Param('workOrderId') workOrderId: string) {
-    return this.quotes.listByWorkOrder(tenantSlug, workOrderId);
+  list(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.listByWorkOrder(tenantSlug, workOrderId, access);
   }
 
   @Post('import-preview')
@@ -77,8 +81,9 @@ export class WorkOrderQuotesController {
     @TenantId() tenantSlug: string,
     @Param('workOrderId') workOrderId: string,
     @Param('quoteId') quoteId: string,
+    @CurrentAccess() access: AccessContext,
   ) {
-    const { buffer, filename } = await this.quotes.exportPdf(tenantSlug, workOrderId, quoteId);
+    const { buffer, filename } = await this.quotes.exportPdf(tenantSlug, workOrderId, quoteId, access);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
       disposition: `attachment; filename="${filename}"`,

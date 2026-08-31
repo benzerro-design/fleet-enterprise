@@ -239,7 +239,7 @@ export function routingLevelLabel(level: CrmTicketRoutingLevel): string {
 export function assertClientAccess(ctx: AccessContext, clientId: string): void {
   if (isTenantWideAccess(ctx)) return;
   if (!ctx.allowedClientIds.includes(clientId)) {
-    throw new Error('CLIENT_ACCESS_DENIED');
+    throw new ForbiddenException('Client access denied');
   }
 }
 
