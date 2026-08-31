@@ -67,13 +67,14 @@ export default async function SupplierDetailPage({ params }: PageProps) {
           supplier={supplier}
           serviceCatalog={serviceCatalog}
           canWriteServices={write}
+          canAllocateClients={write}
           assignedByLabel="Flotă"
         />
       </div>
 
       {write ? (
         <div className="mt-6">
-          <SupplierInvitePanel supplierId={supplier.id} />
+          <SupplierInvitePanel supplierId={supplier.id} allowManagerRole />
         </div>
       ) : null}
     </FleetPageMain>

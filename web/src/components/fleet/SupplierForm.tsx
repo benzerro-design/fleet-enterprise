@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   OPS_INPUT_CLASS,
   OpsFormField,
@@ -12,12 +12,12 @@ import {
   fleetJsonHeaders,
   SUPPLIER_CATEGORIES,
   supplierCategoryLabel,
-  supplierServiceLabel,
   suppliersBrowserBase,
   type SupplierCategory,
   type SupplierRecord,
   type SupplierStatus,
 } from "@/lib/suppliers-api";
+import { clientsBrowserBase, type ClientListPayload, type ClientRecord } from "@/lib/clients-api";
 import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
 
 type Props = {
@@ -40,8 +40,31 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
   const [county, setCounty] = useState(initial?.county ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [services, setServices] = useState<string[]>(initial?.services ?? []);
+  const [clientIds, setClientIds] = useState<string[]>([]);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "create") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${clientsBrowserBase}?pageSize=200&status=active`, {
+          headers: fleetJsonHeaders(),
+          cache: "no-store",
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as ClientListPayload;
+        if (!cancelled) setClients(data.items ?? []);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -60,6 +83,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
       county: county.trim() || null,
       notes: notes.trim() || null,
       services,
+      ...(mode === "create" && clientIds.length ? { clientIds } : {}),
     };
     try {
       const url =
@@ -186,6 +210,43 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
       <OpsFormField label="Notițe">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={OPS_INPUT_CLASS} />
       </OpsFormField>
+      {mode === "create" ? (
+        <OpsFormSection number={4} title="Alocare clienți">
+          <p className="mb-3 text-xs text-zinc-500">
+            Opțional. Managerul clientului vede furnizorul în costuri doar după alocare. Poți aloca și ulterior din
+            profil.
+          </p>
+          {clients.length === 0 ? (
+            <p className="text-sm text-zinc-500">Niciun client activ de alocat.</p>
+          ) : (
+            <ul className="max-h-64 divide-y divide-zinc-800/80 overflow-y-auto rounded-lg border border-zinc-800">
+              {clients.map((c) => {
+                const on = clientIds.includes(c.id);
+                return (
+                  <li key={c.id}>
+                    <label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm hover:bg-zinc-900/60">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={on}
+                        onChange={() =>
+                          setClientIds((prev) =>
+                            prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id],
+                          )
+                        }
+                      />
+                      <span>
+                        <span className="font-medium text-zinc-100">{c.legalName}</span>
+                        <span className="mt-0.5 block font-mono text-xs text-zinc-500">{c.code}</span>
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </OpsFormSection>
+      ) : null}
       <OpsFormStickyActions
         submitLabel={mode === "create" ? "Creează furnizorul" : "Salvează"}
         pendingLabel="Salvez…"

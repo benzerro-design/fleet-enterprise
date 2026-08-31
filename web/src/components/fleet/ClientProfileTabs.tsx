@@ -17,6 +17,8 @@ import { ClientSubscriptionTab } from "@/components/fleet/ClientSubscriptionTab"
 import { ClientDriversTab } from "@/components/fleet/ClientDriversTab";
 import { ClientMailSettingsEditor } from "@/components/fleet/ClientMailSettingsEditor";
 import { ClientPricingSettingsEditor } from "@/components/fleet/ClientPricingSettingsEditor";
+import { ClientSupplierAllocationsEditor } from "@/components/fleet/ClientSupplierAllocationsEditor";
+import { ClientInvitePanel } from "@/components/fleet/ClientInvitePanel";
 import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 
 const TABS: { id: ClientProfileTab; label: string }[] = [
@@ -26,6 +28,7 @@ const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "subscription", label: "Abonament" },
   { id: "mail", label: "Corespondență" },
   { id: "pricing", label: "Prețuri" },
+  { id: "suppliers", label: "Furnizori" },
 ];
 
 function formatDate(iso: string): string {
@@ -59,9 +62,16 @@ function ContactRow({ label, value }: { label: string; value: string | null }) {
 type Props = {
   data: ClientSummaryPayload;
   canWrite?: boolean;
+  canAllocateSuppliers?: boolean;
+  canInviteTeam?: boolean;
 };
 
-export function ClientProfileTabs({ data, canWrite = false }: Props) {
+export function ClientProfileTabs({
+  data,
+  canWrite = false,
+  canAllocateSuppliers = false,
+  canInviteTeam = false,
+}: Props) {
   const { client, kpis, vehicles, recentActivity, subscriptions, drivers } = data;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -74,7 +84,8 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
       t === "subscription" ||
       t === "drivers" ||
       t === "mail" ||
-      t === "pricing"
+      t === "pricing" ||
+      t === "suppliers"
     ) {
       return t;
     }
@@ -119,6 +130,7 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
         <QuickLink href={`/fleet/clients/${client.id}?tab=drivers`} label="Șoferi client" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=subscription`} label="Abonament" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=mail`} label="Corespondență daună" />
+        <QuickLink href={`/fleet/clients/${client.id}?tab=suppliers`} label="Furnizori" />
       </div>
 
       <div className="border-b border-zinc-800 px-4 pt-4">
@@ -189,11 +201,16 @@ export function ClientProfileTabs({ data, canWrite = false }: Props) {
         ) : active === "subscription" ? (
           <ClientSubscriptionTab subscriptions={subscriptions ?? []} />
         ) : active === "drivers" ? (
-          <ClientDriversTab clientCode={client.code} drivers={drivers ?? []} canWrite={canWrite} />
+          <div className="space-y-6">
+            {canInviteTeam ? <ClientInvitePanel clientId={client.id} clientCode={client.code} /> : null}
+            <ClientDriversTab clientCode={client.code} drivers={drivers ?? []} canWrite={canWrite} />
+          </div>
         ) : active === "mail" ? (
           <ClientMailSettingsEditor clientId={client.id} canWrite={canWrite} />
         ) : active === "pricing" ? (
           <ClientPricingSettingsEditor clientId={client.id} canWrite={canWrite} />
+        ) : active === "suppliers" ? (
+          <ClientSupplierAllocationsEditor clientId={client.id} canWrite={canAllocateSuppliers} />
         ) : (
           <>
             {vehicles.length === 0 ? (

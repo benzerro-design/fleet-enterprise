@@ -19,7 +19,12 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { assertClientFleetWrite } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
-import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser } from '../iam/partner-access';
+import {
+  allowedSupplierIds,
+  assertPartnerSupplierId,
+  assertPartnerWrite,
+  isPartnerUser,
+} from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
@@ -403,7 +408,10 @@ export class AppointmentsService {
       where: { id: dto.vehicleId, tenantId: tenant.id },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
-    if (access) {
+    const partner = !!(access && isPartnerUser(access));
+    if (partner) {
+      assertPartnerWrite(access);
+    } else if (access) {
       assertClientFleetWrite(access, vehicle.clientId);
     }
 
@@ -418,17 +426,37 @@ export class AppointmentsService {
     }
 
     let supplierId: string | null = null;
-    if (dto.supplierId) {
+    if (partner) {
+      const allowed = allowedSupplierIds(access!);
+      if (allowed.length === 0) {
+        throw new ForbiddenException('No supplier membership');
+      }
+      if (dto.supplierId) {
+        assertPartnerSupplierId(access!, dto.supplierId);
+        supplierId = dto.supplierId;
+      } else if (allowed.length === 1) {
+        supplierId = allowed[0]!;
+      } else {
+        throw new BadRequestException('supplierId is required');
+      }
+    } else if (dto.supplierId) {
       await resolveSupplierInTenant(this.prisma, tenant.id, dto.supplierId);
       supplierId = dto.supplierId;
     }
 
+    if (partner && !dto.serviceCaseId && !dto.sourceTicketId) {
+      throw new BadRequestException(
+        'Partenerul programează din dosarul WO existent (deschide calendarul din comandă).',
+      );
+    }
+
     const recurrenceRule = dto.recurrenceRule ?? ServiceAppointmentRecurrence.none;
-    const initialStatus = resolveInitialAppointmentStatus(supplierId, dto.createdBySupplier);
+    const createdBySupplier = partner || !!dto.createdBySupplier;
+    const initialStatus = resolveInitialAppointmentStatus(supplierId, createdBySupplier);
     const proposedByRole =
       initialStatus === ServiceAppointmentStatus.pending_supplier
         ? proposedByFromAccess(access)
-        : dto.createdBySupplier
+        : createdBySupplier
           ? ServiceAppointmentProposedBy.supplier
           : null;
 
@@ -443,7 +471,20 @@ export class AppointmentsService {
             })
           : null;
 
-      if (!serviceCase) {
+      if (partner) {
+        if (!serviceCase) {
+          throw new NotFoundException('Service case not found');
+        }
+        if (serviceCase.vehicleId !== vehicle.id) {
+          throw new BadRequestException('Vehiculul nu corespunde dosarului de service');
+        }
+        const ownedWo = await tx.maintenanceWorkOrder.findFirst({
+          where: { serviceCaseId: serviceCase.id, supplierId },
+        });
+        if (!ownedWo) {
+          throw new ForbiddenException('Nu poți programa pe un dosar al altui furnizor');
+        }
+      } else if (!serviceCase) {
         serviceCase = await tx.serviceCase.create({
           data: {
             tenantId: tenant.id,
@@ -458,6 +499,10 @@ export class AppointmentsService {
             title: dto.title?.trim() || `Programare ${vehicle.registrationNumber}`,
           },
         });
+      }
+
+      if (!serviceCase) {
+        throw new NotFoundException('Service case not found');
       }
 
       const title = dto.title?.trim() || serviceCase.title;
@@ -518,8 +563,12 @@ export class AppointmentsService {
       }
 
       await tx.maintenanceWorkOrder.updateMany({
-        where: { serviceCaseId: serviceCase.id },
-        data: { plannedAt: scheduledAt, supplierId: supplierId ?? undefined },
+        where: partner
+          ? { serviceCaseId: serviceCase.id, supplierId }
+          : { serviceCaseId: serviceCase.id },
+        data: partner
+          ? { plannedAt: scheduledAt }
+          : { plannedAt: scheduledAt, supplierId: supplierId ?? undefined },
       });
 
       if (serviceCase.sourceTicketId) {

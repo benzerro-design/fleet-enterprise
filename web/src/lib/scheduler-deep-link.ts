@@ -13,6 +13,10 @@ export function schedulerHref(opts?: {
   inbox?: SchedulerInboxFilter;
   ticket?: string;
   vehicle?: string;
+  /** Nr. înmatriculare (afișare când lista de vehicule e goală, ex. partener). */
+  reg?: string;
+  /** Service case — partener leagă programarea de WO existent. */
+  case?: string;
   create?: boolean;
   /** După reprogramare / repropunere, UI poate întoarce userul la tichet. */
   returnToTicket?: boolean;
@@ -37,6 +41,12 @@ export function schedulerHref(opts?: {
   }
   if (opts?.vehicle?.trim()) {
     params.set("vehicle", opts.vehicle.trim());
+  }
+  if (opts?.reg?.trim()) {
+    params.set("reg", opts.reg.trim());
+  }
+  if (opts?.case?.trim()) {
+    params.set("case", opts.case.trim());
   }
   if (opts?.create) {
     params.set("create", "1");

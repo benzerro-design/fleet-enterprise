@@ -4,6 +4,7 @@ import { VehicleDetailHeader } from "@/components/fleet/VehicleDetailHeader";
 import { VehicleDetailSections } from "@/components/fleet/VehicleDetailSections";
 import { VehicleProfileTabs } from "@/components/fleet/VehicleProfileTabs";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
+import type { ConsumptionPayload } from "@/lib/consumption-types";
 import type { VehicleDetailData } from "@/lib/vehicle-detail-server";
 
 type Props = {
@@ -19,6 +20,8 @@ type Props = {
   mediaWrite?: boolean;
   /** plan mentenanță — doar manager */
   planWrite?: boolean;
+  consumption?: ConsumptionPayload | null;
+  consumptionRequested?: boolean;
 };
 
 export function VehicleDetailLayout({
@@ -29,6 +32,8 @@ export function VehicleDetailLayout({
   canChangeClient = true,
   mediaWrite,
   planWrite,
+  consumption = null,
+  consumptionRequested = false,
 }: Props) {
   const {
     vehicle,
@@ -74,6 +79,8 @@ export function VehicleDetailLayout({
               odometer={odometerPayload}
               maintenancePlan={maintenancePlanPayload}
               driverAssignments={driverAssignments}
+              consumption={consumption}
+              consumptionRequested={consumptionRequested}
             />
           </div>
         </Suspense>

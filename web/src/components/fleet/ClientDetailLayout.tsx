@@ -8,6 +8,8 @@ type Props = {
   data: ClientDetailData;
   canEditClient: boolean;
   canWriteFleet: boolean;
+  canAllocateSuppliers?: boolean;
+  canInviteTeam?: boolean;
 };
 
 function healthBadgeClass(label: string | undefined): string {
@@ -16,7 +18,13 @@ function healthBadgeClass(label: string | undefined): string {
   return "border-rose-500/40 bg-rose-500/10 text-rose-300";
 }
 
-export function ClientDetailLayout({ data, canEditClient, canWriteFleet }: Props) {
+export function ClientDetailLayout({
+  data,
+  canEditClient,
+  canWriteFleet,
+  canAllocateSuppliers = false,
+  canInviteTeam = false,
+}: Props) {
   const { client } = data;
 
   return (
@@ -54,7 +62,12 @@ export function ClientDetailLayout({ data, canEditClient, canWriteFleet }: Props
       </div>
 
       <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă profilul client…</p>}>
-        <ClientProfileTabs data={data} canWrite={canWriteFleet} />
+        <ClientProfileTabs
+          data={data}
+          canWrite={canWriteFleet}
+          canAllocateSuppliers={canAllocateSuppliers}
+          canInviteTeam={canInviteTeam}
+        />
       </Suspense>
     </FleetPageMain>
   );

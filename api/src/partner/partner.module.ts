@@ -6,10 +6,11 @@ import { PartnerAdminService } from './partner-admin.service';
 import { PartnerMailService } from './partner-mail.service';
 import { PartnerNotificationProcessor } from './partner-notification.processor';
 import { PartnerNotificationService } from './partner-notification.service';
+import { PartnerNotificationsController } from './partner-notifications.controller';
 
 @Module({
   imports: [AuthModule],
-  controllers: [PartnerAdminController],
+  controllers: [PartnerAdminController, PartnerNotificationsController],
   providers: [
     PartnerAdminService,
     PartnerMailService,

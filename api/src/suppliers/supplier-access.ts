@@ -24,13 +24,7 @@ export function supplierListScope(access: AccessContext): Prisma.SupplierWhereIn
   if (access.membershipRole === MembershipRole.client_user) {
     const clientIds = access.allowedClientIds ?? [];
     if (clientIds.length === 0) return { id: { in: [] } };
-    return {
-      OR: [
-        { workOrders: { some: { vehicle: { clientId: { in: clientIds } } } } },
-        { serviceCases: { some: { clientId: { in: clientIds } } } },
-        { serviceAppointments: { some: { vehicle: { clientId: { in: clientIds } } } } },
-      ],
-    };
+    return { clientAllocations: { some: { clientId: { in: clientIds } } } };
   }
   return { id: { in: [] } };
 }
@@ -67,11 +61,7 @@ export async function assertSupplierReadById(
       where: {
         id: supplierId,
         tenant: { slug: tenantSlug },
-        OR: [
-          { workOrders: { some: { vehicle: { clientId: { in: clientIds } } } } },
-          { serviceCases: { some: { clientId: { in: clientIds } } } },
-          { serviceAppointments: { some: { vehicle: { clientId: { in: clientIds } } } } },
-        ],
+        clientAllocations: { some: { clientId: { in: clientIds } } },
       },
       select: { id: true },
     });

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -653,6 +654,201 @@ export class ClientsService {
     });
 
     return next;
+  }
+
+  async listSupplierAllocations(
+    tenantSlug: string,
+    clientId: string,
+    access?: AccessContext,
+  ): Promise<{
+    items: Array<{
+      supplierId: string;
+      code: string;
+      legalName: string;
+      category: string;
+      status: string;
+    }>;
+  }> {
+    const row = await this.findRow(tenantSlug, clientId);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
+    const rows = await this.prisma.clientSupplierAllocation.findMany({
+      where: { clientId: row.id },
+      include: { supplier: true },
+      orderBy: { supplier: { legalName: 'asc' } },
+    });
+    return {
+      items: rows.map((a) => ({
+        supplierId: a.supplierId,
+        code: a.supplier.code,
+        legalName: a.supplier.legalName,
+        category: a.supplier.category,
+        status: a.supplier.status,
+      })),
+    };
+  }
+
+  async replaceSupplierAllocations(
+    tenantSlug: string,
+    clientId: string,
+    supplierIds: string[],
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<{
+    items: Array<{
+      supplierId: string;
+      code: string;
+      legalName: string;
+      category: string;
+      status: string;
+    }>;
+  }> {
+    if (access && !access.isTenantWide) {
+      throw new ForbiddenException('Only tenant admin can allocate suppliers');
+    }
+    const row = await this.findRow(tenantSlug, clientId);
+    const unique = [...new Set(supplierIds.map((id) => id.trim()).filter(Boolean))];
+    if (unique.length) {
+      const found = await this.prisma.supplier.findMany({
+        where: { id: { in: unique }, tenantId: row.tenantId },
+        select: { id: true },
+      });
+      if (found.length !== unique.length) {
+        throw new BadRequestException('One or more suppliers are invalid');
+      }
+    }
+
+    const existing = await this.prisma.clientSupplierAllocation.findMany({
+      where: { clientId: row.id },
+      select: { supplierId: true },
+    });
+    const have = new Set(existing.map((e) => e.supplierId));
+    const want = new Set(unique);
+    const toRemove = [...have].filter((id) => !want.has(id));
+    const toAdd = [...want].filter((id) => !have.has(id));
+
+    await this.prisma.$transaction(async (tx) => {
+      if (toRemove.length) {
+        await tx.clientSupplierAllocation.deleteMany({
+          where: { clientId: row.id, supplierId: { in: toRemove } },
+        });
+      }
+      if (toAdd.length) {
+        await tx.clientSupplierAllocation.createMany({
+          data: toAdd.map((supplierId) => ({
+            tenantId: row.tenantId,
+            clientId: row.id,
+            supplierId,
+          })),
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: row.tenantId,
+      actorUserId,
+      action: 'client.supplier_allocations_update',
+      entityType: 'client',
+      entityId: row.id,
+      meta: { supplierIds: unique },
+    });
+
+    return this.listSupplierAllocations(tenantSlug, clientId, access);
+  }
+
+  async listClientAllocationsForSupplier(
+    tenantSlug: string,
+    supplierId: string,
+    access?: AccessContext,
+  ): Promise<{
+    items: Array<{ clientId: string; code: string; legalName: string; status: string }>;
+  }> {
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, tenant: { slug: tenantSlug } },
+    });
+    if (!supplier) throw new NotFoundException('Supplier not found');
+    if (access && !access.isTenantWide) {
+      throw new ForbiddenException('Only tenant team can list client allocations');
+    }
+    const rows = await this.prisma.clientSupplierAllocation.findMany({
+      where: { supplierId: supplier.id },
+      include: { client: true },
+      orderBy: { client: { legalName: 'asc' } },
+    });
+    return {
+      items: rows.map((a) => ({
+        clientId: a.clientId,
+        code: a.client.code,
+        legalName: a.client.legalName,
+        status: a.client.status,
+      })),
+    };
+  }
+
+  async replaceClientAllocationsForSupplier(
+    tenantSlug: string,
+    supplierId: string,
+    clientIds: string[],
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<{
+    items: Array<{ clientId: string; code: string; legalName: string; status: string }>;
+  }> {
+    if (access && !access.isTenantWide) {
+      throw new ForbiddenException('Only tenant admin can allocate suppliers');
+    }
+    const supplier = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, tenant: { slug: tenantSlug } },
+    });
+    if (!supplier) throw new NotFoundException('Supplier not found');
+    const unique = [...new Set(clientIds.map((id) => id.trim()).filter(Boolean))];
+    if (unique.length) {
+      const found = await this.prisma.client.findMany({
+        where: { id: { in: unique }, tenantId: supplier.tenantId },
+        select: { id: true },
+      });
+      if (found.length !== unique.length) {
+        throw new BadRequestException('One or more clients are invalid');
+      }
+    }
+
+    const existing = await this.prisma.clientSupplierAllocation.findMany({
+      where: { supplierId: supplier.id },
+      select: { clientId: true },
+    });
+    const have = new Set(existing.map((e) => e.clientId));
+    const want = new Set(unique);
+    const toRemove = [...have].filter((id) => !want.has(id));
+    const toAdd = [...want].filter((id) => !have.has(id));
+
+    await this.prisma.$transaction(async (tx) => {
+      if (toRemove.length) {
+        await tx.clientSupplierAllocation.deleteMany({
+          where: { supplierId: supplier.id, clientId: { in: toRemove } },
+        });
+      }
+      if (toAdd.length) {
+        await tx.clientSupplierAllocation.createMany({
+          data: toAdd.map((clientId) => ({
+            tenantId: supplier.tenantId,
+            clientId,
+            supplierId: supplier.id,
+          })),
+        });
+      }
+    });
+
+    await this.audit.log({
+      tenantId: supplier.tenantId,
+      actorUserId,
+      action: 'supplier.client_allocations_update',
+      entityType: 'supplier',
+      entityId: supplier.id,
+      meta: { clientIds: unique },
+    });
+
+    return this.listClientAllocationsForSupplier(tenantSlug, supplierId, access);
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string): Promise<void> {

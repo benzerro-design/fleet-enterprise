@@ -37,8 +37,9 @@ import { MaintenancePlanService } from './maintenance-plan.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TenantId } from './tenant-id.decorator';
 import { DriversService } from '../drivers/drivers.service';
-import { assertFuelType, parseFuelType } from '../ops/fuel-types';
+import { assertFuelType, parseFuelType, parseFuelTypesCsv } from '../ops/fuel-types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
+import { TripsService } from '../ops/trips.service';
 
 @Controller('fleet')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -49,6 +50,7 @@ export class FleetController {
     private readonly dashboard: DashboardService,
     private readonly formBrief: VehicleFormBriefService,
     private readonly drivers: DriversService,
+    private readonly trips: TripsService,
   ) {}
 
   @Get('dashboard')
@@ -102,6 +104,33 @@ export class FleetController {
         status: parseOptionalStatus(status),
         clientId: clientId?.trim(),
         vehicleScope: scope,
+      },
+      access,
+    );
+  }
+
+  @Get('vehicles/:vehicleId/consumption')
+  @Roles(...FLEET_READ_ROLES)
+  getVehicleConsumption(
+    @TenantId() tenantSlug: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('fuelTypes') fuelTypesRaw?: string,
+  ) {
+    const fromTrim = from?.trim();
+    const toTrim = to?.trim();
+    if (!fromTrim || !toTrim) {
+      throw new BadRequestException('from and to are required');
+    }
+    return this.trips.getConsumption(
+      tenantSlug,
+      {
+        from: fromTrim,
+        to: toTrim,
+        vehicleIds: [vehicleId],
+        fuelTypes: parseFuelTypesCsv(fuelTypesRaw),
       },
       access,
     );

@@ -62,6 +62,8 @@ model Tenant {
   mobilityAssignments    MobilityAssignment[]
   roadsideInterventions  RoadsideIntervention[]
   insurers               Insurer[]
+  clientSupplierAllocations ClientSupplierAllocation[]
+  userInvites               UserInvite[]
 }
 
 enum ClientStatus {
@@ -100,6 +102,8 @@ model Client {
   serviceCases  ServiceCase[]
   mobilityAssignments MobilityAssignment[]
   roadsideInterventions RoadsideIntervention[]
+  supplierAllocations ClientSupplierAllocation[]
+  userInvites         UserInvite[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -303,6 +307,8 @@ model User {
   supplierMemberships      SupplierMembership[]
   supplierInvitesCreated   SupplierInvite[]          @relation("SupplierInviteCreator")
   supplierInvitesAccepted  SupplierInvite[]          @relation("SupplierInviteAccepter")
+  userInvitesCreated       UserInvite[]              @relation("UserInviteCreator")
+  userInvitesAccepted      UserInvite[]              @relation("UserInviteAccepter")
   workOrderMessages        WorkOrderMessage[]
   botPopulationSessions    BotPopulationSession[]    @relation("BotSessionActor")
 }
@@ -1112,11 +1118,28 @@ model Supplier {
   serviceAppointments  ServiceAppointment[]
   mobilityAssignments  MobilityAssignment[]
   roadsideInterventions RoadsideIntervention[]
+  clientAllocations    ClientSupplierAllocation[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, category])
+}
+
+/// Alocare L* : furnizor vizibil pentru un Client (L1).
+model ClientSupplierAllocation {
+  id         String   @id @default(cuid())
+  tenantId   String
+  clientId   String
+  supplierId String
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, supplierId])
+  @@index([tenantId])
+  @@index([supplierId])
 }
 
 /// Catalog asigurători (daune) — separat de Furnizori.
@@ -1200,6 +1223,32 @@ model SupplierInvite {
   @@index([email])
 }
 
+/// Invitație L* (echipă tenant) sau L1 (echipă client) — IAM-002.
+model UserInvite {
+  id               String          @id @default(cuid())
+  tenantId         String
+  email            String
+  /// tenant_admin | tenant_viewer | client_user
+  targetRole       MembershipRole
+  clientId         String?
+  clientRole       ClientRole?
+  driverId         String?
+  token            String          @unique
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  acceptedByUserId String?
+  createdByUserId  String?
+  createdAt        DateTime        @default(now())
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client           Client?         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy        User?           @relation("UserInviteCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  acceptedBy       User?           @relation("UserInviteAccepter", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([clientId])
+}
+
 enum WorkOrderMessageVisibility {
   internal
   client_visible
@@ -1235,12 +1284,14 @@ model PartnerNotificationOutbox {
   sentAt     DateTime?
   attempts   Int       @default(0)
   lastError  String?
+  readAt     DateTime?
   createdAt  DateTime  @default(now())
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
   @@index([supplierId])
   @@index([sentAt])
+  @@index([supplierId, readAt])
 }
 
 enum ServiceCaseWorkflowType {

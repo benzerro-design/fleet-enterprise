@@ -54,6 +54,8 @@ export type CreateSupplierInput = {
   county?: string | null;
   notes?: string | null;
   services?: string[];
+  /** La creare: alocă imediat la acești clienți (UAT-011). */
+  clientIds?: string[];
 };
 
 export type PatchSupplierInput = Partial<CreateSupplierInput>;
@@ -342,6 +344,19 @@ export class SuppliersService {
     const legalName = dto.legalName?.trim();
     if (!legalName) throw new BadRequestException('legalName is required');
 
+    const uniqueClientIds = [
+      ...new Set((dto.clientIds ?? []).map((id) => id.trim()).filter(Boolean)),
+    ];
+    if (uniqueClientIds.length) {
+      const found = await this.prisma.client.findMany({
+        where: { id: { in: uniqueClientIds }, tenantId: tenant.id },
+        select: { id: true },
+      });
+      if (found.length !== uniqueClientIds.length) {
+        throw new BadRequestException('One or more clients are invalid');
+      }
+    }
+
     try {
       const row = await this.prisma.supplier.create({
         data: {
@@ -371,6 +386,15 @@ export class SuppliersService {
             })),
           });
         }
+      }
+      if (uniqueClientIds.length) {
+        await this.prisma.clientSupplierAllocation.createMany({
+          data: uniqueClientIds.map((clientId) => ({
+            tenantId: tenant.id,
+            clientId,
+            supplierId: row.id,
+          })),
+        });
       }
       await this.audit.log({
         tenantId: tenant.id,

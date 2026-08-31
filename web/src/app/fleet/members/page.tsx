@@ -7,6 +7,7 @@ import {
   type ClientOption,
 } from "@/components/fleet/ClientMembershipsPanel";
 import { MembersAdminPanel } from "@/components/fleet/MembersAdminPanel";
+import { TenantInvitePanel } from "@/components/fleet/TenantInvitePanel";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
 
@@ -65,7 +66,7 @@ export default async function FleetMembersPage() {
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Membri & useri client</h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-            Echipa FlotaX (tenant) și angajații clienților contractuali — scope separat. Hartă ierarhie L &amp;
+            Echipa FlotaX (tenant) și angajații clienților contractuali — invite cu link (IAM-002), fără parolă setată de admin. Hartă ierarhie L &amp;
             profile F/T/G:{" "}
             <Link href="/fleet/user-strategy" className="text-emerald-400 hover:underline">
               Strategie useri
@@ -84,6 +85,9 @@ export default async function FleetMembersPage() {
       <div className="space-y-12">
         <section>
           <h2 className="mb-4 text-lg font-medium text-zinc-200">Echipa FlotaX (tenant)</h2>
+          <div className="mb-6">
+            <TenantInvitePanel />
+          </div>
           {!data ? (
             <p className="text-amber-400">Nu am putut încărca membrii. Verifică API-ul.</p>
           ) : (

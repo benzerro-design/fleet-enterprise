@@ -157,13 +157,20 @@ export function WorkOrderSheetShell({
       : "—";
 
   const schedulerLink =
-    wo.linkedAppointmentScheduledAt || wo.plannedAt
+    wo.linkedAppointmentId || wo.linkedAppointmentScheduledAt || wo.plannedAt
       ? schedulerHref({
           basePath: isPartner ? "/fleet/partner/appointments" : "/fleet/scheduler",
-          week: new Date(wo.linkedAppointmentScheduledAt ?? wo.plannedAt!),
+          week: new Date(wo.linkedAppointmentScheduledAt ?? wo.plannedAt ?? Date.now()),
           select: wo.linkedAppointmentId ?? undefined,
         })
-      : null;
+      : schedulerHref({
+          basePath: isPartner ? "/fleet/partner/appointments" : "/fleet/scheduler",
+          ticket: wo.sourceTicketId ?? undefined,
+          vehicle: wo.vehicleId,
+          reg: wo.registrationNumber,
+          case: wo.serviceCaseId,
+          create: true,
+        });
 
   const patchServiceTimes = useCallback(
     async (body: Record<string, string | number>) => {
@@ -329,14 +336,12 @@ export function WorkOrderSheetShell({
   const navActions: { label: string; href: string }[] = isPartner
     ? [
         { label: "← Inbox", href: "/fleet/partner/work-orders" },
-        ...(schedulerLink
-          ? [{ label: "Programator", href: "/fleet/partner/appointments" }]
-          : []),
+        { label: "Programator", href: schedulerLink },
       ]
     : [
         { label: "← Inbox", href: "/fleet/work-orders" },
         { label: "Vehicul", href: `/fleet/vehicles/${wo.vehicleId}` },
-        ...(schedulerLink ? [{ label: "Programator", href: schedulerLink }] : []),
+        { label: "Programator", href: schedulerLink },
         ...(wo.sourceTicketId
           ? [{ label: "Tichet", href: `/fleet/tickets/${wo.sourceTicketId}` }]
           : []),
@@ -926,15 +931,12 @@ export function WorkOrderSheetShell({
                 )}
                 <p className="mt-2">
                   <Link
-                    href={
-                      schedulerLink ??
-                      (isPartner ? "/fleet/partner/appointments" : "/fleet/scheduler")
-                    }
+                    href={schedulerLink}
                     className="font-medium text-sky-300 hover:underline"
                   >
                     {wo.linkedAppointmentId
                       ? "Deschide programarea în calendar →"
-                      : "Deschide programatorul →"}
+                      : "Deschide programatorul (vehicul + furnizor precompletate) →"}
                   </Link>
                 </p>
               </div>
@@ -962,7 +964,8 @@ export function WorkOrderSheetShell({
         workOrderId={wo.id}
         canWrite={canWrite}
         canApprove={canApprove}
-        canPostCost={!isPartner}
+        canPostCost={canWrite}
+        isPartner={isPartner}
         sheetLayout
         estimatedRepairAt={wo.estimatedRepairAt}
         quoteLocked={

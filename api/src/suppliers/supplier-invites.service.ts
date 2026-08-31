@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -9,6 +10,8 @@ import { MembershipRole, SupplierRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
+import type { AccessContext } from '../iam/access-context.types';
+import { isPartnerUser } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type SupplierInviteRecord = {
@@ -30,11 +33,19 @@ export class SupplierInvitesService {
   ) {}
 
   private inviteUrl(token: string): string {
-    const base = process.env.WEB_PUBLIC_URL ?? 'http://localhost:3000';
+    const base =
+      process.env.WEB_ORIGIN?.trim() ||
+      process.env.WEB_PUBLIC_URL?.trim() ||
+      'http://localhost:3000';
     return `${base.replace(/\/$/, '')}/invite/partner/${token}`;
   }
 
-  async listForSupplier(tenantSlug: string, supplierId: string): Promise<SupplierInviteRecord[]> {
+  async listForSupplier(
+    tenantSlug: string,
+    supplierId: string,
+    access?: AccessContext,
+  ): Promise<SupplierInviteRecord[]> {
+    this.assertCanManageInvites(access, supplierId);
     const rows = await this.prisma.supplierInvite.findMany({
       where: { supplierId, tenant: { slug: tenantSlug }, acceptedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -48,7 +59,9 @@ export class SupplierInvitesService {
     supplierId: string,
     input: { email: string; role?: SupplierRole },
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<SupplierInviteRecord> {
+    this.assertCanManageInvites(access, supplierId);
     const email = input.email?.trim().toLowerCase();
     if (!email || !email.includes('@')) {
       throw new BadRequestException('Valid email is required');
@@ -60,7 +73,7 @@ export class SupplierInvitesService {
 
     const token = randomBytes(24).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const role = input.role ?? SupplierRole.supplier_staff;
+    const role = this.parseInviteRole(input.role, access);
 
     try {
       const row = await this.prisma.supplierInvite.create({
@@ -221,6 +234,35 @@ export class SupplierInvitesService {
     if (row.acceptedAt) throw new BadRequestException('Invite already accepted');
     if (row.expiresAt.getTime() < Date.now()) throw new BadRequestException('Invite expired');
     return row;
+  }
+
+  private assertCanManageInvites(access: AccessContext | undefined, supplierId: string): void {
+    if (!access) return;
+    if (access.membershipRole === MembershipRole.tenant_admin) return;
+    if (isPartnerUser(access)) {
+      const ok = access.supplierMemberships.some(
+        (m) => m.supplierId === supplierId && m.role === SupplierRole.supplier_manager,
+      );
+      if (!ok) throw new ForbiddenException('Only supplier manager can invite');
+      return;
+    }
+    throw new ForbiddenException('Not allowed');
+  }
+
+  private parseInviteRole(raw: SupplierRole | undefined, access?: AccessContext): SupplierRole {
+    const role = raw ?? SupplierRole.supplier_staff;
+    const allowed: SupplierRole[] = [
+      SupplierRole.supplier_manager,
+      SupplierRole.supplier_staff,
+      SupplierRole.supplier_accountant,
+    ];
+    if (!allowed.includes(role)) {
+      throw new BadRequestException('Invalid supplier role');
+    }
+    if (access && isPartnerUser(access) && role === SupplierRole.supplier_manager) {
+      throw new ForbiddenException('Partenerul poate invita R1/R0, nu un alt manager');
+    }
+    return role;
   }
 
   private toRecord(row: {

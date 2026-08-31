@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -221,6 +222,34 @@ export class ClientsController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.clients.patchPricingSettings(tenantSlug, id, body, actorUserId, access);
+  }
+
+  @Get(':id/supplier-allocations')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  listSupplierAllocations(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.listSupplierAllocations(tenantSlug, id, access);
+  }
+
+  @Put(':id/supplier-allocations')
+  @Roles(MembershipRole.tenant_admin)
+  replaceSupplierAllocations(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: { supplierIds?: string[] },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.replaceSupplierAllocations(
+      tenantSlug,
+      id,
+      Array.isArray(body?.supplierIds) ? body.supplierIds : [],
+      actorUserId,
+      access,
+    );
   }
 
   @Get(':id')

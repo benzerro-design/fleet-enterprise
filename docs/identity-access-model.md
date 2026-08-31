@@ -4,7 +4,7 @@
 **Audiență:** product owner, arhitectură, dezvoltare, handoff pilot, suport.  
 **Prioritate:** la conflict cu alte documente sau implementări ad-hoc, **acest document are prioritate** pentru subiectele IAM.
 
-**Referințe înrudite:** `platform-foundation.md` (infrastructură), `domain-model.md` (entități business), `roadmap-2026-q3-q4.md` (calendar livrabile).
+**Referințe înrudite:** `platform-foundation.md` (infrastructură), `domain-model.md` (entități business), `roadmap-2026-q3-q4.md` (calendar livrabile), `iam-decisions-2026-09.md` (creare useri L/R, F/T/G, alocare furnizori, drepturi fine per client — 1 sep 2026).
 
 ---
 

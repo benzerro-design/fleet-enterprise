@@ -11,6 +11,9 @@ export function proposedByFromAccess(access?: AccessContext): ServiceAppointment
   if (access.membershipRole === MembershipRole.tenant_admin) {
     return ServiceAppointmentProposedBy.tenant_admin;
   }
+  if (access.membershipRole === MembershipRole.supplier_user) {
+    return ServiceAppointmentProposedBy.supplier;
+  }
   return ServiceAppointmentProposedBy.client_manager;
 }
 

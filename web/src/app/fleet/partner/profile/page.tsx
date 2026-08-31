@@ -34,6 +34,9 @@ export default async function PartnerProfilePage({ searchParams }: PageProps) {
   const canWriteServices = adminMode
     ? canManageFleet(auth)
     : canWritePartnerOps(auth);
+  const canInvite = adminMode
+    ? canManageFleet(auth)
+    : membership?.role === "supplier_manager";
 
   return (
     <PartnerProfileClient
@@ -42,6 +45,7 @@ export default async function PartnerProfilePage({ searchParams }: PageProps) {
       serviceCatalog={serviceCatalog}
       tenantSlug={auth.ok ? auth.me.tenantSlug : "demo"}
       canWriteServices={canWriteServices}
+      canInvite={canInvite}
     />
   );
 }

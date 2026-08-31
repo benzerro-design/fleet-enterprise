@@ -86,6 +86,7 @@ export type VehicleProfileTab =
   | "photos"
   | "odometer"
   | "maintenance_plan"
-  | "drivers";
+  | "drivers"
+  | "consumption";
 
 export type MaintenancePlanPayload = import("@/lib/maintenance-plan-types").MaintenancePlanPayload;

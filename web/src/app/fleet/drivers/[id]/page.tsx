@@ -6,19 +6,10 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { documentExpiryBadge } from "@/lib/document-expiry";
 import { driverStatusLabel, type DriverDetailPayload, type DriverDocumentRecord } from "@/lib/drivers-api";
-import type { ConsumptionPayload } from "@/lib/consumption-types";
+import { defaultConsumptionPeriod, type ConsumptionPayload } from "@/lib/consumption-types";
 import { buildDriverTripsQuery, type DriverTripListPayload } from "@/lib/trips-api";
 import type { DriverTripsSearch } from "@/components/fleet/DriverTripsPanel";
 import { fleetServerFetch } from "@/lib/fleet-server";
-
-function defaultConsumptionPeriod(): { from: string; to: string } {
-  const now = new Date();
-  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: now.toISOString().slice(0, 10),
-  };
-}
 
 async function loadDriver(id: string): Promise<DriverDetailPayload | null> {
   try {

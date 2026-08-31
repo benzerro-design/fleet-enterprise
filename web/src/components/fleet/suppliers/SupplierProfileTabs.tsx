@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
+import { SupplierClientAllocationsEditor } from "@/components/fleet/suppliers/SupplierClientAllocationsEditor";
 import type { SupplierMembershipMe } from "@/lib/auth-server";
 import type { SupplierRecord } from "@/lib/suppliers-api";
 import type { SupplierServiceCatalogEntry } from "@/lib/supplier-service-catalog";
@@ -14,6 +15,7 @@ export const SUPPLIER_PROFILE_TABS = [
   { id: "documente", label: "Documente firmă" },
   { id: "program", label: "Program & locații" },
   { id: "echipa", label: "Echipă" },
+  { id: "clienti", label: "Clienți alocați" },
 ] as const;
 
 export type SupplierProfileTabId = (typeof SUPPLIER_PROFILE_TABS)[number]["id"];
@@ -24,6 +26,7 @@ type Props = {
   tenantSlug?: string;
   supplierMembership?: SupplierMembershipMe;
   canWriteServices?: boolean;
+  canAllocateClients?: boolean;
   assignedByLabel?: string;
   contextLabel?: string;
 };
@@ -34,10 +37,14 @@ export function SupplierProfileTabs({
   tenantSlug,
   supplierMembership,
   canWriteServices = false,
+  canAllocateClients = false,
   assignedByLabel = "Flotă",
   contextLabel,
 }: Props) {
   const [tab, setTab] = useState<SupplierProfileTabId>("identitate");
+  const tabs = canAllocateClients
+    ? SUPPLIER_PROFILE_TABS
+    : SUPPLIER_PROFILE_TABS.filter((t) => t.id !== "clienti");
 
   return (
     <>
@@ -46,7 +53,7 @@ export function SupplierProfileTabs({
       ) : null}
 
       <div className="flex flex-wrap gap-2 border-b border-zinc-800 pb-3">
-        {SUPPLIER_PROFILE_TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -140,6 +147,12 @@ export function SupplierProfileTabs({
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
+        {tab === "clienti" && supplier ? <SupplierClientAllocationsEditor supplierId={supplier.id} /> : null}
+
+        {tab === "clienti" && !supplier ? (
+          <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
+        ) : null}
+
         {tab === "documente" ? (
           <div className="space-y-3 text-sm text-zinc-400">
             <p className="rounded-lg border border-amber-800/40 bg-amber-950/20 px-3 py-2 text-amber-200">
@@ -149,7 +162,7 @@ export function SupplierProfileTabs({
           </div>
         ) : null}
 
-        {tab !== "identitate" && tab !== "documente" && tab !== "tip" ? (
+        {tab !== "identitate" && tab !== "documente" && tab !== "tip" && tab !== "clienti" ? (
           <p className="text-sm text-zinc-500">
             Conținut tab „{SUPPLIER_PROFILE_TABS.find((t) => t.id === tab)?.label}” — urmează în faza P2 profil furnizor.
           </p>

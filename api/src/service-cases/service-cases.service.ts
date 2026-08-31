@@ -2572,7 +2572,10 @@ export class ServiceCasesService {
       throw new ForbiddenException('Cannot confirm appointment');
     }
 
-    let woCreated = false;
+    let woCreated: { created: boolean; workOrderId: string | null } = {
+      created: false,
+      workOrderId: null,
+    };
     await this.prisma.$transaction(async (tx) => {
       await tx.serviceAppointment.update({
         where: { id: appointmentId },
@@ -2606,14 +2609,18 @@ export class ServiceCasesService {
       );
     });
 
-    if (woCreated) {
+    if (woCreated.created) {
       void this.partnerNotify.notifySupplierContact(
         tenant.id,
         existing.supplierId ?? existing.serviceCase.supplierId,
         'wo_created',
         `Comandă service nouă — ${existing.serviceCase.title}`,
         `S-a creat comanda de lucru după confirmarea programării.`,
-        { appointmentId, serviceCaseId: existing.serviceCaseId },
+        {
+          appointmentId,
+          serviceCaseId: existing.serviceCaseId,
+          workOrderId: woCreated.workOrderId,
+        },
       );
     }
 
@@ -2831,7 +2838,10 @@ export class ServiceCasesService {
       throw new BadRequestException('Appointment was declined — awaiting manager reproposal');
     }
 
-    let woCreated = false;
+    let woCreated: { created: boolean; workOrderId: string | null } = {
+      created: false,
+      workOrderId: null,
+    };
     await this.prisma.$transaction(async (tx) => {
       await tx.serviceAppointment.update({
         where: { id: appointmentId },
@@ -2848,16 +2858,20 @@ export class ServiceCasesService {
       );
     });
 
-    if (woCreated) {
-      const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-      if (tenant) {
+    if (woCreated.created) {
+      const tenantRow = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+      if (tenantRow) {
         void this.partnerNotify.notifySupplierContact(
-          tenant.id,
+          tenantRow.id,
           existing.supplierId ?? existing.serviceCase.supplierId,
           'wo_created',
           `Comandă service nouă — ${existing.serviceCase.title}`,
           `S-a creat comanda de lucru după confirmarea șoferului.`,
-          { appointmentId, serviceCaseId: existing.serviceCaseId },
+          {
+            appointmentId,
+            serviceCaseId: existing.serviceCaseId,
+            workOrderId: woCreated.workOrderId,
+          },
         );
       }
     }
@@ -3184,19 +3198,23 @@ export class ServiceCasesService {
     scheduledAt: Date,
     supplierId: string | null,
     actorUserId?: string,
-  ): Promise<boolean> {
+  ): Promise<{ created: boolean; workOrderId: string | null }> {
     const appt = await tx.serviceAppointment.findFirst({ where: { id: appointmentId } });
-    if (!appt?.managerConfirmedAt || !appt?.driverAcknowledgedAt) return false;
-    if (appt.status !== ServiceAppointmentStatus.confirmed) return false;
+    if (!appt?.managerConfirmedAt || !appt?.driverAcknowledgedAt) {
+      return { created: false, workOrderId: null };
+    }
+    if (appt.status !== ServiceAppointmentStatus.confirmed) {
+      return { created: false, workOrderId: null };
+    }
 
     const serviceCase = await tx.serviceCase.findFirst({ where: { id: appt.serviceCaseId } });
-    if (!serviceCase?.vehicleId) return false;
+    if (!serviceCase?.vehicleId) return { created: false, workOrderId: null };
 
     const prior = await tx.maintenanceWorkOrder.findFirst({
       where: { serviceCaseId: serviceCase.id },
     });
 
-    await this.ensureWorkOrderTx(
+    const wo = await this.ensureWorkOrderTx(
       tx,
       tenantId,
       serviceCase,
@@ -3218,7 +3236,7 @@ export class ServiceCasesService {
       data: { plannedAt: scheduledAt, supplierId: supplierId ?? serviceCase.supplierId },
     });
 
-    return !prior;
+    return { created: !prior, workOrderId: wo.id };
   }
 
   private async ensureWorkOrder(

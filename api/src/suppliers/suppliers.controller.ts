@@ -25,6 +25,7 @@ import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser } from '../iam/partner-access';
 import type { CreateSupplierInput, PatchSupplierInput } from './suppliers.service';
 import { SuppliersService } from './suppliers.service';
+import { ClientsService } from '../clients/clients.service';
 import { supplierServiceCatalog } from './supplier-services';
 
 function parseStatus(raw?: string): SupplierStatus | undefined {
@@ -61,7 +62,10 @@ function parseServiceTypeCode(raw?: string, legacyKind?: string): string | undef
 @Controller('suppliers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SuppliersController {
-  constructor(private readonly suppliers: SuppliersService) {}
+  constructor(
+    private readonly suppliers: SuppliersService,
+    private readonly clients: ClientsService,
+  ) {}
 
   @Get('catalog/services')
   @Roles(...FLEET_READ_ROLES)
@@ -136,6 +140,34 @@ export class SuppliersController {
       status: parseStatus(status),
       category: parseCategory(category),
     });
+  }
+
+  @Get(':id/client-allocations')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
+  listClientAllocations(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.listClientAllocationsForSupplier(tenantSlug, id, access);
+  }
+
+  @Put(':id/client-allocations')
+  @Roles(MembershipRole.tenant_admin)
+  replaceClientAllocations(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: { clientIds?: string[] },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.replaceClientAllocationsForSupplier(
+      tenantSlug,
+      id,
+      Array.isArray(body?.clientIds) ? body.clientIds : [],
+      actorUserId,
+      access,
+    );
   }
 
   @Get(':id')

@@ -43,6 +43,8 @@ type PageProps = {
     create?: string;
     supplierId?: string;
     suppliers?: string;
+    reg?: string;
+    case?: string;
   }>;
 };
 
@@ -120,6 +122,8 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
               initialInbox={initialInbox}
               initialTicketId={sp.ticket?.trim()}
               initialVehicleId={sp.vehicle?.trim()}
+              initialVehicleLabel={sp.reg?.trim()}
+              initialServiceCaseId={sp.case?.trim()}
               initialCreate={sp.create === "1"}
               basePath="/fleet/partner/appointments"
               extraSearch={extraSearch || undefined}

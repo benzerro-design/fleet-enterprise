@@ -1,5 +1,6 @@
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { VehicleRecord } from "@/lib/fleet-api";
+import { defaultConsumptionPeriod, type ConsumptionPayload } from "@/lib/consumption-types";
 import type {
   OdometerReadingsPayload,
   VehicleAcquisitionPayload,
@@ -227,6 +228,23 @@ export type VehicleDetailData = {
   maintenancePlanPayload: MaintenancePlanPayload;
   driverAssignments: DriverAssignmentRecord[];
 };
+
+export async function loadVehicleConsumption(
+  id: string,
+  periodFrom?: string,
+  periodTo?: string,
+): Promise<ConsumptionPayload | null> {
+  const defaults = defaultConsumptionPeriod();
+  const from = periodFrom?.trim() || defaults.from;
+  const to = periodTo?.trim() || defaults.to;
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/consumption?from=${from}&to=${to}`);
+    if (!res?.ok) return null;
+    return (await res.json()) as ConsumptionPayload;
+  } catch {
+    return null;
+  }
+}
 
 export async function loadVehicleDetail(id: string): Promise<VehicleDetailData | null> {
   const vehicle = await getVehicle(id);

@@ -9,7 +9,9 @@ import { VehicleDriversPanel } from "@/components/fleet/VehicleDriversPanel";
 import { VehicleMaintenancePlanTab } from "@/components/fleet/VehicleMaintenancePlanTab";
 import { VehicleOdometerTab } from "@/components/fleet/VehicleOdometerTab";
 import { VehiclePhotosTab } from "@/components/fleet/VehiclePhotosTab";
+import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import type { VehicleRecord } from "@/lib/fleet-api";
+import { defaultConsumptionPeriod, type ConsumptionPayload } from "@/lib/consumption-types";
 import type {
   MaintenancePlanPayload,
   OdometerReadingsPayload,
@@ -28,6 +30,7 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "odometer", label: "Odometru" },
   { id: "maintenance_plan", label: "Plan Mentenanță" },
   { id: "drivers", label: "Șoferi" },
+  { id: "consumption", label: "Consum" },
 ];
 
 type Props = {
@@ -43,6 +46,9 @@ type Props = {
   odometer: OdometerReadingsPayload;
   maintenancePlan: MaintenancePlanPayload;
   driverAssignments: DriverAssignmentRecord[];
+  consumption: ConsumptionPayload | null;
+  /** true după fetch server (tab=consumption); false = încă nu s-a cerut */
+  consumptionRequested?: boolean;
 };
 
 export function VehicleProfileTabs({
@@ -58,6 +64,8 @@ export function VehicleProfileTabs({
   odometer,
   maintenancePlan,
   driverAssignments,
+  consumption,
+  consumptionRequested = false,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,7 +78,8 @@ export function VehicleProfileTabs({
       t === "odometer" ||
       t === "basic" ||
       t === "maintenance_plan" ||
-      t === "drivers"
+      t === "drivers" ||
+      t === "consumption"
     ) {
       return t;
     }
@@ -141,6 +150,41 @@ export function VehicleProfileTabs({
             initialAssignments={driverAssignments}
             canWrite={write}
           />
+        ) : null}
+        {active === "consumption" ? (
+          <div className="space-y-6">
+            <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+              <input type="hidden" name="tab" value="consumption" />
+              <div>
+                <label className="text-xs text-zinc-500">De la</label>
+                <input
+                  name="periodFrom"
+                  type="date"
+                  defaultValue={searchParams.get("periodFrom") ?? defaultConsumptionPeriod().from}
+                  className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500">Până la</label>
+                <input
+                  name="periodTo"
+                  type="date"
+                  defaultValue={searchParams.get("periodTo") ?? defaultConsumptionPeriod().to}
+                  className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                />
+              </div>
+              <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
+                Aplică
+              </button>
+            </form>
+            {consumption ? (
+              <TripsConsumptionView data={consumption} />
+            ) : consumptionRequested ? (
+              <p className="text-sm text-amber-400">Nu am putut încărca consumul pentru acest vehicul.</p>
+            ) : (
+              <p className="text-sm text-zinc-500">Se încarcă consumul…</p>
+            )}
+          </div>
         ) : null}
       </div>
     </section>

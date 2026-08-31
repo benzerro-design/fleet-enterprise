@@ -18,6 +18,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import { SupplierInvitesService } from '../suppliers/supplier-invites.service';
 
 @Controller('partner-invites')
@@ -67,22 +69,33 @@ export class SupplierInvitesController {
   constructor(private readonly invites: SupplierInvitesService) {}
 
   @Get()
-  @Roles(MembershipRole.tenant_admin)
-  list(@TenantId() tenantSlug: string, @Param('supplierId') supplierId: string) {
-    return this.invites.listForSupplier(tenantSlug, supplierId);
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  list(
+    @TenantId() tenantSlug: string,
+    @Param('supplierId') supplierId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.invites.listForSupplier(tenantSlug, supplierId, access);
   }
 
   @Post()
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
   create(
     @TenantId() tenantSlug: string,
     @Param('supplierId') supplierId: string,
     @Body() body: { email?: string; role?: SupplierRole },
     @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
   ) {
     const email = body.email?.trim();
     if (!email) throw new BadRequestException('email is required');
-    return this.invites.create(tenantSlug, supplierId, { email, role: body.role }, actorUserId);
+    return this.invites.create(
+      tenantSlug,
+      supplierId,
+      { email, role: body.role },
+      actorUserId,
+      access,
+    );
   }
 }
-
+

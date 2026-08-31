@@ -32,9 +32,12 @@ type Props = {
   vehicles: VehicleOption[];
   initialCreateScheduledAt?: string;
   linkTicketId?: string | null;
+  linkServiceCaseId?: string | null;
   initialVehicleId?: string;
+  initialVehicleLabel?: string;
   serviceTypeCode?: string;
   partnerMode?: boolean;
+  partnerSupplier?: { id: string; code: string; legalName: string };
   /** Notifică shell-ul când e activă reprogramarea (pick din calendar). */
   onRescheduleEditingChange?: (editing: boolean) => void;
   /** Deschide direct editarea datei (ex. din listă „Propune altă dată”). */
@@ -58,9 +61,12 @@ export function SchedulerInspector({
   vehicles,
   initialCreateScheduledAt,
   linkTicketId,
+  linkServiceCaseId,
   initialVehicleId,
+  initialVehicleLabel,
   serviceTypeCode,
   partnerMode,
+  partnerSupplier,
   onRescheduleEditingChange,
   openInRescheduleMode,
   calendarPickAt,
@@ -124,6 +130,12 @@ export function SchedulerInspector({
       setVehicleId(initialVehicleId);
     }
   }, [createMode, initialVehicleId]);
+
+  useEffect(() => {
+    if (createMode && partnerMode && partnerSupplier) {
+      setSupplierId(partnerSupplier.id);
+    }
+  }, [createMode, partnerMode, partnerSupplier]);
 
   async function markVehicleService(
     workOrderId: string,
@@ -195,6 +207,8 @@ export function SchedulerInspector({
           location: location || null,
           recurrenceRule: recurrenceRule !== "none" ? recurrenceRule : undefined,
           ...(linkTicketId ? { sourceTicketId: linkTicketId } : {}),
+          ...(linkServiceCaseId ? { serviceCaseId: linkServiceCaseId } : {}),
+          ...(partnerMode ? { createdBySupplier: true } : {}),
         }),
       });
       if (!res.ok) {
@@ -422,23 +436,44 @@ export function SchedulerInspector({
         <div className="space-y-3 overflow-y-auto">
           <div>
             <label className={OPS_LABEL_CLASS}>Vehicul</label>
-            <select
-              value={vehicleId}
-              onChange={(e) => setVehicleId(e.target.value)}
-              disabled={!!linkTicketId && !!initialVehicleId}
-              className={OPS_INPUT_CLASS}
-            >
-              <option value="">Selectează…</option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.registrationNumber} · {v.clientId}
-                </option>
-              ))}
-            </select>
+            {partnerMode && initialVehicleId ? (
+              <p className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                {vehicles.find((v) => v.id === initialVehicleId)?.registrationNumber ||
+                  initialVehicleLabel ||
+                  "Vehicul din comandă"}
+              </p>
+            ) : (
+              <select
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                disabled={!!linkTicketId && !!initialVehicleId}
+                className={OPS_INPUT_CLASS}
+              >
+                <option value="">Selectează…</option>
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.registrationNumber} · {v.clientId}
+                  </option>
+                ))}
+              </select>
+            )}
+            {partnerMode && !vehicleId ? (
+              <p className="mt-1 text-[11px] text-amber-200">
+                Deschide programatorul din WO ca să preiei vehiculul dosarului.
+              </p>
+            ) : null}
           </div>
           <div>
             <label className={OPS_LABEL_CLASS}>Furnizor</label>
-            <SupplierCombobox value={supplierId} onChange={setSupplierId} serviceTypeCode={serviceTypeCode} />
+            {partnerMode ? (
+              <p className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                {partnerSupplier
+                  ? `${partnerSupplier.code} · ${partnerSupplier.legalName}`
+                  : "Contul tău de furnizor"}
+              </p>
+            ) : (
+              <SupplierCombobox value={supplierId} onChange={setSupplierId} serviceTypeCode={serviceTypeCode} />
+            )}
           </div>
           <div>
             <label className={OPS_LABEL_CLASS}>Titlu</label>
@@ -456,6 +491,7 @@ export function SchedulerInspector({
             <label className={OPS_LABEL_CLASS}>Locație</label>
             <input value={location} onChange={(e) => setLocation(e.target.value)} className={OPS_INPUT_CLASS} />
           </div>
+          {!partnerMode ? (
           <div>
             <label className={OPS_LABEL_CLASS}>Recurență</label>
             <select value={recurrenceRule} onChange={(e) => setRecurrenceRule(e.target.value)} className={OPS_INPUT_CLASS}>
@@ -469,15 +505,26 @@ export function SchedulerInspector({
               <p className="mt-1 text-[10px] text-zinc-500">Se generează 8 apariții viitoare în serie.</p>
             ) : null}
           </div>
+          ) : null}
         </div>
         <button
           type="button"
-          disabled={pending || !vehicleId || !scheduledAt}
+          disabled={
+            pending ||
+            !vehicleId ||
+            !scheduledAt ||
+            (partnerMode && !(linkTicketId || linkServiceCaseId))
+          }
           onClick={() => void submitCreate()}
           className="mt-4 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         >
           Salvează programarea
         </button>
+        {partnerMode && !(linkTicketId || linkServiceCaseId) ? (
+          <p className="mt-2 text-[11px] text-amber-200">
+            Programarea de reparație se creează din WO (Reprogramare → Deschide programatorul).
+          </p>
+        ) : null}
       </aside>
     );
   }

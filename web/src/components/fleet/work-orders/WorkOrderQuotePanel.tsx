@@ -183,8 +183,10 @@ type Props = {
   workOrderId: string;
   canWrite: boolean;
   canApprove?: boolean;
-  /** Factură + cost din deviz — doar flotă (nu partener). */
+  /** Factură + cost din deviz — flotă și partener (pe WO; partenerul nu are tichet). */
   canPostCost?: boolean;
+  /** Ascunde link-ul către /fleet/costs (portal partener). */
+  isPartner?: boolean;
   sheetLayout?: boolean;
   estimatedRepairAt?: string | null;
   quoteLocked?: boolean;
@@ -219,6 +221,7 @@ export function WorkOrderQuotePanel({
   allowPartsOrderLaunch = false,
   canLaunchPartsOrders = false,
   ticketSettlement = null,
+  isPartner = false,
 }: Props) {
   const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
@@ -1265,6 +1268,11 @@ export function WorkOrderQuotePanel({
           {activeQuote.status === "approved" ? (
             <div className="mt-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
               <p className="text-xs uppercase text-zinc-500">Factură & cost</p>
+              {isPartner && !activeQuote.invoicedAt ? (
+                <p className="text-[11px] text-zinc-500">
+                  Încarcă PDF-ul facturii și înregistrează numărul — fără acces la tichetul flotei.
+                </p>
+              ) : null}
 
               {activeQuote.invoicedAt ? (
                 <p className="text-sm text-emerald-300">
@@ -1330,10 +1338,15 @@ export function WorkOrderQuotePanel({
 
               {activeQuote.costEntryId ? (
                 <p className="text-sm">
-                  Cost înregistrat:{" "}
-                  <Link href={`/fleet/costs/${activeQuote.costEntryId}`} className="text-sky-300 hover:underline">
-                    deschide costul
-                  </Link>
+                  Cost înregistrat
+                  {!isPartner ? (
+                    <>
+                      {": "}
+                      <Link href={`/fleet/costs/${activeQuote.costEntryId}`} className="text-sky-300 hover:underline">
+                        deschide costul
+                      </Link>
+                    </>
+                  ) : null}
                   {" · "}
                   {formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}
                 </p>

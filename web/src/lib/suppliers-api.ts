@@ -52,6 +52,13 @@ export type SupplierListPayload = {
   pageSize: number;
 };
 
+export type SupplierClientAllocationItem = {
+  clientId: string;
+  code: string;
+  legalName: string;
+  status: string;
+};
+
 export type SupplierStats = {
   total: number;
   active: number;

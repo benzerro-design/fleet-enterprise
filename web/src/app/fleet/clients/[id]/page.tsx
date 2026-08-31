@@ -13,6 +13,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       data={data}
       canEditClient={canManageFleet(auth)}
       canWriteFleet={canWriteFleetOps(auth)}
+      canAllocateSuppliers={canManageFleet(auth)}
+      canInviteTeam={canManageFleet(auth) || canWriteFleetOps(auth)}
     />
   );
 }

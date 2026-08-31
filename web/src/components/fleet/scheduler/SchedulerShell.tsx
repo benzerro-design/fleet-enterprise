@@ -45,6 +45,8 @@ type Props = {
   initialInbox?: SchedulerInboxFilter;
   initialTicketId?: string;
   initialVehicleId?: string;
+  initialVehicleLabel?: string;
+  initialServiceCaseId?: string;
   initialCreate?: boolean;
   /** După repropunere / reprogramare, navighează înapoi la tichet. */
   returnToTicket?: boolean;
@@ -78,6 +80,8 @@ export function SchedulerShell({
   initialInbox = "all",
   initialTicketId,
   initialVehicleId,
+  initialVehicleLabel,
+  initialServiceCaseId,
   initialCreate = false,
   returnToTicket = false,
   basePath = "/fleet/scheduler",
@@ -103,10 +107,14 @@ export function SchedulerShell({
   const [createPrefillAt, setCreatePrefillAt] = useState<string | undefined>();
   const [linkTicketId] = useState(initialTicketId ?? null);
   const [linkVehicleId] = useState(initialVehicleId ?? null);
+  const [linkVehicleLabel] = useState(initialVehicleLabel ?? null);
+  const [linkServiceCaseId] = useState(initialServiceCaseId ?? null);
   const [returnTicketId] = useState(() =>
     returnToTicket && initialTicketId ? initialTicketId : null,
   );
-  const [createMode, setCreateMode] = useState(() => !!(initialCreate && initialTicketId && canWrite));
+  const [createMode, setCreateMode] = useState(
+    () => !!(initialCreate && canWrite && (initialTicketId || initialVehicleId || initialServiceCaseId)),
+  );
   const [mobileDetail, setMobileDetail] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   /** Repropunere / edit interval — click pe slot umple data, nu deschide programare nouă. */
@@ -119,6 +127,21 @@ export function SchedulerShell({
     if (!serviceTypeCode) return suppliers;
     return suppliers.filter((s) => s.services?.includes(serviceTypeCode));
   }, [suppliers, serviceTypeCode]);
+
+  const keepCaseLink = !!(linkTicketId || linkVehicleId || linkServiceCaseId);
+  const vehiclesForCreate = useMemo(() => {
+    if (!linkVehicleId) return vehicles;
+    if (vehicles.some((v) => v.id === linkVehicleId)) return vehicles;
+    return [
+      {
+        id: linkVehicleId,
+        registrationNumber: linkVehicleLabel || "Vehicul dosar",
+        clientId: "",
+      },
+      ...vehicles,
+    ];
+  }, [vehicles, linkVehicleId, linkVehicleLabel]);
+  const partnerSupplier = partnerMode && suppliers.length > 0 ? suppliers[0] : undefined;
 
   useEffect(() => {
     setSupplierFilter(visibleSuppliers.map((s) => s.id));
@@ -152,12 +175,17 @@ export function SchedulerShell({
         inbox: opts.inbox ?? inboxFilter,
         ticket: opts.clearTicketLink && !returnTicketId ? undefined : linkTicketId ?? returnTicketId ?? undefined,
         vehicle: opts.clearTicketLink && !returnTicketId ? undefined : linkVehicleId ?? undefined,
-        create: !opts.clearTicketLink && createMode && linkTicketId ? true : undefined,
+        reg: opts.clearTicketLink && !returnTicketId ? undefined : linkVehicleLabel ?? undefined,
+        case: opts.clearTicketLink && !returnTicketId ? undefined : linkServiceCaseId ?? undefined,
+        create:
+          !opts.clearTicketLink && createMode && (linkTicketId || linkVehicleId || linkServiceCaseId)
+            ? true
+            : undefined,
         returnToTicket: !!returnTicketId,
       });
       window.history.replaceState(null, "", href);
     },
-    [basePath, extraSearch, weekStart, viewMode, inboxFilter, linkTicketId, linkVehicleId, createMode, returnTicketId],
+    [basePath, extraSearch, weekStart, viewMode, inboxFilter, linkTicketId, linkVehicleId, linkVehicleLabel, linkServiceCaseId, createMode, returnTicketId],
   );
 
   const load = useCallback(
@@ -334,7 +362,7 @@ export function SchedulerShell({
     setRescheduleEditing(false);
     setReschedulePickAt(undefined);
     if (isMobile) setMobileDetail(true);
-    syncUrlHistory({ select: null, clearTicketLink: true });
+    syncUrlHistory({ select: null, clearTicketLink: !keepCaseLink });
   }
 
   function handleSlotClick(when: Date) {
@@ -501,7 +529,7 @@ export function SchedulerShell({
               </button>
             ))}
           </div>
-          {canWrite ? (
+          {canWrite && (!partnerMode || keepCaseLink) ? (
             <button
               type="button"
               onClick={() => {
@@ -512,7 +540,7 @@ export function SchedulerShell({
                 setReschedulePickAt(undefined);
                 setProposeRescheduleForId(null);
                 if (isMobile) setMobileDetail(true);
-                syncUrlHistory({ select: null, clearTicketLink: true });
+                syncUrlHistory({ select: null, clearTicketLink: !keepCaseLink });
               }}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
             >
@@ -572,10 +600,13 @@ export function SchedulerShell({
             }}
             onReturnToTicket={returnTicketId ? goBackToTicket : undefined}
             returnTicketId={returnTicketId}
-            vehicles={vehicles}
+            vehicles={vehiclesForCreate}
             initialCreateScheduledAt={createPrefillAt}
             linkTicketId={linkTicketId}
+            linkServiceCaseId={linkServiceCaseId}
             initialVehicleId={linkVehicleId ?? undefined}
+            initialVehicleLabel={linkVehicleLabel ?? undefined}
+            partnerSupplier={partnerSupplier}
             serviceTypeCode={serviceTypeCode || undefined}
           />
         ) : null}
@@ -612,10 +643,13 @@ export function SchedulerShell({
           }}
           onReturnToTicket={returnTicketId ? goBackToTicket : undefined}
           returnTicketId={returnTicketId}
-          vehicles={vehicles}
+          vehicles={vehiclesForCreate}
           initialCreateScheduledAt={createPrefillAt}
           linkTicketId={linkTicketId}
+          linkServiceCaseId={linkServiceCaseId}
           initialVehicleId={linkVehicleId ?? undefined}
+          initialVehicleLabel={linkVehicleLabel ?? undefined}
+          partnerSupplier={partnerSupplier}
           serviceTypeCode={serviceTypeCode || undefined}
         />
       ) : null}

@@ -54,6 +54,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ path?: st
   return proxy(req, ctx);
 }
 
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  return proxy(req, ctx);
+}
+
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
   return proxy(req, ctx);
 }

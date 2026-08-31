@@ -6,18 +6,30 @@ import { AccessContextService } from './access-context.service';
 import { AccessScopeInterceptor } from './access-scope.interceptor';
 import { ClientMembershipsController } from './client-memberships.controller';
 import { ClientMembershipsService } from './client-memberships.service';
+import {
+  ClientInvitesController,
+  TenantInvitesController,
+  UserInvitesPublicController,
+} from './user-invites.controller';
+import { UserInvitesService } from './user-invites.service';
 
 @Module({
   imports: [AuthModule, AuditModule],
-  controllers: [ClientMembershipsController],
+  controllers: [
+    ClientMembershipsController,
+    TenantInvitesController,
+    ClientInvitesController,
+    UserInvitesPublicController,
+  ],
   providers: [
     AccessContextService,
     ClientMembershipsService,
+    UserInvitesService,
     {
       provide: APP_INTERCEPTOR,
       useClass: AccessScopeInterceptor,
     },
   ],
-  exports: [AccessContextService, ClientMembershipsService],
+  exports: [AccessContextService, ClientMembershipsService, UserInvitesService],
 })
 export class IamModule {}
