@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { InviteCopyLink } from "@/components/fleet/InviteCopyLink";
 import { clientsBrowserBase } from "@/lib/clients-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 
@@ -102,7 +103,9 @@ export function ClientInvitePanel({ clientId, clientCode }: Props) {
     <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
       <div>
         <h3 className="text-sm font-semibold text-zinc-200">Invită în echipa clientului</h3>
-        <p className="mt-1 text-xs text-zinc-500">Link 7 zile — utilizatorul își alege parola.</p>
+        <p className="mt-1 text-xs text-zinc-500">
+          Link 7 zile — utilizatorul își alege parola. Nu se trimite email — copiază linkul.
+        </p>
       </div>
       <div className="flex flex-wrap gap-2">
         <input
@@ -151,14 +154,18 @@ export function ClientInvitePanel({ clientId, clientCode }: Props) {
       {lastInvite ? (
         <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-xs text-emerald-200">
           <p>Link pentru {lastInvite.email}:</p>
-          <p className="mt-1 break-all font-mono text-emerald-100">{lastInvite.inviteUrl}</p>
+          <InviteCopyLink url={lastInvite.inviteUrl} />
         </div>
       ) : null}
       {items.length > 0 ? (
-        <ul className="space-y-1 text-xs text-zinc-500">
+        <ul className="space-y-2 text-xs text-zinc-400">
           {items.map((i) => (
-            <li key={i.id}>
-              {i.email} · expiră {new Date(i.expiresAt).toLocaleDateString("ro-RO")}
+            <li key={i.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {i.email} · {i.clientRole ?? "echipă"} · expiră{" "}
+                {new Date(i.expiresAt).toLocaleDateString("ro-RO")}
+              </span>
+              {i.inviteUrl ? <InviteCopyLink url={i.inviteUrl} compact /> : null}
             </li>
           ))}
         </ul>

@@ -278,7 +278,7 @@ export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
   items: [
     {
       kind: "link",
-      label: "Membri & useri client",
+      label: "Membri",
       href: "/fleet/members",
       phase: "live",
       adminOnly: true,

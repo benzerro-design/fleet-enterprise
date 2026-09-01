@@ -73,6 +73,8 @@ export type WorkOrderSupplierSnapshot = {
   city: string | null;
   contactPhone: string | null;
   contactEmail: string | null;
+  partsDiscountPercent: number;
+  laborDiscountPercent: number;
 };
 
 export type WorkOrderListRow = {
@@ -344,6 +346,8 @@ export class WorkOrdersService {
           version: true,
           totalNetCents: true,
           totalVatCents: true,
+          approvedNetCents: true,
+          approvedVatCents: true,
           currency: true,
           submittedAt: true,
           approvedAt: true,
@@ -360,6 +364,8 @@ export class WorkOrdersService {
           version: number;
           totalNetCents: number;
           totalVatCents: number;
+          approvedNetCents?: number | null;
+          approvedVatCents?: number | null;
           currency: string;
           submittedAt: Date | null;
           approvedAt: Date | null;
@@ -381,7 +387,10 @@ export class WorkOrdersService {
     return {
       status: quote.status,
       version: quote.version,
-      totalGrossCents: quote.totalNetCents + quote.totalVatCents,
+      totalGrossCents:
+        quote.approvedNetCents != null && quote.approvedVatCents != null
+          ? quote.approvedNetCents + quote.approvedVatCents
+          : quote.totalNetCents + quote.totalVatCents,
       currency: quote.currency,
       submittedAt: quote.submittedAt?.toISOString() ?? null,
       approvedAt: quote.approvedAt?.toISOString() ?? null,
@@ -654,6 +663,8 @@ export class WorkOrdersService {
             city: true,
             contactPhone: true,
             contactEmail: true,
+            partsDiscountPercent: true,
+            laborDiscountPercent: true,
           },
         },
         serviceCase: {
@@ -716,6 +727,8 @@ export class WorkOrdersService {
             currency: true,
             totalNetCents: true,
             totalVatCents: true,
+            approvedNetCents: true,
+            approvedVatCents: true,
             submittedAt: true,
             approvedAt: true,
             invoicedAt: true,
@@ -799,6 +812,8 @@ export class WorkOrdersService {
             city: row.supplier.city,
             contactPhone: row.supplier.contactPhone,
             contactEmail: row.supplier.contactEmail,
+            partsDiscountPercent: Number(row.supplier.partsDiscountPercent) || 0,
+            laborDiscountPercent: Number(row.supplier.laborDiscountPercent) || 0,
           }
         : null,
       ticketSubject: row.serviceCase.sourceTicket?.subject ?? null,
@@ -849,7 +864,10 @@ export class WorkOrdersService {
         ? {
             status: primary.status,
             version: primary.version,
-            totalGrossCents: primary.totalNetCents + primary.totalVatCents,
+            totalGrossCents:
+              primary.approvedNetCents != null && primary.approvedVatCents != null
+                ? primary.approvedNetCents + primary.approvedVatCents
+                : primary.totalNetCents + primary.totalVatCents,
             currency: primary.currency,
             submittedAt: primary.submittedAt?.toISOString() ?? null,
             approvedAt: primary.approvedAt?.toISOString() ?? null,

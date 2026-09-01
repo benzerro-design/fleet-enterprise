@@ -40,7 +40,7 @@ export default async function UserStrategyPage() {
           href="/fleet/members"
           className="inline-flex w-fit rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
         >
-          Membri & useri client
+          Membri & invitații
         </Link>
       </div>
 

@@ -3,10 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { LogoutButton } from "@/app/fleet/logout-button";
 import { PartnerNotificationBell } from "@/components/fleet/partner/PartnerNotificationBell";
+import { PartnerPendingActionsList } from "@/components/fleet/partner/PartnerPendingActionsList";
 import {
   PartnerSupplierSelector,
   type PartnerSupplierOption,
 } from "@/components/fleet/partner/PartnerAdminChrome";
+import {
+  partnerBrowserSupplierQuery,
+  partnerPendingActionsBrowserBase,
+  type PartnerPendingAction,
+} from "@/lib/partner-pending-actions-api";
 
 export type PartnerTopBarContext = {
   pageTitle: string;
@@ -31,6 +37,8 @@ type Props = {
 export function PartnerTopBar({ ctx }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [pendingItems, setPendingItems] = useState<PartnerPendingAction[]>([]);
+  const [pendingCount, setPendingCount] = useState(ctx.pendingTotal ?? 0);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -49,7 +57,29 @@ export function PartnerTopBar({ ctx }: Props) {
     };
   }, [menuOpen]);
 
-  const pending = ctx.pendingTotal ?? 0;
+  useEffect(() => {
+    if (!menuOpen) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${partnerPendingActionsBrowserBase}${partnerBrowserSupplierQuery()}`, {
+          cache: "no-store",
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { items?: PartnerPendingAction[]; total?: number };
+        if (cancelled) return;
+        setPendingItems(data.items ?? []);
+        if (typeof data.total === "number") setPendingCount(data.total);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [menuOpen]);
+
+  const pending = pendingCount;
 
   return (
     <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950 px-4 lg:px-6">
@@ -107,7 +137,7 @@ export function PartnerTopBar({ ctx }: Props) {
           {menuOpen ? (
             <div
               role="menu"
-              className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-zinc-800 bg-zinc-950 py-1 shadow-xl"
+              className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border border-zinc-800 bg-zinc-950 py-1 shadow-xl"
             >
               <div className="border-b border-zinc-800 px-3 py-2">
                 <p className="truncate text-xs font-medium text-zinc-200">{ctx.userEmail}</p>
@@ -115,9 +145,12 @@ export function PartnerTopBar({ ctx }: Props) {
                 <p className="mt-1 font-mono text-[10px] text-zinc-600">tenant: {ctx.tenantSlug}</p>
               </div>
               {pending > 0 ? (
-                <p className="px-3 py-2 text-[10px] text-amber-300">
-                  {pending} acțiuni în așteptare
-                </p>
+                <PartnerPendingActionsList
+                  items={pendingItems}
+                  total={pending}
+                  compact
+                  onNavigate={() => setMenuOpen(false)}
+                />
               ) : null}
               <div className="border-t border-zinc-800 px-3 py-2">
                 <LogoutButton />

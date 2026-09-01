@@ -39,6 +39,12 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
   const [city, setCity] = useState(initial?.city ?? "");
   const [county, setCounty] = useState(initial?.county ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [partsDiscountPercent, setPartsDiscountPercent] = useState(
+    initial?.partsDiscountPercent != null ? String(initial.partsDiscountPercent) : "0",
+  );
+  const [laborDiscountPercent, setLaborDiscountPercent] = useState(
+    initial?.laborDiscountPercent != null ? String(initial.laborDiscountPercent) : "0",
+  );
   const [services, setServices] = useState<string[]>(initial?.services ?? []);
   const [clientIds, setClientIds] = useState<string[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
@@ -82,6 +88,8 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
       city: city.trim() || null,
       county: county.trim() || null,
       notes: notes.trim() || null,
+      partsDiscountPercent: parseFloat(partsDiscountPercent.replace(",", ".")) || 0,
+      laborDiscountPercent: parseFloat(laborDiscountPercent.replace(",", ".")) || 0,
       services,
       ...(mode === "create" && clientIds.length ? { clientIds } : {}),
     };
@@ -168,7 +176,33 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
           </OpsFormField>
         </div>
       </OpsFormSection>
-      <OpsFormSection number={3} title="Servicii prestate">
+      <OpsFormSection number={3} title="Discount default pe deviz">
+        <p className="mb-3 text-xs text-zinc-500">
+          Se aplică pe linii noi (și la import PDF dacă linia nu are discount). Poți schimba per linie pe
+          comandă. Dacă completezi %, suma pe linie e ignorată.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <OpsFormField label="Discount piese (%)" hint="0–100">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={partsDiscountPercent}
+              onChange={(e) => setPartsDiscountPercent(e.target.value)}
+              className={OPS_INPUT_CLASS}
+            />
+          </OpsFormField>
+          <OpsFormField label="Discount manoperă (%)" hint="0–100">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={laborDiscountPercent}
+              onChange={(e) => setLaborDiscountPercent(e.target.value)}
+              className={OPS_INPUT_CLASS}
+            />
+          </OpsFormField>
+        </div>
+      </OpsFormSection>
+      <OpsFormSection number={4} title="Servicii prestate">
         {mode === "edit" && initial ? (
           <SupplierServicesEditor
             supplierId={initial.id}
@@ -211,7 +245,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={OPS_INPUT_CLASS} />
       </OpsFormField>
       {mode === "create" ? (
-        <OpsFormSection number={4} title="Alocare clienți">
+        <OpsFormSection number={5} title="Alocare clienți">
           <p className="mb-3 text-xs text-zinc-500">
             Opțional. Managerul clientului vede furnizorul în costuri doar după alocare. Poți aloca și ulterior din
             profil.

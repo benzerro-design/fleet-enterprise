@@ -162,7 +162,32 @@ export function SupplierProfileTabs({
           </div>
         ) : null}
 
-        {tab !== "identitate" && tab !== "documente" && tab !== "tip" && tab !== "clienti" ? (
+        {tab === "tarife" ? (
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-zinc-500">Discount piese</dt>
+              <dd className="mt-1 text-sm text-zinc-200">
+                {supplier ? `${supplier.partsDiscountPercent ?? 0}%` : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">Discount manoperă</dt>
+              <dd className="mt-1 text-sm text-zinc-200">
+                {supplier ? `${supplier.laborDiscountPercent ?? 0}%` : "—"}
+              </dd>
+            </div>
+            <p className="sm:col-span-2 text-xs text-zinc-500">
+              Default pe linii noi de deviz (piese / manoperă). Se poate modifica per linie pe comandă.
+              Valorile se editează din fișa furnizorului (admin flotă).
+            </p>
+          </dl>
+        ) : null}
+
+        {tab !== "identitate" &&
+        tab !== "documente" &&
+        tab !== "tip" &&
+        tab !== "clienti" &&
+        tab !== "tarife" ? (
           <p className="text-sm text-zinc-500">
             Conținut tab „{SUPPLIER_PROFILE_TABS.find((t) => t.id === tab)?.label}” — urmează în faza P2 profil furnizor.
           </p>

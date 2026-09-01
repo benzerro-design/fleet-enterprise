@@ -1105,6 +1105,10 @@ model Supplier {
   city         String?
   county       String?
   notes        String?
+  /// Default pe linii noi de tip piese (0–100). UAT-034.
+  partsDiscountPercent Float    @default(0)
+  /// Default pe linii noi de tip manoperă (0–100). UAT-034.
+  laborDiscountPercent Float    @default(0)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1635,6 +1639,9 @@ model WorkOrderQuoteLine {
   quantity       Float                  @default(1)
   unitNetCents   Int
   vatRatePercent Int                    @default(19)
+  /// 0–100. Dacă > 0, are prioritate față de discountCents.
+  discountPercent Float                 @default(0)
+  discountCents  Int                    @default(0)
   partNumber     String?
   partCodeExempt Boolean                @default(false)
   partsOrderStatus QuotePartsOrderStatus @default(none)

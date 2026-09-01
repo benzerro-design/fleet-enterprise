@@ -964,7 +964,7 @@ export function WorkOrderSheetShell({
         workOrderId={wo.id}
         canWrite={canWrite}
         canApprove={canApprove}
-        canPostCost={canWrite}
+        canPostCost={canWrite && !isPartner}
         isPartner={isPartner}
         sheetLayout
         estimatedRepairAt={wo.estimatedRepairAt}
@@ -979,6 +979,14 @@ export function WorkOrderSheetShell({
         allowPartsOrderLaunch={workOrderSettings.allowPartsOrderLaunch}
         canLaunchPartsOrders={isPartner ? canWrite : canApprove}
         ticketSettlement={ticketSettlement}
+        supplierDiscounts={
+          wo.supplier
+            ? {
+                partsDiscountPercent: wo.supplier.partsDiscountPercent ?? 0,
+                laborDiscountPercent: wo.supplier.laborDiscountPercent ?? 0,
+              }
+            : null
+        }
       />
 
       <div className="border-t border-zinc-800 p-4">

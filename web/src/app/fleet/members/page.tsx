@@ -7,6 +7,8 @@ import {
   type ClientOption,
 } from "@/components/fleet/ClientMembershipsPanel";
 import { MembersAdminPanel } from "@/components/fleet/MembersAdminPanel";
+import { MembersInviteHub, parseMembersHubTab } from "@/components/fleet/MembersInviteHub";
+import { SupplierInvitesHubPanel, type SupplierInviteOption } from "@/components/fleet/SupplierInvitesHubPanel";
 import { TenantInvitePanel } from "@/components/fleet/TenantInvitePanel";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
@@ -46,16 +48,33 @@ async function fetchClients(): Promise<ClientOption[]> {
   }));
 }
 
-export default async function FleetMembersPage() {
+async function fetchSuppliers(): Promise<SupplierInviteOption[]> {
+  const res = await apiServerFetch("/suppliers?status=active&pageSize=200");
+  if (!res?.ok) return [];
+  const data = (await res.json()) as {
+    items?: Array<{ id: string; code: string; legalName: string }>;
+  };
+  return (data.items ?? []).map((s) => ({
+    id: s.id,
+    code: s.code,
+    legalName: s.legalName,
+  }));
+}
+
+type PageProps = { searchParams: Promise<{ tab?: string }> };
+
+export default async function FleetMembersPage({ searchParams }: PageProps) {
   const auth = await getAuthMeResult();
   if (!canManageFleet(auth)) {
     redirect("/fleet/vehicles");
   }
 
-  const [data, clientMemberships, clients] = await Promise.all([
+  const sp = await searchParams;
+  const [data, clientMemberships, clients, suppliers] = await Promise.all([
     fetchMembers(),
     fetchClientMemberships(),
     fetchClients(),
+    fetchSuppliers(),
   ]);
   const currentUserEmail = auth.ok ? auth.me.email : undefined;
 
@@ -64,10 +83,10 @@ export default async function FleetMembersPage() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Membri & useri client</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Membri & invitații</h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-            Echipa FlotaX (tenant) și angajații clienților contractuali — invite cu link (IAM-002), fără parolă setată de admin. Hartă ierarhie L &amp;
-            profile F/T/G:{" "}
+            Abonat (L*), client (L1/L0) și furnizor (R*). Invite cu link 7 zile — fără email SMTP; copiază
+            linkul din listă. Hartă ierarhie:{" "}
             <Link href="/fleet/user-strategy" className="text-emerald-400 hover:underline">
               Strategie useri
             </Link>
@@ -82,24 +101,21 @@ export default async function FleetMembersPage() {
         </Link>
       </div>
 
-      <div className="space-y-12">
-        <section>
-          <h2 className="mb-4 text-lg font-medium text-zinc-200">Echipa FlotaX (tenant)</h2>
-          <div className="mb-6">
+      <MembersInviteHub
+        initialTab={parseMembersHubTab(sp.tab)}
+        abonat={
+          <section className="space-y-6">
             <TenantInvitePanel />
-          </div>
-          {!data ? (
-            <p className="text-amber-400">Nu am putut încărca membrii. Verifică API-ul.</p>
-          ) : (
-            <MembersAdminPanel members={data.members} currentUserEmail={currentUserEmail} />
-          )}
-        </section>
-
-        <section>
-          <h2 className="mb-4 text-lg font-medium text-zinc-200">Useri client (organizații)</h2>
-          <ClientMembershipsPanel memberships={clientMemberships} clients={clients} />
-        </section>
-      </div>
+            {!data ? (
+              <p className="text-amber-400">Nu am putut încărca membrii. Verifică API-ul.</p>
+            ) : (
+              <MembersAdminPanel members={data.members} currentUserEmail={currentUserEmail} />
+            )}
+          </section>
+        }
+        client={<ClientMembershipsPanel memberships={clientMemberships} clients={clients} />}
+        furnizor={<SupplierInvitesHubPanel suppliers={suppliers} />}
+      />
     </FleetPageMain>
   );
 }

@@ -7,10 +7,11 @@ import { PartnerMailService } from './partner-mail.service';
 import { PartnerNotificationProcessor } from './partner-notification.processor';
 import { PartnerNotificationService } from './partner-notification.service';
 import { PartnerNotificationsController } from './partner-notifications.controller';
+import { PartnerPendingActionsController } from './partner-pending-actions.controller';
 
 @Module({
   imports: [AuthModule],
-  controllers: [PartnerAdminController, PartnerNotificationsController],
+  controllers: [PartnerAdminController, PartnerNotificationsController, PartnerPendingActionsController],
   providers: [
     PartnerAdminService,
     PartnerMailService,

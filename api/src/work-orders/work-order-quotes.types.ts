@@ -11,6 +11,9 @@ export type QuoteLineInput = {
   quantity?: number;
   unitNetCents: number;
   vatRatePercent?: number;
+  /** 0–100. Dacă > 0, are prioritate față de discountCents. */
+  discountPercent?: number | null;
+  discountCents?: number | null;
   partNumber?: string | null;
   partCodeExempt?: boolean;
   approvalStatus?: WorkOrderQuoteLineApproval;
@@ -21,6 +24,11 @@ export type QuoteLineInput = {
   sortOrder?: number;
 };
 
+export type SupplierQuoteDiscountDefaults = {
+  partsDiscountPercent?: number | null;
+  laborDiscountPercent?: number | null;
+};
+
 export type QuoteLineRecord = {
   id: string;
   sortOrder: number;
@@ -29,6 +37,9 @@ export type QuoteLineRecord = {
   quantity: number;
   unitNetCents: number;
   vatRatePercent: number;
+  discountPercent: number;
+  discountCents: number;
+  discountAppliedCents: number;
   partNumber: string | null;
   partCodeExempt: boolean;
   approvalStatus: WorkOrderQuoteLineApproval;
@@ -66,19 +77,51 @@ export type WorkOrderQuoteRecord = {
   lines: QuoteLineRecord[];
 };
 
-export function computeLineAmounts(line: {
+export type QuoteLineMoneyInput = {
   quantity: number;
   unitNetCents: number;
   vatRatePercent: number;
-}): { lineNetCents: number; lineVatCents: number } {
-  const lineNetCents = Math.round(line.quantity * line.unitNetCents);
-  const lineVatCents = Math.round((lineNetCents * line.vatRatePercent) / 100);
-  return { lineNetCents, lineVatCents };
+  discountPercent?: number | null;
+  discountCents?: number | null;
+};
+
+export function defaultDiscountPercent(
+  lineType: WorkOrderQuoteLineType | string | undefined,
+  supplier?: SupplierQuoteDiscountDefaults | null,
+): number {
+  if (!supplier) return 0;
+  if (lineType === 'parts') return Number(supplier.partsDiscountPercent) || 0;
+  if (lineType === 'labor') return Number(supplier.laborDiscountPercent) || 0;
+  return 0;
 }
 
-export function computeQuoteTotals(
-  lines: Array<{ quantity: number; unitNetCents: number; vatRatePercent: number }>,
-): { totalNetCents: number; totalVatCents: number } {
+/** Dacă % > 0, folosește procentul; altfel suma. Nu trece de brutul liniei. */
+export function computeDiscountAppliedCents(line: QuoteLineMoneyInput): number {
+  const gross = Math.round(line.quantity * line.unitNetCents);
+  const pct = Number(line.discountPercent) || 0;
+  if (pct > 0) {
+    return Math.min(gross, Math.round((gross * pct) / 100));
+  }
+  const cents = Math.round(Number(line.discountCents) || 0);
+  return Math.min(gross, Math.max(0, cents));
+}
+
+export function computeLineAmounts(line: QuoteLineMoneyInput): {
+  lineNetCents: number;
+  lineVatCents: number;
+  discountAppliedCents: number;
+} {
+  const gross = Math.round(line.quantity * line.unitNetCents);
+  const discountAppliedCents = computeDiscountAppliedCents(line);
+  const lineNetCents = Math.max(0, gross - discountAppliedCents);
+  const lineVatCents = Math.round((lineNetCents * line.vatRatePercent) / 100);
+  return { lineNetCents, lineVatCents, discountAppliedCents };
+}
+
+export function computeQuoteTotals(lines: QuoteLineMoneyInput[]): {
+  totalNetCents: number;
+  totalVatCents: number;
+} {
   let totalNetCents = 0;
   let totalVatCents = 0;
   for (const line of lines) {
@@ -90,17 +133,50 @@ export function computeQuoteTotals(
 }
 
 export function computeApprovedTotals(
-  lines: Array<{
-    quantity: number;
-    unitNetCents: number;
-    vatRatePercent: number;
-    approvalStatus?: WorkOrderQuoteLineApproval | null;
-  }>,
+  lines: Array<
+    QuoteLineMoneyInput & {
+      approvalStatus?: WorkOrderQuoteLineApproval | null;
+    }
+  >,
 ): { totalNetCents: number; totalVatCents: number } {
   const hasDecision = lines.some((line) => line.approvalStatus && line.approvalStatus !== 'pending');
   return computeQuoteTotals(
     hasDecision ? lines.filter((line) => line.approvalStatus === 'approved') : lines,
   );
+}
+
+/** Total afișat: dacă există linii respinse/aprobate, doar cele approved. */
+export function displayQuoteMoneyTotals(quote: {
+  totalNetCents: number;
+  totalVatCents: number;
+  approvedNetCents?: number | null;
+  approvedVatCents?: number | null;
+  lines?: Array<
+    QuoteLineMoneyInput & {
+      approvalStatus?: WorkOrderQuoteLineApproval | null;
+    }
+  >;
+}): { totalNetCents: number; totalVatCents: number; totalGrossCents: number } {
+  if (quote.approvedNetCents != null && quote.approvedVatCents != null) {
+    return {
+      totalNetCents: quote.approvedNetCents,
+      totalVatCents: quote.approvedVatCents,
+      totalGrossCents: quote.approvedNetCents + quote.approvedVatCents,
+    };
+  }
+  if (quote.lines?.length) {
+    const decided = computeApprovedTotals(quote.lines);
+    return {
+      totalNetCents: decided.totalNetCents,
+      totalVatCents: decided.totalVatCents,
+      totalGrossCents: decided.totalNetCents + decided.totalVatCents,
+    };
+  }
+  return {
+    totalNetCents: quote.totalNetCents,
+    totalVatCents: quote.totalVatCents,
+    totalGrossCents: quote.totalNetCents + quote.totalVatCents,
+  };
 }
 
 export function toQuoteLineRecord(line: {
@@ -111,6 +187,8 @@ export function toQuoteLineRecord(line: {
   quantity: number;
   unitNetCents: number;
   vatRatePercent: number;
+  discountPercent?: number | null;
+  discountCents?: number | null;
   partNumber: string | null;
   partCodeExempt: boolean;
   approvalStatus: WorkOrderQuoteLineApproval;
@@ -119,7 +197,13 @@ export function toQuoteLineRecord(line: {
   warrantyMonths: number | null;
   warrantyKm: number | null;
 }): QuoteLineRecord {
-  const { lineNetCents, lineVatCents } = computeLineAmounts(line);
+  const discountPercent = Number(line.discountPercent) || 0;
+  const discountCents = Math.round(Number(line.discountCents) || 0);
+  const { lineNetCents, lineVatCents, discountAppliedCents } = computeLineAmounts({
+    ...line,
+    discountPercent,
+    discountCents,
+  });
   return {
     id: line.id,
     sortOrder: line.sortOrder,
@@ -128,6 +212,9 @@ export function toQuoteLineRecord(line: {
     quantity: line.quantity,
     unitNetCents: line.unitNetCents,
     vatRatePercent: line.vatRatePercent,
+    discountPercent,
+    discountCents,
+    discountAppliedCents,
     partNumber: line.partNumber,
     partCodeExempt: line.partCodeExempt,
     approvalStatus: line.approvalStatus,
@@ -174,6 +261,8 @@ export function toQuoteRecord(quote: {
     quantity: number;
     unitNetCents: number;
     vatRatePercent: number;
+    discountPercent?: number | null;
+    discountCents?: number | null;
     partNumber: string | null;
     partCodeExempt: boolean;
     approvalStatus: WorkOrderQuoteLineApproval;
@@ -183,15 +272,16 @@ export function toQuoteRecord(quote: {
     warrantyKm: number | null;
   }>;
 }): WorkOrderQuoteRecord {
+  const money = displayQuoteMoneyTotals(quote);
   return {
     id: quote.id,
     workOrderId: quote.workOrderId,
     version: quote.version,
     status: quote.status,
     currency: quote.currency,
-    totalNetCents: quote.totalNetCents,
-    totalVatCents: quote.totalVatCents,
-    totalGrossCents: quote.totalNetCents + quote.totalVatCents,
+    totalNetCents: money.totalNetCents,
+    totalVatCents: money.totalVatCents,
+    totalGrossCents: money.totalGrossCents,
     approvedNetCents: quote.approvedNetCents,
     approvedVatCents: quote.approvedVatCents,
     approvedGrossCents:

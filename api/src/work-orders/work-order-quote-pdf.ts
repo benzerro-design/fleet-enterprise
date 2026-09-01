@@ -1,8 +1,17 @@
 import PDFDocument from 'pdfkit';
-import type { WorkOrderQuoteRecord } from './work-order-quotes.types';
+import { displayQuoteMoneyTotals, type WorkOrderQuoteRecord } from './work-order-quotes.types';
 
 function formatMoney(cents: number, currency: string): string {
   return `${(cents / 100).toFixed(2)} ${currency}`;
+}
+
+function discountNote(
+  line: { discountPercent?: number; discountCents?: number },
+  currency: string,
+): string {
+  if ((line.discountPercent ?? 0) > 0) return ` − ${line.discountPercent}%`;
+  if ((line.discountCents ?? 0) > 0) return ` − ${formatMoney(line.discountCents ?? 0, currency)}`;
+  return '';
 }
 
 export async function buildQuotePdfBuffer(input: {
@@ -19,6 +28,7 @@ export async function buildQuotePdfBuffer(input: {
     doc.on('error', reject);
 
     const { quote, workOrderTitle, displayNumber, supplierName } = input;
+    const money = displayQuoteMoneyTotals(quote);
 
     doc.fontSize(18).text('Deviz service', { continued: false });
     doc.moveDown(0.5);
@@ -34,10 +44,13 @@ export async function buildQuotePdfBuffer(input: {
     doc.moveDown(0.5);
 
     for (const line of quote.lines) {
+      const rejected = line.approvalStatus === 'rejected';
+      const prefix = rejected ? '[RESPINS] ' : '';
       doc
         .fontSize(9)
+        .fillColor(rejected ? '#888' : '#000')
         .text(
-          `${line.description} · ${line.quantity} × ${formatMoney(line.unitNetCents, quote.currency)} + TVA ${line.vatRatePercent}%`,
+          `${prefix}${line.description} · ${line.quantity} × ${formatMoney(line.unitNetCents, quote.currency)}${discountNote(line, quote.currency)} + TVA ${line.vatRatePercent}% = ${formatMoney(line.lineNetCents, quote.currency)}`,
         );
       if (line.partNumber) doc.fontSize(8).fillColor('#666').text(`Cod: ${line.partNumber}`);
       doc.fillColor('#000');
@@ -45,9 +58,9 @@ export async function buildQuotePdfBuffer(input: {
 
     doc.moveDown();
     doc.fontSize(10);
-    doc.text(`Total net: ${formatMoney(quote.totalNetCents, quote.currency)}`);
-    doc.text(`TVA: ${formatMoney(quote.totalVatCents, quote.currency)}`);
-    doc.fontSize(12).font('Helvetica-Bold').text(`Total: ${formatMoney(quote.totalGrossCents, quote.currency)}`);
+    doc.text(`Total net: ${formatMoney(money.totalNetCents, quote.currency)}`);
+    doc.text(`TVA: ${formatMoney(money.totalVatCents, quote.currency)}`);
+    doc.fontSize(12).font('Helvetica-Bold').text(`Total: ${formatMoney(money.totalGrossCents, quote.currency)}`);
     doc.font('Helvetica');
 
     if (quote.notes?.trim()) {

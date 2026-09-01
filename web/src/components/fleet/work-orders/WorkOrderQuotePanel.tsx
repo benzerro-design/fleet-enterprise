@@ -11,7 +11,10 @@ import { formatDateRo, toDateInput, toIsoFromDateInput } from "@/lib/datetime-lo
 import {
   fleetJsonHeaders,
   formatMoneyCents,
+  formatLineDiscount,
+  computeQuoteLineMoney,
   quoteLineTypeLabel,
+  quoteLinesIncludedInTotals,
   quoteStatusLabel,
   workOrdersBrowserBase,
   type QuoteLineApprovalStatus,
@@ -23,6 +26,11 @@ import {
   type WorkOrderQuoteStatus,
 } from "@/lib/work-orders-api";
 
+type SupplierDiscountDefaults = {
+  partsDiscountPercent: number;
+  laborDiscountPercent: number;
+};
+
 type EditableLine = {
   key: string;
   lineType: QuoteLineInput["lineType"];
@@ -30,18 +38,43 @@ type EditableLine = {
   quantity: string;
   unitNetLei: string;
   vatRatePercent: string;
+  discountPercent: string;
+  discountLei: string;
+  discountTouched: boolean;
   partNumber: string;
   partCodeExempt: boolean;
 };
 
-function newLine(): EditableLine {
+function formatDiscountPercentInput(n: number): string {
+  if (!n) return "";
+  const rounded = Math.round(n * 100) / 100;
+  return String(rounded);
+}
+
+function defaultDiscountForType(
+  lineType: QuoteLineInput["lineType"],
+  discounts?: SupplierDiscountDefaults | null,
+): number {
+  if (!discounts) return 0;
+  if (lineType === "parts") return discounts.partsDiscountPercent || 0;
+  if (lineType === "labor") return discounts.laborDiscountPercent || 0;
+  return 0;
+}
+
+function newLine(
+  discounts?: SupplierDiscountDefaults | null,
+  lineType: QuoteLineInput["lineType"] = "parts",
+): EditableLine {
   return {
     key: Math.random().toString(36).slice(2),
-    lineType: "parts",
+    lineType,
     description: "",
     quantity: "1",
     unitNetLei: "",
     vatRatePercent: "21",
+    discountPercent: formatDiscountPercentInput(defaultDiscountForType(lineType, discounts)),
+    discountLei: "",
+    discountTouched: false,
     partNumber: "",
     partCodeExempt: false,
   };
@@ -57,8 +90,26 @@ function centsToLei(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-function linesFromQuote(quote: WorkOrderQuoteRecord): EditableLine[] {
-  if (quote.lines.length === 0) return [newLine()];
+function editableLineNetLabel(line: EditableLine): string {
+  const unit = leiToCents(line.unitNetLei);
+  const qty = parseFloat(line.quantity.replace(",", ".")) || 0;
+  const rate = parseInt(line.vatRatePercent, 10) || 0;
+  if (!Number.isFinite(unit) || unit < 0 || qty <= 0) return "—";
+  const pct = parseFloat(line.discountPercent.replace(",", ".")) || 0;
+  const disc = leiToCents(line.discountLei);
+  return formatMoneyCents(
+    computeQuoteLineMoney({
+      quantity: qty,
+      unitNetCents: unit,
+      vatRatePercent: rate,
+      discountPercent: pct,
+      discountCents: Number.isFinite(disc) ? disc : 0,
+    }).lineNetCents,
+  );
+}
+
+function linesFromQuote(quote: WorkOrderQuoteRecord, discounts?: SupplierDiscountDefaults | null): EditableLine[] {
+  if (quote.lines.length === 0) return [newLine(discounts)];
   return quote.lines.map((line) => ({
     key: line.id,
     lineType: line.lineType,
@@ -66,6 +117,11 @@ function linesFromQuote(quote: WorkOrderQuoteRecord): EditableLine[] {
     quantity: String(line.quantity),
     unitNetLei: centsToLei(line.unitNetCents),
     vatRatePercent: String(line.vatRatePercent),
+    discountPercent:
+      (line.discountPercent ?? 0) > 0 ? formatDiscountPercentInput(line.discountPercent ?? 0) : "",
+    discountLei:
+      (line.discountPercent ?? 0) > 0 || !line.discountCents ? "" : centsToLei(line.discountCents),
+    discountTouched: true,
     partNumber: line.partNumber ?? "",
     partCodeExempt: line.partCodeExempt,
   }));
@@ -78,6 +134,8 @@ function toPayload(lines: EditableLine[]): QuoteLineInput[] {
     quantity: parseFloat(line.quantity.replace(",", ".")) || 1,
     unitNetCents: leiToCents(line.unitNetLei),
     vatRatePercent: parseInt(line.vatRatePercent, 10) || 19,
+    discountPercent: parseFloat(line.discountPercent.replace(",", ".")) || 0,
+    discountCents: Number.isFinite(leiToCents(line.discountLei)) ? leiToCents(line.discountLei) : 0,
     partNumber: line.partNumber || null,
     partCodeExempt: line.partCodeExempt,
     sortOrder: idx,
@@ -88,8 +146,7 @@ function quoteSubtotalsFromLines(
   lines: WorkOrderQuoteRecord["lines"],
   decisions?: Record<string, QuoteLineApprovalStatus | undefined>,
 ) {
-  const hasDecisions = decisions ? Object.values(decisions).some(Boolean) : false;
-  const subtotalLines = hasDecisions ? lines.filter((line) => decisions?.[line.id] === "approved") : lines;
+  const subtotalLines = quoteLinesIncludedInTotals(lines, decisions);
   let labor = 0;
   let parts = 0;
   let other = 0;
@@ -100,7 +157,8 @@ function quoteSubtotalsFromLines(
     else other += line.lineNetCents;
     vat += line.lineVatCents;
   }
-  return { labor, parts, other, vat, gross: labor + parts + other + vat };
+  const rejectedCount = lines.length - subtotalLines.length;
+  return { labor, parts, other, vat, gross: labor + parts + other + vat, rejectedCount };
 }
 
 function QuoteSubtotals({
@@ -109,6 +167,7 @@ function QuoteSubtotals({
   other,
   vat,
   gross,
+  rejectedCount = 0,
   currency = "RON",
 }: {
   labor: number;
@@ -116,6 +175,7 @@ function QuoteSubtotals({
   other: number;
   vat: number;
   gross: number;
+  rejectedCount?: number;
   currency?: string;
 }) {
   return (
@@ -123,8 +183,13 @@ function QuoteSubtotals({
       <SubtotalRow label="Subtotal manoperă" cents={labor} currency={currency} />
       <SubtotalRow label="Subtotal piese" cents={parts} currency={currency} />
       <SubtotalRow label="Subtotal altele" cents={other} currency={currency} />
-      <SubtotalRow label="TVA (21%)" cents={vat} currency={currency} />
+      <SubtotalRow label="TVA" cents={vat} currency={currency} />
       <SubtotalRow label="Total brut" cents={gross} currency={currency} bold />
+      {rejectedCount > 0 ? (
+        <p className="pt-1 text-[11px] text-zinc-500">
+          Fără {rejectedCount} {rejectedCount === 1 ? "linie respinsă" : "linii respinse"}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -183,7 +248,7 @@ type Props = {
   workOrderId: string;
   canWrite: boolean;
   canApprove?: boolean;
-  /** Factură + cost din deviz — flotă și partener (pe WO; partenerul nu are tichet). */
+  /** Cost din factură — doar flotă (L*/L1). Partenerul încarcă factura, nu generează cost. */
   canPostCost?: boolean;
   /** Ascunde link-ul către /fleet/costs (portal partener). */
   isPartner?: boolean;
@@ -203,6 +268,7 @@ type Props = {
     entityId: string;
     createdAt: string;
   } | null;
+  supplierDiscounts?: SupplierDiscountDefaults | null;
 };
 
 export function WorkOrderQuotePanel({
@@ -222,13 +288,14 @@ export function WorkOrderQuotePanel({
   canLaunchPartsOrders = false,
   ticketSettlement = null,
   isPartner = false,
+  supplierDiscounts = null,
 }: Props) {
   const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"quote" | "warranty">("quote");
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
-  const [lines, setLines] = useState<EditableLine[]>([newLine()]);
+  const [lines, setLines] = useState<EditableLine[]>(() => [newLine(supplierDiscounts)]);
   const [notes, setNotes] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
@@ -337,8 +404,17 @@ export function WorkOrderQuotePanel({
       const qty = parseFloat(line.quantity.replace(",", ".")) || 0;
       const rate = parseInt(line.vatRatePercent, 10) || 0;
       if (!Number.isFinite(unit) || unit < 0 || qty <= 0) continue;
-      const lineNet = Math.round(qty * unit);
-      const lineVat = Math.round((lineNet * rate) / 100);
+      const pct = parseFloat(line.discountPercent.replace(",", ".")) || 0;
+      const discCents = leiToCents(line.discountLei);
+      const money = computeQuoteLineMoney({
+        quantity: qty,
+        unitNetCents: unit,
+        vatRatePercent: rate,
+        discountPercent: pct,
+        discountCents: Number.isFinite(discCents) ? discCents : 0,
+      });
+      const lineNet = money.lineNetCents;
+      const lineVat = money.lineVatCents;
       net += lineNet;
       vat += lineVat;
       if (line.lineType === "labor") labor += lineNet;
@@ -559,7 +635,7 @@ export function WorkOrderQuotePanel({
   function startNewDraft() {
     setActiveId(null);
     setEditingDraftId(null);
-    setLines([newLine()]);
+    setLines([newLine(supplierDiscounts)]);
     setNotes("");
     setPriceVerify(null);
     setPriceVerifyByKey({});
@@ -732,7 +808,7 @@ export function WorkOrderQuotePanel({
               <span className="h-5 w-px shrink-0 bg-zinc-700" />
               <button
                 type="button"
-                onClick={() => setLines([...lines, newLine()])}
+                onClick={() => setLines([...lines, newLine(supplierDiscounts)])}
                 className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
               >
                 + Linie
@@ -1027,20 +1103,28 @@ export function WorkOrderQuotePanel({
       {activeTab === "quote" && activeQuote && !isEditingDraft ? (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-4 text-sm">
-            <span>
-              Total net: <strong>{formatMoneyCents(activeQuote.totalNetCents, activeQuote.currency)}</strong>
-            </span>
-            <span>
-              TVA: <strong>{formatMoneyCents(activeQuote.totalVatCents, activeQuote.currency)}</strong>
-            </span>
-            <span>
-              Total: <strong>{formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}</strong>
-            </span>
-            {activeQuote.approvedGrossCents != null ? (
-              <span className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-2 py-0.5 text-emerald-200">
-                Total aprobat: <strong>{formatMoneyCents(activeQuote.approvedGrossCents, activeQuote.currency)}</strong>
-              </span>
-            ) : null}
+            {(() => {
+              const totals = quoteSubtotalsFromLines(activeQuote.lines, lineDecisions);
+              return (
+                <>
+                  <span>
+                    Total net:{" "}
+                    <strong>
+                      {formatMoneyCents(totals.labor + totals.parts + totals.other, activeQuote.currency)}
+                    </strong>
+                  </span>
+                  <span>
+                    TVA: <strong>{formatMoneyCents(totals.vat, activeQuote.currency)}</strong>
+                  </span>
+                  <span>
+                    Total: <strong>{formatMoneyCents(totals.gross, activeQuote.currency)}</strong>
+                  </span>
+                  {totals.rejectedCount > 0 ? (
+                    <span className="text-xs text-zinc-500">fără {totals.rejectedCount} respinse</span>
+                  ) : null}
+                </>
+              );
+            })()}
             {activeQuote.status !== "draft" ? (
               <a
                 href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
@@ -1097,6 +1181,7 @@ export function WorkOrderQuotePanel({
                 <th className="py-2 pr-2">Cod</th>
                 <th className="py-2 pr-2">Cant.</th>
                 <th className="py-2 pr-2">Preț unit.</th>
+                <th className="py-2 pr-2">Disc.</th>
                 <th className="py-2 pr-2">TVA %</th>
                 <th className="py-2 pr-2">Total net</th>
                 <th className="py-2 pr-2">Aprobare</th>
@@ -1107,6 +1192,7 @@ export function WorkOrderQuotePanel({
               {activeQuote.lines.map((line) => {
                 const decision = lineDecisions[line.id];
                 const displayedApproval = decision ?? line.approvalStatus;
+                const rejected = displayedApproval === "rejected";
                 const tint =
                   decision === "approved"
                     ? "bg-emerald-950/20"
@@ -1118,7 +1204,10 @@ export function WorkOrderQuotePanel({
                           ? "bg-red-950/10"
                           : "";
                 return (
-                  <tr key={line.id} className={`border-b border-zinc-800/60 ${tint}`}>
+                  <tr
+                    key={line.id}
+                    className={`border-b border-zinc-800/60 ${tint} ${rejected ? "text-zinc-500 line-through decoration-zinc-600" : ""}`}
+                  >
                     <td className="py-2 pr-2 text-zinc-400">{quoteLineTypeLabel(line.lineType)}</td>
                     <td className="py-2 pr-2">{line.description}</td>
                     <td className="py-2 pr-2 font-mono text-xs text-zinc-300">
@@ -1130,6 +1219,9 @@ export function WorkOrderQuotePanel({
                       {priceVerifyByKey[line.id] ? (
                         <PriceVerifyHint result={priceVerifyByKey[line.id]} canApply={false} />
                       ) : null}
+                    </td>
+                    <td className="py-2 pr-2 font-mono text-xs text-zinc-400">
+                      {formatLineDiscount(line)}
                     </td>
                     <td className="py-2 pr-2">{line.vatRatePercent}%</td>
                     <td className="py-2 pr-2 font-mono">{formatMoneyCents(line.lineNetCents)}</td>
@@ -1294,7 +1386,7 @@ export function WorkOrderQuotePanel({
                     </>
                   ) : null}
                 </p>
-              ) : canWrite && canPostCost ? (
+              ) : canWrite ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className={OPS_LABEL_CLASS}>Nr. factură</label>
@@ -1359,6 +1451,8 @@ export function WorkOrderQuotePanel({
                 >
                   Generează cost din deviz
                 </button>
+              ) : activeQuote.invoicedAt && isPartner && !activeQuote.costEntryId ? (
+                <p className="text-sm text-zinc-500">Factura e înregistrată. Costul îl generează flota.</p>
               ) : !activeQuote.invoicedAt ? (
                 <p className="text-sm text-zinc-500">Înregistrează factura înainte de cost.</p>
               ) : null}
@@ -1370,7 +1464,7 @@ export function WorkOrderQuotePanel({
       {activeTab === "quote" && (isEditingDraft || quotes.length === 0 || isCreatingDraft) && canWrite ? (
         <div className="mt-4 space-y-4">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-sm">
+            <table className="w-full min-w-[1080px] text-left text-sm">
               <thead>
                 <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
                   <th className="py-2 pr-2">Tip</th>
@@ -1378,7 +1472,10 @@ export function WorkOrderQuotePanel({
                   <th className="py-2 pr-2">Cod piesă</th>
                   <th className="py-2 pr-2">Cant.</th>
                   <th className="py-2 pr-2">Preț net (lei)</th>
+                  <th className="py-2 pr-2">Disc. %</th>
+                  <th className="py-2 pr-2">Disc. lei</th>
                   <th className="py-2 pr-2">TVA %</th>
+                  <th className="py-2 pr-2">Net</th>
                   <th className="py-2 w-8" />
                 </tr>
               </thead>
@@ -1389,8 +1486,16 @@ export function WorkOrderQuotePanel({
                       <select
                         value={line.lineType}
                         onChange={(e) => {
+                          const nextType = e.target.value as EditableLine["lineType"];
                           const next = [...lines];
-                          next[idx] = { ...line, lineType: e.target.value as EditableLine["lineType"] };
+                          const updated: EditableLine = { ...line, lineType: nextType };
+                          if (!line.discountTouched) {
+                            updated.discountPercent = formatDiscountPercentInput(
+                              defaultDiscountForType(nextType, supplierDiscounts),
+                            );
+                            updated.discountLei = "";
+                          }
+                          next[idx] = updated;
                           setLines(next);
                         }}
                         className={OPS_INPUT_CLASS}
@@ -1475,6 +1580,43 @@ export function WorkOrderQuotePanel({
                     </td>
                     <td className="py-2 pr-2">
                       <input
+                        value={line.discountPercent}
+                        onChange={(e) => {
+                          const next = [...lines];
+                          next[idx] = {
+                            ...line,
+                            discountPercent: e.target.value,
+                            discountTouched: true,
+                          };
+                          setLines(next);
+                        }}
+                        className={`${OPS_INPUT_CLASS} w-16 font-mono`}
+                        placeholder="0"
+                        title="Dacă e > 0, are prioritate față de suma în lei"
+                        aria-label="Discount procent"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        value={line.discountLei}
+                        onChange={(e) => {
+                          const next = [...lines];
+                          next[idx] = {
+                            ...line,
+                            discountLei: e.target.value,
+                            discountTouched: true,
+                          };
+                          setLines(next);
+                        }}
+                        className={`${OPS_INPUT_CLASS} w-24 font-mono`}
+                        placeholder="0.00"
+                        disabled={Boolean(parseFloat(line.discountPercent.replace(",", ".")))}
+                        title="Sumă netă. Ignorată dacă completezi %."
+                        aria-label="Discount lei"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
                         value={line.vatRatePercent}
                         onChange={(e) => {
                           const next = [...lines];
@@ -1483,6 +1625,9 @@ export function WorkOrderQuotePanel({
                         }}
                         className={`${OPS_INPUT_CLASS} w-16`}
                       />
+                    </td>
+                    <td className="py-2 pr-2 font-mono text-xs text-zinc-400">
+                      {editableLineNetLabel(line)}
                     </td>
                     <td className="py-2">
                       <button
@@ -1502,7 +1647,7 @@ export function WorkOrderQuotePanel({
           {!sheetLayout ? (
             <button
               type="button"
-              onClick={() => setLines([...lines, newLine()])}
+              onClick={() => setLines([...lines, newLine(supplierDiscounts)])}
               className="text-xs text-sky-300 hover:underline"
             >
               + Linie

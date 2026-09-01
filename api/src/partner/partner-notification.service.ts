@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, ServiceAppointmentStatus, WorkOrderQuoteStatus } from '@prisma/client';
 import type { AccessContext } from '../iam/access-context.types';
 import { isPartnerUser } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,6 +22,23 @@ export type PartnerNotificationRecord = {
   readAt: string | null;
   sentAt: string | null;
 };
+
+export type PartnerPendingActionKind = 'pending_approval' | 'ready_uninvoiced' | 'pending_supplier';
+
+export type PartnerPendingAction = {
+  id: string;
+  kind: PartnerPendingActionKind;
+  href: string;
+  title: string;
+  subtitle: string;
+};
+
+export type PartnerPendingActionsPayload = {
+  items: PartnerPendingAction[];
+  total: number;
+};
+
+const PENDING_PER_KIND = 12;
 
 function payloadRecord(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -182,6 +199,118 @@ export class PartnerNotificationService {
           sentAt: r.sentAt?.toISOString() ?? null,
         };
       }),
+    };
+  }
+
+  /** UAT-035: WO + programări care cer acțiune, cu href ca la notificări. */
+  async listPendingActions(
+    tenantSlug: string,
+    access: AccessContext,
+    opts?: { supplierId?: string },
+  ): Promise<PartnerPendingActionsPayload> {
+    const tenant = await this.prisma.tenant.findFirst({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const supplierIds = this.scopeSupplierIds(access, opts?.supplierId);
+    const supplierFilter = supplierIds ? { supplierId: { in: supplierIds } } : {};
+
+    const woBase = { tenantId: tenant.id, ...supplierFilter };
+    const apptBase = { tenantId: tenant.id, ...supplierFilter };
+
+    const [approvalRows, readyRows, apptRows, pendingApproval, readyUninvoiced, pendingSupplier] =
+      await Promise.all([
+        this.prisma.maintenanceWorkOrder.findMany({
+          where: { ...woBase, quotes: { some: { status: WorkOrderQuoteStatus.submitted } } },
+          orderBy: { updatedAt: 'desc' },
+          take: PENDING_PER_KIND,
+          select: {
+            id: true,
+            displayNumber: true,
+            title: true,
+            vehicle: { select: { registrationNumber: true } },
+          },
+        }),
+        this.prisma.maintenanceWorkOrder.findMany({
+          where: {
+            ...woBase,
+            readyAt: { not: null },
+            NOT: { quotes: { some: { invoicedAt: { not: null } } } },
+          },
+          orderBy: { readyAt: 'desc' },
+          take: PENDING_PER_KIND,
+          select: {
+            id: true,
+            displayNumber: true,
+            title: true,
+            vehicle: { select: { registrationNumber: true } },
+          },
+        }),
+        this.prisma.serviceAppointment.findMany({
+          where: { ...apptBase, status: ServiceAppointmentStatus.pending_supplier },
+          orderBy: { scheduledAt: 'asc' },
+          take: PENDING_PER_KIND,
+          select: {
+            id: true,
+            title: true,
+            scheduledAt: true,
+            vehicle: { select: { registrationNumber: true } },
+          },
+        }),
+        this.prisma.maintenanceWorkOrder.count({
+          where: { ...woBase, quotes: { some: { status: WorkOrderQuoteStatus.submitted } } },
+        }),
+        this.prisma.maintenanceWorkOrder.count({
+          where: {
+            ...woBase,
+            readyAt: { not: null },
+            NOT: { quotes: { some: { invoicedAt: { not: null } } } },
+          },
+        }),
+        this.prisma.serviceAppointment.count({
+          where: { ...apptBase, status: ServiceAppointmentStatus.pending_supplier },
+        }),
+      ]);
+
+    const approvalIds = new Set(approvalRows.map((r) => r.id));
+    const items: PartnerPendingAction[] = [];
+
+    for (const row of apptRows) {
+      items.push({
+        id: row.id,
+        kind: 'pending_supplier',
+        href: `/fleet/partner/appointments?select=${encodeURIComponent(row.id)}&inbox=pending_supplier`,
+        title: row.scheduledAt.toLocaleString('ro-RO', {
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        subtitle: `${row.vehicle.registrationNumber} · ${row.title || 'Programare de validat'}`,
+      });
+    }
+    for (const row of approvalRows) {
+      items.push({
+        id: row.id,
+        kind: 'pending_approval',
+        href: `/fleet/partner/work-orders/${row.id}`,
+        title: row.displayNumber ?? row.id.slice(-6).toUpperCase(),
+        subtitle: `${row.vehicle.registrationNumber} · Deviz așteaptă aprobare`,
+      });
+    }
+    for (const row of readyRows) {
+      if (approvalIds.has(row.id)) continue;
+      items.push({
+        id: row.id,
+        kind: 'ready_uninvoiced',
+        href: `/fleet/partner/work-orders/${row.id}`,
+        title: row.displayNumber ?? row.id.slice(-6).toUpperCase(),
+        subtitle: `${row.vehicle.registrationNumber} · Gata, nefacturat`,
+      });
+    }
+
+    return {
+      items,
+      total: pendingApproval + readyUninvoiced + pendingSupplier,
     };
   }
 

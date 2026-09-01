@@ -48,7 +48,9 @@ import { costCategoryForWorkflow } from './work-order-cost.utils';
 import {
   computeApprovedTotals,
   computeQuoteTotals,
+  defaultDiscountPercent,
   type QuoteLineInput,
+  type SupplierQuoteDiscountDefaults,
   toQuoteRecord,
   type WorkOrderQuoteRecord,
 } from './work-order-quotes.types';
@@ -596,7 +598,8 @@ export class WorkOrderQuotesService {
     }
 
     const settings = parseWorkOrderSettings(tenant.workOrderSettings);
-    const lines = this.normalizeLines(dto.lines, settings);
+    const supplierDefaults = await this.loadSupplierDiscountDefaults(wo.supplierId);
+    const lines = this.normalizeLines(dto.lines, settings, supplierDefaults);
     const { totalNetCents, totalVatCents } = computeQuoteTotals(lines);
     const maxVersion = await this.prisma.workOrderQuote.aggregate({
       where: { workOrderId },
@@ -623,6 +626,8 @@ export class WorkOrderQuotesService {
               quantity: line.quantity ?? 1,
               unitNetCents: line.unitNetCents,
               vatRatePercent: line.vatRatePercent ?? 19,
+              discountPercent: line.discountPercent ?? 0,
+              discountCents: line.discountCents ?? 0,
               partNumber: line.partNumber?.trim() || null,
               partCodeExempt: line.partCodeExempt ?? false,
               warrantyMonths: line.warrantyMonths ?? null,
@@ -668,7 +673,7 @@ export class WorkOrderQuotesService {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+    const wo = await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
@@ -679,7 +684,8 @@ export class WorkOrderQuotesService {
     }
 
     const settings = parseWorkOrderSettings(tenant.workOrderSettings);
-    const lines = this.normalizeLines(dto.lines, settings);
+    const supplierDefaults = await this.loadSupplierDiscountDefaults(wo.supplierId);
+    const lines = this.normalizeLines(dto.lines, settings, supplierDefaults);
     const { totalNetCents, totalVatCents } = computeQuoteTotals(lines);
 
     const quote = await this.prisma.$transaction(async (tx) => {
@@ -700,6 +706,8 @@ export class WorkOrderQuotesService {
               quantity: line.quantity ?? 1,
               unitNetCents: line.unitNetCents,
               vatRatePercent: line.vatRatePercent ?? 19,
+              discountPercent: line.discountPercent ?? 0,
+              discountCents: line.discountCents ?? 0,
               partNumber: line.partNumber?.trim() || null,
               partCodeExempt: line.partCodeExempt ?? false,
               warrantyMonths: line.warrantyMonths ?? null,
@@ -1191,6 +1199,11 @@ export class WorkOrderQuotesService {
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+    if (access && isPartnerUser(access)) {
+      throw new ForbiddenException(
+        'Partenerul înregistrează factura; costul îl generează flota (L*/L1).',
+      );
+    }
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
@@ -1460,7 +1473,39 @@ export class WorkOrderQuotesService {
     return { buffer, filename: `deviz-v${row.version}.pdf` };
   }
 
-  private normalizeLines(lines: QuoteLineInput[], settings: WorkOrderSettings) {
+  private async loadSupplierDiscountDefaults(
+    supplierId: string | null,
+  ): Promise<SupplierQuoteDiscountDefaults | null> {
+    if (!supplierId) return null;
+    return this.prisma.supplier.findFirst({
+      where: { id: supplierId },
+      select: { partsDiscountPercent: true, laborDiscountPercent: true },
+    });
+  }
+
+  private parseDiscountPercent(raw: unknown, lineNo: number): number {
+    if (raw == null || raw === '') return 0;
+    const n = typeof raw === 'number' ? raw : Number.parseFloat(String(raw).replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+      throw new BadRequestException(`Line ${lineNo}: discount % must be 0–100`);
+    }
+    return Math.round(n * 100) / 100;
+  }
+
+  private parseDiscountCents(raw: unknown, lineNo: number): number {
+    if (raw == null || raw === '') return 0;
+    const n = typeof raw === 'number' ? raw : Number.parseFloat(String(raw).replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0) {
+      throw new BadRequestException(`Line ${lineNo}: invalid discount amount`);
+    }
+    return Math.round(n);
+  }
+
+  private normalizeLines(
+    lines: QuoteLineInput[],
+    settings: WorkOrderSettings,
+    supplier?: SupplierQuoteDiscountDefaults | null,
+  ) {
     if (!lines?.length) {
       throw new BadRequestException('At least one quote line is required');
     }
@@ -1492,6 +1537,17 @@ export class WorkOrderQuotesService {
       if (warrantyKm != null && (!Number.isFinite(warrantyKm) || warrantyKm < 0)) {
         throw new BadRequestException(`Line ${idx + 1}: invalid warranty km`);
       }
+      const percentProvided = line.discountPercent != null;
+      const centsProvided = line.discountCents != null;
+      let discountPercent = percentProvided ? this.parseDiscountPercent(line.discountPercent, idx + 1) : null;
+      let discountCents = centsProvided ? this.parseDiscountCents(line.discountCents, idx + 1) : null;
+      if (discountPercent == null && discountCents == null) {
+        discountPercent = defaultDiscountPercent(lineType, supplier);
+        discountCents = 0;
+      } else {
+        discountPercent = discountPercent ?? 0;
+        discountCents = discountCents ?? 0;
+      }
       return {
         ...line,
         lineType,
@@ -1499,6 +1555,8 @@ export class WorkOrderQuotesService {
         quantity,
         unitNetCents: Math.round(line.unitNetCents),
         vatRatePercent,
+        discountPercent,
+        discountCents,
         partNumber,
         partCodeExempt,
         warrantyMonths: warrantyMonths == null ? null : Math.round(warrantyMonths),

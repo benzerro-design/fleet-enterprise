@@ -35,6 +35,8 @@ export type SupplierRecord = {
   city: string | null;
   county: string | null;
   notes: string | null;
+  partsDiscountPercent: number;
+  laborDiscountPercent: number;
   services: string[];
   workOrderCount: number;
   createdAt: string;
@@ -54,6 +56,8 @@ export type CreateSupplierInput = {
   county?: string | null;
   notes?: string | null;
   services?: string[];
+  partsDiscountPercent?: number | null;
+  laborDiscountPercent?: number | null;
   /** La creare: alocă imediat la acești clienți (UAT-011). */
   clientIds?: string[];
 };
@@ -76,6 +80,15 @@ export type SupplierStats = {
   blocked: number;
   openWorkOrders: number;
 };
+
+function parseDiscountPercent(raw: unknown, field: string): number {
+  if (raw == null || raw === '') return 0;
+  const n = typeof raw === 'number' ? raw : Number.parseFloat(String(raw).replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0 || n > 100) {
+    throw new BadRequestException(`${field} must be 0–100`);
+  }
+  return Math.round(n * 100) / 100;
+}
 
 function normalizeCode(code: string): string {
   const t = code.trim();
@@ -133,6 +146,8 @@ export class SuppliersService {
       city: string | null;
       county: string | null;
       notes: string | null;
+      partsDiscountPercent?: number | null;
+      laborDiscountPercent?: number | null;
       createdAt: Date;
       updatedAt: Date;
     },
@@ -152,6 +167,8 @@ export class SuppliersService {
       city: row.city,
       county: row.county,
       notes: row.notes,
+      partsDiscountPercent: Number(row.partsDiscountPercent) || 0,
+      laborDiscountPercent: Number(row.laborDiscountPercent) || 0,
       services,
       workOrderCount,
       createdAt: row.createdAt.toISOString(),
@@ -372,6 +389,8 @@ export class SuppliersService {
           city: dto.city?.trim() || null,
           county: dto.county?.trim() || null,
           notes: dto.notes?.trim() || null,
+          partsDiscountPercent: parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent'),
+          laborDiscountPercent: parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent'),
         },
       });
       if (dto.services?.length) {
@@ -431,6 +450,12 @@ export class SuppliersService {
     if (dto.city !== undefined) data.city = dto.city?.trim() || null;
     if (dto.county !== undefined) data.county = dto.county?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
+    if (dto.partsDiscountPercent !== undefined) {
+      data.partsDiscountPercent = parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent');
+    }
+    if (dto.laborDiscountPercent !== undefined) {
+      data.laborDiscountPercent = parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent');
+    }
 
     const serviceCodes =
       dto.services !== undefined ? parseSupplierServiceCodes(dto.services) : undefined;

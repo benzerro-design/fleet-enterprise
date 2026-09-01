@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { InviteCopyLink } from "@/components/fleet/InviteCopyLink";
 import { fleetJsonHeaders, suppliersBrowserBase } from "@/lib/suppliers-api";
 
 type Invite = {
@@ -72,7 +73,9 @@ export function SupplierInvitePanel({ supplierId, allowManagerRole = false }: Pr
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
       <h3 className="text-sm font-semibold text-zinc-200">Invită utilizator portal</h3>
-      <p className="mt-1 text-xs text-zinc-500">Link unic valabil 7 zile. Destinatarul își setează parola.</p>
+      <p className="mt-1 text-xs text-zinc-500">
+        Link unic valabil 7 zile. Destinatarul își setează parola. Nu se trimite email — copiază linkul.
+      </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <input
           type="email"
@@ -103,14 +106,17 @@ export function SupplierInvitePanel({ supplierId, allowManagerRole = false }: Pr
       {lastInvite ? (
         <div className="mt-3 rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-xs text-emerald-200">
           <p>Link pentru {lastInvite.email}:</p>
-          <p className="mt-1 break-all font-mono text-emerald-100">{lastInvite.inviteUrl}</p>
+          <InviteCopyLink url={lastInvite.inviteUrl} />
         </div>
       ) : null}
       {items.length > 0 ? (
-        <ul className="mt-3 space-y-1 text-xs text-zinc-500">
+        <ul className="mt-3 space-y-2 text-xs text-zinc-400">
           {items.map((i) => (
-            <li key={i.id}>
-              {i.email} · {roleLabel(i.role)} · expiră {new Date(i.expiresAt).toLocaleDateString("ro-RO")}
+            <li key={i.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {i.email} · {roleLabel(i.role)} · expiră {new Date(i.expiresAt).toLocaleDateString("ro-RO")}
+              </span>
+              {i.inviteUrl ? <InviteCopyLink url={i.inviteUrl} compact /> : null}
             </li>
           ))}
         </ul>

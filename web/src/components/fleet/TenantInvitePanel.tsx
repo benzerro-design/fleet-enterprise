@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { tenantBrowserBase } from "@/lib/fleet-api";
-import { fleetJsonHeaders } from "@/lib/fleet-api";
+import { InviteCopyLink } from "@/components/fleet/InviteCopyLink";
+import { fleetJsonHeaders, tenantBrowserBase } from "@/lib/fleet-api";
 
 type Invite = {
   id: string;
@@ -62,7 +62,7 @@ export function TenantInvitePanel() {
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
       <h3 className="text-sm font-semibold text-zinc-200">Invită în echipa abonatului (L*)</h3>
       <p className="mt-1 text-xs text-zinc-500">
-        Link unic 7 zile. Destinatarul își setează parola. Fără seed / SQL.
+        Link unic 7 zile. Destinatarul își setează parola. Nu se trimite email — copiază linkul și trimite-l tu.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <input
@@ -93,15 +93,18 @@ export function TenantInvitePanel() {
       {lastInvite ? (
         <div className="mt-3 rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-xs text-emerald-200">
           <p>Link pentru {lastInvite.email}:</p>
-          <p className="mt-1 break-all font-mono text-emerald-100">{lastInvite.inviteUrl}</p>
+          <InviteCopyLink url={lastInvite.inviteUrl} />
         </div>
       ) : null}
       {items.length > 0 ? (
-        <ul className="mt-3 space-y-1 text-xs text-zinc-500">
+        <ul className="mt-3 space-y-2 text-xs text-zinc-400">
           {items.map((i) => (
-            <li key={i.id}>
-              {i.email} · {i.targetRole === "tenant_admin" ? "L*" : "cititor"} · expiră{" "}
-              {new Date(i.expiresAt).toLocaleDateString("ro-RO")}
+            <li key={i.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {i.email} · {i.targetRole === "tenant_admin" ? "L*" : "cititor"} · expiră{" "}
+                {new Date(i.expiresAt).toLocaleDateString("ro-RO")}
+              </span>
+              {i.inviteUrl ? <InviteCopyLink url={i.inviteUrl} compact /> : null}
             </li>
           ))}
         </ul>

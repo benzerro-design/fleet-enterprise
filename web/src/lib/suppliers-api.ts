@@ -39,6 +39,8 @@ export type SupplierRecord = {
   city: string | null;
   county: string | null;
   notes: string | null;
+  partsDiscountPercent: number;
+  laborDiscountPercent: number;
   services: string[];
   workOrderCount: number;
   createdAt: string;

@@ -38,6 +38,8 @@ export type WorkOrderSupplierSnapshot = {
   city: string | null;
   contactPhone: string | null;
   contactEmail: string | null;
+  partsDiscountPercent?: number;
+  laborDiscountPercent?: number;
 };
 
 export type WorkOrderListRow = {
@@ -249,6 +251,9 @@ export type QuoteLineRecord = {
   quantity: number;
   unitNetCents: number;
   vatRatePercent: number;
+  discountPercent: number;
+  discountCents: number;
+  discountAppliedCents: number;
   partNumber: string | null;
   partCodeExempt: boolean;
   approvalStatus: QuoteLineApprovalStatus;
@@ -295,6 +300,8 @@ export type QuoteLineInput = {
   quantity?: number;
   unitNetCents: number;
   vatRatePercent?: number;
+  discountPercent?: number | null;
+  discountCents?: number | null;
   partNumber?: string | null;
   partCodeExempt?: boolean;
   approvalStatus?: QuoteLineApprovalStatus;
@@ -307,6 +314,46 @@ export type QuoteLineInput = {
 
 export function formatMoneyCents(cents: number, currency = "RON"): string {
   return `${(cents / 100).toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+}
+
+/** Net după discount, apoi TVA. % > 0 are prioritate față de sumă. */
+export function computeQuoteLineMoney(line: {
+  quantity: number;
+  unitNetCents: number;
+  vatRatePercent: number;
+  discountPercent?: number | null;
+  discountCents?: number | null;
+}): { lineNetCents: number; lineVatCents: number; discountAppliedCents: number } {
+  const gross = Math.round(line.quantity * line.unitNetCents);
+  const pct = Number(line.discountPercent) || 0;
+  const discountAppliedCents =
+    pct > 0
+      ? Math.min(gross, Math.round((gross * pct) / 100))
+      : Math.min(gross, Math.max(0, Math.round(Number(line.discountCents) || 0)));
+  const lineNetCents = Math.max(0, gross - discountAppliedCents);
+  const lineVatCents = Math.round((lineNetCents * line.vatRatePercent) / 100);
+  return { lineNetCents, lineVatCents, discountAppliedCents };
+}
+
+export function formatLineDiscount(line: {
+  discountPercent?: number | null;
+  discountCents?: number | null;
+}): string {
+  if ((line.discountPercent ?? 0) > 0) return `${line.discountPercent}%`;
+  if ((line.discountCents ?? 0) > 0) return formatMoneyCents(line.discountCents ?? 0);
+  return "—";
+}
+
+/** Linii care intră în total: dacă există decizii, doar approved. */
+export function quoteLinesIncludedInTotals<
+  T extends { id: string; approvalStatus: QuoteLineApprovalStatus },
+>(lines: T[], decisions?: Record<string, QuoteLineApprovalStatus | undefined>): T[] {
+  const statusOf = (line: T) => decisions?.[line.id] ?? line.approvalStatus;
+  const hasDecision = lines.some((line) => {
+    const s = statusOf(line);
+    return s && s !== "pending";
+  });
+  return hasDecision ? lines.filter((line) => statusOf(line) === "approved") : lines;
 }
 
 export function quoteStatusLabel(status: WorkOrderQuoteStatus | string): string {
