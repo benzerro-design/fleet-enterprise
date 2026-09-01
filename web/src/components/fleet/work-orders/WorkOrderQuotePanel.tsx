@@ -248,7 +248,7 @@ type Props = {
   workOrderId: string;
   canWrite: boolean;
   canApprove?: boolean;
-  /** Cost din factură — doar flotă (L*/L1). Partenerul încarcă factura, nu generează cost. */
+  /** Cost din factură — doar flotă (L* / L1). Partenerul încarcă factura, nu generează cost. */
   canPostCost?: boolean;
   /** Ascunde link-ul către /fleet/costs (portal partener). */
   isPartner?: boolean;
