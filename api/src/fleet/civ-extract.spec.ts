@@ -48,6 +48,21 @@ describe('detectCivDocumentFormat', () => {
   it('verso-only 2016 rămâne 2016 (nu 2024)', () => {
     expect(detectCivDocumentFormat(VERSO_ONLY_2016)).toBe('2016');
   });
+
+  it('OCR Proace grilă → 2024, nu standingPlaces din glosar', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const ocr = fs.readFileSync(
+      path.join(__dirname, '../../scripts/fixtures/civ-2024-proace.ocr.txt'),
+      'utf8',
+    );
+    expect(detectCivDocumentFormat(ocr)).toBe('2024');
+    const g = mapCivExtractTextToPreview(ocr, 'unknown', 'file');
+    expect(g.formatUsed).toBe('2024');
+    expect(g.civProfile.brand).toBe('TOYOTA');
+    expect(g.civProfile.lengthMm).toBe(5309);
+    expect(g.civProfile.standingPlaces).not.toBe(3);
+  });
 });
 
 describe('parseWebUploadUrl / object key', () => {

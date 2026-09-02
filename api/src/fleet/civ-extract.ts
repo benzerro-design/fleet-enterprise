@@ -13,6 +13,7 @@ import {
 } from './civ-label-map';
 import { splitCivBookPages, stripEnglishCivGlossary } from './civ-pages';
 import { looksLikeCiv1993, mapCiv1993TextToPreview } from './civ-1993-extract';
+import { looksLikeCiv2024Grid, mapCiv2024TextToPreview } from './civ-2024-extract';
 
 export type CivExtractMatch = {
   rubric: string;
@@ -49,6 +50,10 @@ export function isModernCivFormat(format: CivDocumentFormat): boolean {
   return format === '2016' || format === '2024';
 }
 
+function stripDiacriticsLoose(s: string): string {
+  return s.normalize('NFD').replace(/\p{M}/gu, '');
+}
+
 /**
  * Detectare variantă CIV.
  * - 2016: layout UE cu D.1 / P.x (ex. Logan emis 2022)
@@ -56,7 +61,7 @@ export function isModernCivFormat(format: CivDocumentFormat): boolean {
  * - 1993: grilă veche, fără D.1
  */
 export function detectCivDocumentFormat(text: string): CivDocumentFormat {
-  const t = text.toLowerCase();
+  const t = stripDiacriticsLoose(text).toLowerCase().replace(/\s+/g, ' ');
   const hasUeCodes = /\bd\.1\b/.test(t) || /\bp\.3\b/.test(t) || /\bd\.3\b/.test(t);
   if (hasUeCodes) {
     const hasOwnerBlock =
@@ -65,12 +70,12 @@ export function detectCivDocumentFormat(text: string): CivDocumentFormat {
       /\bnume\s+si\s+prenume\b/.test(t) ||
       /\bcnp\b/.test(t);
     if (hasOwnerBlock) return '2016';
-    // 2024 = aceleași D.1/P.x, fără C.2/CNP. Nu cere fraza „fără date proprietar”
-    // (OCR rar o vede). Verso-only 2016 (fără față) rămâne 2016 — n-are indicii p1.
+    // 2024 = aceleași D.1/P.x, fără C.2/CNP. Diacritice + Identity Card pe mai multe linii.
     const hasFront2024Hints =
       /\bmentiuni\b/.test(t) ||
       /\bvehicle identity card\b/.test(t) ||
-      /\bnum[aă]r\s+de\s+[iî]nmatriculare\b/.test(t);
+      /\bnumar\s+de\s+inmatriculare\b/.test(t) ||
+      looksLikeCiv2024Grid(text);
     if (hasFront2024Hints) return '2024';
     return '2016';
   }
@@ -181,6 +186,14 @@ export function mapCivExtractTextToPreview(
       hasVerso: Boolean(splitCivBookPages(text).versoRaw.trim()) || /===\s*CIV\s+VERSO\s*===/i.test(text),
       techPairCount: r.techPairCount,
     };
+  }
+
+  if (looksLikeCiv2024Grid(text)) {
+    const grid = mapCiv2024TextToPreview(text, source);
+    const filled = Object.values(grid.civProfile).filter((v) => v != null && v !== '').length;
+    if (filled >= 6) {
+      return { ...grid, formatUsed: '2024' };
+    }
   }
 
   const pages = splitCivBookPages(text);

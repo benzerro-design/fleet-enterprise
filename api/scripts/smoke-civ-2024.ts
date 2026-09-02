@@ -78,4 +78,37 @@ console.log({
   vin: p.vin,
   series: p.civSeries,
 });
-console.log('OK');
+console.log('OK colon-2024');
+
+{
+  const { readFileSync } = require('fs') as typeof import('fs');
+  const { join } = require('path') as typeof import('path');
+  const ocr = readFileSync(join(__dirname, 'fixtures/civ-2024-proace.ocr.txt'), 'utf8');
+  if (detectCivDocumentFormat(ocr) !== '2024') {
+    throw new Error(`grid detect=${detectCivDocumentFormat(ocr)}`);
+  }
+  const g = mapCivExtractTextToPreview(ocr, 'unknown', 'file');
+  if (g.formatUsed !== '2024') throw new Error(`grid formatUsed=${g.formatUsed}`);
+  if (g.civProfile.standingPlaces === 3) {
+    throw new Error('standingPlaces=3 e fals din glosar EN');
+  }
+  if (g.civProfile.brand !== 'TOYOTA') throw new Error(`grid brand=${g.civProfile.brand}`);
+  if (String(g.civProfile.commercialName ?? '').toUpperCase() !== 'PROACE') {
+    throw new Error(`grid commercial=${g.civProfile.commercialName}`);
+  }
+  if (g.vin !== 'YARVAYHVMGZ008341') throw new Error(`grid vin=${g.vin}`);
+  if (g.civProfile.lengthMm !== 5309) throw new Error(`grid L=${g.civProfile.lengthMm}`);
+  if (g.civProfile.widthMm !== 1920) throw new Error(`grid l=${g.civProfile.widthMm}`);
+  if (g.civProfile.heightMm !== 1899) throw new Error(`grid h=${g.civProfile.heightMm}`);
+  if (!/MOTORIN/i.test(String(g.civProfile.fuelType ?? ''))) {
+    throw new Error(`grid fuel=${g.civProfile.fuelType}`);
+  }
+  const gk = Object.keys(g.civProfile).filter((k) => g.civProfile[k] != null && g.civProfile[k] !== '');
+  if (gk.length < 12) throw new Error(`grid fields=${gk.length} ${gk.join(',')}`);
+  console.log({
+    gridFormat: g.formatUsed,
+    gridFields: gk.length,
+    gridKeys: gk,
+  });
+  console.log('OK grid-2024 Proace OCR');
+}
