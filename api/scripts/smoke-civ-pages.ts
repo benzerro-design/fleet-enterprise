@@ -48,6 +48,7 @@ console.log({
   matched: p.matched.length,
 });
 if (p.civProfile.brand !== 'DACIA') throw new Error(`brand=${p.civProfile.brand}`);
+if (p.formatUsed !== '2016') throw new Error(`formatUsed=${p.formatUsed} (Logan trebuie 2016)`);
 if (p.civSeries !== 'P541981') throw new Error(`serie=${p.civSeries}`);
 if (keys.length < 12) throw new Error(`fields=${keys.length}`);
 console.log('OK');

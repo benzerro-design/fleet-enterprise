@@ -43,7 +43,7 @@ import { parseTenantIntegrationsSettings, interCarsHasCredentials } from '../ten
 import { InterCarsClient } from '../tenant/intercars-client.service';
 import { parseWorkOrderSettings, type WorkOrderSettings } from '../tenant/work-order-settings';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
-import { parseWebUploadUrl, readWebUploadFromGcs } from '../storage/web-upload-storage';
+import { loadWebUploadBytes, WebUploadLoadError } from '../storage/web-upload-storage';
 import { costCategoryForWorkflow } from './work-order-cost.utils';
 import {
   computeApprovedTotals,
@@ -277,42 +277,18 @@ export class WorkOrderQuotesService {
   private async loadImportFileBytes(
     rawUrl: string,
   ): Promise<{ buf: Buffer; contentType: string }> {
-    const uploadRef = parseWebUploadUrl(rawUrl);
-    if (uploadRef) {
-      const fromGcs = await readWebUploadFromGcs(uploadRef);
-      if (fromGcs) {
-        return { buf: fromGcs.data, contentType: fromGcs.contentType };
-      }
-    }
-
-    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
-    let url = rawUrl.trim();
-    if (url.startsWith('/') && webOrigin) {
-      url = `${webOrigin}${url}`;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      throw new BadRequestException(
-        uploadRef
-          ? 'Fișierul nu a fost găsit în storage. Reîncarcă PDF-ul și reîncearcă.'
-          : 'fileUrl trebuie să fie absolut sau relative pe WEB_ORIGIN',
-      );
-    }
-
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 25_000);
-    let res: Response;
     try {
-      res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
-    } finally {
-      clearTimeout(timer);
+      return await loadWebUploadBytes(rawUrl);
+    } catch (e) {
+      if (e instanceof WebUploadLoadError) {
+        throw new BadRequestException(
+          e.code === 'not_found'
+            ? 'Fișierul nu a fost găsit în storage. Reîncarcă PDF-ul și reîncearcă.'
+            : e.message.replace(/\bscanului CIV\b/gi, 'fișierului').replace(/\bScan CIV\b/g, 'Fișierul'),
+        );
+      }
+      throw e;
     }
-    if (!res.ok) {
-      throw new BadRequestException(`Nu am putut descărca fișierul (HTTP ${res.status})`);
-    }
-    const buf = Buffer.from(await res.arrayBuffer());
-    const contentType =
-      res.headers.get('content-type')?.split(';')[0]?.trim() || 'application/octet-stream';
-    return { buf, contentType };
   }
 
   async importPreview(

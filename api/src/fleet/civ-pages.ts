@@ -109,15 +109,18 @@ function splitFrontIntoPage1And4(front: string): { page1: string; page4: string 
   const mentiuni = /Men[tț]iuni\s*:/i.exec(front);
   const proprietar = /\b(?:C\.?2\.?\s*)?Proprietar\b/i.exec(front);
   const inmatriculare = /\bNum[aă]r\s+de\s+[iî]nmatriculare\b/i.exec(front);
+  const serieCiv = /\bSerie\s+C\.?I\.?V\b/i.exec(front);
   const glossary = /A\.\s*Registration\s+number/i.exec(front);
 
   // Dacă Mențiuni e înaintea blocului p1 → OCR a citit p4 (stânga) apoi p1 (dreapta).
   // Taie la „Număr de înmatriculare” / REGISTRUL, nu la Proprietar — altfel A./barcode/Serie CIV
   // rămân greșit în page4 și Serie CIV nu se mai găsește.
+  // 2024: fără C.2 Proprietar — landmark p1 = înmatriculare / Serie CIV.
   {
     const page1Landmark = Math.min(
       proprietar?.index ?? Number.POSITIVE_INFINITY,
       inmatriculare?.index ?? Number.POSITIVE_INFINITY,
+      serieCiv?.index ?? Number.POSITIVE_INFINITY,
     );
     if (
       mentiuni &&
@@ -129,6 +132,7 @@ function splitFrontIntoPage1And4(front: string): { page1: string; page4: string 
         inmatriculare?.index,
         rarHeader,
         proprietar?.index,
+        serieCiv?.index,
       ].filter(
         (n): n is number => typeof n === 'number' && n > mentiuni.index!,
       );
@@ -142,8 +146,8 @@ function splitFrontIntoPage1And4(front: string): { page1: string; page4: string 
     }
   }
 
-  // Proprietar / înmatriculare înainte → p1 apoi p4.
-  if (mentiuni && (proprietar || inmatriculare)) {
+  // Proprietar / înmatriculare / Serie CIV înainte → p1 apoi p4.
+  if (mentiuni && (proprietar || inmatriculare || serieCiv)) {
     const p1End = mentiuni.index!;
     const page1 = front.slice(0, p1End).trim();
     const page4 = front.slice(p1End).trim();

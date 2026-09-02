@@ -66,7 +66,7 @@ export function isReadableCivOcrText(text: string): boolean {
     /num[aă]r(?:ul)?\s+de\s+identificare/,
     /carte\s+de\s+identitate/,
     /\bautoturism\b/,
-    /\bford\b|\bdacia\b|\bvolkswagen\b|\brenaul/,
+    /\bford\b|\bdacia\b|\bvolkswagen\b|\brenaul|\btoyota\b|\bproace\b/,
     /\bwf0[a-z0-9]{14}\b/i,
     /\bvin\b/,
   ];

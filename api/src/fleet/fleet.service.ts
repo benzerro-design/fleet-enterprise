@@ -28,7 +28,7 @@ import type {
   VehiclePhotosPayload,
 } from './vehicle-acquisition.types';
 import { buildVehicleMobilityPayload } from './vehicle-mobility';
-import { parseWebUploadUrl, readWebUploadFromGcs } from '../storage/web-upload-storage';
+import { loadWebUploadBytes, WebUploadLoadError } from '../storage/web-upload-storage';
 import { isPlausibleCivValue, isReadableCivOcrText } from './civ-text-quality';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
@@ -579,15 +579,20 @@ export class FleetService {
 
     const preview = mapCivExtractTextToPreview(text, format, source);
     if (preview.mappingSkipped) {
-    return {
-      ...preview,
-      ocrText: (text || preview.ocrText || '').slice(0, 100_000),
-    };
+      return {
+        ...preview,
+        ocrText: (text || preview.ocrText || '').slice(0, 100_000),
+      };
     }
     if (preview.matched.length === 0) {
-      throw new BadRequestException(
-        'Nu am putut mapa nicio rubrică validă. Pentru CIV scanat: asigură-te că Vision OCR e activ, sau lipește text OCR curat (ex. „Marcă: DACIA”).',
-      );
+      return {
+        ...preview,
+        mappingSkipped: true,
+        mappingSkipReason:
+          preview.mappingSkipReason ??
+          'Nu am putut mapa nicio rubrică validă. Verifică scanul față+verso sau lipește text OCR curat.',
+        ocrText: (text || preview.ocrText || '').slice(0, 100_000),
+      };
     }
 
     let vinAutoSaved = false;
@@ -665,10 +670,13 @@ export class FleetService {
       );
     } catch (e) {
       if (e instanceof BadRequestException) throw e;
+      if (e instanceof WebUploadLoadError) {
+        throw new BadRequestException(e.message);
+      }
       const msg = e instanceof Error ? e.message : 'Descărcare scan CIV eșuată';
       throw new BadRequestException(
         msg === 'fetch failed'
-          ? 'Nu am putut descărca scanul CIV (rețea Cloud Run). Reîncearcă după redeploy API sau lipește text OCR.'
+          ? 'Nu am putut descărca scanul CIV (rețea Cloud Run). Verifică GCS_BUCKET + roles/storage.objectViewer pe SA API.'
           : msg,
       );
     }
@@ -681,42 +689,14 @@ export class FleetService {
   private async loadCivScanBytes(
     rawUrl: string,
   ): Promise<{ buf: Buffer; contentType: string }> {
-    const uploadRef = parseWebUploadUrl(rawUrl);
-    if (uploadRef) {
-      const fromGcs = await readWebUploadFromGcs(uploadRef);
-      if (fromGcs) {
-        return { buf: fromGcs.data, contentType: fromGcs.contentType };
-      }
-    }
-
-    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
-    let url = rawUrl.trim();
-    if (url.startsWith('/') && webOrigin) {
-      url = `${webOrigin}${url}`;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      throw new BadRequestException(
-        uploadRef
-          ? 'Scan CIV negăsit în GCS. Reîncarcă documentul CIV (cu fișier) și reîncearcă.'
-          : 'fileUrl trebuie să fie absolut sau relative pe WEB_ORIGIN',
-      );
-    }
-
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 25_000);
-    let res: Response;
     try {
-      res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
-    } finally {
-      clearTimeout(timer);
+      return await loadWebUploadBytes(rawUrl);
+    } catch (e) {
+      if (e instanceof WebUploadLoadError) {
+        throw new BadRequestException(e.message);
+      }
+      throw e;
     }
-    if (!res.ok) {
-      throw new BadRequestException(`Nu am putut descărca scanul (HTTP ${res.status})`);
-    }
-    const buf = Buffer.from(await res.arrayBuffer());
-    const contentType =
-      res.headers.get('content-type')?.split(';')[0]?.trim() || 'application/octet-stream';
-    return { buf, contentType };
   }
 
   async patchVehicleCiv(

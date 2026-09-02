@@ -64,9 +64,14 @@ export function detectCivDocumentFormat(text: string): CivDocumentFormat {
       /\btitular\b/.test(t) ||
       /\bnume\s+si\s+prenume\b/.test(t) ||
       /\bcnp\b/.test(t);
-    if (!hasOwnerBlock && (/\bvehicle identity card\b/.test(t) || /\bmentiuni\b/.test(t))) {
-      if (/\bfara\s+date\s+proprietar\b/.test(t) || /\bno\s+owner\b/.test(t)) return '2024';
-    }
+    if (hasOwnerBlock) return '2016';
+    // 2024 = aceleași D.1/P.x, fără C.2/CNP. Nu cere fraza „fără date proprietar”
+    // (OCR rar o vede). Verso-only 2016 (fără față) rămâne 2016 — n-are indicii p1.
+    const hasFront2024Hints =
+      /\bmentiuni\b/.test(t) ||
+      /\bvehicle identity card\b/.test(t) ||
+      /\bnum[aă]r\s+de\s+[iî]nmatriculare\b/.test(t);
+    if (hasFront2024Hints) return '2024';
     return '2016';
   }
   if (looksLikeCiv1993(text)) return '1993';
