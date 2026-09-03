@@ -121,6 +121,24 @@ F.1 N.1 P.1
     expect(g.civProfile.seatsIncludingDriver).toBeUndefined();
   });
 
+  it('S.1 = 9 pe M1 AF când Vision citește 6 lângă E6 (fără etichetă S.1)', () => {
+    const g = mapCiv2024TextToPreview(
+      `=== CIV FAȚĂ ===
+AF
+cu utilizare multiplă
+Autoturism M1
+
+=== CIV VERSO ===
+E6 Gri 6 0 160 80 2625 68 xx
+F.1 N.1 P.1
+5309
+`,
+      'text',
+    );
+    expect(g.civProfile.homologationCategory).toBe('M1');
+    expect(g.civProfile.seatsIncludingDriver).toBe(9);
+  });
+
   it('V.9 din regulamente UE fragmentate (nu șir hardcodat Proace)', () => {
     const g = mapCiv2024TextToPreview(
       `=== CIV VERSO ===

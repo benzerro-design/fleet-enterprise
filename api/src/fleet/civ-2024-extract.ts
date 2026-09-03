@@ -515,12 +515,19 @@ function pickEmissionStandard(verso: string): string | null {
   return null;
 }
 
+/** M1 + caroserie AF / utilizare multiplă — plafon legal 9 locuri, fără S.2. */
+function isM1PeopleCarrier(profile: VehicleCivProfile): boolean {
+  if (!/^M1/i.test(String(profile.homologationCategory ?? ''))) return false;
+  const body = String(profile.bodyType ?? '');
+  return /\bAF\b/i.test(body) || /utilizare multipl/i.test(stripDiacritics(body));
+}
+
 function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: CivExtractMatch[]) {
   pickSeatsFromLabel(verso, profile, matched);
 
   /**
    * Rând 16→W: E{n} culoare S.1 S.2 T. U.1…
-   * Dacă S.1 din grilă = cifra Euro (E6 + 6), e ambiguu (OCR 9↔6) — nu inventăm locuri.
+   * Dacă S.1 = cifra Euro (E6+6), nu lua 6. Pe M1+AF (plafon 9) e OCR 9↔6.
    */
   const coded = /\b(E\d)\s+(Gri|Alb|Negru|Albastru|Rosu|Roșu|Maro|Verde|Argintiu|Bej|Galben|Portocaliu)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})\s+(\d{4})\s+(\d{2,3})/i.exec(
     verso,
@@ -541,6 +548,14 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
     const moving = Number(coded[8]);
     if (afterColor >= 2 && afterColor <= 9 && afterColor !== euroDigit) {
       setProfile(profile, matched, 'seatsIncludingDriver', afterColor, 'Număr locuri (cu șofer)');
+    } else if (
+      afterColor === euroDigit &&
+      euroDigit === 6 &&
+      standing === 0 &&
+      isM1PeopleCarrier(profile)
+    ) {
+      // OCR 9↔6 lângă E6. M1 + AF (plafon 9, fără locuri în picioare) → 9, nu gol.
+      setProfile(profile, matched, 'seatsIncludingDriver', 9, 'Număr locuri (cu șofer)');
     }
     if (standing >= 0 && standing <= 20) {
       setProfile(profile, matched, 'standingPlaces', standing, 'Locuri în picioare');
