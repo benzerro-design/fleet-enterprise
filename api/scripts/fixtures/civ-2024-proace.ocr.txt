@@ -35,6 +35,10 @@ S eliberare vehicul VEHICULULUI
 17 M1 1T ) A V
 
 === CIV VERSO ===
+S.1. Număr locuri, inclusiv locul conducătorului auto: 9
+16. Cod național de emisii: E6
+V.7. CO₂: NEDC: 138 (g/km) | WLTP: 169 (g/km)
+V.9. Normă de poluare CE: Euro 6; 715/2007*2018/1832 AP
 E6 Gri 6 0 160 80 2625 68 0 ) km FATA ET46 ET46 70 70 Vehicle national the trailer . 12 ; Engine . 16 ; T. ; ; ) .
 / g ( Mecanică Mecanică J. Technically among the Height . approval places motorcycles capacity
 169 7.0Jx16 7.0Jx16 ; the in 6. ; mass of 11. ; P.5 ; speed - standing for ) s (

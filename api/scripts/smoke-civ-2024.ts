@@ -111,7 +111,9 @@ console.log('OK colon-2024');
   if (!/215\/65/.test(String(g.civProfile.tyresFront ?? ''))) {
     throw new Error(`grid tyres=${g.civProfile.tyresFront}`);
   }
-  if (g.civProfile.co2Gkm !== 169) throw new Error(`grid co2=${g.civProfile.co2Gkm}`);
+  if (String(g.civProfile.co2Gkm) !== 'NEDC: 138 (g/km) | WLTP: 169 (g/km)') {
+    throw new Error(`grid co2=${g.civProfile.co2Gkm}`);
+  }
   if (g.civSeries !== 'S869740') throw new Error(`grid serie=${g.civSeries}`);
   if (!/AF.*multipl/i.test(String(g.civProfile.bodyType ?? ''))) {
     throw new Error(`grid body=${g.civProfile.bodyType}`);
@@ -133,11 +135,14 @@ console.log('OK colon-2024');
   if (!/Motor cu ardere intern/i.test(String(g.civProfile.propulsionSystem ?? ''))) {
     throw new Error(`grid prop=${g.civProfile.propulsionSystem}`);
   }
-  if (g.civProfile.nationalEmissionCode) {
-    throw new Error(`grid emCode should be empty, got ${g.civProfile.nationalEmissionCode}`);
+  if (g.civProfile.nationalEmissionCode !== 'E6') {
+    throw new Error(`grid emCode=${g.civProfile.nationalEmissionCode}`);
   }
-  if (g.civProfile.seatsIncludingDriver != null) {
-    throw new Error(`grid seats should stay empty (OCR 6 = Euro 6), got ${g.civProfile.seatsIncludingDriver}`);
+  if (g.civProfile.seatsIncludingDriver !== 9) {
+    throw new Error(`grid seats=${g.civProfile.seatsIncludingDriver}`);
+  }
+  if (String(g.civProfile.emissionStandard) !== 'Euro 6; 715/2007*2018/1832 AP') {
+    throw new Error(`grid euro=${g.civProfile.emissionStandard}`);
   }
   if (!/215\/65 R16C 106T\/7\.0Jx16 ET46/i.test(String(g.civProfile.tyresFront ?? ''))) {
     throw new Error(`grid tyres full=${g.civProfile.tyresFront}`);

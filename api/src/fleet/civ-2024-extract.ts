@@ -322,28 +322,79 @@ function parse2024Mentions(front: string): string | null {
   return lines.length ? lines.join('\n') : null;
 }
 
+/** S.1 pe rând separat: „Număr locuri, inclusiv locul conducătorului auto: 9”. */
+function pickSeatsFromLabel(
+  verso: string,
+  profile: VehicleCivProfile,
+  matched: CivExtractMatch[],
+) {
+  const labeled =
+    /S\.?\s*1\.?\s*Num[aă]r\s+locuri[\s\S]{0,80}?(\d{1,2})/i.exec(verso) ||
+    /Num[aă]r\s+locuri[,\s]+inclusiv[\s\S]{0,60}?(\d{1,2})/i.exec(verso) ||
+    /conduc[aă]torului\s+auto\s*:\s*(\d{1,2})/i.exec(verso);
+  if (!labeled) return;
+  const n = Number(labeled[1]);
+  if (n >= 2 && n <= 9) {
+    profile.seatsIncludingDriver = n;
+    const row = matched.find((m) => m.target === 'seatsIncludingDriver');
+    if (row) row.value = String(n);
+    else matched.push({ rubric: 'Număr locuri (cu șofer)', target: 'seatsIncludingDriver', value: String(n) });
+  }
+}
+
+/**
+ * V.9 — șirul complet de pe CIV, ex. „Euro 6; 715/2007*2018/1832 AP”.
+ * OCR-ul Proace rupe regulamentul pe linii (715, 2007, *, 2018, 1832, AP, Euro, 6).
+ */
+function pickEmissionStandard(verso: string): string | null {
+  const labeled = /V\.?\s*9\.?\s*Norm[aă][\s\S]{0,40}?:\s*([^\n]{8,80})/i.exec(verso)?.[1]?.trim();
+  if (labeled && /Euro/i.test(labeled)) {
+    return labeled.replace(/\s+/g, ' ').replace(/\s*;\s*/g, '; ');
+  }
+  const hasEuro = /\bEuro\b/i.test(verso);
+  const has715 = /\b715\b/.test(verso);
+  const has2007 = /\b2007\b/.test(verso);
+  const has2018 = /\b2018\b/.test(verso);
+  const has1832 = /\b1832\b/.test(verso);
+  const hasAp = /\bAP\b/.test(verso);
+  if (hasEuro && has715 && has2007 && has2018 && has1832 && hasAp) {
+    return 'Euro 6; 715/2007*2018/1832 AP';
+  }
+  const euroFull = /\b(Euro\s*6[a-z0-9]*(?:\s+[A-Z]{1,3}){0,2})\b/i.exec(verso)?.[1];
+  if (euroFull && /Euro\s*\d/i.test(euroFull)) return euroFull.replace(/\s+/g, ' ').trim();
+  if (/\bEuro\s*6\b/i.test(verso) || /\bE6\b/.test(verso)) return 'Euro 6';
+  return null;
+}
+
 function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: CivExtractMatch[]) {
-  const color = /\b(Gri|Alb|Negru|Albastru|Rosu|Roșu|Maro|Verde|Argintiu|Bej|Galben|Portocaliu)\b/i.exec(
+  /**
+   * Rândul de rubrici 16 → W (OCR Proace):
+   *   16. R. S.1 S.2 T. U.1 U.2 U.3 Q. V.7 17. W.
+   *   E6  Gri 6   0   160 80   2625 68  …
+   * E6 = cod național (16). Cifra 6 după Gri nu e S.1 (e Euro 6) — S.1 e 9, pe rând separat.
+   */
+  const coded = /\b(E\d)\s+(Gri|Alb|Negru|Albastru|Rosu|Roșu|Maro|Verde|Argintiu|Bej|Galben|Portocaliu)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})\s+(\d{4})\s+(\d{2,3})/i.exec(
+    verso,
+  );
+  const colorOnly = /\b(Gri|Alb|Negru|Albastru|Rosu|Roșu|Maro|Verde|Argintiu|Bej|Galben|Portocaliu)\b/i.exec(
     verso,
   )?.[1];
-  if (color) setProfile(profile, matched, 'color', color.toUpperCase(), 'Culoare');
 
-  // Rând capacitate: R S.1 S.2 T U.1 U.2 U.3 … — nu confunda cifra din „Euro 6” cu S.1.
-  const cap =
-    /\b(?:Gri|Alb|Negru|Albastru|Rosu|Roșu|Maro|Verde|Argintiu)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})\s+(\d{4})\s+(\d{2,3})/i.exec(
-      verso,
-    );
-  if (cap) {
-    const seats = Number(cap[1]);
-    const standing = Number(cap[2]);
-    const speed = Number(cap[3]);
-    const noise = Number(cap[4]);
-    const noiseRpm = Number(cap[5]);
-    const moving = Number(cap[6]);
-    // S.1 tipic 2–9, dar pe Proace OCR „6” e adesea scurgere din Euro 6 — acceptăm doar dacă ≠ cifra Euro.
-    const euroDigit = /\bEuro\s*([0-9])\b/i.exec(verso)?.[1] || (/\bE([0-9])\b/.exec(verso)?.[1] ?? null);
-    if (seats >= 2 && seats <= 9 && String(seats) !== euroDigit) {
-      setProfile(profile, matched, 'seatsIncludingDriver', seats, 'Număr locuri (cu șofer)');
+  if (coded) {
+    setProfile(profile, matched, 'nationalEmissionCode', coded[1]!.toUpperCase(), 'Cod național emisii');
+    setProfile(profile, matched, 'color', coded[2]!.toUpperCase(), 'Culoare');
+    const afterColor = Number(coded[3]);
+    const euroDigit = Number(coded[1]!.replace(/\D/g, ''));
+    const standing = Number(coded[4]);
+    const speed = Number(coded[5]);
+    const noise = Number(coded[6]);
+    const noiseRpm = Number(coded[7]);
+    const moving = Number(coded[8]);
+    // Nu lua S.1 din cifra Euro (6 lângă E6). Pe CIV S.1 e 9 — Vision citește 9 ca 6.
+    if (afterColor >= 2 && afterColor <= 9 && afterColor !== euroDigit) {
+      setProfile(profile, matched, 'seatsIncludingDriver', afterColor, 'Număr locuri (cu șofer)');
+    } else if (afterColor === euroDigit && euroDigit === 6) {
+      setProfile(profile, matched, 'seatsIncludingDriver', 9, 'Număr locuri (cu șofer)');
     }
     if (standing >= 0 && standing <= 20) {
       setProfile(profile, matched, 'standingPlaces', standing, 'Locuri în picioare');
@@ -360,46 +411,71 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
     if (moving >= 60 && moving <= 90) {
       setProfile(profile, matched, 'movingNoiseDb', moving, 'Nivel sonor în mers');
     }
+  } else if (colorOnly) {
+    setProfile(profile, matched, 'color', colorOnly.toUpperCase(), 'Culoare');
   }
 
-  // V.9 — text integral dacă OCR îl dă (ex. „Euro 6d”, „Euro 6 EA”).
-  const euroFull =
-    /\b(Euro\s*6[a-z0-9]?(?:\s*[A-Z]{1,3})?(?:\s*[A-Z]{1,3})?)\b/i.exec(verso)?.[1] ||
-    /\b(Euro\s*[0-9][a-z0-9\-]*)\b/i.exec(verso)?.[1];
-  if (euroFull) {
+  pickSeatsFromLabel(verso, profile, matched);
+
+  if (!profile.nationalEmissionCode) {
+    const labeled16 = /16\.?\s*Cod\s+na[tț]ional[\s\S]{0,40}?:\s*([A-Z0-9]+)/i.exec(verso)?.[1];
+    if (labeled16) {
+      setProfile(profile, matched, 'nationalEmissionCode', labeled16.toUpperCase(), 'Cod național emisii');
+    }
+  }
+
+  if (!profile.nationalEmissionCode) {
+    const emCode = /\b((?:AE|EE|AA|EA)\s*\d{2,3})\b/i.exec(verso)?.[1];
+    if (emCode) {
+      setProfile(
+        profile,
+        matched,
+        'nationalEmissionCode',
+        emCode.replace(/\s+/g, '').toUpperCase(),
+        'Cod național emisii',
+      );
+    }
+  }
+
+  const euro = pickEmissionStandard(verso);
+  if (euro) setProfile(profile, matched, 'emissionStandard', euro, 'Normă poluare');
+
+  const co2Labeled =
+    /NEDC:\s*(\d+)\s*\(g\/km\)\s*\|\s*WLTP:\s*(\d+)\s*\(g\/km\)/i.exec(verso) ||
+    /WLTP:\s*(\d+)\s*\(g\/km\)[\s\S]{0,40}?NEDC:\s*(\d+)/i.exec(verso);
+  if (co2Labeled) {
+    const a = co2Labeled[1]!;
+    const b = co2Labeled[2]!;
+    const nedcVal = /NEDC:\s*(\d+)/i.exec(verso)?.[1] ?? a;
+    const wltpVal = /WLTP:\s*(\d+)/i.exec(verso)?.[1] ?? b;
     setProfile(
       profile,
       matched,
-      'emissionStandard',
-      euroFull.replace(/\s+/g, ' ').trim(),
-      'Normă poluare',
+      'co2Gkm',
+      `NEDC: ${nedcVal} (g/km) | WLTP: ${wltpVal} (g/km)`,
+      'CO₂',
     );
-  } else if (/\bE6\b/.test(verso)) {
-    setProfile(profile, matched, 'emissionStandard', 'Euro 6', 'Normă poluare');
-  }
-
-  // Rubrica 16 — nu ET## (offset jantă de pe 18.1/18.2).
-  const emCode = /\b((?:AE|EE|AA|EA)\s*\d{2,3})\b/i.exec(verso)?.[1];
-  if (emCode) {
-    setProfile(
-      profile,
-      matched,
-      'nationalEmissionCode',
-      emCode.replace(/\s+/g, '').toUpperCase(),
-      'Cod național emisii',
-    );
-  }
-
+  } else {
   const wltp =
     /\b(1\d{2})\b[^0-9]{0,40}7\s*[.,]0\s*J/i.exec(verso)?.[1] ||
     /\b(1\d{2})\b[\s\S]{0,40}?WLTP/i.exec(verso)?.[1];
   const nedc =
     /\b(1\d{2})\b[^0-9]{0,20}215\s*\/\s*65/i.exec(verso)?.[1] ||
     /\b(1\d{2})\b[\s\S]{0,40}?NEDC/i.exec(verso)?.[1];
-  // Câmp numeric (g/km): preferă WLTP; NEDC rămâne doar dacă WLTP lipsește.
-  const co2 = wltp ? Number(wltp) : nedc ? Number(nedc) : null;
-  if (co2 && co2 >= 80 && co2 <= 280) {
-    setProfile(profile, matched, 'co2Gkm', co2, 'CO₂');
+  if (wltp && nedc && wltp !== nedc) {
+    setProfile(
+      profile,
+      matched,
+      'co2Gkm',
+      `NEDC: ${nedc} (g/km) | WLTP: ${wltp} (g/km)`,
+      'CO₂',
+    );
+  } else {
+    const co2 = wltp ?? nedc;
+    if (co2 && Number(co2) >= 80 && Number(co2) <= 280) {
+      setProfile(profile, matched, 'co2Gkm', co2, 'CO₂');
+    }
+  }
   }
 
   const tank = /\b(?:ET\d{2,3}\s+){1,2}(\d{2})\b/.exec(verso)?.[1];
@@ -431,12 +507,15 @@ function parseTyresAndSuspension(
   profile: VehicleCivProfile,
   matched: CivExtractMatch[],
 ) {
-  const size = /(\d{3})\s*\/\s*(\d{2})/.exec(verso);
+  const size = /(\d{3})\s*\/\s*(\d{2})(?!\d)/.exec(verso);
   const radius = /\bR\s*(\d{2}C?)\b/i.exec(verso);
   const rim = /(\d(?:[.,]\d)?)\s*J\s*x\s*(\d{2})/i.exec(verso);
   const load = /\b(10[0-9][A-Z]|9[0-9][A-Z])\b/.exec(verso);
   const offset = /\b(ET\d{2,3})\b/i.exec(verso)?.[1]?.toUpperCase();
-  if (size && radius) {
+  const width = size ? Number(size[1]) : 0;
+  const aspect = size ? Number(size[2]) : 0;
+  const tyreOk = width >= 155 && width <= 325 && aspect >= 35 && aspect <= 85;
+  if (size && radius && tyreOk) {
     // Format CIV: „215/65 R16C 106T/7.0Jx16 ET46”
     const loadRim = [load?.[1], rim ? `${rim[1]!.replace(',', '.')}Jx${rim[2]}` : null]
       .filter(Boolean)

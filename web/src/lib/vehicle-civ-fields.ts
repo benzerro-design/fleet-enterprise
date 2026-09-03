@@ -80,7 +80,7 @@ export const CIV_PROFILE_FIELDS: CivFieldDef[] = [
   { key: "driveType", rubric: "17", label: "Tracțiune", kind: "text", group: "motor" },
   { key: "emissionStandard", rubric: "V.9", label: "Normă poluare", kind: "text", group: "mediu" },
   { key: "nationalEmissionCode", rubric: "16", label: "Cod național emisii", kind: "text", group: "mediu" },
-  { key: "co2Gkm", rubric: "V.7", label: "CO₂", kind: "number", group: "mediu", unit: "g/km" },
+  { key: "co2Gkm", rubric: "V.7", label: "CO₂", kind: "text", group: "mediu", unit: "g/km" },
   { key: "color", rubric: "R", label: "Culoare", kind: "text", group: "capacitate" },
   { key: "seatsIncludingDriver", rubric: "S.1", label: "Număr locuri (cu șofer)", kind: "number", group: "capacitate" },
   { key: "standingPlaces", rubric: "S.2", label: "Locuri în picioare", kind: "number", group: "capacitate" },
@@ -251,8 +251,8 @@ export function normalizeCivProfile(raw: unknown): VehicleCivProfile {
     if (f.kind === "number" || f.kind === "year") {
       const n = typeof v === "number" ? v : Number(v);
       if (Number.isFinite(n)) out[f.key] = n;
-    } else if (typeof v === "string") {
-      const t = v.trim();
+    } else {
+      const t = typeof v === "string" ? v.trim() : String(v);
       if (t) out[f.key] = t;
     }
   }

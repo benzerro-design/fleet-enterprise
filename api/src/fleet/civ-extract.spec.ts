@@ -68,7 +68,7 @@ describe('detectCivDocumentFormat', () => {
     expect(g.civIssuedOn).toBe('2025-06-23');
     expect(g.civRarOffice).toMatch(/Călărași/i);
     expect(String(g.civProfile.tyresFront ?? '')).toMatch(/215\/65/);
-    expect(g.civProfile.seatsIncludingDriver).toBeUndefined();
+    expect(g.civProfile.seatsIncludingDriver).toBe(9);
     expect(g.civProfile.maxSpeedKmh).toBe(160);
     expect(g.civSeries).toBe('S869740');
     expect(g.civProfile.bodyType).toMatch(/AF.*utilizare multipl/i);
@@ -80,7 +80,9 @@ describe('detectCivDocumentFormat', () => {
     expect(g.civProfile.maxBrakedTrailerMassKg).toBe(1400);
     expect(g.civProfile.engineSerial).toBe('FĂRĂ SERIE');
     expect(String(g.civProfile.propulsionSystem)).toMatch(/Motor cu ardere intern/i);
-    expect(g.civProfile.nationalEmissionCode).toBeUndefined();
+    expect(g.civProfile.nationalEmissionCode).toBe('E6');
+    expect(g.civProfile.emissionStandard).toBe('Euro 6; 715/2007*2018/1832 AP');
+    expect(g.civProfile.co2Gkm).toBe('NEDC: 138 (g/km) | WLTP: 169 (g/km)');
     expect(String(g.civProfile.tyresFront)).toMatch(/ET46/);
   });
 });
