@@ -20,7 +20,14 @@ type VisionWord = {
   maxX: number;
   minY: number;
   maxY: number;
+  /** Direcția de citire a cuvântului, din ordinea vârfurilor Vision. */
+  dir: RotationClass | null;
+  /** Cât cântărește cuvântul la votul de orientare (nr. de simboluri). */
+  weight: number;
 };
+
+/** Rotația scanului față de pagina dreaptă, în grade. */
+export type RotationClass = 0 | 90 | 180 | 270;
 
 type VisionFullText = {
   text?: string;
@@ -125,6 +132,22 @@ function boxFromBounding(
   return pixel;
 }
 
+/**
+ * Vision returnează vârfurile în ordinea de citire a textului, deci v0→v1 e chiar
+ * direcția rândului. Pe scan rotit, direcția dominantă nu mai e stânga→dreapta.
+ */
+function wordDirection(
+  boundingBox: { vertices?: Vertex[]; normalizedVertices?: Vertex[] } | undefined,
+): RotationClass | null {
+  const v = boundingBox?.vertices?.length ? boundingBox.vertices : boundingBox?.normalizedVertices;
+  if (!v || v.length < 2) return null;
+  const dx = (v[1]!.x ?? 0) - (v[0]!.x ?? 0);
+  const dy = (v[1]!.y ?? 0) - (v[0]!.y ?? 0);
+  if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return null;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 0 : 180;
+  return dy >= 0 ? 90 : 270;
+}
+
 function collectWords(page: NonNullable<VisionFullText['pages']>[number]): VisionWord[] {
   const out: VisionWord[] = [];
   const width = page.width ?? 0;
@@ -136,11 +159,74 @@ function collectWords(page: NonNullable<VisionFullText['pages']>[number]): Visio
         if (!text) continue;
         const box = boxFromBounding(word.boundingBox, width, height);
         if (!box) continue;
-        out.push({ text, ...box });
+        out.push({
+          text,
+          ...box,
+          dir: wordDirection(word.boundingBox),
+          weight: Math.max(1, word.symbols?.length ?? text.length),
+        });
       }
     }
   }
   return out;
+}
+
+/**
+ * Orientarea paginii = votul cuvintelor. Etichetele tipărite vertical pe marginea CIV
+ * au direcția lor proprie, deci contează majoritatea, nu primul cuvânt.
+ */
+function dominantRotation(words: VisionWord[]): RotationClass {
+  const tally: Record<RotationClass, number> = { 0: 0, 90: 0, 180: 0, 270: 0 };
+  for (const w of words) {
+    if (w.dir == null) continue;
+    tally[w.dir] += w.weight;
+  }
+  let best: RotationClass = 0;
+  for (const cls of [90, 180, 270] as RotationClass[]) {
+    if (tally[cls] > tally[best]) best = cls;
+  }
+  return best;
+}
+
+/** Aduce cuvintele în cadrul paginii drepte, ca gruparea pe rânduri să vadă rânduri. */
+function derotateWords(
+  words: VisionWord[],
+  rotation: RotationClass,
+  width: number,
+  height: number,
+): { words: VisionWord[]; width: number; height: number } {
+  if (rotation === 0 || !words.length) return { words, width, height };
+
+  const map = (x: number, y: number): [number, number] => {
+    if (rotation === 90) return [y, -x];
+    if (rotation === 180) return [-x, -y];
+    return [-y, x];
+  };
+
+  const turned = words.map((w) => {
+    const [ax, ay] = map(w.minX, w.minY);
+    const [bx, by] = map(w.maxX, w.maxY);
+    return {
+      ...w,
+      minX: Math.min(ax, bx),
+      maxX: Math.max(ax, bx),
+      minY: Math.min(ay, by),
+      maxY: Math.max(ay, by),
+    };
+  });
+
+  const offX = Math.min(...turned.map((w) => w.minX));
+  const offY = Math.min(...turned.map((w) => w.minY));
+  const shifted = turned.map((w) => {
+    const minX = w.minX - offX;
+    const maxX = w.maxX - offX;
+    const minY = w.minY - offY;
+    const maxY = w.maxY - offY;
+    return { ...w, minX, maxX, minY, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+  });
+
+  const swap = rotation === 90 || rotation === 270;
+  return { words: shifted, width: swap ? height : width, height: swap ? width : height };
 }
 
 function clusterLines(words: VisionWord[]): VisionWord[][] {
@@ -213,6 +299,19 @@ export function mergeOrphanValueAboveEmptyLabel(text: string): string {
 }
 
 /**
+ * Cât de rotit e scanul față de pagina dreaptă (0 = drept). Pentru avertisment la upload.
+ */
+export function detectCivScanRotation(
+  fullText: VisionFullText | null | undefined,
+): RotationClass {
+  for (const page of fullText?.pages ?? []) {
+    const words = collectWords(page);
+    if (words.length) return dominantRotation(words);
+  }
+  return 0;
+}
+
+/**
  * Reconstruiește text pe linii; pe spread lat împarte stânga/dreapta (două pagini CIV).
  * Pe CIV 1993 (Secțiunea A|B|C|omologare) împarte în 4 coloane și marchează COL A…D.
  */
@@ -232,10 +331,15 @@ export function rebuildCivOcrTextFromVision(fullText: VisionFullText | null | un
 
   const pageTexts: string[] = [];
   for (const page of fullText.pages) {
-    const width = page.width ?? 0;
-    const height = page.height ?? 0;
-    const words = collectWords(page);
-    if (!words.length) continue;
+    const collected = collectWords(page);
+    if (!collected.length) continue;
+
+    // Scan rotit: rândurile CIV ajung coloane și textul iese amestecat. Îndreptăm întâi.
+    const rotation = dominantRotation(collected);
+    const derotated = derotateWords(collected, rotation, page.width ?? 0, page.height ?? 0);
+    const words = derotated.words;
+    const width = derotated.width;
+    const height = derotated.height;
 
     const isSpread = width > 0 && height > 0 && width / height >= 1.25;
     if (looks1993) {
