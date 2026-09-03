@@ -161,6 +161,25 @@ function pickTypeApproval(front: string): string | null {
   return null;
 }
 
+/**
+ * D.1/D.3 sunt rubrici etichetate, oriunde ar cădea în broșură. Le citim înaintea listelor
+ * de mărci/modele, care rămân doar rezervă pentru fața fără etichete.
+ */
+function pickLabelled(text: string, label: RegExp): string | null {
+  const raw = label.exec(text)?.[1]?.trim();
+  if (!raw) return null;
+  const value = raw.replace(/\s+/g, ' ').toUpperCase();
+  return /^[A-Z0-9][A-Z0-9 .\-]{1,24}$/.test(value) ? value : null;
+}
+
+function parseIdentLabels(text: string, profile: VehicleCivProfile, matched: CivExtractMatch[]) {
+  const brand = pickLabelled(text, /D\.?\s*1\s*\.?\s*Marc[ăa]?\s*:\s*([^\n]+)/i);
+  if (brand) setProfile(profile, matched, 'brand', brand, 'Marcă');
+
+  const commercial = pickLabelled(text, /D\.?\s*3\s*\.?\s*Denumire\s+comercial[ăa]\s*:\s*([^\n]+)/i);
+  if (commercial) setProfile(profile, matched, 'commercialName', commercial, 'Denumire comercială');
+}
+
 function parseFrontIdent(
   front: string,
   profile: VehicleCivProfile,
@@ -877,6 +896,8 @@ export function mapCiv2024TextToPreview(
     civRarOffice: null as string | null,
     civSeries: null as string | null,
   };
+
+  parseIdentLabels(text, profile, matched);
 
   if (meta.vin) {
     matched.push({ rubric: 'Număr de identificare', target: 'vin', value: meta.vin });
