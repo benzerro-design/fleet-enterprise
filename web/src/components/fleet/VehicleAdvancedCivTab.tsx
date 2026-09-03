@@ -53,6 +53,9 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
   const [ocrDump, setOcrDump] = useState<string | null>(null);
   const [extractPending, setExtractPending] = useState(false);
   const [extractInfo, setExtractInfo] = useState<string | null>(null);
+  const [civWarnings, setCivWarnings] = useState<
+    { rubric: string; target: string; message: string }[]
+  >([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -125,6 +128,7 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
     setExtractPending(true);
     setError(null);
     setExtractInfo(null);
+    setCivWarnings([]);
     try {
       const body: { text?: string; fileUrl?: string; fileUrlVerso?: string; format?: string } = {
         format: "unknown",
@@ -169,6 +173,7 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
         civMentions: string | null;
         vin: string | null;
         matched: { rubric: string; target: string; value: string }[];
+        civWarnings?: { rubric: string; target: string; message: string }[];
         formatUsed: string;
         ocrText?: string;
         mappingSkipped?: boolean;
@@ -201,6 +206,7 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
         }
         return next;
       });
+      setCivWarnings(preview.civWarnings ?? []);
       if (preview.civSeries) setCivSeries(preview.civSeries);
       if (preview.civIssuedOn) setCivIssuedOn(preview.civIssuedOn.slice(0, 10));
       if (preview.civRarOffice) setCivRarOffice(preview.civRarOffice);
@@ -373,6 +379,20 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
 
       {error ? (
         <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p>
+      ) : null}
+      {civWarnings.length ? (
+        <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 px-4 py-3">
+          <p className="text-sm font-medium text-amber-200">
+            Rubrici de verificat pe CIV ({civWarnings.length})
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-amber-100/80">
+            {civWarnings.map((w) => (
+              <li key={w.target}>
+                <span className="font-mono text-amber-200">{w.rubric}</span> — {w.message}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {saved ? (
         <p className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">

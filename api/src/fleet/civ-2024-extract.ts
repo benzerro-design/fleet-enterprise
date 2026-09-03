@@ -13,7 +13,7 @@ import {
   parseCivIssuedOnIso,
 } from './civ-label-map';
 import { splitCivBookPages } from './civ-pages';
-import type { CivExtractMatch, CivExtractPreview } from './civ-extract';
+import type { CivExtractMatch, CivExtractPreview, CivExtractWarning } from './civ-extract';
 
 function stripDiacritics(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '');
@@ -515,19 +515,55 @@ function pickEmissionStandard(verso: string): string | null {
   return null;
 }
 
-/** M1 + caroserie AF / utilizare multiplă — plafon legal 9 locuri, fără S.2. */
-function isM1PeopleCarrier(profile: VehicleCivProfile): boolean {
-  if (!/^M1/i.test(String(profile.homologationCategory ?? ''))) return false;
-  const body = String(profile.bodyType ?? '');
-  return /\bAF\b/i.test(body) || /utilizare multipl/i.test(stripDiacritics(body));
+/** Glife pe care OCR-ul le confundă pe scan de card, cea mai probabilă prima. */
+const DIGIT_LOOKALIKES: Record<string, string[]> = {
+  '0': ['8', '6', '9'],
+  '1': ['7', '4'],
+  '2': ['7', '3'],
+  '3': ['8', '9', '5'],
+  '4': ['9', '1'],
+  '5': ['6', '8', '3'],
+  '6': ['9', '8', '5'],
+  '7': ['1', '2'],
+  '8': ['6', '9', '3'],
+  '9': ['6', '4', '8'],
+};
+
+/** Plafon legal S.1 după categoria de omologare (J). */
+function maxSeatsForCategory(category: string): number {
+  if (/^M1/i.test(category)) return 9;
+  if (/^N/i.test(category)) return 9;
+  return 70;
 }
 
-function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: CivExtractMatch[]) {
+function seatsAreImplausible(n: number, category: string): boolean {
+  return n < 1 || n > maxSeatsForCategory(category);
+}
+
+function pushSeatsWarning(warnings: CivExtractWarning[], read: number, reason: string) {
+  const digit = String(read);
+  const candidates = DIGIT_LOOKALIKES[digit] ?? [];
+  const hint = candidates.slice(0, 2).join(' sau ');
+  warnings.push({
+    rubric: 'S.1',
+    target: 'seatsIncludingDriver',
+    read: digit,
+    candidates,
+    message: `${reason} Citește S.1 de pe CIV${hint ? ` — poate fi ${hint}` : ''}.`,
+  });
+}
+
+function parseVersoCapacity(
+  verso: string,
+  profile: VehicleCivProfile,
+  matched: CivExtractMatch[],
+  warnings: CivExtractWarning[],
+) {
   pickSeatsFromLabel(verso, profile, matched);
 
   /**
    * Rând 16→W: E{n} culoare S.1 S.2 T. U.1…
-   * Dacă S.1 = cifra Euro (E6+6), nu lua 6. Pe M1+AF (plafon 9) e OCR 9↔6.
+   * Dacă S.1 = cifra Euro (E6+6), nu lua 6 și nu deduce din AF/M1 — AF nu e număr de locuri.
    */
   const coded = /\b(E\d)\s+(Gri|Alb|Negru|Albastru|Rosu|Roșu|Maro|Verde|Argintiu|Bej|Galben|Portocaliu)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})\s+(\d{4})\s+(\d{2,3})/i.exec(
     verso,
@@ -546,16 +582,23 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
     const noise = Number(coded[6]);
     const noiseRpm = Number(coded[7]);
     const moving = Number(coded[8]);
-    if (afterColor >= 2 && afterColor <= 9 && afterColor !== euroDigit) {
+    const category = String(profile.homologationCategory ?? '');
+    if (profile.seatsIncludingDriver != null) {
+      // S.1 a venit deja de pe rândul etichetat — grila nu-l rescrie.
+    } else if (afterColor === euroDigit) {
+      pushSeatsWarning(
+        warnings,
+        afterColor,
+        `OCR a citit ${afterColor} la S.1, dar e aceeași cifră cu norma Euro ${euroDigit} de alături.`,
+      );
+    } else if (seatsAreImplausible(afterColor, category)) {
+      pushSeatsWarning(
+        warnings,
+        afterColor,
+        `OCR a citit ${afterColor} locuri, imposibil pe categoria ${category || 'necunoscută'}.`,
+      );
+    } else {
       setProfile(profile, matched, 'seatsIncludingDriver', afterColor, 'Număr locuri (cu șofer)');
-    } else if (
-      afterColor === euroDigit &&
-      euroDigit === 6 &&
-      standing === 0 &&
-      isM1PeopleCarrier(profile)
-    ) {
-      // OCR 9↔6 lângă E6. M1 + AF (plafon 9, fără locuri în picioare) → 9, nu gol.
-      setProfile(profile, matched, 'seatsIncludingDriver', 9, 'Număr locuri (cu șofer)');
     }
     if (standing >= 0 && standing <= 20) {
       setProfile(profile, matched, 'standingPlaces', standing, 'Locuri în picioare');
@@ -693,14 +736,19 @@ function parseTyresAndSuspension(
   }
 }
 
-function parseVersoGrid(verso: string, profile: VehicleCivProfile, matched: CivExtractMatch[]) {
+function parseVersoGrid(
+  verso: string,
+  profile: VehicleCivProfile,
+  matched: CivExtractMatch[],
+  warnings: CivExtractWarning[],
+) {
   const fuelRo = /\b(MOTORINA|BENZINA|GPL|HIBRID[AĂ]?)\b/i.exec(verso)?.[1];
   const fuel = fuelRo ?? (/\bELECTRIC\b/i.exec(verso)?.[1]);
   if (fuel) {
     setProfile(profile, matched, 'fuelType', stripDiacritics(fuel).toUpperCase(), 'Combustibil / sursă energie');
   }
 
-  parseVersoCapacity(verso, profile, matched);
+  parseVersoCapacity(verso, profile, matched, warnings);
   parseTyresAndSuspension(verso, profile, matched);
 
   const dim = findDimensionLine(verso);
@@ -822,6 +870,7 @@ export function mapCiv2024TextToPreview(
   const verso = pages.versoRaw || pages.techText || text;
   const profile: VehicleCivProfile = {};
   const matched: CivExtractMatch[] = [];
+  const warnings: CivExtractWarning[] = [];
   const meta = {
     vin: findVinInText(text) ?? findVinInText(front),
     civIssuedOn: null as string | null,
@@ -837,7 +886,7 @@ export function mapCiv2024TextToPreview(
   }
 
   parseFrontIdent(front, profile, matched, meta);
-  parseVersoGrid(verso, profile, matched);
+  parseVersoGrid(verso, profile, matched, warnings);
 
   const mentions = parse2024Mentions(front);
   if (mentions) {
@@ -846,6 +895,7 @@ export function mapCiv2024TextToPreview(
 
   return {
     civProfile: profile,
+    civWarnings: warnings,
     civSeries: meta.civSeries,
     civIssuedOn: meta.civIssuedOn,
     civRarOffice: meta.civRarOffice,

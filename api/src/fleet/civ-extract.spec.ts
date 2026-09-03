@@ -121,7 +121,7 @@ F.1 N.1 P.1
     expect(g.civProfile.seatsIncludingDriver).toBeUndefined();
   });
 
-  it('S.1 = 9 pe M1 AF când Vision citește 6 lângă E6 (fără etichetă S.1)', () => {
+  it('AF + M1 nu înseamnă 9 locuri (coliziune E6/6 rămâne gol)', () => {
     const g = mapCiv2024TextToPreview(
       `=== CIV FAȚĂ ===
 AF
@@ -136,7 +136,39 @@ F.1 N.1 P.1
       'text',
     );
     expect(g.civProfile.homologationCategory).toBe('M1');
-    expect(g.civProfile.seatsIncludingDriver).toBe(9);
+    expect(g.civProfile.bodyType).toMatch(/AF/i);
+    expect(g.civProfile.seatsIncludingDriver).toBeUndefined();
+
+    const seats = g.civWarnings?.find((w) => w.target === 'seatsIncludingDriver');
+    expect(seats?.rubric).toBe('S.1');
+    expect(seats?.read).toBe('6');
+    expect(seats?.candidates[0]).toBe('9');
+    expect(seats?.message).toMatch(/Euro 6/);
+  });
+
+  it('semnalează S.1 imposibil pentru categorie (M1 cu 12 locuri)', () => {
+    const g = mapCiv2024TextToPreview(
+      `=== CIV FAȚĂ ===
+Autoturism M1
+
+=== CIV VERSO ===
+E6 Alb 12 0 160 80 2625 68 xx
+F.1 N.1 P.1
+5309
+`,
+      'text',
+    );
+    expect(g.civProfile.seatsIncludingDriver).toBeUndefined();
+    expect(g.civWarnings?.[0]?.message).toMatch(/imposibil pe categoria M1/);
+  });
+
+  it('S.1 plauzibil nu produce avertisment', () => {
+    const g = mapCiv2024TextToPreview(
+      `=== CIV VERSO ===\nE6 Alb 5 0 160 80 2625 68 xx\nF.1 N.1 P.1\n5309\n`,
+      'text',
+    );
+    expect(g.civProfile.seatsIncludingDriver).toBe(5);
+    expect(g.civWarnings ?? []).toHaveLength(0);
   });
 
   it('V.9 din regulamente UE fragmentate (nu șir hardcodat Proace)', () => {

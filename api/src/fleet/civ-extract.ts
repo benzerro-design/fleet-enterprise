@@ -21,6 +21,20 @@ export type CivExtractMatch = {
   value: string;
 };
 
+/**
+ * Rubrică pe care OCR-ul a citit-o, dar nu o putem scrie în siguranță
+ * (glifă ambiguă, valoare imposibilă pentru categorie). Se completează manual, o dată.
+ */
+export type CivExtractWarning = {
+  rubric: string;
+  target: string;
+  /** Ce a citit Vision, chiar dacă nu e de încredere. */
+  read: string | null;
+  /** Cifre plauzibile în locul celei citite, cea mai probabilă prima. */
+  candidates: string[];
+  message: string;
+};
+
 export type CivExtractPreview = {
   civProfile: VehicleCivProfile;
   civSeries: string | null;
@@ -29,6 +43,8 @@ export type CivExtractPreview = {
   civMentions: string | null;
   vin: string | null;
   matched: CivExtractMatch[];
+  /** Rubrici citite nesigur — de confirmat de om înainte de Salvează. */
+  civWarnings?: CivExtractWarning[];
   unmatchedLines: string[];
   formatUsed: CivDocumentFormat;
   source: 'text' | 'file';
