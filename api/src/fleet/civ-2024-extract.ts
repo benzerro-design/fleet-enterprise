@@ -237,30 +237,145 @@ function parseFrontIdent(
   }
 }
 
-/** D.2 Tip + Variantă + Versiune → un singur câmp, separate cu „ / ”. */
-function pickTypeVariantVersion(front: string): string | null {
-  const yhvm = /\bYHVM\b/i.exec(front)?.[0]?.toUpperCase();
-  const p2 = /\bP2S10N\b/i.exec(front)?.[0]?.toUpperCase();
-  const oneT = /\(?\s*1T\s*\)?/.test(front);
-  // OCR faţă Proace: „1T ) A V” la finalul grilei D.2.
-  const tipVariantTail = /1T\s*\)\s*([A-Z])\s+([A-Z])\b/.exec(front);
-  if (yhvm && p2 && tipVariantTail) {
-    const variant = tipVariantTail[1]!.toUpperCase();
-    const tip = tipVariantTail[2]!.toUpperCase();
-    const versiune = oneT ? `${yhvm}-${p2}(1T)` : `${yhvm}-${p2}`;
-    return `${tip} / ${variant} / ${versiune}`;
-  }
+const D2_STOPWORDS = new Set(
+  [
+    'TOYOTA',
+    'DACIA',
+    'FORD',
+    'VOLKSWAGEN',
+    'VW',
+    'RENAULT',
+    'SKODA',
+    'OPEL',
+    'PEUGEOT',
+    'CITROEN',
+    'FIAT',
+    'SEAT',
+    'MERCEDES',
+    'BMW',
+    'AUDI',
+    'HYUNDAI',
+    'KIA',
+    'NISSAN',
+    'IVECO',
+    'MAN',
+    'PROACE',
+    'LOGAN',
+    'DUSTER',
+    'SANDERO',
+    'TRANSIT',
+    'CRAFTER',
+    'SPRINTER',
+    'MASTER',
+    'BOXER',
+    'JUMPER',
+    'VITO',
+    'TRANSPORTER',
+    'CADDY',
+    'KANGOO',
+    'PARTNER',
+    'AUTO',
+    'CARD',
+    'DATE',
+    'SERIE',
+    'MARCA',
+    'TIP',
+    'RAR',
+    'CIV',
+    'VIN',
+    'STANDARD',
+    'IDENTITY',
+    'VEHICLE',
+    'ROMAN',
+    'REGISTRUL',
+    'IDENTITATE',
+    'VEHICULULUI',
+    'AUTOTURISM',
+    'AUTOUTILITARA',
+    'CAROSERIE',
+    'CLASA',
+    'CATEGORIE',
+    'VERSIUNE',
+    'VARIANTA',
+    'DENUMIRE',
+    'NUMAR',
+    'UTILIZARE',
+    'MULTIPLA',
+    'ELIBERARE',
+    'REPREZENTANTA',
+  ].map((s) => s.toUpperCase()),
+);
 
-  const tip =
+/** Zona de valori D.2: după data eliberării (nu stickerul din Mențiuni). */
+function d2ValueZone(front: string): string {
+  for (const m of front.matchAll(/(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})/g)) {
+    const raw = m[1]!;
+    if (isStickerDate(front, raw)) continue;
+    return front.slice(m.index ?? 0);
+  }
+  return front;
+}
+
+/**
+ * D.2 pe grila 2024: celule Tip | Variantă | Versiune, OCR-ul le dumped lângă VIN.
+ * Versiunea e familia + codul (LITERE + LITERE/CIFRE), opțional (nT); tip/variantă
+ * stau după „nT )” — ordine de tipar RTL (D.3 D.2 D.1), nu tokeni de marcă.
+ */
+function isD2HeaderLeak(tok: string | undefined): boolean {
+  if (!tok) return true;
+  return /^(MARC|MARCA|DENUMIRE|VERSIUNE|VARIANTA|NUMAR|CATEGORIE|IDENTIFICARE|COMERCIALA)$/i.test(
+    tok,
+  );
+}
+
+function pickTypeVariantVersion(front: string): string | null {
+  const labeledTipRaw =
     /\bTip\s*:\s*([A-Z0-9]{1,8})\b/i.exec(front)?.[1] ||
     /\bD\.?\s*2\.?\s*Tip\s*:\s*([A-Z0-9]{1,8})\b/i.exec(front)?.[1];
-  const varianta = /\bVariant[aă]\s*:\s*([A-Z0-9]{1,14})\b/i.exec(front)?.[1];
-  const versiune =
-    /\bVersiune\s*:\s*([A-Z0-9()\-]{3,40})\b/i.exec(front)?.[1] ||
-    (yhvm && p2 ? `${yhvm}-${p2}${oneT ? '(1T)' : ''}` : null);
-  const parts = [tip, varianta, versiune].filter(Boolean).map((s) => String(s).toUpperCase());
-  if (parts.length >= 2) return parts.join(' / ');
-  if (parts.length === 1) return parts[0]!;
+  const labeledVariantRaw = /\bVariant[aă]\s*:\s*([A-Z0-9]{1,14})\b/i.exec(front)?.[1];
+  const labeledVersionRaw = /\bVersiune\s*:\s*([A-Z0-9()\-]{3,40})\b/i.exec(front)?.[1];
+  const labeledTip = isD2HeaderLeak(labeledTipRaw) ? undefined : labeledTipRaw;
+  const labeledVariant = isD2HeaderLeak(labeledVariantRaw) ? undefined : labeledVariantRaw;
+  const labeledVersion = isD2HeaderLeak(labeledVersionRaw) ? undefined : labeledVersionRaw;
+  if (labeledTip || labeledVariant || labeledVersion) {
+    const parts = [labeledTip, labeledVariant, labeledVersion]
+      .filter(Boolean)
+      .map((s) => String(s).toUpperCase());
+    if (parts.length >= 2) return parts.join(' / ');
+    if (parts.length === 1) return parts[0]!;
+  }
+
+  const zone = d2ValueZone(front);
+  const axle = /\b(\dT)\s*\)/.exec(zone)?.[1]?.toUpperCase();
+  const tail = /\dT\s*\)\s*([A-Z0-9]{1,4})\s+([A-Z0-9]{1,4})\b/.exec(zone);
+  const variant = tail?.[1]?.toUpperCase() ?? null;
+  const tip = tail?.[2]?.toUpperCase() ?? null;
+
+  const joined = /\b(?=[A-Z0-9-]*[A-Z])([A-Z0-9]{2,8})-([A-Z0-9]{3,14})(?:\((\dT)\))?\b/i.exec(
+    zone,
+  );
+  let version: string | null = null;
+  if (joined && !/^\d{2,4}-\d{2,4}/.test(joined[0]!)) {
+    version = `${joined[1]!.toUpperCase()}-${joined[2]!.toUpperCase()}`;
+    const joinedAxle = joined[3]?.toUpperCase();
+    if (joinedAxle) version += `(${joinedAxle})`;
+  }
+
+  if (!version) {
+    const family = [...zone.matchAll(/\b([A-Z]{3,8})(?!\p{L})/gu)]
+      .map((m) => m[1]!.toUpperCase())
+      .find((tok) => !D2_STOPWORDS.has(tok) && tok !== 'THE' && tok !== 'ROM');
+    const code = [...zone.matchAll(/\b([A-Z]{1,4}\d[A-Z0-9]{2,8})\b/g)]
+      .map((m) => m[1]!.toUpperCase())
+      .find((tok) => tok.length <= 10 && !/^AF\d{3}/.test(tok));
+    if (family && code) version = `${family}-${code}`;
+  }
+
+  if (version && axle && !/\(\dT\)$/.test(version)) version += `(${axle})`;
+
+  if (tip && variant && version) return `${tip} / ${variant} / ${version}`;
+  if (tip && variant) return `${tip} / ${variant}`;
+  if (version) return version;
   return null;
 }
 
@@ -322,56 +437,90 @@ function parse2024Mentions(front: string): string | null {
   return lines.length ? lines.join('\n') : null;
 }
 
-/** S.1 pe rând separat: „Număr locuri, inclusiv locul conducătorului auto: 9”. */
+/** S.1 etichetat — unica sursă sigură când OCR amestecă cifra cu Euro n. */
 function pickSeatsFromLabel(
   verso: string,
   profile: VehicleCivProfile,
   matched: CivExtractMatch[],
 ) {
   const labeled =
+    /S\.?\s*1\.?\s*Num[aă]r\s+locuri[\s\S]{0,80}?:\s*(\d{1,2})/i.exec(verso) ||
     /S\.?\s*1\.?\s*Num[aă]r\s+locuri[\s\S]{0,80}?(\d{1,2})/i.exec(verso) ||
+    /Num[aă]r\s+locuri[,\s]+inclusiv[\s\S]{0,60}?:\s*(\d{1,2})/i.exec(verso) ||
     /Num[aă]r\s+locuri[,\s]+inclusiv[\s\S]{0,60}?(\d{1,2})/i.exec(verso) ||
     /conduc[aă]torului\s+auto\s*:\s*(\d{1,2})/i.exec(verso);
   if (!labeled) return;
   const n = Number(labeled[1]);
-  if (n >= 2 && n <= 9) {
-    profile.seatsIncludingDriver = n;
-    const row = matched.find((m) => m.target === 'seatsIncludingDriver');
-    if (row) row.value = String(n);
-    else matched.push({ rubric: 'Număr locuri (cu șofer)', target: 'seatsIncludingDriver', value: String(n) });
+  if (n >= 1 && n <= 70 && n !== 16 && n !== 17 && n !== 18) {
+    setProfile(profile, matched, 'seatsIncludingDriver', n, 'Număr locuri (cu șofer)');
   }
 }
 
+const EMISSION_BASES = ['715/2007', '595/2009', '168/2013'] as const;
+const EMISSION_AMENDS = ['692/2008', '2017/1151', '2018/1832', '582/2011'] as const;
+
+function hasRegCitation(text: string, id: string): boolean {
+  const [a, b] = id.split('/');
+  if (!a || !b) return false;
+  if (new RegExp(`\\b${a}\\s*/\\s*${b}\\b`).test(text)) return true;
+  const ia = text.search(new RegExp(`\\b${a}\\b`));
+  const ib = text.search(new RegExp(`\\b${b}\\b`));
+  if (ia < 0 || ib < 0) return false;
+  return Math.abs(ia - ib) < 400;
+}
+
+function pickEuroLevel(verso: string): string | null {
+  const full = /\bEuro\s*(\d[a-zA-Z-]{0,10})/i.exec(verso);
+  if (full) return `Euro ${full[1]!.replace(/-+$/g, '')}`.replace(/\s+/g, ' ').trim();
+  const code = /\bE(\d)\b/.exec(verso);
+  if (code) return `Euro ${code[1]}`;
+  return null;
+}
+
+function pickEmissionStage(verso: string): string | null {
+  const around =
+    /(?:V\.?\s*9|Euro|poluare|715|595|168)[\s\S]{0,220}?\b(AP|AM|AT|AX)\b/i.exec(verso) ||
+    /\b(AP|AM|AT|AX)\b[\s\S]{0,220}?(?:V\.?\s*9|Euro|poluare|715)/i.exec(verso);
+  return around?.[1]?.toUpperCase() ?? null;
+}
+
 /**
- * V.9 — șirul complet de pe CIV, ex. „Euro 6; 715/2007*2018/1832 AP”.
- * OCR-ul Proace rupe regulamentul pe linii (715, 2007, *, 2018, 1832, AP, Euro, 6).
+ * V.9 — etichetă, șir deja lipit, sau reconstituire din regulamente UE (nu un singur act).
  */
 function pickEmissionStandard(verso: string): string | null {
   const labeled = /V\.?\s*9\.?\s*Norm[aă][\s\S]{0,40}?:\s*([^\n]{8,80})/i.exec(verso)?.[1]?.trim();
   if (labeled && /Euro/i.test(labeled)) {
     return labeled.replace(/\s+/g, ' ').replace(/\s*;\s*/g, '; ');
   }
-  const hasEuro = /\bEuro\b/i.test(verso);
-  const has715 = /\b715\b/.test(verso);
-  const has2007 = /\b2007\b/.test(verso);
-  const has2018 = /\b2018\b/.test(verso);
-  const has1832 = /\b1832\b/.test(verso);
-  const hasAp = /\bAP\b/.test(verso);
-  if (hasEuro && has715 && has2007 && has2018 && has1832 && hasAp) {
-    return 'Euro 6; 715/2007*2018/1832 AP';
+
+  const joined =
+    /\bEuro\s*(\d[a-zA-Z-]{0,10})\s*;\s*(\d{3,4}\/\d{4}(?:\s*\*\s*\d{3,4}\/\d{4})*)(?:\s+(AP|AM|AT|AX)\b)?/i.exec(
+      verso,
+    );
+  if (joined) {
+    const regs = joined[2]!.replace(/\s+/g, '');
+    const stage = joined[3] ? ` ${joined[3]!.toUpperCase()}` : '';
+    return `Euro ${joined[1]!.replace(/-+$/g, '')}; ${regs}${stage}`.replace(/\s+/g, ' ').trim();
   }
-  const euroFull = /\b(Euro\s*6[a-z0-9]*(?:\s+[A-Z]{1,3}){0,2})\b/i.exec(verso)?.[1];
-  if (euroFull && /Euro\s*\d/i.test(euroFull)) return euroFull.replace(/\s+/g, ' ').trim();
-  if (/\bEuro\s*6\b/i.test(verso) || /\bE6\b/.test(verso)) return 'Euro 6';
+
+  const euro = pickEuroLevel(verso);
+  const bases = EMISSION_BASES.filter((id) => hasRegCitation(verso, id));
+  const amends = EMISSION_AMENDS.filter((id) => hasRegCitation(verso, id));
+  const regs = [...bases, ...amends];
+  const stage = pickEmissionStage(verso);
+  if (euro && regs.length) {
+    return `${euro}; ${regs.join('*')}${stage ? ` ${stage}` : ''}`;
+  }
+  if (euro) return euro;
   return null;
 }
 
 function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: CivExtractMatch[]) {
+  pickSeatsFromLabel(verso, profile, matched);
+
   /**
-   * Rândul de rubrici 16 → W (OCR Proace):
-   *   16. R. S.1 S.2 T. U.1 U.2 U.3 Q. V.7 17. W.
-   *   E6  Gri 6   0   160 80   2625 68  …
-   * E6 = cod național (16). Cifra 6 după Gri nu e S.1 (e Euro 6) — S.1 e 9, pe rând separat.
+   * Rând 16→W: E{n} culoare S.1 S.2 T. U.1…
+   * Dacă S.1 din grilă = cifra Euro (E6 + 6), e ambiguu (OCR 9↔6) — nu inventăm locuri.
    */
   const coded = /\b(E\d)\s+(Gri|Alb|Negru|Albastru|Rosu|Roșu|Maro|Verde|Argintiu|Bej|Galben|Portocaliu)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})\s+(\d{4})\s+(\d{2,3})/i.exec(
     verso,
@@ -390,11 +539,8 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
     const noise = Number(coded[6]);
     const noiseRpm = Number(coded[7]);
     const moving = Number(coded[8]);
-    // Nu lua S.1 din cifra Euro (6 lângă E6). Pe CIV S.1 e 9 — Vision citește 9 ca 6.
     if (afterColor >= 2 && afterColor <= 9 && afterColor !== euroDigit) {
       setProfile(profile, matched, 'seatsIncludingDriver', afterColor, 'Număr locuri (cu șofer)');
-    } else if (afterColor === euroDigit && euroDigit === 6) {
-      setProfile(profile, matched, 'seatsIncludingDriver', 9, 'Număr locuri (cu șofer)');
     }
     if (standing >= 0 && standing <= 20) {
       setProfile(profile, matched, 'standingPlaces', standing, 'Locuri în picioare');
@@ -414,8 +560,6 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
   } else if (colorOnly) {
     setProfile(profile, matched, 'color', colorOnly.toUpperCase(), 'Culoare');
   }
-
-  pickSeatsFromLabel(verso, profile, matched);
 
   if (!profile.nationalEmissionCode) {
     const labeled16 = /16\.?\s*Cod\s+na[tț]ional[\s\S]{0,40}?:\s*([A-Z0-9]+)/i.exec(verso)?.[1];

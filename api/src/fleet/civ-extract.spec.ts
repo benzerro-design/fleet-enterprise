@@ -1,3 +1,4 @@
+import { mapCiv2024TextToPreview } from './civ-2024-extract';
 import { detectCivDocumentFormat, mapCivExtractTextToPreview } from './civ-extract';
 import { parseWebUploadUrl, webUploadObjectKey } from '../storage/web-upload-storage';
 
@@ -84,6 +85,70 @@ describe('detectCivDocumentFormat', () => {
     expect(g.civProfile.emissionStandard).toBe('Euro 6; 715/2007*2018/1832 AP');
     expect(g.civProfile.co2Gkm).toBe('NEDC: 138 (g/km) | WLTP: 169 (g/km)');
     expect(String(g.civProfile.tyresFront)).toMatch(/ET46/);
+  });
+});
+
+describe('CIV 2024 grid — D.2 / S.1 / V.9 fără tokeni de marcă', () => {
+  it('compune D.2 din celule (familie + cod + nT), nu din YHVM', () => {
+    const text = `
+=== CIV FAȚĂ ===
+23-06-2025 2007 WXYZ
+AAAAAAAAAAAAAAAAA
+Q7M12B
+2T ) C D
+
+=== CIV VERSO ===
+F.1 N.1 P.1
+5309 1920
+`;
+    const g = mapCiv2024TextToPreview(text, 'text');
+    expect(g.civProfile.typeVariantVersion).toBe('D / C / WXYZ-Q7M12B(2T)');
+  });
+
+  it('S.1 din grilă când cifra ≠ Euro (E6 + 5 locuri)', () => {
+    const g = mapCiv2024TextToPreview(
+      `=== CIV VERSO ===\nE6 Alb 5 0 160 80 2625 68 xx\nF.1 N.1 P.1\n5309\n`,
+      'text',
+    );
+    expect(g.civProfile.seatsIncludingDriver).toBe(5);
+  });
+
+  it('nu inventează 9 locuri când E6 se ciocnește cu cifra 6 din OCR', () => {
+    const g = mapCiv2024TextToPreview(
+      `=== CIV VERSO ===\nE6 Gri 6 0 160 80 2625 68 xx\nF.1 N.1 P.1\n5309\n`,
+      'text',
+    );
+    expect(g.civProfile.seatsIncludingDriver).toBeUndefined();
+  });
+
+  it('V.9 din regulamente UE fragmentate (nu șir hardcodat Proace)', () => {
+    const g = mapCiv2024TextToPreview(
+      `=== CIV VERSO ===
+Euro 6
+715
+2007
+*
+2018
+1832
+AP
+F.1 N.1 P.1
+5309
+`,
+      'text',
+    );
+    expect(g.civProfile.emissionStandard).toBe('Euro 6; 715/2007*2018/1832 AP');
+  });
+
+  it('V.9 Euro 5 + 715/2007*692/2008', () => {
+    const g = mapCiv2024TextToPreview(
+      `=== CIV VERSO ===
+Euro 5; 715/2007*692/2008
+F.1 N.1 P.1
+5309
+`,
+      'text',
+    );
+    expect(g.civProfile.emissionStandard).toBe('Euro 5; 715/2007*692/2008');
   });
 });
 
