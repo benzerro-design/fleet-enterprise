@@ -414,6 +414,19 @@ export const CIV_LABEL_FIELDS: CivLabelFieldSpec[] = [
     validate: (v) => isPositiveNumber(v, 500, 12000),
   },
   {
+    // U.2 — turația la care se măsoară zgomotul; pe card scrie doar „Turație motor”.
+    key: 'stationaryNoiseRpm',
+    kind: 'profile',
+    fieldKind: 'number',
+    labels: [
+      'Turație motor',
+      'Turatie motor',
+      'Turaţie motor',
+      'Turație la măsurare zgomot',
+    ],
+    validate: (v) => isPositiveNumber(v, 500, 8000),
+  },
+  {
     key: 'engineSerial',
     kind: 'profile',
     fieldKind: 'text',
