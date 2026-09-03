@@ -6,13 +6,16 @@
  *
  * Exemplu: Proace B 15 NPY.
  */
-import type { VehicleCivProfile } from './vehicle-civ-fields';
+import { CIV_PROFILE_FIELDS, type VehicleCivProfile } from './vehicle-civ-fields';
 import {
+  extractCivLabelValuePairs,
   findCivSeriesInFrontText,
   findVinInText,
+  mapCivPairsToFields,
   parseCivIssuedOnIso,
+  type CivLabelPair,
 } from './civ-label-map';
-import { splitCivBookPages } from './civ-pages';
+import { splitCivBookPages, stripEnglishCivGlossary } from './civ-pages';
 import type { CivExtractMatch, CivExtractPreview, CivExtractWarning } from './civ-extract';
 
 function stripDiacritics(s: string): string {
@@ -161,6 +164,76 @@ function pickTypeApproval(front: string): string | null {
   return null;
 }
 
+function coerceProfileValue(key: string, raw: string): string | number {
+  const def = CIV_PROFILE_FIELDS.find((f) => f.key === key);
+  if (def && (def.kind === 'number' || def.kind === 'year')) {
+    const n = Number(String(raw).replace(',', '.').replace(/[^\d.-]/g, ''));
+    if (Number.isFinite(n)) return n;
+  }
+  return raw.trim();
+}
+
+/** Pe 2024 versiunea vine ca „YHVM - P2S10N ( 1T )”, formă pe care regula 2016 o respinge. */
+function composeTvvFromPairs(pairs: CivLabelPair[]): string | null {
+  let tip: string | null = null;
+  let varianta: string | null = null;
+  let versiune: string | null = null;
+  for (const p of pairs) {
+    const n = p.labelNorm;
+    const v = p.value.replace(/\s+/g, '').toUpperCase();
+    if (!v || v.length > 24 || !/^[A-Z0-9()\-.]+$/.test(v)) continue;
+    if (n === 'tip' || /^d\.?\s*2\b/.test(n)) tip ??= v;
+    else if (n.startsWith('varianta')) varianta ??= v;
+    else if (n === 'versiune') versiune ??= v;
+  }
+  const parts = [tip, varianta, versiune].filter(Boolean);
+  return parts.length >= 2 ? parts.join(' / ') : null;
+}
+
+/**
+ * 2024 renumerotează rubricile numerice față de 2016 (Lungime e „9”, nu „10”) și mută blocul
+ * de identificare pe pagina 1. Textul etichetei rămâne însă același, așa că perechile
+ * „Etichetă: valoare” din toată broșura sunt sursa de încredere; regulile de grilă de mai
+ * jos rămân doar pentru ce nu se poate citi așa.
+ */
+function parseLabelledRubrics(
+  text: string,
+  profile: VehicleCivProfile,
+  matched: CivExtractMatch[],
+  meta: {
+    vin: string | null;
+    civIssuedOn: string | null;
+    civRarOffice: string | null;
+    civSeries: string | null;
+  },
+) {
+  const pairs = extractCivLabelValuePairs(text);
+  const hits = mapCivPairsToFields(pairs);
+  // Pe un scan citit chiar ca grilă, etichetele ies puține și amestecate — acolo ar strica
+  // mai mult decât ajută (Proace rotit dădea „locuri în picioare: 3” din text amestecat).
+  // Ne bazăm pe ele doar când broșura chiar s-a citit pe rânduri.
+  if (hits.length < 12) return;
+
+  // Înaintea buclei: altfel perechea simplă „D.2. Tip: V” ocupă câmpul și nu mai încape
+  // forma completă, iar setProfile păstrează prima scriere.
+  const tvv = composeTvvFromPairs(pairs);
+  if (tvv) setProfile(profile, matched, 'typeVariantVersion', tvv, 'Tip / variantă / versiune');
+
+  for (const hit of hits) {
+    // Seria se ia doar de sub barcode, mențiunile doar de pe pagina 4.
+    if (hit.kind === 'civSeries' || hit.kind === 'civMentions') continue;
+    if (hit.kind === 'vin') {
+      meta.vin ??= hit.value.replace(/\s+/g, '').toUpperCase();
+    } else if (hit.kind === 'civIssuedOn') {
+      meta.civIssuedOn ??= parseCivIssuedOnIso(hit.value) ?? hit.value.trim();
+    } else if (hit.kind === 'civRarOffice') {
+      meta.civRarOffice ??= hit.value.trim();
+    } else if (hit.kind === 'profile') {
+      setProfile(profile, matched, hit.key, coerceProfileValue(hit.key, hit.value), hit.label);
+    }
+  }
+}
+
 /**
  * D.1/D.3 sunt rubrici etichetate, oriunde ar cădea în broșură. Le citim înaintea listelor
  * de mărci/modele, care rămân doar rezervă pentru fața fără etichete.
@@ -249,7 +322,9 @@ function parseFrontIdent(
 
   pickClassAndBody(front, profile, matched);
 
-  const series = findCivSeriesInFrontText(front);
+  // 2024 tipărește seria sub barcode, ruptă în grupuri: „RO S 86 9740” → S869740.
+  const spaced = /\bRO\s+([A-Z])\s*(\d{2})\s*(\d{4})\b/.exec(front);
+  const series = findCivSeriesInFrontText(front) ?? (spaced ? `${spaced[1]}${spaced[2]}${spaced[3]}` : null);
   if (series) {
     meta.civSeries = series;
     matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: series });
@@ -421,7 +496,12 @@ function pickClassAndBody(
     );
   }
 
-  const classColon = /Clas[aă]\s*(?:\([^)]*\))?\s*:\s*([^\n]{1,40})/i.exec(front)?.[1]?.trim();
+  // Pe M1 rubrica 3 e goală, iar `\s*` trecea peste rândul următor și lua „4. Caroserie: …”.
+  // Valoarea trebuie să stea pe aceeași linie și să arate a clasă, nu a altă rubrică.
+  const rawClass = /Clas[aă]\s*(?:\([^)]*\))?\s*:[ \t]*([^\n:]{1,20})/i.exec(front)?.[1]?.trim();
+  const classColon = rawClass && /^[A-Za-z0-9][A-Za-z0-9 .\-]{0,19}$/.test(rawClass) && !/^\d+\s*\./.test(rawClass)
+    ? rawClass
+    : null;
   if (classColon && !/^[-–—]+$/.test(classColon)) {
     setProfile(profile, matched, 'vehicleClass', classColon, 'Clasă');
   } else if (/^M1/i.test(String(profile.homologationCategory ?? ''))) {
@@ -897,6 +977,13 @@ export function mapCiv2024TextToPreview(
     civSeries: null as string | null,
   };
 
+  // Blocul de identificare stă pe pagina 1 la 2024, deci fața intră și ea în perechi.
+  parseLabelledRubrics(
+    [front, stripEnglishCivGlossary(pages.techText || verso)].join('\n'),
+    profile,
+    matched,
+    meta,
+  );
   parseIdentLabels(text, profile, matched);
 
   if (meta.vin) {

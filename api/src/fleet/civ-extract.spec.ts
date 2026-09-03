@@ -86,6 +86,46 @@ describe('detectCivDocumentFormat', () => {
     expect(g.civProfile.co2Gkm).toBe('NEDC: 138 (g/km) | WLTP: 169 (g/km)');
     expect(String(g.civProfile.tyresFront)).toMatch(/ET46/);
   });
+
+  it('scanul îndreptat citește rubricile după etichetă, nu după poziție', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const ocr = fs.readFileSync(
+      path.join(__dirname, '../../scripts/fixtures/civ-2024-proace-derotated.ocr.txt'),
+      'utf8',
+    );
+    const g = mapCivExtractTextToPreview(ocr, 'unknown', 'file');
+    expect(g.formatUsed).toBe('2024');
+
+    // Rubricile numerice sunt renumerotate față de 2016 (Lungime e „9”, nu „10”); potrivirea
+    // pe textul etichetei le prinde oricum.
+    expect(g.civProfile.lengthMm).toBe(5309);
+    expect(g.civProfile.wheelbaseMm).toBe(3275);
+    expect(g.civProfile.engineCode).toBe('YH01');
+    expect(g.civProfile.driveType).toMatch(/FATA/i);
+
+    // Astea lipseau complet cât timp citeam doar pe poziție.
+    expect(g.civProfile.maxTechnicalMassKg).toBe(2790);
+    expect(g.civProfile.curbMassKg).toBe(1734);
+    expect(g.civProfile.axleCount).toBe(2);
+    expect(g.civProfile.engineCapacityCm3).toBe(1499);
+    expect(g.civProfile.fuelTankCapacityL).toBe(70);
+    expect(g.civProfile.maxSpeedKmh).toBe(160);
+
+    // Blocul de identificare stă pe pagina 1 la 2024.
+    expect(g.civProfile.brand).toBe('TOYOTA');
+    expect(g.civProfile.homologationCategory).toBe('M1');
+    expect(g.civProfile.typeVariantVersion).toBe('V / A / YHVM-P2S10N(1T)');
+    expect(g.civProfile.typeApprovalNumber).toMatch(/0537/);
+    expect(g.civProfile.typeApprovalNumber).not.toMatch(/2017/);
+    expect(g.civProfile.vehicleClass).toBe('-');
+    expect(g.civSeries).toBe('S869740');
+    expect(g.civIssuedOn).toBe('2025-06-23');
+    expect(g.civRarOffice).toMatch(/Călărași/i);
+
+    const filled = Object.values(g.civProfile).filter((v) => v != null && v !== '').length;
+    expect(filled).toBeGreaterThanOrEqual(45);
+  });
 });
 
 describe('CIV 2024 grid — D.2 / S.1 / V.9 fără tokeni de marcă', () => {
