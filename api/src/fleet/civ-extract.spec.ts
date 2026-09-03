@@ -62,6 +62,19 @@ describe('detectCivDocumentFormat', () => {
     expect(g.civProfile.brand).toBe('TOYOTA');
     expect(g.civProfile.lengthMm).toBe(5309);
     expect(g.civProfile.standingPlaces).not.toBe(3);
+    expect(g.civProfile.manufactureYear).toBe(2021);
+    expect(g.civProfile.homologationCategory).toBe('M1');
+    expect(g.civProfile.engineRpm).toBe(3500);
+    expect(g.civIssuedOn).toBe('2025-06-23');
+    expect(g.civRarOffice).toMatch(/Călărași/i);
+    expect(String(g.civProfile.tyresFront ?? '')).toMatch(/215\/65/);
+    expect(g.civProfile.seatsIncludingDriver).toBe(6);
+    expect(g.civProfile.maxSpeedKmh).toBe(160);
+    expect(g.civSeries).toBe('S869740');
+    expect(g.civProfile.bodyType).toMatch(/AF.*utilizare multipl/i);
+    expect(g.civProfile.vehicleClass).toBe('-');
+    expect(g.civMentions).toMatch(/FILTRU DE PARTICULE/);
+    expect(g.civMentions).toMatch(/ASG04_4856239/);
   });
 });
 

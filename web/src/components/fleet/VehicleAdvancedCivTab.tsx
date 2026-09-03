@@ -215,9 +215,11 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
         preview.hasVerso === false
           ? " Atenție: lipsește textul VERSO — rulează „OCR din CIV față + verso”, nu doar Extrage din text."
           : typeof preview.techPairCount === "number" && preview.techPairCount < 8
-            ? ` Puține perechi pe verso (${preview.techPairCount}) — verifică scanul verso / scroll în cutia OCR dupăă „=== CIV VERSO ===”.`
+            ? ` Puține câmpuri pe verso (${preview.techPairCount}) — verifică scanul verso / scroll în cutia OCR după „=== CIV VERSO ===”.`
             : typeof preview.techPairCount === "number"
-              ? ` Verso: ${preview.techPairCount} perechi etichetă:valoare.`
+              ? preview.formatUsed === "2024"
+                ? ` Grilă 2024: ${preview.techPairCount} câmpuri.`
+                : ` Verso: ${preview.techPairCount} perechi etichetă:valoare.`
               : "";
       setExtractInfo(
         `Mapate ${preview.matched.length} câmpuri (format detectat: ${preview.formatUsed}).` +
@@ -281,9 +283,11 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
           {importMode && write ? (
             <div className="mt-3 space-y-3">
               <p className="text-xs text-zinc-500">
-                Extrage din CIV față + verso (carte 4 pagini). Modern 2016/2024: Serie pe pag. 1,
-                tehnice pe 2–3, Mențiuni pe 4. CIV 1993: doar Secțiunea A (etichetă albastră →
-                valoare neagră pe același rând); Modificări → Mențiuni. Același formular.
+                Același formular pentru toate generațiile. CIV 2024 (Ordin 211, fără proprietar):
+                față = serie / dată / RAR + date identificare; verso = date constructive (grilă).
+                CIV 2016: față = proprietar + serie; verso = identificare + constructive
+                (etichetă: valoare). CIV 1993: Secțiunea A pe grilă veche. Mențiuni = pagina din
+                stânga a scanului față.
               </p>
               <label className="block text-xs font-medium text-zinc-400">Text OCR (editabil / copiabil)</label>
               <textarea
@@ -413,7 +417,7 @@ export function VehicleAdvancedCivTab({ vehicle, write, initial }: Props) {
         ))}
 
         <div>
-          <label className="block text-sm font-medium text-zinc-300">Mențiuni (pag. 4)</label>
+          <label className="block text-sm font-medium text-zinc-300">Mențiuni</label>
           <textarea
             value={civMentions}
             onChange={(e) => setCivMentions(e.target.value)}

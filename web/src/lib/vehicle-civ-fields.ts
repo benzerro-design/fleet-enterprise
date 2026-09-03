@@ -27,7 +27,7 @@ export type CivFieldDef = {
 export type CivDocumentFormat = "2024" | "2016" | "1993" | "unknown";
 
 export const CIV_FIELD_GROUPS: { id: CivFieldGroupId; label: string }[] = [
-  { id: "identificare", label: "Identificare (pag. 1)" },
+  { id: "identificare", label: "Identificare vehicul" },
   { id: "mase", label: "Mase și remorcare" },
   { id: "dimensiuni", label: "Dimensiuni" },
   { id: "motor", label: "Motor / propulsie" },

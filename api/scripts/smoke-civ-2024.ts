@@ -103,8 +103,26 @@ console.log('OK colon-2024');
   if (!/MOTORIN/i.test(String(g.civProfile.fuelType ?? ''))) {
     throw new Error(`grid fuel=${g.civProfile.fuelType}`);
   }
+  if (g.civProfile.manufactureYear !== 2021) throw new Error(`grid year=${g.civProfile.manufactureYear}`);
+  if (g.civProfile.homologationCategory !== 'M1') throw new Error(`grid J=${g.civProfile.homologationCategory}`);
+  if (g.civProfile.engineRpm !== 3500) throw new Error(`grid rpm=${g.civProfile.engineRpm}`);
+  if (g.civIssuedOn !== '2025-06-23') throw new Error(`grid issued=${g.civIssuedOn}`);
+  if (!/Călărași/i.test(String(g.civRarOffice ?? ''))) throw new Error(`grid rar=${g.civRarOffice}`);
+  if (!/215\/65/.test(String(g.civProfile.tyresFront ?? ''))) {
+    throw new Error(`grid tyres=${g.civProfile.tyresFront}`);
+  }
+  if (g.civProfile.seatsIncludingDriver !== 6) throw new Error(`grid seats=${g.civProfile.seatsIncludingDriver}`);
+  if (g.civProfile.co2Gkm !== 169) throw new Error(`grid co2=${g.civProfile.co2Gkm}`);
+  if (g.civSeries !== 'S869740') throw new Error(`grid serie=${g.civSeries}`);
+  if (!/AF.*multipl/i.test(String(g.civProfile.bodyType ?? ''))) {
+    throw new Error(`grid body=${g.civProfile.bodyType}`);
+  }
+  if (g.civProfile.vehicleClass !== '-') throw new Error(`grid class=${g.civProfile.vehicleClass}`);
+  if (!/FILTRU DE PARTICULE/i.test(String(g.civMentions ?? ''))) {
+    throw new Error(`grid mentions=${g.civMentions}`);
+  }
   const gk = Object.keys(g.civProfile).filter((k) => g.civProfile[k] != null && g.civProfile[k] !== '');
-  if (gk.length < 12) throw new Error(`grid fields=${gk.length} ${gk.join(',')}`);
+  if (gk.length < 30) throw new Error(`grid fields=${gk.length} ${gk.join(',')}`);
   console.log({
     gridFormat: g.formatUsed,
     gridFields: gk.length,

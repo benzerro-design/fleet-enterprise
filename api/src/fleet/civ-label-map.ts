@@ -814,6 +814,16 @@ export function findCivSeriesInFrontText(text: string): string | null {
   const pSeries = unique.filter((s) => s.startsWith('P'));
   if (pSeries.length === 1) return pSeries[0]!;
   if (unique.length === 1 && !unique[0]!.startsWith('R')) return unique[0]!;
+
+  // Vision rupe barcode-ul spațiat „S 8 6 9 7 4 0” în: „S eliberare” / „86: e2” / „9740 AF183…”.
+  const splitBarcode =
+    /\b([A-HJ-NP-Z])\s+eliberare[\s\S]{0,120}?(\d{2})\s*:[\s\S]{0,280}?\b(\d{4})\s+[A-Z]{2}\d/i.exec(
+      withoutEngine,
+    );
+  if (splitBarcode) {
+    const glued = `${splitBarcode[1]}${splitBarcode[2]}${splitBarcode[3]}`.toUpperCase();
+    if (isCivSeriesCode(glued)) return glued;
+  }
   return null;
 }
 
