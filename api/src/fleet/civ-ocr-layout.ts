@@ -135,15 +135,25 @@ function boxFromBounding(
 /**
  * Vision returnează vârfurile în ordinea de citire a textului, deci v0→v1 e chiar
  * direcția rândului. Pe scan rotit, direcția dominantă nu mai e stânga→dreapta.
+ *
+ * Un „6" singur are caseta aproape pătrată, deci muchia v0→v1 e dictată de zgomot, nu de
+ * direcția textului. Fără pragurile de mai jos, valorile scurte erau luate drept text
+ * vertical și scoase din rândul lor: pe Proace, S.1 rămânea gol.
  */
 function wordDirection(
   boundingBox: { vertices?: Vertex[]; normalizedVertices?: Vertex[] } | undefined,
+  text: string,
 ): RotationClass | null {
   const v = boundingBox?.vertices?.length ? boundingBox.vertices : boundingBox?.normalizedVertices;
   if (!v || v.length < 2) return null;
+  if (text.replace(/\s+/g, '').length < 3) return null;
   const dx = (v[1]!.x ?? 0) - (v[0]!.x ?? 0);
   const dy = (v[1]!.y ?? 0) - (v[0]!.y ?? 0);
-  if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return null;
+  const along = Math.hypot(dx, dy);
+  const across = v.length >= 3 ? Math.hypot((v[2]!.x ?? 0) - (v[1]!.x ?? 0), (v[2]!.y ?? 0) - (v[1]!.y ?? 0)) : 0;
+  if (along < 1e-9) return null;
+  // Caseta trebuie să fie alungită pe direcția de citire ca să avem încredere în ea.
+  if (across > 0 && along <= across) return null;
   if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 0 : 180;
   return dy >= 0 ? 90 : 270;
 }
@@ -162,7 +172,7 @@ function collectWords(page: NonNullable<VisionFullText['pages']>[number]): Visio
         out.push({
           text,
           ...box,
-          dir: wordDirection(word.boundingBox),
+          dir: wordDirection(word.boundingBox, text),
           weight: Math.max(1, word.symbols?.length ?? text.length),
         });
       }

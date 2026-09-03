@@ -150,6 +150,19 @@ describe('rebuildCivOcrTextFromVision — scan rotit', () => {
     expect(text).toMatch(/Date constructive vehicul|vehicul constructive Date/);
   });
 
+  it('valoarea scurtă cu casetă ambiguă rămâne în rândul ei', () => {
+    const ann = buildUpright(ROWS, true);
+    const words = ann.pages[0]!.blocks[0]!.paragraphs[0]!.words;
+    const nine = words.find((w) => w.symbols.map((s) => s.text).join('') === '9')!;
+    // Vision poate întoarce vârfurile unei cifre singure în orice ordine: caseta e ~pătrată,
+    // deci muchia v0→v1 nu spune nimic despre direcția textului.
+    const [a, b, c, d] = nine.boundingBox.vertices as [Vertex, Vertex, Vertex, Vertex];
+    nine.boundingBox.vertices = [d, a, b, c];
+
+    const text = rebuildCivOcrTextFromVision(ann) ?? '';
+    expect(text).toContain('S.1. Numar locuri, inclusiv locul conducatorului auto: 9');
+  });
+
   it('rândurile rămân curate cu titlu vertical, la orice rotație', () => {
     const clean = rebuildCivOcrTextFromVision(buildUpright(ROWS, true)) ?? '';
     for (const deg of [90, 180, 270] as const) {
