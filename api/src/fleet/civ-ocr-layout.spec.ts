@@ -42,7 +42,8 @@ function word(text: string, x0: number, y0: number, x1: number, y1: number): Wor
  */
 function sidebarWords(): Word[] {
   const out: Word[] = [];
-  let y = 700;
+  // Pornește la aceeași înălțime cu rândurile de date — acolo se produce lipirea.
+  let y = 430;
   for (const token of ['Date', 'constructive', 'vehicul']) {
     const len = token.length * CHAR_W;
     const yTop = y - len;
@@ -136,6 +137,26 @@ describe('rebuildCivOcrTextFromVision — scan rotit', () => {
       expect(text).toContain('W. Capacitate rezervor (l): 70');
     },
   );
+
+  it('titlul vertical nu se lipește de rânduri și nu devine valoare', () => {
+    const text = rebuildCivOcrTextFromVision(buildUpright(ROWS, true)) ?? '';
+    for (const line of text.split('\n')) {
+      // Niciun rând de rubrică nu are voie să conțină cuvinte din titlul de pe margine.
+      if (/^[A-Z0-9]+[.\s]/.test(line) && /:/.test(line)) {
+        expect(line).not.toMatch(/\bconstructive\b|^Date\b|:\s*vehicul\b/i);
+      }
+    }
+    // Textul nu se pierde: rămâne la coada paginii.
+    expect(text).toMatch(/Date constructive vehicul|vehicul constructive Date/);
+  });
+
+  it('rândurile rămân curate cu titlu vertical, la orice rotație', () => {
+    const clean = rebuildCivOcrTextFromVision(buildUpright(ROWS, true)) ?? '';
+    for (const deg of [90, 180, 270] as const) {
+      const turned = rebuildCivOcrTextFromVision(rotate(buildUpright(ROWS, true), deg)) ?? '';
+      expect(turned).toBe(clean);
+    }
+  });
 
   it('fără derotare, rândurile ar fi ieșit ca o coloană lipită', () => {
     // Simptomul de pe scanul Proace: codurile de rubrică ajung toate pe o linie.

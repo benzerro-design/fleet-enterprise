@@ -94,7 +94,13 @@ for (const rel of SAMPLES) {
     console.log(`skip (lipsește local): ${rel}`);
     continue;
   }
-  const ann = JSON.parse(readFileSync(path, 'utf8'));
+  // Unele fixtures sunt salvate ca răspuns brut Vision: [{ pages, text }].
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
+  const ann = Array.isArray(raw) ? raw[0] : raw;
+  if (!ann?.pages?.length) {
+    console.log(`skip (fără pagini): ${rel}`);
+    continue;
+  }
   const upright = rebuildCivOcrTextFromVision(ann) ?? '';
   const uprightRotation = detectCivScanRotation(ann);
   console.log(`\n=== ${rel}`);

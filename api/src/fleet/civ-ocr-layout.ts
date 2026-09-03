@@ -299,6 +299,31 @@ export function mergeOrphanValueAboveEmptyLabel(text: string): string {
 }
 
 /**
+ * Titlurile de secțiune sunt tipărite vertical pe marginea CIV („DATE CONSTRUCTIVE VEHICUL”).
+ * Au altă direcție decât rândurile, dar același y, deci gruparea le lipea de etichete —
+ * pe Logan „VEHICUL” ajungea chiar valoarea rubricii N.4. Le scoatem din rânduri și le
+ * păstrăm la coadă, ca să nu pierdem text.
+ */
+function splitSidebarWords(
+  words: VisionWord[],
+  rotation: RotationClass,
+): { words: VisionWord[]; sidebarText: string } {
+  const aligned = words.filter((w) => w.dir == null || w.dir === rotation);
+  const cross = words.filter((w) => w.dir != null && w.dir !== rotation);
+  // Dacă „marginea” e de fapt majoritatea, orientarea dominantă e nesigură — nu tăiem nimic.
+  if (!cross.length || aligned.length < words.length * 0.6) {
+    return { words, sidebarText: '' };
+  }
+  const sidebarText = [...cross]
+    .sort((a, b) => a.cy - b.cy || a.cx - b.cx)
+    .map((w) => w.text)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { words: aligned, sidebarText };
+}
+
+/**
  * Cât de rotit e scanul față de pagina dreaptă (0 = drept). Pentru avertisment la upload.
  */
 export function detectCivScanRotation(
@@ -337,9 +362,12 @@ export function rebuildCivOcrTextFromVision(fullText: VisionFullText | null | un
     // Scan rotit: rândurile CIV ajung coloane și textul iese amestecat. Îndreptăm întâi.
     const rotation = dominantRotation(collected);
     const derotated = derotateWords(collected, rotation, page.width ?? 0, page.height ?? 0);
-    const words = derotated.words;
     const width = derotated.width;
     const height = derotated.height;
+
+    const { words, sidebarText } = splitSidebarWords(derotated.words, rotation);
+    const withSidebar = (text: string) =>
+      sidebarText ? [text.trim(), sidebarText].filter(Boolean).join('\n') : text;
 
     const isSpread = width > 0 && height > 0 && width / height >= 1.25;
     if (looks1993) {
@@ -353,12 +381,12 @@ export function rebuildCivOcrTextFromVision(fullText: VisionFullText | null | un
         const rightText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(right)));
         const parts = [leftText, rightText].filter((t) => t.trim());
         if (parts.length) {
-          pageTexts.push(parts.join('\n\n'));
+          pageTexts.push(withSidebar(parts.join('\n\n')));
           continue;
         }
       }
       const t = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(words)));
-      if (t.trim()) pageTexts.push(t.trim());
+      if (t.trim()) pageTexts.push(withSidebar(t.trim()));
       continue;
     }
     if (isSpread) {
@@ -368,10 +396,10 @@ export function rebuildCivOcrTextFromVision(fullText: VisionFullText | null | un
       const leftText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(left)));
       const rightText = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(right)));
       const parts = [leftText, rightText].filter(Boolean);
-      if (parts.length) pageTexts.push(parts.join('\n\n'));
+      if (parts.length) pageTexts.push(withSidebar(parts.join('\n\n')));
     } else {
       const t = mergeOrphanValueAboveEmptyLabel(linesToText(clusterLines(words)));
-      if (t) pageTexts.push(t);
+      if (t) pageTexts.push(withSidebar(t));
     }
   }
 
