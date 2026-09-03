@@ -652,6 +652,27 @@ function pushSeatsWarning(warnings: CivExtractWarning[], read: number, reason: s
   });
 }
 
+/**
+ * O cifră singură dintr-un scan e ușor de confundat, iar pe vehiculele cu utilizare multiplă
+ * numărul de locuri variază între 5 și 9 și are urmări fiscale. Verificat pe Proace: cardul
+ * scrie 9, Vision citește 6. Nu ghicim în locul omului, dar nu tăcem nici.
+ */
+function warnOnConfusableSeats(profile: VehicleCivProfile, warnings: CivExtractWarning[]) {
+  if (warnings.some((w) => w.target === 'seatsIncludingDriver')) return;
+  const seats = profile.seatsIncludingDriver;
+  if (typeof seats !== 'number' || seats < 0 || seats > 9) return;
+  if (!DIGIT_LOOKALIKES[String(seats)]?.length) return;
+
+  const body = stripDiacritics(String(profile.bodyType ?? '')).toLowerCase();
+  if (!/\baf\b/.test(body) && !/utilizare multipla/.test(body)) return;
+
+  pushSeatsWarning(
+    warnings,
+    seats,
+    'Vehicul cu utilizare multiplă, unde numărul de locuri diferă de la o versiune la alta.',
+  );
+}
+
 function parseVersoCapacity(
   verso: string,
   profile: VehicleCivProfile,
@@ -995,6 +1016,8 @@ export function mapCiv2024TextToPreview(
 
   parseFrontIdent(front, profile, matched, meta);
   parseVersoGrid(verso, profile, matched, warnings);
+
+  warnOnConfusableSeats(profile, warnings);
 
   const mentions = parse2024Mentions(front);
   if (mentions) {

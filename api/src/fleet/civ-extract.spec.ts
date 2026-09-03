@@ -123,6 +123,15 @@ describe('detectCivDocumentFormat', () => {
     expect(g.civIssuedOn).toBe('2025-06-23');
     expect(g.civRarOffice).toMatch(/Călărași/i);
 
+    // U.2 e o rubrică proprie („Turație motor” pe card), nu turația nominală de la P.4.
+    expect(g.civProfile.stationaryNoiseRpm).toBe(2625);
+    expect(g.civProfile.engineRpm).toBe(3500);
+
+    // Cardul scrie 9 la S.1, Vision citește 6: nu ghicim, dar cerem confirmare.
+    const seatWarning = g.civWarnings?.find((w) => w.target === 'seatsIncludingDriver');
+    expect(seatWarning).toBeDefined();
+    expect(seatWarning?.candidates).toContain('9');
+
     const filled = Object.values(g.civProfile).filter((v) => v != null && v !== '').length;
     expect(filled).toBeGreaterThanOrEqual(45);
   });
