@@ -68,13 +68,20 @@ describe('detectCivDocumentFormat', () => {
     expect(g.civIssuedOn).toBe('2025-06-23');
     expect(g.civRarOffice).toMatch(/Călărași/i);
     expect(String(g.civProfile.tyresFront ?? '')).toMatch(/215\/65/);
-    expect(g.civProfile.seatsIncludingDriver).toBe(6);
+    expect(g.civProfile.seatsIncludingDriver).toBeUndefined();
     expect(g.civProfile.maxSpeedKmh).toBe(160);
     expect(g.civSeries).toBe('S869740');
     expect(g.civProfile.bodyType).toMatch(/AF.*utilizare multipl/i);
     expect(g.civProfile.vehicleClass).toBe('-');
     expect(g.civMentions).toMatch(/FILTRU DE PARTICULE/);
     expect(g.civMentions).toMatch(/ASG04_4856239/);
+    expect(g.civProfile.typeVariantVersion).toBe('V / A / YHVM-P2S10N(1T)');
+    expect(g.civProfile.curbMassKg).toBe(1734);
+    expect(g.civProfile.maxBrakedTrailerMassKg).toBe(1400);
+    expect(g.civProfile.engineSerial).toBe('FĂRĂ SERIE');
+    expect(String(g.civProfile.propulsionSystem)).toMatch(/Motor cu ardere intern/i);
+    expect(g.civProfile.nationalEmissionCode).toBeUndefined();
+    expect(String(g.civProfile.tyresFront)).toMatch(/ET46/);
   });
 });
 

@@ -111,7 +111,6 @@ console.log('OK colon-2024');
   if (!/215\/65/.test(String(g.civProfile.tyresFront ?? ''))) {
     throw new Error(`grid tyres=${g.civProfile.tyresFront}`);
   }
-  if (g.civProfile.seatsIncludingDriver !== 6) throw new Error(`grid seats=${g.civProfile.seatsIncludingDriver}`);
   if (g.civProfile.co2Gkm !== 169) throw new Error(`grid co2=${g.civProfile.co2Gkm}`);
   if (g.civSeries !== 'S869740') throw new Error(`grid serie=${g.civSeries}`);
   if (!/AF.*multipl/i.test(String(g.civProfile.bodyType ?? ''))) {
@@ -120,6 +119,28 @@ console.log('OK colon-2024');
   if (g.civProfile.vehicleClass !== '-') throw new Error(`grid class=${g.civProfile.vehicleClass}`);
   if (!/FILTRU DE PARTICULE/i.test(String(g.civMentions ?? ''))) {
     throw new Error(`grid mentions=${g.civMentions}`);
+  }
+  if (g.civProfile.typeVariantVersion !== 'V / A / YHVM-P2S10N(1T)') {
+    throw new Error(`grid tvv=${g.civProfile.typeVariantVersion}`);
+  }
+  if (g.civProfile.curbMassKg !== 1734) throw new Error(`grid curb=${g.civProfile.curbMassKg}`);
+  if (g.civProfile.maxBrakedTrailerMassKg !== 1400) {
+    throw new Error(`grid braked=${g.civProfile.maxBrakedTrailerMassKg}`);
+  }
+  if (String(g.civProfile.engineSerial ?? '') !== 'FĂRĂ SERIE') {
+    throw new Error(`grid engineSerial=${g.civProfile.engineSerial}`);
+  }
+  if (!/Motor cu ardere intern/i.test(String(g.civProfile.propulsionSystem ?? ''))) {
+    throw new Error(`grid prop=${g.civProfile.propulsionSystem}`);
+  }
+  if (g.civProfile.nationalEmissionCode) {
+    throw new Error(`grid emCode should be empty, got ${g.civProfile.nationalEmissionCode}`);
+  }
+  if (g.civProfile.seatsIncludingDriver != null) {
+    throw new Error(`grid seats should stay empty (OCR 6 = Euro 6), got ${g.civProfile.seatsIncludingDriver}`);
+  }
+  if (!/215\/65 R16C 106T\/7\.0Jx16 ET46/i.test(String(g.civProfile.tyresFront ?? ''))) {
+    throw new Error(`grid tyres full=${g.civProfile.tyresFront}`);
   }
   const gk = Object.keys(g.civProfile).filter((k) => g.civProfile[k] != null && g.civProfile[k] !== '');
   if (gk.length < 30) throw new Error(`grid fields=${gk.length} ${gk.join(',')}`);

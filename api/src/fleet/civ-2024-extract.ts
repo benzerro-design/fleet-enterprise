@@ -223,9 +223,9 @@ function parseFrontIdent(
     matched.push({ rubric: 'Reprezentanță RAR', target: 'civRarOffice', value: rarCity });
   }
 
-  const d2 = /\*\s*([A-Z][A-Z0-9]{4,10})\b/.exec(front)?.[1];
-  if (d2 && !/^(TOYOTA|PROACE|MOTORINA)$/i.test(d2)) {
-    setProfile(profile, matched, 'typeVariantVersion', d2.toUpperCase(), 'Tip – variantă – versiune');
+  const tvv = pickTypeVariantVersion(front);
+  if (tvv) {
+    setProfile(profile, matched, 'typeVariantVersion', tvv, 'Tip – variantă – versiune');
   }
 
   pickClassAndBody(front, profile, matched);
@@ -235,6 +235,33 @@ function parseFrontIdent(
     meta.civSeries = series;
     matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: series });
   }
+}
+
+/** D.2 Tip + Variantă + Versiune → un singur câmp, separate cu „ / ”. */
+function pickTypeVariantVersion(front: string): string | null {
+  const yhvm = /\bYHVM\b/i.exec(front)?.[0]?.toUpperCase();
+  const p2 = /\bP2S10N\b/i.exec(front)?.[0]?.toUpperCase();
+  const oneT = /\(?\s*1T\s*\)?/.test(front);
+  // OCR faţă Proace: „1T ) A V” la finalul grilei D.2.
+  const tipVariantTail = /1T\s*\)\s*([A-Z])\s+([A-Z])\b/.exec(front);
+  if (yhvm && p2 && tipVariantTail) {
+    const variant = tipVariantTail[1]!.toUpperCase();
+    const tip = tipVariantTail[2]!.toUpperCase();
+    const versiune = oneT ? `${yhvm}-${p2}(1T)` : `${yhvm}-${p2}`;
+    return `${tip} / ${variant} / ${versiune}`;
+  }
+
+  const tip =
+    /\bTip\s*:\s*([A-Z0-9]{1,8})\b/i.exec(front)?.[1] ||
+    /\bD\.?\s*2\.?\s*Tip\s*:\s*([A-Z0-9]{1,8})\b/i.exec(front)?.[1];
+  const varianta = /\bVariant[aă]\s*:\s*([A-Z0-9]{1,14})\b/i.exec(front)?.[1];
+  const versiune =
+    /\bVersiune\s*:\s*([A-Z0-9()\-]{3,40})\b/i.exec(front)?.[1] ||
+    (yhvm && p2 ? `${yhvm}-${p2}${oneT ? '(1T)' : ''}` : null);
+  const parts = [tip, varianta, versiune].filter(Boolean).map((s) => String(s).toUpperCase());
+  if (parts.length >= 2) return parts.join(' / ');
+  if (parts.length === 1) return parts[0]!;
+  return null;
 }
 
 /** 3. Clasă (doar M2/M3) și 4. Caroserie — pe 2024 sunt linii separate, nu celule de grilă. */
@@ -301,6 +328,7 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
   )?.[1];
   if (color) setProfile(profile, matched, 'color', color.toUpperCase(), 'Culoare');
 
+  // Rând capacitate: R S.1 S.2 T U.1 U.2 U.3 … — nu confunda cifra din „Euro 6” cu S.1.
   const cap =
     /\b(?:Gri|Alb|Negru|Albastru|Rosu|Roșu|Maro|Verde|Argintiu)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})\s+(\d{4})\s+(\d{2,3})/i.exec(
       verso,
@@ -312,7 +340,9 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
     const noise = Number(cap[4]);
     const noiseRpm = Number(cap[5]);
     const moving = Number(cap[6]);
-    if (seats >= 2 && seats <= 9) {
+    // S.1 tipic 2–9, dar pe Proace OCR „6” e adesea scurgere din Euro 6 — acceptăm doar dacă ≠ cifra Euro.
+    const euroDigit = /\bEuro\s*([0-9])\b/i.exec(verso)?.[1] || (/\bE([0-9])\b/.exec(verso)?.[1] ?? null);
+    if (seats >= 2 && seats <= 9 && String(seats) !== euroDigit) {
       setProfile(profile, matched, 'seatsIncludingDriver', seats, 'Număr locuri (cu șofer)');
     }
     if (standing >= 0 && standing <= 20) {
@@ -332,14 +362,32 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
     }
   }
 
-  const euro =
-    /\bEuro\s*([0-9])\b/i.exec(verso)?.[1] ||
-    (/\bE6\b/.test(verso) ? '6' : null);
-  if (euro) setProfile(profile, matched, 'emissionStandard', `Euro ${euro}`, 'Normă poluare');
+  // V.9 — text integral dacă OCR îl dă (ex. „Euro 6d”, „Euro 6 EA”).
+  const euroFull =
+    /\b(Euro\s*6[a-z0-9]?(?:\s*[A-Z]{1,3})?(?:\s*[A-Z]{1,3})?)\b/i.exec(verso)?.[1] ||
+    /\b(Euro\s*[0-9][a-z0-9\-]*)\b/i.exec(verso)?.[1];
+  if (euroFull) {
+    setProfile(
+      profile,
+      matched,
+      'emissionStandard',
+      euroFull.replace(/\s+/g, ' ').trim(),
+      'Normă poluare',
+    );
+  } else if (/\bE6\b/.test(verso)) {
+    setProfile(profile, matched, 'emissionStandard', 'Euro 6', 'Normă poluare');
+  }
 
-  const emCode = /\b(ET\d{2,3}|AE\d{2,3}|EE\d{2,3})\b/i.exec(verso)?.[1];
+  // Rubrica 16 — nu ET## (offset jantă de pe 18.1/18.2).
+  const emCode = /\b((?:AE|EE|AA|EA)\s*\d{2,3})\b/i.exec(verso)?.[1];
   if (emCode) {
-    setProfile(profile, matched, 'nationalEmissionCode', emCode.toUpperCase(), 'Cod național emisii');
+    setProfile(
+      profile,
+      matched,
+      'nationalEmissionCode',
+      emCode.replace(/\s+/g, '').toUpperCase(),
+      'Cod național emisii',
+    );
   }
 
   const wltp =
@@ -348,12 +396,13 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
   const nedc =
     /\b(1\d{2})\b[^0-9]{0,20}215\s*\/\s*65/i.exec(verso)?.[1] ||
     /\b(1\d{2})\b[\s\S]{0,40}?NEDC/i.exec(verso)?.[1];
+  // Câmp numeric (g/km): preferă WLTP; NEDC rămâne doar dacă WLTP lipsește.
   const co2 = wltp ? Number(wltp) : nedc ? Number(nedc) : null;
   if (co2 && co2 >= 80 && co2 <= 280) {
     setProfile(profile, matched, 'co2Gkm', co2, 'CO₂');
   }
 
-  const tank = /\bET\d{2,3}\b[\s\S]{0,40}?\b(4\d|5\d|6\d|7\d|8\d|90)\b/i.exec(verso)?.[1];
+  const tank = /\b(?:ET\d{2,3}\s+){1,2}(\d{2})\b/.exec(verso)?.[1];
   if (tank) {
     const n = Number(tank);
     if (n >= 40 && n <= 120) setProfile(profile, matched, 'fuelTankCapacityL', n, 'Capacitate rezervor');
@@ -364,8 +413,16 @@ function parseVersoCapacity(verso: string, profile: VehicleCivProfile, matched: 
     setProfile(profile, matched, 'driveType', stripDiacritics(drive).toUpperCase(), 'Tracțiune');
   }
 
-  if (/\bardere\b/i.test(stripDiacritics(verso))) {
-    setProfile(profile, matched, 'propulsionSystem', 'ARDERE INTERNĂ', 'Sistem propulsie');
+  const prop = stripDiacritics(verso);
+  if (/\bmotor\s+cu\s+ardere\s+interna\b/i.test(prop) || (/\bmotor\b/i.test(prop) && /\bardere\b/i.test(prop))) {
+    setProfile(profile, matched, 'propulsionSystem', 'Motor cu ardere internă', 'Sistem propulsie');
+  }
+
+  // P.5 — inclusiv „Fără serie” tipărit pe CIV (nu lăsa gol = fals OCR fail).
+  if (/\bFARA\b/i.test(prop) && /\bSERIE\b/i.test(prop)) {
+    setProfile(profile, matched, 'engineSerial', 'FĂRĂ SERIE', 'Serie motor');
+  } else if (/\bFARA\s*\/\s*/i.test(verso) && /\bSERIE\b/i.test(verso)) {
+    setProfile(profile, matched, 'engineSerial', 'FĂRĂ SERIE', 'Serie motor');
   }
 }
 
@@ -378,10 +435,15 @@ function parseTyresAndSuspension(
   const radius = /\bR\s*(\d{2}C?)\b/i.exec(verso);
   const rim = /(\d(?:[.,]\d)?)\s*J\s*x\s*(\d{2})/i.exec(verso);
   const load = /\b(10[0-9][A-Z]|9[0-9][A-Z])\b/.exec(verso);
+  const offset = /\b(ET\d{2,3})\b/i.exec(verso)?.[1]?.toUpperCase();
   if (size && radius) {
-    const spec = [`${size[1]}/${size[2]} R${radius[1]}`, load?.[1], rim ? `${rim[1]!.replace(',', '.')}Jx${rim[2]}` : null]
+    // Format CIV: „215/65 R16C 106T/7.0Jx16 ET46”
+    const loadRim = [load?.[1], rim ? `${rim[1]!.replace(',', '.')}Jx${rim[2]}` : null]
       .filter(Boolean)
-      .join(' / ')
+      .join('/');
+    const spec = [`${size[1]}/${size[2]} R${radius[1]}`, loadRim || null, offset]
+      .filter(Boolean)
+      .join(' ')
       .replace(/\s+/g, ' ');
     setProfile(profile, matched, 'tyresFront', spec, 'Anvelope/jante față');
     setProfile(profile, matched, 'tyresRear', spec, 'Anvelope/jante spate');
@@ -402,12 +464,6 @@ function parseVersoGrid(verso: string, profile: VehicleCivProfile, matched: CivE
 
   parseVersoCapacity(verso, profile, matched);
   parseTyresAndSuspension(verso, profile, matched);
-
-  const fuelCurb = /MOTORINA\s+(\d{3,4})\b|\b(\d{4})\s+MOTORINA/i.exec(verso);
-  const curb = fuelCurb ? Number(fuelCurb[1] || fuelCurb[2]) : null;
-  if (curb && curb >= 900 && curb <= 3500) {
-    setProfile(profile, matched, 'curbMassKg', curb, 'Masă în ordine de mers');
-  }
 
   const dim = findDimensionLine(verso);
   if (!dim) return;
@@ -465,39 +521,58 @@ function parseVersoGrid(verso: string, profile: VehicleCivProfile, matched: CivE
   );
   if (rpm) setProfile(profile, matched, 'engineRpm', rpm, 'Turație nominală');
 
-  if (before[0] != null && before[0] >= 1 && before[0] <= 5) {
-    setProfile(profile, matched, 'axleCount', before[0], 'Număr axe');
+  /**
+   * Ordine rubrici înainte de lungime (9):
+   * L, F.1, 6, N.1, N.2, [N.3–N.5 goale pe 2 axe], G, 7, O.1, O.2, 8
+   * Exemplu Proace: 2 2790 4190 1500 1500 1734 1910 1400 750 84 5309…
+   * → G=1734, O.1=1400 (nu curb din „MOTORINA 1832”, nu O.1=1734).
+   */
+  const axleCount = before[0];
+  if (axleCount != null && axleCount >= 1 && axleCount <= 5) {
+    setProfile(profile, matched, 'axleCount', axleCount, 'Număr axe');
   }
-  const masses = before.filter((n) => n >= 900);
-  if (masses[0] != null) setProfile(profile, matched, 'maxTechnicalMassKg', masses[0], 'Masă maximă tehnic admisă');
-  if (masses[1] != null && masses[1] > (masses[0] ?? 0)) {
-    setProfile(profile, matched, 'maxTrainMassKg', masses[1], 'MTMA ansamblu vehicule');
+  if (before[1] != null && before[1] >= 900) {
+    setProfile(profile, matched, 'maxTechnicalMassKg', before[1], 'Masă maximă tehnic admisă');
   }
-  const axles = masses.filter((n) => n >= 800 && n <= 2500 && n !== masses[0] && n !== masses[1]);
-  if (axles[0]) setProfile(profile, matched, 'axle1MaxMassKg', axles[0], 'MTMA axa 1');
-  if (axles[1]) setProfile(profile, matched, 'axle2MaxMassKg', axles[1], 'MTMA axa 2');
+  if (before[2] != null && before[2] > (before[1] ?? 0)) {
+    setProfile(profile, matched, 'maxTrainMassKg', before[2], 'MTMA ansamblu vehicule');
+  }
+  if (before[3] != null && before[3] >= 800 && before[3] <= 2500) {
+    setProfile(profile, matched, 'axle1MaxMassKg', before[3], 'MTMA axa 1');
+  }
+  if (before[4] != null && before[4] >= 800 && before[4] <= 2500) {
+    setProfile(profile, matched, 'axle2MaxMassKg', before[4], 'MTMA axa 2');
+  }
 
-  const coupling = before.find((n) => n >= 50 && n <= 150);
-  if (coupling) setProfile(profile, matched, 'maxCouplingMassKg', coupling, 'Masă max. punct cuplare');
-  const unbraked = before.find((n) => n >= 400 && n <= 900);
-  if (unbraked) setProfile(profile, matched, 'maxUnbrakedTrailerMassKg', unbraked, 'Masă remorcabilă fără frână');
-  const braked = before.find(
-    (n) => n >= 1000 && n <= 3500 && n !== masses[0] && n !== masses[1] && n !== axles[0] && n !== axles[1],
-  );
-  if (braked) setProfile(profile, matched, 'maxBrakedTrailerMassKg', braked, 'Masă remorcabilă cu frână');
+  const rest = before.slice(5);
+  const twoAxlePacked =
+    (axleCount === 2 || axleCount == null) &&
+    rest.length >= 5 &&
+    rest[0]! >= 900 &&
+    rest[0]! <= 3500 &&
+    rest[3]! >= 400 &&
+    rest[3]! <= 900 &&
+    rest[4]! >= 50 &&
+    rest[4]! <= 150;
 
-  const actual = before.find(
-    (n) =>
-      n >= 1200 &&
-      n <= 2800 &&
-      n !== masses[0] &&
-      n !== masses[1] &&
-      n !== axles[0] &&
-      n !== axles[1] &&
-      n !== braked &&
-      n !== curb,
-  );
-  if (actual) setProfile(profile, matched, 'actualMassKg', actual, 'Masă reală');
+  if (twoAxlePacked) {
+    setProfile(profile, matched, 'curbMassKg', rest[0], 'Masă în ordine de mers');
+    if (rest[1]! >= 900 && rest[1]! <= 3500) {
+      setProfile(profile, matched, 'actualMassKg', rest[1], 'Masă reală');
+    }
+    if (rest[2]! >= 800 && rest[2]! <= 3500) {
+      setProfile(profile, matched, 'maxBrakedTrailerMassKg', rest[2], 'Masă remorcabilă cu frână');
+    }
+    setProfile(profile, matched, 'maxUnbrakedTrailerMassKg', rest[3], 'Masă remorcabilă fără frână');
+    setProfile(profile, matched, 'maxCouplingMassKg', rest[4], 'Masă max. punct cuplare');
+  } else {
+    const coupling = before.find((n) => n >= 50 && n <= 150);
+    if (coupling) setProfile(profile, matched, 'maxCouplingMassKg', coupling, 'Masă max. punct cuplare');
+    const unbraked = before.find((n) => n >= 400 && n <= 900);
+    if (unbraked) {
+      setProfile(profile, matched, 'maxUnbrakedTrailerMassKg', unbraked, 'Masă remorcabilă fără frână');
+    }
+  }
 }
 
 export function mapCiv2024TextToPreview(
