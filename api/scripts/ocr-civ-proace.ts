@@ -25,7 +25,13 @@ async function token() {
   }
 }
 
-async function visionPdf(buf: Buffer) {
+async function visionPdf(buf: Buffer, name: string) {
+  // Anotarea brută se păstrează pe disc: rebuild-ul se poate reface fără un nou apel Vision.
+  const cache = join(DIR, `${name}.ann.json`);
+  if (existsSync(cache)) {
+    const ann = JSON.parse(readFileSync(cache, 'utf8'));
+    return (rebuildCivOcrTextFromVision(ann)?.trim() || ann?.text?.trim() || '') as string;
+  }
   const accessToken = await token();
   const res = await fetch('https://vision.googleapis.com/v1/files:annotate', {
     method: 'POST',
@@ -59,6 +65,7 @@ async function visionPdf(buf: Buffer) {
   const page = json.responses?.[0]?.responses?.[0];
   if (page?.error?.message) throw new Error(page.error.message);
   const ann = page?.fullTextAnnotation;
+  if (ann) writeFileSync(cache, JSON.stringify(ann), 'utf8');
   const rebuilt = rebuildCivOcrTextFromVision(ann as Parameters<typeof rebuildCivOcrTextFromVision>[0]);
   return (rebuilt?.trim() || ann?.text?.trim() || '') as string;
 }
@@ -71,10 +78,10 @@ async function main() {
     process.exit(1);
   }
   console.log('OCR față', readFileSync(fata).length, 'bytes');
-  const front = await visionPdf(readFileSync(fata));
+  const front = await visionPdf(readFileSync(fata), 'fata');
   writeFileSync(join(DIR, 'fata.ocr.txt'), front);
   console.log('OCR verso', readFileSync(verso).length, 'bytes');
-  const back = await visionPdf(readFileSync(verso));
+  const back = await visionPdf(readFileSync(verso), 'verso');
   writeFileSync(join(DIR, 'verso.ocr.txt'), back);
 
   const combined = `=== CIV FAȚĂ ===\n${front}\n\n=== CIV VERSO ===\n${back}`;
