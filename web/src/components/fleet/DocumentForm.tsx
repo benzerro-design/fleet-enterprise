@@ -34,6 +34,8 @@ type DocumentRecord = {
   expiresOn: string | null;
   fileUrl: string | null;
   fileName?: string | null;
+  fileUrlVerso?: string | null;
+  fileNameVerso?: string | null;
   reminderOffsetsDays?: number[] | null;
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
@@ -81,6 +83,8 @@ export function DocumentForm(props: Props) {
         expiresOn: "",
         fileUrl: "",
         fileName: "",
+        fileUrlVerso: "",
+        fileNameVerso: "",
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
         reminderOffsetsKm: [] as number[],
@@ -94,6 +98,8 @@ export function DocumentForm(props: Props) {
       expiresOn: toDateInputOrEmpty(r.expiresOn),
       fileUrl: r.fileUrl ?? "",
       fileName: r.fileName ?? "",
+      fileUrlVerso: r.fileUrlVerso ?? "",
+      fileNameVerso: r.fileNameVerso ?? "",
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
       reminderOffsetsKm: r.reminderOffsetsKm?.length ? [...r.reminderOffsetsKm] : [],
@@ -111,8 +117,13 @@ export function DocumentForm(props: Props) {
   const [expiresOn, setExpiresOn] = useState(initial.expiresOn);
   const [fileUrl, setFileUrl] = useState(initial.fileUrl);
   const [fileName, setFileName] = useState(initial.fileName);
-  const [civFront, setCivFront] = useState<FileSlot | null>(null);
-  const [civVerso, setCivVerso] = useState<FileSlot | null>(null);
+  // La editare pornim de la scanurile deja salvate, ca să se poată înlocui doar una din pagini.
+  const [civFront, setCivFront] = useState<FileSlot | null>(
+    initial.fileUrl ? { url: initial.fileUrl, name: initial.fileName || "CIV față" } : null,
+  );
+  const [civVerso, setCivVerso] = useState<FileSlot | null>(
+    initial.fileUrlVerso ? { url: initial.fileUrlVerso, name: initial.fileNameVerso || "CIV verso" } : null,
+  );
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
   const [reminderOffsetsKm, setReminderOffsetsKm] = useState<number[]>(initial.reminderOffsetsKm);
@@ -130,8 +141,10 @@ export function DocumentForm(props: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const isCivCreate = !isEdit && documentTypeCode === "civ";
-  const isCivSideEdit =
-    isEdit && (documentTypeCode === "civ_fata" || documentTypeCode === "civ_verso" || documentTypeCode === "civ");
+  /** Un CIV are două pagini și la editare, nu doar la creare. */
+  const isCivEdit = isEdit && documentTypeCode === "civ";
+  const showCivDualUpload = isCivCreate || isCivEdit;
+  const isCivSideEdit = isEdit && (documentTypeCode === "civ_fata" || documentTypeCode === "civ_verso");
 
   const typeOptions = useMemo(() => {
     if (isEdit && (documentTypeCode === "civ_fata" || documentTypeCode === "civ_verso")) {
@@ -240,13 +253,22 @@ export function DocumentForm(props: Props) {
         return;
       }
 
+      if (isCivEdit && !civFront?.url) {
+        setError("CIV față e obligatoriu — serie CIV e pe față.");
+        setPending(false);
+        return;
+      }
+
       const payload = {
         ...(isEdit ? {} : { vehicleId: boundVehicleId }),
         documentTypeCode,
         title: title.trim(),
         expiresOn: expiryIso,
-        fileUrl: fileUrl.trim() ? fileUrl.trim() : null,
-        fileName: fileName.trim() ? fileName.trim() : null,
+        fileUrl: isCivEdit ? (civFront?.url ?? null) : fileUrl.trim() ? fileUrl.trim() : null,
+        fileName: isCivEdit ? (civFront?.name ?? null) : fileName.trim() ? fileName.trim() : null,
+        ...(isCivEdit
+          ? { fileUrlVerso: civVerso?.url ?? null, fileNameVerso: civVerso?.name ?? null }
+          : {}),
         reminderOffsetsDays: dayOffsets,
         dueOdometerKm: kmDue,
         reminderOffsetsKm: kmOffsets,
@@ -329,7 +351,12 @@ export function DocumentForm(props: Props) {
             </div>
           ) : null}
         </OpsFormField>
-        <OpsFormField label="CIV verso" required hint="Pagina cu caracteristici tehnice (P.1, mase, etc.).">
+        <OpsFormField
+          label="CIV verso"
+          // Documentele vechi pot avea doar fața; la editare nu blocăm salvarea pentru asta.
+          required={isCivCreate}
+          hint="Pagina cu caracteristici tehnice (P.1, mase, etc.)."
+        >
           <input
             type="file"
             accept="application/pdf,image/jpeg,image/png,image/webp,.pdf"
@@ -432,8 +459,8 @@ export function DocumentForm(props: Props) {
             </OpsFormField>
           </div>
         </OpsFormPrimaryBand>
-        <OpsFormSection number={4} title={isCivCreate ? "Scan CIV (față + verso)" : "Fișier document"}>
-          {isCivCreate ? (
+        <OpsFormSection number={4} title={showCivDualUpload ? "Scan CIV (față + verso)" : "Fișier document"}>
+          {showCivDualUpload ? (
             renderCivDualUpload()
           ) : (
             <div className="grid grid-cols-1 gap-3">
@@ -441,9 +468,7 @@ export function DocumentForm(props: Props) {
                 isCivSideEdit
                   ? documentTypeCode === "civ_verso"
                     ? "CIV verso"
-                    : documentTypeCode === "civ_fata"
-                      ? "CIV față"
-                      : "Upload"
+                    : "CIV față"
                   : "Upload",
               )}
               <OpsFormField label="URL fișier (alternativ)">
@@ -451,7 +476,7 @@ export function DocumentForm(props: Props) {
               </OpsFormField>
             </div>
           )}
-          {uploading && isCivCreate ? <p className="mt-2 text-xs text-zinc-400">Se încarcă fișierul…</p> : null}
+          {uploading && showCivDualUpload ? <p className="mt-2 text-xs text-zinc-400">Se încarcă fișierul…</p> : null}
         </OpsFormSection>
         {!isCivCreate ? <OpsFormCollapsible title="5. Termene & remindere (pliable)">{reminderBlock}</OpsFormCollapsible> : null}
         <OpsFormStickyActions
@@ -516,7 +541,7 @@ export function DocumentForm(props: Props) {
 
       {!isCivCreate ? reminderBlock : null}
 
-      {isCivCreate ? (
+      {showCivDualUpload ? (
         <div className="space-y-3">
           <p className="text-sm font-medium text-zinc-300">Scan CIV — față + verso</p>
           {renderCivDualUpload()}

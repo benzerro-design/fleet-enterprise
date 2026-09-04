@@ -15,6 +15,8 @@ type DocumentRecord = {
   expiresOn: string | null;
   fileUrl: string | null;
   fileName: string | null;
+  fileUrlVerso?: string | null;
+  fileNameVerso?: string | null;
   reminderOffsetsDays: number[] | null;
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
