@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleAuth } from 'google-auth-library';
 import { rebuildCivOcrTextFromVision } from './civ-ocr-layout';
+import { extractCivPdfImages, type CivPdfImage } from './civ-pdf-image';
 
 type VisionFullTextAnnotation = {
   text?: string;
@@ -67,6 +68,8 @@ export class CivOcrService {
     const ct = (contentType || '').split(';')[0].trim().toLowerCase();
     try {
       if (ct === 'application/pdf' || buf.slice(0, 5).toString('utf8') === '%PDF-') {
+        const unwrapped = await this.ocrPdfAsImages(buf);
+        if (unwrapped?.text) return unwrapped;
         return await this.ocrPdf(buf);
       }
       if (ct.startsWith('image/') || this.looksLikeImage(buf)) {
@@ -165,6 +168,34 @@ export class CivOcrService {
       return { text: null, error: 'Vision nu a găsit text pe imagine (scan neclar?)' };
     }
     return { text };
+  }
+
+  /**
+   * Un CIV scanat e o singură imagine împachetată în PDF. Pe files:annotate, Google
+   * o rasterizează la o rezoluție pe care nu o controlăm și pierde detaliu — așa
+   * ajungea un 9 de la S.1 să fie citit 6. O scoatem exact cum e în fișier și o
+   * trimitem pe calea de imagine. Null înseamnă „nu e un scan simplu”, deci PDF ca înainte.
+   */
+  private async ocrPdfAsImages(buf: Buffer): Promise<CivOcrResult | null> {
+    let images: CivPdfImage[];
+    try {
+      images = extractCivPdfImages(buf);
+    } catch (e) {
+      this.logger.warn(`CIV PDF unwrap failed: ${e instanceof Error ? e.message : e}`);
+      return null;
+    }
+    if (!images.length) return null;
+
+    const parts: string[] = [];
+    for (const img of images) {
+      const page = await this.ocrImage(img.data);
+      if (page.text) parts.push(page.text);
+    }
+    if (!parts.length) return null;
+
+    const px = images.map((i) => `${i.width}x${i.height}`).join(' + ');
+    this.logger.log(`CIV PDF citit ca imagine la rezoluția scanului (${px})`);
+    return { text: parts.join('\n\n') };
   }
 
   private async ocrPdf(buf: Buffer): Promise<CivOcrResult> {

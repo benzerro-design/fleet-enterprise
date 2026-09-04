@@ -7,3 +7,6 @@ coverage/
 .env.local
 .env.*.local
 .DS_Store
+
+# imagini extrase din PDF-uri CIV pentru verificari locale
+api/scripts/_civ_preview/_extracted/
