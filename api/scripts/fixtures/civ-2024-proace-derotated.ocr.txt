@@ -1,12 +1,14 @@
 === CIV FAȚĂ ===
 Menţiuni:
 FILTRU DE PARTICULE
-REPREZENTANTA CL / ASG04 4856239/16/06/2025
-STANDARD SRL
+REPREZENTANTA CL / ASG04_4856239 / 16 / 06 / 2025
 °
+°
+TIPARITI ANDARD SRL
+O
 
 REGISTRUL
-AUTO
+R AUTO
 ROMÂN
 CARTE DE IDENTITATE A VEHICULULUI
 Vehicle Identity Card
@@ -20,14 +22,14 @@ E. Număr de identificare vehicul: YARVAYHVMGZ008341
 J. Categorie de omologare: M1
 2 . Categorie de folosinţă: Autoturism
 3 . Clasă ( numai pentru M2 , M3 ):
-4 . Caroserie: AF vehicul cu utilizare multiplǎ
-K. Număr omologare de tip: e2 * 2007 / 46 * 0537 * 17
+4 . Caroserie: AF vehicul cu utilizare multiplă
+K Număr omologare de tip: e2 * 2007 / 46 * 0537 * 17
 5 . Număr naţional de registru: AF183D0901G65E6
 Reprezentanţă RAR: Dată eliberare:
 Călăraşi 23-06-2025
 C.I.V.
-RO S 86 9740
-vehicul identificare Date REGISTREL AUTO
+RO S 869 740
+vehicul identificare Date
 
 === CIV VERSO ===
 L. Număr axe: 2
@@ -46,20 +48,20 @@ G. Masă în ordine de mers ( kg ): 1734
 9 . Lungime ( mm ): 5309
 10. Lăţime ( mm ): 1920
 11. Înălţime ( mm ): 1899
-12 . Distanţă între axe ( mm ): 3275
+12. Distanţă între axe ( mm ): 3275
 13 . Cod motor: YH01
 P.1 . Capacitate cilindrică ( cm³ ): 1499
 P.2 . Putere ( kW ): 88
 P.3 . Tip combustibil sau sursă de energie: MOTORINA
-P.4 . Turaţie nominală ( min 1 ): 3500
+P.4 . Turaţie nominală ( min - 1 ): 3500
 P.5 . Serie motor: FARA SERIE
 14 . Sistem de propulsie: Motor cu Ardere Interna
 15 . Putere motor electric ( kW ):
 V.9 . Normă de poluare CE: Euro 6 ; 715 / 2007 * 2018 / 1832 AP
 
-16. Cod naţional de emisii: E6
+16 . Cod naţional de emisii: E6
 R. Culoare vehicul: Gri
-S.1 . Număr locuri , inclusiv locul conducătorului auto: 6
+S.1 . Număr locuri , inclusiv locul conducătorului auto: 9
 S.2 . Număr locuri în picioare: 0
 T. Viteză maximă ( km / h ): 160
 U.1 . Nivel sonor în staţionare [ dB ( A ) ]: 80
@@ -72,11 +74,20 @@ V.7 . CO2: NEDC: 138 ( g / km ) | WLTP: 169 ( g / km )
 18.2 . Anvelope / jante axe spate: 215/65 R16C 106T / 7.0Jx16 ET46
 19.1 . Suspensie axe faţă: Mecanică
 19.2 . Suspensie axe spate: Mecanică
-W. Capacitate rezervor ( I ): 70
-D.1 . category Make ; ; 2. D.2 . National Type / category Variant / of Version use ; ; 3. D.3 Class . ( only Commercial for M₂ , M. description vehicles ; ) ; E. 4. Vehicle Bodywork ; K. identification Type - approval number ; 1. number Year ; 5. of Number production in ; the J. national Vehicle
-register permissible of vehicles maximum ; L. mass Number of the of axles ; combination F.1 . ; N.1 Maximum - N.5 . technically Distribution of the permissible technically laden mass permissible , except for maximum motorcycles laden ; mass 6. among Technically the
-( axles braked ; / G. unbraked Mass ) ; in 8. running Technically order ; 7. permissible Actual maximum mass ; static 0.1-0.2 . vertical Technically mass at the permissible coupling point ; maximum 9. Length ; towable 10. Width mass ; 11. of the Height ; trailer 12 .
-Axle identification spacing ; 13. number Engine ; code 14.Propulsion ; P.1 . ; 15. Engine Electric capacity ; motor P.2 . power Power ; ; V.9 P.3 . . Type Indication of fuel of or the power environmental source ; P.4 . category Engine of rated EC type speed - ; P.5 approval . ; Engine 16 .
-National emission class ; R. Color of the vehicle ; S.1 . Number of seats , including the driver's seat ; S.2 . Number of standing places ; T.
-V.7 . Maximum CO ; 17. speed ; Powered U.1 . axles Stationary position sound ; 18.1 . level - ; 18.2 U.2 . . Tyre / Engine wheel ( speed front ; / U.3 rear . ): Drive 19.1 - . - by 19.2 sound . level Suspension ; Q. ( Power front / / rear weight ) ; W. ratio Fuel ( only tank ( for s ) capacity motorcycles . ) ;
+W Capacitate rezervor ( I ): 70
+0
+° о
+C °
+00 0
+D.1 . Make ; D.2 . Type / Variant / Version ; D.3 . Commercial description ; E. Vehicle identification number , 1. Year of production ; J. Vehicle
+category ; 2. National category of use ; 3. Class ( only for M₂ , M , vehicles ) ; 4. Bodywork ; K. Type - approval number ; 5. Number in the national
+register of vehicles ; L. Number of axles ; F.1 . Maximum technically permissible laden mass , except for motorcycles ; 6. Technically
+permissible maximum mass of the combination ; N.1 - N.5 . Distribution of the technically permissible maximum laden mass among the
+axles ; G. Mass in running order ; 7. Actual mass ; 0.1-0.2 . Technically permissible maximum towable mass of the trailer
+( braked / unbraked ) ; 8. Technically permissible maximum static vertical mass at the coupling point ; 9. Length ; 10. Width ; 11. Height ; 12 .
+Axle spacing ; 13. Engine code ; P.1 . Engine capacity ; P.2 . Power ; P.3 . Type of fuel or power source ; P.4 . Engine rated speed ; P.5 . Engine
+identification number: 14.Propulsion ; 15. Electric motor power ; V.9 . Indication of the environmental category of EC type - approval ; 16 .
+National emission class ; R. Color of the vehicle ; S.1 . Number of seats , including the driver's seat ; S.2 . Number of standing places ; T
+Maximum speed ; U.1 . Stationary sound level ; U.2 . Engine speed ; U.3 . Drive - by sound level ; Q. Power / weight ratio ( only for motorcycles ) ;
+V.7 . CO₂ ; 17. Powered axles position ; 18.1 . - 18.2 . Tyre / wheel ( front / rear ): 19.1-19.2 . Suspension ( front / rear ) ; W. Fuel tank ( s ) capacity .
 vehicul constructive Date vehicul constructive Date

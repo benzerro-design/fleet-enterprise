@@ -1,0 +1,112 @@
+DATE IDENTIFICARE VEHICUL
+D.1. Marca:
+D.2. Tip:
+Variantă:
+Versiune:
+D.3. Denumire comercială:
+E. Număr de identificare:
+DACIA
+14. Cod motor:
+K9K-C6
+SD
+P.1. Capacitate cilindrică (cm³):
+1461
+7SDCL
+P.2. Putere (kW):
+66
+7SDCL5
+P.3. Tip combustibil sau sursă de energie:
+MOTORINA
+LOGAN
+P.4. Turaţie nominală (min°¹):
+3750
+UU17SDCL551325663
+P.5. Serie motor:
+R196021
+2.
+An fabricaţie:
+2014
+15. Sistem de propulsie:
+J.
+Categorie:
+M1
+16. Putere motor electric (kW):
+3. Categorie de folosinţă:
+AUTOTURISM M1
+4.
+Clasă (numai pentru M2, M3):
+5.
+Caroserie:
+AC BREAK
+K. Număr omologare de tip:
+6. Număr naţional de registru:
+e2*2001/116*0314*70
+ACDA1G8A11CA4E5
+L Număr axe:
+2
+F.1. Masă maximă tehnic admisibilă, cu excepţia motocicletelor (kg):
+1670
+7.
+Masă maximă tehnic admisibilă a ansamblului de vehicule (kg):
+N.1. Masă maximă tehnic admisibilă a axei 1 (kg):
+2480
+840
+DATE CONSTRUCTIVE VEHICUL (continuare)
+V.9. Normă de poluare CE:
+17. Cod naţional de emisii:
+R. Culoare:
+S.1. Număr locuri, inclusiv locul conducătorului auto:
+E5
+MARO
+5
+S.2. Număr locuri în picioare:
+T. Viteză maximă (km/h):
+U.1. Nivel sonor în staționare [dB(A)]:
+U.2. Turaţie motor (min):
+173
+78
+U.3 Nivel sonor in mers [dB(A)]:
+Q. Raport putere/masă (kW/kg) (numai pentru motociclete):
+V.7. CO₂:
+18. Tracţiune:
+19.1. Anvelope/jante axe faţă:
+72
+NEDC: 99 (g/km)
+FATA
+DATE CONSTRUCTIVE VEHICUL
+N.2. Masă maximă tehnic admisibilă a axei 2 (kg):
+N.3. Masă maximă tehnic admisibilă a axei 3 (kg):
+N.4. Masă maximă tehnic admisibilă a axei 4 (kg):
+N.5. Masă maximă tehnic admisibilă a axei 5 (kg):
+G. Masă în ordine de mers (kg):
+8. Masă reală (kg):
+950
+19.2. Anvelope/jante axe spate:
+1165
+20.1. Suspensie axe faţă:
+20.2. Suspensie axe spate:
+0.1. Masă maximă remorcabilă cu dispozitiv de frânare (kg):
+0.2. Masă maximă remorcabilă fără dispozitiv de frânare (kg):
+1150
+W. Capacitate rezervor (1):
+580
+21. Reprezentanţă RAR:
+9. Masă maximă tehnic admisibilă în punctul de cuplare (kg):
+75
+Data eliberării:
+10. Lungime (mm):
+4494
+11. Lăţime (mm):
+1733
+12. Înălţime (mm):
+1518
+13. Distanţă între axe (mm):
+2634;
+355
+185/65R15 88T/6JX15
+185/65R15 88T/6JX15
+ARCURI ELICOIDALE
+ARCURI ELICOIDALE
+50
+OB/B2320088
+14.02.2022

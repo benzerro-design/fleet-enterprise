@@ -1,0 +1,98 @@
+=== CIV FAȚĂ ===
+STANDARD REPREZENTANTA DE: FILTRU Menţiuni
+SRL
+PARTICULE
+CL
+/
+ASG04
+4856239/16/06/2025
+°
+Date identificare vehicul
+5 . K. 4 . 3 . . 2 J. 1 . E. D.3 D.2 D.1
+. . .
+Număr Număr Caroserie Clasă An Număr Versiune Variantă Tip: Marcă ROMÂN AUTO
+Reprezentanţă ( Categorie Categorie Denumire: REGISTRUL
+: numai fabricaţie de: :
+naţional omologare de de:
+RAR de pentru folosinţă identificare comercială CARTE
+Călăraşi: de omologare
+C.I.V. registru tip: , M2: : : DE
+: M3 vehicul
+): :
+Vehicle
+IDENTITATE
+Identity
+AUTO REGISTREL A
+Card
+RO Dată
+AF
+S eliberare vehicul VEHICULULUI
+86: e2 * cu
+23-06-2025 2007 YHVM
+/ utilizare YARVAYHVMGZ008341 -
+9740 AF183D0901G65E6 46 * P2S10N
+0537 * multiplǎ Autoturism 2021 Proace ( TOYOTA
+17 M1 1T ) A V
+
+=== CIV VERSO ===
+E6 Gri 6 0 160 80 2625 68 0 ) km FATA ET46 ET46 70 70 Vehicle national the trailer . 12 ; Engine . 16 ; T. ; ; ) .
+/ g ( Mecanică Mecanică J. Technically among the Height . approval places motorcycles capacity
+169 7.0Jx16 7.0Jx16 ; the in 6. ; mass of 11. ; P.5 ; speed - standing for ) s (
+: production Number mass Width type only tank
+WLTP / / of 5. motorcycles laden 10. rated EC of of ( Fuel
+| 106T 106T Year ; towable ; Engine Number ratio W.
+) km 1. number for maximum Length category . weight ; ) rear
+/ g R16C R16C ; except maximum 9. . P.4 S.2 ; / / front
+( number approval , permissible ; point ; seat Power (
+: ) 138 215/65 215/65 - mass source environmental driver's Q. ;
+: identification Type permissible coupling power level Suspension
+motociclete NEDC K. ; laden technically the or the the sound .
+: auto Bodywork at fuel of including by 19.2 - .
+о Vehicle 4. permissible the of Technically mass of Type Indication , - Drive 19.1
+pentru 0 E. ; ; ) vertical . P.3 . seats . U.3: ) rear
+description vehicles technically Distribution . ; V.9 ; of ; / front
+conducătorului M. 0.1-0.2 static Power power Number speed (
+: ] ) A numai , M₂ . N.5 ; . P.2 Engine wheel
+( dB: ( ) Commercial for Maximum - N.1 mass maximum ; motor . S.1 . / Tyre
+locul: [ ] ) A ( kg /: : only ( . ; Actual capacity Electric ; vehicle U.2 ; . 18.2
+: picioare: ) h: ) dB [ kW ( faţă spate: : ) I ( . D.3 Class F.1 ; combination 7. permissible Engine 15. level - . 18.1
+emisii inclusiv / km staţionare 1 - mers masă axe axe: faţă spate ; 3. ; axles ; . ; the of sound ;
+de: în ( min ( / rezervor Version / use of of the of order P.1 ; Color position
+vehicul , în în jante jante axe axe Number Technically code 14.Propulsion R. Stationary
+locuri locuri maximă motor sonor putere: / / Variant category mass running ; axles
+naţional sonor / Type L. ; in 8. ; Engine ; class . U.1
+Culoare Număr Număr Viteză Turaţie Raport: Tracţiune Anvelope Anvelope Suspensie Suspensie Capacitate . National vehicles maximum Mass ) 13. number ; Powered
+Cod Nivel Nivel CO2 D.2 ; 2. unbraked ; emission speed 17.
+. . . . . . 18.1 . 18.2 . 19.1 . 19.2 Make ; of permissible G. ; / spacing identification ; CO
+16. R. S.1 S.2 T. U.1 U.2 U.3 Q. V.7 17. W. . category register axles braked Axle National Maximum .
+D.1 ( V.7
+vehicul constructive Date
+2 2790 4190 1500 1500 1734 1910 1400 750 84 5309 1920 1899 3275 YH01 1499 88 3500 SERIE Interna AP
+MOTORINA 1832
+FARA /
+Ardere 2018
+*
+cu 2007
+Motor /
+: ): ) 715
+kg ( kg ; 6
+(: ): ) kg Euro
+vehicule: ) kg kg ( (
+motocicletelor (
+de frânare cuplare
+frânare
+: ): ): ): ): ) de de
+excepţia ansamblului 1 2 3 4 5 punctul: kg ( kg ( kg ( kg ( kg ( de
+axei axei axei axei axei dispozitiv dispozitiv energie
+cu , a a a a a a în
+admisibilă admisibilă admisibilă admisibilă admisibilă admisibilă admisibilă: ) kg cu fără admisibilă: ) de: )
+(: ) cm³ sursă: ) 1 kW (:
+mers remorcabilă remorcabilă mm ( min: CE
+tehnic tehnic tehnic tehnic tehnic tehnic tehnic de: tehnic ( axe cilindrică sau ( propulsie electric
+) kg: ) mm: ): ): nominală: poluare
+: axe maximă maximă maximă maximă maximă maximă maximă ordine ( maximă maximă maximă ( mm mm ( între: ) kW combustibil motor de motor de
+în reală ( motor (
+Număr Masă Masă Masă Masă Masă Masă Masă Masă Masă Masă Masă Masă Lungime Lăţime Înălţime Distanţă Cod Capacitate Putere Tip Turaţie Serie Sistem Putere Normă
+. F.1 . . N.1 . N.2 . N.3 . N.4 . N.5 G. . . 0.1 . 0.2 . 8 . 9 10. 11. . 12 . 13 P.1 . . P.2 . P.3 P.4 . P.5 . . 14 . 15 . V.9
+L. 6 7
+vehicul constructive Date

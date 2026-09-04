@@ -127,10 +127,15 @@ describe('detectCivDocumentFormat', () => {
     expect(g.civProfile.stationaryNoiseRpm).toBe(2625);
     expect(g.civProfile.engineRpm).toBe(3500);
 
-    // Cardul scrie 9 la S.1, Vision citește 6: nu ghicim, dar cerem confirmare.
+    // Scanul la rezoluția lui citește corect 9 la S.1 (rasterizarea PDF îl dădea 6),
+    // dar rămâne o rubrică cu sosii, deci tot cerem confirmare.
+    expect(g.civProfile.seatsIncludingDriver).toBe(9);
     const seatWarning = g.civWarnings?.find((w) => w.target === 'seatsIncludingDriver');
     expect(seatWarning).toBeDefined();
-    expect(seatWarning?.candidates).toContain('9');
+
+    // Ștampila reprezentanței vine cu data spațiată de OCR („16 / 06 / 2025”).
+    expect(g.civMentions).toContain('FILTRU DE PARTICULE');
+    expect(g.civMentions).toContain('REPREZENTANTA CL / ASG04_4856239 / 16/06/2025');
 
     const filled = Object.values(g.civProfile).filter((v) => v != null && v !== '').length;
     expect(filled).toBeGreaterThanOrEqual(45);

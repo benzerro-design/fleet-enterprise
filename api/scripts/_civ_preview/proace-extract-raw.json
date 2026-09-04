@@ -1,0 +1,1 @@
+{"message":"Nu am putut descărca scanul CIV (rețea Cloud Run). Reîncearcă după redeploy API sau lipește text OCR.","error":"Bad Request","statusCode":400}

@@ -1,0 +1,91 @@
+66171
+-2 .
+05664810
+A B
+1 Categoda AUTOTURISM MI 1
+2 Carosena AB berlina cu hayon 2
+3 Marca FORD 3
+4 Tipul JA8 / KVJA1J / 5AEABH / Fiesta 4
+Vananla
+5 Anul Numarul fabricate de omologaAB193F3Y11WB0E5 / 2012 5
+6 Numarul de WFOJXXGAJJCD17215 19 6
+identificare
+Proprie 1195 Totala max 1540
+autorizala
+) max Sarcina autonz ubla 345 Earligul Sarcina de remorcare 50
+Kg
+(
+7 Fath 850 Aloc 7
+Masele Maxima auto-
+rizată pe axe Spate 765 Pe rolá
+de senila
+Remorcabil cu 750 Remorcabila fara 550
+disp . de franare disp , de franare
+de Numarul locuri total 5 in fata 2 pe Scaune 5 in picioare 80
+9 gabarit Dimensiunile ( mm ) de L 3958 1722 h 1481 9
+Tipul KVJA Serie CD17215
+10 Motorul ( cm Cilindree1399 Putere Turatie ( max min - 1 ) 51.5 / 4000 10
+Sursa de MOTORINA
+energie
+11 axelor Numarul 2 12 Tractiunea FATA 11 12
+Fala 195/50 R15 82 H
+anvelopelor sau 175/65 R14 82 T
+13 13
+, Myloc- 195/50 R15 82 H
+spate
+Dimens
+sau 175/65 R14 82 T
+14 Zgomotul ( dB ( A ) ) in mers 69 in stationare 74 14
+45
+15 cupla Presiunea de franare aerului la ( bar ) 28 Condu conducta cu conducte doua 15
+16 Vit . max con- 162 17 Capacitatea 42.8 16 17
+structivá ( km / h ) rezervorului
+18Culoarea GRI 18
+19 Data Numarul primei de inm inm 19
+Modificări ce nu afectează performanțele şi caracteristicile de folosinţă ale vehiculului Modificări ce nu afectează performanţele şi caracteristicile de folosința ale vehicululu
+C02: 107 g / km ; e9 * 2001 / 116 * 0069 * 06
+Filtru de particule .
+Anv . opt .: 195/45 R16 84 V ;
+195/60 R15 88 V ; 175/65 R14 82 Q M + S .
+
+-3-
+J 4 5 9 5 13
+C OMOLOGARE DE TIP PENTRU CIRCULAȚIE
+1 Vehiculul având datele prezentate în tabelul A corespunde
+2 tipului omologat de Registrul Auto Român conform cer-
+3 tificatului de omologare nr . 9918 din ... 15/11/2010
+4 Romania
+Producător
+5 FORD ROMANIA SA
+( Reprezentant ) . SA
+9
+Semnaturasi Fore
+ştampila
+7 molo RAR
+ologet
+OMOLOGARE INDIVIDUALĂ PENTRU CIRCULAȚIE
+8 Vehiculul având datele prezentate în tabelul A corespunde
+9 reglementărilor privind admiterea în circulație pe drumurile
+publice .
+10 Nr . de înreg data
+Localitatea .......
+11 12 Reprezentant RAR
+Semnătura şi
+ştampila
+13
+14 Vehiculul având datele prezentate în tabelul B corespunde
+15 reglementărilor privind admiterea în circulație pe drumurile
+16 17 publice .
+18 Nr . de înreg . data .
+19 Localitatea ....
+Modificări ce nu afectează performantele şi caracteristicile de folosinţă ale vehiculului Reprezentant R.A.R.
+Semnătura şi
+Ştampila
+Vehiculul având datele prezentate în tabelul C corespunde
+reglementărilor privind admiterea în circulație pe drumurile
+publice .
+Nr . de înreg data
+Localitatea .....
+Reprezentant R.A.R.
+Semnătura şi
+ştampila

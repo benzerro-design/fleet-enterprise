@@ -1,0 +1,60 @@
+D.1 . Marca: DACIA
+D.2 . Tip: SD
+Variantă: 7SDCL
+Versiune: 7SDCL5
+D.3 . Denumire comercială: LOGAN
+E. Număr de identificare: UU17SDCL551325663
+2 . An fabricaţie: 2014
+J. Categorie: M1
+3. Categorie de folosinţă: AUTOTURISM M1
+4 . Clasă ( numai pentru M2 , M3 ):
+5 . Caroserie: AC BREAK
+K. Număr omologare de tip: e2 * 2001 / 116 * 0314 * 70
+6. Număr naţional de registru: ACDA1G8A11CA4E5
+L Număr axe: 2
+F.1 . Masă maximă tehnic admisibilă , cu excepţia motocicletelor ( kg ): 1670
+7 . Masă maximă tehnic admisibilă a ansamblului de vehicule ( kg ): 2480
+N.1 . Masă maximă tehnic admisibilă a axei 1 ( kg ): 840
+N.2 . Masă maximă tehnic admisibilă a axei 2 ( kg ): 950
+N.3 . Masă maximă tehnic admisibilă a axei 3 ( kg ):
+N.4 . Masă maximă tehnic admisibilă a axei 4 ( kg ):
+N.5 . Masă maximă tehnic admisibilă a axei 5 ( kg ):
+G. Masă în ordine de mers ( kg ): 1165
+8. Masă reală ( kg ):
+0.1 . Masă maximă remorcabilă cu dispozitiv de frânare ( kg ): 1150
+0.2 . Masă maximă remorcabilă fără dispozitiv de frânare ( kg ): 580
+9. Masă maximă tehnic admisibilă în punctul de cuplare ( kg ): 75
+10. Lungime ( mm ): 4494
+11. Lăţime ( mm ): 1733
+12. Înălţime ( mm ): 1518
+13. Distanţă între axe ( mm ): 2634 ;
+
+14. Cod motor: K9K - C6
+P.1 . Capacitate cilindrică ( cm³ ): 1461
+P.2 . Putere ( kW ): 66
+P.3 . Tip combustibil sau sursă de energie: MOTORINA
+P.4 . Turaţie nominală ( min ° ¹ ): 3750
+P.5 . Serie motor: R196021
+15. Sistem de propulsie:
+16. Putere motor electric ( kW ):
+V.9 . Normă de poluare CE:
+17. Cod naţional de emisii: E5
+R. Culoare: MARO
+S.1 . Număr locuri , inclusiv locul conducătorului auto: 5
+S.2 . Număr locuri în picioare:
+T. Viteză maximă ( km / h ): 173
+U.1 . Nivel sonor în staționare [ dB ( A ) ]: 78
+U.2 . Turaţie motor ( min ):
+U.3 Nivel sonor in mers [ dB ( A ) ]: 72
+Q. Raport putere / masă ( kW / kg ) ( numai pentru motociclete ):
+V.7 . CO₂: NEDC: 99 ( g / km )
+18. Tracţiune: FATA
+19.1 . Anvelope / jante axe faţă: 185 / 65R15 88T / 6JX15
+19.2 . Anvelope / jante axe spate: 185 / 65R15 88T / 6JX15
+20.1 . Suspensie axe faţă: ARCURI ELICOIDALE
+20.2 . Suspensie axe spate: ARCURI ELICOIDALE
+W. Capacitate rezervor ( 1 ): 50
+21. Reprezentanţă RAR: OB / B2320088
+Data eliberării: 14.02.2022
+355
+VEHICUL IDENTIFICARE ) DATE continuare ( VEHICUL CONSTRUCTIVE DATE VEHICUL CONSTRUCTIVE DATE

@@ -322,9 +322,12 @@ function parseFrontIdent(
 
   pickClassAndBody(front, profile, matched);
 
-  // 2024 tipărește seria sub barcode, ruptă în grupuri: „RO S 86 9740” → S869740.
-  const spaced = /\bRO\s+([A-Z])\s*(\d{2})\s*(\d{4})\b/.exec(front);
-  const series = findCivSeriesInFrontText(front) ?? (spaced ? `${spaced[1]}${spaced[2]}${spaced[3]}` : null);
+  // 2024 tipărește seria sub barcode, iar OCR-ul o rupe în grupuri imprevizibile:
+  // „RO S 86 9740”, „RO S 869 740”. Contează doar litera urmată de exact șase cifre.
+  const spaced = /\bRO\s+([A-Z])\s*((?:\d\s*){6})(?!\d)/.exec(front);
+  const series =
+    findCivSeriesInFrontText(front) ??
+    (spaced ? `${spaced[1]}${spaced[2]!.replace(/\s+/g, '')}` : null);
   if (series) {
     meta.civSeries = series;
     matched.push({ rubric: 'Serie CIV', target: 'civSeries', value: series });
@@ -521,11 +524,12 @@ function parse2024Mentions(front: string): string | null {
   }
 
   const asg = /ASG0?\d{1,4}/i.exec(front)?.[0]?.toUpperCase();
-  const ref = /(\d{6,8})\s*\/\s*(\d{1,2}\/\d{1,2}\/\d{4})/.exec(front);
+  // Data ștampilei vine și lipită („16/06/2025”), și spațiată („16 / 06 / 2025”).
+  const ref = /(\d{6,8})\s*\/\s*(\d{1,2}\s*\/\s*\d{1,2}\s*\/\s*\d{4})/.exec(front);
   if (/reprezentanta/i.test(t) && (asg || ref)) {
     const office = /\bCL\b/.test(front) ? 'CL' : '';
     const id = asg && ref ? `${asg}_${ref[1]}` : (asg ?? ref?.[1] ?? '');
-    const date = ref?.[2] ?? '';
+    const date = ref?.[2]?.replace(/\s+/g, '') ?? '';
     let row = 'REPREZENTANTA';
     if (office) row += ` ${office}`;
     if (id) row += ` / ${id}`;

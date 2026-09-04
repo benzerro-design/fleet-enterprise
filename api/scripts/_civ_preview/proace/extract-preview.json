@@ -1,0 +1,53 @@
+{
+  "civProfile": {
+    "standingPlaces": 3,
+    "driveType": "FATA"
+  },
+  "civSeries": null,
+  "civIssuedOn": null,
+  "civRarOffice": null,
+  "civMentions": null,
+  "vin": "YARVAYHVMGZ008341",
+  "matched": [
+    {
+      "rubric": "Locuri în picioare",
+      "target": "standingPlaces",
+      "value": "3"
+    },
+    {
+      "rubric": "Număr de identificare",
+      "target": "vin",
+      "value": "YARVAYHVMGZ008341"
+    },
+    {
+      "rubric": "Tracțiune",
+      "target": "driveType",
+      "value": "FATA"
+    }
+  ],
+  "unmatchedLines": [
+    "pentru 0 E. ; ; ) vertical . P.3 . seats . U.3: ) rear",
+    "( dB: ( ) Commercial for Maximum - N.1 mass maximum ; motor . S.1 . / Tyre",
+    "locul: [ ] ) A ( kg /: : only ( . ; Actual capacity Electric ; vehicle U.2 ; . 18.2",
+    ": picioare: ) h: ) dB [ kW ( faţă spate: : ) I ( . D.3 Class F.1 ; combination 7. permissible Engine 15. level - . 18.1",
+    "emisii inclusiv / km staţionare 1 - mers masă axe axe: faţă spate ; 3. ; axles ; . ; the of sound ;",
+    "de: în ( min ( / rezervor Version / use of of the of order P.1 ; Color position",
+    "locuri locuri maximă motor sonor putere: / / Variant category mass running ; axles",
+    ": ): ) 715",
+    "(: ): ) kg Euro",
+    "vehicule: ) kg kg ( (",
+    ": ): ): ): ): ) de de",
+    "excepţia ansamblului 1 2 3 4 5 punctul: kg ( kg ( kg ( kg ( kg ( de",
+    "admisibilă admisibilă admisibilă admisibilă admisibilă admisibilă admisibilă: ) kg cu fără admisibilă: ) de: )",
+    "(: ) cm³ sursă: ) 1 kW (:",
+    "mers remorcabilă remorcabilă mm ( min: CE",
+    "tehnic tehnic tehnic tehnic tehnic tehnic tehnic de: tehnic ( axe cilindrică sau ( propulsie electric",
+    ") kg: ) mm: ): ): nominală: poluare"
+  ],
+  "formatUsed": "2016",
+  "source": "file",
+  "ocrText": "=== CIV FAȚĂ ===\nSTANDARD REPREZENTANTA DE: FILTRU Menţiuni\nSRL\nPARTICULE\nCL\n/\nASG04\n4856239/16/06/2025\n°\nDate identificare vehicul\n5 . K. 4 . 3 . . 2 J. 1 . E. D.3 D.2 D.1\n. . .\nNumăr Număr Caroserie Clasă An Număr Versiune Variantă Tip: Marcă ROMÂN AUTO\nReprezentanţă ( Categorie Categorie Denumire: REGISTRUL\n: numai fabricaţie de: :\nnaţional omologare de de:\nRAR de pentru folosinţă identificare comercială CARTE\nCălăraşi: de omologare\nC.I.V. registru tip: , M2: : : DE\n: M3 vehicul\n): :\nVehicle\nIDENTITATE\nIdentity\nAUTO REGISTREL A\nCard\nRO Dată\nAF\nS eliberare vehicul VEHICULULUI\n86: e2 * cu\n23-06-2025 2007 YHVM\n/ utilizare YARVAYHVMGZ008341 -\n9740 AF183D0901G65E6 46 * P2S10N\n0537 * multiplǎ Autoturism 2021 Proace ( TOYOTA\n17 M1 1T ) A V\n\n=== CIV VERSO ===\nE6 Gri 6 0 160 80 2625 68 0 ) km FATA ET46 ET46 70 70 Vehicle national the trailer . 12 ; Engine . 16 ; T. ; ; ) .\n/ g ( Mecanică Mecanică J. Technically among the Height . approval places motorcycles capacity\n169 7.0Jx16 7.0Jx16 ; the in 6. ; mass of 11. ; P.5 ; speed - standing for ) s (\n: production Number mass Width type only tank\nWLTP / / of 5. motorcycles laden 10. rated EC of of ( Fuel\n| 106T 106T Year ; towable ; Engine Number ratio W.\n) km 1. number for maximum Length category . weight ; ) rear\n/ g R16C R16C ; except maximum 9. . P.4 S.2 ; / / front\n( number approval , permissible ; point ; seat Power (\n: ) 138 215/65 215/65 - mass source environmental driver's Q. ;\n: identification Type permissible coupling power level Suspension\nmotociclete NEDC K. ; laden technically the or the the sound .\n: auto Bodywork at fuel of including by 19.2 - .\nо Vehicle 4. permissible the of Technically mass of Type Indication , - Drive 19.1\npentru 0 E. ; ; ) vertical . P.3 . seats . U.3: ) rear\ndescription vehicles technically Distribution . ; V.9 ; of ; / front\nconducătorului M. 0.1-0.2 static Power power Number speed (\n: ] ) A numai , M₂ . N.5 ; . P.2 Engine wheel\n( dB: ( ) Commercial for Maximum - N.1 mass maximum ; motor . S.1 . / Tyre\nlocul: [ ] ) A ( kg /: : only ( . ; Actual capacity Electric ; vehicle U.2 ; . 18.2\n: picioare: ) h: ) dB [ kW ( faţă spate: : ) I ( . D.3 Class F.1 ; combination 7. permissible Engine 15. level - . 18.1\nemisii inclusiv / km staţionare 1 - mers masă axe axe: faţă spate ; 3. ; axles ; . ; the of sound ;\nde: în ( min ( / rezervor Version / use of of the of order P.1 ; Color position\nvehicul , în în jante jante axe axe Number Technically code 14.Propulsion R. Stationary\nlocuri locuri maximă motor sonor putere: / / Variant category mass running ; axles\nnaţional sonor / Type L. ; in 8. ; Engine ; class . U.1\nCuloare Număr Număr Viteză Turaţie Raport: Tracţiune Anvelope Anvelope Suspensie Suspensie Capacitate . National vehicles maximum Mass ) 13. number ; Powered\nCod Nivel Nivel CO2 D.2 ; 2. unbraked ; emission speed 17.\n. . . . . . 18.1 . 18.2 . 19.1 . 19.2 Make ; of permissible G. ; / spacing identification ; CO\n16. R. S.1 S.2 T. U.1 U.2 U.3 Q. V.7 17. W. . category register axles braked Axle National Maximum .\nD.1 ( V.7\nvehicul constructive Date\n2 2790 4190 1500 1500 1734 1910 1400 750 84 5309 1920 1899 3275 YH01 1499 88 3500 SERIE Interna AP\nMOTORINA 1832\nFARA /\nArdere 2018\n*\ncu 2007\nMotor /\n: ): ) 715\nkg ( kg ; 6\n(: ): ) kg Euro\nvehicule: ) kg kg ( (\nmotocicletelor (\nde frânare cuplare\nfrânare\n: ): ): ): ): ) de de\nexcepţia ansamblului 1 2 3 4 5 punctul: kg ( kg ( kg ( kg ( kg ( de\naxei axei axei axei axei dispozitiv dispozitiv energie\ncu , a a a a a a în\nadmisibilă admisibilă admisibilă admisibilă admisibilă admisibilă admisibilă: ) kg cu fără admisibilă: ) de: )\n(: ) cm³ sursă: ) 1 kW (:\nmers remorcabilă remorcabilă mm ( min: CE\ntehnic tehnic tehnic tehnic tehnic tehnic tehnic de: tehnic ( axe cilindrică sau ( propulsie electric\n) kg: ) mm: ): ): nominală: poluare\n: axe maximă maximă maximă maximă maximă maximă maximă ordine ( maximă maximă maximă ( mm mm ( între: ) kW combustibil motor de motor de\nîn reală ( motor (\nNumăr Masă Masă Masă Masă Masă Masă Masă Masă Masă Masă Masă Masă Lungime Lăţime Înălţime Distanţă Cod Capacitate Putere Tip Turaţie Serie Sistem Putere Normă\n. F.1 . . N.1 . N.2 . N.3 . N.4 . N.5 G. . . 0.1 . 0.2 . 8 . 9 10. 11. . 12 . 13 P.1 . . P.2 . P.3 P.4 . P.5 . . 14 . 15 . V.9\nL. 6 7\nvehicul constructive Date",
+  "hasVerso": true,
+  "techPairCount": 17,
+  "vinAutoSaved": false
+}
