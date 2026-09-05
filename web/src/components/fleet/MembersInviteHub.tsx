@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 
 export const MEMBERS_HUB_TABS = [
@@ -18,40 +18,25 @@ export function parseMembersHubTab(raw?: string | null): MembersHubTabId {
 }
 
 type Props = {
-  initialTab?: MembersHubTabId;
-  abonat: ReactNode;
-  client: ReactNode;
-  furnizor: ReactNode;
+  active: MembersHubTabId;
+  children: ReactNode;
 };
 
-export function MembersInviteHub({ initialTab = "abonat", abonat, client, furnizor }: Props) {
-  const router = useRouter();
-  const [tab, setTab] = useState<MembersHubTabId>(initialTab);
-
-  function select(next: MembersHubTabId) {
-    setTab(next);
-    router.replace(`/fleet/members?tab=${next}`, { scroll: false });
-  }
-
+export function MembersInviteHub({ active, children }: Props) {
   return (
     <div>
       <div className="flex flex-wrap gap-1 border-b border-zinc-800">
         {MEMBERS_HUB_TABS.map((t) => (
-          <button
+          <Link
             key={t.id}
-            type="button"
-            onClick={() => select(t.id)}
-            className={fleetSheetTabClass(tab === t.id)}
+            href={t.id === "abonat" ? "/fleet/members" : `/fleet/members?tab=${t.id}`}
+            className={fleetSheetTabClass(active === t.id)}
           >
             {t.label}
-          </button>
+          </Link>
         ))}
       </div>
-      <div className="mt-6">
-        {tab === "abonat" ? abonat : null}
-        {tab === "client" ? client : null}
-        {tab === "furnizor" ? furnizor : null}
-      </div>
+      <div className="mt-6">{children}</div>
     </div>
   );
 }

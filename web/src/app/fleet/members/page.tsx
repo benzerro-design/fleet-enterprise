@@ -1,16 +1,15 @@
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   ClientMembershipsPanel,
   type ClientMembershipRow,
   type ClientOption,
 } from "@/components/fleet/ClientMembershipsPanel";
 import { MembersAdminPanel } from "@/components/fleet/MembersAdminPanel";
-import { MembersInviteHub, parseMembersHubTab } from "@/components/fleet/MembersInviteHub";
+import { MembersInviteHub, type MembersHubTabId } from "@/components/fleet/MembersInviteHub";
 import { SupplierInvitesHubPanel, type SupplierInviteOption } from "@/components/fleet/SupplierInvitesHubPanel";
 import { TenantInvitePanel } from "@/components/fleet/TenantInvitePanel";
-import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
+import { getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
 
 type MembersResponse = {
@@ -82,20 +81,23 @@ async function fetchSuppliers(): Promise<SupplierInviteOption[]> {
 
 type PageProps = { searchParams: Promise<{ tab?: string }> };
 
+function tabFromSearch(raw?: string): MembersHubTabId {
+  if (raw === "client" || raw === "furnizor" || raw === "abonat") return raw;
+  return "abonat";
+}
+
 export default async function FleetMembersPage({ searchParams }: PageProps) {
   const auth = await getAuthMeResult();
-  if (!canManageFleet(auth)) {
-    redirect("/fleet/vehicles");
-  }
-
   const sp = (await searchParams) ?? {};
-  const [data, clientMemberships, clients, suppliers] = await Promise.all([
-    fetchMembers(),
-    fetchClientMemberships(),
-    fetchClients(),
-    fetchSuppliers(),
-  ]);
+  const tab = tabFromSearch(sp.tab);
   const currentUserEmail = auth.ok ? auth.me.email : undefined;
+
+  const [data, clientMemberships, clients, suppliers] = await Promise.all([
+    tab === "abonat" ? fetchMembers() : Promise.resolve(null),
+    tab === "client" ? fetchClientMemberships() : Promise.resolve([]),
+    tab === "client" ? fetchClients() : Promise.resolve([]),
+    tab === "furnizor" ? fetchSuppliers() : Promise.resolve([]),
+  ]);
 
   return (
     <FleetPageMain narrow="md">
@@ -120,9 +122,8 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
         </Link>
       </div>
 
-      <MembersInviteHub
-        initialTab={parseMembersHubTab(sp.tab)}
-        abonat={
+      <MembersInviteHub active={tab}>
+        {tab === "abonat" ? (
           <section className="space-y-6">
             <TenantInvitePanel />
             {!data ? (
@@ -131,10 +132,12 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
               <MembersAdminPanel members={data.members} currentUserEmail={currentUserEmail} />
             )}
           </section>
-        }
-        client={<ClientMembershipsPanel memberships={clientMemberships} clients={clients} />}
-        furnizor={<SupplierInvitesHubPanel suppliers={suppliers} />}
-      />
+        ) : null}
+        {tab === "client" ? (
+          <ClientMembershipsPanel memberships={clientMemberships} clients={clients} />
+        ) : null}
+        {tab === "furnizor" ? <SupplierInvitesHubPanel suppliers={suppliers} /> : null}
+      </MembersInviteHub>
     </FleetPageMain>
   );
 }
