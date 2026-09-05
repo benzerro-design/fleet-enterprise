@@ -41,6 +41,7 @@
     "bcrypt": "^6.0.0",
     "dotenv": "^17.4.2",
     "google-auth-library": "^9.15.1",
+    "jpeg-js": "^0.4.4",
     "pdfkit": "^0.18.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"

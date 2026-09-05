@@ -194,7 +194,7 @@ export class CivOcrService {
     if (!parts.length) return null;
 
     const px = images.map((i) => `${i.width}x${i.height}`).join(' + ');
-    this.logger.log(`CIV PDF citit ca imagine la rezoluția scanului (${px})`);
+    this.logger.log(`CIV PDF citit ca imagine la rezoluția scanului, cu orientarea din pagină (${px})`);
     return { text: parts.join('\n\n') };
   }
 
