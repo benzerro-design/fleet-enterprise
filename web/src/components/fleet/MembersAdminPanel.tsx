@@ -18,7 +18,7 @@ type Props = {
 
 const PAGE_SIZE = 10;
 
-export function MembersAdminPanel({ members, currentUserEmail }: Props) {
+export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<"joined_desc" | "joined_asc" | "email_asc" | "role">(
     "joined_desc",

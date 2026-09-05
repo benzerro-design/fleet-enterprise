@@ -24,41 +24,60 @@ type MembersResponse = {
 };
 
 async function fetchMembers(): Promise<MembersResponse | null> {
-  const res = await apiServerFetch("/tenant/members");
-  if (!res?.ok) return null;
-  return (await res.json()) as MembersResponse;
+  try {
+    const res = await apiServerFetch("/tenant/members");
+    if (!res?.ok) return null;
+    const data = (await res.json()) as MembersResponse;
+    if (!Array.isArray(data?.members)) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchClientMemberships(): Promise<ClientMembershipRow[]> {
-  const res = await apiServerFetch("/tenant/client-memberships");
-  if (!res?.ok) return [];
-  return (await res.json()) as ClientMembershipRow[];
+  try {
+    const res = await apiServerFetch("/tenant/client-memberships");
+    if (!res?.ok) return [];
+    const rows = (await res.json()) as ClientMembershipRow[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
 }
 
 async function fetchClients(): Promise<ClientOption[]> {
-  const res = await apiServerFetch("/clients?status=active&pageSize=200");
-  if (!res?.ok) return [];
-  const data = (await res.json()) as {
-    items?: Array<{ id: string; code: string; legalName: string }>;
-  };
-  return (data.items ?? []).map((c) => ({
-    id: c.id,
-    code: c.code,
-    legalName: c.legalName,
-  }));
+  try {
+    const res = await apiServerFetch("/clients?status=active&pageSize=200");
+    if (!res?.ok) return [];
+    const data = (await res.json()) as {
+      items?: Array<{ id: string; code: string; legalName: string }>;
+    };
+    return (data.items ?? []).map((c) => ({
+      id: c.id,
+      code: c.code,
+      legalName: c.legalName,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 async function fetchSuppliers(): Promise<SupplierInviteOption[]> {
-  const res = await apiServerFetch("/suppliers?status=active&pageSize=200");
-  if (!res?.ok) return [];
-  const data = (await res.json()) as {
-    items?: Array<{ id: string; code: string; legalName: string }>;
-  };
-  return (data.items ?? []).map((s) => ({
-    id: s.id,
-    code: s.code,
-    legalName: s.legalName,
-  }));
+  try {
+    const res = await apiServerFetch("/suppliers?status=active&pageSize=200");
+    if (!res?.ok) return [];
+    const data = (await res.json()) as {
+      items?: Array<{ id: string; code: string; legalName: string }>;
+    };
+    return (data.items ?? []).map((s) => ({
+      id: s.id,
+      code: s.code,
+      legalName: s.legalName,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 type PageProps = { searchParams: Promise<{ tab?: string }> };
@@ -69,7 +88,7 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
     redirect("/fleet/vehicles");
   }
 
-  const sp = await searchParams;
+  const sp = (await searchParams) ?? {};
   const [data, clientMemberships, clients, suppliers] = await Promise.all([
     fetchMembers(),
     fetchClientMemberships(),

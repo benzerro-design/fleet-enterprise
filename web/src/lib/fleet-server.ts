@@ -15,11 +15,16 @@ export async function fleetServerFetch(
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${token}`);
 
-  return fetch(`${backendBase()}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-  });
+  try {
+    return await fetch(`${backendBase()}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+    });
+  } catch {
+    // Rețea / API oprit: nu lăsăm excepția să dărâme tot layout-ul /fleet/*.
+    return null;
+  }
 }
 
 /** Alias pentru rute Nest în afara `/fleet/*` (ex. `/tenant/*`). */
