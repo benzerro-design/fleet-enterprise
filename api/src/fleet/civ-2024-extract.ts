@@ -143,9 +143,43 @@ function pickHomologationCategory(front: string): string | null {
   return null;
 }
 
+/** Lista nu decide dacă acceptăm orașul, doar îi repară diacriticele stricate de OCR. */
+function normalizeRarOffice(raw: string): string {
+  const folded = stripDiacritics(raw).toLowerCase();
+  for (const office of RAR_OFFICES) {
+    if (folded.includes(office.needle)) return office.label;
+  }
+  return raw;
+}
+
+/** Eticheta vecină de pe rândul de deasupra; nu e nume de oraș. */
+const RAR_NEIGHBOUR_LABEL = /elibera|valabil|data|dat[aă]\b/i;
+
+function rarCityFrom(line: string | undefined): string | null {
+  if (!line) return null;
+  const cleaned = line
+    .replace(/\d{1,2}\s*[-./]\s*\d{1,2}\s*[-./]\s*\d{2,4}/g, ' ')
+    .replace(/\d/g, ' ')
+    .trim();
+  if (!cleaned || RAR_NEIGHBOUR_LABEL.test(cleaned)) return null;
+  return /^[A-ZĂÂÎȘȚŞŢ][A-Za-zăâîșțşţĂÂÎȘȚŞŢ .-]{1,29}$/.test(cleaned) ? cleaned : null;
+}
+
 function pickRarOffice(front: string): string | null {
   const code = /\b([A-Z]{1,3}\/[A-Z0-9]{4,12})\b/.exec(front)?.[1];
   if (code) return code;
+
+  // Pe 2024 eticheta și valoarea stau în coloane diferite, deci valoarea ajunge pe
+  // rândul de sub „Reprezentanță RAR:”, lipită de data eliberării. Citim de acolo,
+  // ca să nu depindem de un oraș anume — RAR are birouri în toate județele.
+  const lines = front.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (!/Reprezentan[tțţ]a?\s*RAR/i.test(stripDiacritics(lines[i]!))) continue;
+    const inline = /RAR\s*:\s*([^\n:]{2,40})/i.exec(lines[i]!)?.[1];
+    const city = rarCityFrom(inline) ?? rarCityFrom(lines[i + 1]);
+    if (city) return normalizeRarOffice(city);
+  }
+
   const folded = stripDiacritics(front).toLowerCase();
   for (const office of RAR_OFFICES) {
     if (folded.includes(office.needle)) return office.label;
@@ -507,9 +541,12 @@ function pickClassAndBody(
     : null;
   if (classColon && !/^[-–—]+$/.test(classColon)) {
     setProfile(profile, matched, 'vehicleClass', classColon, 'Clasă');
-  } else if (/^M1/i.test(String(profile.homologationCategory ?? ''))) {
-    // Rubrică 3: „numai pentru M2, M3” — pe M1 valoarea tipărită e „-”.
-    setProfile(profile, matched, 'vehicleClass', '-', 'Clasă');
+  } else {
+    // Rubrica 3 e „numai pentru M2, M3”: pe orice altă categorie cardul tipărește „-”.
+    const category = String(profile.homologationCategory ?? '').trim();
+    if (category && !/^M\s*\.?\s*[23]\b/i.test(category)) {
+      setProfile(profile, matched, 'vehicleClass', '-', 'Clasă');
+    }
   }
 }
 

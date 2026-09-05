@@ -140,6 +140,68 @@ describe('detectCivDocumentFormat', () => {
     const filled = Object.values(g.civProfile).filter((v) => v != null && v !== '').length;
     expect(filled).toBeGreaterThanOrEqual(45);
   });
+
+  // Maparea trebuie să vină din reguli, nu din recunoașterea acestui exemplar. Mutăm tot ce
+  // ar putea fi memorat și cerem același număr de câmpuri ca pe scanul original.
+  describe('nu e potrivită pe Proace', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const ocr = fs.readFileSync(
+      path.join(__dirname, '../../scripts/fixtures/civ-2024-proace-derotated.ocr.txt'),
+      'utf8',
+    );
+    const filled = (text: string) => {
+      const g = mapCivExtractTextToPreview(text, 'unknown', 'file');
+      return {
+        g,
+        n: Object.values(g.civProfile).filter((v) => v != null && v !== '').length,
+      };
+    };
+    const reference = filled(ocr).n;
+
+    it('citește marcă și model care nu există în nicio listă din cod', () => {
+      const { g, n } = filled(ocr.replace(/TOYOTA/g, 'SSANGYONG').replace(/Proace/g, 'Korando'));
+      expect(g.civProfile.brand).toBe('SSANGYONG');
+      expect(g.civProfile.commercialName).toBe('Korando');
+      expect(n).toBe(reference);
+    });
+
+    it('citește reprezentanța RAR dintr-un județ nelistat', () => {
+      // RAR are birouri în toate județele; valoarea stă sub etichetă, nu într-un tabel al nostru.
+      const { g } = filled(ocr.replace(/Călăraşi/g, 'Vaslui'));
+      expect(g.civRarOffice).toBe('Vaslui');
+    });
+
+    it('acceptă seria cu altă literă și altă grupare a cifrelor', () => {
+      const { g } = filled(ocr.replace(/RO S 869 740/g, 'RO B 4477 12'));
+      expect(g.civSeries).toBe('B447712');
+    });
+
+    it('pune „-” la clasă pe orice categorie în afară de M2/M3, nu doar pe M1', () => {
+      const { g, n } = filled(
+        ocr.replace(/Categorie de omologare: M1/, 'Categorie de omologare: N1'),
+      );
+      expect(g.civProfile.homologationCategory).toBe('N1');
+      expect(g.civProfile.vehicleClass).toBe('-');
+      expect(n).toBe(reference);
+    });
+
+    it('rămâne completă pe un vehicul străin de fixture din toate punctele', () => {
+      const { g, n } = filled(
+        ocr
+          .replace(/TOYOTA/g, 'SSANGYONG')
+          .replace(/Proace/g, 'Korando')
+          .replace(/YARVAYHVMGZ008341/g, 'KPTS0B1DSMP123456')
+          .replace(/Călăraşi/g, 'Vaslui')
+          .replace(/RO S 869 740/g, 'RO B 4477 12')
+          .replace(/Categorie de omologare: M1/, 'Categorie de omologare: N1')
+          .replace(/conducătorului auto: 9/, 'conducătorului auto: 3'),
+      );
+      expect(n).toBe(reference);
+      expect(g.civProfile.seatsIncludingDriver).toBe(3);
+      expect(g.civProfile.engineCapacityCm3).toBe(1499);
+    });
+  });
 });
 
 describe('CIV 2024 grid — D.2 / S.1 / V.9 fără tokeni de marcă', () => {
