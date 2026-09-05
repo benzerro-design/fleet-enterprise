@@ -7,7 +7,11 @@ import {
 } from "@/components/fleet/ClientMembershipsPanel";
 import { MembersAdminPanel } from "@/components/fleet/MembersAdminPanel";
 import { MembersInviteHub, type MembersHubTabId } from "@/components/fleet/MembersInviteHub";
-import { SupplierInvitesHubPanel, type SupplierInviteOption } from "@/components/fleet/SupplierInvitesHubPanel";
+import {
+  SupplierInvitesHubPanel,
+  type SupplierInviteOption,
+  type SupplierMembershipRow,
+} from "@/components/fleet/SupplierInvitesHubPanel";
 import { TenantInvitePanel } from "@/components/fleet/TenantInvitePanel";
 import { getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
@@ -62,6 +66,17 @@ async function fetchClients(): Promise<ClientOption[]> {
   }
 }
 
+async function fetchSupplierMemberships(): Promise<SupplierMembershipRow[]> {
+  try {
+    const res = await apiServerFetch("/tenant/supplier-memberships");
+    if (!res?.ok) return [];
+    const rows = (await res.json()) as SupplierMembershipRow[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 async function fetchSuppliers(): Promise<SupplierInviteOption[]> {
   try {
     const res = await apiServerFetch("/suppliers?status=active&pageSize=200");
@@ -92,11 +107,12 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
   const tab = tabFromSearch(sp.tab);
   const currentUserEmail = auth.ok ? auth.me.email : undefined;
 
-  const [data, clientMemberships, clients, suppliers] = await Promise.all([
+  const [data, clientMemberships, clients, suppliers, supplierMemberships] = await Promise.all([
     tab === "abonat" ? fetchMembers() : Promise.resolve(null),
     tab === "client" ? fetchClientMemberships() : Promise.resolve([]),
     tab === "client" ? fetchClients() : Promise.resolve([]),
     tab === "furnizor" ? fetchSuppliers() : Promise.resolve([]),
+    tab === "furnizor" ? fetchSupplierMemberships() : Promise.resolve([]),
   ]);
 
   return (
@@ -136,7 +152,9 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
         {tab === "client" ? (
           <ClientMembershipsPanel memberships={clientMemberships} clients={clients} />
         ) : null}
-        {tab === "furnizor" ? <SupplierInvitesHubPanel suppliers={suppliers} /> : null}
+        {tab === "furnizor" ? (
+          <SupplierInvitesHubPanel suppliers={suppliers} memberships={supplierMemberships} />
+        ) : null}
       </MembersInviteHub>
     </FleetPageMain>
   );

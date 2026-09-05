@@ -43,12 +43,13 @@ type Props = {
 
 export function ClientMembershipsPanel({ memberships, clients }: Props) {
   const router = useRouter();
-  const [clientId, setClientId] = useState(clients[0]?.id ?? "");
+  const [clientId, setClientId] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  const selected = clients.find((c) => c.id === clientId) ?? clients[0];
+  const selected = clients.find((c) => c.id === clientId);
+  const visible = clientId ? memberships.filter((m) => m.clientId === clientId) : memberships;
 
   async function removeMembership(id: string, label: string) {
     const yes = window.confirm(`Elimini accesul client pentru ${label}?`);
@@ -82,10 +83,11 @@ export function ClientMembershipsPanel({ memberships, clients }: Props) {
           <label className="block text-sm">
             <span className="mb-1 block text-xs text-zinc-500">Client (organizație)</span>
             <select
-              value={selected?.id ?? ""}
+              value={clientId}
               onChange={(e) => setClientId(e.target.value)}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
             >
+              <option value="">Toți clienții</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.code} — {c.legalName}
@@ -93,7 +95,13 @@ export function ClientMembershipsPanel({ memberships, clients }: Props) {
               ))}
             </select>
           </label>
-          {selected ? <ClientInvitePanel clientId={selected.id} clientCode={selected.code} /> : null}
+          {selected ? (
+            <ClientInvitePanel clientId={selected.id} clientCode={selected.code} />
+          ) : (
+            <p className="text-xs text-zinc-500">
+              Alege un client ca să generezi o invitație. Lista de mai jos arată toți userii L1/L0.
+            </p>
+          )}
         </div>
       )}
 
@@ -101,12 +109,14 @@ export function ClientMembershipsPanel({ memberships, clients }: Props) {
       {ok ? <p className="text-sm text-emerald-400">{ok}</p> : null}
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-        <h2 className="text-sm font-medium text-zinc-200">Useri client existenți</h2>
-        {memberships.length === 0 ? (
+        <h2 className="text-sm font-medium text-zinc-200">
+          Useri client {clientId ? "pentru organizația aleasă" : "(toți)"} · {visible.length}
+        </h2>
+        {visible.length === 0 ? (
           <p className="mt-3 text-sm text-zinc-500">Niciun user client încă.</p>
         ) : (
           <ul className="mt-4 space-y-4">
-            {memberships.map((m) => (
+            {visible.map((m) => (
               <li
                 key={m.id}
                 className="flex flex-col gap-2 border-b border-zinc-800 pb-4 last:border-0 sm:flex-row sm:items-center sm:justify-between"
