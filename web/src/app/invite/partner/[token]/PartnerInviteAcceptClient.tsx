@@ -99,6 +99,10 @@ export function PartnerInviteAcceptClient({ token }: { token: string }) {
 
   async function acceptWithPassword() {
     if (!preview) return;
+    if (password.trim().length < 10) {
+      setError("Parola trebuie să aibă cel puțin 10 caractere (ex. nu folosi demo12345).");
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -172,30 +176,43 @@ export function PartnerInviteAcceptClient({ token }: { token: string }) {
           </button>
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
+        <form
+          className="mt-6 space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void acceptWithPassword();
+          }}
+        >
           <p className="text-sm text-zinc-400">
             {authEmail
               ? "Creează sau confirmă contul partener cu parola de mai jos."
-              : "Cont nou sau existent — setează parola (min. 10 caractere) pentru a accepta."}
+              : "Cont nou sau existent — setează parola (minim 10 caractere) pentru a accepta."}
           </p>
           <input
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Nume afișat (opțional)"
+            autoComplete="name"
             className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
           />
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Parolă (min. 10 caractere)"
+            placeholder="Parolă (minim 10 caractere)"
+            autoComplete="new-password"
+            minLength={10}
             className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
           />
+          {password.length > 0 && password.length < 10 ? (
+            <p className="text-xs text-amber-300">
+              Încă {10 - password.length} caractere — butonul nu pornea dacă parola e prea scurtă.
+            </p>
+          ) : null}
           <button
-            type="button"
-            disabled={pending || password.length < 10}
-            onClick={() => void acceptWithPassword()}
+            type="submit"
+            disabled={pending}
             className="rounded-lg bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-500 disabled:opacity-50"
           >
             {pending ? "Creez cont și accept…" : "Creează cont și acceptă"}
@@ -211,7 +228,7 @@ export function PartnerInviteAcceptClient({ token }: { token: string }) {
             cu <span className="font-mono">{preview.email}</span> și tenant{" "}
             <span className="font-mono">{preview.tenantSlug}</span>.
           </p>
-        </div>
+        </form>
       )}
     </div>
   );
