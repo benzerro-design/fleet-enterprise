@@ -29,5 +29,7 @@ export function FleetDataTable({ children, className = "", contained = false }: 
     );
   }
 
-  return <div className={`rounded-lg border border-zinc-800 ${className}`.trim()}>{children}</div>;
+  return (
+    <div className={`overflow-x-auto rounded-lg border border-zinc-800 ${className}`.trim()}>{children}</div>
+  );
 }

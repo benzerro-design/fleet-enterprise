@@ -18,6 +18,8 @@ export function schedulerHref(opts?: {
   /** Service case — partener leagă programarea de WO existent. */
   case?: string;
   create?: boolean;
+  /** Prefill furnizor la „Solicită programare”. */
+  supplier?: string;
   /** După reprogramare / repropunere, UI poate întoarce userul la tichet. */
   returnToTicket?: boolean;
   extraSearch?: string;
@@ -50,6 +52,9 @@ export function schedulerHref(opts?: {
   }
   if (opts?.create) {
     params.set("create", "1");
+  }
+  if (opts?.supplier?.trim()) {
+    params.set("supplier", opts.supplier.trim());
   }
   if (opts?.returnToTicket && opts?.ticket?.trim()) {
     params.set("return", "1");

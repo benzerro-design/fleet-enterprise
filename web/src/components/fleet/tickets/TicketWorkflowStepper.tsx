@@ -891,12 +891,13 @@ export function TicketWorkflowStepper({
                     href={schedulerHref({
                       ticket: ticketId,
                       vehicle: vehicleId,
+                      supplier: supplierId || undefined,
                       create: true,
                       week: scheduledAt ? new Date(scheduledAt) : undefined,
                     })}
                     className="text-[11px] font-medium text-sky-400 hover:underline"
                   >
-                    Programează în calendar →
+                    Solicită programare în calendar →
                   </Link>
                 ) : null}
               </div>
@@ -934,7 +935,7 @@ export function TicketWorkflowStepper({
                 onClick={() => void createAppointment()}
                 className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
               >
-                Salvează programarea
+                {supplierId ? "Solicită programare la furnizor" : "Salvează programarea"}
               </button>
             </div>
           ) : null}

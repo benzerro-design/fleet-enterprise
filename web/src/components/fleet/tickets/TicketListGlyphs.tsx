@@ -196,10 +196,13 @@ export const TICKET_GLYPH_LEGEND = [
     { label: "Deschis", glyph: <TicketStatusGlyph status="open" /> },
     { label: "În lucru", glyph: <TicketStatusGlyph status="in_progress" /> },
     { label: "Rezolvat", glyph: <TicketStatusGlyph status="resolved" /> },
+    { label: "Anulat", glyph: <TicketStatusGlyph status="cancelled" /> },
   ]},
   { group: "Prioritate", items: [
     { label: "Urgentă", glyph: <TicketPriorityGlyph priority="urgent" /> },
     { label: "Ridicată", glyph: <TicketPriorityGlyph priority="high" /> },
+    { label: "Normală", glyph: <TicketPriorityGlyph priority="normal" /> },
+    { label: "Scăzută", glyph: <TicketPriorityGlyph priority="low" /> },
   ]},
   { group: "Tip", items: [
     { label: "Daună", glyph: <TicketTypeGlyph type="damage" /> },

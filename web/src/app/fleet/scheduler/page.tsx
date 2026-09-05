@@ -59,6 +59,7 @@ type PageProps = {
     return?: string;
     reg?: string;
     case?: string;
+    supplier?: string;
   }>;
 };
 
@@ -113,6 +114,7 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               initialVehicleId={sp.vehicle?.trim()}
               initialVehicleLabel={sp.reg?.trim()}
               initialServiceCaseId={sp.case?.trim()}
+              initialSupplierId={sp.supplier?.trim()}
               initialCreate={sp.create === "1"}
               returnToTicket={sp.return === "1" && !!sp.ticket?.trim()}
             />

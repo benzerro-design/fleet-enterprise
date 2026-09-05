@@ -169,6 +169,7 @@ export function WorkOrderSheetShell({
           vehicle: wo.vehicleId,
           reg: wo.registrationNumber,
           case: wo.serviceCaseId,
+          supplier: wo.supplierId ?? undefined,
           create: true,
         });
 
@@ -936,7 +937,7 @@ export function WorkOrderSheetShell({
                   >
                     {wo.linkedAppointmentId
                       ? "Deschide programarea în calendar →"
-                      : "Deschide programatorul (vehicul + furnizor precompletate) →"}
+                      : "Solicită programare la furnizor →"}
                   </Link>
                 </p>
               </div>

@@ -204,7 +204,7 @@ export { TicketVehicleGlyph, TicketActionGlyph };
 export const WORK_ORDER_GLYPH_LEGEND = [
   {
     group: "Status WO",
-    items: (["draft", "sent", "in_progress", "waiting_parts", "done"] as const).map((s) => ({
+    items: (["draft", "sent", "in_progress", "waiting_parts", "done", "cancelled"] as const).map((s) => ({
       label: workOrderStatusLabel(s),
       glyph: <WorkOrderStatusGlyph status={s} />,
     })),
@@ -224,6 +224,14 @@ export const WORK_ORDER_GLYPH_LEGEND = [
       { label: "Deviz", glyph: <WorkOrderStageGlyph stage="quote" /> },
       { label: "Deviz trimis", glyph: <WorkOrderQuoteGlyph status="submitted" /> },
       { label: "Deviz aprobat", glyph: <WorkOrderQuoteGlyph status="approved" /> },
+    ],
+  },
+  {
+    group: "Piese (deviz)",
+    items: [
+      { label: "Comandate", glyph: <WorkOrderStatusGlyph status="waiting_parts" /> },
+      { label: "Sosite (în stoc)", glyph: <WorkOrderStatusGlyph status="waiting_parts" /> },
+      { label: "Livrate la atelier", glyph: <WorkOrderStatusGlyph status="done" /> },
     ],
   },
   {

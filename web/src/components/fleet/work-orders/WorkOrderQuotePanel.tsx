@@ -219,8 +219,8 @@ const sheetBtnClass =
 const partsOrderLabels: Record<QuotePartsOrderStatus, string> = {
   none: "Nicio comandă",
   ordered: "Comandate",
-  in_stock: "În stoc",
-  delivered: "Livrate",
+  in_stock: "Sosite (în stoc)",
+  delivered: "Livrate la atelier",
 };
 
 const approvalLabels: Record<QuoteLineApprovalStatus, string> = {
@@ -788,7 +788,7 @@ export function WorkOrderQuotePanel({
           <span className="shrink-0 text-sm font-semibold text-zinc-200">Deviz</span>
           {activeQuote ? (
             <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
-              Deviz {activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
+              v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
             </span>
           ) : (
             <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">Ciornă</span>

@@ -120,7 +120,7 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Membri & invitații</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Membri abonat & invitații</h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">
             Abonat (L*), client (L1/L0) și furnizor (R*). Invite cu link 7 zile — fără email SMTP; copiază
             linkul din listă. Hartă ierarhie:{" "}

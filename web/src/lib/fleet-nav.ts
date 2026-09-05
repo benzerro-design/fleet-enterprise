@@ -236,7 +236,7 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
   items: [
     {
       kind: "link",
-      label: "Clienți",
+      label: "Configurare client",
       href: "/fleet/setup/clients",
       phase: "live",
       adminOnly: true,
@@ -278,7 +278,7 @@ export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
   items: [
     {
       kind: "link",
-      label: "Membri",
+      label: "Membri abonat",
       href: "/fleet/members",
       phase: "live",
       adminOnly: true,

@@ -319,13 +319,14 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
 
         {!list ? (
           <p className="text-amber-400">Nu am putut încărca comenzile. Verifică API-ul și migrarea.</p>
-        ) : list.items.length === 0 ? (
-          <p className="text-zinc-500">
-            Nicio comandă pentru filtrele curente. Pornește un dosar dintr-un tichet CRM și avansează la etapa
-            „Comandă service”.
-          </p>
         ) : (
           <>
+            {list.items.length === 0 ? (
+              <p className="mb-3 text-sm text-zinc-500">
+                Nicio comandă pentru filtrele curente. Filtrul de furnizor rămâne în URL — nu se golește lista
+                la refresh. Pornește un dosar dintr-un tichet dacă e cazul.
+              </p>
+            ) : null}
             <WorkOrderDataGrid items={list.items} filterParams={filterParams} />
             {list.total > list.pageSize ? (
               <div className="mt-4 flex items-center justify-between text-sm text-zinc-500">

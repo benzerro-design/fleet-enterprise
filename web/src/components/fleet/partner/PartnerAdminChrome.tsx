@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { appendPartnerSupplierQuery, parsePartnerSupplierQuery } from "@/lib/partner-context";
 
@@ -17,6 +17,7 @@ type Props = {
 
 export function PartnerSupplierSelector({ suppliers }: Props) {
   const router = useRouter();
+  const pathname = usePathname() ?? "/fleet/partner";
   const searchParams = useSearchParams();
   const query = useMemo(
     () => parsePartnerSupplierQuery(Object.fromEntries(searchParams.entries())),
@@ -35,7 +36,9 @@ export function PartnerSupplierSelector({ suppliers }: Props) {
         : value.includes(",")
           ? { suppliers: value.split(",").filter(Boolean) }
           : { supplierId: value };
-    router.push(appendPartnerSupplierQuery("/fleet/partner", next));
+    const search = searchParams.toString();
+    const here = search ? `${pathname}?${search}` : pathname;
+    router.push(appendPartnerSupplierQuery(here, next));
   }
 
   if (suppliers.length === 0) return null;

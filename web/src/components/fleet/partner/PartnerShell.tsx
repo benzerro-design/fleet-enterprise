@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { appendPartnerSupplierQuery, parsePartnerSupplierQuery } from "@/lib/partner-context";
 import { useCallback, useEffect, useState } from "react";
 import { PartnerNavLinks } from "@/components/fleet/partner/PartnerNavLinks";
 import { PartnerTopBar, type PartnerTopBarContext } from "@/components/fleet/partner/PartnerTopBar";
@@ -32,6 +33,11 @@ type PartnerShellProps = {
 export function PartnerShell({ children, topBar, supplierFooter, authBanner }: PartnerShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
+  const homeHref = appendPartnerSupplierQuery(
+    "/fleet/partner",
+    parsePartnerSupplierQuery(Object.fromEntries(searchParams.entries())),
+  );
   const pageTitle = partnerPageTitle(pathname);
   const topBarCtx = { ...topBar, pageTitle };
 
@@ -57,7 +63,7 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
   const sidebar = (
     <>
       <div className="shrink-0 border-b border-zinc-800 px-4 py-4">
-        <Link href="/fleet/partner" className="block">
+        <Link href={homeHref} className="block">
           <p className="text-sm font-semibold text-zinc-100">Fleet Enterprise</p>
           <p className="mt-0.5 text-[10px] uppercase tracking-widest text-zinc-600">Portal partener</p>
         </Link>

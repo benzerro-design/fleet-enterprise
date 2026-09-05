@@ -29,7 +29,7 @@ export function MemberRoleSelect({
 
   async function save() {
     if (isCurrentUser || role === currentRole) return;
-    const label = role === "tenant_admin" ? "Administrator tenant" : "Doar citire";
+    const label = role === "tenant_admin" ? "Administrator abonat (L*)" : "Cititor abonat";
     const yes = window.confirm(`Confirmi schimbarea rolului pentru ${email} la „${label}”?`);
     if (!yes) return;
     setPending(true);
@@ -79,8 +79,8 @@ export function MemberRoleSelect({
           disabled={pending || isCurrentUser}
           className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
         >
-          <option value="tenant_admin">Administrator tenant</option>
-          <option value="tenant_viewer">Doar citire</option>
+          <option value="tenant_admin">Administrator abonat (L*)</option>
+          <option value="tenant_viewer">Cititor abonat</option>
         </select>
         <button
           type="button"

@@ -34,6 +34,7 @@ type Props = {
   linkTicketId?: string | null;
   linkServiceCaseId?: string | null;
   initialVehicleId?: string;
+  initialSupplierId?: string;
   initialVehicleLabel?: string;
   serviceTypeCode?: string;
   partnerMode?: boolean;
@@ -63,6 +64,7 @@ export function SchedulerInspector({
   linkTicketId,
   linkServiceCaseId,
   initialVehicleId,
+  initialSupplierId,
   initialVehicleLabel,
   serviceTypeCode,
   partnerMode,
@@ -134,8 +136,10 @@ export function SchedulerInspector({
   useEffect(() => {
     if (createMode && partnerMode && partnerSupplier) {
       setSupplierId(partnerSupplier.id);
+    } else if (createMode && initialSupplierId) {
+      setSupplierId(initialSupplierId);
     }
-  }, [createMode, partnerMode, partnerSupplier]);
+  }, [createMode, partnerMode, partnerSupplier, initialSupplierId]);
 
   async function markVehicleService(
     workOrderId: string,
@@ -518,7 +522,7 @@ export function SchedulerInspector({
           onClick={() => void submitCreate()}
           className="mt-4 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         >
-          Salvează programarea
+          {supplierId && !partnerMode ? "Solicită programare la furnizor" : "Salvează programarea"}
         </button>
         {partnerMode && !(linkTicketId || linkServiceCaseId) ? (
           <p className="mt-2 text-[11px] text-amber-200">
@@ -658,20 +662,6 @@ export function SchedulerInspector({
       ) : null}
 
       <dl className="space-y-3 text-sm">
-        {(appointment.ticketDisplayId || appointment.workOrders.length > 0) ? (
-          <div>
-            <dt className="text-xs uppercase text-zinc-500">Referințe</dt>
-            <dd className="mt-0.5 space-y-0.5 font-mono text-xs text-zinc-300">
-              {appointment.ticketDisplayId ? <p>Tichet #{appointment.ticketDisplayId}</p> : null}
-              {appointment.workOrders.map((wo) => (
-                <p key={wo.id}>
-                  WO {wo.displayNumber ?? wo.id.slice(-6).toUpperCase()}
-                  {wo.title ? <span className="font-sans text-zinc-500"> · {wo.title}</span> : null}
-                </p>
-              ))}
-            </dd>
-          </div>
-        ) : null}
         <div>
           <dt className="text-xs uppercase text-zinc-500">Interval</dt>
           <dd className="mt-0.5 flex items-center gap-2">

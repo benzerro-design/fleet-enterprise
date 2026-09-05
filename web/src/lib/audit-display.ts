@@ -24,8 +24,8 @@ const VEHICLE_FIELD_LABELS: Record<string, string> = {
 };
 
 const ROLE_LABELS: Record<string, string> = {
-  tenant_admin: "Administrator tenant",
-  tenant_viewer: "Doar citire",
+  tenant_admin: "Administrator abonat",
+  tenant_viewer: "Cititor abonat",
 };
 
 const TRIP_FIELD_LABELS: Record<string, string> = {
@@ -78,7 +78,7 @@ export function auditEntityLabel(entityType: string): string {
     case "vehicle":
       return "Vehicul";
     case "membership":
-      return "Membru tenant";
+      return "Membru abonat";
     case "trip":
       return "Cursă";
     case "maintenance_entry":

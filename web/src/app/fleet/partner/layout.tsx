@@ -70,12 +70,12 @@ export default async function PartnerLayout({ children }: { children: React.Reac
     supplierLegalName: adminMode
       ? "Toți furnizorii"
       : (supplierMembership?.supplierLegalName ?? "Furnizor"),
-    supplierCode: adminMode ? "ADMIN" : (supplierMembership?.supplierCode ?? "—"),
+    supplierCode: adminMode ? "L*" : (supplierMembership?.supplierCode ?? "—"),
     tenantSlug: auth.me.tenantSlug,
     userEmail: auth.me.email,
     userInitials: userInitialsFromEmail(auth.me.email),
     supplierRoleLabel: adminMode
-      ? "Administrator tenant"
+      ? "Administrator abonat (L*) — mod flotă"
       : supplierMembership
         ? supplierRoleLabel(supplierMembership.role)
         : "Partener",

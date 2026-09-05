@@ -150,7 +150,7 @@ export function PartnerInviteAcceptClient({ token }: { token: string }) {
         Cont: <span className="font-mono">{preview.email}</span>
       </p>
       <p className="mt-1 text-xs text-zinc-500">
-        Tenant: <span className="font-mono">{preview.tenantSlug}</span> · Expiră:{" "}
+        Abonat: <span className="font-mono">{preview.tenantSlug}</span> · Expiră:{" "}
         {new Date(preview.expiresAt).toLocaleString("ro-RO")}
       </p>
 

@@ -6,7 +6,12 @@ import { WorkOrderDataGrid } from "@/components/fleet/work-orders/WorkOrderDataG
 import { WorkOrderKpiStrip } from "@/components/fleet/work-orders/WorkOrderKpiStrip";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
-import { mergePartnerQueryIntoParams, parsePartnerSupplierQuery, partnerSupplierSearchParams } from "@/lib/partner-context";
+import {
+  appendPartnerSupplierQuery,
+  mergePartnerQueryIntoParams,
+  parsePartnerSupplierQuery,
+  partnerSupplierSearchParams,
+} from "@/lib/partner-context";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 import { SERVICE_ORDER_TYPES } from "@/lib/work-order-sheet";
 import {
@@ -112,6 +117,8 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
   if (sp.serviceCaseStage?.trim()) filterParams.serviceCaseStage = sp.serviceCaseStage.trim();
   if (sp.serviceOrderType?.trim()) filterParams.serviceOrderType = sp.serviceOrderType.trim();
   if (sp.inbox?.trim()) filterParams.inbox = sp.inbox.trim();
+  if (supplierQuery.supplierId) filterParams.supplierId = supplierQuery.supplierId;
+  if (supplierQuery.suppliers?.length) filterParams.suppliers = supplierQuery.suppliers.join(",");
 
   const quickTabs: { label: string; inbox?: WorkOrderInbox | "all" }[] = [
     { label: "Deschise", inbox: "open" },
@@ -144,6 +151,12 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
               <input type="hidden" name="inbox" value={activeInbox} />
             ) : activeInbox === "open" ? (
               <input type="hidden" name="inbox" value="open" />
+            ) : null}
+            {supplierQuery.supplierId ? (
+              <input type="hidden" name="supplierId" value={supplierQuery.supplierId} />
+            ) : null}
+            {supplierQuery.suppliers?.length ? (
+              <input type="hidden" name="suppliers" value={supplierQuery.suppliers.join(",")} />
             ) : null}
             <div>
               <label className="text-xs text-zinc-500">Căutare</label>
@@ -220,7 +233,7 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
             >
               Filtrează
             </button>
-            <FilterResetLink href={`${BASE}?inbox=open`} />
+            <FilterResetLink href={appendPartnerSupplierQuery(`${BASE}?inbox=open`, supplierQuery)} />
           </form>
         }
         toolbar={
@@ -248,10 +261,14 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
 
         {!list ? (
           <p className="text-amber-400">Nu am putut încărca comenzile. Verifică API-ul și migrarea.</p>
-        ) : list.items.length === 0 ? (
-          <p className="text-zinc-500">Nicio comandă pentru filtrele curente.</p>
         ) : (
           <>
+            {list.items.length === 0 ? (
+              <p className="mb-3 text-sm text-zinc-500">
+                Nicio comandă pentru filtrele / furnizorul curent. Lista rămâne aici — schimbă filtrul sau
+                furnizorul, nu se pierde scope-ul.
+              </p>
+            ) : null}
             <WorkOrderDataGrid
               items={list.items}
               filterParams={filterParams}

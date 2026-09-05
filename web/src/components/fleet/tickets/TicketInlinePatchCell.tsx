@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { FleetGlyphTooltip } from "@/components/fleet/FleetGlyphTooltip";
 import { TicketPriorityGlyph, TicketStatusGlyph } from "@/components/fleet/tickets/TicketListGlyphs";
-import { fleetJsonHeaders, ticketPriorityLabel, ticketsBrowserBase, type TicketRecord } from "@/lib/tickets-api";
+import { fleetJsonHeaders, ticketPriorityLabel, ticketStatusLabel, ticketsBrowserBase, type TicketRecord } from "@/lib/tickets-api";
 
 type Props = {
   ticket: TicketRecord;
@@ -31,7 +32,9 @@ export function TicketInlinePatchCell({ ticket, field }: Props) {
   if (field === "status") {
     return (
       <span className="inline-flex items-center gap-1">
-        <TicketStatusGlyph status={ticket.status} />
+        <FleetGlyphTooltip label={ticketStatusLabel(ticket.status)}>
+          <TicketStatusGlyph status={ticket.status} />
+        </FleetGlyphTooltip>
         <select
           value={ticket.status}
           disabled={pending}
@@ -49,8 +52,10 @@ export function TicketInlinePatchCell({ ticket, field }: Props) {
   }
 
   return (
-    <span className="inline-flex items-center gap-1" title={ticketPriorityLabel(ticket.priority)}>
-      <TicketPriorityGlyph priority={ticket.priority} />
+    <span className="inline-flex items-center gap-1">
+      <FleetGlyphTooltip label={ticketPriorityLabel(ticket.priority)}>
+        <TicketPriorityGlyph priority={ticket.priority} />
+      </FleetGlyphTooltip>
       <select
         value={ticket.priority}
         disabled={pending}

@@ -431,7 +431,7 @@ export const WORK_ORDER_STATUSES: { value: WorkOrderStatus; label: string }[] = 
   { value: "draft", label: "Ciornă" },
   { value: "sent", label: "Trimisă" },
   { value: "in_progress", label: "În lucru" },
-  { value: "waiting_parts", label: "Așteaptă piese" },
+  { value: "waiting_parts", label: "Așteaptă piese (comandă lansată)" },
   { value: "done", label: "Finalizată" },
   { value: "cancelled", label: "Anulată" },
 ];

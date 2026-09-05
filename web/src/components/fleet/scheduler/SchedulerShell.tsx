@@ -47,6 +47,7 @@ type Props = {
   initialVehicleId?: string;
   initialVehicleLabel?: string;
   initialServiceCaseId?: string;
+  initialSupplierId?: string;
   initialCreate?: boolean;
   /** După repropunere / reprogramare, navighează înapoi la tichet. */
   returnToTicket?: boolean;
@@ -82,6 +83,7 @@ export function SchedulerShell({
   initialVehicleId,
   initialVehicleLabel,
   initialServiceCaseId,
+  initialSupplierId,
   initialCreate = false,
   returnToTicket = false,
   basePath = "/fleet/scheduler",
@@ -606,6 +608,7 @@ export function SchedulerShell({
             linkServiceCaseId={linkServiceCaseId}
             initialVehicleId={linkVehicleId ?? undefined}
             initialVehicleLabel={linkVehicleLabel ?? undefined}
+            initialSupplierId={initialSupplierId}
             partnerSupplier={partnerSupplier}
             serviceTypeCode={serviceTypeCode || undefined}
           />
@@ -649,6 +652,7 @@ export function SchedulerShell({
           linkServiceCaseId={linkServiceCaseId}
           initialVehicleId={linkVehicleId ?? undefined}
           initialVehicleLabel={linkVehicleLabel ?? undefined}
+          initialSupplierId={initialSupplierId}
           partnerSupplier={partnerSupplier}
           serviceTypeCode={serviceTypeCode || undefined}
         />

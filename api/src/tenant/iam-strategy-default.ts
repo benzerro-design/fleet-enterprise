@@ -17,7 +17,7 @@ export function defaultIamStrategyNodes(): IamStrategyNode[] {
     {
       id: 'node-l-star',
       levelLabel: 'L*',
-      title: 'Admin tenant (FlotaX)',
+      title: 'Abonat (FlotaX)',
       subtitle: 'Administrare clienți: Alpha, Beta, Client_1…',
       tone: 'tenant',
       badge: 'STRAT 1',

@@ -124,8 +124,10 @@ export function WorkOrderDataGrid({
         );
       case "vehicle":
         return partnerView ? (
-          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-zinc-300" title={row.registrationNumber}>
-            <TicketVehicleGlyph />
+          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-zinc-300">
+            <FleetGlyphTooltip label="Vehicul">
+              <TicketVehicleGlyph />
+            </FleetGlyphTooltip>
             {row.registrationNumber}
           </span>
         ) : (
@@ -146,8 +148,10 @@ export function WorkOrderDataGrid({
         );
       case "partner":
         return row.supplierLegalName ? (
-          <span className="inline-flex max-w-[7rem] items-center gap-1 truncate" title={row.supplierLegalName}>
-            <WorkOrderPartnerGlyph />
+          <span className="inline-flex max-w-[7rem] items-center gap-1 truncate">
+            <FleetGlyphTooltip label={row.supplierLegalName}>
+              <WorkOrderPartnerGlyph />
+            </FleetGlyphTooltip>
             <span className="truncate">{row.supplierLegalName}</span>
           </span>
         ) : (

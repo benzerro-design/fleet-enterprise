@@ -92,17 +92,17 @@ export function LoginForm({ nextPath }: Props) {
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Tenant (slug)</label>
+        <label className="block text-sm font-medium text-zinc-300">Abonat (slug)</label>
         <input
           value={tenantSlug}
           onChange={(e) => setTenantSlug(e.target.value)}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-          placeholder="demo (opțional dacă ai un singur tenant)"
+          placeholder="demo (opțional dacă ai un singur abonat)"
           autoComplete="organization"
         />
         <p className="text-xs text-zinc-500">
-          Obligatoriu dacă utilizatorul are acces la mai mulți tenanți; după seed, demo are un singur tenant. Viewer:
-          același tenant <span className="font-mono text-zinc-400">demo</span> și aceeași parolă demo ca admin (
+          Obligatoriu dacă utilizatorul are acces la mai mulți abonați; după seed, demo are un singur abonat. Viewer:
+          același abonat <span className="font-mono text-zinc-400">demo</span> și aceeași parolă demo ca administrator abonat (
           <span className="font-mono text-zinc-400">demo12345</span>); dacă primești „Invalid credentials”, rulează
           din nou <span className="font-mono text-zinc-400">npm run db:seed</span> în folderul API.
         </p>

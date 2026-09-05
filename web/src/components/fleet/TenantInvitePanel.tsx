@@ -77,8 +77,8 @@ export function TenantInvitePanel() {
           onChange={(e) => setTargetRole(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
         >
-          <option value="tenant_admin">Administrator (L*)</option>
-          <option value="tenant_viewer">Cititor</option>
+          <option value="tenant_admin">Administrator abonat (L*)</option>
+          <option value="tenant_viewer">Cititor abonat</option>
         </select>
         <button
           type="button"

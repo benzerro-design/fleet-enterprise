@@ -11,6 +11,7 @@ import {
   type WorkOrderSettings,
 } from "@/lib/work-order-settings";
 import { type WorkOrderDetail, type WorkOrderQuoteRecord } from "@/lib/work-orders-api";
+import { appendPartnerSupplierQuery, parsePartnerSupplierQuery } from "@/lib/partner-context";
 
 async function loadQuotes(id: string): Promise<WorkOrderQuoteRecord[]> {
   try {
@@ -42,7 +43,10 @@ async function load(id: string): Promise<WorkOrderDetail | null> {
   }
 }
 
-type PageProps = { params: Promise<{ id: string }> };
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | undefined>>;
+};
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
@@ -51,8 +55,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return { title: workOrderPageTitle(wo) };
 }
 
-export default async function PartnerWorkOrderDetailPage({ params }: PageProps) {
+export default async function PartnerWorkOrderDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const sp = searchParams ? await searchParams : {};
+  const listHref = appendPartnerSupplierQuery("/fleet/partner/work-orders", parsePartnerSupplierQuery(sp));
   const [wo, auth, workOrderSettings] = await Promise.all([
     load(id),
     getAuthMeResult(),
@@ -66,7 +72,7 @@ export default async function PartnerWorkOrderDetailPage({ params }: PageProps) 
 
   return (
     <FleetPageMain>
-      <Link href="/fleet/partner/work-orders" className="text-sm text-zinc-400 hover:text-zinc-200">
+      <Link href={listHref} className="text-sm text-zinc-400 hover:text-zinc-200">
         ← Devize & comenzi
       </Link>
 
