@@ -45,6 +45,7 @@ export class TenantService {
       where: { slug: tenantSlug },
       include: {
         memberships: {
+          where: { role: { in: [MembershipRole.tenant_admin, MembershipRole.tenant_viewer] } },
           include: { user: { select: { id: true, email: true, displayName: true } } },
           orderBy: { createdAt: 'asc' },
         },
@@ -82,6 +83,14 @@ export class TenantService {
       },
     });
     if (!mem) throw new NotFoundException('Membership not found');
+    if (mem.role !== MembershipRole.tenant_admin && mem.role !== MembershipRole.tenant_viewer) {
+      throw new BadRequestException(
+        'Rolul acestui user se schimbă din tab-ul Client sau Furnizor, nu din echipa abonatului.',
+      );
+    }
+    if (role !== MembershipRole.tenant_admin && role !== MembershipRole.tenant_viewer) {
+      throw new BadRequestException('role must be tenant_admin or tenant_viewer');
+    }
 
     await this.prisma.tenantMembership.update({
       where: { id: mem.id },
