@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
 import type { AccessContext } from './access-context.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { buildPublicUrl, resolveWebOrigin, webOriginLooksBroken } from '../web-origin';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -29,17 +31,21 @@ export type UserInviteRecord = {
 
 @Injectable()
 export class UserInvitesService {
+  private readonly logger = new Logger(UserInvitesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
 
   private inviteUrl(token: string): string {
-    const base =
-      process.env.WEB_ORIGIN?.trim() ||
-      process.env.WEB_PUBLIC_URL?.trim() ||
-      'http://localhost:3000';
-    return `${base.replace(/\/$/, '')}/invite/${token}`;
+    const origin = resolveWebOrigin();
+    if (webOriginLooksBroken(origin)) {
+      this.logger.warn(
+        `WEB_ORIGIN is not a usable public host (${origin}). Set it to the real Cloud Run web URL.`,
+      );
+    }
+    return buildPublicUrl(`/invite/${token}`);
   }
 
   async listTenantInvites(tenantSlug: string): Promise<UserInviteRecord[]> {
