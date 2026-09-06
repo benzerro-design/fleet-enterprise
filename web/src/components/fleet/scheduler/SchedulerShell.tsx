@@ -228,20 +228,14 @@ export function SchedulerShell({
     () => filterByInbox(appointments, inboxFilter),
     [appointments, inboxFilter],
   );
-  const slottedAppointments = useMemo(() => {
-    const base = filteredAppointments.filter((a): a is SlottedCalendarAppointment =>
-      appointmentHasSlot(a.scheduledAt),
-    );
-    const extra = appointments.find((a) => a.id === selectedId);
-    if (
-      extra &&
-      appointmentHasSlot(extra.scheduledAt) &&
-      !base.some((a) => a.id === extra.id)
-    ) {
-      return [...base, extra];
-    }
-    return base;
-  }, [filteredAppointments, appointments, selectedId]);
+  /** Grila/agenda = toată săptămâna. Inbox-ul filtrează doar lista. */
+  const slottedAppointments = useMemo(
+    () =>
+      appointments.filter((a): a is SlottedCalendarAppointment =>
+        appointmentHasSlot(a.scheduledAt),
+      ),
+    [appointments],
+  );
 
   const selected = appointments.find((a) => a.id === selectedId) ?? null;
   const slotClickMode =
