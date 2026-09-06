@@ -81,6 +81,9 @@ export class AppointmentsService {
       vehicle: {
         select: {
           registrationNumber: true,
+          brand: true,
+          model: true,
+          vin: true,
           clientId: true,
           client: { select: { code: true, legalName: true } },
         },
@@ -134,6 +137,9 @@ export class AppointmentsService {
     updatedAt: Date;
     vehicle: {
       registrationNumber: string;
+      brand: string | null;
+      model: string | null;
+      vin: string | null;
       clientId: string;
       client: { code: string; legalName: string };
     };
@@ -174,6 +180,9 @@ export class AppointmentsService {
       notes: row.notes,
       vehicleId: row.vehicleId,
       registrationNumber: row.vehicle.registrationNumber,
+      vehicleBrand: row.vehicle.brand ?? null,
+      vehicleModel: row.vehicle.model ?? null,
+      vehicleVin: row.vehicle.vin ?? null,
       clientId: row.vehicle.clientId,
       clientCode: row.vehicle.client.code,
       clientLegalName: row.vehicle.client.legalName,

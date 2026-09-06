@@ -89,6 +89,9 @@ export type WorkOrderListRow = {
   completedAt: string | null;
   vehicleId: string;
   registrationNumber: string;
+  vehicleBrand: string | null;
+  vehicleModel: string | null;
+  vehicleVin: string | null;
   clientId: string;
   clientCode: string;
   clientLegalName: string;
@@ -321,6 +324,9 @@ export class WorkOrdersService {
       vehicle: {
         select: {
           registrationNumber: true,
+          brand: true,
+          model: true,
+          vin: true,
           clientId: true,
           client: { select: { code: true, legalName: true } },
         },
@@ -415,6 +421,9 @@ export class WorkOrdersService {
     serviceCaseId: string;
     vehicle: {
       registrationNumber: string;
+      brand?: string | null;
+      model?: string | null;
+      vin?: string | null;
       clientId: string;
       client: { code: string; legalName: string };
     };
@@ -449,6 +458,9 @@ export class WorkOrdersService {
       completedAt: row.completedAt?.toISOString() ?? null,
       vehicleId: row.vehicleId,
       registrationNumber: row.vehicle.registrationNumber,
+      vehicleBrand: row.vehicle.brand ?? null,
+      vehicleModel: row.vehicle.model ?? null,
+      vehicleVin: row.vehicle.vin ?? null,
       clientId: row.vehicle.clientId,
       clientCode: row.vehicle.client.code,
       clientLegalName: row.vehicle.client.legalName,

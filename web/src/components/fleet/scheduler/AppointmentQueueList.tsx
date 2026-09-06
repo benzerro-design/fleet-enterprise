@@ -59,6 +59,7 @@ export function AppointmentQueueList({
     <ul className={`divide-y divide-zinc-800/80 overflow-y-auto ${compact ? "max-h-full" : ""}`}>
       {sorted.map((a) => {
         const selected = a.id === selectedId;
+        const vehicleSpec = [a.vehicleBrand, a.vehicleModel].filter((x) => x?.trim()).join(" ");
         return (
           <li key={a.id}>
             <div
@@ -82,6 +83,10 @@ export function AppointmentQueueList({
                     <p className="truncate font-medium text-zinc-100">{a.title}</p>
                   </div>
                   <p className="mt-0.5 font-mono text-sm text-emerald-400/90">{a.registrationNumber}</p>
+                  {vehicleSpec ? <p className="text-[11px] text-zinc-400">{vehicleSpec}</p> : null}
+                  {a.vehicleVin?.trim() ? (
+                    <p className="font-mono text-[10px] text-zinc-500">VIN {a.vehicleVin}</p>
+                  ) : null}
                   <p className="mt-1 text-xs text-zinc-500">
                     {formatAppointmentSlot(a.scheduledAt, { partner: partnerMode })}
                     {a.supplierCode ? ` · ${a.supplierCode}` : ""}

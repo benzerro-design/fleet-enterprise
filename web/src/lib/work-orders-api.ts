@@ -54,6 +54,9 @@ export type WorkOrderListRow = {
   completedAt: string | null;
   vehicleId: string;
   registrationNumber: string;
+  vehicleBrand: string | null;
+  vehicleModel: string | null;
+  vehicleVin: string | null;
   clientId: string;
   clientCode: string;
   clientLegalName: string;

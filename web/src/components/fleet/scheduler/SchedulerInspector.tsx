@@ -550,6 +550,9 @@ export function SchedulerInspector({
   }
 
   const editable = canWrite && appointment.status !== "cancelled" && appointment.status !== "completed";
+  const vehicleSpec = [appointment.vehicleBrand, appointment.vehicleModel]
+    .filter((x) => x?.trim())
+    .join(" ");
 
   const panel = (
     <>
@@ -763,8 +766,14 @@ export function SchedulerInspector({
                 {appointment.registrationNumber}
               </Link>
             )}
+            {vehicleSpec ? ` · ${vehicleSpec}` : ""}
             {" · "}
             {appointment.clientCode}
+            {appointment.vehicleVin?.trim() ? (
+              <span className="mt-0.5 block font-mono text-[11px] text-zinc-500">
+                VIN {appointment.vehicleVin}
+              </span>
+            ) : null}
           </dd>
         </div>
         <div>

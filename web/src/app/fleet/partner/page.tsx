@@ -25,6 +25,27 @@ import type { WorkOrderListPayload, WorkOrderStats } from "@/lib/work-orders-api
 
 type Search = { supplierId?: string; suppliers?: string; inbox?: string };
 
+function PartnerVehicleCell({
+  registrationNumber,
+  brand,
+  model,
+  vin,
+}: {
+  registrationNumber: string;
+  brand?: string | null;
+  model?: string | null;
+  vin?: string | null;
+}) {
+  const spec = [brand, model].filter((x) => x?.trim()).join(" ");
+  return (
+    <div className="text-xs">
+      <div className="font-mono text-zinc-200">{registrationNumber}</div>
+      {spec ? <div className="mt-0.5 text-zinc-400">{spec}</div> : null}
+      {vin?.trim() ? <div className="mt-0.5 font-mono text-[10px] text-zinc-500">VIN {vin}</div> : null}
+    </div>
+  );
+}
+
 function supplierQueryString(q: ReturnType<typeof parsePartnerSupplierQuery>): string {
   const p = partnerSupplierSearchParams(q);
   const s = p.toString();
@@ -355,7 +376,14 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                         <div className="mt-0.5 text-[10px] text-amber-400/90">Solicitat de client</div>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-zinc-300">{row.registrationNumber}</td>
+                    <td className="px-3 py-2">
+                      <PartnerVehicleCell
+                        registrationNumber={row.registrationNumber}
+                        brand={row.vehicleBrand}
+                        model={row.vehicleModel}
+                        vin={row.vehicleVin}
+                      />
+                    </td>
                     <td className="px-3 py-2 text-zinc-300">{row.title}</td>
                     <td className="px-3 py-2">
                       <Link
@@ -405,7 +433,14 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                         {row.displayNumber ?? row.id.slice(-6).toUpperCase()}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-zinc-400">{row.registrationNumber}</td>
+                    <td className="px-3 py-2">
+                      <PartnerVehicleCell
+                        registrationNumber={row.registrationNumber}
+                        brand={row.vehicleBrand}
+                        model={row.vehicleModel}
+                        vin={row.vehicleVin}
+                      />
+                    </td>
                     <td className="px-3 py-2 text-zinc-300">{row.title}</td>
                     <td className="px-3 py-2 text-xs text-zinc-500">{row.status}</td>
                   </tr>
