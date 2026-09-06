@@ -308,7 +308,7 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
           ? "Propus de flotă — așteaptă validare furnizor."
           : "Fără dată — așteaptă ca furnizorul să propună slotul."
         : appt?.status === "needs_repropose"
-          ? "Șoferul nu poate la data curentă — reprogramare necesară."
+          ? "Șoferul nu poate la ora curentă — aceeași cerere, altă oră."
           : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
             ? "Confirmată de manager — așteaptă Confirmă primire (șofer)."
             : appt?.managerConfirmedAt && appt.driverAcknowledgedAt

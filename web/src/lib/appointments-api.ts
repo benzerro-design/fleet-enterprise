@@ -75,7 +75,7 @@ export type AppointmentStats = {
 export const APPOINTMENT_STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "scheduled", label: "În curs de validare" },
   { value: "pending_supplier", label: "Așteaptă furnizor" },
-  { value: "needs_repropose", label: "Șofer nu poate — reprogramare" },
+  { value: "needs_repropose", label: "Șofer nu poate — altă oră" },
   { value: "confirmed", label: "Confirmat" },
   { value: "completed", label: "Finalizat" },
   { value: "cancelled", label: "Anulat" },
@@ -116,7 +116,7 @@ export function appointmentProcessLabel(a: {
   if (a.status === "cancelled") return "Anulat";
   if (a.status === "completed") return "Finalizat";
   if (a.status === "no_show") return "Neprezentare";
-  if (a.status === "needs_repropose") return "Șofer nu poate — reprogramare";
+  if (a.status === "needs_repropose") return "Șofer nu poate — altă oră";
   if (a.status === "pending_supplier" && !appointmentHasSlot(a.scheduledAt)) {
     return "Așteaptă propunere slot";
   }

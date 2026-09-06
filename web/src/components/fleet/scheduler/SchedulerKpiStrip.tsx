@@ -22,7 +22,7 @@ export function SchedulerKpiStrip({ stats, activeInbox = "all", onInboxChange, p
     },
     {
       key: "needs_repropose",
-      label: partnerMode ? "Șofer nu poate" : "Reprogramare (șofer)",
+      label: partnerMode ? "Șofer nu poate" : "Șofer nu poate",
       value: stats?.needsRepropose ?? 0,
       warn: (stats?.needsRepropose ?? 0) > 0,
     },

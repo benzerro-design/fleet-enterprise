@@ -445,15 +445,15 @@ export function SchedulerWeekView({
       {canWrite && onReschedule ? (
         <p className="hidden border-t border-zinc-800/80 px-3 py-1.5 text-[10px] text-zinc-600 lg:block">
           Click = selectează · click din nou = deselectează · Escape = deselectează · dublu-click = deschide
-          tichet/WO · click dreapta = meniu · ține apăsat și trage = reprogramare.
+          tichet/WO · click dreapta = meniu · ține apăsat și trage = mută ora.
           {onSlotClick
             ? slotClickMode === "propose"
               ? " Click pe slot liber = propune data solicitată de client."
               : slotClickMode === "reschedule"
-                ? " Click pe slot liber = alege data pentru repropunere."
+                ? " Click pe slot liber = alege altă oră (aceeași cerere)."
                 : " Click pe slot liber = programare nouă."
             : ""}
-          {partnerMode ? " Programările de validat: Propune dată / altă dată, apoi click pe calendar." : ""}
+          {partnerMode ? " Programările de validat: Propune dată / altă oră, apoi click pe calendar." : ""}
         </p>
       ) : null}
       {ctxMenu ? (

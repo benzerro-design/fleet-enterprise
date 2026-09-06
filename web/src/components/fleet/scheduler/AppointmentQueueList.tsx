@@ -143,7 +143,7 @@ export function AppointmentQueueList({
                       onClick={() => onProposeReschedule(a.id)}
                       className="rounded-md border border-amber-500/50 bg-amber-950/30 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-950/50"
                     >
-                      {appointmentHasSlot(a.scheduledAt) ? "Propune altă dată" : "Propune dată"}
+                      {appointmentHasSlot(a.scheduledAt) ? "Propune altă oră" : "Propune dată"}
                     </button>
                   ) : null}
                   {a.status === "scheduled" && onConfirm && !partnerMode ? (

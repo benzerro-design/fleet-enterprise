@@ -527,7 +527,7 @@ export function appointmentStatusLabel(status: ServiceAppointmentStatus | string
   const map: Record<string, string> = {
     scheduled: "În curs de validare",
     pending_supplier: "Așteaptă validare furnizor",
-    needs_repropose: "Șofer nu poate — reprogramare",
+    needs_repropose: "Șofer nu poate — altă oră",
     confirmed: "Confirmat",
     completed: "Finalizat",
     cancelled: "Anulat",

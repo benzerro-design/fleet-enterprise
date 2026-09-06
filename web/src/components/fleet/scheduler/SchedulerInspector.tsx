@@ -630,11 +630,11 @@ export function SchedulerInspector({
       {editing && editable ? (
         <div className="mb-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
           <p className="text-xs font-semibold uppercase text-zinc-500">
-            {appointmentHasSlot(appointment.scheduledAt) ? "Reprogramare" : "Propune programare"}
+            {appointmentHasSlot(appointment.scheduledAt) ? "Altă oră" : "Propune programare"}
           </p>
           <p className="text-[11px] text-sky-300/90">
             {appointmentHasSlot(appointment.scheduledAt)
-              ? "Click pe un slot liber din calendar ca să alegi data/ora vizual."
+              ? "Aceeași solicitare, altă oră. Click pe un slot liber din calendar."
               : "Clientul a solicitat un slot. Click pe un interval liber din calendar sau completează data."}
           </p>
           {returnTicketId ? (
@@ -662,7 +662,7 @@ export function SchedulerInspector({
                 ? "Trimite propunere"
                 : appointment.status === "pending_supplier" || appointment.status === "needs_repropose"
                   ? partnerMode
-                    ? "Trimite reprogramare"
+                    ? "Trimite altă oră"
                     : appointment.status === "needs_repropose"
                       ? "Trimite propunere"
                       : "Salvează"
@@ -720,8 +720,8 @@ export function SchedulerInspector({
               Șoferul nu poate la data programată
               {appointment.driverDeclineNote ? `: ${appointment.driverDeclineNote}` : "."}
               {partnerMode
-                ? " — așteaptă propunere flotă sau repropune tu un slot."
-                : " — propune altă dată (Repropune / Propune)."}
+                ? " — aceeași cerere: așteaptă altă oră de la flotă sau propune tu."
+                : " — aceeași cerere: propune altă oră."}
             </p>
           ) : null}
           {appointment.lastProposalNote ? (
@@ -891,9 +891,7 @@ export function SchedulerInspector({
                   className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
                 >
                   {appointmentHasSlot(appointment.scheduledAt)
-                    ? appointment.status === "needs_repropose"
-                      ? "Propune / repropune dată"
-                      : "Propune altă dată"
+                    ? "Propune altă oră"
                     : "Propune dată"}
                 </button>
               ) : null}

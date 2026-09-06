@@ -366,7 +366,7 @@ export function TicketWorkflowStepper({
 
   async function reproposeAppointment(appointmentId: string) {
     if (!reproposeAt) {
-      setError("Alege data și ora pentru reprogramare.");
+      setError("Alege data și ora nouă.");
       return;
     }
     setPending(true);
@@ -658,7 +658,12 @@ export function TicketWorkflowStepper({
           {serviceCase.appointments?.length ? (
             <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs uppercase text-zinc-500">Programări</p>
+                <div>
+                  <p className="text-xs uppercase text-zinc-500">Programări</p>
+                  <p className="mt-0.5 text-[10px] text-zinc-500">
+                    Aceeași cerere până e confirmată de toți. Altă oră nu deschide un flux nou.
+                  </p>
+                </div>
                 <Link
                   href={schedulerHref({
                     week: serviceCase.appointments[0]!.scheduledAt
@@ -785,7 +790,7 @@ export function TicketWorkflowStepper({
                             }}
                             className="rounded-lg border border-amber-500/40 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-950/40 disabled:opacity-50"
                           >
-                            Propune altă dată
+                            Propune altă oră
                           </button>
                         ) : null}
                         {appt.managerConfirmedAt &&
@@ -845,8 +850,8 @@ export function TicketWorkflowStepper({
                               placeholder="Context pentru furnizor"
                             />
                             <p className="text-[10px] text-zinc-500">
-                              Se trimite din nou la furnizor pentru validare. „Deschide calendar” te duce la
-                              programator; după ce trimiți repropunerea te întoarce pe tichet.
+                              Aceeași cerere, altă oră — se trimite din nou la furnizor. După trimitere te
+                              întorci pe tichet.
                             </p>
                             <div className="flex flex-wrap gap-2">
                               <button

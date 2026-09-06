@@ -103,7 +103,7 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
             <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">Programator</h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Programări service — listă + calendar, propunere de slot, validare și reprogramare pe{" "}
+              Programări service — listă + calendar, propunere de slot, validare și altă oră pe{" "}
               {membership?.supplierCode ?? (suppliers.length === 1 ? suppliers[0].code : `${suppliers.length} furnizori`)}.
             </p>
           </div>

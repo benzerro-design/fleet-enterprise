@@ -252,7 +252,7 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
     needsRepropose > 0
       ? {
           href: `${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=needs_repropose`,
-          label: "Șofer nu poate — reprogramare",
+          label: "Șofer nu poate — altă oră",
           count: needsRepropose,
           tone: "amber" as const,
         }
