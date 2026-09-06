@@ -12,8 +12,8 @@ export type CalendarWorkOrderSummary = {
 export type CalendarAppointmentRecord = {
   id: string;
   title: string;
-  scheduledAt: string;
-  endAt: string;
+  scheduledAt: string | null;
+  endAt: string | null;
   durationMin: number;
   status: ServiceAppointmentStatus;
   proposedByRole: ServiceAppointmentProposedBy | null;

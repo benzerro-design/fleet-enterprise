@@ -771,7 +771,7 @@ export class WorkOrdersService {
       awaitingPostApproval: row.serviceCase.awaitingPostApproval ?? false,
       postApprovalPath: row.serviceCase.postApprovalPath ?? null,
       linkedAppointmentId: linked?.id ?? null,
-      linkedAppointmentScheduledAt: linked?.scheduledAt.toISOString() ?? null,
+      linkedAppointmentScheduledAt: linked?.scheduledAt?.toISOString() ?? null,
       linkedAppointmentStatus: linked?.status ?? null,
       inServiceAt: row.inServiceAt?.toISOString() ?? null,
       outServiceAt: row.outServiceAt?.toISOString() ?? null,
@@ -1569,7 +1569,7 @@ export class WorkOrdersService {
     tenantId: string,
     serviceCaseId: string,
     plannedAt: Date | null,
-  ): Promise<{ id: string; scheduledAt: Date; status: string } | null> {
+  ): Promise<{ id: string; scheduledAt: Date | null; status: string } | null> {
     const rows = await this.prisma.serviceAppointment.findMany({
       where: {
         tenantId,
@@ -1588,7 +1588,7 @@ export class WorkOrdersService {
     if (active) return active;
 
     if (plannedAt) {
-      const exact = rows.find((r) => r.scheduledAt.getTime() === plannedAt.getTime());
+      const exact = rows.find((r) => r.scheduledAt?.getTime() === plannedAt.getTime());
       if (exact) return exact;
     }
 

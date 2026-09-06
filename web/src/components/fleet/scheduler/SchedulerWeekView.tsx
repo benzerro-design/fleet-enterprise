@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CalendarAppointment } from "@/lib/appointments-api";
+import type { SlottedCalendarAppointment } from "@/lib/appointments-api";
 import { appointmentStatusLabel, workflowTypeLabel } from "@/lib/appointments-api";
 import {
   SCHEDULER_HOURS,
@@ -23,7 +23,7 @@ import { appointmentStatusAccentClass } from "./appointment-status-colors";
 
 type Props = {
   weekStart: Date;
-  appointments: CalendarAppointment[];
+  appointments: SlottedCalendarAppointment[];
   selectedId: string | null;
   canWrite: boolean;
   partnerMode?: boolean;
@@ -54,14 +54,14 @@ type PendingPointer = {
   offsetY: number;
 };
 
-function primaryHref(a: CalendarAppointment, partnerMode?: boolean): string | null {
+function primaryHref(a: SlottedCalendarAppointment, partnerMode?: boolean): string | null {
   if (partnerMode) return null;
   if (a.sourceTicketId) return `/fleet/tickets/${a.sourceTicketId}`;
   if (a.workOrders?.[0]?.id) return `/fleet/work-orders/${a.workOrders[0].id}`;
   return null;
 }
 
-function appointmentHoverDetail(a: CalendarAppointment): string {
+function appointmentHoverDetail(a: SlottedCalendarAppointment): string {
   const start = new Date(a.scheduledAt);
   const woLabels = a.workOrders
     .map((wo) => wo.displayNumber ?? wo.id.slice(-6).toUpperCase())
@@ -89,7 +89,7 @@ function AppointmentBlock({
   onDoubleClick,
   onContextMenu,
 }: {
-  a: CalendarAppointment;
+  a: SlottedCalendarAppointment;
   selected: boolean;
   dragging: boolean;
   canDrag: boolean;
@@ -161,7 +161,7 @@ export function SchedulerWeekView({
   const days = dayLabels(weekStart);
   const gridH = gridHeightPx();
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; appt: CalendarAppointment } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; appt: SlottedCalendarAppointment } | null>(null);
   const gridRefs = useRef<(HTMLDivElement | null)[]>([]);
   const pendingRef = useRef<PendingPointer | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -169,7 +169,7 @@ export function SchedulerWeekView({
   const suppressSlotClickUntilRef = useRef(0);
 
   const canDragAppt = useCallback(
-    (a: CalendarAppointment) =>
+    (a: SlottedCalendarAppointment) =>
       canWrite &&
       !!onReschedule &&
       a.status !== "cancelled" &&
@@ -313,7 +313,7 @@ export function SchedulerWeekView({
 
   const dragAppt = drag ? appointments.find((a) => a.id === drag.id) : null;
 
-  function startPendingDrag(e: React.PointerEvent, a: CalendarAppointment, dayIndex: number) {
+  function startPendingDrag(e: React.PointerEvent, a: SlottedCalendarAppointment, dayIndex: number) {
     if (!canDragAppt(a)) {
       onSelect(a.id);
       return;

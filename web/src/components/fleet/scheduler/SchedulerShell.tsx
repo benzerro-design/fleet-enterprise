@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  appointmentHasSlot,
   appointmentsBrowserBase,
   type AppointmentStats,
   type CalendarAppointment,
+  type SlottedCalendarAppointment,
 } from "@/lib/appointments-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import { serviceCasesBrowserBase } from "@/lib/service-cases-api";
@@ -226,6 +228,13 @@ export function SchedulerShell({
     () => filterByInbox(appointments, inboxFilter),
     [appointments, inboxFilter],
   );
+  const slottedAppointments = useMemo(
+    () =>
+      filteredAppointments.filter((a): a is SlottedCalendarAppointment =>
+        appointmentHasSlot(a.scheduledAt),
+      ),
+    [filteredAppointments],
+  );
 
   const selected = appointments.find((a) => a.id === selectedId) ?? null;
 
@@ -265,6 +274,11 @@ export function SchedulerShell({
 
   const supplierValidateById = useCallback(
     async (id: string) => {
+      const row = appointments.find((a) => a.id === id);
+      if (row && !appointmentHasSlot(row.scheduledAt)) {
+        proposeAlternateDate(id);
+        return;
+      }
       const res = await fetch(`${serviceCasesBrowserBase}/appointments/${id}/supplier-validate`, {
         method: "POST",
         headers: fleetJsonHeaders(),
@@ -273,7 +287,7 @@ export function SchedulerShell({
       if (!res.ok) return;
       await load(true);
     },
-    [load],
+    [appointments, load],
   );
 
   const requestCancelById = useCallback(
@@ -408,7 +422,7 @@ export function SchedulerShell({
           <div className="hidden min-h-0 w-full flex-1 lg:flex lg:w-1/2 lg:flex-col">
             <SchedulerWeekView
               weekStart={weekStart}
-              appointments={filteredAppointments}
+              appointments={slottedAppointments}
               selectedId={selectedId}
               canWrite={canWrite}
               partnerMode={partnerMode}
@@ -427,7 +441,7 @@ export function SchedulerShell({
       {viewMode === "grid" ? (
         <SchedulerWeekView
           weekStart={weekStart}
-          appointments={filteredAppointments}
+          appointments={slottedAppointments}
           selectedId={selectedId}
           canWrite={canWrite}
           partnerMode={partnerMode}
@@ -444,7 +458,7 @@ export function SchedulerShell({
       {viewMode === "bands" ? (
         <SchedulerSupplierBandView
           weekStart={weekStart}
-          appointments={filteredAppointments}
+          appointments={slottedAppointments}
           suppliers={suppliers}
           supplierFilter={supplierFilter}
           selectedId={selectedId}
@@ -473,7 +487,7 @@ export function SchedulerShell({
       ) : null}
       <SchedulerAgendaView
         weekStart={weekStart}
-        appointments={filteredAppointments}
+        appointments={slottedAppointments}
         selectedId={selectedId}
         partnerMode={partnerMode}
         onSelect={selectAppointment}

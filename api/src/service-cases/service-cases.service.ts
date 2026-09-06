@@ -117,8 +117,8 @@ export type ServiceAppointmentRecord = {
   supplierId: string | null;
   supplierLegalName: string | null;
   title: string;
-  scheduledAt: string;
-  endAt: string;
+  scheduledAt: string | null;
+  endAt: string | null;
   durationMin: number;
   location: string | null;
   status: ServiceAppointmentStatus;
@@ -137,7 +137,8 @@ export type ServiceAppointmentRecord = {
 };
 
 export type CreateServiceAppointmentInput = {
-  scheduledAt: string;
+  /** Lipsă = L1 cere slot; furnizorul propune data. */
+  scheduledAt?: string | null;
   supplierId?: string | null;
   location?: string | null;
   notes?: string | null;
@@ -2358,8 +2359,9 @@ export class ServiceCasesService {
     }
     if (access) assertServiceCaseWrite(access, serviceCase.clientId);
 
-    const scheduledAt = new Date(dto.scheduledAt);
-    if (Number.isNaN(scheduledAt.getTime())) {
+    const rawWhen = dto.scheduledAt?.trim() || '';
+    const scheduledAt = rawWhen ? new Date(rawWhen) : null;
+    if (rawWhen && (scheduledAt == null || Number.isNaN(scheduledAt.getTime()))) {
       throw new BadRequestException('Invalid scheduledAt');
     }
 
@@ -2376,6 +2378,15 @@ export class ServiceCasesService {
     const durationMin = dto.durationMin ?? 60;
     if (!Number.isInteger(durationMin) || durationMin < 15) {
       throw new BadRequestException('Invalid durationMin');
+    }
+
+    if (!scheduledAt && !supplierId) {
+      throw new BadRequestException(
+        'Alege o dată sau un furnizor care să propună slotul.',
+      );
+    }
+    if (!scheduledAt && dto.createdBySupplier) {
+      throw new BadRequestException('Furnizorul trebuie să propună o dată.');
     }
 
     const initialStatus =
@@ -2419,7 +2430,9 @@ export class ServiceCasesService {
               tenantId: tenant.id,
               ticketId: serviceCase.sourceTicketId,
               kind: CrmTicketEventKind.workflow_advance,
-              body: `Programare stabilită: ${scheduledAt.toLocaleString('ro-RO')}.`,
+              body: scheduledAt
+                ? `Programare stabilită: ${scheduledAt.toLocaleString('ro-RO')}.`
+                : 'Solicitare programare fără dată — furnizorul propune slotul.',
               payload: {
                 fromStage: serviceCase.currentStage,
                 toStage: ServiceCaseStage.scheduled,
@@ -2439,7 +2452,7 @@ export class ServiceCasesService {
 
       await tx.maintenanceWorkOrder.updateMany({
         where: { serviceCaseId: caseId },
-        data: { plannedAt: scheduledAt, supplierId },
+        data: { ...(scheduledAt ? { plannedAt: scheduledAt } : {}), supplierId },
       });
 
       return created;
@@ -2571,6 +2584,10 @@ export class ServiceCasesService {
     if (access && !canConfirmAppointment(access, existing.serviceCase.clientId)) {
       throw new ForbiddenException('Cannot confirm appointment');
     }
+    const confirmedSlot = existing.scheduledAt;
+    if (!confirmedSlot) {
+      throw new BadRequestException('Programarea nu are dată — furnizorul trebuie să propună slotul.');
+    }
 
     let woCreated: { created: boolean; workOrderId: string | null } = {
       created: false,
@@ -2592,7 +2609,7 @@ export class ServiceCasesService {
             tenantId: tenant.id,
             ticketId: serviceCase.sourceTicketId,
             kind: CrmTicketEventKind.workflow_advance,
-            body: `Programare confirmată de manager: ${existing.scheduledAt.toLocaleString('ro-RO')}.`,
+            body: `Programare confirmată de manager: ${existing.scheduledAt?.toLocaleString('ro-RO') ?? '—'}.`,
             payload: { appointmentId, serviceCaseId: serviceCase.id },
             actorUserId: actorUserId ?? null,
           },
@@ -2603,7 +2620,7 @@ export class ServiceCasesService {
         tx,
         tenant.id,
         appointmentId,
-        existing.scheduledAt,
+        confirmedSlot,
         existing.supplierId ?? existing.serviceCase.supplierId,
         actorUserId,
       );
@@ -2669,6 +2686,9 @@ export class ServiceCasesService {
         throw new BadRequestException('Invalid scheduledAt');
       }
       scheduledAt = next;
+    }
+    if (!scheduledAt) {
+      throw new BadRequestException('Propune o dată pentru această solicitare.');
     }
     if (dto.durationMin !== undefined) {
       if (!Number.isInteger(dto.durationMin) || dto.durationMin < 15 || dto.durationMin > 24 * 60) {
@@ -2775,7 +2795,7 @@ export class ServiceCasesService {
       });
 
       if (existing.serviceCase.sourceTicketId) {
-        const when = existing.scheduledAt.toLocaleString('ro-RO');
+        const when = existing.scheduledAt?.toLocaleString('ro-RO') ?? 'fără dată';
         const reg = existing.vehicle.registrationNumber;
         const body = note
           ? `Furnizorul solicită anularea programării (${reg}, ${when}): ${note}`
@@ -2837,6 +2857,10 @@ export class ServiceCasesService {
     ) {
       throw new BadRequestException('Appointment was declined — awaiting manager reproposal');
     }
+    const ackSlot = existing.scheduledAt;
+    if (!ackSlot) {
+      throw new BadRequestException('Programarea nu are dată — furnizorul trebuie să propună slotul.');
+    }
 
     let woCreated: { created: boolean; workOrderId: string | null } = {
       created: false,
@@ -2852,7 +2876,7 @@ export class ServiceCasesService {
         tx,
         tenant.id,
         appointmentId,
-        existing.scheduledAt,
+        ackSlot,
         existing.supplierId ?? existing.serviceCase.supplierId,
         actorUserId,
       );
@@ -2941,7 +2965,7 @@ export class ServiceCasesService {
             tenantId: tenant.id,
             ticketId: existing.serviceCase.sourceTicketId,
             kind: CrmTicketEventKind.workflow_advance,
-            body: `Șoferul a refuzat programarea (${existing.scheduledAt.toLocaleString('ro-RO')}): ${note}`,
+            body: `Șoferul a refuzat programarea (${existing.scheduledAt?.toLocaleString('ro-RO') ?? 'fără dată'}): ${note}`,
             payload: {
               appointmentId,
               serviceCaseId: existing.serviceCaseId,
@@ -3369,7 +3393,7 @@ export class ServiceCasesService {
     vehicleId: string;
     supplierId: string | null;
     title: string | null;
-    scheduledAt: Date;
+    scheduledAt: Date | null;
     durationMin: number;
     location: string | null;
     status: ServiceAppointmentStatus;
@@ -3397,8 +3421,10 @@ export class ServiceCasesService {
       supplierId: row.supplierId,
       supplierLegalName: row.supplier?.legalName ?? null,
       title,
-      scheduledAt: row.scheduledAt.toISOString(),
-      endAt: new Date(row.scheduledAt.getTime() + durationMin * 60_000).toISOString(),
+      scheduledAt: row.scheduledAt?.toISOString() ?? null,
+      endAt: row.scheduledAt
+        ? new Date(row.scheduledAt.getTime() + durationMin * 60_000).toISOString()
+        : null,
       durationMin,
       location: row.location,
       status: row.status,
@@ -3779,7 +3805,7 @@ export class ServiceCasesService {
         vehicleId: string;
         supplierId: string | null;
         title: string | null;
-        scheduledAt: Date;
+        scheduledAt: Date | null;
         durationMin: number;
         location: string | null;
         status: ServiceAppointmentStatus;

@@ -418,8 +418,8 @@ export type ServiceAppointmentRecord = {
   supplierId: string | null;
   supplierLegalName: string | null;
   title: string;
-  scheduledAt: string;
-  endAt: string;
+  scheduledAt: string | null;
+  endAt: string | null;
   durationMin: number;
   location: string | null;
   status: ServiceAppointmentStatus;

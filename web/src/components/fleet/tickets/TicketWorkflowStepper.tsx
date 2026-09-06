@@ -180,7 +180,8 @@ export function TicketWorkflowStepper({
   }
 
   async function createAppointment() {
-    if (!serviceCase || !scheduledAt) return;
+    if (!serviceCase) return;
+    if (!scheduledAt && !supplierId) return;
     setPending(true);
     setError(null);
     try {
@@ -188,7 +189,7 @@ export function TicketWorkflowStepper({
         method: "POST",
         headers: fleetJsonHeaders(),
         body: JSON.stringify({
-          scheduledAt: new Date(scheduledAt).toISOString(),
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
           supplierId: supplierId || null,
           location: appointmentLocation || null,
           notes: appointmentNotes || null,
@@ -468,9 +469,10 @@ export function TicketWorkflowStepper({
     }
   }
 
-  function formatAppointmentWhen(iso: string): string {
+  function formatAppointmentWhen(iso: string | null): string {
+    if (!iso) return "Fără dată — furnizorul propune";
     const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
+    if (Number.isNaN(d.getTime())) return "Fără dată — furnizorul propune";
     return d.toLocaleString("ro-RO");
   }
 
@@ -659,8 +661,13 @@ export function TicketWorkflowStepper({
                 <p className="text-xs uppercase text-zinc-500">Programări</p>
                 <Link
                   href={schedulerHref({
-                    week: new Date(serviceCase.appointments[0]!.scheduledAt),
+                    week: serviceCase.appointments[0]!.scheduledAt
+                      ? new Date(serviceCase.appointments[0]!.scheduledAt)
+                      : undefined,
                     select: serviceCase.appointments[0]!.id,
+                    inbox: serviceCase.appointments[0]!.scheduledAt
+                      ? undefined
+                      : "pending_supplier",
                   })}
                   className="text-[10px] font-medium text-emerald-400 hover:underline"
                 >
@@ -672,7 +679,11 @@ export function TicketWorkflowStepper({
                   <li key={appt.id} className="rounded-md border border-zinc-800/80 bg-zinc-900/40 p-2.5">
                     <div className="text-zinc-300">
                       <Link
-                        href={schedulerHref({ week: new Date(appt.scheduledAt), select: appt.id })}
+                        href={schedulerHref({
+                          week: appt.scheduledAt ? new Date(appt.scheduledAt) : undefined,
+                          select: appt.id,
+                          inbox: appt.scheduledAt ? undefined : "pending_supplier",
+                        })}
                         className="font-medium text-zinc-100 hover:text-emerald-300"
                       >
                         {formatAppointmentWhen(appt.scheduledAt)}
@@ -689,7 +700,11 @@ export function TicketWorkflowStepper({
                           {appt.driverDeclineNote ? `: ${appt.driverDeclineNote}` : ""}
                         </span>
                       ) : appt.status === "pending_supplier" ? (
-                        <span className="text-amber-400/90">Așteaptă validare furnizor</span>
+                        <span className="text-amber-400/90">
+                          {appt.scheduledAt
+                            ? "Așteaptă validare furnizor"
+                            : "Așteaptă ca furnizorul să propună data"}
+                        </span>
                       ) : appt.managerConfirmedAt ? (
                         <span className="text-emerald-400/90">Confirmat manager</span>
                       ) : (
@@ -707,6 +722,7 @@ export function TicketWorkflowStepper({
                     {!closed && appt.status !== "cancelled" ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {canOperate &&
+                        appt.scheduledAt &&
                         (appt.status === "pending_supplier" || appt.status === "needs_repropose") ? (
                           <button
                             type="button"
@@ -843,7 +859,7 @@ export function TicketWorkflowStepper({
                               </button>
                               <Link
                                 href={schedulerHref({
-                                  week: new Date(appt.scheduledAt),
+                                  week: appt.scheduledAt ? new Date(appt.scheduledAt) : undefined,
                                   select: appt.id,
                                   ticket: ticketId,
                                   returnToTicket: true,
@@ -902,13 +918,16 @@ export function TicketWorkflowStepper({
                 ) : null}
               </div>
               <div>
-                <label className={OPS_LABEL_CLASS}>Data și ora</label>
+                <label className={OPS_LABEL_CLASS}>Data și ora (opțional)</label>
                 <input
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={(e) => setScheduledAt(e.target.value)}
                   className={OPS_INPUT_CLASS}
                 />
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Lasă gol ca furnizorul să propună slotul. Cu dată = cerere pe intervalul ales.
+                </p>
               </div>
               <div>
                 <label className={OPS_LABEL_CLASS}>Furnizor / service</label>
@@ -931,11 +950,15 @@ export function TicketWorkflowStepper({
               </div>
               <button
                 type="button"
-                disabled={pending || !scheduledAt}
+                disabled={pending || (!scheduledAt && !supplierId)}
                 onClick={() => void createAppointment()}
                 className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
               >
-                {supplierId ? "Solicită programare la furnizor" : "Salvează programarea"}
+                {supplierId && !scheduledAt
+                  ? "Solicită programare — furnizorul propune data"
+                  : supplierId
+                    ? "Solicită programare la furnizor"
+                    : "Salvează programarea"}
               </button>
             </div>
           ) : null}

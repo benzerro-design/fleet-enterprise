@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  appointmentHasSlot,
   appointmentStatusLabel,
+  formatAppointmentSlot,
   type CalendarAppointment,
 } from "@/lib/appointments-api";
 import { supplierDotClass } from "./supplier-colors";
@@ -38,7 +40,12 @@ export function AppointmentQueueList({
   partnerMode,
   compact,
 }: Props) {
-  const sorted = [...appointments].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+  const sorted = [...appointments].sort((a, b) => {
+    if (!a.scheduledAt && !b.scheduledAt) return 0;
+    if (!a.scheduledAt) return -1;
+    if (!b.scheduledAt) return 1;
+    return a.scheduledAt.localeCompare(b.scheduledAt);
+  });
 
   if (sorted.length === 0) {
     return (
@@ -51,7 +58,6 @@ export function AppointmentQueueList({
   return (
     <ul className={`divide-y divide-zinc-800/80 overflow-y-auto ${compact ? "max-h-full" : ""}`}>
       {sorted.map((a) => {
-        const start = new Date(a.scheduledAt);
         const selected = a.id === selectedId;
         return (
           <li key={a.id}>
@@ -77,8 +83,7 @@ export function AppointmentQueueList({
                   </div>
                   <p className="mt-0.5 font-mono text-sm text-emerald-400/90">{a.registrationNumber}</p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    {start.toLocaleDateString("ro-RO", { weekday: "short", day: "numeric", month: "short" })}{" "}
-                    · {start.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}
+                    {formatAppointmentSlot(a.scheduledAt)}
                     {a.supplierCode ? ` · ${a.supplierCode}` : ""}
                   </p>
                   {(a.ticketDisplayId || a.workOrders.length > 0) ? (
@@ -109,7 +114,8 @@ export function AppointmentQueueList({
               {canWrite ? (
                 <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
                   {(a.status === "pending_supplier" || a.status === "needs_repropose") &&
-                  onSupplierValidate ? (
+                  onSupplierValidate &&
+                  appointmentHasSlot(a.scheduledAt) ? (
                     <button
                       type="button"
                       onClick={() => onSupplierValidate(a.id)}
@@ -126,7 +132,7 @@ export function AppointmentQueueList({
                       onClick={() => onProposeReschedule(a.id)}
                       className="rounded-md border border-amber-500/50 bg-amber-950/30 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-950/50"
                     >
-                      Propune altă dată
+                      {appointmentHasSlot(a.scheduledAt) ? "Propune altă dată" : "Propune dată"}
                     </button>
                   ) : null}
                   {a.status === "scheduled" && onConfirm && !partnerMode ? (

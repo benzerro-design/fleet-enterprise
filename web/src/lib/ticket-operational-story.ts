@@ -47,9 +47,10 @@ export type OperationalStoryInput = {
   roadside?: RoadsideInterventionRecord[] | null;
 };
 
-function fmt(iso: string): string {
+function fmt(iso: string | null | undefined): string {
+  if (!iso) return "Fără dată — furnizorul propune";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return "Fără dată — furnizorul propune";
   return d.toLocaleString("ro-RO", { dateStyle: "medium", timeStyle: "short" });
 }
 
@@ -103,6 +104,9 @@ export function operationalHeadline(
   }
   if (pendingAppt) {
     return `Programare ${fmt(pendingAppt.scheduledAt)}${pendingAppt.supplierLegalName ? ` la ${pendingAppt.supplierLegalName}` : ""} — confirmă.`;
+  }
+  if (appt?.status === "pending_supplier" && !appt.scheduledAt) {
+    return `Solicitare fără dată${appt.supplierLegalName ? ` la ${appt.supplierLegalName}` : ""} — așteaptă ca furnizorul să propună slotul.`;
   }
   if (appt?.managerConfirmedAt && !appt.driverAcknowledgedAt) {
     return "Managerul a confirmat — așteaptă Confirmă primire (șofer) ca să se deschidă comanda (WO).";
@@ -300,7 +304,9 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
           ? "Nicio programare încă."
           : "După deschiderea fluxului service.",
       detail: appt?.status === "pending_supplier"
-        ? "Propus de flotă — așteaptă validare furnizor."
+        ? appt.scheduledAt
+          ? "Propus de flotă — așteaptă validare furnizor."
+          : "Fără dată — așteaptă ca furnizorul să propună slotul."
         : appt?.status === "needs_repropose"
           ? "Șoferul nu poate la data curentă — reprogramare necesară."
           : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt

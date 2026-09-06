@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   APPOINTMENT_RECURRENCE,
+  appointmentHasSlot,
   appointmentsBrowserBase,
   appointmentStatusLabel,
+  formatAppointmentSlot,
   recurrenceLabel,
   workflowTypeLabel,
   type CalendarAppointment,
@@ -96,7 +98,7 @@ export function SchedulerInspector({
     if (!appointment) return;
     setEditScheduledAt(toDatetimeLocalValue(appointment.scheduledAt));
     setEditDurationMin(String(appointment.durationMin));
-    if (openInRescheduleMode) {
+    if (openInRescheduleMode || !appointmentHasSlot(appointment.scheduledAt)) {
       setEditing(true);
       onRescheduleEditingChange?.(true);
     } else {
@@ -326,6 +328,12 @@ export function SchedulerInspector({
 
   async function supplierValidate() {
     if (!appointment) return;
+    if (!appointmentHasSlot(appointment.scheduledAt)) {
+      setEditing(true);
+      onRescheduleEditingChange?.(true);
+      setError("Alege o dată, apoi propune slotul.");
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -541,7 +549,6 @@ export function SchedulerInspector({
     );
   }
 
-  const start = new Date(appointment.scheduledAt);
   const editable = canWrite && appointment.status !== "cancelled" && appointment.status !== "completed";
 
   const panel = (
@@ -666,7 +673,7 @@ export function SchedulerInspector({
           <dt className="text-xs uppercase text-zinc-500">Interval</dt>
           <dd className="mt-0.5 flex items-center gap-2">
             <span>
-              {start.toLocaleString("ro-RO")} · {appointment.durationMin} min
+              {formatAppointmentSlot(appointment.scheduledAt)} · {appointment.durationMin} min
             </span>
             {editable && !editing && appointment.status !== "pending_supplier" ? (
               <button
@@ -844,6 +851,7 @@ export function SchedulerInspector({
         <div className="mt-4 flex flex-wrap gap-2">
           {appointment.status === "pending_supplier" || appointment.status === "needs_repropose" ? (
             <>
+              {appointmentHasSlot(appointment.scheduledAt) ? (
               <button
                 type="button"
                 disabled={pending}
@@ -852,6 +860,7 @@ export function SchedulerInspector({
               >
                 Validează (furnizor)
               </button>
+              ) : null}
               {!editing ? (
                 <button
                   type="button"
@@ -861,7 +870,11 @@ export function SchedulerInspector({
                   }}
                   className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
                 >
-                  {appointment.status === "needs_repropose" ? "Propune / repropune dată" : "Propune altă dată"}
+                  {appointmentHasSlot(appointment.scheduledAt)
+                    ? appointment.status === "needs_repropose"
+                      ? "Propune / repropune dată"
+                      : "Propune altă dată"
+                    : "Propune dată"}
                 </button>
               ) : null}
             </>

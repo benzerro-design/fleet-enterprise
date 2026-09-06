@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {
   appointmentStatusLabel,
-  type CalendarAppointment,
+  type SlottedCalendarAppointment,
 } from "@/lib/appointments-api";
 import { addDays, isSameDay, startOfDay } from "@/lib/scheduler-date-utils";
 import { appointmentStatusAccentClass, appointmentStatusBadgeClass } from "./appointment-status-colors";
@@ -11,7 +11,7 @@ import { supplierDotClass } from "./supplier-colors";
 
 type Props = {
   weekStart: Date;
-  appointments: CalendarAppointment[];
+  appointments: SlottedCalendarAppointment[];
   selectedId: string | null;
   partnerMode?: boolean;
   onSelect: (id: string) => void;

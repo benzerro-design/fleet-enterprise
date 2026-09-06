@@ -15,7 +15,12 @@ import {
 } from "@/lib/partner-context";
 import { primarySupplierMembership } from "@/lib/partner-auth";
 import type { SupplierRecord } from "@/lib/suppliers-api";
-import type { AppointmentStats, CalendarAppointment } from "@/lib/appointments-api";
+import {
+  appointmentHasSlot,
+  formatAppointmentSlot,
+  type AppointmentStats,
+  type CalendarAppointment,
+} from "@/lib/appointments-api";
 import type { WorkOrderListPayload, WorkOrderStats } from "@/lib/work-orders-api";
 
 type Search = { supplierId?: string; suppliers?: string; inbox?: string };
@@ -79,9 +84,12 @@ async function loadPendingAppointments(
     const declined = declinedRes?.ok ? ((await declinedRes.json()) as CalendarAppointment[]) : [];
     const byId = new Map<string, CalendarAppointment>();
     for (const a of [...declined, ...pending]) byId.set(a.id, a);
-    return Array.from(byId.values()).sort(
-      (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
-    );
+    return Array.from(byId.values()).sort((a, b) => {
+      if (!a.scheduledAt && !b.scheduledAt) return 0;
+      if (!a.scheduledAt) return -1;
+      if (!b.scheduledAt) return 1;
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+    });
   } catch {
     return [];
   }
@@ -331,16 +339,15 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
               </thead>
               <tbody>
                 {pendingAppts.slice(0, 6).map((row) => {
-                  const past = new Date(row.scheduledAt).getTime() < Date.now();
+                  const past =
+                    appointmentHasSlot(row.scheduledAt) &&
+                    new Date(row.scheduledAt).getTime() < Date.now();
                   return (
                   <tr key={row.id} className="border-t border-zinc-800/80">
                     <td className="px-3 py-2 text-xs text-zinc-400">
-                      {new Date(row.scheduledAt).toLocaleString("ro-RO", {
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {appointmentHasSlot(row.scheduledAt)
+                        ? formatAppointmentSlot(row.scheduledAt)
+                        : "Fără dată — propune slot"}
                       {past ? (
                         <span className="ml-1.5 text-[10px] text-amber-400/90">(trecut)</span>
                       ) : null}

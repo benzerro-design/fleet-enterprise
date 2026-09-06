@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { CalendarAppointment } from "@/lib/appointments-api";
+import type { SlottedCalendarAppointment } from "@/lib/appointments-api";
 import {
   SCHEDULER_HOURS,
   PX_PER_HOUR,
@@ -25,7 +25,7 @@ type Lane = {
 
 type Props = {
   weekStart: Date;
-  appointments: CalendarAppointment[];
+  appointments: SlottedCalendarAppointment[];
   suppliers: SupplierOption[];
   supplierFilter: string[];
   selectedId: string | null;

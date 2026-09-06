@@ -23,8 +23,8 @@ export type CalendarWorkOrderSummary = {
 export type CalendarAppointment = {
   id: string;
   title: string;
-  scheduledAt: string;
-  endAt: string;
+  scheduledAt: string | null;
+  endAt: string | null;
   durationMin: number;
   status: AppointmentStatus;
   location: string | null;
@@ -104,4 +104,22 @@ export const APPOINTMENT_RECURRENCE: { value: AppointmentRecurrence; label: stri
 
 export function recurrenceLabel(rule: AppointmentRecurrence | string): string {
   return APPOINTMENT_RECURRENCE.find((r) => r.value === rule)?.label ?? rule;
+}
+
+export type SlottedCalendarAppointment = CalendarAppointment & { scheduledAt: string };
+
+export function appointmentHasSlot(
+  scheduledAt: string | null | undefined,
+): scheduledAt is string {
+  return Boolean(scheduledAt && !Number.isNaN(new Date(scheduledAt).getTime()));
+}
+
+export function formatAppointmentSlot(scheduledAt: string | null | undefined): string {
+  if (!appointmentHasSlot(scheduledAt)) return "Fără dată — furnizorul propune";
+  return new Date(scheduledAt).toLocaleString("ro-RO", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

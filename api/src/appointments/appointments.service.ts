@@ -111,7 +111,7 @@ export class AppointmentsService {
   private toCalendarRecord(row: {
     id: string;
     title: string | null;
-    scheduledAt: Date;
+    scheduledAt: Date | null;
     durationMin: number;
     status: ServiceAppointmentStatus;
     proposedByRole?: ServiceAppointmentProposedBy | null;
@@ -157,8 +157,8 @@ export class AppointmentsService {
     return {
       id: row.id,
       title,
-      scheduledAt: row.scheduledAt.toISOString(),
-      endAt: endAtIso(row.scheduledAt, row.durationMin),
+      scheduledAt: row.scheduledAt?.toISOString() ?? null,
+      endAt: row.scheduledAt ? endAtIso(row.scheduledAt, row.durationMin) : null,
       durationMin: row.durationMin,
       status: row.status,
       proposedByRole: row.proposedByRole ?? null,
@@ -237,7 +237,20 @@ export class AppointmentsService {
 
     const parts: Prisma.ServiceAppointmentWhereInput[] = [
       { tenantId },
-      { scheduledAt: { gte: from, lt: to } },
+      {
+        OR: [
+          { scheduledAt: { gte: from, lt: to } },
+          {
+            scheduledAt: null,
+            status: {
+              in: [
+                ServiceAppointmentStatus.pending_supplier,
+                ServiceAppointmentStatus.needs_repropose,
+              ],
+            },
+          },
+        ],
+      },
     ];
 
     const clientScope = this.appointmentClientScope(access);

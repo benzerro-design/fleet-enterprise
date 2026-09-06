@@ -1528,7 +1528,7 @@ model ServiceAppointment {
   vehicleId     String
   supplierId    String?
   title         String?
-  scheduledAt   DateTime
+  scheduledAt   DateTime?
   durationMin   Int                      @default(60)
   location      String?
   status               ServiceAppointmentStatus     @default(scheduled)

@@ -247,7 +247,7 @@ export class PartnerNotificationService {
         }),
         this.prisma.serviceAppointment.findMany({
           where: { ...apptBase, status: ServiceAppointmentStatus.pending_supplier },
-          orderBy: { scheduledAt: 'asc' },
+          orderBy: { scheduledAt: { sort: 'asc', nulls: 'first' } },
           take: PENDING_PER_KIND,
           select: {
             id: true,
@@ -279,12 +279,14 @@ export class PartnerNotificationService {
         id: row.id,
         kind: 'pending_supplier',
         href: `/fleet/partner/appointments?select=${encodeURIComponent(row.id)}&inbox=pending_supplier`,
-        title: row.scheduledAt.toLocaleString('ro-RO', {
-          day: 'numeric',
-          month: 'short',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        title: row.scheduledAt
+          ? row.scheduledAt.toLocaleString('ro-RO', {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : 'Fără dată — propune slot',
         subtitle: `${row.vehicle.registrationNumber} · ${row.title || 'Programare de validat'}`,
       });
     }
