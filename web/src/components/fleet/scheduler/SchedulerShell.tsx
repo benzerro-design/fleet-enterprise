@@ -237,6 +237,12 @@ export function SchedulerShell({
   );
 
   const selected = appointments.find((a) => a.id === selectedId) ?? null;
+  const slotClickMode =
+    rescheduleEditing && selectedId
+      ? selected && !appointmentHasSlot(selected.scheduledAt)
+        ? "propose"
+        : "reschedule"
+      : "create";
 
   const reschedule = useCallback(
     async (id: string, scheduledAt: Date) => {
@@ -430,7 +436,7 @@ export function SchedulerShell({
               onDeselect={clearSelection}
               onReschedule={canWrite ? reschedule : undefined}
               onSlotClick={canWrite ? handleSlotClick : undefined}
-              slotClickMode={rescheduleEditing && selectedId ? "reschedule" : "create"}
+              slotClickMode={slotClickMode}
               onStatusChange={canWrite ? setAppointmentStatus : undefined}
               onSupplierValidate={canWrite ? supplierValidateById : undefined}
               onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
@@ -449,7 +455,7 @@ export function SchedulerShell({
           onDeselect={clearSelection}
           onReschedule={canWrite ? reschedule : undefined}
           onSlotClick={canWrite ? handleSlotClick : undefined}
-          slotClickMode={rescheduleEditing && selectedId ? "reschedule" : "create"}
+          slotClickMode={slotClickMode}
           onStatusChange={canWrite ? setAppointmentStatus : undefined}
           onSupplierValidate={canWrite ? supplierValidateById : undefined}
           onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}

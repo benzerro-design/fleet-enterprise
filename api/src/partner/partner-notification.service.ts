@@ -286,7 +286,7 @@ export class PartnerNotificationService {
               hour: '2-digit',
               minute: '2-digit',
             })
-          : 'Fără dată — propune slot',
+          : 'Solicitare client — propune slot',
         subtitle: `${row.vehicle.registrationNumber} · ${row.title || 'Programare de validat'}`,
       });
     }

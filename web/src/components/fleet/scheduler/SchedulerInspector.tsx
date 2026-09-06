@@ -621,9 +621,13 @@ export function SchedulerInspector({
 
       {editing && editable ? (
         <div className="mb-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-          <p className="text-xs font-semibold uppercase text-zinc-500">Reprogramare</p>
+          <p className="text-xs font-semibold uppercase text-zinc-500">
+            {appointmentHasSlot(appointment.scheduledAt) ? "Reprogramare" : "Propune programare"}
+          </p>
           <p className="text-[11px] text-sky-300/90">
-            Click pe un slot liber din calendar ca să alegi data/ora vizual.
+            {appointmentHasSlot(appointment.scheduledAt)
+              ? "Click pe un slot liber din calendar ca să alegi data/ora vizual."
+              : "Clientul a solicitat un slot. Click pe un interval liber din calendar sau completează data."}
           </p>
           {returnTicketId ? (
             <p className="text-[11px] text-emerald-300/90">
@@ -646,13 +650,15 @@ export function SchedulerInspector({
               onClick={() => void saveReschedule()}
               className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              {appointment?.status === "pending_supplier" || appointment?.status === "needs_repropose"
-                ? partnerMode
-                  ? "Trimite reprogramare"
-                  : appointment.status === "needs_repropose"
-                    ? "Trimite propunere"
-                    : "Salvează"
-                : "Salvează"}
+              {!appointmentHasSlot(appointment.scheduledAt)
+                ? "Trimite propunere"
+                : appointment.status === "pending_supplier" || appointment.status === "needs_repropose"
+                  ? partnerMode
+                    ? "Trimite reprogramare"
+                    : appointment.status === "needs_repropose"
+                      ? "Trimite propunere"
+                      : "Salvează"
+                  : "Salvează"}
             </button>
             <button
               type="button"
@@ -673,7 +679,7 @@ export function SchedulerInspector({
           <dt className="text-xs uppercase text-zinc-500">Interval</dt>
           <dd className="mt-0.5 flex items-center gap-2">
             <span>
-              {formatAppointmentSlot(appointment.scheduledAt)} · {appointment.durationMin} min
+              {formatAppointmentSlot(appointment.scheduledAt, { partner: partnerMode })} · {appointment.durationMin} min
             </span>
             {editable && !editing && appointment.status !== "pending_supplier" ? (
               <button

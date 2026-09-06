@@ -83,8 +83,11 @@ export function AppointmentQueueList({
                   </div>
                   <p className="mt-0.5 font-mono text-sm text-emerald-400/90">{a.registrationNumber}</p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    {formatAppointmentSlot(a.scheduledAt)}
+                    {formatAppointmentSlot(a.scheduledAt, { partner: partnerMode })}
                     {a.supplierCode ? ` · ${a.supplierCode}` : ""}
+                    {!appointmentHasSlot(a.scheduledAt) && partnerMode
+                      ? " · solicitat de client"
+                      : ""}
                   </p>
                   {(a.ticketDisplayId || a.workOrders.length > 0) ? (
                     <p className="mt-1 font-mono text-[10px] text-zinc-400">

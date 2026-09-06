@@ -351,6 +351,9 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                       {past ? (
                         <span className="ml-1.5 text-[10px] text-amber-400/90">(trecut)</span>
                       ) : null}
+                      {!appointmentHasSlot(row.scheduledAt) ? (
+                        <div className="mt-0.5 text-[10px] text-amber-400/90">Solicitat de client</div>
+                      ) : null}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-zinc-300">{row.registrationNumber}</td>
                     <td className="px-3 py-2 text-zinc-300">{row.title}</td>
@@ -359,7 +362,7 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                         href={`${apptBase}${apptBase.includes("?") ? "&" : "?"}select=${row.id}&inbox=pending_supplier`}
                         className="text-xs text-amber-300 hover:underline"
                       >
-                        Validează →
+                        {appointmentHasSlot(row.scheduledAt) ? "Validează →" : "Propune slot →"}
                       </Link>
                     </td>
                   </tr>

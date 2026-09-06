@@ -114,8 +114,15 @@ export function appointmentHasSlot(
   return Boolean(scheduledAt && !Number.isNaN(new Date(scheduledAt).getTime()));
 }
 
-export function formatAppointmentSlot(scheduledAt: string | null | undefined): string {
-  if (!appointmentHasSlot(scheduledAt)) return "Fără dată — furnizorul propune";
+export function formatAppointmentSlot(
+  scheduledAt: string | null | undefined,
+  opts?: { partner?: boolean },
+): string {
+  if (!appointmentHasSlot(scheduledAt)) {
+    return opts?.partner
+      ? "Fără dată — clientul a solicitat slot"
+      : "Fără dată — furnizorul propune";
+  }
   return new Date(scheduledAt).toLocaleString("ro-RO", {
     day: "numeric",
     month: "short",
