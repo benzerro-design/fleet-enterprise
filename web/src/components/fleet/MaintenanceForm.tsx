@@ -214,58 +214,50 @@ export function MaintenanceForm(props: Props) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setPending(true);
+    if (pending || timelineConfirmOpen) return;
     setError(null);
     setOdometerSync(null);
 
     if (!isEdit && !boundVehicleId) {
       setError("Selectează vehiculul.");
-      setPending(false);
       return;
     }
 
     if (!costAllocationCode.trim()) {
       setError("Selectați criteriul de alocare costuri.");
-      setPending(false);
       return;
     }
 
     const parsedOdo = odometerKm.trim() ? Number(odometerKm) : null;
     if (parsedOdo != null && (!Number.isInteger(parsedOdo) || parsedOdo < 0)) {
       setError("Odometru invalid.");
-      setPending(false);
       return;
     }
     const parsedCost = warrantyRepair ? 0 : costCents.trim() ? parseRonToCents(costCents) : null;
     if (!warrantyRepair && costCents.trim() && parsedCost === null) {
       setError("Costul trebuie să fie în RON fără TVA (maxim 2 zecimale).");
-      setPending(false);
       return;
     }
     const parsedPotential =
       warrantyRepair && potentialCostCents.trim() ? parseRonToCents(potentialCostCents) : null;
     if (warrantyRepair && potentialCostCents.trim() && parsedPotential === null) {
       setError("Costul potențial trebuie să fie în RON fără TVA (maxim 2 zecimale).");
-      setPending(false);
       return;
     }
     const when = toIsoDate(performedAt);
     const invoiceWhen = invoiceDate.trim() ? new Date(`${invoiceDate}T12:00:00.000Z`) : null;
     if (invoiceDate.trim() && (!invoiceWhen || Number.isNaN(invoiceWhen.getTime()))) {
       setError("Data facturii este invalidă.");
-      setPending(false);
       return;
     }
     if (performedAt.trim() && !when) {
       setError("Data efectuării este invalidă.");
-      setPending(false);
       return;
     }
 
     const nextDue = constraintMode !== "km" ? toIsoDate(nextDueOn) : null;
     if (constraintMode !== "km" && nextDueOn.trim() && !nextDue) {
       setError("Data termenului este invalidă.");
-      setPending(false);
       return;
     }
     const kmDue = constraintMode !== "time" ? dueOdometerKm : null;
@@ -306,12 +298,10 @@ export function MaintenanceForm(props: Props) {
     const activeVehicleId = isEdit ? initial.vehicleId : boundVehicleId;
     if (parsedOdo != null && when && activeVehicleId) {
       const confirmed = await confirmIfNeeded(activeVehicleId, parsedOdo, when);
-      if (!confirmed) {
-        setPending(false);
-        return;
-      }
+      if (!confirmed) return;
     }
 
+    setPending(true);
     try {
       const url = isEdit ? `/api/maintenance/${props.entryId}` : "/api/maintenance";
       const method = isEdit ? "PATCH" : "POST";

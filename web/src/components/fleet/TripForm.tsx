@@ -162,44 +162,38 @@ export function TripForm(props: Props) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setPending(true);
+    if (pending || timelineConfirmOpen) return;
     setError(null);
     setOdometerSync(null);
 
     if (!isEdit && !boundVehicleId) {
       setError("Selectează vehiculul.");
-      setPending(false);
       return;
     }
 
     const startIso = toIsoFromDatetimeLocal(startedAt);
     if (!startIso) {
       setError("Data de start este invalidă.");
-      setPending(false);
       return;
     }
     const endIso = endedAt.trim() ? toIsoFromDatetimeLocal(endedAt) : null;
     if (endedAt.trim() && !endIso) {
       setError("Data de stop este invalidă.");
-      setPending(false);
       return;
     }
 
     const odoStart = parseOdometerKm(odometerStartKm);
     if (odometerStartKm.trim() && odoStart == null) {
       setError("Odometru start trebuie să fie un număr întreg >= 0.");
-      setPending(false);
       return;
     }
     const odoEnd = parseOdometerKm(odometerEndKm);
     if (odometerEndKm.trim() && odoEnd == null) {
       setError("Odometru final trebuie să fie un număr întreg >= 0.");
-      setPending(false);
       return;
     }
     if (odoStart != null && odoEnd != null && odoEnd < odoStart) {
       setError("Odometru final trebuie să fie >= odometru start.");
-      setPending(false);
       return;
     }
 
@@ -210,7 +204,6 @@ export function TripForm(props: Props) {
       const n = Number(distanceKm);
       if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
         setError("Distanța trebuie să fie un număr întreg >= 0.");
-        setPending(false);
         return;
       }
       parsedDistance = n;
@@ -235,12 +228,10 @@ export function TripForm(props: Props) {
     const eventIso = endIso ?? startIso;
     if (boundVehicleId && syncKm != null && eventIso) {
       const confirmed = await confirmIfNeeded(boundVehicleId, syncKm, eventIso);
-      if (!confirmed) {
-        setPending(false);
-        return;
-      }
+      if (!confirmed) return;
     }
 
+    setPending(true);
     try {
       const url = isEdit ? `/api/trips/${props.tripId}` : "/api/trips";
       const method = isEdit ? "PATCH" : "POST";

@@ -250,52 +250,45 @@ export function CostForm(props: Props) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setPending(true);
+    if (pending || timelineConfirmOpen) return;
     setError(null);
     setOdometerSync(null);
 
     const amount = parseRonToCents(amountCents);
     if (amount === null) {
       setError("Suma trebuie să fie în RON fără TVA (maxim 2 zecimale).");
-      setPending(false);
       return;
     }
     const when = toIsoDate(incurredOn);
     const odo = odometerKm.trim() ? Number(odometerKm) : null;
     if (odo != null && (!Number.isInteger(odo) || odo < 0)) {
       setError("Km trebuie să fie număr întreg >= 0.");
-      setPending(false);
       return;
     }
 
     const invoiceWhen = invoiceDate.trim() ? toIsoDate(invoiceDate) : null;
     if (invoiceDate.trim() && !invoiceWhen) {
       setError("Data facturii este invalidă.");
-      setPending(false);
       return;
     }
 
     if (!when) {
       setError("Data costului este invalidă.");
-      setPending(false);
       return;
     }
 
     if (!isEdit && !boundVehicleId) {
       setError("Selectează vehiculul.");
-      setPending(false);
       return;
     }
 
     if (!category.trim()) {
       setError("Alege o categorie.");
-      setPending(false);
       return;
     }
 
     if (driverPortal && !notes.trim()) {
       setError("Câmpul explicații este obligatoriu pentru această categorie.");
-      setPending(false);
       return;
     }
 
@@ -304,18 +297,15 @@ export function CostForm(props: Props) {
       const raw = fuelLiters.trim();
       if (!raw) {
         setError("Introdu litrii alimentați pentru costul de combustibil.");
-        setPending(false);
         return;
       }
       liters = Number(raw);
       if (!Number.isFinite(liters) || liters <= 0) {
         setError("Litrii alimentați trebuie să fie un număr pozitiv.");
-        setPending(false);
         return;
       }
       if (!fuelProductType) {
         setError("Alege tipul de carburant alimentat sau completează CIV P.3 în profilul vehiculului.");
-        setPending(false);
         return;
       }
     }
@@ -323,7 +313,6 @@ export function CostForm(props: Props) {
     const nextDue = constraintMode !== "km" ? toIsoDate(nextDueOn) : null;
     if (constraintMode !== "km" && nextDueOn.trim() && !nextDue) {
       setError("Data termenului este invalidă.");
-      setPending(false);
       return;
     }
     const kmDue = constraintMode !== "time" ? dueOdometerKm : null;
@@ -362,12 +351,10 @@ export function CostForm(props: Props) {
     const activeVehicleId = isEdit ? initial.vehicleId : boundVehicleId;
     if (odo != null && when && activeVehicleId) {
       const confirmed = await confirmIfNeeded(activeVehicleId, odo, when);
-      if (!confirmed) {
-        setPending(false);
-        return;
-      }
+      if (!confirmed) return;
     }
 
+    setPending(true);
     try {
       const url = isEdit ? `/api/costs/${props.entryId}` : "/api/costs";
       const method = isEdit ? "PATCH" : "POST";

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import type { OdometerPreviewPayload } from "@/lib/ops-odometer-preview";
 
 type Props = {
@@ -17,19 +18,47 @@ export function OpsOdometerTimelineConfirm({
   onConfirm,
   pending = false,
 }: Props) {
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onCancel]);
+
   if (!open || !preview) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <button
+        type="button"
+        aria-label="Închide"
+        className="absolute inset-0 cursor-default"
+        onClick={onCancel}
+      />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="odometer-timeline-confirm-title"
-        className="w-full max-w-lg rounded-xl border border-rose-900/50 bg-zinc-950 p-5 shadow-xl"
+        className="relative w-full max-w-lg rounded-xl border border-rose-900/50 bg-zinc-950 p-5 shadow-xl"
       >
-        <h3 id="odometer-timeline-confirm-title" className="text-base font-semibold text-rose-200">
-          Importanță majoră — dată și km
-        </h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 id="odometer-timeline-confirm-title" className="text-base font-semibold text-rose-200">
+            Importanță majoră — dată și km
+          </h3>
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Închide fereastra"
+            className="rounded-md px-2 py-1 text-lg leading-none text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+          >
+            ×
+          </button>
+        </div>
         <p className="mt-2 text-sm text-zinc-400">
           Combinația introdusă nu respectă ordinea din istoricul odometrului vehiculului.
         </p>
@@ -49,8 +78,7 @@ export function OpsOdometerTimelineConfirm({
           <button
             type="button"
             onClick={onCancel}
-            disabled={pending}
-            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
           >
             Anulează
           </button>
