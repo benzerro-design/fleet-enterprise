@@ -25,23 +25,22 @@ import type { WorkOrderListPayload, WorkOrderStats } from "@/lib/work-orders-api
 
 type Search = { supplierId?: string; suppliers?: string; inbox?: string };
 
-function PartnerVehicleCell({
+function dash(value?: string | null): string {
+  const t = value?.trim();
+  return t || "—";
+}
+
+function PlateWithVin({
   registrationNumber,
-  brand,
-  model,
   vin,
 }: {
   registrationNumber: string;
-  brand?: string | null;
-  model?: string | null;
   vin?: string | null;
 }) {
-  const spec = [brand, model].filter((x) => x?.trim()).join(" ");
   return (
-    <div className="text-xs">
-      <div className="font-mono text-zinc-200">{registrationNumber}</div>
-      {spec ? <div className="mt-0.5 text-zinc-400">{spec}</div> : null}
-      {vin?.trim() ? <div className="mt-0.5 font-mono text-[10px] text-zinc-500">VIN {vin}</div> : null}
+    <div>
+      <div className="font-mono text-xs text-zinc-200">{registrationNumber}</div>
+      {vin?.trim() ? <div className="mt-0.5 font-mono text-[10px] text-zinc-500">{vin}</div> : null}
     </div>
   );
 }
@@ -348,12 +347,14 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
         {!pendingAppts.length ? (
           <p className="text-sm text-zinc-500">Nicio programare așteaptă validarea dvs.</p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-zinc-800">
+          <div className="overflow-x-auto rounded-xl border border-zinc-800">
             <table className="w-full text-left text-sm">
               <thead className="bg-zinc-900/60 text-[10px] uppercase tracking-wide text-zinc-500">
                 <tr>
                   <th className="px-3 py-2">Data</th>
-                  <th className="px-3 py-2">Auto</th>
+                  <th className="px-3 py-2">Brand</th>
+                  <th className="px-3 py-2">Model</th>
+                  <th className="px-3 py-2">Nr. auto</th>
                   <th className="px-3 py-2">Titlu</th>
                   <th className="px-3 py-2">Status</th>
                 </tr>
@@ -376,11 +377,11 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                         <div className="mt-0.5 text-[10px] text-amber-400/90">Solicitat de client</div>
                       ) : null}
                     </td>
+                    <td className="px-3 py-2 text-xs text-zinc-300">{dash(row.vehicleBrand)}</td>
+                    <td className="px-3 py-2 text-xs text-zinc-300">{dash(row.vehicleModel)}</td>
                     <td className="px-3 py-2">
-                      <PartnerVehicleCell
+                      <PlateWithVin
                         registrationNumber={row.registrationNumber}
-                        brand={row.vehicleBrand}
-                        model={row.vehicleModel}
                         vin={row.vehicleVin}
                       />
                     </td>
@@ -412,12 +413,14 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
         {!recent?.items.length ? (
           <p className="text-sm text-zinc-500">Nicio comandă deschisă pentru furnizorul dvs.</p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-zinc-800">
+          <div className="overflow-x-auto rounded-xl border border-zinc-800">
             <table className="w-full text-left text-sm">
               <thead className="bg-zinc-900/60 text-[10px] uppercase tracking-wide text-zinc-500">
                 <tr>
                   <th className="px-3 py-2">Comandă</th>
-                  <th className="px-3 py-2">Auto</th>
+                  <th className="px-3 py-2">Brand</th>
+                  <th className="px-3 py-2">Model</th>
+                  <th className="px-3 py-2">Nr. auto</th>
                   <th className="px-3 py-2">Titlu</th>
                   <th className="px-3 py-2">Status</th>
                 </tr>
@@ -433,11 +436,11 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                         {row.displayNumber ?? row.id.slice(-6).toUpperCase()}
                       </Link>
                     </td>
+                    <td className="px-3 py-2 text-xs text-zinc-300">{dash(row.vehicleBrand)}</td>
+                    <td className="px-3 py-2 text-xs text-zinc-300">{dash(row.vehicleModel)}</td>
                     <td className="px-3 py-2">
-                      <PartnerVehicleCell
+                      <PlateWithVin
                         registrationNumber={row.registrationNumber}
-                        brand={row.vehicleBrand}
-                        model={row.vehicleModel}
                         vin={row.vehicleVin}
                       />
                     </td>
