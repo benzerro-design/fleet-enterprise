@@ -228,13 +228,20 @@ export function SchedulerShell({
     () => filterByInbox(appointments, inboxFilter),
     [appointments, inboxFilter],
   );
-  const slottedAppointments = useMemo(
-    () =>
-      filteredAppointments.filter((a): a is SlottedCalendarAppointment =>
-        appointmentHasSlot(a.scheduledAt),
-      ),
-    [filteredAppointments],
-  );
+  const slottedAppointments = useMemo(() => {
+    const base = filteredAppointments.filter((a): a is SlottedCalendarAppointment =>
+      appointmentHasSlot(a.scheduledAt),
+    );
+    const extra = appointments.find((a) => a.id === selectedId);
+    if (
+      extra &&
+      appointmentHasSlot(extra.scheduledAt) &&
+      !base.some((a) => a.id === extra.id)
+    ) {
+      return [...base, extra];
+    }
+    return base;
+  }, [filteredAppointments, appointments, selectedId]);
 
   const selected = appointments.find((a) => a.id === selectedId) ?? null;
   const slotClickMode =
@@ -292,6 +299,7 @@ export function SchedulerShell({
       });
       if (!res.ok) return;
       await load(true);
+      revealProposedAppointment(row?.scheduledAt ?? null);
     },
     [appointments, load],
   );
@@ -375,6 +383,19 @@ export function SchedulerShell({
   function setInbox(inbox: SchedulerInboxFilter) {
     setInboxFilter(inbox);
     syncUrlHistory({ inbox, select: selectedId });
+  }
+
+  function revealProposedAppointment(scheduledAt: string | null) {
+    setInboxFilter("scheduled");
+    if (scheduledAt) {
+      const week = startOfWeekMonday(new Date(scheduledAt));
+      if (!Number.isNaN(week.getTime())) {
+        setWeekStart(week);
+        syncUrlHistory({ inbox: "scheduled", week, select: selectedId });
+        return;
+      }
+    }
+    syncUrlHistory({ inbox: "scheduled", select: selectedId });
   }
 
   function openCreateAt(when: Date) {
@@ -610,6 +631,7 @@ export function SchedulerShell({
               setCreatePrefillAt(undefined);
               syncUrlHistory({ clearTicketLink: !returnTicketId });
             }}
+            onAfterSupplierPropose={revealProposedAppointment}
             onUpdated={() => {
               void load(true);
               setRescheduleEditing(false);
@@ -653,6 +675,7 @@ export function SchedulerShell({
             setCreatePrefillAt(undefined);
             syncUrlHistory({ clearTicketLink: !returnTicketId });
           }}
+          onAfterSupplierPropose={revealProposedAppointment}
           onUpdated={() => {
             void load(true);
             setRescheduleEditing(false);

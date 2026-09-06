@@ -17,6 +17,7 @@ import { primarySupplierMembership } from "@/lib/partner-auth";
 import type { SupplierRecord } from "@/lib/suppliers-api";
 import {
   appointmentHasSlot,
+  appointmentProcessLabel,
   formatAppointmentSlot,
   type AppointmentStats,
   type CalendarAppointment,
@@ -115,6 +116,37 @@ async function loadPendingAppointments(
   }
 }
 
+async function loadAwaitingValidationAppointments(
+  q: ReturnType<typeof parsePartnerSupplierQuery>,
+): Promise<CalendarAppointment[]> {
+  try {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const from = new Date(Date.now() - 365 * dayMs).toISOString();
+    const to = new Date(Date.now() + 365 * dayMs).toISOString();
+    const base = partnerSupplierSearchParams(q);
+    base.set("from", from);
+    base.set("to", to);
+    const [scheduledRes, confirmedRes] = await Promise.all([
+      fleetServerFetch(`/appointments/calendar?${new URLSearchParams({ ...Object.fromEntries(base), status: "scheduled" })}`),
+      fleetServerFetch(`/appointments/calendar?${new URLSearchParams({ ...Object.fromEntries(base), status: "confirmed" })}`),
+    ]);
+    const scheduled = scheduledRes?.ok ? ((await scheduledRes.json()) as CalendarAppointment[]) : [];
+    const confirmed = confirmedRes?.ok ? ((await confirmedRes.json()) as CalendarAppointment[]) : [];
+    const awaiting = [
+      ...scheduled,
+      ...confirmed.filter((a) => !a.managerConfirmedAt || !a.driverAcknowledgedAt),
+    ];
+    return awaiting.sort((a, b) => {
+      if (!a.scheduledAt && !b.scheduledAt) return 0;
+      if (!a.scheduledAt) return -1;
+      if (!b.scheduledAt) return 1;
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+    });
+  } catch {
+    return [];
+  }
+}
+
 async function loadRecentOrders(q: ReturnType<typeof parsePartnerSupplierQuery>): Promise<WorkOrderListPayload | null> {
   try {
     const p = new URLSearchParams({ inbox: "open", pageSize: "6" });
@@ -173,11 +205,12 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
     if (overview) return <PartnerAdminOverview overview={overview} />;
   }
 
-  const [stats, apptStats, recent, pendingAppts, viewAsSupplier] = await Promise.all([
+  const [stats, apptStats, recent, pendingAppts, awaitingAppts, viewAsSupplier] = await Promise.all([
     loadStats(supplierQuery),
     loadAppointmentStats(supplierQuery),
     loadRecentOrders(supplierQuery),
     loadPendingAppointments(supplierQuery),
+    loadAwaitingValidationAppointments(supplierQuery),
     supplierQuery.supplierId ? loadSupplierById(supplierQuery.supplierId) : Promise.resolve(null),
   ]);
 
@@ -309,9 +342,9 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
           )}
           {kpiCard(
             `${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=scheduled`,
-            "De confirmat flotă",
+            "În curs de validare",
             apptStats?.awaitingConfirm ?? apptStats?.scheduled ?? 0,
-            "Așteaptă manager flotă",
+            "Propunere trimisă — așteaptă flotă / șofer",
           )}
         </div>
       </div>
@@ -397,6 +430,62 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
                   </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-200">În curs de validare</h2>
+          <Link
+            href={`${apptBase}${apptBase.includes("?") ? "&" : "?"}inbox=scheduled`}
+            className="text-xs text-violet-400 hover:underline"
+          >
+            Programator →
+          </Link>
+        </div>
+        {!awaitingAppts.length ? (
+          <p className="text-sm text-zinc-500">Nicio propunere așteaptă confirmarea flotei sau a șoferului.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-dashed border-zinc-600/70">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-zinc-900/60 text-[10px] uppercase tracking-wide text-zinc-500">
+                <tr>
+                  <th className="px-3 py-2">Data</th>
+                  <th className="px-3 py-2">Brand</th>
+                  <th className="px-3 py-2">Model</th>
+                  <th className="px-3 py-2">Nr. auto</th>
+                  <th className="px-3 py-2">Titlu</th>
+                  <th className="px-3 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {awaitingAppts.slice(0, 6).map((row) => (
+                  <tr key={row.id} className="border-t border-dashed border-zinc-700/80">
+                    <td className="px-3 py-2 text-xs text-zinc-400">
+                      {formatAppointmentSlot(row.scheduledAt, { partner: true })}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-zinc-300">{dash(row.vehicleBrand)}</td>
+                    <td className="px-3 py-2 text-xs text-zinc-300">{dash(row.vehicleModel)}</td>
+                    <td className="px-3 py-2">
+                      <PlateWithVin
+                        registrationNumber={row.registrationNumber}
+                        vin={row.vehicleVin}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-zinc-300">{row.title}</td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`${apptBase}${apptBase.includes("?") ? "&" : "?"}select=${row.id}&inbox=scheduled`}
+                        className="text-xs text-sky-300 hover:underline"
+                      >
+                        {appointmentProcessLabel(row)} →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

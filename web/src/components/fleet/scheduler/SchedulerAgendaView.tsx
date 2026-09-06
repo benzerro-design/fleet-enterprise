@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import {
-  appointmentStatusLabel,
+  appointmentProcessLabel,
+  appointmentUsesDashedOutline,
   type SlottedCalendarAppointment,
 } from "@/lib/appointments-api";
 import { addDays, isSameDay, startOfDay } from "@/lib/scheduler-date-utils";
@@ -57,7 +58,11 @@ export function SchedulerAgendaView({ weekStart, appointments, selectedId, partn
                       className={`w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition-colors ${
                         selected
                           ? "ring-1 ring-emerald-500/50"
-                          : "border-zinc-800 hover:border-zinc-700"
+                          : "hover:border-zinc-700"
+                      } ${
+                        appointmentUsesDashedOutline(a)
+                          ? "border-dashed border-zinc-400/50"
+                          : "border-solid border-zinc-800"
                       } border-l-4 ${appointmentStatusAccentClass(a.status)}`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -76,7 +81,7 @@ export function SchedulerAgendaView({ weekStart, appointments, selectedId, partn
                         <span className={`inline-block h-1.5 w-1.5 rounded-full ${supplierDotClass(a.supplierCategory)}`} />
                         {a.supplierCode ?? "—"} ·{" "}
                         <span className={`rounded border px-1 py-0.5 ${appointmentStatusBadgeClass(a.status)}`}>
-                          {appointmentStatusLabel(a.status)}
+                          {appointmentProcessLabel(a)}
                         </span>
                       </div>
                       {(a.ticketDisplayId || a.workOrders.length > 0) ? (

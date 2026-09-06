@@ -28,9 +28,9 @@ export function SchedulerKpiStrip({ stats, activeInbox = "all", onInboxChange, p
     },
     {
       key: "scheduled",
-      label: partnerMode ? "De confirmat flotă" : "De confirmat",
+      label: "În curs de validare",
       value: stats?.awaitingConfirm ?? stats?.scheduled ?? 0,
-      warn: !partnerMode && (stats?.awaitingConfirm ?? stats?.scheduled ?? 0) > 0,
+      warn: (stats?.awaitingConfirm ?? stats?.scheduled ?? 0) > 0,
     },
     { key: "confirmed", label: "Confirmate", value: stats?.confirmed ?? 0 },
   ];
@@ -83,7 +83,7 @@ export function SchedulerStatusLegend() {
   const items = [
     { cls: appointmentStatusBadgeClass("pending_supplier"), label: "De validat" },
     { cls: appointmentStatusBadgeClass("needs_repropose"), label: "Șofer nu poate" },
-    { cls: appointmentStatusBadgeClass("scheduled"), label: "De confirmat" },
+    { cls: appointmentStatusBadgeClass("scheduled"), label: "În curs de validare" },
     { cls: appointmentStatusBadgeClass("confirmed"), label: "Confirmat" },
   ];
   return (
@@ -94,7 +94,7 @@ export function SchedulerStatusLegend() {
           {item.label}
         </span>
       ))}
-      <span className="text-zinc-600">· punct = categorie furnizor</span>
+      <span className="text-zinc-600">· punctat = în curs de validare · continuu = confirmat de toți</span>
     </div>
   );
 }

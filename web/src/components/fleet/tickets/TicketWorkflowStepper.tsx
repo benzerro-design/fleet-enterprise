@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
+import { appointmentProcessLabel } from "@/lib/appointments-api";
 import {
-  appointmentStatusLabel,
   formatQuoteMoney,
   quoteStatusLabel,
   serviceCasesBrowserBase,
@@ -689,7 +689,7 @@ export function TicketWorkflowStepper({
                         {formatAppointmentWhen(appt.scheduledAt)}
                       </Link>
                       {" · "}
-                      {appointmentStatusLabel(appt.status)}
+                      {appointmentProcessLabel(appt)}
                       {appt.supplierLegalName ? ` · ${appt.supplierLegalName}` : ""}
                       {appt.location ? ` · ${appt.location}` : ""}
                     </div>

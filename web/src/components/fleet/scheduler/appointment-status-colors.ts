@@ -46,7 +46,7 @@ export function appointmentStatusBadgeClass(status: AppointmentStatus | string):
 export const APPOINTMENT_STATUS_LEGEND: { status: AppointmentStatus; label: string }[] = [
   { status: "pending_supplier", label: "De validat (furnizor)" },
   { status: "needs_repropose", label: "Șofer nu poate" },
-  { status: "scheduled", label: "De confirmat (manager)" },
+  { status: "scheduled", label: "În curs de validare" },
   { status: "confirmed", label: "Confirmat" },
   { status: "completed", label: "Finalizat" },
   { status: "cancelled", label: "Anulat" },

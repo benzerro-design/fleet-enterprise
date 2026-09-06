@@ -525,7 +525,7 @@ export function serviceCaseStageLabel(stage: ServiceCaseStage): string {
 
 export function appointmentStatusLabel(status: ServiceAppointmentStatus | string): string {
   const map: Record<string, string> = {
-    scheduled: "Programat",
+    scheduled: "În curs de validare",
     pending_supplier: "Așteaptă validare furnizor",
     needs_repropose: "Șofer nu poate — reprogramare",
     confirmed: "Confirmat",

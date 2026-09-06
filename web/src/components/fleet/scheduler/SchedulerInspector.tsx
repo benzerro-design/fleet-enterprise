@@ -6,7 +6,7 @@ import {
   APPOINTMENT_RECURRENCE,
   appointmentHasSlot,
   appointmentsBrowserBase,
-  appointmentStatusLabel,
+  appointmentProcessLabel,
   formatAppointmentSlot,
   recurrenceLabel,
   workflowTypeLabel,
@@ -51,6 +51,8 @@ type Props = {
   /** După trimiterea repropunerii, întoarce la tichet. */
   returnTicketId?: string | null;
   onReturnToTicket?: () => void;
+  /** După propunere / validare furnizor — arată programarea pe grilă. */
+  onAfterSupplierPropose?: (scheduledAt: string | null) => void;
 };
 
 export function SchedulerInspector({
@@ -77,6 +79,7 @@ export function SchedulerInspector({
   onCalendarPickConsumed,
   returnTicketId,
   onReturnToTicket,
+  onAfterSupplierPropose,
 }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -350,6 +353,7 @@ export function SchedulerInspector({
         setError(j.message ?? `HTTP ${res.status}`);
         return;
       }
+      onAfterSupplierPropose?.(appointment.scheduledAt);
       onUpdated();
     } finally {
       setPending(false);
@@ -379,6 +383,7 @@ export function SchedulerInspector({
       }
       setEditing(false);
       onRescheduleEditingChange?.(false);
+      onAfterSupplierPropose?.(new Date(editScheduledAt).toISOString());
       onUpdated();
       onReturnToTicket?.();
     } finally {
@@ -700,7 +705,7 @@ export function SchedulerInspector({
         </div>
         <div>
           <dt className="text-xs uppercase text-zinc-500">Status</dt>
-          <dd className="mt-0.5">{appointmentStatusLabel(appointment.status)}</dd>
+          <dd className="mt-0.5">{appointmentProcessLabel(appointment)}</dd>
           {appointment.cancellationRequestedAt ? (
             <p className="mt-1 rounded border border-rose-800/50 bg-rose-950/30 px-2 py-1 text-[10px] text-rose-200">
               Anulare solicitată

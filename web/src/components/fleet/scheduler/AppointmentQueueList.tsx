@@ -2,7 +2,8 @@
 
 import {
   appointmentHasSlot,
-  appointmentStatusLabel,
+  appointmentProcessLabel,
+  appointmentUsesDashedOutline,
   formatAppointmentSlot,
   type CalendarAppointment,
 } from "@/lib/appointments-api";
@@ -74,6 +75,8 @@ export function AppointmentQueueList({
               }}
               className={`cursor-pointer border-l-4 px-3 py-3 transition-colors ${
                 selected ? "bg-zinc-800/50 ring-1 ring-inset ring-emerald-500/30" : "hover:bg-zinc-900/60"
+              } ${
+                appointmentUsesDashedOutline(a) ? "border-y border-r border-dashed border-zinc-500/40" : ""
               } ${appointmentStatusAccentClass(a.status)}`}
             >
               <div className="flex items-start justify-between gap-2">
@@ -107,7 +110,7 @@ export function AppointmentQueueList({
                 <span
                   className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${appointmentStatusBadgeClass(a.status)}`}
                 >
-                  {appointmentStatusLabel(a.status)}
+                  {appointmentProcessLabel(a)}
                 </span>
               </div>
               {a.cancellationRequestedAt ? (

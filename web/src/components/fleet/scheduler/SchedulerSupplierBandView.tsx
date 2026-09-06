@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { SlottedCalendarAppointment } from "@/lib/appointments-api";
+import { appointmentUsesDashedOutline, type SlottedCalendarAppointment } from "@/lib/appointments-api";
 import {
   SCHEDULER_HOURS,
   PX_PER_HOUR,
@@ -137,7 +137,11 @@ export function SchedulerSupplierBandView({
                           type="button"
                           onClick={() => onSelect(a.id)}
                           className={`absolute left-0.5 right-0.5 overflow-hidden rounded border border-l-[3px] px-1 py-0.5 text-left text-[9px] leading-tight ${
-                            selected ? "z-10 ring-1 ring-emerald-500/50" : "border-zinc-700/80 hover:brightness-110"
+                            selected ? "z-10 ring-1 ring-emerald-500/50" : "hover:brightness-110"
+                          } ${
+                            appointmentUsesDashedOutline(a)
+                              ? "border-dashed border-zinc-400/70"
+                              : "border-solid border-zinc-600/80"
                           } ${appointmentStatusAccentClass(a.status)}`}
                           style={{
                             top: topOffsetForTime(start),

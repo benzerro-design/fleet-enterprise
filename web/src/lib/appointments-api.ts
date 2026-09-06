@@ -73,7 +73,7 @@ export type AppointmentStats = {
 };
 
 export const APPOINTMENT_STATUSES: { value: AppointmentStatus; label: string }[] = [
-  { value: "scheduled", label: "Programat" },
+  { value: "scheduled", label: "În curs de validare" },
   { value: "pending_supplier", label: "Așteaptă furnizor" },
   { value: "needs_repropose", label: "Șofer nu poate — reprogramare" },
   { value: "confirmed", label: "Confirmat" },
@@ -84,6 +84,49 @@ export const APPOINTMENT_STATUSES: { value: AppointmentStatus; label: string }[]
 
 export function appointmentStatusLabel(status: AppointmentStatus | string): string {
   return APPOINTMENT_STATUSES.find((s) => s.value === status)?.label ?? status;
+}
+
+export function appointmentIsFullyValidated(a: {
+  status?: string | null;
+  managerConfirmedAt?: string | null;
+  driverAcknowledgedAt?: string | null;
+}): boolean {
+  if (a.status === "cancelled" || a.status === "completed" || a.status === "no_show") return false;
+  return Boolean(a.managerConfirmedAt && a.driverAcknowledgedAt);
+}
+
+/** Chenar punctat până confirmă furnizor + manager + șofer. */
+export function appointmentUsesDashedOutline(a: {
+  status?: string | null;
+  scheduledAt?: string | null;
+  managerConfirmedAt?: string | null;
+  driverAcknowledgedAt?: string | null;
+}): boolean {
+  if (a.status === "cancelled" || a.status === "completed" || a.status === "no_show") return false;
+  if (!appointmentHasSlot(a.scheduledAt)) return false;
+  return !appointmentIsFullyValidated(a);
+}
+
+export function appointmentProcessLabel(a: {
+  status: string;
+  scheduledAt?: string | null;
+  managerConfirmedAt?: string | null;
+  driverAcknowledgedAt?: string | null;
+}): string {
+  if (a.status === "cancelled") return "Anulat";
+  if (a.status === "completed") return "Finalizat";
+  if (a.status === "no_show") return "Neprezentare";
+  if (a.status === "needs_repropose") return "Șofer nu poate — reprogramare";
+  if (a.status === "pending_supplier" && !appointmentHasSlot(a.scheduledAt)) {
+    return "Așteaptă propunere slot";
+  }
+  if (a.status === "pending_supplier") return "Așteaptă furnizor";
+  if (appointmentIsFullyValidated(a) || a.status === "confirmed") {
+    return a.driverAcknowledgedAt && a.managerConfirmedAt
+      ? "Confirmat"
+      : "În curs de validare";
+  }
+  return "În curs de validare";
 }
 
 export function workflowTypeLabel(type: string): string {

@@ -3,7 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SlottedCalendarAppointment } from "@/lib/appointments-api";
-import { appointmentStatusLabel, workflowTypeLabel } from "@/lib/appointments-api";
+import {
+  appointmentProcessLabel,
+  appointmentUsesDashedOutline,
+  workflowTypeLabel,
+} from "@/lib/appointments-api";
 import {
   SCHEDULER_HOURS,
   PX_PER_HOUR,
@@ -70,7 +74,7 @@ function appointmentHoverDetail(a: SlottedCalendarAppointment): string {
     `${start.toLocaleString("ro-RO")} · ${a.durationMin} min`,
     `${a.registrationNumber} · ${a.clientCode}`,
     workflowTypeLabel(a.workflowType),
-    appointmentStatusLabel(a.status),
+    appointmentProcessLabel(a),
     a.supplierLegalName ? `Furnizor: ${a.supplierLegalName}` : null,
     a.title,
     a.location,
@@ -116,7 +120,9 @@ function AppointmentBlock({
       } ${
         selected
           ? "z-10 ring-1 ring-emerald-500/50"
-          : "border-zinc-700/80 hover:brightness-110"
+          : "hover:brightness-110"
+      } ${
+        appointmentUsesDashedOutline(a) ? "border-dashed border-zinc-400/70" : "border-solid border-zinc-600/80"
       } ${appointmentStatusAccentClass(a.status)}`}
       style={{
         top: topOffsetForTime(start),
@@ -130,7 +136,7 @@ function AppointmentBlock({
       <div className="truncate text-zinc-400">{a.title}</div>
       <div className="flex items-center gap-1 truncate text-zinc-500">
         <span className={`inline-block h-1 w-1 shrink-0 rounded-full ${supplierDotClass(a.supplierCategory)}`} />
-        {a.supplierCode ?? appointmentStatusLabel(a.status)}
+        {a.supplierCode ?? appointmentProcessLabel(a)}
       </div>
       <div
         role="tooltip"
