@@ -160,6 +160,32 @@ export function appointmentHasSlot(
   return Boolean(scheduledAt && !Number.isNaN(new Date(scheduledAt).getTime()));
 }
 
+/** Slot pe masă, înainte de Confirmă — managerul poate trimite altă oră la furnizor. */
+export function appointmentFleetCanCounterPropose(a: {
+  status: string;
+  scheduledAt?: string | null;
+  managerConfirmedAt?: string | null;
+  driverAcknowledgedAt?: string | null;
+}): boolean {
+  return (
+    a.status === "scheduled" &&
+    appointmentHasSlot(a.scheduledAt) &&
+    !a.managerConfirmedAt &&
+    !a.driverAcknowledgedAt
+  );
+}
+
+export function appointmentFleetCanRepropose(a: {
+  status: string;
+  scheduledAt?: string | null;
+  managerConfirmedAt?: string | null;
+  driverAcknowledgedAt?: string | null;
+  driverDeclinedAt?: string | null;
+}): boolean {
+  if (a.status === "needs_repropose" || Boolean(a.driverDeclinedAt)) return true;
+  return appointmentFleetCanCounterPropose(a);
+}
+
 export function formatAppointmentSlot(
   scheduledAt: string | null | undefined,
   opts?: { partner?: boolean },

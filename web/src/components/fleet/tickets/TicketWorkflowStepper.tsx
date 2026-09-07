@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
-import { appointmentProcessLabel } from "@/lib/appointments-api";
+import { appointmentFleetCanCounterPropose, appointmentProcessLabel } from "@/lib/appointments-api";
 import {
   formatQuoteMoney,
   quoteStatusLabel,
@@ -778,7 +778,8 @@ export function TicketWorkflowStepper({
                             </button>
                           </>
                         ) : null}
-                        {canOperate && appt.status === "needs_repropose" ? (
+                        {canOperate &&
+                        (appt.status === "needs_repropose" || appointmentFleetCanCounterPropose(appt)) ? (
                           <button
                             type="button"
                             disabled={pending}

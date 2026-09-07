@@ -3011,10 +3011,15 @@ export class ServiceCasesService {
     if (!existing) throw new NotFoundException('Appointment not found');
     if (access) assertServiceCaseWrite(access, existing.serviceCase.clientId);
 
-    const canRepropose =
+    const canReproposeAfterDriverDecline =
       existing.status === ServiceAppointmentStatus.needs_repropose ||
       !!existing.driverDeclinedAt;
-    if (!canRepropose) {
+    const canCounterProposeBeforeConfirm =
+      existing.status === ServiceAppointmentStatus.scheduled &&
+      !!existing.scheduledAt &&
+      !existing.managerConfirmedAt &&
+      !existing.driverAcknowledgedAt;
+    if (!canReproposeAfterDriverDecline && !canCounterProposeBeforeConfirm) {
       throw new BadRequestException('Appointment is not awaiting reproposal');
     }
 

@@ -112,7 +112,7 @@ export function operationalHeadline(
     return "Managerul a confirmat — așteaptă Confirmă primire (șofer) ca să se deschidă comanda (WO).";
   }
   if (appt && !appt.managerConfirmedAt) {
-    return "Programare stabilită — confirmă cu service-ul și șoferul.";
+    return "Slot pe masă — confirmă sau propune altă oră către furnizor.";
   }
   if (serviceCase.currentStage === "scheduled" || !appt) {
     return "Stabilește programarea la service (dată, furnizor).";
@@ -314,7 +314,7 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
             : appt?.managerConfirmedAt && appt.driverAcknowledgedAt
               ? "Confirmată de manager și șofer."
               : appt
-                ? "De confirmat cu service și șofer."
+                ? "Slot pe masă — confirmă sau propune altă oră către furnizor."
                 : undefined,
     },
     {

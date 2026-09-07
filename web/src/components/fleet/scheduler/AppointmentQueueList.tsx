@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  appointmentFleetCanRepropose,
   appointmentHasSlot,
   appointmentProcessLabel,
   appointmentUsesDashedOutline,
@@ -153,6 +154,17 @@ export function AppointmentQueueList({
                       className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-500"
                     >
                       Confirmă
+                    </button>
+                  ) : null}
+                  {!partnerMode &&
+                  onProposeReschedule &&
+                  appointmentFleetCanRepropose(a) ? (
+                    <button
+                      type="button"
+                      onClick={() => onProposeReschedule(a.id)}
+                      className="rounded-md border border-amber-500/50 bg-amber-950/30 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-950/50"
+                    >
+                      Propune altă oră
                     </button>
                   ) : null}
                   {a.status !== "cancelled" && a.status !== "completed" && onCancel && !partnerMode ? (

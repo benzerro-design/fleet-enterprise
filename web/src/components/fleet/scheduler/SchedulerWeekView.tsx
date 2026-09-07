@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SlottedCalendarAppointment } from "@/lib/appointments-api";
 import {
+  appointmentFleetCanRepropose,
   appointmentProcessLabel,
   appointmentUsesDashedOutline,
   workflowTypeLabel,
@@ -40,6 +41,7 @@ type Props = {
   onStatusChange?: (id: string, status: "confirmed" | "cancelled") => Promise<void>;
   onSupplierValidate?: (id: string) => Promise<void>;
   onRequestCancel?: (id: string) => Promise<void>;
+  onProposeReschedule?: (id: string) => void;
 };
 
 type DragState = {
@@ -162,6 +164,7 @@ export function SchedulerWeekView({
   onStatusChange,
   onSupplierValidate,
   onRequestCancel,
+  onProposeReschedule,
 }: Props) {
   const router = useRouter();
   const days = dayLabels(weekStart);
@@ -507,6 +510,21 @@ export function SchedulerWeekView({
               }}
             >
               Confirmă programare
+            </button>
+          ) : null}
+          {canWrite &&
+          !partnerMode &&
+          onProposeReschedule &&
+          appointmentFleetCanRepropose(ctxMenu.appt) ? (
+            <button
+              type="button"
+              className="block w-full px-3 py-1.5 text-left text-xs text-amber-200 hover:bg-zinc-800"
+              onClick={() => {
+                onProposeReschedule(ctxMenu.appt.id);
+                setCtxMenu(null);
+              }}
+            >
+              Propune altă oră
             </button>
           ) : null}
           {canWrite &&

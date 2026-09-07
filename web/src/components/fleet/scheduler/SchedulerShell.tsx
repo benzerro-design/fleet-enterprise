@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  appointmentFleetCanRepropose,
   appointmentHasSlot,
   appointmentsBrowserBase,
   type AppointmentStats,
@@ -247,6 +248,17 @@ export function SchedulerShell({
 
   const reschedule = useCallback(
     async (id: string, scheduledAt: Date) => {
+      const row = appointments.find((a) => a.id === id);
+      if (!partnerMode && row && appointmentFleetCanRepropose(row)) {
+        const res = await fetch(`${serviceCasesBrowserBase}/appointments/${id}/repropose`, {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({ scheduledAt: scheduledAt.toISOString() }),
+        });
+        if (!res.ok) return;
+        await load(true);
+        return;
+      }
       const res = await fetch(`${appointmentsBrowserBase}/${id}`, {
         method: "PATCH",
         headers: fleetJsonHeaders(),
@@ -255,7 +267,7 @@ export function SchedulerShell({
       if (!res.ok) return;
       await load(true);
     },
-    [load],
+    [appointments, load, partnerMode],
   );
 
   const setAppointmentStatus = useCallback(
@@ -432,9 +444,7 @@ export function SchedulerShell({
                 onRequestCancel={
                   canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
                 }
-                onProposeReschedule={
-                  canWrite && partnerMode ? (id) => proposeAlternateDate(id) : undefined
-                }
+                onProposeReschedule={canWrite ? (id) => proposeAlternateDate(id) : undefined}
                 partnerMode={partnerMode}
                 compact
               />
@@ -455,6 +465,7 @@ export function SchedulerShell({
               onStatusChange={canWrite ? setAppointmentStatus : undefined}
               onSupplierValidate={canWrite ? supplierValidateById : undefined}
               onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
+              onProposeReschedule={canWrite ? proposeAlternateDate : undefined}
             />
           </div>
         </div>
@@ -474,6 +485,7 @@ export function SchedulerShell({
           onStatusChange={canWrite ? setAppointmentStatus : undefined}
           onSupplierValidate={canWrite ? supplierValidateById : undefined}
           onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
+          onProposeReschedule={canWrite ? proposeAlternateDate : undefined}
         />
       ) : null}
       {viewMode === "bands" ? (
@@ -499,9 +511,7 @@ export function SchedulerShell({
             onRequestCancel={
               canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
             }
-            onProposeReschedule={
-              canWrite && partnerMode ? (id) => proposeAlternateDate(id) : undefined
-            }
+            onProposeReschedule={canWrite ? (id) => proposeAlternateDate(id) : undefined}
             partnerMode={partnerMode}
           />
         </div>

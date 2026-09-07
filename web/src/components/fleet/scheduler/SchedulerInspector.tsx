@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   APPOINTMENT_RECURRENCE,
+  appointmentFleetCanCounterPropose,
+  appointmentFleetCanRepropose,
   appointmentHasSlot,
   appointmentsBrowserBase,
   appointmentProcessLabel,
@@ -262,7 +264,7 @@ export function SchedulerInspector({
       await supplierValidateWithReschedule();
       return;
     }
-    if (appointment.status === "needs_repropose" && !partnerMode) {
+    if (!partnerMode && appointmentFleetCanRepropose(appointment)) {
       setPending(true);
       setError(null);
       try {
@@ -660,12 +662,12 @@ export function SchedulerInspector({
             >
               {!appointmentHasSlot(appointment.scheduledAt)
                 ? "Trimite propunere"
-                : appointment.status === "pending_supplier" || appointment.status === "needs_repropose"
+                : appointment.status === "pending_supplier" ||
+                    appointment.status === "needs_repropose" ||
+                    appointmentFleetCanCounterPropose(appointment)
                   ? partnerMode
                     ? "Trimite altă oră"
-                    : appointment.status === "needs_repropose"
-                      ? "Trimite propunere"
-                      : "Salvează"
+                    : "Trimite propunere"
                   : "Salvează"}
             </button>
             <button
@@ -689,7 +691,10 @@ export function SchedulerInspector({
             <span>
               {formatAppointmentSlot(appointment.scheduledAt, { partner: partnerMode })} · {appointment.durationMin} min
             </span>
-            {editable && !editing && appointment.status !== "pending_supplier" ? (
+            {editable &&
+            !editing &&
+            appointment.status !== "pending_supplier" &&
+            !appointmentFleetCanCounterPropose(appointment) ? (
               <button
                 type="button"
                 onClick={() => {
@@ -898,14 +903,28 @@ export function SchedulerInspector({
             </>
           ) : null}
           {appointment.status === "scheduled" && !partnerMode ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => void confirmAppointment()}
-              className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              Confirmă (manager)
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void confirmAppointment()}
+                className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                Confirmă (manager)
+              </button>
+              {!editing && appointmentFleetCanCounterPropose(appointment) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(true);
+                    onRescheduleEditingChange?.(true);
+                  }}
+                  className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
+                >
+                  Propune altă oră
+                </button>
+              ) : null}
+            </>
           ) : null}
           {appointment.status === "scheduled" && partnerMode ? (
             <p className="w-full rounded-lg border border-sky-800/40 bg-sky-950/20 px-2.5 py-2 text-[11px] text-sky-200">
