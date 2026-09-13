@@ -5,6 +5,11 @@ export type ClientMembershipContext = {
   clientCode: string;
   role: ClientRole;
   driverId: string | null;
+  iamSettings: {
+    allowClientOcr: boolean;
+    allowClientAcquisition: boolean;
+    requireDriverAck: boolean;
+  };
 };
 
 export type SupplierMembershipContext = {

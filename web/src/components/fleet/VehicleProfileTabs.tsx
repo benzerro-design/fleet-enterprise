@@ -49,6 +49,8 @@ type Props = {
   consumption: ConsumptionPayload | null;
   /** true după fetch server (tab=consumption); false = încă nu s-a cerut */
   consumptionRequested?: boolean;
+  showAcquisition?: boolean;
+  civWrite?: boolean;
 };
 
 export function VehicleProfileTabs({
@@ -66,11 +68,19 @@ export function VehicleProfileTabs({
   driverAssignments,
   consumption,
   consumptionRequested = false,
+  showAcquisition = true,
+  civWrite,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const visibleTabs = useMemo(
+    () => TABS.filter((tab) => tab.id !== "acquisition" || showAcquisition),
+    [showAcquisition],
+  );
+
   const active = useMemo((): VehicleProfileTab => {
     const t = searchParams.get("tab");
+    if (t === "acquisition" && !showAcquisition) return "basic";
     if (
       t === "advanced" ||
       t === "acquisition" ||
@@ -84,7 +94,7 @@ export function VehicleProfileTabs({
       return t;
     }
     return "basic";
-  }, [searchParams]);
+  }, [searchParams, showAcquisition]);
 
   const planItemHighlight = searchParams.get("planItem");
 
@@ -101,7 +111,7 @@ export function VehicleProfileTabs({
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/50">
       <div className="border-b border-zinc-800 px-4 pt-4">
         <div className="flex flex-wrap gap-2">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -123,7 +133,7 @@ export function VehicleProfileTabs({
           <VehicleBasicInfoTab vehicle={vehicle} write={write} lockClient={lockClient} />
         ) : null}
         {active === "advanced" ? (
-          <VehicleAdvancedCivTab vehicle={vehicle} write={write} initial={civ} />
+          <VehicleAdvancedCivTab vehicle={vehicle} write={civWrite ?? write} initial={civ} />
         ) : null}
         {active === "acquisition" ? (
           <VehicleAcquisitionTab vehicleId={vehicle.id} write={write} initial={acquisition} />

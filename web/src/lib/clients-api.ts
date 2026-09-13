@@ -70,6 +70,7 @@ export type ClientProfileTab =
   | "subscription"
   | "mail"
   | "pricing"
+  | "iam"
   | "suppliers";
 
 export type ClientSupplierAllocationItem = {

@@ -224,6 +224,28 @@ export class ClientsController {
     return this.clients.patchPricingSettings(tenantSlug, id, body, actorUserId, access);
   }
 
+  @Get(':id/iam-settings')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  getIamSettings(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.getIamSettings(tenantSlug, id, access);
+  }
+
+  @Patch(':id/iam-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchIamSettings(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.patchIamSettings(tenantSlug, id, body, actorUserId, access);
+  }
+
   @Get(':id/supplier-allocations')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   listSupplierAllocations(

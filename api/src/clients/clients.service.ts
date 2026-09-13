@@ -32,6 +32,11 @@ import {
   parseClientPricingSettingsPatch,
   type ClientPricingSettings,
 } from './client-pricing-settings';
+import {
+  parseClientIamSettings,
+  parseClientIamSettingsPatch,
+  type ClientIamSettings,
+} from '../iam/client-iam-settings';
 
 export type { ClientSubscriptionRow, DriverRecord, ClientMailSettings, ClientPricingSettings };
 
@@ -651,6 +656,58 @@ export class ClientsService {
       entityType: 'client',
       entityId: row.id,
       meta: { partsPriceSuspectPercent: next.partsPriceSuspectPercent },
+    });
+
+    return next;
+  }
+
+  async getIamSettings(
+    tenantSlug: string,
+    id: string,
+    access?: AccessContext,
+  ): Promise<ClientIamSettings> {
+    const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
+    return parseClientIamSettings(row.iamSettings);
+  }
+
+  async patchIamSettings(
+    tenantSlug: string,
+    id: string,
+    body: unknown,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ClientIamSettings> {
+    const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide) {
+      throw new ForbiddenException('Only tenant admin can change client IAM settings');
+    }
+    let patch: Partial<ClientIamSettings>;
+    try {
+      patch = parseClientIamSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid body');
+    }
+
+    const next: ClientIamSettings = {
+      ...parseClientIamSettings(row.iamSettings),
+      ...patch,
+    };
+
+    await this.prisma.client.update({
+      where: { id: row.id },
+      data: { iamSettings: next as unknown as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: row.tenantId,
+      actorUserId,
+      action: 'client.iam_settings_update',
+      entityType: 'client',
+      entityId: row.id,
+      meta: next,
     });
 
     return next;

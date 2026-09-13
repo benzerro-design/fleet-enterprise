@@ -34,6 +34,7 @@ import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
 import { vehicleClientScope } from '../iam/client-access';
 import { tripOpsVehicleScope } from '../iam/driver-access';
+import { assertClientIamFeature } from '../iam/client-iam-settings';
 import { assertClientCodeOpsWrite, assertDriverMediaWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import {
   buildOdometerSyncPrimaryMessage,
@@ -534,6 +535,7 @@ export class FleetService {
     access?: AccessContext,
   ): Promise<CivExtractPreview> {
     await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    await assertClientIamFeature(this.prisma, tenantSlug, vehicleId, access, 'allowClientOcr');
     const row = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: { id: true, vin: true },
@@ -704,7 +706,10 @@ export class FleetService {
     vehicleId: string,
     dto: PatchVehicleCivDto,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<VehicleCivPayload> {
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    await assertClientIamFeature(this.prisma, tenantSlug, vehicleId, access, 'allowClientOcr');
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       include: { tenant: true },
@@ -809,7 +814,10 @@ export class FleetService {
     vehicleId: string,
     dto: PatchVehicleAcquisitionDto,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<VehicleAcquisitionPayload> {
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    await assertClientIamFeature(this.prisma, tenantSlug, vehicleId, access, 'allowClientAcquisition');
     const existing = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
       select: { id: true, tenantId: true, registrationNumber: true },

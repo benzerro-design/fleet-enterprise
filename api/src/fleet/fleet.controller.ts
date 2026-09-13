@@ -213,19 +213,20 @@ export class FleetController {
   }
 
   @Patch('vehicles/:vehicleId/civ')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patchVehicleCiv(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertPatchVehicleCivDto(body);
-    return this.fleet.patchVehicleCiv(tenantId, vehicleId, dto, actorUserId);
+    return this.fleet.patchVehicleCiv(tenantId, vehicleId, dto, actorUserId, access);
   }
 
   @Post('vehicles/:vehicleId/civ/extract-preview')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   extractCivPreview(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
@@ -246,15 +247,16 @@ export class FleetController {
   }
 
   @Patch('vehicles/:vehicleId/acquisition')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patchVehicleAcquisition(
     @TenantId() tenantId: string,
     @Param('vehicleId') vehicleId: string,
     @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
     @CurrentUserId() actorUserId?: string,
   ) {
     const dto = assertPatchVehicleAcquisitionDto(body);
-    return this.fleet.patchVehicleAcquisition(tenantId, vehicleId, dto, actorUserId);
+    return this.fleet.patchVehicleAcquisition(tenantId, vehicleId, dto, actorUserId, access);
   }
 
   @Get('vehicles/:vehicleId/photos')

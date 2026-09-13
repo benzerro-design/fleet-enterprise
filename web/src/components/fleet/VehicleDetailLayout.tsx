@@ -22,6 +22,8 @@ type Props = {
   planWrite?: boolean;
   consumption?: ConsumptionPayload | null;
   consumptionRequested?: boolean;
+  showAcquisition?: boolean;
+  civWrite?: boolean;
 };
 
 export function VehicleDetailLayout({
@@ -34,6 +36,8 @@ export function VehicleDetailLayout({
   planWrite,
   consumption = null,
   consumptionRequested = false,
+  showAcquisition = false,
+  civWrite = false,
 }: Props) {
   const {
     vehicle,
@@ -81,6 +85,8 @@ export function VehicleDetailLayout({
               driverAssignments={driverAssignments}
               consumption={consumption}
               consumptionRequested={consumptionRequested}
+              showAcquisition={showAcquisition}
+              civWrite={civWrite}
             />
           </div>
         </Suspense>

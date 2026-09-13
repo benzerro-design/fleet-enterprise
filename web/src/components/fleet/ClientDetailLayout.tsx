@@ -67,6 +67,7 @@ export function ClientDetailLayout({
           canWrite={canWriteFleet}
           canAllocateSuppliers={canAllocateSuppliers}
           canInviteTeam={canInviteTeam}
+          canEditIam={canEditClient}
         />
       </Suspense>
     </FleetPageMain>

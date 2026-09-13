@@ -17,6 +17,7 @@ import { ClientSubscriptionTab } from "@/components/fleet/ClientSubscriptionTab"
 import { ClientDriversTab } from "@/components/fleet/ClientDriversTab";
 import { ClientMailSettingsEditor } from "@/components/fleet/ClientMailSettingsEditor";
 import { ClientPricingSettingsEditor } from "@/components/fleet/ClientPricingSettingsEditor";
+import { ClientIamSettingsEditor } from "@/components/fleet/ClientIamSettingsEditor";
 import { ClientSupplierAllocationsEditor } from "@/components/fleet/ClientSupplierAllocationsEditor";
 import { ClientInvitePanel } from "@/components/fleet/ClientInvitePanel";
 import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
@@ -28,6 +29,7 @@ const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "subscription", label: "Abonament" },
   { id: "mail", label: "Corespondență" },
   { id: "pricing", label: "Prețuri" },
+  { id: "iam", label: "Drepturi L1" },
   { id: "suppliers", label: "Furnizori" },
 ];
 
@@ -64,6 +66,7 @@ type Props = {
   canWrite?: boolean;
   canAllocateSuppliers?: boolean;
   canInviteTeam?: boolean;
+  canEditIam?: boolean;
 };
 
 export function ClientProfileTabs({
@@ -71,26 +74,34 @@ export function ClientProfileTabs({
   canWrite = false,
   canAllocateSuppliers = false,
   canInviteTeam = false,
+  canEditIam = false,
 }: Props) {
   const { client, kpis, vehicles, recentActivity, subscriptions, drivers } = data;
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientQs = clientOpsQuery(client.code);
 
+  const visibleTabs = useMemo(
+    () => TABS.filter((tab) => tab.id !== "iam" || canEditIam),
+    [canEditIam],
+  );
+
   const active = useMemo((): ClientProfileTab => {
     const t = searchParams.get("tab");
+    if (t === "iam" && !canEditIam) return "overview";
     if (
       t === "vehicles" ||
       t === "subscription" ||
       t === "drivers" ||
       t === "mail" ||
       t === "pricing" ||
+      t === "iam" ||
       t === "suppliers"
     ) {
       return t;
     }
     return "overview";
-  }, [searchParams]);
+  }, [searchParams, canEditIam]);
 
   const setTab = useCallback(
     (tab: ClientProfileTab) => {
@@ -135,7 +146,7 @@ export function ClientProfileTabs({
 
       <div className="border-b border-zinc-800 px-4 pt-4">
         <div className="flex flex-wrap gap-2">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -209,6 +220,8 @@ export function ClientProfileTabs({
           <ClientMailSettingsEditor clientId={client.id} canWrite={canWrite} />
         ) : active === "pricing" ? (
           <ClientPricingSettingsEditor clientId={client.id} canWrite={canWrite} />
+        ) : active === "iam" ? (
+          <ClientIamSettingsEditor clientId={client.id} canWrite={canEditIam} />
         ) : active === "suppliers" ? (
           <ClientSupplierAllocationsEditor clientId={client.id} canWrite={canAllocateSuppliers} />
         ) : (

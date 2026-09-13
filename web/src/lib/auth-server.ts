@@ -1,11 +1,18 @@
 import { cache } from "react";
 import { fleetServerFetch } from "./fleet-server";
 
+export type ClientIamSettingsMe = {
+  allowClientOcr: boolean;
+  allowClientAcquisition: boolean;
+  requireDriverAck: boolean;
+};
+
 export type ClientMembershipMe = {
   clientId: string;
   clientCode: string;
   role: "client_admin" | "client_dispatcher" | "client_viewer" | "driver";
   driverId?: string | null;
+  iamSettings?: ClientIamSettingsMe;
 };
 
 export type SupplierMembershipMe = {
@@ -215,4 +222,39 @@ export function getDefaultFleetHome(auth: AuthMeResult): string {
   if (isClientDriverPortal(auth)) return "/fleet/vehicles";
   if (isClientPortalUser(auth)) return "/fleet/tickets";
   return "/fleet/dashboard";
+}
+
+function membershipForClient(
+  auth: AuthMeResult,
+  clientRefId?: string | null,
+  clientCode?: string | null,
+): ClientMembershipMe | undefined {
+  if (!auth.ok) return undefined;
+  const rows = auth.me.access?.clientMemberships ?? [];
+  return rows.find(
+    (m) =>
+      (clientRefId && m.clientId === clientRefId) ||
+      (clientCode && m.clientCode === clientCode),
+  );
+}
+
+/** L* mereu; L1 doar dacă e pornit pe client (IAM-008). */
+export function canUseClientOcr(
+  auth: AuthMeResult,
+  clientRefId?: string | null,
+  clientCode?: string | null,
+): boolean {
+  if (canManageFleet(auth)) return true;
+  if (!canWriteClientFleet(auth)) return false;
+  return membershipForClient(auth, clientRefId, clientCode)?.iamSettings?.allowClientOcr === true;
+}
+
+export function canUseClientAcquisition(
+  auth: AuthMeResult,
+  clientRefId?: string | null,
+  clientCode?: string | null,
+): boolean {
+  if (canManageFleet(auth)) return true;
+  if (!canWriteClientFleet(auth)) return false;
+  return membershipForClient(auth, clientRefId, clientCode)?.iamSettings?.allowClientAcquisition === true;
 }

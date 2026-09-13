@@ -3,6 +3,7 @@ import { MembershipRole, ClientRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessContext, ActorContext } from './access-context.types';
 import { actorRoutingLevel } from './client-access';
+import { parseClientIamSettings } from './client-iam-settings';
 
 @Injectable()
 export class AccessContextService {
@@ -24,7 +25,7 @@ export class AccessContextService {
 
     const rows = await this.prisma.clientMembership.findMany({
       where: { userId, tenantId: tenant.id },
-      include: { client: { select: { code: true } } },
+      include: { client: { select: { code: true, iamSettings: true } } },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -39,6 +40,7 @@ export class AccessContextService {
       clientCode: r.client.code,
       role: r.role,
       driverId: r.driverId,
+      iamSettings: parseClientIamSettings(r.client.iamSettings),
     }));
 
     const supplierMemberships = supplierRows.map((r) => ({

@@ -1,6 +1,13 @@
 import { notFound } from "next/navigation";
 import { VehicleDetailLayout } from "@/components/fleet/VehicleDetailLayout";
-import { canManageFleet, canWriteFleetOps, canWriteVehicleMedia, getAuthMeResult } from "@/lib/auth-server";
+import {
+  canManageFleet,
+  canUseClientAcquisition,
+  canUseClientOcr,
+  canWriteFleetOps,
+  canWriteVehicleMedia,
+  getAuthMeResult,
+} from "@/lib/auth-server";
 import { loadVehicleConsumption, loadVehicleDetail } from "@/lib/vehicle-detail-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
@@ -32,6 +39,8 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
       canChangeClient={canManageFleet(auth)}
       consumption={consumption}
       consumptionRequested={showConsumption}
+      showAcquisition={canUseClientAcquisition(auth, data.vehicle.clientRefId, data.vehicle.clientId)}
+      civWrite={false}
     />
   );
 }
