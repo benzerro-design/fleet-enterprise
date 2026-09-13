@@ -1,16 +1,26 @@
 import { FleetLayoutSwitcher } from "@/components/fleet/FleetLayoutSwitcher";
-import { canManageFleet, canUseBot, getAuthMeResult, getDefaultFleetHome, isClientDriverPortal, isClientFleetPortal } from "@/lib/auth-server";
+import {
+  canManageFleet,
+  canUseBot,
+  getAuthMeResult,
+  getDefaultFleetHome,
+  getSessionPortalHint,
+  isClientDriverPortal,
+  isClientFleetPortal,
+} from "@/lib/auth-server";
 import { getFleetNavForUser } from "@/lib/fleet-nav";
 
 export default async function FleetLayout({ children }: { children: React.ReactNode }) {
-  const auth = await getAuthMeResult();
+  const [auth, hint] = await Promise.all([getAuthMeResult(), getSessionPortalHint()]);
   const write = canManageFleet(auth);
+  const driverPortal = isClientDriverPortal(auth) || hint?.clientPortal === "driver";
+  const fleetPortal = isClientFleetPortal(auth) || (!driverPortal && hint?.clientPortal === "fleet");
   const { groups, setup, admin, bot } = getFleetNavForUser({
     canWrite: write,
-    authenticated: auth.ok,
+    authenticated: auth.ok || Boolean(hint),
     demoBot: canUseBot(auth),
-    clientDriverPortal: isClientDriverPortal(auth),
-    clientFleetPortal: isClientFleetPortal(auth),
+    clientDriverPortal: driverPortal,
+    clientFleetPortal: fleetPortal,
   });
 
   const authBanner =
@@ -30,10 +40,10 @@ export default async function FleetLayout({ children }: { children: React.ReactN
       admin={admin}
       bot={bot}
       tenantSlug={auth.ok ? auth.me.tenantSlug : undefined}
-      userEmail={auth.ok ? auth.me.email : undefined}
+      userEmail={auth.ok ? auth.me.email : hint?.email}
       readOnly={auth.ok && auth.me.role === "tenant_viewer"}
       authBanner={authBanner}
-      homeHref={getDefaultFleetHome(auth)}
+      homeHref={getDefaultFleetHome(auth, hint)}
     >
       {children}
     </FleetLayoutSwitcher>

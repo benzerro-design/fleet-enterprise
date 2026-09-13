@@ -73,11 +73,16 @@ export async function assertClientIamFeature(
   if (!access.allowedClientIds.includes(vehicle.clientId)) {
     throw new ForbiddenException('Vehicle is outside your client scope');
   }
-  const client = await prisma.client.findFirst({
-    where: { id: vehicle.clientId, tenantId: vehicle.tenantId },
-    select: { iamSettings: true },
-  });
-  const settings = parseClientIamSettings(client?.iamSettings);
+  let settings = { ...DEFAULT_CLIENT_IAM_SETTINGS };
+  try {
+    const client = await prisma.client.findFirst({
+      where: { id: vehicle.clientId, tenantId: vehicle.tenantId },
+      select: { iamSettings: true },
+    });
+    settings = parseClientIamSettings(client?.iamSettings);
+  } catch {
+    /* column missing — treat as defaults */
+  }
   if (!settings[feature]) {
     throw new ForbiddenException(
       feature === 'allowClientOcr'

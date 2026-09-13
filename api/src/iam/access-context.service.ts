@@ -3,11 +3,33 @@ import { MembershipRole, ClientRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessContext, ActorContext } from './access-context.types';
 import { actorRoutingLevel } from './client-access';
-import { parseClientIamSettings } from './client-iam-settings';
+import {
+  DEFAULT_CLIENT_IAM_SETTINGS,
+  parseClientIamSettings,
+  type ClientIamSettings,
+} from './client-iam-settings';
 
 @Injectable()
 export class AccessContextService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** IAM flags are optional — login must work if the column is not migrated yet. */
+  private async loadIamSettingsMap(clientIds: string[]): Promise<Map<string, ClientIamSettings>> {
+    const map = new Map<string, ClientIamSettings>();
+    if (clientIds.length === 0) return map;
+    try {
+      const clients = await this.prisma.client.findMany({
+        where: { id: { in: clientIds } },
+        select: { id: true, iamSettings: true },
+      });
+      for (const c of clients) {
+        map.set(c.id, parseClientIamSettings(c.iamSettings));
+      }
+    } catch {
+      /* column missing or Prisma/DB mismatch — defaults */
+    }
+    return map;
+  }
 
   async resolve(userId: string, tenantSlug: string): Promise<AccessContext> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
@@ -25,9 +47,10 @@ export class AccessContextService {
 
     const rows = await this.prisma.clientMembership.findMany({
       where: { userId, tenantId: tenant.id },
-      include: { client: { select: { code: true, iamSettings: true } } },
+      include: { client: { select: { code: true } } },
       orderBy: { createdAt: 'asc' },
     });
+    const iamByClient = await this.loadIamSettingsMap(rows.map((r) => r.clientId));
 
     const supplierRows = await this.prisma.supplierMembership.findMany({
       where: { userId, tenantId: tenant.id },
@@ -40,7 +63,7 @@ export class AccessContextService {
       clientCode: r.client.code,
       role: r.role,
       driverId: r.driverId,
-      iamSettings: parseClientIamSettings(r.client.iamSettings),
+      iamSettings: iamByClient.get(r.clientId) ?? { ...DEFAULT_CLIENT_IAM_SETTINGS },
     }));
 
     const supplierMemberships = supplierRows.map((r) => ({

@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { cache } from "react";
 import { fleetServerFetch } from "./fleet-server";
 
@@ -215,12 +216,37 @@ export function driverNameFromAuth(auth: AuthMeResult): string | undefined {
   return auth.me.email?.split("@")[0];
 }
 
+export type SessionPortalHint = {
+  role?: string;
+  clientPortal?: "fleet" | "driver" | "tickets";
+  partnerPortal?: boolean;
+  email?: string;
+};
+
+/** JWT payload from cookie — used when /auth/me fails so nav/home stay role-correct. */
+export async function getSessionPortalHint(): Promise<SessionPortalHint | undefined> {
+  const token = (await cookies()).get("fleet_access")?.value;
+  if (!token) return undefined;
+  try {
+    const part = token.split(".")[1];
+    if (!part) return undefined;
+    const json = Buffer.from(part, "base64url").toString("utf8");
+    return JSON.parse(json) as SessionPortalHint;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Pagină implicită după login — șoferi la vehicule, manager client la panou scoped, partener la portal. */
-export function getDefaultFleetHome(auth: AuthMeResult): string {
+export function getDefaultFleetHome(auth: AuthMeResult, hint?: SessionPortalHint): string {
   if (isPartnerPortalUser(auth)) return "/fleet/partner";
   if (isClientFleetPortal(auth)) return "/fleet/dashboard";
   if (isClientDriverPortal(auth)) return "/fleet/vehicles";
   if (isClientPortalUser(auth)) return "/fleet/tickets";
+  if (hint?.partnerPortal || hint?.role === "supplier_user") return "/fleet/partner";
+  if (hint?.clientPortal === "fleet") return "/fleet/dashboard";
+  if (hint?.clientPortal === "driver") return "/fleet/vehicles";
+  if (hint?.role === "client_user") return "/fleet/tickets";
   return "/fleet/dashboard";
 }
 

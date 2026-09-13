@@ -41,7 +41,8 @@ export class AccessScopeInterceptor implements NestInterceptor {
         req.accessContext = await this.access.resolve(sub, tenantSlug);
       } catch (e) {
         if (e instanceof UnauthorizedException) throw e;
-        throw new UnauthorizedException('Failed to resolve access scope');
+        // DB/schema errors must not look like a logged-out session (login loop).
+        throw e;
       }
     }
 

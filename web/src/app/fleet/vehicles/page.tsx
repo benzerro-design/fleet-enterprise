@@ -11,7 +11,7 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { type VehicleListPayload, VEHICLE_STATUSES, fleetBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -49,6 +49,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const [list, auth] = await Promise.all([getVehiclesList(sp), getAuthMeResult()]);
   const write = canWriteFleetOps(auth);
+  const driverPortal = isClientDriverPortal(auth);
 
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const pageSize = 20;
@@ -74,10 +75,16 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
         header={
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Fleet core</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Vehicule</h1>
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">
+                {driverPortal ? "Cont șofer" : "Fleet core"}
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+                {driverPortal ? "Vehiculele tale" : "Vehicule"}
+              </h1>
               <p className="mt-3 max-w-2xl text-zinc-400">
-                Căutare, filtru status, paginare și export CSV. Detaliu pe vehicul fără a intra direct în editare.
+                {driverPortal
+                  ? "Vehiculele alocate ție. Deschide un vehicul pentru curse, costuri și documente."
+                  : "Căutare, filtru status, paginare și export CSV. Detaliu pe vehicul fără a intra direct în editare."}
               </p>
             </div>
 
@@ -98,12 +105,14 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                   </Link>
                 </>
               ) : null}
-              <a
-                href={exportHref}
-                className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-              >
-                Export CSV
-              </a>
+              {!driverPortal ? (
+                <a
+                  href={exportHref}
+                  className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+                >
+                  Export CSV
+                </a>
+              ) : null}
             </div>
           </div>
         }

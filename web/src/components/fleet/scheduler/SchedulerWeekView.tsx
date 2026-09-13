@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { SlottedCalendarAppointment } from "@/lib/appointments-api";
 import {
   appointmentFleetCanRepropose,
@@ -105,8 +106,24 @@ function AppointmentBlock({
 }) {
   const start = new Date(a.scheduledAt);
   const hover = appointmentHoverDetail(a);
+  const blockRef = useRef<HTMLDivElement>(null);
+  const [tip, setTip] = useState<{ left: number; top: number; place: "above" | "below" } | null>(null);
+
+  function showTip() {
+    const r = blockRef.current?.getBoundingClientRect();
+    if (!r || typeof window === "undefined") return;
+    const place = r.top < 220 ? "below" : "above";
+    const width = 256;
+    setTip({
+      left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
+      top: place === "below" ? r.bottom + 6 : r.top - 6,
+      place,
+    });
+  }
+
   return (
     <div
+      ref={blockRef}
       role="button"
       tabIndex={0}
       data-appt-block
@@ -114,10 +131,14 @@ function AppointmentBlock({
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
+      onMouseEnter={showTip}
+      onMouseLeave={() => setTip(null)}
+      onFocus={showTip}
+      onBlur={() => setTip(null)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") e.preventDefault();
       }}
-      className={`group/appt absolute left-1 right-1 overflow-visible rounded-md border border-l-[3px] px-1.5 py-1 text-left text-[10px] leading-tight transition-shadow select-none ${
+      className={`absolute left-1 right-1 overflow-visible rounded-md border border-l-[3px] px-1.5 py-1 text-left text-[10px] leading-tight transition-shadow select-none ${
         dragging ? "z-20 cursor-grabbing opacity-40" : canDrag ? "cursor-pointer" : "cursor-pointer"
       } ${
         selected
@@ -140,12 +161,22 @@ function AppointmentBlock({
         <span className={`inline-block h-1 w-1 shrink-0 rounded-full ${supplierDotClass(a.supplierCategory)}`} />
         {a.supplierCode ?? appointmentProcessLabel(a)}
       </div>
-      <div
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-0 z-50 mb-1 hidden min-w-[12rem] max-w-[16rem] whitespace-pre-wrap rounded border border-zinc-600 bg-zinc-900 px-2 py-1.5 text-[10px] leading-snug text-zinc-100 shadow-lg group-hover/appt:block"
-      >
-        {hover}
-      </div>
+      {tip && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              role="tooltip"
+              className="pointer-events-none fixed z-[80] min-w-[12rem] max-w-[16rem] whitespace-pre-wrap rounded border border-zinc-600 bg-zinc-900 px-2 py-1.5 text-[10px] leading-snug text-zinc-100 shadow-lg"
+              style={{
+                left: tip.left,
+                top: tip.place === "below" ? tip.top : undefined,
+                bottom: tip.place === "above" ? window.innerHeight - tip.top : undefined,
+              }}
+            >
+              {hover}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
