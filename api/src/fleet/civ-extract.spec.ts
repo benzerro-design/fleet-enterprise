@@ -1,6 +1,10 @@
 import { mapCiv2024TextToPreview } from './civ-2024-extract';
 import { detectCivDocumentFormat, mapCivExtractTextToPreview } from './civ-extract';
-import { findCivSeriesInFrontText, stripDanglingCivParens } from './civ-label-map';
+import {
+  extractCivLabelValuePairs,
+  findCivSeriesInFrontText,
+  stripDanglingCivParens,
+} from './civ-label-map';
 import { parseCivFuelTypeText } from './vehicle-fuel-resolve';
 import { parseWebUploadUrl, webUploadObjectKey } from '../storage/web-upload-storage';
 
@@ -402,11 +406,14 @@ MOTORINA glossary noise
       expect(String(g.civProfile.typeApprovalNumber ?? '')).not.toMatch(/\($/);
     });
 
-    it('ia data eliberării de pe verso, nu „Data naşterii” de pe față', () => {
+    // Pe acest scan OCR-ul rupe rândul și lasă eticheta singură: valoarea e dedesubt.
+    it('ia valorile căzute pe rândul următor', () => {
       expect(g.civIssuedOn).toBe('2021-02-11');
+      expect(g.civProfile.heightMm).toBe(1745);
+      expect(Number(g.civProfile.co2Gkm)).toBe(37);
     });
 
-    it('nu inventează serie din glosarul englezesc (Soho s 0 8 3 5 6 0)', () => {
+    it('barcode-ul degradat nu produce serie, ci avertisment', () => {
       expect(g.civSeries).toBeNull();
       const warning = g.civWarnings?.find((w) => w.target === 'civSeries');
       expect(warning?.message).toMatch(/Completează seria/i);
@@ -464,6 +471,34 @@ V.9 . Normă de poluare CE: Euro 6 ; 715 / 2007 * 2018 / 1832 AP
       'text',
     );
     expect(g.civProfile.electricMotorPowerKw).toBeUndefined();
+  });
+
+  // Rasterizarea PDF a Google producea „Soho's 0 8 3 5 6 0” în glosarul englezesc de pe față.
+  // Scanul nu mai trece pe acolo, dar gaura din regex rămâne de păzit.
+  it('litera seriei nu poate fi coada unui cuvânt cu apostrof', () => {
+    expect(findCivSeriesInFrontText("5 60 Soho's 0 8 3 5 6 0 1")).toBeNull();
+    // Aceleași cifre, cu litera ca token izolat, rămân o serie validă.
+    expect(findCivSeriesInFrontText('5 60 S 0 8 3 5 6 0 1')).toBe('S083560');
+  });
+
+  it('valoarea de pe rândul următor nu e împrumutată de la rubrica vecină', () => {
+    const pairs = extractCivLabelValuePairs(
+      [
+        '12. Înălţime ( mm ):',
+        '1745',
+        'V.7 . CO₂:',
+        'NEDC: 37 ( g / km ) ; WLTP: 27 ( g / km )',
+        'S.2 . Număr locuri în picioare:',
+        'T. Viteză maximă ( km / h ): 235',
+      ].join('\n'),
+    );
+    const byLabel = (re: RegExp) => pairs.find((p) => re.test(p.label));
+
+    expect(byLabel(/Înălţime/)?.value).toBe('1745');
+    expect(byLabel(/CO₂/)?.value).toMatch(/NEDC: 37/);
+    // S.2 e goală pe card, iar dedesubt începe altă rubrică — nu împrumutăm valoarea ei.
+    expect(byLabel(/picioare/)).toBeUndefined();
+    expect(byLabel(/Viteză/)?.value).toBe('235');
   });
 
   it('stripDanglingCivParens lasă (1T) intact', () => {

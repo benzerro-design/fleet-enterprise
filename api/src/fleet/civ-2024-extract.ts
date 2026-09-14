@@ -614,14 +614,27 @@ function parseMentionsBlockLines(front: string): string[] {
   if (start < 0) return [];
 
   const out: string[] = [];
-  for (const raw of lines.slice(start + 1, start + 15)) {
-    // OCR lipește pe coada rândului marcajul rubricii vecine („… / spate . A.”).
-    const line = stripDanglingCivParens(raw.replace(/\s+[A-Z]\.\d?\s*$/, '').trim());
-    if (!line || line.length < 6) break;
-    if (/^[A-Z][\s.\d]*$/.test(line)) break;
-    if (/tiparit|registration certificate|vehicle ident|identity card/i.test(stripDiacritics(line))) {
+  let noise = 0;
+  for (const raw of lines.slice(start + 1, start + 19)) {
+    // Marcajele rubricilor vecine cad când lipite pe coada rândului („… / spate . A.”),
+    // când pe rând propriu. Le sărim: caseta se termină la filigran / glosar sau când
+    // zgomotul ține trei rânduri la rând.
+    const line = stripDanglingCivParens(
+      raw
+        .replace(/\s+[A-Z]\.\d?\s*$/, '')
+        .replace(/\s*\(\s*Nr\.?\s*$/i, '')
+        .trim(),
+    );
+    if (/tiparit|registration|vehicle ident|identity card|certificate refers/i.test(
+        stripDiacritics(line),
+      )) {
       break;
     }
+    if (!line || line.length < 6 || /^[A-Z][\s.\d]*$/.test(line)) {
+      if (++noise >= 3) break;
+      continue;
+    }
+    noise = 0;
     out.push(line);
   }
   return out;

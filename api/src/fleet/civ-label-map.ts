@@ -619,7 +619,7 @@ export type CivLabelPair = {
   label: string;
   labelNorm: string;
   value: string;
-  source: 'same-line';
+  source: 'same-line' | 'next-line';
 };
 
 /** Serie CIV pe față: 1 literă + 6 cifre (sub barcode / QR). */
@@ -630,8 +630,30 @@ export function isCivSeriesCode(raw: string): boolean {
 }
 
 /**
+ * Un rând care e el însuși o rubrică cunoscută nu poate fi valoarea rubricii de deasupra.
+ * Așa deosebim „Data eliberării:” urmat de „11.02.2021” (valoare căzută pe rândul următor)
+ * de „Putere motor electric (kW):” urmat de „V.9 . Normă de poluare CE: …” (rubrică goală).
+ */
+function startsNewCivRubric(line: string): boolean {
+  const cleaned = line.replace(/^(?:[A-Z]\.?\s*)?\d{1,2}(?:\.\d+)?\.?\s+/i, '');
+  const m = /^(.{2,90}?)\s*:/.exec(cleaned) || /^(.{2,90}?)\s*:/.exec(line);
+  if (!m) return false;
+  const norm = normalizeCivLabel(
+    m[1]!
+      .replace(/^[A-Z]\.?\d{0,2}\.?\s+/i, '')
+      .replace(/^\d{1,2}(?:\.\d+)?\.?\s+/i, '')
+      .trim(),
+  );
+  if (!norm) return false;
+  return CIV_LABEL_FIELDS.some((f) =>
+    f.labels.some((l) => labelMatchScore(normalizeCivLabel(l), norm) >= MIN_SCORE),
+  );
+}
+
+/**
  * Extrage perechi etichetă: / valoare din text OCR.
- * Doar pe aceeași linie (etichetă stânga cu ":" → valoare dreapta). Fără fallback pe linia următoare.
+ * De regulă pe aceeași linie (etichetă stânga cu ":" → valoare dreapta). Când OCR-ul rupe rândul
+ * și lasă eticheta singură, luăm rândul următor — dar numai dacă acela nu deschide altă rubrică.
  */
 export function extractCivLabelValuePairs(text: string): CivLabelPair[] {
   const lines = text
@@ -659,7 +681,14 @@ export function extractCivLabelValuePairs(text: string): CivLabelPair[] {
     label = label.replace(/^[A-Z]\.?\d{0,2}\.?\s+/i, '').trim();
     label = label.replace(/^\d{1,2}(?:\.\d+)?\.?\s+/i, '').trim();
 
-    const value = stripDanglingCivParens((m[2] ?? '').trim());
+    let value = stripDanglingCivParens((m[2] ?? '').trim());
+    let source: CivLabelPair['source'] = 'same-line';
+    if (isEmptyCivValue(value)) {
+      const next = lines[i + 1];
+      if (!next || startsNewCivRubric(next)) continue;
+      value = stripDanglingCivParens(next);
+      source = 'next-line';
+    }
     if (isEmptyCivValue(value)) continue;
     if (looksLikeLabelNotValue(value) && value.length > 20) continue;
 
@@ -667,7 +696,7 @@ export function extractCivLabelValuePairs(text: string): CivLabelPair[] {
       label,
       labelNorm: normalizeCivLabel(label),
       value,
-      source: 'same-line',
+      source,
     });
   }
 
