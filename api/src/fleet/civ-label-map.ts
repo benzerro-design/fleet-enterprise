@@ -63,6 +63,16 @@ function isYear(v: string): boolean {
   return /^(19|20)\d{2}$/.test(v.trim());
 }
 
+/**
+ * O rubrică numerică are drept valoare un număr, eventual cu unitate („1670 kg”) — nu o frază.
+ * Rubricile cu sub-coloane („Putere motor electric: orară max. netă max. max. în 30 min.”) lasă
+ * legenda pe rândul etichetei; extrasul primului număr din ea dădea 30, luat din „în 30 min.”.
+ */
+function looksLikeProseNotNumber(v: string): boolean {
+  const words = String(v).match(/[A-Za-zÀ-ÿ]{2,}/g) ?? [];
+  return words.length >= 2;
+}
+
 function isPositiveNumber(v: string, min: number, max: number): boolean {
   const cleaned = String(v)
     .replace(/\s/g, '')
@@ -738,15 +748,16 @@ export function mapCivPairsToFields(pairs: CivLabelPair[]): CivLabelMapHit[] {
       if (score < MIN_SCORE) continue;
 
       let value = stripDanglingCivParens(pair.value.trim());
-      // Numere: „2634 ;” / „1670 kg” → extrage partea numerică înainte de validare.
-      if (field.fieldKind === 'number' || field.fieldKind === 'year') {
-        const num = value.match(/-?\d+(?:[.,]\d+)?/);
-        if (num) value = num[0]!.replace(',', '.');
-      }
-      // CO2: extrage numărul
+      // CO2: rubrica poartă două standarde pe același rând („NEDC: 37 ; WLTP: 27”), deci e
+      // singura valoare numerică unde textul din jur e normal. Luăm prima cifră.
       if (field.key === 'co2Gkm') {
         const num = value.match(/(\d{1,3}(?:[.,]\d+)?)/);
         if (num) value = num[1]!.replace(',', '.');
+      } else if (field.fieldKind === 'number' || field.fieldKind === 'year') {
+        // Numere: „2634 ;” / „1670 kg” → extrage partea numerică înainte de validare.
+        if (looksLikeProseNotNumber(value)) continue;
+        const num = value.match(/-?\d+(?:[.,]\d+)?/);
+        if (num) value = num[0]!.replace(',', '.');
       }
       if (field.kind === 'vin') value = value.replace(/\s+/g, '').toUpperCase();
       if (field.key === 'engineCode') value = value.replace(/\s+/g, '');

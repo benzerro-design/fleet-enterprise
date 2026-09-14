@@ -425,6 +425,45 @@ MOTORINA glossary noise
     it('nu raportează mențiuni pe care cardul nu le are', () => {
       expect(g.civMentions).not.toMatch(/PHEV/);
     });
+
+    // Rubrica are sub-coloane: legenda stă pe rândul etichetei, cifrele pe rândul următor.
+    it('ia puterea electrică din „83 55”, nu 30 din „max. în 30 min.”', () => {
+      expect(g.civProfile.electricMotorPowerKw).toBe(83);
+    });
+
+    it('CO₂ rămâne citit deși rubrica poartă NEDC și WLTP', () => {
+      expect(Number(g.civProfile.co2Gkm)).toBe(37);
+    });
+  });
+
+  it('o rubrică numerică nu ia cifra din legenda sub-coloanelor', () => {
+    const g = mapCiv2024TextToPreview(
+      `
+=== CIV FAȚĂ ===
+Vehicle Identity Card
+
+=== CIV VERSO ===
+16. Putere motor electric ( kW ): orara max . neta max . max . in 30 min .
+83 55
+`,
+      'text',
+    );
+    expect(g.civProfile.electricMotorPowerKw).toBe(83);
+  });
+
+  it('rubrica goală nu împrumută cifre de la eticheta următoare', () => {
+    const g = mapCiv2024TextToPreview(
+      `
+=== CIV FAȚĂ ===
+Vehicle Identity Card
+
+=== CIV VERSO ===
+15 . Putere motor electric ( kW ):
+V.9 . Normă de poluare CE: Euro 6 ; 715 / 2007 * 2018 / 1832 AP
+`,
+      'text',
+    );
+    expect(g.civProfile.electricMotorPowerKw).toBeUndefined();
   });
 
   it('stripDanglingCivParens lasă (1T) intact', () => {

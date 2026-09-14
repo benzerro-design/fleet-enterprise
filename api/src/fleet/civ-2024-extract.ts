@@ -841,6 +841,31 @@ function warnOnConfusableSeats(profile: VehicleCivProfile, warnings: CivExtractW
 }
 
 /**
+ * Rubrica „Putere motor electric” are trei sub-coloane (orară max. / netă max. / max. în 30 min.),
+ * deci pe rândul etichetei stă legenda, iar cifrele cad pe rândul următor („83 55”). Cerem un rând
+ * numai din numere: pe un card fără motor electric rubrica e goală și urmează altă etichetă (V.9),
+ * pe care nu avem voie s-o citim ca valoare. Reținem vârful — puterea de catalog a motorului.
+ */
+function pickElectricMotorPower(
+  verso: string,
+  profile: VehicleCivProfile,
+  matched: CivExtractMatch[],
+) {
+  if (profile.electricMotorPowerKw != null) return;
+
+  const lines = verso.split(/\r?\n/);
+  const at = lines.findIndex((l) => /putere\s+motor\s+electric/i.test(stripDiacritics(l)));
+  if (at < 0) return;
+
+  const next = lines[at + 1]?.trim() ?? '';
+  if (!/^\d{1,3}(?:[.,]\d+)?(?:\s+\d{1,3}(?:[.,]\d+)?){0,3}$/.test(next)) return;
+
+  const peak = Math.max(...next.split(/\s+/).map((n) => Number(n.replace(',', '.'))));
+  if (!Number.isFinite(peak) || peak <= 0 || peak > 800) return;
+  setProfile(profile, matched, 'electricMotorPowerKw', peak, 'Putere motor electric');
+}
+
+/**
  * Seria stă doar în barcode-ul de la baza feței. Când acolo OCR-ul dă text degradat, preferăm
  * câmpul gol unei serii inventate — dar semnalăm, ca să fie completată de pe card.
  */
@@ -1227,6 +1252,7 @@ export function mapCiv2024TextToPreview(
 
   parseFrontIdent(front, profile, matched, meta);
   parseVersoGrid(verso, profile, matched, warnings);
+  pickElectricMotorPower(verso, profile, matched);
 
   warnOnConfusableSeats(profile, warnings);
   warnOnMissingSeries(pages.frontRaw, meta.civSeries, warnings);
