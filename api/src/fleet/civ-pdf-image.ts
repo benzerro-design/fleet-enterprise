@@ -298,6 +298,19 @@ function decodeImage(dict: string, stream: Buffer): DecodedImage | null {
   const filters = [...dict.matchAll(/\/(DCTDecode|FlateDecode|JPXDecode|CCITTFaxDecode|JBIG2Decode|LZWDecode|RunLengthDecode|ASCII85Decode|ASCIIHexDecode)\b/g)].map(
     (m) => m[1]!,
   );
+  // Unele scanere mai împachetează o dată JPEG-ul în Flate („[/FlateDecode /DCTDecode]”).
+  // E singurul lanț pe care îl desfacem: inflate lasă exact JPEG-ul din fișier, deci tot fără
+  // reeșantionare. Altfel scanul ar pleca la Vision ca PDF, rasterizat de Google la rezoluția lui.
+  if (filters.length === 2 && filters[0] === 'FlateDecode' && filters[1] === 'DCTDecode') {
+    let jpeg: Buffer;
+    try {
+      jpeg = inflateSync(stream);
+    } catch {
+      return null;
+    }
+    if (jpeg[0] !== 0xff || jpeg[1] !== 0xd8) return null;
+    return { kind: 'jpeg', data: jpeg, width, height };
+  }
   // Un singur filtru, altfel sunt lanțuri pe care nu le desfacem aici.
   if (filters.length !== 1) return null;
 

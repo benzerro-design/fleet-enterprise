@@ -171,6 +171,15 @@ describe('extractCivPdfImages', () => {
       expect([img?.width, img?.height]).toEqual([2480, 3507]);
     }, 60_000);
 
+    // Scanul de 150 DPI al BMW-ului vine cu JPEG-ul împachetat încă o dată în Flate. Înainte
+    // cădea la extragere, deci pleca la Vision ca PDF și mai pierdea un rând de detaliu.
+    it('BMW 2024: lanțul [/FlateDecode /DCTDecode] iese ca JPEG la rezoluția scanului', () => {
+      const pdf = readFileSync(fixture('bmw-b108vdf-fata.pdf'));
+      const [img] = extractCivPdfImages(pdf);
+      expect(img?.mime).toBe('image/jpeg');
+      expect([img?.width, img?.height]).toEqual([1240, 1752]);
+    });
+
     it('Logan 2016 (pixeli Flate) iese exact la rezoluția scanului, fără mărire', () => {
       const pdf = readFileSync(fixture('logan-fata.pdf'));
       expect(detectPdfImageTransform(pdf)).toBe('identity');
