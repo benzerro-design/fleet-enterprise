@@ -35,11 +35,20 @@ type Props = {
     description: string;
   }>;
   lockClient?: boolean;
+  lockedDriverId?: string;
+  lockedDriverName?: string;
   /** Catalog tenant activ — înlocuiește TICKET_TYPES hardcodat când e disponibil. */
   serviceTypes?: TenantServiceType[];
 };
 
-export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes }: Props) {
+export function TicketForm({
+  vehicles,
+  initial,
+  lockClient = false,
+  lockedDriverId,
+  lockedDriverName,
+  serviceTypes,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [subject, setSubject] = useState(initial?.subject ?? "");
@@ -111,7 +120,7 @@ export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes
       serviceTypeId: useCatalog && selectedCatalog ? selectedCatalog.id : null,
       priority,
       vehicleId: ctx.vehicleId.trim() || null,
-      driverId: ctx.driverId.trim() || null,
+      driverId: (lockedDriverId ?? ctx.driverId).trim() || null,
       reminderActionId: reminderActionId.trim() || null,
       eventOdometerKm: km,
       updateVehicleOdometer: km != null ? updateVehicleOdometer : undefined,
@@ -186,11 +195,18 @@ export function TicketForm({ vehicles, initial, lockClient = false, serviceTypes
 
             <div>
               <label className="text-xs text-zinc-500">Șofer</label>
-              <DriverSelect
-                clientCode={ctx.clientId}
-                value={ctx.driverId}
-                onChange={ctx.setDriverId}
-              />
+              {lockedDriverId ? (
+                <p className="mt-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
+                  {lockedDriverName ?? "Contul tău"}
+                </p>
+              ) : (
+                <DriverSelect
+                  clientCode={ctx.clientId}
+                  value={ctx.driverId}
+                  onChange={ctx.setDriverId}
+                  hideLabel
+                />
+              )}
             </div>
 
             <div>

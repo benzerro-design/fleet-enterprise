@@ -67,6 +67,7 @@ export type ClientProfileTab =
   | "overview"
   | "vehicles"
   | "drivers"
+  | "team"
   | "subscription"
   | "mail"
   | "pricing"

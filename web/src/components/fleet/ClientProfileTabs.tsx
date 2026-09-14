@@ -19,13 +19,14 @@ import { ClientMailSettingsEditor } from "@/components/fleet/ClientMailSettingsE
 import { ClientPricingSettingsEditor } from "@/components/fleet/ClientPricingSettingsEditor";
 import { ClientIamSettingsEditor } from "@/components/fleet/ClientIamSettingsEditor";
 import { ClientSupplierAllocationsEditor } from "@/components/fleet/ClientSupplierAllocationsEditor";
-import { ClientInvitePanel } from "@/components/fleet/ClientInvitePanel";
+import { ClientTeamTab } from "@/components/fleet/ClientTeamTab";
 import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 
 const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "overview", label: "Prezentare" },
   { id: "vehicles", label: "Vehicule" },
   { id: "drivers", label: "Șoferi" },
+  { id: "team", label: "Echipă" },
   { id: "subscription", label: "Abonament" },
   { id: "mail", label: "Corespondență" },
   { id: "pricing", label: "Prețuri" },
@@ -82,17 +83,24 @@ export function ClientProfileTabs({
   const clientQs = clientOpsQuery(client.code);
 
   const visibleTabs = useMemo(
-    () => TABS.filter((tab) => tab.id !== "iam" || canEditIam),
-    [canEditIam],
+    () =>
+      TABS.filter((tab) => {
+        if (tab.id === "iam") return canEditIam;
+        if (tab.id === "team") return canInviteTeam;
+        return true;
+      }),
+    [canEditIam, canInviteTeam],
   );
 
   const active = useMemo((): ClientProfileTab => {
     const t = searchParams.get("tab");
     if (t === "iam" && !canEditIam) return "overview";
+    if (t === "team" && !canInviteTeam) return "overview";
     if (
       t === "vehicles" ||
       t === "subscription" ||
       t === "drivers" ||
+      t === "team" ||
       t === "mail" ||
       t === "pricing" ||
       t === "iam" ||
@@ -101,7 +109,7 @@ export function ClientProfileTabs({
       return t;
     }
     return "overview";
-  }, [searchParams, canEditIam]);
+  }, [searchParams, canEditIam, canInviteTeam]);
 
   const setTab = useCallback(
     (tab: ClientProfileTab) => {
@@ -139,6 +147,9 @@ export function ClientProfileTabs({
         <QuickLink href={`/fleet/maintenance?${clientQs}`} label="Mentenanță" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=vehicles`} label="Vehicule client" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=drivers`} label="Șoferi client" />
+        {canInviteTeam ? (
+          <QuickLink href={`/fleet/clients/${client.id}?tab=team`} label="Echipă" />
+        ) : null}
         <QuickLink href={`/fleet/clients/${client.id}?tab=subscription`} label="Abonament" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=mail`} label="Corespondență daună" />
         <QuickLink href={`/fleet/clients/${client.id}?tab=suppliers`} label="Furnizori" />
@@ -212,10 +223,9 @@ export function ClientProfileTabs({
         ) : active === "subscription" ? (
           <ClientSubscriptionTab subscriptions={subscriptions ?? []} />
         ) : active === "drivers" ? (
-          <div className="space-y-6">
-            {canInviteTeam ? <ClientInvitePanel clientId={client.id} clientCode={client.code} /> : null}
-            <ClientDriversTab clientCode={client.code} drivers={drivers ?? []} canWrite={canWrite} />
-          </div>
+          <ClientDriversTab clientCode={client.code} drivers={drivers ?? []} canWrite={canWrite} />
+        ) : active === "team" ? (
+          <ClientTeamTab clientId={client.id} clientCode={client.code} canInvite={canInviteTeam} />
         ) : active === "mail" ? (
           <ClientMailSettingsEditor clientId={client.id} canWrite={canWrite} />
         ) : active === "pricing" ? (

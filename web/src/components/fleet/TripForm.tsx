@@ -48,8 +48,21 @@ type VehicleOption = {
 };
 
 type Props =
-  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string }
-  | { mode: "edit"; tripId: string; initial: TripRecord; vehicles: VehicleOption[] };
+  | {
+      mode: "create";
+      vehicles: VehicleOption[];
+      defaultVehicleId?: string;
+      lockedDriverId?: string;
+      lockedDriverName?: string;
+    }
+  | {
+      mode: "edit";
+      tripId: string;
+      initial: TripRecord;
+      vehicles: VehicleOption[];
+      lockedDriverId?: string;
+      lockedDriverName?: string;
+    };
 
 function parseOdometerKm(raw: string): number | null {
   const t = raw.trim();
@@ -97,6 +110,7 @@ export function TripForm(props: Props) {
         odometerStartKm: "",
         odometerEndKm: "",
         driverId: "",
+        driverName: "",
       };
     }
     const t = props.initial;
@@ -113,6 +127,7 @@ export function TripForm(props: Props) {
       odometerStartKm: t.odometerStartKm != null ? String(t.odometerStartKm) : "",
       odometerEndKm: t.odometerEndKm != null ? String(t.odometerEndKm) : "",
       driverId: t.driverId ?? "",
+      driverName: t.driverName ?? "",
     };
   }, [props]);
 
@@ -132,7 +147,8 @@ export function TripForm(props: Props) {
   const [roadType, setRoadType] = useState(initial.roadType);
   const [odometerStartKm, setOdometerStartKm] = useState(initial.odometerStartKm);
   const [odometerEndKm, setOdometerEndKm] = useState(initial.odometerEndKm);
-  const [driverId, setDriverId] = useState(initial.driverId);
+  const [driverId, setDriverId] = useState(props.lockedDriverId ?? initial.driverId);
+  const [assignedDriverName, setAssignedDriverName] = useState(initial.driverName);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [odometerSync, setOdometerSync] = useState<VehicleOdometerSyncPayload | null>(null);
@@ -153,6 +169,33 @@ export function TripForm(props: Props) {
   const tripSyncOdometerKm = odometerEndKm.trim() || odometerStartKm.trim();
   const tripEventDate = endedAt.trim() || startedAt;
   const clientCode = selectedVehicle?.clientId ?? "";
+  const lockedDriverId = props.lockedDriverId?.trim() || "";
+  const lockedDriverName = props.lockedDriverName?.trim() || "Contul tău";
+
+  useEffect(() => {
+    if (isEdit || lockedDriverId || !boundVehicleId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/fleet/vehicles/${boundVehicleId}/driver-assignments`);
+        if (!res.ok || cancelled) return;
+        const rows = (await res.json()) as {
+          driverId: string;
+          driverFullName?: string | null;
+          unassignedAt: string | null;
+        }[];
+        const active = rows.find((r) => !r.unassignedAt);
+        if (cancelled) return;
+        setDriverId(active?.driverId ?? "");
+        setAssignedDriverName(active?.driverFullName ?? "");
+      } catch {
+        /* keep current */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [boundVehicleId, isEdit, lockedDriverId]);
 
   useEffect(() => {
     if (computedDistanceKm != null) {
@@ -221,7 +264,7 @@ export function TripForm(props: Props) {
       roadType: roadType.trim() ? roadType.trim() : null,
       odometerStartKm: odoStart,
       odometerEndKm: odoEnd,
-      driverId: driverId.trim() || null,
+      driverId: (lockedDriverId || driverId).trim() || null,
     };
 
     const syncKm = odoEnd ?? odoStart;
@@ -334,7 +377,22 @@ export function TripForm(props: Props) {
               </select>
             </OpsFormField>
             <OpsFormField label="Șofer">
-              <DriverSelect clientCode={clientCode} value={driverId} onChange={setDriverId} />
+              {lockedDriverId ? (
+                <>
+                  <p className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
+                    {lockedDriverName}
+                  </p>
+                  <input type="hidden" value={lockedDriverId} readOnly />
+                </>
+              ) : (
+                <DriverSelect
+                  clientCode={clientCode}
+                  value={driverId}
+                  onChange={setDriverId}
+                  selectedLabel={assignedDriverName || undefined}
+                  hideLabel
+                />
+              )}
             </OpsFormField>
             <div className="sm:col-span-2">
               <OpsOdometerKmHint
@@ -446,7 +504,21 @@ export function TripForm(props: Props) {
           <input type="number" min={0} step={1} value={odometerEndKm} onChange={(e) => setOdometerEndKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
         </div>
       </div>
-      <DriverSelect clientCode={clientCode} value={driverId} onChange={setDriverId} />
+      {lockedDriverId ? (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-zinc-300">Șofer</label>
+          <p className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
+            {lockedDriverName}
+          </p>
+        </div>
+      ) : (
+        <DriverSelect
+          clientCode={clientCode}
+          value={driverId}
+          onChange={setDriverId}
+          selectedLabel={assignedDriverName || undefined}
+        />
+      )}
       <OpsOdometerKmHint
         odometerKm={tripSyncOdometerKm}
         vehicleOdometerKm={selectedVehicle?.odometerKm ?? 0}

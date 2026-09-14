@@ -89,6 +89,18 @@ export class TenantInvitesController {
   }
 }
 
+@Controller('tenant/client-invites')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class TenantClientInvitesController {
+  constructor(private readonly invites: UserInvitesService) {}
+
+  @Get()
+  @Roles(MembershipRole.tenant_admin)
+  listAll(@TenantId() tenantSlug: string, @CurrentAccess() access: AccessContext) {
+    return this.invites.listAllClientInvites(tenantSlug, access);
+  }
+}
+
 @Controller('clients/:clientId/invites')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ClientInvitesController {

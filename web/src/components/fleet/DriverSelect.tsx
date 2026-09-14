@@ -9,9 +9,21 @@ type Props = {
   onChange: (driverId: string) => void;
   disabled?: boolean;
   required?: boolean;
+  /** Etichetă dacă value nu e în lista activă (alocare existentă). */
+  selectedLabel?: string;
+  /** Când e deja un label în jur (OpsFormField / TicketForm). */
+  hideLabel?: boolean;
 };
 
-export function DriverSelect({ clientCode, value, onChange, disabled, required }: Props) {
+export function DriverSelect({
+  clientCode,
+  value,
+  onChange,
+  disabled,
+  required,
+  selectedLabel,
+  hideLabel,
+}: Props) {
   const [options, setOptions] = useState<DriverRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,17 +58,15 @@ export function DriverSelect({ clientCode, value, onChange, disabled, required }
     };
   }, [clientCode]);
 
-  useEffect(() => {
-    if (value && options.length > 0 && !options.some((d) => d.id === value)) {
-      onChange("");
-    }
-  }, [clientCode, options, value, onChange]);
+  const selectedMissing = Boolean(value) && !options.some((d) => d.id === value);
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-zinc-400">
-        Șofer {required ? <span className="text-rose-400">*</span> : null}
-      </label>
+      {hideLabel ? null : (
+        <label className="text-sm text-zinc-400">
+          Șofer {required ? <span className="text-rose-400">*</span> : null}
+        </label>
+      )}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -71,6 +81,9 @@ export function DriverSelect({ clientCode, value, onChange, disabled, required }
               ? "Se încarcă…"
               : "Fără șofer / nealocat"}
         </option>
+        {selectedMissing ? (
+          <option value={value}>{selectedLabel?.trim() || "Șofer alocat"}</option>
+        ) : null}
         {options.map((d) => (
           <option key={d.id} value={d.id}>
             {d.fullName}
@@ -79,7 +92,7 @@ export function DriverSelect({ clientCode, value, onChange, disabled, required }
         ))}
       </select>
       {error ? <p className="text-xs text-amber-400">{error}</p> : null}
-      {!loading && clientCode && options.length === 0 ? (
+      {!loading && clientCode && options.length === 0 && !selectedMissing ? (
         <p className="text-xs text-zinc-500">
           Niciun șofer activ pentru acest client.{" "}
           <a href="/fleet/drivers/new" className="text-emerald-400 hover:underline">

@@ -3,8 +3,14 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TripForm } from "@/components/fleet/TripForm";
-import { canWriteTrips, getAuthMeResult } from "@/lib/auth-server";
-import { getVehicleOptions } from "@/lib/vehicle-options-server";
+import {
+  canWriteTrips,
+  driverIdFromAuth,
+  driverNameFromAuth,
+  getAuthMeResult,
+  isClientDriverPortal,
+} from "@/lib/auth-server";
+import { getTripVehicleOptions, getVehicleOptions } from "@/lib/vehicle-options-server";
 
 export default async function NewTripPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
   const sp = await searchParams;
@@ -15,7 +21,11 @@ export default async function NewTripPage({ searchParams }: { searchParams: Prom
   if (!canWriteTrips(auth)) {
     redirect("/fleet/trips");
   }
-  const vehicles = await getVehicleOptions();
+  const driverPortal = isClientDriverPortal(auth);
+  const lockedDriverId = driverPortal ? driverIdFromAuth(auth) : undefined;
+  const assignedIds = auth.ok ? (auth.me.access?.assignedVehicleIds ?? []) : [];
+  const defaultVehicleId = sp.vehicleId ?? (driverPortal ? assignedIds[0] : undefined);
+  const vehicles = driverPortal ? await getTripVehicleOptions() : await getVehicleOptions();
 
   return (
     <FleetPageMain>
@@ -28,8 +38,14 @@ export default async function NewTripPage({ searchParams }: { searchParams: Prom
           Înapoi la listă
         </Link>
       </div>
-      <OpsFormLayout module="trips" formTitle="Cursă nouă" vehicles={vehicles} defaultVehicleId={sp.vehicleId}>
-        <TripForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} />
+      <OpsFormLayout module="trips" formTitle="Cursă nouă" vehicles={vehicles} defaultVehicleId={defaultVehicleId}>
+        <TripForm
+          mode="create"
+          vehicles={vehicles}
+          defaultVehicleId={defaultVehicleId}
+          lockedDriverId={lockedDriverId}
+          lockedDriverName={driverPortal ? driverNameFromAuth(auth) : undefined}
+        />
       </OpsFormLayout>
     </FleetPageMain>
   );

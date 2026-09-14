@@ -2,16 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { InviteCopyLink } from "@/components/fleet/InviteCopyLink";
+import { ClientInvitesLedger } from "@/components/fleet/ClientInvitesLedger";
+import { type ClientInviteRecord } from "@/lib/client-invites";
 import { clientsBrowserBase } from "@/lib/clients-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 
-export type ClientInviteRecord = {
-  id: string;
-  email: string;
-  clientRole: string | null;
-  inviteUrl: string;
-  expiresAt: string;
-};
+export type { ClientInviteRecord };
 
 const CLIENT_ROLES = [
   { value: "client_admin", label: "Administrator client (L1)" },
@@ -25,9 +21,10 @@ type DriverOption = { id: string; fullName: string };
 type Props = {
   clientId: string;
   clientCode: string;
+  hideHistory?: boolean;
 };
 
-export function ClientInvitePanel({ clientId, clientCode }: Props) {
+export function ClientInvitePanel({ clientId, clientCode, hideHistory }: Props) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("client_admin");
   const [driverId, setDriverId] = useState("");
@@ -151,25 +148,13 @@ export function ClientInvitePanel({ clientId, clientCode }: Props) {
         </button>
       </div>
       {error ? <p className="text-xs text-amber-300">{error}</p> : null}
-      {lastInvite ? (
+      {lastInvite?.inviteUrl ? (
         <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-xs text-emerald-200">
           <p>Link pentru {lastInvite.email}:</p>
           <InviteCopyLink url={lastInvite.inviteUrl} />
         </div>
       ) : null}
-      {items.length > 0 ? (
-        <ul className="space-y-2 text-xs text-zinc-400">
-          {items.map((i) => (
-            <li key={i.id} className="flex flex-wrap items-center justify-between gap-2">
-              <span>
-                {i.email} · {i.clientRole ?? "echipă"} · expiră{" "}
-                {new Date(i.expiresAt).toLocaleDateString("ro-RO")}
-              </span>
-              {i.inviteUrl ? <InviteCopyLink url={i.inviteUrl} compact /> : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {hideHistory ? null : <ClientInvitesLedger items={items} />}
     </div>
   );
 }

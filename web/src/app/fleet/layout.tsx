@@ -44,6 +44,7 @@ export default async function FleetLayout({ children }: { children: React.ReactN
       readOnly={auth.ok && auth.me.role === "tenant_viewer"}
       authBanner={authBanner}
       homeHref={getDefaultFleetHome(auth, hint)}
+      driverPortal={driverPortal}
     >
       {children}
     </FleetLayoutSwitcher>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { FleetSidebarNav } from "@/components/fleet/FleetSidebarNav";
-import { FLEET_MOBILE_TABS, type FleetNavGroup } from "@/lib/fleet-nav";
+import { FLEET_MOBILE_TABS, type FleetMobileTab, type FleetNavGroup } from "@/lib/fleet-nav";
 import { LogoutButton } from "@/app/fleet/logout-button";
 
 type FleetShellProps = {
@@ -18,6 +18,7 @@ type FleetShellProps = {
   readOnly?: boolean;
   authBanner?: React.ReactNode;
   homeHref?: string;
+  mobileTabs?: FleetMobileTab[];
 };
 
 function mobileTabActive(pathname: string, prefixes: string[]): boolean {
@@ -36,6 +37,7 @@ export function FleetShell({
   readOnly,
   authBanner,
   homeHref = "/fleet/dashboard",
+  mobileTabs = FLEET_MOBILE_TABS,
 }: FleetShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "";
@@ -118,7 +120,7 @@ export function FleetShell({
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
           aria-label="Navigare rapidă"
         >
-          {FLEET_MOBILE_TABS.map((tab) => {
+          {mobileTabs.map((tab) => {
             const active = tab.openMenu ? menuOpen : mobileTabActive(pathname, tab.activePrefixes);
             if (tab.openMenu) {
               return (

@@ -13,6 +13,8 @@ import {
   type SupplierMembershipRow,
 } from "@/components/fleet/SupplierInvitesHubPanel";
 import { TenantInvitePanel } from "@/components/fleet/TenantInvitePanel";
+import { ClientInvitesLedger } from "@/components/fleet/ClientInvitesLedger";
+import type { ClientInviteRecord } from "@/lib/client-invites";
 import { getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
 
@@ -77,6 +79,17 @@ async function fetchSupplierMemberships(): Promise<SupplierMembershipRow[]> {
   }
 }
 
+async function fetchClientInvites(): Promise<ClientInviteRecord[]> {
+  try {
+    const res = await apiServerFetch("/tenant/client-invites");
+    if (!res?.ok) return [];
+    const rows = (await res.json()) as ClientInviteRecord[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 async function fetchSuppliers(): Promise<SupplierInviteOption[]> {
   try {
     const res = await apiServerFetch("/suppliers?status=active&pageSize=200");
@@ -107,10 +120,11 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
   const tab = tabFromSearch(sp.tab);
   const currentUserEmail = auth.ok ? auth.me.email : undefined;
 
-  const [data, clientMemberships, clients, suppliers, supplierMemberships] = await Promise.all([
+  const [data, clientMemberships, clients, clientInvites, suppliers, supplierMemberships] = await Promise.all([
     tab === "abonat" ? fetchMembers() : Promise.resolve(null),
     tab === "client" ? fetchClientMemberships() : Promise.resolve([]),
     tab === "client" ? fetchClients() : Promise.resolve([]),
+    tab === "client" ? fetchClientInvites() : Promise.resolve([]),
     tab === "furnizor" ? fetchSuppliers() : Promise.resolve([]),
     tab === "furnizor" ? fetchSupplierMemberships() : Promise.resolve([]),
   ]);
@@ -150,7 +164,18 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
           </section>
         ) : null}
         {tab === "client" ? (
-          <ClientMembershipsPanel memberships={clientMemberships} clients={clients} />
+          <div className="space-y-8">
+            <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+              <h2 className="text-sm font-medium text-zinc-200">Invitații generate de clienți</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Toate invitațiile L1/L0 — cine a generat, status, fără să alegi clientul.
+              </p>
+              <div className="mt-4">
+                <ClientInvitesLedger items={clientInvites} showClient />
+              </div>
+            </section>
+            <ClientMembershipsPanel memberships={clientMemberships} clients={clients} />
+          </div>
         ) : null}
         {tab === "furnizor" ? (
           <SupplierInvitesHubPanel suppliers={suppliers} memberships={supplierMemberships} />

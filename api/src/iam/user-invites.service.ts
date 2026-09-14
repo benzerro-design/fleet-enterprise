@@ -17,16 +17,26 @@ import { buildPublicUrl, resolveWebOrigin, webOriginLooksBroken } from '../web-o
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+const inviteInclude = {
+  createdBy: { select: { email: true } },
+  client: { select: { code: true, legalName: true } },
+} as const;
+
 export type UserInviteRecord = {
   id: string;
   email: string;
   targetRole: MembershipRole;
   clientId: string | null;
+  clientCode?: string | null;
+  clientLegalName?: string | null;
   clientRole: ClientRole | null;
   expiresAt: string;
   acceptedAt: string | null;
-  inviteUrl: string;
+  inviteUrl: string | null;
   createdAt: string;
+  createdByUserId?: string | null;
+  createdByEmail?: string | null;
+  status: 'pending' | 'accepted' | 'expired';
 };
 
 @Injectable()
@@ -56,6 +66,7 @@ export class UserInvitesService {
         acceptedAt: null,
         targetRole: { in: [MembershipRole.tenant_admin, MembershipRole.tenant_viewer] },
       },
+      include: inviteInclude,
       orderBy: { createdAt: 'desc' },
       take: 30,
     });
@@ -91,11 +102,31 @@ export class UserInvitesService {
       where: {
         tenantId: tenant.id,
         clientId: client.id,
-        acceptedAt: null,
         targetRole: MembershipRole.client_user,
       },
+      include: inviteInclude,
       orderBy: { createdAt: 'desc' },
-      take: 30,
+      take: 50,
+    });
+    return rows.map((r) => this.toRecord(r));
+  }
+
+  async listAllClientInvites(
+    tenantSlug: string,
+    access: AccessContext,
+  ): Promise<UserInviteRecord[]> {
+    if (!access.isTenantWide || access.membershipRole !== MembershipRole.tenant_admin) {
+      throw new ForbiddenException('Only tenant admin can list all client invites');
+    }
+    const tenant = await this.requireTenant(tenantSlug);
+    const rows = await this.prisma.userInvite.findMany({
+      where: {
+        tenantId: tenant.id,
+        targetRole: MembershipRole.client_user,
+      },
+      include: inviteInclude,
+      orderBy: { createdAt: 'desc' },
+      take: 80,
     });
     return rows.map((r) => this.toRecord(r));
   }
@@ -383,17 +414,30 @@ export class UserInvitesService {
     expiresAt: Date;
     acceptedAt: Date | null;
     createdAt: Date;
+    createdByUserId?: string | null;
+    createdBy?: { email: string } | null;
+    client?: { code: string; legalName: string } | null;
   }): UserInviteRecord {
+    const status: UserInviteRecord['status'] = row.acceptedAt
+      ? 'accepted'
+      : row.expiresAt.getTime() < Date.now()
+        ? 'expired'
+        : 'pending';
     return {
       id: row.id,
       email: row.email,
       targetRole: row.targetRole,
       clientId: row.clientId,
+      clientCode: row.client?.code ?? null,
+      clientLegalName: row.client?.legalName ?? null,
       clientRole: row.clientRole,
       expiresAt: row.expiresAt.toISOString(),
       acceptedAt: row.acceptedAt?.toISOString() ?? null,
-      inviteUrl: this.inviteUrl(row.token),
+      inviteUrl: status === 'pending' ? this.inviteUrl(row.token) : null,
       createdAt: row.createdAt.toISOString(),
+      createdByUserId: row.createdByUserId ?? null,
+      createdByEmail: row.createdBy?.email ?? null,
+      status,
     };
   }
 }

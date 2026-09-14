@@ -3,7 +3,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { TicketForm } from "@/components/fleet/TicketForm";
-import { canWriteTickets, defaultClientCodeForTickets, getAuthMeResult } from "@/lib/auth-server";
+import {
+  canWriteTickets,
+  defaultClientCodeForTickets,
+  driverIdFromAuth,
+  driverNameFromAuth,
+  getAuthMeResult,
+  isClientDriverPortal,
+} from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { TenantServiceTypesResponse } from "@/lib/tenant-service-types/types";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
@@ -33,6 +40,8 @@ export default async function NewTicketPage({ searchParams }: { searchParams: Pr
   const vehicles = await getVehicleOptions();
   const serviceTypes = await loadServiceTypes();
   const defaultClient = sp.client ?? defaultClientCodeForTickets(auth);
+  const driverPortal = isClientDriverPortal(auth);
+  const lockedDriverId = driverPortal ? driverIdFromAuth(auth) : undefined;
 
   return (
     <FleetPageMain>
@@ -47,9 +56,12 @@ export default async function NewTicketPage({ searchParams }: { searchParams: Pr
           vehicles={vehicles}
           serviceTypes={serviceTypes}
           lockClient={Boolean(defaultClient)}
+          lockedDriverId={lockedDriverId}
+          lockedDriverName={driverPortal ? driverNameFromAuth(auth) : undefined}
           initial={{
             clientId: defaultClient,
             vehicleId: sp.vehicleId,
+            driverId: lockedDriverId,
             reminderActionId: sp.reminderActionId,
             subject: sp.subject,
           }}

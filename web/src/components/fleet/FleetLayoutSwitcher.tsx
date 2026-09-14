@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { FleetShell } from "@/components/fleet/FleetShell";
-import type { FleetNavGroup } from "@/lib/fleet-nav";
+import { getFleetMobileTabs, type FleetNavGroup } from "@/lib/fleet-nav";
 
 type Props = {
   children: React.ReactNode;
@@ -15,6 +15,7 @@ type Props = {
   readOnly?: boolean;
   authBanner?: React.ReactNode;
   homeHref?: string;
+  driverPortal?: boolean;
 };
 
 export function FleetLayoutSwitcher({
@@ -28,6 +29,7 @@ export function FleetLayoutSwitcher({
   readOnly,
   authBanner,
   homeHref,
+  driverPortal,
 }: Props) {
   const pathname = usePathname() ?? "";
   const isPartnerRoute = pathname === "/fleet/partner" || pathname.startsWith("/fleet/partner/");
@@ -47,6 +49,7 @@ export function FleetLayoutSwitcher({
       readOnly={readOnly}
       authBanner={authBanner}
       homeHref={homeHref}
+      mobileTabs={getFleetMobileTabs({ clientDriverPortal: driverPortal })}
     >
       {children}
     </FleetShell>

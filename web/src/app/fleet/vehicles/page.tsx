@@ -11,10 +11,19 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
-import { canWriteFleetOps, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
+import { DriverHomeView, type DriverHomeTrip } from "@/components/fleet/DriverHomeView";
+import {
+  canWriteFleetOps,
+  driverIdFromAuth,
+  driverNameFromAuth,
+  getAuthMeResult,
+  isClientDriverPortal,
+} from "@/lib/auth-server";
 import { type VehicleListPayload, VEHICLE_STATUSES, fleetBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import type { ReminderActionRow } from "@/lib/reminder-actions";
+import type { TicketListPayload } from "@/lib/tickets-api";
 
 type Search = {
   q?: string;
@@ -22,19 +31,19 @@ type Search = {
   page?: string;
 };
 
-function buildListQuery(sp: Search): string {
+function buildListQuery(sp: Search, pageSize = 20): string {
   const p = new URLSearchParams();
   if (sp.q?.trim()) p.set("q", sp.q.trim());
   if (sp.status?.trim()) p.set("status", sp.status.trim());
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   p.set("page", String(page));
-  p.set("pageSize", "20");
+  p.set("pageSize", String(pageSize));
   return p.toString();
 }
 
-async function getVehiclesList(sp: Search): Promise<VehicleListPayload | null> {
+async function getVehiclesList(sp: Search, pageSize = 20): Promise<VehicleListPayload | null> {
   try {
-    const res = await fleetServerFetch(`/fleet/vehicles?${buildListQuery(sp)}`);
+    const res = await fleetServerFetch(`/fleet/vehicles?${buildListQuery(sp, pageSize)}`);
     if (!res) return null;
     if (!res.ok) return null;
     return (await res.json()) as VehicleListPayload;
@@ -43,13 +52,67 @@ async function getVehiclesList(sp: Search): Promise<VehicleListPayload | null> {
   }
 }
 
+type TripListPayload = { items: DriverHomeTrip[] };
+type ReminderListPayload = { items: ReminderActionRow[] };
+
+async function loadDriverHomeData(driverId?: string) {
+  const tripQs = new URLSearchParams({ page: "1", pageSize: "8", ended: "open" });
+  if (driverId) tripQs.set("driverId", driverId);
+  const [tripsRes, remindersRes, ticketsRes] = await Promise.all([
+    fleetServerFetch(`/trips?${tripQs.toString()}`),
+    fleetServerFetch("/reminders?status=action&page=1&pageSize=8"),
+    fleetServerFetch("/tickets?page=1&pageSize=20"),
+  ]);
+  let trips: DriverHomeTrip[] = [];
+  let reminders: ReminderActionRow[] = [];
+  let tickets: TicketListPayload["items"] = [];
+  try {
+    if (tripsRes?.ok) trips = ((await tripsRes.json()) as TripListPayload).items ?? [];
+  } catch {
+    trips = [];
+  }
+  try {
+    if (remindersRes?.ok) reminders = ((await remindersRes.json()) as ReminderListPayload).items ?? [];
+  } catch {
+    reminders = [];
+  }
+  try {
+    if (ticketsRes?.ok) {
+      const payload = (await ticketsRes.json()) as TicketListPayload;
+      tickets = (payload.items ?? []).filter((t) => t.status === "open" || t.status === "in_progress").slice(0, 8);
+    }
+  } catch {
+    tickets = [];
+  }
+  return { trips, reminders, tickets };
+}
+
 type PageProps = { searchParams: Promise<Search> };
 
 export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const [list, auth] = await Promise.all([getVehiclesList(sp), getAuthMeResult()]);
+  const auth = await getAuthMeResult();
   const write = canWriteFleetOps(auth);
   const driverPortal = isClientDriverPortal(auth);
+
+  if (driverPortal) {
+    const [list, extra] = await Promise.all([
+      getVehiclesList({ page: "1" }, 50),
+      loadDriverHomeData(driverIdFromAuth(auth)),
+    ]);
+    return (
+      <DriverHomeView
+        driverName={driverNameFromAuth(auth)}
+        vehicles={list?.items ?? []}
+        vehiclesLoadFailed={!list}
+        trips={extra.trips}
+        reminders={extra.reminders}
+        tickets={extra.tickets}
+      />
+    );
+  }
+
+  const list = await getVehiclesList(sp);
 
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const pageSize = 20;

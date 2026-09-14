@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { ClientRole, MembershipRole } from '@prisma/client';
+import type { AccessContext } from './access-context.types';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../audit/audit.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
@@ -39,7 +41,54 @@ export class ClientMembershipsService {
       },
     });
 
-    return rows.map((r) => ({
+    return rows.map((r) => this.toRow(r));
+  }
+
+  async listForClient(tenantSlug: string, clientId: string, access: AccessContext) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) return [];
+    const client = await resolveClientInTenant(this.prisma, tenant.id, clientId);
+    this.assertCanReadTeam(access, client.id);
+    const rows = await this.prisma.clientMembership.findMany({
+      where: { tenantId: tenant.id, clientId: client.id },
+      orderBy: { user: { email: 'asc' } },
+      include: {
+        client: { select: { code: true, legalName: true } },
+        user: { select: { email: true, displayName: true } },
+        driver: { select: { fullName: true } },
+      },
+    });
+    return rows.map((r) => this.toRow(r));
+  }
+
+  private assertCanReadTeam(access: AccessContext, clientId: string) {
+    if (access.isTenantWide && access.membershipRole === MembershipRole.tenant_admin) return;
+    if (access.membershipRole !== MembershipRole.client_user) {
+      throw new ForbiddenException('Not allowed');
+    }
+    if (!access.allowedClientIds.includes(clientId)) {
+      throw new ForbiddenException('Client access denied');
+    }
+    const ok = access.clientMemberships.some(
+      (m) =>
+        m.clientId === clientId &&
+        (m.role === ClientRole.client_admin || m.role === ClientRole.client_dispatcher),
+    );
+    if (!ok) throw new ForbiddenException('Only client admin or dispatcher can view the team');
+  }
+
+  private toRow(r: {
+    id: string;
+    clientId: string;
+    client: { code: string; legalName: string };
+    userId: string;
+    user: { email: string; displayName: string | null };
+    role: ClientRole;
+    driverId: string | null;
+    driver: { fullName: string } | null;
+    createdAt: Date;
+  }) {
+    return {
       id: r.id,
       clientId: r.clientId,
       clientCode: r.client.code,
@@ -51,7 +100,7 @@ export class ClientMembershipsService {
       driverId: r.driverId,
       driverFullName: r.driver?.fullName ?? null,
       createdAt: r.createdAt.toISOString(),
-    }));
+    };
   }
 
   async create(

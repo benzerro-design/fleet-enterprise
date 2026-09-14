@@ -14,6 +14,8 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { TenantId } from '../fleet/tenant-id.decorator';
+import { CurrentAccess } from './current-access.decorator';
+import type { AccessContext } from './access-context.types';
 import { ClientMembershipsService } from './client-memberships.service';
 
 @Controller('tenant/client-memberships')
@@ -66,5 +68,21 @@ export class ClientMembershipsController {
     @CurrentUserId() actorUserId?: string,
   ) {
     await this.memberships.remove(tenantSlug, id, actorUserId);
+  }
+}
+
+@Controller('clients/:clientId/memberships')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class ClientTeamMembershipsController {
+  constructor(private readonly memberships: ClientMembershipsService) {}
+
+  @Get()
+  @Roles(MembershipRole.tenant_admin, MembershipRole.client_user)
+  list(
+    @TenantId() tenantSlug: string,
+    @Param('clientId') clientId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.memberships.listForClient(tenantSlug, clientId, access);
   }
 }

@@ -311,6 +311,19 @@ export type FleetMobileTab = {
   openMenu?: boolean;
 };
 
+export function getFleetMobileTabs(ctx: { clientDriverPortal?: boolean }): FleetMobileTab[] {
+  if (ctx.clientDriverPortal) {
+    return [
+      { label: "Acasă", href: "/fleet/vehicles", activePrefixes: ["/fleet/vehicles"] },
+      { label: "Curse", href: "/fleet/trips", activePrefixes: ["/fleet/trips"] },
+      { label: "Tichete", href: "/fleet/tickets", activePrefixes: ["/fleet/tickets"] },
+      { label: "Remindere", href: "/fleet/reminders", activePrefixes: ["/fleet/reminders"] },
+      { label: "Mai mult", href: "#", activePrefixes: [], openMenu: true },
+    ];
+  }
+  return FLEET_MOBILE_TABS;
+}
+
 export const FLEET_MOBILE_TABS: FleetMobileTab[] = [
   {
     label: "Acasă",
@@ -357,9 +370,11 @@ function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup 
       return { ...group, label: "Solicitări", items };
     }
     if (group.id === "operations") {
-      const items = group.items.filter(
-        (e) => e.kind === "link" && e.href !== "/fleet/dashboard",
-      );
+      const items = group.items
+        .filter((e) => e.kind === "link" && e.href !== "/fleet/dashboard")
+        .map((e) =>
+          e.kind === "link" && e.href === "/fleet/vehicles" ? { ...e, label: "Acasă" } : e,
+        );
       if (items.length === 0) return null;
       return { ...group, items };
     }
