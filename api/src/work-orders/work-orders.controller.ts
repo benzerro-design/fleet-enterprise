@@ -204,6 +204,7 @@ export class WorkOrdersController {
       outServiceAt?: string | null;
       odometerKmIn?: number | null;
       odometerKmOut?: number | null;
+      visitIndex?: number | null;
     },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,

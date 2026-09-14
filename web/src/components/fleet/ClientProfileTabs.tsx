@@ -123,18 +123,33 @@ export function ClientProfileTabs({
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/50">
       <div className="grid gap-3 border-b border-zinc-800 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <KpiCard label="Vehicule active" value={String(kpis.vehiclesActive)} sub={`din ${kpis.vehiclesTotal}`} />
+        <KpiCard
+          label="Vehicule active"
+          value={String(kpis.vehiclesActive)}
+          sub={`din ${kpis.vehiclesTotal}`}
+          href={`/fleet/clients/${client.id}?tab=vehicles`}
+        />
         <KpiCard
           label="Remindere acțiune"
           value={String(kpis.remindersActionCount)}
           accent={kpis.remindersActionCount > 0 ? "warn" : undefined}
+          href={`/fleet/reminders?${clientQs}&status=action`}
         />
-        <KpiCard label="Costuri luna curentă" value={`${formatRonFromCents(kpis.costsMonthCents)} RON`} />
-        <KpiCard label="Curse luna curentă" value={String(kpis.tripsMonthCount)} />
+        <KpiCard
+          label="Costuri luna curentă"
+          value={`${formatRonFromCents(kpis.costsMonthCents)} RON`}
+          href={`/fleet/costs?${clientQs}`}
+        />
+        <KpiCard
+          label="Curse luna curentă"
+          value={String(kpis.tripsMonthCount)}
+          href={`/fleet/trips?${clientQs}`}
+        />
         <KpiCard
           label="ITP în 30 zile"
           value={String(kpis.itpWithin30Days)}
           accent={kpis.itpWithin30Days > 0 ? "warn" : undefined}
+          href={`/fleet/clients/${client.id}?tab=vehicles`}
         />
         <KpiCard label="Sănătate" value={client.healthLabel ?? "OK"} />
       </div>
@@ -282,21 +297,34 @@ function KpiCard({
   value,
   sub,
   accent,
+  href,
 }: {
   label: string;
   value: string;
   sub?: string;
   accent?: "warn";
+  href?: string;
 }) {
-  return (
-    <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2">
+  const inner = (
+    <>
       <p className="text-xs text-zinc-500">{label}</p>
       <p className={`mt-0.5 text-lg font-semibold ${accent === "warn" ? "text-amber-300" : "text-zinc-100"}`}>
         {value}
       </p>
       {sub ? <p className="text-xs text-zinc-500">{sub}</p> : null}
-    </div>
+    </>
   );
+  const className = `rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2 ${
+    href ? "transition-colors hover:border-zinc-600 hover:bg-zinc-900/80" : ""
+  }`;
+  if (href) {
+    return (
+      <Link href={href} className={`${className} block`}>
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={className}>{inner}</div>;
 }
 
 function QuickLink({ href, label }: { href: string; label: string }) {

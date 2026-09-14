@@ -1480,6 +1480,8 @@ model MaintenanceWorkOrder {
   /// Dată estimativă finalizare reparație — obligatorie înainte de trimitere deviz spre aprobare (partener).
   estimatedRepairAt DateTime?
   notes         String?
+  /// Vizite atelier 3+ (vizitele 1–2 rămân pe coloanele IN/OUT existente).
+  extraVisits   Json     @default("[]")
   createdAt     DateTime                   @default(now())
   updatedAt     DateTime                   @updatedAt
   tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)

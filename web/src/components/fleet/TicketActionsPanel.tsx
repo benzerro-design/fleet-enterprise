@@ -23,8 +23,23 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
   const [showRoute, setShowRoute] = useState(false);
   const [showReturn, setShowReturn] = useState(false);
 
+  const [lstarUserId, setLstarUserId] = useState("");
+  const [l1UserId, setL1UserId] = useState("");
+
   const closed = ticket.status === "resolved" || ticket.status === "cancelled";
   const needsClaim = !ticket.ownerUserId && !closed;
+  const lstarPeople = (detail.routeTargets ?? []).filter((t) => t.level === "L_STAR");
+  const l1People = (detail.routeTargets ?? []).filter((t) => t.level === "L1");
+
+  function routePayload(targetLevel: "L_STAR" | "L1", profile?: "F" | "T" | "G") {
+    const ownerUserId = targetLevel === "L_STAR" ? lstarUserId : l1UserId;
+    return {
+      targetLevel,
+      reason: profile ? `${routeReason.trim()} [${profile}]` : routeReason.trim(),
+      ...(profile ? { profile } : {}),
+      ...(ownerUserId ? { ownerUserId } : {}),
+    };
+  }
 
   async function post(path: string, body?: unknown) {
     setPending(path);
@@ -181,7 +196,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
         <div className="mt-4 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
           <p className="text-xs font-medium text-amber-200">Redirecționează tichetul</p>
           <p className="mt-1 text-[11px] text-zinc-500">
-            Alege coada țintă. Profilurile F/T/G orientează către financiar, tehnic sau logistică (L1).
+            Alege persoana de la nivelul țintă. Destinatarul vede de la cine a primit (nume + nivel).
           </p>
           <label className="mt-3 block text-xs text-amber-200">Motiv (obligatoriu)</label>
           <textarea
@@ -191,35 +206,63 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
             placeholder="De ce redirecționezi…"
           />
+          {lstarPeople.length > 0 ? (
+            <label className="mt-3 block text-xs text-zinc-400">
+              Persoană L★
+              <select
+                value={lstarUserId}
+                onChange={(e) => setLstarUserId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+              >
+                <option value="">— alege —</option>
+                {lstarPeople.map((p) => (
+                  <option key={p.userId} value={p.userId}>
+                    {p.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {l1People.length > 0 ? (
+            <label className="mt-3 block text-xs text-zinc-400">
+              Persoană L1
+              <select
+                value={l1UserId}
+                onChange={(e) => setL1UserId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+              >
+                <option value="">— alege —</option>
+                {l1People.map((p) => (
+                  <option key={p.userId} value={p.userId}>
+                    {p.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={!!pending || routeReason.trim().length < 3}
-              onClick={() => post("/route", { targetLevel: "L_STAR", reason: routeReason.trim() })}
+              disabled={!!pending || routeReason.trim().length < 3 || (lstarPeople.length > 0 && !lstarUserId)}
+              onClick={() => post("/route", routePayload("L_STAR"))}
               className="rounded-lg bg-amber-700 px-3 py-1.5 text-xs text-white hover:bg-amber-600 disabled:opacity-50"
             >
-              → L★ FlotaX
+              → L★
             </button>
             <button
               type="button"
-              disabled={!!pending || routeReason.trim().length < 3}
-              onClick={() => post("/route", { targetLevel: "L1", reason: routeReason.trim() })}
+              disabled={!!pending || routeReason.trim().length < 3 || (l1People.length > 0 && !l1UserId)}
+              onClick={() => post("/route", routePayload("L1"))}
               className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
             >
-              → L1 client
+              → L1
             </button>
             {(["F", "T", "G"] as const).map((profile) => (
               <button
                 key={profile}
                 type="button"
-                disabled={!!pending || routeReason.trim().length < 3}
-                onClick={() =>
-                  post("/route", {
-                    targetLevel: "L1",
-                    profile,
-                    reason: `${routeReason.trim()} [${profile}]`,
-                  })
-                }
+                disabled={!!pending || routeReason.trim().length < 3 || (l1People.length > 0 && !l1UserId)}
+                onClick={() => post("/route", routePayload("L1", profile))}
                 className="rounded-lg border border-violet-600/40 bg-violet-950/30 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/50 disabled:opacity-50"
               >
                 → L1 · {profile}
@@ -238,10 +281,27 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
             rows={2}
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
           />
+          {lstarPeople.length > 0 ? (
+            <label className="mt-3 block text-xs text-zinc-400">
+              Persoană L★
+              <select
+                value={lstarUserId}
+                onChange={(e) => setLstarUserId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+              >
+                <option value="">— alege —</option>
+                {lstarPeople.map((p) => (
+                  <option key={p.userId} value={p.userId}>
+                    {p.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <button
             type="button"
-            disabled={!!pending || routeReason.trim().length < 3}
-            onClick={() => post("/route", { targetLevel: "L_STAR", reason: routeReason.trim() })}
+            disabled={!!pending || routeReason.trim().length < 3 || (lstarPeople.length > 0 && !lstarUserId)}
+            onClick={() => post("/route", routePayload("L_STAR"))}
             className="mt-2 rounded-lg bg-amber-700 px-3 py-1.5 text-sm text-white hover:bg-amber-600 disabled:opacity-50"
           >
             Confirmă escaladare

@@ -118,6 +118,41 @@ export type WorkOrderListRow = {
   };
 };
 
+export type WorkOrderExtraVisit = {
+  n: number;
+  inServiceAt: string | null;
+  outServiceAt: string | null;
+  odometerKmIn: number | null;
+  odometerKmOut: number | null;
+};
+
+export function parseWorkOrderExtraVisits(raw: unknown): WorkOrderExtraVisit[] {
+  if (!Array.isArray(raw)) return [];
+  const out: WorkOrderExtraVisit[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const rec = item as Record<string, unknown>;
+    const n = Number(rec.n);
+    if (!Number.isInteger(n) || n < 3) continue;
+    const iso = (v: unknown): string | null =>
+      typeof v === 'string' && v.trim() ? v : null;
+    const km = (v: unknown): number | null => {
+      if (v == null || v === '') return null;
+      const x = Number(v);
+      return Number.isFinite(x) && x >= 0 ? Math.round(x) : null;
+    };
+    out.push({
+      n,
+      inServiceAt: iso(rec.inServiceAt),
+      outServiceAt: iso(rec.outServiceAt),
+      odometerKmIn: km(rec.odometerKmIn),
+      odometerKmOut: km(rec.odometerKmOut),
+    });
+  }
+  out.sort((a, b) => a.n - b.n);
+  return out;
+}
+
 export type WorkOrderTicketSettlement = {
   entityType: 'maintenance' | 'cost' | 'document';
   entityId: string;
@@ -141,6 +176,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   odometerKmOut: number | null;
   visit2OdometerKmIn: number | null;
   visit2OdometerKmOut: number | null;
+  extraVisits: WorkOrderExtraVisit[];
   repairPathNote: string | null;
   readyAt: string | null;
   /** Etapă suplimentară după deviz aprobat v2+ (partener). */
@@ -793,6 +829,9 @@ export class WorkOrdersService {
       odometerKmOut: row.odometerKmOut ?? null,
       visit2OdometerKmIn: row.visit2OdometerKmIn ?? null,
       visit2OdometerKmOut: row.visit2OdometerKmOut ?? null,
+      extraVisits: parseWorkOrderExtraVisits(
+        (row as { extraVisits?: unknown }).extraVisits,
+      ),
       repairPathNote: row.repairPathNote ?? null,
       readyAt: row.readyAt?.toISOString() ?? null,
       supplementRepairAt: row.supplementRepairAt?.toISOString() ?? null,
@@ -1218,6 +1257,125 @@ export class WorkOrdersService {
     return this.getById(tenantSlug, id);
   }
 
+  private async recordExtraVisitTimes(
+    tenantSlug: string,
+    wo: {
+      id: string;
+      tenantId: string;
+      outServiceAt: Date | null;
+      visit2InServiceAt: Date | null;
+      visit2OutServiceAt: Date | null;
+      extraVisits?: unknown;
+      vehicle: { id: string; odometerKm: number };
+    },
+    dto: {
+      inServiceAt?: string | null;
+      outServiceAt?: string | null;
+      odometerKmIn?: number | null;
+      odometerKmOut?: number | null;
+    },
+    visitIndex: number,
+    actorUserId?: string,
+  ): Promise<ServiceTimesResult> {
+    if (!wo.outServiceAt) {
+      throw new BadRequestException('Vizita 1 trebuie să aibă OUT înainte de vizite suplimentare');
+    }
+    if (wo.visit2InServiceAt && !wo.visit2OutServiceAt) {
+      throw new BadRequestException('Finalizează vizita 2 (OUT) înainte de o vizită nouă');
+    }
+
+    const visits = parseWorkOrderExtraVisits(wo.extraVisits);
+    const lastN = visits.length ? visits[visits.length - 1]!.n : 2;
+    let current = visits.find((v) => v.n === visitIndex);
+    if (!current) {
+      if (visitIndex !== lastN + 1) {
+        throw new BadRequestException(`Următoarea vizită trebuie să fie ${lastN + 1}`);
+      }
+      if (lastN >= 3) {
+        const prev = visits.find((v) => v.n === lastN);
+        if (!prev?.outServiceAt) {
+          throw new BadRequestException(`Vizita ${lastN} trebuie să aibă OUT înainte de vizita ${visitIndex}`);
+        }
+      }
+      current = {
+        n: visitIndex,
+        inServiceAt: null,
+        outServiceAt: null,
+        odometerKmIn: null,
+        odometerKmOut: null,
+      };
+      visits.push(current);
+    }
+
+    const parseIso = (raw: string | null | undefined, field: string): string | null | undefined => {
+      if (raw === undefined) return undefined;
+      if (raw === null || raw === '') return null;
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) throw new BadRequestException(`Invalid ${field}`);
+      return d.toISOString();
+    };
+    const parseKm = (raw: number | null | undefined, field: string): number | null | undefined => {
+      if (raw === undefined) return undefined;
+      if (raw === null) return null;
+      if (!Number.isFinite(raw) || raw < 0) throw new BadRequestException(`${field} must be a non-negative integer`);
+      return Math.round(raw);
+    };
+
+    const nextIn = parseIso(dto.inServiceAt, 'inServiceAt');
+    const nextOut = parseIso(dto.outServiceAt, 'outServiceAt');
+    const nextKmIn = parseKm(dto.odometerKmIn, 'odometerKmIn');
+    const nextKmOut = parseKm(dto.odometerKmOut, 'odometerKmOut');
+    if (nextIn !== undefined) current.inServiceAt = nextIn;
+    if (nextOut !== undefined) current.outServiceAt = nextOut;
+    if (nextKmIn !== undefined) current.odometerKmIn = nextKmIn;
+    if (nextKmOut !== undefined) current.odometerKmOut = nextKmOut;
+    if (current.outServiceAt && !current.inServiceAt) {
+      throw new BadRequestException('Nu poți marca OUT înainte de IN pe vizita suplimentară');
+    }
+
+    visits.sort((a, b) => a.n - b.n);
+    await this.prisma.maintenanceWorkOrder.update({
+      where: { id: wo.id },
+      data: { extraVisits: visits as unknown as Prisma.InputJsonValue },
+    });
+
+    const kmCandidates = [current.odometerKmIn, current.odometerKmOut].filter(
+      (n): n is number => n != null,
+    );
+    const fleetKm = kmCandidates.length ? Math.max(...kmCandidates) : null;
+    let fleetOdometerUpdate: ServiceTimesResult['fleetOdometerUpdate'] | undefined;
+    if (fleetKm != null && fleetKm >= wo.vehicle.odometerKm) {
+      const previousKm = wo.vehicle.odometerKm;
+      await this.prisma.$transaction(async (tx) => {
+        await tx.odometerReading.create({
+          data: {
+            vehicleId: wo.vehicle.id,
+            odometerKm: fleetKm,
+            source: 'ops',
+            sourceRef: `work_order:${wo.id}:visit${visitIndex}`,
+            notes: `Km vizită ${visitIndex} (comandă)`,
+            recordedByUserId: actorUserId ?? null,
+          },
+        });
+        await tx.vehicle.update({
+          where: { id: wo.vehicle.id },
+          data: { odometerKm: fleetKm, updatedByUserId: actorUserId ?? undefined },
+        });
+      });
+      fleetOdometerUpdate = { updated: true, previousKm, newKm: fleetKm };
+    }
+
+    const detail = await this.getById(tenantSlug, wo.id);
+    return {
+      ...detail,
+      fleetOdometerUpdate: fleetOdometerUpdate ?? {
+        updated: false,
+        previousKm: wo.vehicle.odometerKm,
+        newKm: null,
+      },
+    };
+  }
+
   async recordServiceTimes(
     tenantSlug: string,
     id: string,
@@ -1226,6 +1384,7 @@ export class WorkOrdersService {
       outServiceAt?: string | null;
       odometerKmIn?: number | null;
       odometerKmOut?: number | null;
+      visitIndex?: number | null;
     },
     actorUserId?: string,
     access?: AccessContext,
@@ -1269,6 +1428,12 @@ export class WorkOrdersService {
             : 'Cannot update service times',
         );
       }
+    }
+
+    const visitIndex =
+      dto.visitIndex == null || dto.visitIndex === undefined ? null : Number(dto.visitIndex);
+    if (visitIndex != null && Number.isInteger(visitIndex) && visitIndex >= 3) {
+      return this.recordExtraVisitTimes(tenantSlug, wo, dto, visitIndex, actorUserId);
     }
 
     const data: {

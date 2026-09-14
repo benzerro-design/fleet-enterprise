@@ -56,6 +56,7 @@ export type TicketRecord = {
   createdByEmail: string | null;
   ownerUserId: string | null;
   ownerEmail: string | null;
+  ownerDisplayName?: string | null;
   resolvedAt: string | null;
   eventOdometerKm: number | null;
   /** Obligatoriu la tip daună: deplasabilă | nedeplasabilă. */
@@ -110,10 +111,18 @@ export type TicketListPayload = {
   pageSize: number;
 };
 
+export type TicketRouteTarget = {
+  userId: string;
+  displayName: string;
+  email: string;
+  level: "L_STAR" | "L1";
+};
+
 export type TicketDetailPayload = {
   ticket: TicketRecord;
   events: TicketEventRecord[];
   links: TicketLinkRecord[];
+  routeTargets?: TicketRouteTarget[];
 };
 
 export type TicketStats = {

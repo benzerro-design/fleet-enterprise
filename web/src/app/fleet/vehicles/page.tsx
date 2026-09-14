@@ -241,6 +241,43 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
           </p>
         ) : (
           <>
+            <div className="space-y-3 md:hidden">
+              {vehicles.map((v) => (
+                <article key={v.id} className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                  <p className="font-mono text-sm font-medium text-zinc-100">{v.registrationNumber}</p>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {v.clientId}
+                    {v.type ? ` · ${v.type}` : ""}
+                    {v.status ? ` · ${v.status}` : ""}
+                  </p>
+                  <p className="mt-2 font-mono text-xs text-zinc-300">
+                    {v.odometerKm.toLocaleString("ro-RO")} km
+                    {" · ITP "}
+                    {v.itpExpiresOn ? new Date(v.itpExpiresOn).toLocaleDateString("ro-RO") : "—"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href={`/fleet/vehicles/${v.id}`}
+                      className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-zinc-800"
+                    >
+                      Vezi
+                    </Link>
+                    {write ? (
+                      <>
+                        <Link
+                          href={`/fleet/vehicles/${v.id}/edit`}
+                          className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+                        >
+                          Editare
+                        </Link>
+                        <DeleteVehicleButton vehicleId={v.id} registrationNumber={v.registrationNumber} />
+                      </>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="hidden md:block">
             <FleetDataTable>
                 <table className={fleetTableClass}>
                   <thead className={`${fleetTheadClass} tracking-wide`}>
@@ -292,6 +329,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                   </tbody>
                 </table>
               </FleetDataTable>
+            </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
                 <p>

@@ -13,6 +13,7 @@ import {
   findVinInText,
   mapCivPairsToFields,
   parseCivIssuedOnIso,
+  stripDanglingCivParens,
   type CivLabelPair,
 } from './civ-label-map';
 import { splitCivBookPages, stripEnglishCivGlossary } from './civ-pages';
@@ -98,6 +99,8 @@ function isStickerDate(front: string, dateRaw: string): boolean {
 
 function pickIssueDate(front: string): string | null {
   const nearIssue =
+    /eliberare\s+vehicul[\s\S]{0,120}?(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})/i.exec(front)?.[1] ??
+    /Dat[aă]\s*eliberar[\s\S]{0,80}?(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})/i.exec(front)?.[1] ??
     /eliberare[\s\S]{0,120}?(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})/i.exec(front)?.[1] ??
     /Data[\s\S]{0,40}?(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})/i.exec(front)?.[1];
   if (nearIssue && !isStickerDate(front, nearIssue)) {
@@ -204,7 +207,7 @@ function coerceProfileValue(key: string, raw: string): string | number {
     const n = Number(String(raw).replace(',', '.').replace(/[^\d.-]/g, ''));
     if (Number.isFinite(n)) return n;
   }
-  return raw.trim();
+  return stripDanglingCivParens(raw);
 }
 
 /** Pe 2024 versiunea vine ca „YHVM - P2S10N ( 1T )”, formă pe care regula 2016 o respinge. */
@@ -239,6 +242,7 @@ function parseLabelledRubrics(
     civIssuedOn: string | null;
     civRarOffice: string | null;
     civSeries: string | null;
+    civMentions: string | null;
   },
 ) {
   const pairs = extractCivLabelValuePairs(text);
@@ -254,14 +258,20 @@ function parseLabelledRubrics(
   if (tvv) setProfile(profile, matched, 'typeVariantVersion', tvv, 'Tip / variantă / versiune');
 
   for (const hit of hits) {
-    // Seria se ia doar de sub barcode, mențiunile doar de pe pagina 4.
-    if (hit.kind === 'civSeries' || hit.kind === 'civMentions') continue;
+    // Seria se ia doar de sub barcode. Mențiunile etichetate se unesc cu reconstrucția de pe față.
+    if (hit.kind === 'civSeries') continue;
     if (hit.kind === 'vin') {
       meta.vin ??= hit.value.replace(/\s+/g, '').toUpperCase();
     } else if (hit.kind === 'civIssuedOn') {
-      meta.civIssuedOn ??= parseCivIssuedOnIso(hit.value) ?? hit.value.trim();
+      if (!meta.civIssuedOn) {
+        meta.civIssuedOn = parseCivIssuedOnIso(hit.value) ?? hit.value.trim();
+        matched.push({ rubric: hit.label, target: 'civIssuedOn', value: meta.civIssuedOn });
+      }
     } else if (hit.kind === 'civRarOffice') {
       meta.civRarOffice ??= hit.value.trim();
+    } else if (hit.kind === 'civMentions') {
+      const mention = hit.value.trim();
+      if (mention && mention !== '-') meta.civMentions ??= mention;
     } else if (hit.kind === 'profile') {
       setProfile(profile, matched, hit.key, coerceProfileValue(hit.key, hit.value), hit.label);
     }
@@ -315,7 +325,7 @@ function parseFrontIdent(
       profile,
       matched,
       'usageCategory',
-      usage.replace(/\s+/g, ' ').toUpperCase(),
+      stripDanglingCivParens(usage.replace(/\s+/g, ' ').toUpperCase()),
       'Categorie de folosință',
     );
   }
@@ -323,10 +333,14 @@ function parseFrontIdent(
   const cat = pickHomologationCategory(front);
   if (cat) setProfile(profile, matched, 'homologationCategory', cat, 'Categorie omologare');
 
-  const issued = pickIssueDate(front);
-  if (issued) {
-    meta.civIssuedOn = issued;
-    matched.push({ rubric: 'Data eliberării', target: 'civIssuedOn', value: issued });
+  // Eticheta „Data eliberării” e sursa de încredere. pickIssueDate ia prima dată lângă
+  // „eliberare” (inclusiv an fabricație / prima înmatriculare) — nu suprascrie.
+  if (!meta.civIssuedOn) {
+    const issued = pickIssueDate(front);
+    if (issued) {
+      meta.civIssuedOn = issued;
+      matched.push({ rubric: 'Data eliberării', target: 'civIssuedOn', value: issued });
+    }
   }
 
   const issueYear = meta.civIssuedOn ? Number(meta.civIssuedOn.slice(0, 4)) : null;
@@ -553,12 +567,16 @@ function pickClassAndBody(
 /** Caseta Mențiuni de pe față (Ordin 211) — text oficial, nu sticker. */
 function parse2024Mentions(front: string): string | null {
   const t = stripDiacritics(front);
-  if (!/mentiuni/i.test(t) && !/filtru/i.test(t)) return null;
+  if (!/mentiuni/i.test(t) && !/filtru/i.test(t) && !/\bPHEV\b/i.test(front) && !/PLUG[\s-]*IN/i.test(front)) {
+    return null;
+  }
 
   const lines: string[] = [];
   if (/filtru/i.test(t) && /particule/i.test(t)) {
     lines.push('FILTRU DE PARTICULE');
   }
+  if (/\bPHEV\b/i.test(front)) lines.push('PHEV');
+  if (/PLUG[\s-]*IN/i.test(front)) lines.push('PLUG-IN');
 
   const asg = /ASG0?\d{1,4}/i.exec(front)?.[0]?.toUpperCase();
   // Data ștampilei vine și lipită („16/06/2025”), și spațiată („16 / 06 / 2025”).
@@ -575,6 +593,58 @@ function parse2024Mentions(front: string): string | null {
   }
 
   return lines.length ? lines.join('\n') : null;
+}
+
+function mergeCivMentions(...parts: Array<string | null | undefined>): string | null {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const part of parts) {
+    if (!part) continue;
+    for (const raw of part.split(/\n+/)) {
+      const line = stripDanglingCivParens(raw);
+      if (!line || line === '-') continue;
+      const key = stripDiacritics(line).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(line);
+    }
+  }
+  return lines.length ? lines.join('\n') : null;
+}
+
+const CIV_FUEL_TOKEN_RE = /\b(MOTORINA|BENZINA|GPL|ELECTRIC|HIBRID[AĂ]?)\b/gi;
+
+function collectFuelTokens(hay: string): string[] {
+  const out: string[] = [];
+  for (const m of hay.matchAll(CIV_FUEL_TOKEN_RE)) {
+    const t = stripDiacritics(m[1]!).toUpperCase().replace(/HIBRIDA$/, 'HIBRID');
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+/** P.3 pe linie: toate sursele. Restul verso-ului: un singur token RO — glosarul EN are „electric”. */
+function pickFuelFromText(verso: string): string | null {
+  const p3 =
+    /P\.?\s*3[^\n]{0,160}/i.exec(verso)?.[0] ??
+    /Tip combustibil sau surs[aă] de energie[^\n]{0,80}/i.exec(verso)?.[0];
+  if (p3) {
+    const fromLine = collectFuelTokens(p3);
+    if (fromLine.length) return fromLine.join(' + ');
+  }
+  for (const line of verso.split(/\r?\n/)) {
+    if (line.length > 80) continue;
+    const tokens = collectFuelTokens(line);
+    if (
+      tokens.length >= 2 &&
+      tokens.some((t) => t === 'BENZINA' || t === 'MOTORINA' || t === 'GPL' || t === 'HIBRID')
+    ) {
+      return tokens.join(' + ');
+    }
+  }
+  const fuelRo = /\b(MOTORINA|BENZINA|GPL|HIBRID[AĂ]?)\b/i.exec(verso)?.[1];
+  const fuel = fuelRo ?? (/\bELECTRIC\b/i.exec(verso)?.[1]);
+  return fuel ? stripDiacritics(fuel).toUpperCase().replace(/HIBRIDA$/, 'HIBRID') : null;
 }
 
 /** S.1 etichetat — unica sursă sigură când OCR amestecă cifra cu Euro n. */
@@ -903,10 +973,22 @@ function parseVersoGrid(
   matched: CivExtractMatch[],
   warnings: CivExtractWarning[],
 ) {
-  const fuelRo = /\b(MOTORINA|BENZINA|GPL|HIBRID[AĂ]?)\b/i.exec(verso)?.[1];
-  const fuel = fuelRo ?? (/\bELECTRIC\b/i.exec(verso)?.[1]);
+  const fuel = pickFuelFromText(verso);
   if (fuel) {
-    setProfile(profile, matched, 'fuelType', stripDiacritics(fuel).toUpperCase(), 'Combustibil / sursă energie');
+    const current = String(profile.fuelType ?? '').trim();
+    const curTokens = current ? current.split(/\s*\+\s*/) : [];
+    const nextTokens = fuel.split(/\s*\+\s*/);
+    const isSuperset =
+      curTokens.length > 0 &&
+      curTokens.every((t) => nextTokens.includes(t)) &&
+      nextTokens.length > curTokens.length;
+    if (!current) {
+      setProfile(profile, matched, 'fuelType', fuel, 'Combustibil / sursă energie');
+    } else if (isSuperset) {
+      profile.fuelType = fuel;
+      const hit = matched.find((m) => m.target === 'fuelType');
+      if (hit) hit.value = fuel;
+    }
   }
 
   parseVersoCapacity(verso, profile, matched, warnings);
@@ -1037,6 +1119,7 @@ export function mapCiv2024TextToPreview(
     civIssuedOn: null as string | null,
     civRarOffice: null as string | null,
     civSeries: null as string | null,
+    civMentions: null as string | null,
   };
 
   // Blocul de identificare stă pe pagina 1 la 2024, deci fața intră și ea în perechi.
@@ -1060,7 +1143,7 @@ export function mapCiv2024TextToPreview(
 
   warnOnConfusableSeats(profile, warnings);
 
-  const mentions = parse2024Mentions(front);
+  const mentions = mergeCivMentions(parse2024Mentions(front), meta.civMentions);
   if (mentions) {
     matched.push({ rubric: 'Mențiuni', target: 'civMentions', value: mentions });
   }

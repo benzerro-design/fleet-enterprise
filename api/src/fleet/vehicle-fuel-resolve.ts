@@ -19,6 +19,10 @@ export function parseCivFuelTypeText(raw: unknown): FuelType | null {
   const direct = parseFuelType(t);
   if (direct) return direct;
 
+  const hasElectric = /(electric|electrica|kwh|kw\/h|battery|baterie)/.test(t);
+  const hasLiquid = /(diesel|motorina|motorin|gasoil|mazut|benzina|benzin|petrol|gasoline|essence|super)/.test(t);
+  if (/(hybrid|hibrid)/.test(t) || (hasElectric && hasLiquid)) return 'hybrid';
+
   if (/(^|\b)(diesel|motorina|motorin|gasoil|mazut)(\b|$)/.test(t)) return 'diesel';
   if (/(^|\b)(benzina|benzin|petrol|gasoline|essence|super)(\b|$)/.test(t)) return 'petrol';
   if (/(^|\b)(gpl|lpg|gaz petrolier)(\b|$)/.test(t)) return 'lpg';

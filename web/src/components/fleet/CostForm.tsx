@@ -287,8 +287,8 @@ export function CostForm(props: Props) {
       return;
     }
 
-    if (driverPortal && !notes.trim()) {
-      setError("Câmpul explicații este obligatoriu pentru această categorie.");
+    if (isFuelCostCategory(category.trim()) && !notes.trim()) {
+      setError("Câmpul explicații este obligatoriu pentru combustibil.");
       return;
     }
 
@@ -487,9 +487,23 @@ export function CostForm(props: Props) {
         <OpsOdometerSyncNotice sync={odometerSync} />
 
         <OpsFormPrimaryBand module="costs" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <OpsFormField label="Categorie" required>
               {categorySelect}
+            </OpsFormField>
+            <OpsFormField
+              label={driverPortal ? "Explicații" : "Note"}
+              required={isFuel}
+              hint={isFuel ? "Obligatoriu pentru combustibil." : "Opțional pentru spălare și restul categoriilor."}
+            >
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                required={isFuel}
+                className={OPS_INPUT_CLASS}
+                placeholder={isFuel ? "Ex. motorină, pompă 4…" : "Opțional"}
+              />
             </OpsFormField>
             <OpsFormField label="Data costului" required>
               <input type="date" required value={incurredOn} onChange={(e) => setIncurredOn(e.target.value)} className={OPS_INPUT_CLASS} />
@@ -633,9 +647,6 @@ export function CostForm(props: Props) {
 
         <OpsFormCollapsible title="5. Termene & remindere (pliable)">
           {reminderBlock}
-          <OpsFormField label="Notițe">
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={OPS_INPUT_CLASS} />
-          </OpsFormField>
         </OpsFormCollapsible>
 
         <OpsFormStickyActions
@@ -672,6 +683,20 @@ export function CostForm(props: Props) {
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Categorie</label>
         {categorySelect}
+      </div>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-zinc-300">
+          {driverPortal ? "Explicații" : "Note"}
+          {isFuel ? " *" : ""}
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={3}
+          required={isFuel}
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+          placeholder={isFuel ? "Obligatoriu pentru combustibil" : "Opțional"}
+        />
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Furnizor (opțional)</label>
@@ -787,10 +812,6 @@ export function CostForm(props: Props) {
       </div>
       {reminderBlock}
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Notițe (opțional)</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
-      </div>
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">
           {pending ? "Salvez..." : isEdit ? "Salvează modificările" : "Creează costul"}

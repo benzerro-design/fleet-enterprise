@@ -12,6 +12,8 @@ import {
   CrmTicketRoutingLevel,
   CrmTicketStatus,
   CrmTicketType,
+  ClientRole,
+  MembershipRole,
   Prisma,
   ReminderSourceType,
   VehicleMovableState,
@@ -61,6 +63,7 @@ export type TicketRecord = {
   createdByEmail: string | null;
   ownerUserId: string | null;
   ownerEmail: string | null;
+  ownerDisplayName: string | null;
   eventOdometerKm: number | null;
   vehicleMovable: VehicleMovableState | null;
   resolvedAt: string | null;
@@ -89,10 +92,18 @@ export type TicketLinkRecord = {
   createdAt: string;
 };
 
+export type TicketRouteTarget = {
+  userId: string;
+  displayName: string;
+  email: string;
+  level: 'L_STAR' | 'L1';
+};
+
 export type TicketDetailPayload = {
   ticket: TicketRecord;
   events: TicketEventRecord[];
   links: TicketLinkRecord[];
+  routeTargets: TicketRouteTarget[];
 };
 
 export type TicketStats = {
@@ -164,6 +175,8 @@ export type RouteTicketInput = {
   reason: string;
   /** Profil funcțional pe coadă L1: F financiar, T tehnic, G logistică */
   profile?: 'F' | 'T' | 'G';
+  /** Persoană țintă; fără ea tichetul rămâne pe coadă, neasignat. */
+  ownerUserId?: string | null;
 };
 
 export type ReturnTicketInput = { reason: string };
@@ -198,7 +211,7 @@ type TicketRow = Prisma.CrmTicketGetPayload<{
     vehicle: { select: { registrationNumber: true; odometerKm: true } };
     driver: { select: { fullName: true } };
     createdBy: { select: { email: true } };
-    owner: { select: { email: true } };
+    owner: { select: { email: true; displayName: true } };
     serviceType: { select: { id: true; code: true; label: true } };
   };
 }>;
@@ -456,6 +469,7 @@ export class CrmTicketsService {
         entityId: l.entityId,
         createdAt: l.createdAt.toISOString(),
       })),
+      routeTargets: await this.listRouteTargets(tenant.id, row.clientId),
     };
   }
 
@@ -1023,6 +1037,18 @@ export class CrmTicketsService {
       throw new BadRequestException('targetLevel must be L_STAR or L1');
     }
 
+    const requestedOwner = dto.ownerUserId?.trim() || null;
+    let nextOwnerUserId: string | null = null;
+    if (requestedOwner) {
+      const targets = await this.listRouteTargets(tenant.id, ticket.clientId);
+      const allowedLevel = dto.targetLevel === 'L_STAR' ? 'L_STAR' : 'L1';
+      const picked = targets.find((t) => t.userId === requestedOwner && t.level === allowedLevel);
+      if (!picked) {
+        throw new BadRequestException('ownerUserId is not a valid recipient for this level');
+      }
+      nextOwnerUserId = picked.userId;
+    }
+
     const row = await this.prisma.crmTicket.update({
       where: { id },
       data: {
@@ -1032,15 +1058,18 @@ export class CrmTicketsService {
           ticket.status === CrmTicketStatus.resolved || ticket.status === CrmTicketStatus.cancelled
             ? ticket.status
             : CrmTicketStatus.in_progress,
-        ownerUserId: null,
+        ownerUserId: nextOwnerUserId,
       },
       include: this.ticketInclude(),
     });
 
+    const ownerLabel = row.owner?.displayName || row.owner?.email || null;
     await this.appendEvent(tenant.id, id, {
       kind: CrmTicketEventKind.routing,
       body: actor
-        ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)}): ${reason}`
+        ? `${actor.displayName} (${routingLevelLabel(actor.routingLevel)})${
+            ownerLabel ? ` → ${ownerLabel}` : ''
+          }: ${reason}`
         : reason,
       actor,
       payload: {
@@ -1048,6 +1077,7 @@ export class CrmTicketsService {
         toLevel: routingLevel,
         assignedQueue,
         profile: dto.profile ?? null,
+        ownerUserId: nextOwnerUserId,
       },
     });
 
@@ -1428,13 +1458,57 @@ export class CrmTicketsService {
     });
   }
 
+  private async listRouteTargets(tenantId: string, clientId: string): Promise<TicketRouteTarget[]> {
+    const [lstar, l1] = await Promise.all([
+      this.prisma.tenantMembership.findMany({
+        where: { tenantId, role: MembershipRole.tenant_admin },
+        include: { user: { select: { email: true, displayName: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.clientMembership.findMany({
+        where: {
+          tenantId,
+          clientId,
+          role: { in: [ClientRole.client_admin, ClientRole.client_dispatcher] },
+        },
+        include: { user: { select: { email: true, displayName: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    const out: TicketRouteTarget[] = [];
+    const seenStar = new Set<string>();
+    for (const m of lstar) {
+      if (seenStar.has(m.userId)) continue;
+      seenStar.add(m.userId);
+      out.push({
+        userId: m.userId,
+        email: m.user.email,
+        displayName: m.user.displayName?.trim() || m.user.email,
+        level: 'L_STAR',
+      });
+    }
+    const seenL1 = new Set<string>();
+    for (const m of l1) {
+      if (seenL1.has(m.userId)) continue;
+      seenL1.add(m.userId);
+      out.push({
+        userId: m.userId,
+        email: m.user.email,
+        displayName: m.user.displayName?.trim() || m.user.email,
+        level: 'L1',
+      });
+    }
+    return out;
+  }
+
   private ticketInclude() {
     return {
       client: { select: { code: true, legalName: true } },
       vehicle: { select: { registrationNumber: true, odometerKm: true } },
       driver: { select: { fullName: true } },
       createdBy: { select: { email: true } },
-      owner: { select: { email: true } },
+      owner: { select: { email: true, displayName: true } },
       serviceType: { select: { id: true, code: true, label: true } },
     } as const;
   }
@@ -1535,6 +1609,7 @@ export class CrmTicketsService {
       createdByEmail: row.createdBy?.email ?? null,
       ownerUserId: row.ownerUserId,
       ownerEmail: row.owner?.email ?? null,
+      ownerDisplayName: row.owner?.displayName ?? null,
       eventOdometerKm: row.eventOdometerKm,
       vehicleMovable: row.vehicleMovable ?? null,
       resolvedAt: row.resolvedAt?.toISOString() ?? null,

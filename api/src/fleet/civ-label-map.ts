@@ -48,6 +48,17 @@ function isEmptyCivValue(raw: string): boolean {
   return false;
 }
 
+/** OCR lipește `)` / `(` izolate la capete (`AUTOTURISM )`, `e1*…*10 (`). Nu atinge paranteze pereche (`(1T)`). */
+export function stripDanglingCivParens(raw: string): string {
+  let s = raw.trim();
+  s = s.replace(/^[)\]}]+/, '').trim();
+  s = s.replace(/[(\[{]+$/, '').trim();
+  if (!/[(\[{]/.test(s)) {
+    s = s.replace(/[)\]}]+$/, '').trim();
+  }
+  return s.replace(/\s+/g, ' ').trim();
+}
+
 function isYear(v: string): boolean {
   return /^(19|20)\d{2}$/.test(v.trim());
 }
@@ -61,10 +72,15 @@ function isPositiveNumber(v: string, min: number, max: number): boolean {
   return Number.isFinite(n) && n >= min && n <= max;
 }
 
+const CIV_FUEL_TOKENS = new Set(['MOTORINA', 'BENZINA', 'GPL', 'ELECTRIC', 'HIBRID']);
+
 function isFuel(v: string): boolean {
-  return /^(MOTORINA|MOTORINA|BENZINA|BENZINA|GPL|ELECTRIC|HIBRID|HIBRIDA|MOTORINĂ|BENZINĂ|HIBRIDĂ)$/i.test(
-    stripDiacritics(v).replace(/\s+/g, ''),
-  );
+  const tokens = stripDiacritics(v)
+    .toUpperCase()
+    .replace(/HIBRID[AĂ]/g, 'HIBRID')
+    .split(/[\s+,\/]+/)
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((t) => CIV_FUEL_TOKENS.has(t));
 }
 
 function isDrive(v: string): boolean {
@@ -404,7 +420,7 @@ export const CIV_LABEL_FIELDS: CivLabelFieldSpec[] = [
       'Sursa de energie',
       'Combustibil',
     ],
-    validate: (v) => isFuel(v) || (/^[A-ZĂÂÎȘȚa-zăâîșț \-]{3,40}$/.test(v) && !looksLikeLabelNotValue(v)),
+    validate: (v) => isFuel(v) || (/^[A-ZĂÂÎȘȚa-zăâîșț +\-\/]{3,40}$/.test(v) && !looksLikeLabelNotValue(v)),
   },
   {
     key: 'engineRpm',
@@ -633,7 +649,7 @@ export function extractCivLabelValuePairs(text: string): CivLabelPair[] {
     label = label.replace(/^[A-Z]\.?\d{0,2}\.?\s+/i, '').trim();
     label = label.replace(/^\d{1,2}(?:\.\d+)?\.?\s+/i, '').trim();
 
-    const value = (m[2] ?? '').trim();
+    const value = stripDanglingCivParens((m[2] ?? '').trim());
     if (isEmptyCivValue(value)) continue;
     if (looksLikeLabelNotValue(value) && value.length > 20) continue;
 
@@ -721,7 +737,7 @@ export function mapCivPairsToFields(pairs: CivLabelPair[]): CivLabelMapHit[] {
 
       if (score < MIN_SCORE) continue;
 
-      let value = pair.value.trim();
+      let value = stripDanglingCivParens(pair.value.trim());
       // Numere: „2634 ;” / „1670 kg” → extrage partea numerică înainte de validare.
       if (field.fieldKind === 'number' || field.fieldKind === 'year') {
         const num = value.match(/-?\d+(?:[.,]\d+)?/);
@@ -828,9 +844,10 @@ export function findCivSeriesInFrontText(text: string): string | null {
   if (pSeries.length === 1) return pSeries[0]!;
   if (unique.length === 1 && !unique[0]!.startsWith('R')) return unique[0]!;
 
-  // Vision rupe barcode-ul spațiat „S 8 6 9 7 4 0” în: „S eliberare” / „86: e2” / „9740 AF183…”.
+  // Vision rupe barcode-ul spațiat „S 8 6 9 7 4 0” în: „S eliberare vehicul” / „86: e2” / „9740 AF183…”.
+  // Cere „eliberare vehicul”: altfel litera S de lângă „Data eliberării” lipește cifre aleatorii (S083560).
   const splitBarcode =
-    /\b([A-HJ-NP-Z])\s+eliberare[\s\S]{0,120}?(\d{2})\s*:[\s\S]{0,280}?\b(\d{4})\s+[A-Z]{2}\d/i.exec(
+    /\b([A-HJ-NP-Z])\s+eliberare\s+vehicul[\s\S]{0,120}?(\d{2})\s*:[\s\S]{0,280}?\b(\d{4})\s+[A-Z]{2}\d/i.exec(
       withoutEngine,
     );
   if (splitBarcode) {

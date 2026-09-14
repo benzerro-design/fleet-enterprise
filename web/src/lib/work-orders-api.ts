@@ -93,6 +93,14 @@ export type WorkOrderTicketSettlement = {
   createdAt: string;
 };
 
+export type WorkOrderExtraVisit = {
+  n: number;
+  inServiceAt: string | null;
+  outServiceAt: string | null;
+  odometerKmIn: number | null;
+  odometerKmOut: number | null;
+};
+
 export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
   serviceCaseTitle: string;
@@ -109,6 +117,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   odometerKmOut: number | null;
   visit2OdometerKmIn: number | null;
   visit2OdometerKmOut: number | null;
+  extraVisits?: WorkOrderExtraVisit[];
   repairPathNote: string | null;
   /** Etapă suplimentară după Deviz aprobat v2+. */
   supplementRepairAt?: string | null;

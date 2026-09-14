@@ -98,6 +98,17 @@ export function WorkOrderSheetShell({
   const [kmOut, setKmOut] = useState(wo.odometerKmOut != null ? String(wo.odometerKmOut) : "");
   const [kmIn2, setKmIn2] = useState(wo.visit2OdometerKmIn != null ? String(wo.visit2OdometerKmIn) : "");
   const [kmOut2, setKmOut2] = useState(wo.visit2OdometerKmOut != null ? String(wo.visit2OdometerKmOut) : "");
+  const extraVisits = wo.extraVisits ?? [];
+  const [extraKm, setExtraKm] = useState<Record<number, { in: string; out: string }>>(() => {
+    const init: Record<number, { in: string; out: string }> = {};
+    for (const v of extraVisits) {
+      init[v.n] = {
+        in: v.odometerKmIn != null ? String(v.odometerKmIn) : "",
+        out: v.odometerKmOut != null ? String(v.odometerKmOut) : "",
+      };
+    }
+    return init;
+  });
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [sheetView, setSheetView] = useState<"comanda" | "dosar">("comanda");
@@ -238,6 +249,51 @@ export function WorkOrderSheetShell({
       return;
     }
     await patchServiceTimes(body);
+  }
+
+  async function markExtraIn(n: number) {
+    const body: Record<string, string | number> = {
+      visitIndex: n,
+      inServiceAt: new Date().toISOString(),
+    };
+    const kmVal = extraKm[n]?.in ?? "";
+    if (kmVal.trim()) {
+      const km = parseInt(kmVal, 10);
+      if (!Number.isFinite(km) || km < 0) {
+        setError("Km intrare invalid.");
+        return;
+      }
+      body.odometerKmIn = km;
+    } else if (requireKm) {
+      setError("Km intrare este obligatoriu.");
+      return;
+    }
+    await patchServiceTimes(body);
+  }
+
+  async function markExtraOut(n: number) {
+    const body: Record<string, string | number> = {
+      visitIndex: n,
+      outServiceAt: new Date().toISOString(),
+    };
+    const kmVal = extraKm[n]?.out ?? "";
+    if (kmVal.trim()) {
+      const km = parseInt(kmVal, 10);
+      if (!Number.isFinite(km) || km < 0) {
+        setError("Km ieșire invalid.");
+        return;
+      }
+      body.odometerKmOut = km;
+    } else if (requireKm) {
+      setError("Km ieșire este obligatoriu.");
+      return;
+    }
+    await patchServiceTimes(body);
+  }
+
+  async function addExtraVisit() {
+    const last = extraVisits.length ? extraVisits[extraVisits.length - 1]!.n : 2;
+    await patchServiceTimes({ visitIndex: last + 1 });
   }
 
   async function applyPostApproval(path: "immediate" | "reschedule") {
@@ -861,6 +917,96 @@ export function WorkOrderSheetShell({
                   </div>
                 </div>
               </div>
+            ) : null}
+
+            {extraVisits.map((v) => {
+              const km = extraKm[v.n] ?? { in: "", out: "" };
+              return (
+                <div key={v.n} className="mt-3 space-y-2 rounded-lg border border-sky-500/30 bg-sky-950/20 p-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/90">
+                    Vizită {v.n}
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="block text-zinc-500">
+                        Km in V{v.n}
+                        {requireKm ? <span className="text-amber-400"> *</span> : null}
+                        <input
+                          type="number"
+                          min={0}
+                          value={km.in}
+                          disabled={!canWrite || pending || !!v.inServiceAt}
+                          onChange={(e) =>
+                            setExtraKm((prev) => ({
+                              ...prev,
+                              [v.n]: { in: e.target.value, out: prev[v.n]?.out ?? km.out },
+                            }))
+                          }
+                          className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                        />
+                      </label>
+                      {v.inServiceAt ? (
+                        <p className="text-[10px] text-zinc-500">
+                          In: {new Date(v.inServiceAt).toLocaleString("ro-RO")}
+                        </p>
+                      ) : canWrite ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => void markExtraIn(v.n)}
+                          className="w-full rounded-lg bg-sky-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+                        >
+                          In service (V{v.n})
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-zinc-500">
+                        Km out V{v.n}
+                        {requireKm ? <span className="text-amber-400"> *</span> : null}
+                        <input
+                          type="number"
+                          min={0}
+                          value={km.out}
+                          disabled={!canWrite || pending || !v.inServiceAt || !!v.outServiceAt}
+                          onChange={(e) =>
+                            setExtraKm((prev) => ({
+                              ...prev,
+                              [v.n]: { in: prev[v.n]?.in ?? km.in, out: e.target.value },
+                            }))
+                          }
+                          className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                        />
+                      </label>
+                      {v.outServiceAt ? (
+                        <p className="text-[10px] text-zinc-500">
+                          Out: {new Date(v.outServiceAt).toLocaleString("ro-RO")}
+                        </p>
+                      ) : canWrite && v.inServiceAt ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => void markExtraOut(v.n)}
+                          className="w-full rounded-lg border border-sky-500/50 bg-sky-950/40 px-2 py-1.5 text-xs font-medium text-sky-100 hover:bg-sky-900/40 disabled:opacity-50"
+                        >
+                          Out service (V{v.n})
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {canWrite && wo.outServiceAt && !(wo.visit2InServiceAt && !wo.visit2OutServiceAt) ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void addExtraVisit()}
+                className="mt-3 w-full rounded-lg border border-zinc-600 px-2 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Adaugă vizită
+              </button>
             ) : null}
           </div>
         </div>

@@ -1,5 +1,7 @@
 import { mapCiv2024TextToPreview } from './civ-2024-extract';
 import { detectCivDocumentFormat, mapCivExtractTextToPreview } from './civ-extract';
+import { findCivSeriesInFrontText, stripDanglingCivParens } from './civ-label-map';
+import { parseCivFuelTypeText } from './vehicle-fuel-resolve';
 import { parseWebUploadUrl, webUploadObjectKey } from '../storage/web-upload-storage';
 
 const LOGAN = `
@@ -315,6 +317,75 @@ F.1 N.1 P.1
       'text',
     );
     expect(g.civProfile.emissionStandard).toBe('Euro 5; 715/2007*692/2008');
+  });
+});
+
+describe('CIV 2024 — UAT-036 (PHEV / serie / dată / paranteze)', () => {
+  it('nu lipește S + Data eliberării într-o serie falsă', () => {
+    expect(
+      findCivSeriesInFrontText(`S eliberare
+08: e1 * 2007 / 46 * 1918 * 10 (
+3560 XX1`),
+    ).toBeNull();
+  });
+
+  it('barcode-ul rupt Proace rămâne S869740', () => {
+    expect(
+      findCivSeriesInFrontText(`S eliberare vehicul VEHICULULUI
+86: e2 * cu
+23-06-2025 2007 YHVM
+9740 AF183D0901G65E6`),
+    ).toBe('S869740');
+  });
+
+  it('P.3 colectează BENZINA + ELECTRIC, fără ELECTRIC din glosarul EN', () => {
+    const g = mapCiv2024TextToPreview(
+      `
+=== CIV FAȚĂ ===
+Vehicle Identity Card
+Mențiuni: FILTRU DE PARTICULE PHEV PLUG-IN
+Categorie de folosință: AUTOTURISM )
+Număr omologare de tip: e1 * 2007 / 46 * 1918 * 10 (
+Data eliberării: 14/03/2024
+eliberare 05/10/2021
+
+=== CIV VERSO ===
+F.1 N.1 P.1
+5309
+P.3. Tip combustibil sau sursă de energie: BENZINA + ELECTRIC
+Electric motor power the fuel source
+MOTORINA glossary noise
+`,
+      'text',
+    );
+    expect(g.civProfile.fuelType).toBe('BENZINA + ELECTRIC');
+    expect(g.civProfile.usageCategory).toMatch(/^AUTOTURISM$/i);
+    expect(String(g.civProfile.typeApprovalNumber ?? '')).not.toMatch(/\($/);
+    expect(g.civMentions).toMatch(/FILTRU DE PARTICULE/);
+    expect(g.civMentions).toMatch(/PHEV/);
+    expect(g.civMentions).toMatch(/PLUG-IN/);
+    expect(parseCivFuelTypeText(g.civProfile.fuelType)).toBe('hybrid');
+  });
+
+  it('eticheta Data eliberării nu e suprascrisă de o dată mai veche lângă eliberare', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const ocr = fs.readFileSync(
+      path.join(__dirname, '../../scripts/fixtures/civ-2024-proace-derotated.ocr.txt'),
+      'utf8',
+    );
+    const poisoned = ocr.replace('=== CIV FAȚĂ ===', '=== CIV FAȚĂ ===\neliberare 05/10/2021\n');
+    const g = mapCivExtractTextToPreview(poisoned, 'unknown', 'file');
+    expect(g.civIssuedOn).toBe('2025-06-23');
+    expect(g.civSeries).toBe('S869740');
+    expect(g.civProfile.fuelType).toMatch(/MOTORINA/i);
+  });
+
+  it('stripDanglingCivParens lasă (1T) intact', () => {
+    expect(stripDanglingCivParens('YHVM-P2S10N(1T)')).toBe('YHVM-P2S10N(1T)');
+    expect(stripDanglingCivParens('( 1T )')).toBe('( 1T )');
+    expect(stripDanglingCivParens('AUTOTURISM )')).toBe('AUTOTURISM');
+    expect(stripDanglingCivParens('e1 * 2007 / 46 * 1918 * 10 (')).toBe('e1 * 2007 / 46 * 1918 * 10');
   });
 });
 
