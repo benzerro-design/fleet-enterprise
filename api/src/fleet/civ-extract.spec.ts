@@ -381,6 +381,52 @@ MOTORINA glossary noise
     expect(g.civProfile.fuelType).toMatch(/MOTORINA/i);
   });
 
+  // Scanul real BMW X5 xDrive45e (B108VDF): față cu glosar englezesc și barcode degradat,
+  // verso citit curat pe etichete. Complementul Proace-ului, care are fața rotită.
+  describe('scan real BMW X5 xDrive45e', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const ocr = fs.readFileSync(
+      path.join(__dirname, '../../scripts/fixtures/civ-2024-bmw-b108vdf.ocr.txt'),
+      'utf8',
+    );
+    const g = mapCivExtractTextToPreview(ocr, 'unknown', 'file');
+
+    it('citește identificarea și motorizarea de pe verso', () => {
+      expect(g.civProfile.brand).toBe('BMW');
+      expect(g.civProfile.commercialName).toMatch(/X5 xDrive45e/i);
+      expect(g.vin).toBe('WBATA610209F62120');
+      expect(g.civProfile.fuelType).toBe('BENZINA + ELECTRIC');
+      expect(parseCivFuelTypeText(g.civProfile.fuelType)).toBe('hybrid');
+      expect(g.civProfile.usageCategory).toMatch(/^AUTOTURISM$/i);
+      expect(String(g.civProfile.typeApprovalNumber ?? '')).not.toMatch(/\($/);
+    });
+
+    it('ia data eliberării de pe verso, nu „Data naşterii” de pe față', () => {
+      expect(g.civIssuedOn).toBe('2021-02-11');
+    });
+
+    it('nu inventează serie din glosarul englezesc (Soho s 0 8 3 5 6 0)', () => {
+      expect(g.civSeries).toBeNull();
+      const warning = g.civWarnings?.find((w) => w.target === 'civSeries');
+      expect(warning?.message).toMatch(/Completează seria/i);
+    });
+
+    it('citește caseta Mențiuni întreagă, nu doar fraza cunoscută', () => {
+      expect(g.civMentions).toContain('FILTRU DE PARTICULE');
+      expect(g.civMentions).toMatch(/CINT \/ TVV: ACBM350811YP1E6/);
+      expect(g.civMentions).toMatch(/275 \/ 45 R20/);
+      expect(g.civMentions).toMatch(/265 \/ 50 R19/);
+      // Blocul se oprește înainte de glosarul englezesc de pe față.
+      expect(g.civMentions).not.toMatch(/Registration certificate/i);
+      expect(g.civMentions).not.toMatch(/ARVAL/i);
+    });
+
+    it('nu raportează mențiuni pe care cardul nu le are', () => {
+      expect(g.civMentions).not.toMatch(/PHEV/);
+    });
+  });
+
   it('stripDanglingCivParens lasă (1T) intact', () => {
     expect(stripDanglingCivParens('YHVM-P2S10N(1T)')).toBe('YHVM-P2S10N(1T)');
     expect(stripDanglingCivParens('( 1T )')).toBe('( 1T )');

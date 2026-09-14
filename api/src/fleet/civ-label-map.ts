@@ -803,15 +803,19 @@ export function findCivSeriesInFrontText(text: string): string | null {
     /\b([A-HJ-NP-Z]\d{6})\b[\s\S]{0,40}?(?:serie|seria)\s*c\.?\s*i\.?\s*v/i.exec(withoutEngine);
   if (nearLabel && isCivSeriesCode(nearLabel[1]!)) return nearLabel[1]!.toUpperCase();
 
+  // Litera seriei e un token izolat în barcode („RO S 869 740”). `\b` singur lasă și coada unui
+  // cuvânt cu apostrof, iar glosarul englezesc de pe față produce „Soho's 0 8 3 5 6 0” → S083560.
   // „J 4 5 9 5 1 3” SAU „J 4 5 9 5 13” (Vision lipește ultimele două cifre).
   const compactSpaced = [
-    ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\b/gi),
+    ...withoutEngine.matchAll(
+      /(?<!['’‘])\b([A-HJ-NP-Z])\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\b/gi,
+    ),
   ].map((m) => `${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}${m[6]}${m[7]}`.toUpperCase());
   for (const c of compactSpaced) {
     if (isCivSeriesCode(c)) return c;
   }
   const gluedSpaced = [
-    ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])((?:\s+\d{1,2}){4,6})\b/gi),
+    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-HJ-NP-Z])((?:\s+\d{1,2}){4,6})\b/gi),
   ].map((m) => `${m[1]}${m[2]!.replace(/\s+/g, '')}`.toUpperCase());
   for (const c of gluedSpaced) {
     if (isCivSeriesCode(c)) return c;
@@ -819,7 +823,7 @@ export function findCivSeriesInFrontText(text: string): string | null {
 
   // „P 541981” / „P541981” — literă + 6 cifre (posibil spațiu).
   const letterDigits = [
-    ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])\s*(\d{6})\b/gi),
+    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-HJ-NP-Z])\s*(\d{6})\b/gi),
   ].map((m) => `${m[1]}${m[2]}`.toUpperCase());
   for (const c of letterDigits) {
     if (isCivSeriesCode(c)) return c;
@@ -827,13 +831,13 @@ export function findCivSeriesInFrontText(text: string): string | null {
 
   // Literă pe o linie, 6 cifre pe următoarea (OCR barcode fragmentat).
   const lineBroken = [
-    ...withoutEngine.matchAll(/\b([A-HJ-NP-Z])\s*\n\s*(\d{6})\b/gi),
+    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-HJ-NP-Z])\s*\n\s*(\d{6})\b/gi),
   ].map((m) => `${m[1]}${m[2]}`.toUpperCase());
   for (const c of lineBroken) {
     if (isCivSeriesCode(c)) return c;
   }
 
-  const candidates = [...withoutEngine.matchAll(/\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) =>
+  const candidates = [...withoutEngine.matchAll(/(?<!['’‘])\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) =>
     m[1]!.toUpperCase(),
   );
   const unique = [

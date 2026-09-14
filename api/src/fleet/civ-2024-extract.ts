@@ -595,6 +595,62 @@ function parse2024Mentions(front: string): string | null {
   return lines.length ? lines.join('\n') : null;
 }
 
+/** Cheie de dedup insensibilă la felul în care OCR-ul sparge spațiile și punctuația. */
+function civMentionKey(line: string): string {
+  return stripDiacritics(line)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Caseta Mențiuni de pe față: liniile de sub eticheta „Mențiuni:”. Caseta e contiguă pe card,
+ * deci prima linie de layout (marcaj de rubrică „A.” / „C.2”, simboluri, filigran, glosarul
+ * englezesc) o închide. Doar așa prindem și rândurile proprii fiecărui card — „Nr. CINT/TVV”,
+ * anvelopele opționale — pe care o listă de fraze cunoscute nu le poate acoperi.
+ */
+function parseMentionsBlockLines(front: string): string[] {
+  const lines = front.split(/\r?\n/);
+  const start = lines.findIndex((l) => /^\s*mentiuni\s*:?\s*$/i.test(stripDiacritics(l)));
+  if (start < 0) return [];
+
+  const out: string[] = [];
+  for (const raw of lines.slice(start + 1, start + 15)) {
+    // OCR lipește pe coada rândului marcajul rubricii vecine („… / spate . A.”).
+    const line = stripDanglingCivParens(raw.replace(/\s+[A-Z]\.\d?\s*$/, '').trim());
+    if (!line || line.length < 6) break;
+    if (/^[A-Z][\s.\d]*$/.test(line)) break;
+    if (/tiparit|registration certificate|vehicle ident|identity card/i.test(stripDiacritics(line))) {
+      break;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+/**
+ * Blocul citit de pe card dă conținutul și ordinea; formele sintetizate de `parse2024Mentions`
+ * dau normalizarea (data ștampilei fără spații), deci le preferăm acolo unde descriu același rând.
+ */
+function composeCivMentions(blockLines: string[], synthesized: string | null): string | null {
+  const synthLines = synthesized ? synthesized.split(/\n+/).filter(Boolean) : [];
+  const used = new Set<number>();
+  const out: string[] = [];
+  for (const line of blockLines) {
+    const key = civMentionKey(line);
+    const hit = synthLines.findIndex((s, idx) => !used.has(idx) && civMentionKey(s) === key);
+    if (hit >= 0) {
+      used.add(hit);
+      out.push(synthLines[hit]!);
+    } else {
+      out.push(line);
+    }
+  }
+  synthLines.forEach((s, idx) => {
+    if (!used.has(idx)) out.push(s);
+  });
+  return out.length ? out.join('\n') : null;
+}
+
 function mergeCivMentions(...parts: Array<string | null | undefined>): string | null {
   const seen = new Set<string>();
   const lines: string[] = [];
@@ -603,8 +659,8 @@ function mergeCivMentions(...parts: Array<string | null | undefined>): string | 
     for (const raw of part.split(/\n+/)) {
       const line = stripDanglingCivParens(raw);
       if (!line || line === '-') continue;
-      const key = stripDiacritics(line).toLowerCase();
-      if (seen.has(key)) continue;
+      const key = civMentionKey(line);
+      if (!key || seen.has(key)) continue;
       seen.add(key);
       lines.push(line);
     }
@@ -782,6 +838,37 @@ function warnOnConfusableSeats(profile: VehicleCivProfile, warnings: CivExtractW
     seats,
     'Vehicul cu utilizare multiplă, unde numărul de locuri diferă de la o versiune la alta.',
   );
+}
+
+/**
+ * Seria stă doar în barcode-ul de la baza feței. Când acolo OCR-ul dă text degradat, preferăm
+ * câmpul gol unei serii inventate — dar semnalăm, ca să fie completată de pe card.
+ */
+function warnOnMissingSeries(
+  front: string,
+  series: string | null,
+  warnings: CivExtractWarning[],
+) {
+  if (series || !front.trim()) return;
+  // Rândul barcode-ului e aproape numai cifre; rubricile au etichetă și text.
+  const barcodeish = front
+    .split(/\r?\n/)
+    .find(
+      (l) =>
+        (l.match(/\d/g)?.length ?? 0) >= 6 &&
+        (l.match(/[A-Za-z]/g)?.length ?? 0) <= 8 &&
+        !l.includes(':') &&
+        !/\d{2}[./-]\d{2}[./-]\d{4}/.test(l),
+    );
+  if (!barcodeish) return;
+
+  warnings.push({
+    rubric: 'Serie CIV',
+    target: 'civSeries',
+    read: barcodeish.trim().slice(0, 60),
+    candidates: [],
+    message: 'Barcode-ul de pe față nu s-a citit sigur. Completează seria de pe card.',
+  });
 }
 
 function parseVersoCapacity(
@@ -1142,8 +1229,12 @@ export function mapCiv2024TextToPreview(
   parseVersoGrid(verso, profile, matched, warnings);
 
   warnOnConfusableSeats(profile, warnings);
+  warnOnMissingSeries(pages.frontRaw, meta.civSeries, warnings);
 
-  const mentions = mergeCivMentions(parse2024Mentions(front), meta.civMentions);
+  const mentions = mergeCivMentions(
+    composeCivMentions(parseMentionsBlockLines(front), parse2024Mentions(front)),
+    meta.civMentions,
+  );
   if (mentions) {
     matched.push({ rubric: 'Mențiuni', target: 'civMentions', value: mentions });
   }

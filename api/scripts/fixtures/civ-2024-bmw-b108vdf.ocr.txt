@@ -1,0 +1,127 @@
+=== CIV FAȚĂ ===
+Menţiuni:
+Nr . CINT / TVV: ACBM350811YP1E6
+Filtru de particule .
+Anv . opt.275 / 45 R20 110 Y / fata +
+305/40 R20 112 Y / spate . A.
+Anv . opt.275 / 40 R21 107 Y / fata + C.2
+315/35 R21 111 Y / spate .
+Anv . opt.275 / 35 R22 104 Y / fata +
+315/30 R22 107 Y / spate .
+Anv . opt.265 / 50 R19 110 H M + S (
+A.
+C.2
+( Nr
+A.
+C.2
+Data
+( Nr
+A.
+C.2
+Data
+LA EURO STANDARD SRL A. this Registration certificate refers number ;: D.1 C.2 . . Make Owner ; of D.2 . the Type vehicle / ; Variant 1. / Version Registration ; D.3 . competent Commercial authority ; I. description Date ; of E. the Vehicle registration to identification which ( Nr
+number ; 2. Year of production ; J. Vehicle category ; 3. National category of use ; 4. Class ( only for M2 , M3 vehicles ) ;
+5. technically Bodywork ; K. permissible Type - approval laden mass number , , 6. except Number for in the motorcycles national ; 7. register of Technically vehicles ; L. permissible Number of maximum axles ; F.1 . mass of Maximum the
+combination ; N.1 - N.5 . Distribution of the technically permissible maximum laden mass among the axles ; G. Mass in
+running order ; 8. Actual mass: 0.1-0.2 . Technically permissible maximum towable mass of the trailer ( braked / unbraked ) ;
+9. spacing Technically: 14. Engine permissible code ; P.1 . maximum Engine static capacity vertical ; P.2 . mass Power at ; the P.3 . coupling Type of point fuel ; or 10. power Length ; source 11. ; Width P.4 . ; Engine 12.Height rated ; 13. speed Axle ; 9
+of P.5 . EC Engine type - approval identification: 17. National number ; 15. emission Propulsion class ; ; R. 16. Color Electric of the motor vehicle power ; S.1 , . V.9 . Number Indication of seats of , the including environmental the driver's category seat ;
+S.2 level . ; Q. Number Power of / standing weight ratio places ( , only T. for Maximum motorcycles speed ; ) ; U.1 V.7 . . CO Stationary 18. sound Powered level ; axles U.2 . Engine position ; speed 19.1 ; . - U.3 . 19.2 Drive . - Tyre by / sound wheel 8 3
+( front / rear ) ; 20.1 . - 20.2 . Suspension ( front / rear ) ; W. Fuel tank ( s ) capacity: 21. RAR agency / release date .
+
+CARTE DE IDENTITATE A VEHICULULUI
+REGISTRUL
+AUTO ROMÂN Vehicle Identity Card
+Număr de înmatriculare: B - 108 - VDF 1. Autoritate competentă 1
+care efectuează înmatricularea:
+. Proprietar:
+SRL I. Data inmatricularii: ARVAL SERVICE LEASE ROMANIA SRPCIV BUCURESTI
+Data naşterii 10.05.2021
+Nr . de înm . la Reg.Com . ): 18824870
+Adresă: Semnătura şi ştampila:
+Str . Gheorghe Titeica Nr . 212-214 ,
+Sectorul 2 , Mun Bucuresti
+Număr de înmatriculare: 1. Autoritate competentă 2
+care efectuează înmatricularea:
+. Proprietar:
+I. Data înmatriculării:
+. de înm . la Reg.Com . ): Data naşterii
+Adresă: Semnătura şi ştampila:
+Număr de înmatriculare: 1. Autoritate competentă 3
+care efectuează înmatricularea:
+. Proprietar:
+I. Data înmatriculării:
+. de înm . la Reg.Com . ): naşterii
+Adresă: Semnătura şi ştampila:
+Număr de înmatriculare: 1. Autoritate competentă 4
+care efectuează înmatricularea:
+. Proprietar:
+I. Data înmatriculării:
+. de înm . la Reg.Com . ): naşterii
+Adresă: Semnătura şi ştampila:
+5 60 Soho's 0 8 3 5 6 0 1
+
+=== CIV VERSO ===
+D.1 . Marcă: BMW
+D.2 . Tip: G5X
+Variantă: TA61
+Versiune: IAA50000
+D.3 . Denumire comercială: X5 xDrive45e
+E. Număr de identificare: WBATA610209F62120
+2 . An fabricaţie: 2021
+J. Categorie: M1G
+3. Categorie de folosinţă: AUTOTURISM )
+4 . Clasă ( numai pentru M2 , M3 ):
+5 . Caroserie: AC break
+K. Număr omologare de tip: e1 * 2007 / 46 * 1918 * 10 (
+6 . Număr naţional de registru: ACBM35081050ME6
+L. Număr axe: 2
+F.1 . Masă maximă tehnic admisibilă , cu excepţia motocicletelor ( kg ): 3150
+7 . Masă maximă tehnic admisibilă a ansamblului de vehicule ( kg ): 5850
+N.1 . Masă maximă tehnic admisibilă a axei 1 ( kg ): 1390
+N.2 . Masă maximă tehnic admisibilă a axei 2 ( kg ): 1810
+N.3 . Masă maximă tehnic admisibilă a axei 3 ( kg ):
+N.4 . Masă maximă tehnic admisibilă a axei 4 ( kg ):
+N.5 . Masă maximă tehnic admisibilă a axei 5 ( kg ):
+G. Masă în ordine de mers ( kg ): 2510
+8 . Masă reală ( kg ): 2515
+0.1 . Masă maximă remorcabilă cu dispozitiv de frânare ( kg ): 2700
+0.2 . Masă maximă remorcabilă fără dispozitiv de frânare ( kg ): 750
+9 . Masă maximă tehnic admisibilă în punctul de cuplare ( kg ): 140
+10. Lungime ( mm ): 4922
+11. Lăţime ( mm ): 2004
+12. Înălţime ( mm ): 1745
+13. Distanţă între axe ( mm ): 2975
+
+ABG
+14. Cod motor: B58B30C
+P.1 . Capacitate cilindrică ( cm³ ): 2998
+P.2 . Putere ( kW ): 210
+P.3 . Tip combustibil sau sursă de energie: BENZINA + ELECTRIC
+P.4 . Turaţie nominală ( min - 1 ): 5000
+P.5 . Serie motor: 20076261
+15. Sistem de propulsie: HE - I
+16. Putere motor electric ( kW ): orara max . neta max . max . in 30 min .
+83 55
+V.9 . Normă de poluare CE: Euro 6 ; 715 / 2007 * 2018 / 1832 AP
+17. Cod naţional de emisii: E6
+R. Culoare: NEGRU
+S.1 . Număr locuri , inclusiv locul conducătorului auto: 5
+S.2 . Număr locuri în picioare:
+T. Viteză maximă ( km / h ): 235
+U.1 . Nivel sonor în staţionare [ dB ( A ) ]: 77,5
+U.2 . Turaţie motor ( min - 1 ): 3750
+U.3 Nivel sonor în mers [ dB ( A ) ]: 69
+Q. Raport putere / masă ( kW / kg ) ( numai pentru motociclete ):
+V.7 . CO₂: NEDC: 37 ( g / km ) ; WLTP: 27 ( g / km )
+18. Tracţiune: INTEGRALA
+19.1 . Anvelope / jante axe faţă: 265/50 R19 110 W / 9.00J X 19
+19.2 . Anvelope / jante axe spate: 265/50 R19 110 W / 9.00J X 19
+20.1 . Suspensie axe faţă: PNEUMATICA
+20.2 . Suspensie axe spate: PNEUMATICA
+W. Capacitate rezervor ( 1 ): 69
+21. Reprezentanţă RAR: BUCURESTI D.O.T.
+Data eliberării: 11.02.2021
+G.LV
+555
+VEHICUL IDENTIFICARE DATE continuare VEHICUL CONSTRUCTIVE DATE VEHICUL CONSTRUCTIVE DATE
