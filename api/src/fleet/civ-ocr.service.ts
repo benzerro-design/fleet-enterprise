@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { GoogleAuth } from 'google-auth-library';
 import { rebuildCivOcrTextFromVision } from './civ-ocr-layout';
 import { extractCivPdfImages, type CivPdfImage } from './civ-pdf-image';
+import { mergeCivSeriesBarcodeIntoOcr } from './civ-label-map';
 
 type VisionFullTextAnnotation = {
   text?: string;
@@ -22,8 +23,15 @@ type VisionFullTextAnnotation = {
   }>;
 };
 
+type VisionBarcodeAnnotation = {
+  rawValue?: string;
+  displayValue?: string;
+  format?: string;
+};
+
 type VisionPageResponse = {
   fullTextAnnotation?: VisionFullTextAnnotation;
+  barcodeAnnotations?: VisionBarcodeAnnotation[];
   error?: { message?: string; status?: string };
 };
 
@@ -138,6 +146,20 @@ export class CivOcrService {
     return ann.text?.trim() || null;
   }
 
+  private barcodesFromPage(page: VisionPageResponse | undefined): string[] {
+    const out: string[] = [];
+    for (const b of page?.barcodeAnnotations ?? []) {
+      const v = (b.rawValue ?? b.displayValue ?? '').trim();
+      if (v) out.push(v);
+    }
+    return out;
+  }
+
+  private withBarcodeSeries(text: string | null, barcodes: string[]): string | null {
+    const merged = mergeCivSeriesBarcodeIntoOcr(text ?? '', barcodes);
+    return merged.trim() ? merged : null;
+  }
+
   private async ocrImage(buf: Buffer): Promise<CivOcrResult> {
     const token = await this.accessToken();
     const res = await fetch('https://vision.googleapis.com/v1/images:annotate', {
@@ -150,7 +172,7 @@ export class CivOcrService {
         requests: [
           {
             image: { content: buf.toString('base64') },
-            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }, { type: 'BARCODE_DETECTION' }],
           },
         ],
       }),
@@ -163,7 +185,8 @@ export class CivOcrService {
     if (json.error?.message) throw new Error(json.error.message);
     const first = json.responses?.[0];
     if (first?.error?.message) throw new Error(first.error.message);
-    const text = this.textFromAnnotation(first?.fullTextAnnotation);
+    const barcodes = this.barcodesFromPage(first);
+    const text = this.withBarcodeSeries(this.textFromAnnotation(first?.fullTextAnnotation), barcodes);
     if (!text) {
       return { text: null, error: 'Vision nu a găsit text pe imagine (scan neclar?)' };
     }
@@ -238,7 +261,7 @@ export class CivOcrService {
               mimeType: 'application/pdf',
               content: buf.toString('base64'),
             },
-            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }, { type: 'BARCODE_DETECTION' }],
             pages,
           },
         ],
@@ -251,6 +274,7 @@ export class CivOcrService {
     const json = (await res.json()) as VisionFileAnnotateResponse;
     if (json.error?.message) throw new Error(json.error.message);
     const parts: string[] = [];
+    const barcodes: string[] = [];
     let pageErr: string | null = null;
     for (const fileResp of json.responses ?? []) {
       if (fileResp.error?.message) {
@@ -262,11 +286,12 @@ export class CivOcrService {
           pageErr = pageResp.error.message;
           continue;
         }
+        barcodes.push(...this.barcodesFromPage(pageResp));
         const t = this.textFromAnnotation(pageResp.fullTextAnnotation);
         if (t) parts.push(t);
       }
     }
-    const text = parts.join('\n\n').trim();
+    const text = this.withBarcodeSeries(parts.join('\n\n').trim() || null, barcodes);
     if (text) return { text };
     return {
       text: null,

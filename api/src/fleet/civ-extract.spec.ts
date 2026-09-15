@@ -3,6 +3,9 @@ import { detectCivDocumentFormat, mapCivExtractTextToPreview } from './civ-extra
 import {
   extractCivLabelValuePairs,
   findCivSeriesInFrontText,
+  isCivSeriesCode,
+  mergeCivSeriesBarcodeIntoOcr,
+  parseCivSeriesFromBarcode,
   stripDanglingCivParens,
 } from './civ-label-map';
 import { parseCivFuelTypeText } from './vehicle-fuel-resolve';
@@ -413,10 +416,19 @@ MOTORINA glossary noise
       expect(Number(g.civProfile.co2Gkm)).toBe(37);
     });
 
-    it('barcode-ul degradat nu produce serie, ci avertisment', () => {
+    it('barcode-ul OCR-uit nu produce serie, ci avertisment', () => {
       expect(g.civSeries).toBeNull();
       const warning = g.civWarnings?.find((w) => w.target === 'civSeries');
       expect(warning?.message).toMatch(/Completează seria/i);
+    });
+
+    it('payload-ul barcode-ului (inclusiv 0 citit în loc de O) mapează O835601', () => {
+      const withBarcode = ocr.replace(
+        '=== CIV FAȚĂ ===',
+        `=== CIV FAȚĂ ===\n${mergeCivSeriesBarcodeIntoOcr('', ['0835601'])}`,
+      );
+      const mapped = mapCivExtractTextToPreview(withBarcode, 'unknown', 'file');
+      expect(mapped.civSeries).toBe('O835601');
     });
 
     it('citește caseta Mențiuni întreagă, nu doar fraza cunoscută', () => {
@@ -479,6 +491,17 @@ V.9 . Normă de poluare CE: Euro 6 ; 715 / 2007 * 2018 / 1832 AP
     expect(findCivSeriesInFrontText("5 60 Soho's 0 8 3 5 6 0 1")).toBeNull();
     // Aceleași cifre, cu litera ca token izolat, rămân o serie validă.
     expect(findCivSeriesInFrontText('5 60 S 0 8 3 5 6 0 1')).toBe('S083560');
+  });
+
+  it('seria CIV acceptă O; barcode-ul 0###### e O + 6 cifre', () => {
+    expect(isCivSeriesCode('O835601')).toBe(true);
+    expect(isCivSeriesCode('S869740')).toBe(true);
+    expect(parseCivSeriesFromBarcode('O835601')).toBe('O835601');
+    expect(parseCivSeriesFromBarcode('0835601')).toBe('O835601');
+    expect(parseCivSeriesFromBarcode('ROS869740')).toBe('S869740');
+    expect(parseCivSeriesFromBarcode('https://rarom.ro/x')).toBeNull();
+    // Șapte cifre în OCR, fără barcode, nu inventează litera O.
+    expect(findCivSeriesInFrontText('0835601')).toBeNull();
   });
 
   it('valoarea de pe rândul următor nu e împrumutată de la rubrica vecină', () => {

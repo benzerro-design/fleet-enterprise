@@ -328,7 +328,7 @@ export function DocumentForm(props: Props) {
         <OpsFormField
           label="CIV față"
           required
-          hint="Pagina cu barcode / QR. Serie CIV = literă + 6 cifre, sub barcode."
+          hint="Pagina cu barcode / QR. Serie CIV = o literă (inclusiv O) + 6 cifre, din barcode."
         >
           <input
             type="file"

@@ -622,11 +622,48 @@ export type CivLabelPair = {
   source: 'same-line' | 'next-line';
 };
 
-/** Serie CIV pe față: 1 literă + 6 cifre (sub barcode / QR). */
+/**
+ * Serie CIV: o literă + 6 cifre (RAR, pe față, lângă barcode).
+ * Alfabetul e A–Z, inclusiv I/O/Q — pe CIV sunt litere, nu se copiază excluderile VIN.
+ */
 export function isCivSeriesCode(raw: string): boolean {
   const s = raw.replace(/\s+/g, '').toUpperCase();
   if (isPlausibleVin(s)) return false;
-  return /^[A-HJ-NP-Z]\d{6}$/.test(s);
+  return /^[A-Z]\d{6}$/.test(s);
+}
+
+/**
+ * Payload-ul barcode-ului 1D de pe față (instrucțiuni RAR: „cod de bare, aferent seriei CIV”).
+ * Vision îl decodează indiferent de orientarea scanului; de-aia seria nu se citește dintr-o
+ * „bandă verticală”, ci din rawValue.
+ *
+ * Fonturile de barcode tipăresc O ca 0. Pe un payload de exact 7 glife `0######`,
+ * formatul documentului (literă + 6 cifre) spune că primul caracter e litera O.
+ */
+export function parseCivSeriesFromBarcode(raw: string): string | null {
+  const compact = raw.replace(/[\s-]+/g, '').toUpperCase();
+  if (!compact) return null;
+  const ro = /^RO([A-Z]\d{6})$/.exec(compact);
+  if (ro && isCivSeriesCode(ro[1]!)) return ro[1]!;
+  if (isCivSeriesCode(compact)) return compact;
+  const oHomoglyph = /^0(\d{6})$/.exec(compact);
+  if (oHomoglyph) {
+    const asO = `O${oHomoglyph[1]}`;
+    if (isCivSeriesCode(asO)) return asO;
+  }
+  return null;
+}
+
+export function mergeCivSeriesBarcodeIntoOcr(text: string, barcodes: string[]): string {
+  const series = barcodes.map(parseCivSeriesFromBarcode).find((s): s is string => Boolean(s));
+  if (!series) return text;
+  const already = new RegExp(
+    `(?:serie|seria)\\s*c\\.?\\s*i\\.?\\s*v\\.?\\s*:\\s*${series}\\b`,
+    'i',
+  );
+  if (already.test(text)) return text;
+  const prefix = `Serie CIV: ${series}`;
+  return text.trim() ? `${prefix}\n${text}` : prefix;
 }
 
 /**
@@ -839,8 +876,8 @@ export function findCivSeriesInFrontText(text: string): string | null {
   );
 
   const nearLabel =
-    /(?:serie|seria)\s*c\.?\s*i\.?\s*v\.?\s*[:\s]*([A-HJ-NP-Z]\d{6})\b/i.exec(withoutEngine) ||
-    /\b([A-HJ-NP-Z]\d{6})\b[\s\S]{0,40}?(?:serie|seria)\s*c\.?\s*i\.?\s*v/i.exec(withoutEngine);
+    /(?:serie|seria)\s*c\.?\s*i\.?\s*v\.?\s*[:\s]*([A-Z]\d{6})\b/i.exec(withoutEngine) ||
+    /\b([A-Z]\d{6})\b[\s\S]{0,40}?(?:serie|seria)\s*c\.?\s*i\.?\s*v/i.exec(withoutEngine);
   if (nearLabel && isCivSeriesCode(nearLabel[1]!)) return nearLabel[1]!.toUpperCase();
 
   // Litera seriei e un token izolat în barcode („RO S 869 740”). `\b` singur lasă și coada unui
@@ -848,14 +885,14 @@ export function findCivSeriesInFrontText(text: string): string | null {
   // „J 4 5 9 5 1 3” SAU „J 4 5 9 5 13” (Vision lipește ultimele două cifre).
   const compactSpaced = [
     ...withoutEngine.matchAll(
-      /(?<!['’‘])\b([A-HJ-NP-Z])\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\b/gi,
+      /(?<!['’‘])\b([A-Z])\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\b/gi,
     ),
   ].map((m) => `${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}${m[6]}${m[7]}`.toUpperCase());
   for (const c of compactSpaced) {
     if (isCivSeriesCode(c)) return c;
   }
   const gluedSpaced = [
-    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-HJ-NP-Z])((?:\s+\d{1,2}){4,6})\b/gi),
+    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-Z])((?:\s+\d{1,2}){4,6})\b/gi),
   ].map((m) => `${m[1]}${m[2]!.replace(/\s+/g, '')}`.toUpperCase());
   for (const c of gluedSpaced) {
     if (isCivSeriesCode(c)) return c;
@@ -863,7 +900,7 @@ export function findCivSeriesInFrontText(text: string): string | null {
 
   // „P 541981” / „P541981” — literă + 6 cifre (posibil spațiu).
   const letterDigits = [
-    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-HJ-NP-Z])\s*(\d{6})\b/gi),
+    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-Z])\s*(\d{6})\b/gi),
   ].map((m) => `${m[1]}${m[2]}`.toUpperCase());
   for (const c of letterDigits) {
     if (isCivSeriesCode(c)) return c;
@@ -871,13 +908,13 @@ export function findCivSeriesInFrontText(text: string): string | null {
 
   // Literă pe o linie, 6 cifre pe următoarea (OCR barcode fragmentat).
   const lineBroken = [
-    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-HJ-NP-Z])\s*\n\s*(\d{6})\b/gi),
+    ...withoutEngine.matchAll(/(?<!['’‘])\b([A-Z])\s*\n\s*(\d{6})\b/gi),
   ].map((m) => `${m[1]}${m[2]}`.toUpperCase());
   for (const c of lineBroken) {
     if (isCivSeriesCode(c)) return c;
   }
 
-  const candidates = [...withoutEngine.matchAll(/(?<!['’‘])\b([A-HJ-NP-Z]\d{6})\b/gi)].map((m) =>
+  const candidates = [...withoutEngine.matchAll(/(?<!['’‘])\b([A-Z]\d{6})\b/gi)].map((m) =>
     m[1]!.toUpperCase(),
   );
   const unique = [
@@ -891,7 +928,7 @@ export function findCivSeriesInFrontText(text: string): string | null {
   // Vision rupe barcode-ul spațiat „S 8 6 9 7 4 0” în: „S eliberare vehicul” / „86: e2” / „9740 AF183…”.
   // Cere „eliberare vehicul”: altfel litera S de lângă „Data eliberării” lipește cifre aleatorii (S083560).
   const splitBarcode =
-    /\b([A-HJ-NP-Z])\s+eliberare\s+vehicul[\s\S]{0,120}?(\d{2})\s*:[\s\S]{0,280}?\b(\d{4})\s+[A-Z]{2}\d/i.exec(
+    /\b([A-Z])\s+eliberare\s+vehicul[\s\S]{0,120}?(\d{2})\s*:[\s\S]{0,280}?\b(\d{4})\s+[A-Z]{2}\d/i.exec(
       withoutEngine,
     );
   if (splitBarcode) {
