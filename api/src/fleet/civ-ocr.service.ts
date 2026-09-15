@@ -1,8 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleAuth } from 'google-auth-library';
+import { encodeCivMarginStripJpegs, parseCivSeriesFromMarginOcr } from './civ-barcode';
+import {
+  findCivSeriesInFrontText,
+  mergeCivSeriesBarcodeIntoOcr,
+} from './civ-label-map';
 import { rebuildCivOcrTextFromVision } from './civ-ocr-layout';
 import { extractCivPdfImages, type CivPdfImage } from './civ-pdf-image';
-import { mergeCivSeriesBarcodeIntoOcr } from './civ-label-map';
 
 type VisionFullTextAnnotation = {
   text?: string;
@@ -23,15 +27,9 @@ type VisionFullTextAnnotation = {
   }>;
 };
 
-type VisionBarcodeAnnotation = {
-  rawValue?: string;
-  displayValue?: string;
-  format?: string;
-};
-
 type VisionPageResponse = {
   fullTextAnnotation?: VisionFullTextAnnotation;
-  barcodeAnnotations?: VisionBarcodeAnnotation[];
+  textAnnotations?: Array<{ description?: string }>;
   error?: { message?: string; status?: string };
 };
 
@@ -146,21 +144,21 @@ export class CivOcrService {
     return ann.text?.trim() || null;
   }
 
-  private barcodesFromPage(page: VisionPageResponse | undefined): string[] {
-    const out: string[] = [];
-    for (const b of page?.barcodeAnnotations ?? []) {
-      const v = (b.rawValue ?? b.displayValue ?? '').trim();
-      if (v) out.push(v);
-    }
-    return out;
+  private seriesAlreadyInText(text: string | null): boolean {
+    if (!text) return false;
+    return Boolean(findCivSeriesInFrontText(text) || parseCivSeriesFromMarginOcr(text));
   }
 
-  private withBarcodeSeries(text: string | null, barcodes: string[]): string | null {
-    const merged = mergeCivSeriesBarcodeIntoOcr(text ?? '', barcodes);
-    return merged.trim() ? merged : null;
+  /** Verso-ul tehnic n-are barcode-ul seriei; nu mai facem 4 request-uri Vision. */
+  private looksLikeCivVerso(text: string): boolean {
+    return /\bP\.3\b/i.test(text) && /\bF\.1\b/i.test(text) && !/mentiuni|identitate a vehicul/i.test(text);
   }
 
-  private async ocrImage(buf: Buffer): Promise<CivOcrResult> {
+  private async ocrImageBuffers(
+    images: Buffer[],
+    feature: 'DOCUMENT_TEXT_DETECTION' | 'TEXT_DETECTION',
+  ): Promise<string[]> {
+    if (!images.length) return [];
     const token = await this.accessToken();
     const res = await fetch('https://vision.googleapis.com/v1/images:annotate', {
       method: 'POST',
@@ -169,12 +167,10 @@ export class CivOcrService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        requests: [
-          {
-            image: { content: buf.toString('base64') },
-            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }, { type: 'BARCODE_DETECTION' }],
-          },
-        ],
+        requests: images.map((buf) => ({
+          image: { content: buf.toString('base64') },
+          features: [{ type: feature }],
+        })),
       }),
     });
     if (!res.ok) {
@@ -183,10 +179,39 @@ export class CivOcrService {
     }
     const json = (await res.json()) as VisionAnnotateResponse;
     if (json.error?.message) throw new Error(json.error.message);
-    const first = json.responses?.[0];
-    if (first?.error?.message) throw new Error(first.error.message);
-    const barcodes = this.barcodesFromPage(first);
-    const text = this.withBarcodeSeries(this.textFromAnnotation(first?.fullTextAnnotation), barcodes);
+    return (json.responses ?? []).map((page) => {
+      if (page?.error?.message) throw new Error(page.error.message);
+      return (
+        this.textFromAnnotation(page.fullTextAnnotation) ??
+        page.textAnnotations?.[0]?.description?.trim() ??
+        ''
+      );
+    });
+  }
+
+  private async attachSeriesFromMargins(text: string | null, imageBuf: Buffer): Promise<string | null> {
+    if (this.seriesAlreadyInText(text)) return text;
+    if (text && this.looksLikeCivVerso(text)) return text;
+    const strips = encodeCivMarginStripJpegs(imageBuf);
+    if (!strips.length) return text;
+    let stripTexts: string[] = [];
+    try {
+      stripTexts = await this.ocrImageBuffers(strips, 'TEXT_DETECTION');
+    } catch (e) {
+      this.logger.warn(
+        `CIV margin OCR failed: ${e instanceof Error ? e.message : e}`,
+      );
+      return text;
+    }
+    const series = stripTexts.map(parseCivSeriesFromMarginOcr).find((s): s is string => Boolean(s));
+    if (!series) return text;
+    this.logger.log(`CIV serie din banda de muchie: ${series}`);
+    return mergeCivSeriesBarcodeIntoOcr(text ?? '', [series]);
+  }
+
+  private async ocrImage(buf: Buffer): Promise<CivOcrResult> {
+    const pages = await this.ocrImageBuffers([buf], 'DOCUMENT_TEXT_DETECTION');
+    const text = await this.attachSeriesFromMargins(pages[0] || null, buf);
     if (!text) {
       return { text: null, error: 'Vision nu a găsit text pe imagine (scan neclar?)' };
     }
@@ -261,7 +286,7 @@ export class CivOcrService {
               mimeType: 'application/pdf',
               content: buf.toString('base64'),
             },
-            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }, { type: 'BARCODE_DETECTION' }],
+            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
             pages,
           },
         ],
@@ -274,7 +299,6 @@ export class CivOcrService {
     const json = (await res.json()) as VisionFileAnnotateResponse;
     if (json.error?.message) throw new Error(json.error.message);
     const parts: string[] = [];
-    const barcodes: string[] = [];
     let pageErr: string | null = null;
     for (const fileResp of json.responses ?? []) {
       if (fileResp.error?.message) {
@@ -286,12 +310,11 @@ export class CivOcrService {
           pageErr = pageResp.error.message;
           continue;
         }
-        barcodes.push(...this.barcodesFromPage(pageResp));
         const t = this.textFromAnnotation(pageResp.fullTextAnnotation);
         if (t) parts.push(t);
       }
     }
-    const text = this.withBarcodeSeries(parts.join('\n\n').trim() || null, barcodes);
+    const text = parts.join('\n\n').trim();
     if (text) return { text };
     return {
       text: null,
