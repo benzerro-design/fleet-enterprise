@@ -64,12 +64,16 @@ export type VehicleAcquisitionPayload = {
   acquisitionNotes: string | null;
 };
 
+export type VehiclePhotoKind = "exterior" | "interior" | "damage" | "document" | "other";
+
 export type VehiclePhotoRow = {
   id: string;
   vehicleId: string;
   fileUrl: string;
   fileName: string | null;
   caption: string | null;
+  sessionLabel: string | null;
+  kind: VehiclePhotoKind | null;
   sortOrder: number;
   createdAt: string;
   uploadedByEmail: string | null;
@@ -84,9 +88,11 @@ export type VehicleProfileTab =
   | "advanced"
   | "acquisition"
   | "photos"
+  | "equipment"
   | "odometer"
   | "maintenance_plan"
   | "drivers"
   | "consumption";
 
 export type MaintenancePlanPayload = import("@/lib/maintenance-plan-types").MaintenancePlanPayload;
+export type VehicleEquipmentPayload = import("@/lib/vehicle-equipment-types").VehicleEquipmentPayload;

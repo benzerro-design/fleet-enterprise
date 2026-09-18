@@ -30,10 +30,16 @@ import type {
   MarkMaintenancePlanPerformedDto,
   PatchMaintenancePlanItemDto,
 } from './dto/maintenance-plan.dto';
+import type {
+  CreateVehicleEquipmentDto,
+  PatchVehicleEquipmentDto,
+  VehicleEquipmentKind,
+} from './dto/vehicle-equipment.dto';
 import type { VehicleStatus } from './fleet.types';
 import { DashboardService } from './dashboard.service';
 import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
+import { VehicleEquipmentService } from './vehicle-equipment.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TenantId } from './tenant-id.decorator';
 import { DriversService } from '../drivers/drivers.service';
@@ -47,6 +53,7 @@ export class FleetController {
   constructor(
     private readonly fleet: FleetService,
     private readonly maintenancePlan: MaintenancePlanService,
+    private readonly equipment: VehicleEquipmentService,
     private readonly dashboard: DashboardService,
     private readonly formBrief: VehicleFormBriefService,
     private readonly drivers: DriversService,
@@ -407,6 +414,68 @@ export class FleetController {
     return this.maintenancePlan.delete(tenantId, vehicleId, itemId, actorUserId, access);
   }
 
+  @Get('vehicles/:vehicleId/equipment')
+  @Roles(...FLEET_READ_ROLES)
+  listVehicleEquipment(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.equipment.list(tenantId, vehicleId, access);
+  }
+
+  @Post('vehicles/:vehicleId/equipment')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(201)
+  createVehicleEquipment(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.equipment.create(
+      tenantId,
+      vehicleId,
+      assertCreateVehicleEquipmentDto(body),
+      actorUserId,
+      access,
+    );
+  }
+
+  @Patch('vehicles/:vehicleId/equipment/:itemId')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchVehicleEquipment(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('itemId') itemId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.equipment.patch(
+      tenantId,
+      vehicleId,
+      itemId,
+      assertPatchVehicleEquipmentDto(body),
+      actorUserId,
+      access,
+    );
+  }
+
+  @Delete('vehicles/:vehicleId/equipment/:itemId')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(204)
+  deleteVehicleEquipment(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('itemId') itemId: string,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.equipment.delete(tenantId, vehicleId, itemId, actorUserId, access);
+  }
+
   @Delete('vehicles/:vehicleId')
   @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(204)
@@ -520,6 +589,22 @@ function assertPatchVehicleDto(body: unknown): PatchVehicleDto {
   if ('model' in body) {
     if (body.model === null) dto.model = null;
     else dto.model = optionalString(body.model) ?? null;
+  }
+  if ('fuelCardNumber' in body) {
+    if (body.fuelCardNumber === null) dto.fuelCardNumber = null;
+    else dto.fuelCardNumber = optionalString(body.fuelCardNumber) ?? null;
+  }
+  if ('fuelCardProvider' in body) {
+    if (body.fuelCardProvider === null) dto.fuelCardProvider = null;
+    else dto.fuelCardProvider = optionalString(body.fuelCardProvider) ?? null;
+  }
+  if ('fuelCardAccountRef' in body) {
+    if (body.fuelCardAccountRef === null) dto.fuelCardAccountRef = null;
+    else dto.fuelCardAccountRef = optionalString(body.fuelCardAccountRef) ?? null;
+  }
+  if ('fuelCardStatus' in body) {
+    if (body.fuelCardStatus === null) dto.fuelCardStatus = null;
+    else dto.fuelCardStatus = asFuelCardStatus(body.fuelCardStatus);
   }
 
   if ('itpExpiresOn' in body) {
@@ -772,7 +857,26 @@ function assertCreateVehiclePhotoDto(body: unknown): CreateVehiclePhotoDto {
   if ('caption' in body) {
     dto.caption = body.caption === null ? null : optionalString(body.caption) ?? null;
   }
+  if ('sessionLabel' in body) {
+    dto.sessionLabel = body.sessionLabel === null ? null : optionalString(body.sessionLabel) ?? null;
+  }
+  if ('kind' in body) {
+    if (body.kind === null) dto.kind = null;
+    else dto.kind = asVehiclePhotoKind(body.kind);
+  }
   return dto;
+}
+
+function asFuelCardStatus(v: unknown): 'active' | 'inactive' | 'blocked' {
+  if (v === 'active' || v === 'inactive' || v === 'blocked') return v;
+  throw new BadRequestException('Invalid fuelCardStatus');
+}
+
+function asVehiclePhotoKind(v: unknown): 'exterior' | 'interior' | 'damage' | 'document' | 'other' {
+  if (v === 'exterior' || v === 'interior' || v === 'damage' || v === 'document' || v === 'other') {
+    return v;
+  }
+  throw new BadRequestException('Invalid photo kind');
 }
 
 function assertRecordOdometerDto(body: unknown): RecordOdometerDto {
@@ -948,4 +1052,68 @@ function parseReminderOffsetsKmField(
   if (!Array.isArray(raw)) throw new BadRequestException(`${key} must be an array of numbers or null`);
   const nums = raw.filter((v): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0);
   return nums;
+}
+
+const EQUIPMENT_KINDS = new Set<VehicleEquipmentKind>([
+  'tow_hitch',
+  'fridge_unit',
+  'liftgate',
+  'crane',
+  'other',
+]);
+
+function asVehicleEquipmentKind(v: unknown): VehicleEquipmentKind {
+  if (typeof v === 'string' && EQUIPMENT_KINDS.has(v as VehicleEquipmentKind)) {
+    return v as VehicleEquipmentKind;
+  }
+  throw new BadRequestException('Invalid equipment kind');
+}
+
+function assertCreateVehicleEquipmentDto(body: unknown): CreateVehicleEquipmentDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const label = asNonEmptyString(body.label, 'label');
+  const dto: CreateVehicleEquipmentDto = { label };
+  if ('kind' in body && body.kind !== undefined && body.kind !== null) {
+    dto.kind = asVehicleEquipmentKind(body.kind);
+  }
+  if ('serialNumber' in body) {
+    dto.serialNumber = body.serialNumber === null ? null : optionalString(body.serialNumber) ?? null;
+  }
+  if ('mountedOn' in body) {
+    dto.mountedOn =
+      body.mountedOn === null ? null : optionalIsoDateString(body.mountedOn) ?? null;
+  }
+  if ('notes' in body) {
+    dto.notes = body.notes === null ? null : optionalString(body.notes) ?? null;
+  }
+  if ('isActive' in body) dto.isActive = optionalBoolean(body.isActive);
+  return dto;
+}
+
+function assertPatchVehicleEquipmentDto(body: unknown): PatchVehicleEquipmentDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const dto: PatchVehicleEquipmentDto = {};
+  if ('label' in body) dto.label = asNonEmptyString(body.label, 'label');
+  if ('kind' in body && body.kind !== undefined && body.kind !== null) {
+    dto.kind = asVehicleEquipmentKind(body.kind);
+  }
+  if ('serialNumber' in body) {
+    dto.serialNumber = body.serialNumber === null ? null : optionalString(body.serialNumber) ?? null;
+  }
+  if ('mountedOn' in body) {
+    dto.mountedOn =
+      body.mountedOn === null ? null : optionalIsoDateString(body.mountedOn) ?? null;
+  }
+  if ('removedOn' in body) {
+    dto.removedOn =
+      body.removedOn === null ? null : optionalIsoDateString(body.removedOn) ?? null;
+  }
+  if ('notes' in body) {
+    dto.notes = body.notes === null ? null : optionalString(body.notes) ?? null;
+  }
+  if ('isActive' in body) dto.isActive = optionalBoolean(body.isActive);
+  if (Object.keys(dto).length === 0) {
+    throw new BadRequestException('No fields to update');
+  }
+  return dto;
 }

@@ -34,6 +34,7 @@ type TripRecord = {
   distanceKm: number | null;
   purpose?: string | null;
   roadType?: string | null;
+  isRoundTrip?: boolean;
   odometerStartKm?: number | null;
   odometerEndKm?: number | null;
   driverId?: string | null;
@@ -107,6 +108,7 @@ export function TripForm(props: Props) {
         distanceKm: "",
         purpose: "",
         roadType: "",
+        isRoundTrip: false,
         odometerStartKm: "",
         odometerEndKm: "",
         driverId: "",
@@ -124,6 +126,7 @@ export function TripForm(props: Props) {
       distanceKm: t.distanceKm != null ? String(t.distanceKm) : "",
       purpose: t.purpose ?? "",
       roadType: t.roadType ?? "",
+      isRoundTrip: Boolean(t.isRoundTrip),
       odometerStartKm: t.odometerStartKm != null ? String(t.odometerStartKm) : "",
       odometerEndKm: t.odometerEndKm != null ? String(t.odometerEndKm) : "",
       driverId: t.driverId ?? "",
@@ -145,6 +148,7 @@ export function TripForm(props: Props) {
   const [distanceKm, setDistanceKm] = useState(initial.distanceKm);
   const [purpose, setPurpose] = useState(initial.purpose);
   const [roadType, setRoadType] = useState(initial.roadType);
+  const [isRoundTrip, setIsRoundTrip] = useState(Boolean(initial.isRoundTrip));
   const [odometerStartKm, setOdometerStartKm] = useState(initial.odometerStartKm);
   const [odometerEndKm, setOdometerEndKm] = useState(initial.odometerEndKm);
   const [driverId, setDriverId] = useState(props.lockedDriverId ?? initial.driverId);
@@ -262,6 +266,7 @@ export function TripForm(props: Props) {
       distanceKm: parsedDistance,
       purpose: purpose.trim() ? purpose.trim() : null,
       roadType: roadType.trim() ? roadType.trim() : null,
+      isRoundTrip,
       odometerStartKm: odoStart,
       odometerEndKm: odoEnd,
       driverId: (lockedDriverId || driverId).trim() || null,
@@ -357,6 +362,15 @@ export function TripForm(props: Props) {
                 ))}
               </select>
             </OpsFormField>
+            <label className="flex items-center gap-2 text-sm text-zinc-300 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={isRoundTrip}
+                onChange={(e) => setIsRoundTrip(e.target.checked)}
+                className="rounded border-zinc-600"
+              />
+              Dus-întors (retur inclus)
+            </label>
           </div>
         </OpsFormSection>
         <OpsFormSection number={4} title="Odometru & conducător">
@@ -494,6 +508,15 @@ export function TripForm(props: Props) {
           </select>
         </div>
       </div>
+      <label className="flex items-center gap-2 text-sm text-zinc-300">
+        <input
+          type="checkbox"
+          checked={isRoundTrip}
+          onChange={(e) => setIsRoundTrip(e.target.checked)}
+          className="rounded border-zinc-600"
+        />
+        Dus-întors (retur inclus)
+      </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label className="block text-sm font-medium text-zinc-300">Odometru start (opțional)</label>

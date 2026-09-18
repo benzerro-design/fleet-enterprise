@@ -36,6 +36,10 @@ export type VehicleRecord = {
   status: VehicleStatus;
   odometerKm: number;
   fuelType: string | null;
+  fuelCardNumber: string | null;
+  fuelCardProvider: string | null;
+  fuelCardAccountRef: string | null;
+  fuelCardStatus: 'active' | 'inactive' | 'blocked' | null;
   itpExpiresOn: string | null;
   itpStationName: string | null;
   itpReminderOffsetsDays: number[] | null;

@@ -18,8 +18,12 @@ export type PatchVehicleAcquisitionDto = {
   acquisitionNotes?: string | null;
 };
 
+export type VehiclePhotoKind = 'exterior' | 'interior' | 'damage' | 'document' | 'other';
+
 export type CreateVehiclePhotoDto = {
   fileUrl: string;
   fileName?: string | null;
   caption?: string | null;
+  sessionLabel?: string | null;
+  kind?: VehiclePhotoKind | null;
 };

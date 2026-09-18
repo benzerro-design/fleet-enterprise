@@ -15,9 +15,16 @@ type Props = {
   canWrite: boolean;
   /** Pe daună mașina la schimb e obligatorie înainte de reparație (În lucru). */
   damageRequired?: boolean;
+  /** MOB-007: deschide tab Mobilitate pe fișa WO în loc de rută separată. */
+  onAllocate?: () => void;
 };
 
-export function MobilityWoBanner({ workOrderId, canWrite, damageRequired = false }: Props) {
+export function MobilityWoBanner({
+  workOrderId,
+  canWrite,
+  damageRequired = false,
+  onAllocate,
+}: Props) {
   const [data, setData] = useState<MobilityEligibilityRecord | null>(null);
 
   useEffect(() => {
@@ -106,16 +113,30 @@ export function MobilityWoBanner({ workOrderId, canWrite, damageRequired = false
               Vezi alocare →
             </Link>
           ) : canWrite ? (
-            <Link
-              href={`/fleet/mobility/replacement-cars/new?wo=${workOrderId}`}
-              className={`rounded px-2.5 py-1 text-xs font-medium ${
-                damageRequired
-                  ? "bg-rose-600 text-white hover:bg-rose-500"
-                  : "bg-amber-600 text-zinc-950 hover:bg-amber-500"
-              }`}
-            >
-              Alocă mașină schimb
-            </Link>
+            onAllocate ? (
+              <button
+                type="button"
+                onClick={onAllocate}
+                className={`rounded px-2.5 py-1 text-xs font-medium ${
+                  damageRequired
+                    ? "bg-rose-600 text-white hover:bg-rose-500"
+                    : "bg-amber-600 text-zinc-950 hover:bg-amber-500"
+                }`}
+              >
+                Alocă mașină schimb
+              </button>
+            ) : (
+              <Link
+                href={`/fleet/mobility/replacement-cars/new?wo=${workOrderId}`}
+                className={`rounded px-2.5 py-1 text-xs font-medium ${
+                  damageRequired
+                    ? "bg-rose-600 text-white hover:bg-rose-500"
+                    : "bg-amber-600 text-zinc-950 hover:bg-amber-500"
+                }`}
+              >
+                Alocă mașină schimb
+              </Link>
+            )
           ) : null}
         </div>
       </div>

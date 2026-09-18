@@ -25,9 +25,17 @@ type Props = {
     coveredVehicleReg?: string | null;
     workOrderDisplayNumber?: string | null;
   };
+  /** Rămâne pe fișa WO după salvare (MOB-007). */
+  embedded?: boolean;
+  onSaved?: () => void;
 };
 
-export function MobilityAssignmentForm({ workOrderId: initialWoId, prefill }: Props) {
+export function MobilityAssignmentForm({
+  workOrderId: initialWoId,
+  prefill,
+  embedded = false,
+  onSaved,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const workOrderId = useMemo(() => {
@@ -115,8 +123,13 @@ export function MobilityAssignmentForm({ workOrderId: initialWoId, prefill }: Pr
         return;
       }
       const saved = (await res.json()) as { id: string };
-      router.push(`/fleet/mobility/replacement-cars/${saved.id}`);
-      router.refresh();
+      if (embedded) {
+        onSaved?.();
+        router.refresh();
+      } else {
+        router.push(`/fleet/mobility/replacement-cars/${saved.id}`);
+        router.refresh();
+      }
     } finally {
       setPending(false);
     }

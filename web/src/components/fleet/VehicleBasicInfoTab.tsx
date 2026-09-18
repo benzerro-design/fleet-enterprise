@@ -14,6 +14,12 @@ import {
   type VehicleTypeValue,
 } from "@/lib/fleet-api";
 import { FUEL_TYPE_OPTIONS, fuelTypeLabel, type FuelTypeValue } from "@/lib/fuel-types";
+import {
+  FUEL_CARD_PROVIDERS,
+  FUEL_CARD_STATUSES,
+  fuelCardStatusLabel,
+  type FuelCardStatusValue,
+} from "@/lib/fuel-card-providers";
 
 type Props = {
   vehicle: VehicleRecord;
@@ -36,6 +42,12 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
   const [type, setType] = useState(vehicle.type as VehicleTypeValue);
   const [fuelType, setFuelType] = useState<FuelTypeValue>(
     (vehicle.fuelType as FuelTypeValue | null) ?? "diesel",
+  );
+  const [fuelCardNumber, setFuelCardNumber] = useState(vehicle.fuelCardNumber ?? "");
+  const [fuelCardProvider, setFuelCardProvider] = useState(vehicle.fuelCardProvider ?? "");
+  const [fuelCardAccountRef, setFuelCardAccountRef] = useState(vehicle.fuelCardAccountRef ?? "");
+  const [fuelCardStatus, setFuelCardStatus] = useState<FuelCardStatusValue | "">(
+    (vehicle.fuelCardStatus as FuelCardStatusValue | null) ?? "",
   );
   const [status, setStatus] = useState(vehicle.status as VehicleStatusValue);
   const [vin, setVin] = useState(vehicle.vin ?? "");
@@ -72,6 +84,10 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
           registrationNumber: registrationNumber.trim(),
           type,
           fuelType,
+          fuelCardNumber: fuelCardNumber.trim() === "" ? null : fuelCardNumber.trim(),
+          fuelCardProvider: fuelCardProvider.trim() === "" ? null : fuelCardProvider.trim(),
+          fuelCardAccountRef: fuelCardAccountRef.trim() === "" ? null : fuelCardAccountRef.trim(),
+          fuelCardStatus: fuelCardStatus === "" ? null : fuelCardStatus,
           status,
           vin: vin.trim() === "" ? null : vin.trim(),
           brand: brand.trim() === "" ? null : brand.trim(),
@@ -111,6 +127,10 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
         <Field label="Model" value={vehicle.model ?? "—"} />
         <Field label="Tip" value={VEHICLE_TYPES.find((t) => t.value === vehicle.type)?.label ?? vehicle.type} />
         <Field label="Carburant" value={fuelTypeLabel(vehicle.fuelType)} />
+        <Field label="Card combustibil" value={vehicle.fuelCardNumber ?? "—"} mono />
+        <Field label="Emitent card" value={vehicle.fuelCardProvider ?? "—"} />
+        <Field label="Cont / ref. card" value={vehicle.fuelCardAccountRef ?? "—"} mono />
+        <Field label="Status card" value={fuelCardStatusLabel(vehicle.fuelCardStatus)} />
         <Field label="Status" value={VEHICLE_STATUSES.find((s) => s.value === vehicle.status)?.label ?? vehicle.status} />
         <Field label="VIN (E)" value={vehicle.vin ?? "—"} mono />
         <Field
@@ -182,6 +202,58 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
           options={VEHICLE_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
         />
         <Input label="VIN — rubrica E" value={vin} onChange={setVin} mono hint="Serie șasiu din CIV/talon" />
+      </div>
+      <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
+        <div>
+          <h3 className="text-sm font-medium text-zinc-300">Card combustibil</h3>
+          <p className="mt-1 text-xs text-zinc-500">
+            Date card pe vehicul (FLEET-023). Fără import tranzacții / conector live în această fază.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input label="Nr. card" value={fuelCardNumber} onChange={setFuelCardNumber} mono />
+          <div>
+            <label className="block text-sm text-zinc-400">Emitent</label>
+            <select
+              value={fuelCardProvider}
+              onChange={(e) => setFuelCardProvider(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            >
+              <option value="">—</option>
+              {FUEL_CARD_PROVIDERS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+              {fuelCardProvider &&
+              !(FUEL_CARD_PROVIDERS as readonly string[]).includes(fuelCardProvider) ? (
+                <option value={fuelCardProvider}>{fuelCardProvider}</option>
+              ) : null}
+            </select>
+          </div>
+          <Input
+            label="Cont / ref. (fără PIN real)"
+            value={fuelCardAccountRef}
+            onChange={setFuelCardAccountRef}
+            mono
+            hint="Referință cont sau ID — nu stocați PIN-ul"
+          />
+          <div>
+            <label className="block text-sm text-zinc-400">Status card</label>
+            <select
+              value={fuelCardStatus}
+              onChange={(e) => setFuelCardStatus(e.target.value as FuelCardStatusValue | "")}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            >
+              <option value="">—</option>
+              {FUEL_CARD_STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
       <VehicleItpFields
         itpDate={itpDate}

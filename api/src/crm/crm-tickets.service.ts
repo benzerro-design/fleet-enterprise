@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -27,6 +28,7 @@ import {
   routingLevelLabel,
   ticketListScope,
 } from '../iam/client-access';
+import { PartnerMailService } from '../partner/partner-mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from '../ops/ops-csv';
 import {
@@ -218,9 +220,12 @@ type TicketRow = Prisma.CrmTicketGetPayload<{
 
 @Injectable()
 export class CrmTicketsService {
+  private readonly logger = new Logger(CrmTicketsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly mail: PartnerMailService,
   ) {}
 
   displayId(id: string): string {
@@ -1806,6 +1811,51 @@ export class CrmTicketsService {
         body: `${input.actorDisplayName} te-a menționat pe „${input.ticketSubject}”: ${input.excerpt || '—'}`,
       })),
     });
+    void this.sendMentionEmails({
+      userIds: targets,
+      ticketId: input.ticketId,
+      actorDisplayName: input.actorDisplayName,
+      ticketSubject: input.ticketSubject,
+      excerpt: input.excerpt,
+    });
+  }
+
+  /** IAM-005 slice: email la @mention (SMTP). Push rămâne pentru fază ulterioară. */
+  private async sendMentionEmails(input: {
+    userIds: string[];
+    ticketId: string;
+    actorDisplayName: string;
+    ticketSubject: string;
+    excerpt: string;
+  }) {
+    if (!this.mail.isConfigured()) return;
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: input.userIds } },
+      select: { id: true, email: true },
+    });
+    const webOrigin = (process.env.WEB_ORIGIN ?? '').replace(/\/$/, '');
+    const ticketUrl = webOrigin
+      ? `${webOrigin}/fleet/tickets/${input.ticketId}`
+      : `/fleet/tickets/${input.ticketId}`;
+    const subject = `Mențiune pe tichet: ${input.ticketSubject}`;
+    const body = [
+      `${input.actorDisplayName} te-a menționat pe „${input.ticketSubject}”.`,
+      '',
+      input.excerpt?.trim() || '—',
+      '',
+      `Deschide tichetul: ${ticketUrl}`,
+    ].join('\n');
+
+    for (const user of users) {
+      const to = user.email?.trim();
+      if (!to) continue;
+      try {
+        await this.mail.send({ to, subject, body });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'send failed';
+        this.logger.warn(`CRM mention email → ${to} failed: ${msg}`);
+      }
+    }
   }
 
   private isAllowedReaction(emoji: string): boolean {

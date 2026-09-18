@@ -177,6 +177,7 @@ function assertCreateTripDto(body: unknown): CreateTripInput {
     distanceKm: optionalNonNegativeInt(body.distanceKm, 'distanceKm'),
     purpose: optionalTripPurpose(body.purpose),
     roadType: optionalTripRoadType(body.roadType),
+    isRoundTrip: optionalBoolean(body.isRoundTrip),
     odometerStartKm: optionalNonNegativeInt(body.odometerStartKm, 'odometerStartKm') ?? null,
     odometerEndKm: optionalNonNegativeInt(body.odometerEndKm, 'odometerEndKm') ?? null,
     driverId: optionalNullableCuid(body.driverId, 'driverId'),
@@ -214,6 +215,11 @@ function assertPatchTripDto(body: unknown): PatchTripInput {
   }
   if ('purpose' in body) dto.purpose = optionalTripPurpose(body.purpose);
   if ('roadType' in body) dto.roadType = optionalTripRoadType(body.roadType);
+  if ('isRoundTrip' in body) {
+    const b = optionalBoolean(body.isRoundTrip);
+    if (b === undefined) throw new BadRequestException('Invalid isRoundTrip');
+    dto.isRoundTrip = b;
+  }
   if ('odometerStartKm' in body) {
     if (body.odometerStartKm === null) dto.odometerStartKm = null;
     else {
@@ -246,6 +252,12 @@ function asNonEmptyString(v: unknown, field: string): string {
     throw new BadRequestException(`Field "${field}" must be a non-empty string`);
   }
   return v.trim();
+}
+
+function optionalBoolean(v: unknown): boolean | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v === 'boolean') return v;
+  throw new BadRequestException('Expected boolean');
 }
 
 function optionalString(v: unknown): string | undefined {

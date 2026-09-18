@@ -8,6 +8,7 @@ import type {
   VehiclePhotosPayload,
 } from "@/lib/vehicle-profile-types";
 import type { MaintenancePlanPayload } from "@/lib/maintenance-plan-types";
+import type { VehicleEquipmentPayload } from "@/lib/vehicle-equipment-types";
 import type { VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
 
@@ -215,6 +216,16 @@ async function getMaintenancePlan(id: string): Promise<MaintenancePlanPayload | 
   }
 }
 
+async function getVehicleEquipment(id: string): Promise<VehicleEquipmentPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/equipment`);
+    if (!res?.ok) return null;
+    return (await res.json()) as VehicleEquipmentPayload;
+  } catch {
+    return null;
+  }
+}
+
 export type VehicleDetailData = {
   vehicle: VehicleRecord;
   maintenanceList: MaintenanceListPayload | null;
@@ -223,6 +234,7 @@ export type VehicleDetailData = {
   civPayload: VehicleCivPayload;
   acquisitionPayload: VehicleAcquisitionPayload;
   photosPayload: VehiclePhotosPayload;
+  equipmentPayload: VehicleEquipmentPayload;
   odometerPayload: OdometerReadingsPayload;
   mobilityPayload: VehicleMobilityPayload | null;
   maintenancePlanPayload: MaintenancePlanPayload;
@@ -233,12 +245,15 @@ export async function loadVehicleConsumption(
   id: string,
   periodFrom?: string,
   periodTo?: string,
+  fuelTypes?: string,
 ): Promise<ConsumptionPayload | null> {
   const defaults = defaultConsumptionPeriod();
   const from = periodFrom?.trim() || defaults.from;
   const to = periodTo?.trim() || defaults.to;
+  const qs = new URLSearchParams({ from, to });
+  if (fuelTypes?.trim()) qs.set("fuelTypes", fuelTypes.trim());
   try {
-    const res = await fleetServerFetch(`/fleet/vehicles/${id}/consumption?from=${from}&to=${to}`);
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/consumption?${qs.toString()}`);
     if (!res?.ok) return null;
     return (await res.json()) as ConsumptionPayload;
   } catch {
@@ -250,7 +265,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
   const vehicle = await getVehicle(id);
   if (!vehicle) return null;
 
-  const [maintenanceList, costsList, documentsList, civ, acquisition, photos, odometer, mobility, maintenancePlan, driverAssignments] =
+  const [maintenanceList, costsList, documentsList, civ, acquisition, photos, equipment, odometer, mobility, maintenancePlan, driverAssignments] =
     await Promise.all([
     getMaintenanceForVehicle(vehicle.registrationNumber),
     getCostsForVehicle(vehicle.registrationNumber),
@@ -258,6 +273,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     getVehicleCiv(id),
     getVehicleAcquisition(id),
     getVehiclePhotos(id),
+    getVehicleEquipment(id),
     getOdometerReadings(id),
     getVehicleMobility(id),
     getMaintenancePlan(id),
@@ -272,6 +288,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     civPayload: civ ?? EMPTY_CIV,
     acquisitionPayload: acquisition ?? EMPTY_ACQUISITION,
     photosPayload: photos ?? { items: [] },
+    equipmentPayload: equipment ?? { items: [] },
     odometerPayload: odometer ?? { items: [], vehicleOdometerKm: vehicle.odometerKm },
     mobilityPayload: mobility,
     maintenancePlanPayload: maintenancePlan ?? {

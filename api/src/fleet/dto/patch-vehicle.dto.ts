@@ -1,3 +1,5 @@
+export type FuelCardStatus = 'active' | 'inactive' | 'blocked';
+
 export type PatchVehicleDto = {
   clientId?: string;
   registrationNumber?: string;
@@ -14,6 +16,10 @@ export type PatchVehicleDto = {
   vin?: string | null;
   brand?: string | null;
   model?: string | null;
+  fuelCardNumber?: string | null;
+  fuelCardProvider?: string | null;
+  fuelCardAccountRef?: string | null;
+  fuelCardStatus?: FuelCardStatus | null;
   itpExpiresOn?: string | null;
   itpStationName?: string | null;
   itpReminderOffsetsDays?: number[] | null;

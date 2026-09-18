@@ -9,6 +9,7 @@ import { CivOcrService } from './civ-ocr.service';
 import { FleetController } from './fleet.controller';
 import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
+import { VehicleEquipmentService } from './vehicle-equipment.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
 
 @Module({
@@ -17,6 +18,7 @@ import { VehicleFormBriefService } from './vehicle-form-brief.service';
   providers: [
     FleetService,
     MaintenancePlanService,
+    VehicleEquipmentService,
     DashboardService,
     VehicleFormBriefService,
     CivOcrService,

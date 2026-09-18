@@ -13,7 +13,7 @@ import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 type PageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; periodFrom?: string; periodTo?: string }>;
+  searchParams: Promise<{ tab?: string; periodFrom?: string; periodTo?: string; fuelTypes?: string }>;
 };
 
 export default async function VehicleDetailPage({ params, searchParams }: PageProps) {
@@ -24,7 +24,9 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
     loadVehicleDetail(id),
     getVehicleOptions(),
     getAuthMeResult(),
-    showConsumption ? loadVehicleConsumption(id, sp.periodFrom, sp.periodTo) : Promise.resolve(null),
+    showConsumption
+      ? loadVehicleConsumption(id, sp.periodFrom, sp.periodTo, sp.fuelTypes)
+      : Promise.resolve(null),
   ]);
   if (!data) notFound();
 

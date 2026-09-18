@@ -47,6 +47,7 @@ export function VehicleDetailLayout({
     civPayload,
     acquisitionPayload,
     photosPayload,
+    equipmentPayload,
     odometerPayload,
     mobilityPayload,
     maintenancePlanPayload,
@@ -80,6 +81,7 @@ export function VehicleDetailLayout({
               civ={civPayload}
               acquisition={acquisitionPayload}
               photos={photosPayload}
+              equipment={equipmentPayload}
               odometer={odometerPayload}
               maintenancePlan={maintenancePlanPayload}
               driverAssignments={driverAssignments}

@@ -29,6 +29,7 @@ model Tenant {
   trips              Trip[]
   tripSheetDocuments TripSheetDocument[]
   vehicles           Vehicle[]
+  vehicleEquipment   VehicleEquipment[]
   clients            Client[]
   clientContacts     ClientContact[]
   clientDocuments    ClientDocument[]
@@ -481,6 +482,12 @@ model Vehicle {
   odometerKm         Int                @default(0)
   /** Combustibil principal — motorină, benzină, GPL, etc. */
   fuelType           FuelType?
+  /** Card combustibil / mobilitate (FLEET-023) — fără conector live. */
+  fuelCardNumber     String?
+  fuelCardProvider   String?
+  /** Cont / referință PIN (nu stocăm PIN-ul real). */
+  fuelCardAccountRef String?
+  fuelCardStatus     FuelCardStatus?
   itpExpiresOn       DateTime?
   itpStationName     String?
   itpReminderOffsetsDays     Json?
@@ -526,6 +533,7 @@ model Vehicle {
   odometerReadings   OdometerReading[]
   maintenancePlanItems MaintenancePlanItem[]
   photos             VehiclePhoto[]
+  equipment          VehicleEquipment[]
   driverAssignments  DriverVehicleAssignment[]
   crmTickets         CrmTicket[]
   serviceCases       ServiceCase[]
@@ -547,19 +555,68 @@ enum AcquisitionType {
 
 /// Fotografii vehicul (galerie profil).
 model VehiclePhoto {
-  id               String   @id @default(cuid())
+  id               String            @id @default(cuid())
   vehicleId        String
   fileUrl          String
   fileName         String?
   caption          String?
-  sortOrder        Int      @default(0)
-  createdAt        DateTime @default(now())
+  /** Grupare pe sesiune (ex. „2026-09 — inspecție lunară”). */
+  sessionLabel     String?
+  kind             VehiclePhotoKind?
+  sortOrder        Int               @default(0)
+  createdAt        DateTime          @default(now())
   uploadedByUserId String?
-  vehicle          Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  uploadedBy       User?    @relation("VehiclePhotoUploadedBy", fields: [uploadedByUserId], references: [id])
+  vehicle          Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  uploadedBy       User?             @relation("VehiclePhotoUploadedBy", fields: [uploadedByUserId], references: [id])
 
   @@index([vehicleId])
   @@index([vehicleId, sortOrder])
+  @@index([vehicleId, sessionLabel])
+}
+
+enum FuelCardStatus {
+  active
+  inactive
+  blocked
+}
+
+enum VehiclePhotoKind {
+  exterior
+  interior
+  damage
+  document
+  other
+}
+
+/// Echipări montate pe vehicul (FLEET-016) — lifecycle docs/reparații în faze ulterioare.
+model VehicleEquipment {
+  id           String               @id @default(cuid())
+  tenantId     String
+  vehicleId    String
+  kind         VehicleEquipmentKind @default(other)
+  label        String
+  serialNumber String?
+  mountedOn    DateTime?
+  removedOn    DateTime?
+  notes        String?
+  isActive     Boolean              @default(true)
+  sortOrder    Int                  @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([vehicleId])
+  @@index([vehicleId, isActive])
+}
+
+enum VehicleEquipmentKind {
+  tow_hitch
+  fridge_unit
+  liftgate
+  crane
+  other
 }
 
 enum TripPurpose {
@@ -588,6 +645,8 @@ model Trip {
   distanceKm       Int?
   purpose          TripPurpose?
   roadType         TripRoadType?
+  /** true = dus-întors (UAT-041); km rămân cei înregistrați. */
+  isRoundTrip      Boolean        @default(false)
   odometerStartKm  Int?
   odometerEndKm    Int?
   /// Conducător (text liber pentru istoric / fallback).

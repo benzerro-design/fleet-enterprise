@@ -34,6 +34,7 @@ export type CreateTripInput = {
   distanceKm?: number | null;
   purpose?: TripPurpose | null;
   roadType?: TripRoadType | null;
+  isRoundTrip?: boolean;
   odometerStartKm?: number | null;
   odometerEndKm?: number | null;
   driverId?: string | null;
@@ -212,6 +213,7 @@ function toTripRow(row: {
   distanceKm: number | null;
   purpose: TripPurpose | null;
   roadType: TripRoadType | null;
+  isRoundTrip: boolean;
   odometerStartKm: number | null;
   odometerEndKm: number | null;
   driverId: string | null;
@@ -234,6 +236,7 @@ function toTripRow(row: {
     distanceKm: row.distanceKm,
     purpose: row.purpose,
     roadType: row.roadType,
+    isRoundTrip: row.isRoundTrip,
     odometerStartKm: row.odometerStartKm,
     odometerEndKm: row.odometerEndKm,
     driverId: row.driverId,
@@ -409,6 +412,7 @@ export class TripsService {
         }),
         purpose: dto.purpose ?? null,
         roadType: dto.roadType ?? null,
+        isRoundTrip: dto.isRoundTrip ?? false,
         odometerStartKm: dto.odometerStartKm ?? null,
         odometerEndKm: dto.odometerEndKm ?? null,
         driverId: tripDriverId,
@@ -512,6 +516,7 @@ export class TripsService {
         : undefined,
       purpose: dto.purpose,
       roadType: dto.roadType,
+      isRoundTrip: dto.isRoundTrip,
       odometerStartKm: dto.odometerStartKm,
       odometerEndKm: dto.odometerEndKm,
       ...(nextDriverId !== undefined ? { driverId: nextDriverId } : {}),

@@ -21,6 +21,7 @@ type TripRow = {
   distanceKm: number | null;
   purpose?: string | null;
   roadType?: string | null;
+  isRoundTrip?: boolean;
   odometerStartKm?: number | null;
   odometerEndKm?: number | null;
   driverId?: string | null;
@@ -69,6 +70,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           <div><dt className="text-xs uppercase text-zinc-500">Origine</dt><dd className="mt-1">{trip.originLabel ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Destinație</dt><dd className="mt-1">{trip.destLabel ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Distanță</dt><dd className="mt-1 font-mono">{trip.distanceKm ?? "—"} km</dd></div>
+          <div><dt className="text-xs uppercase text-zinc-500">Dus / dus-întors</dt><dd className="mt-1">{trip.isRoundTrip ? "Dus-întors" : "Doar dus"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Scop</dt><dd className="mt-1">{tripPurposeLabel(trip.purpose)}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Tip drum</dt><dd className="mt-1">{tripRoadTypeLabel(trip.roadType)}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Odometru start</dt><dd className="mt-1 font-mono">{trip.odometerStartKm ?? "—"}</dd></div>

@@ -9,14 +9,21 @@ import { VehicleDriversPanel } from "@/components/fleet/VehicleDriversPanel";
 import { VehicleMaintenancePlanTab } from "@/components/fleet/VehicleMaintenancePlanTab";
 import { VehicleOdometerTab } from "@/components/fleet/VehicleOdometerTab";
 import { VehiclePhotosTab } from "@/components/fleet/VehiclePhotosTab";
+import { VehicleEquipmentTab } from "@/components/fleet/VehicleEquipmentTab";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
+import { FuelTypeFilter } from "@/components/fleet/FuelTypeFilter";
 import type { VehicleRecord } from "@/lib/fleet-api";
 import { defaultConsumptionPeriod, type ConsumptionPayload } from "@/lib/consumption-types";
+import { parseFuelTypesCsv } from "@/lib/fuel-types";
+import {
+  fuelCardStatusLabel,
+} from "@/lib/fuel-card-providers";
 import type {
   MaintenancePlanPayload,
   OdometerReadingsPayload,
   VehicleAcquisitionPayload,
   VehicleCivPayload,
+  VehicleEquipmentPayload,
   VehiclePhotosPayload,
   VehicleProfileTab,
 } from "@/lib/vehicle-profile-types";
@@ -27,6 +34,7 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "advanced", label: "Advanced Infos" },
   { id: "acquisition", label: "Date achiziție" },
   { id: "photos", label: "Fotografii" },
+  { id: "equipment", label: "Echipări" },
   { id: "odometer", label: "Odometru" },
   { id: "maintenance_plan", label: "Plan Mentenanță" },
   { id: "drivers", label: "Șoferi" },
@@ -43,6 +51,7 @@ type Props = {
   civ: VehicleCivPayload;
   acquisition: VehicleAcquisitionPayload;
   photos: VehiclePhotosPayload;
+  equipment: VehicleEquipmentPayload;
   odometer: OdometerReadingsPayload;
   maintenancePlan: MaintenancePlanPayload;
   driverAssignments: DriverAssignmentRecord[];
@@ -63,6 +72,7 @@ export function VehicleProfileTabs({
   civ,
   acquisition,
   photos,
+  equipment,
   odometer,
   maintenancePlan,
   driverAssignments,
@@ -85,6 +95,7 @@ export function VehicleProfileTabs({
       t === "advanced" ||
       t === "acquisition" ||
       t === "photos" ||
+      t === "equipment" ||
       t === "odometer" ||
       t === "basic" ||
       t === "maintenance_plan" ||
@@ -141,6 +152,9 @@ export function VehicleProfileTabs({
         {active === "photos" ? (
           <VehiclePhotosTab vehicleId={vehicle.id} write={photosWrite ?? write} initial={photos} />
         ) : null}
+        {active === "equipment" ? (
+          <VehicleEquipmentTab vehicleId={vehicle.id} write={write} initial={equipment} />
+        ) : null}
         {active === "odometer" ? (
           <VehicleOdometerTab vehicleId={vehicle.id} write={odometerWrite ?? write} initial={odometer} />
         ) : null}
@@ -163,29 +177,53 @@ export function VehicleProfileTabs({
         ) : null}
         {active === "consumption" ? (
           <div className="space-y-6">
-            <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+            {(vehicle.fuelCardNumber || vehicle.fuelCardProvider) && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-300">
+                <span className="text-xs uppercase tracking-wide text-zinc-500">Card combustibil</span>
+                <p className="mt-1 font-mono text-zinc-100">
+                  {vehicle.fuelCardNumber ?? "—"}
+                  {vehicle.fuelCardProvider ? ` · ${vehicle.fuelCardProvider}` : ""}
+                  {vehicle.fuelCardStatus
+                    ? ` · ${fuelCardStatusLabel(vehicle.fuelCardStatus)}`
+                    : ""}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Editare în tab Basic Info. Import tranzacții — fază ulterioară.
+                </p>
+              </div>
+            )}
+            <form method="get" className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
               <input type="hidden" name="tab" value="consumption" />
-              <div>
-                <label className="text-xs text-zinc-500">De la</label>
-                <input
-                  name="periodFrom"
-                  type="date"
-                  defaultValue={searchParams.get("periodFrom") ?? defaultConsumptionPeriod().from}
-                  className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-                />
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="text-xs text-zinc-500">De la</label>
+                  <input
+                    name="periodFrom"
+                    type="date"
+                    defaultValue={searchParams.get("periodFrom") ?? defaultConsumptionPeriod().from}
+                    className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-500">Până la</label>
+                  <input
+                    name="periodTo"
+                    type="date"
+                    defaultValue={searchParams.get("periodTo") ?? defaultConsumptionPeriod().to}
+                    className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  />
+                </div>
+                <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
+                  Aplică
+                </button>
               </div>
               <div>
-                <label className="text-xs text-zinc-500">Până la</label>
-                <input
-                  name="periodTo"
-                  type="date"
-                  defaultValue={searchParams.get("periodTo") ?? defaultConsumptionPeriod().to}
-                  className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                <label className="mb-1 block text-xs text-zinc-500">Tip energie</label>
+                <FuelTypeFilter
+                  selected={parseFuelTypesCsv(searchParams.get("fuelTypes") ?? undefined)}
+                  compact
                 />
               </div>
-              <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
-                Aplică
-              </button>
             </form>
             {consumption ? (
               <TripsConsumptionView data={consumption} />

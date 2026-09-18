@@ -7,7 +7,7 @@ import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
 import { TicketNotificationBell } from "@/components/fleet/tickets/TicketNotificationBell";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
-import { canPatchTickets, canWriteTickets, getAuthMeResult } from "@/lib/auth-server";
+import { canPatchTickets, canWriteTickets, getAuthMeResult, isClientPortalUser } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { ticketsBrowserBase } from "@/lib/tickets-api";
@@ -107,14 +107,15 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const viewBoard = sp.view === "board";
   const viewFocus = sp.view === "focus";
-  const [list, focus, stats, board, clients, vehicles, auth] = await Promise.all([
+  const auth = await getAuthMeResult();
+  const clientScoped = isClientPortalUser(auth);
+  const [list, focus, stats, board, clients, vehicles] = await Promise.all([
     viewBoard || viewFocus ? Promise.resolve(null) : loadTickets(sp),
     viewFocus ? loadFocus(sp) : Promise.resolve(null),
     loadStats(sp.clientId),
     viewBoard ? loadBoard(sp) : Promise.resolve(null),
-    loadClientOptions(),
+    clientScoped ? Promise.resolve([]) : loadClientOptions(),
     getVehicleOptions(),
-    getAuthMeResult(),
   ]);
   const write = canWriteTickets(auth);
   const patch = canPatchTickets(auth);
@@ -232,6 +233,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
                 </select>
               </div>
             ) : null}
+            {!clientScoped ? (
             <div>
               <label className="text-xs text-zinc-500">Client</label>
               <select
@@ -247,6 +249,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
                 ))}
               </select>
             </div>
+            ) : null}
             <div>
               <label className="text-xs text-zinc-500">Inbox</label>
               <select

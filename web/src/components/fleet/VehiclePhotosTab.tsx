@@ -1,12 +1,31 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { fleetBrowserBase, fleetJsonHeaders } from "@/lib/fleet-api";
 import { uploadDocumentFile } from "@/lib/document-upload";
-import type { VehiclePhotosPayload } from "@/lib/vehicle-profile-types";
+import type { VehiclePhotoKind, VehiclePhotosPayload } from "@/lib/vehicle-profile-types";
 
 const IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
+
+const PHOTO_KINDS: { value: VehiclePhotoKind; label: string }[] = [
+  { value: "exterior", label: "Exterior" },
+  { value: "interior", label: "Interior" },
+  { value: "damage", label: "Daună" },
+  { value: "document", label: "Document" },
+  { value: "other", label: "Altele" },
+];
+
+function defaultSessionLabel(): string {
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return `${ym} — inspecție lunară`;
+}
+
+function photoKindLabel(kind: VehiclePhotoKind | null): string | null {
+  if (!kind) return null;
+  return PHOTO_KINDS.find((k) => k.value === kind)?.label ?? kind;
+}
 
 type Props = {
   vehicleId: string;
@@ -19,9 +38,31 @@ export function VehiclePhotosTab({ vehicleId, write, initial }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState(initial.items);
   const [caption, setCaption] = useState("");
+  const [sessionLabel, setSessionLabel] = useState(defaultSessionLabel);
+  const [kind, setKind] = useState<VehiclePhotoKind | "">("");
   const [pending, setPending] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const sessions = useMemo(() => {
+    const map = new Map<string, typeof photos>();
+    for (const photo of photos) {
+      const key = photo.sessionLabel?.trim() || "Fără sesiune";
+      const list = map.get(key) ?? [];
+      list.push(photo);
+      map.set(key, list);
+    }
+    return [...map.entries()];
+  }, [photos]);
+
+  const knownSessions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of photos) {
+      const s = p.sessionLabel?.trim();
+      if (s) set.add(s);
+    }
+    return [...set].sort();
+  }, [photos]);
 
   async function onUpload(file: File) {
     if (!write) return;
@@ -40,6 +81,8 @@ export function VehiclePhotosTab({ vehicleId, write, initial }: Props) {
           fileUrl: uploaded.url,
           fileName: uploaded.name,
           caption: caption.trim() || null,
+          sessionLabel: sessionLabel.trim() || null,
+          kind: kind === "" ? null : kind,
         }),
       });
       if (!res.ok) {
@@ -89,8 +132,7 @@ export function VehiclePhotosTab({ vehicleId, write, initial }: Props) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-zinc-400">
-        Galerie fotografii vehicul — imagini exterioare, interior, daune sau documente vizuale. Formate: JPEG, PNG,
-        WebP (max 10 MB).
+        Fotografii pe sesiuni datate (ex. inspecție lunară) — nu un album plat. Formate: JPEG, PNG, WebP (max 10 MB).
       </p>
 
       {error ? (
@@ -101,7 +143,51 @@ export function VehiclePhotosTab({ vehicleId, write, initial }: Props) {
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4 space-y-4">
           <h3 className="text-sm font-medium text-zinc-300">Încarcă fotografie</h3>
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="block text-sm text-zinc-400">Sesiune</label>
+              <input
+                type="text"
+                list="vehicle-photo-sessions"
+                value={sessionLabel}
+                onChange={(e) => setSessionLabel(e.target.value)}
+                disabled={pending}
+                placeholder="ex. 2026-09 — inspecție lunară"
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              />
+              <datalist id="vehicle-photo-sessions">
+                {knownSessions.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </div>
             <div>
+              <label className="block text-sm text-zinc-400">Tip</label>
+              <select
+                value={kind}
+                onChange={(e) => setKind(e.target.value as VehiclePhotoKind | "")}
+                disabled={pending}
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="">—</option>
+                {PHOTO_KINDS.map((k) => (
+                  <option key={k.value} value={k.value}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-zinc-400">Descriere (opțional)</label>
+              <input
+                type="text"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                disabled={pending}
+                placeholder="ex. Față stânga, interior, daună bară"
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              />
+            </div>
+            <div className="sm:col-span-2">
               <label className="block text-sm text-zinc-400">Fișier imagine</label>
               <input
                 ref={fileRef}
@@ -115,17 +201,6 @@ export function VehiclePhotosTab({ vehicleId, write, initial }: Props) {
                 className="mt-1 block w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-500 file:px-3 file:py-2 file:text-sm file:font-medium file:text-zinc-950 hover:file:bg-emerald-400"
               />
             </div>
-            <div>
-              <label className="block text-sm text-zinc-400">Descriere (opțional)</label>
-              <input
-                type="text"
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                disabled={pending}
-                placeholder="ex. Față stânga, interior, daună bară"
-                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-              />
-            </div>
           </div>
           {pending ? <p className="text-xs text-zinc-500">Se încarcă…</p> : null}
         </div>
@@ -136,15 +211,25 @@ export function VehiclePhotosTab({ vehicleId, write, initial }: Props) {
           Nici o fotografie încărcată.
         </p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {photos.map((photo) => (
-            <PhotoCard
-              key={photo.id}
-              photo={photo}
-              write={write}
-              deleting={deletingId === photo.id}
-              onDelete={() => void onDelete(photo.id)}
-            />
+        <div className="space-y-8">
+          {sessions.map(([label, items]) => (
+            <section key={label} className="space-y-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-zinc-800 pb-2">
+                <h3 className="text-sm font-medium text-zinc-200">{label}</h3>
+                <span className="text-xs text-zinc-500">{items.length} foto</span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {items.map((photo) => (
+                  <PhotoCard
+                    key={photo.id}
+                    photo={photo}
+                    write={write}
+                    deleting={deletingId === photo.id}
+                    onDelete={() => void onDelete(photo.id)}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -165,6 +250,7 @@ function PhotoCard({
 }) {
   const [imgError, setImgError] = useState(false);
   const isImage = IMAGE_EXT.test(photo.fileUrl) || photo.fileUrl.includes("/uploads/");
+  const kindLabel = photoKindLabel(photo.kind);
 
   return (
     <article className="group overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/40">
@@ -182,6 +268,7 @@ function PhotoCard({
         )}
       </div>
       <div className="space-y-1 p-3">
+        {kindLabel ? <p className="text-xs uppercase tracking-wide text-zinc-500">{kindLabel}</p> : null}
         {photo.caption ? <p className="text-sm text-zinc-200">{photo.caption}</p> : null}
         <p className="truncate text-xs text-zinc-500">{photo.fileName ?? photo.fileUrl}</p>
         <p className="text-xs text-zinc-600">

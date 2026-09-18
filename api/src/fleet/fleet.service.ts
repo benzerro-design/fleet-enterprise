@@ -439,6 +439,30 @@ export class FleetService {
               : dto.fuelType === null
                 ? null
                 : dto.fuelType,
+          fuelCardNumber:
+            dto.fuelCardNumber === undefined
+              ? undefined
+              : dto.fuelCardNumber === null
+                ? null
+                : dto.fuelCardNumber.trim() || null,
+          fuelCardProvider:
+            dto.fuelCardProvider === undefined
+              ? undefined
+              : dto.fuelCardProvider === null
+                ? null
+                : dto.fuelCardProvider.trim() || null,
+          fuelCardAccountRef:
+            dto.fuelCardAccountRef === undefined
+              ? undefined
+              : dto.fuelCardAccountRef === null
+                ? null
+                : dto.fuelCardAccountRef.trim() || null,
+          fuelCardStatus:
+            dto.fuelCardStatus === undefined
+              ? undefined
+              : dto.fuelCardStatus === null
+                ? null
+                : dto.fuelCardStatus,
           itpExpiresOn:
             dto.itpExpiresOn === undefined
               ? undefined
@@ -942,7 +966,7 @@ export class FleetService {
 
     const rows = await this.prisma.vehiclePhoto.findMany({
       where: { vehicleId },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ sessionLabel: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: { uploadedBy: { select: { email: true } } },
     });
 
@@ -974,6 +998,8 @@ export class FleetService {
         fileUrl: dto.fileUrl.trim(),
         fileName: dto.fileName?.trim() || null,
         caption: dto.caption?.trim() || null,
+        sessionLabel: dto.sessionLabel?.trim() || null,
+        kind: dto.kind ?? null,
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
         uploadedByUserId: actorUserId ?? null,
       },
@@ -1504,6 +1530,10 @@ export class FleetService {
       status: row.status as VehicleStatus,
       odometerKm: row.odometerKm,
       fuelType: row.fuelType ?? null,
+      fuelCardNumber: row.fuelCardNumber ?? null,
+      fuelCardProvider: row.fuelCardProvider ?? null,
+      fuelCardAccountRef: row.fuelCardAccountRef ?? null,
+      fuelCardStatus: row.fuelCardStatus ?? null,
       itpExpiresOn: row.itpExpiresOn ? row.itpExpiresOn.toISOString() : null,
       itpStationName: row.itpStationName,
       itpReminderOffsetsDays: normalizeReminderOffsets(row.itpReminderOffsetsDays),
@@ -1566,6 +1596,8 @@ export class FleetService {
     fileUrl: string;
     fileName: string | null;
     caption: string | null;
+    sessionLabel: string | null;
+    kind: 'exterior' | 'interior' | 'damage' | 'document' | 'other' | null;
     sortOrder: number;
     createdAt: Date;
     uploadedBy: { email: string } | null;
@@ -1576,6 +1608,8 @@ export class FleetService {
       fileUrl: row.fileUrl,
       fileName: row.fileName,
       caption: row.caption,
+      sessionLabel: row.sessionLabel,
+      kind: row.kind,
       sortOrder: row.sortOrder,
       createdAt: row.createdAt.toISOString(),
       uploadedByEmail: row.uploadedBy?.email ?? null,

@@ -10,13 +10,13 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { MembershipRole, MobilityAssignmentStatus, MobilityDeliveryMode } from '@prisma/client';
+import { MobilityAssignmentStatus, MobilityDeliveryMode } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
-import { FLEET_READ_ROLES } from '../iam/role-sets';
+import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import type {
   CreateMobilityAssignmentInput,
   PatchMobilityAssignmentInput,
@@ -88,7 +88,7 @@ export class MobilityController {
   }
 
   @Post('assignments')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(201)
   create(
     @TenantId() tenantSlug: string,
@@ -99,7 +99,7 @@ export class MobilityController {
   }
 
   @Patch('assignments/:id')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(...FLEET_WRITE_ROLES)
   patch(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,

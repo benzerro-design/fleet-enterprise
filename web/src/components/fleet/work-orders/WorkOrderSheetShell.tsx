@@ -23,6 +23,7 @@ import {
 } from "@/lib/work-orders-api";
 import { workOrderDisplayLabel } from "@/lib/work-order-display";
 import { MobilityWoBanner } from "@/components/fleet/MobilityWoBanner";
+import { MobilityAssignmentForm } from "@/components/fleet/MobilityAssignmentForm";
 import { WorkOrderMobilitySummary } from "@/components/fleet/work-orders/WorkOrderMobilitySummary";
 import {
   DamageClaimPanel,
@@ -111,7 +112,7 @@ export function WorkOrderSheetShell({
   });
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
-  const [sheetView, setSheetView] = useState<"comanda" | "dosar">("comanda");
+  const [sheetView, setSheetView] = useState<"comanda" | "dosar" | "mobilitate">("comanda");
   /** Dosar pe WO: același ServiceCase ca pe tichet (nu mapare parțială din WO). */
   const [dosarServiceCase, setDosarServiceCase] = useState<ServiceCaseRecord | null>(null);
   const requireKm = workOrderSettings.requireServiceKm;
@@ -417,7 +418,7 @@ export function WorkOrderSheetShell({
       <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/60 px-2 py-2">
         <div className={`grid min-w-[640px] gap-1.5 ${isDamageWo ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2"}`}>
           {toolbarGroups.map((g) => {
-            if (g.label === "Comandă" && isDamageWo) {
+            if (g.label === "Comandă") {
               return (
                 <div
                   key={g.label}
@@ -436,13 +437,23 @@ export function WorkOrderSheetShell({
                       >
                         Comandă
                       </button>
+                      {isDamageWo ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => setSheetView("dosar")}
+                          className={fleetSheetTabClass(sheetView === "dosar")}
+                        >
+                          Dosar daună
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         disabled={pending}
-                        onClick={() => setSheetView("dosar")}
-                        className={fleetSheetTabClass(sheetView === "dosar")}
+                        onClick={() => setSheetView("mobilitate")}
+                        className={fleetSheetTabClass(sheetView === "mobilitate")}
                       >
-                        Dosar daună
+                        Mobilitate
                       </button>
                     </div>
                   </nav>
@@ -485,7 +496,7 @@ export function WorkOrderSheetShell({
           <div className="font-mono text-lg font-semibold tracking-tight text-violet-300">
             {workOrderDisplayLabel(wo)}
           </div>
-          {sheetView === "comanda" || !isDamageWo ? (
+          {sheetView === "comanda" ? (
             <>
               <div className="text-sm font-medium text-zinc-200">{wo.title}</div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
@@ -517,6 +528,19 @@ export function WorkOrderSheetShell({
                 <span className="text-zinc-300">{serviceOrderTypeLabel(serviceType)}</span>
               </span>
             </>
+          ) : sheetView === "mobilitate" ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+              <span>Mobilitate — mașină la schimb</span>
+              <span>·</span>
+              <span>{wo.registrationNumber}</span>
+              <button
+                type="button"
+                onClick={() => setSheetView("comanda")}
+                className="text-sky-300 hover:underline"
+              >
+                ← înapoi la comandă
+              </button>
+            </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
               <span>Dosar daună</span>
@@ -550,12 +574,35 @@ export function WorkOrderSheetShell({
         </div>
       ) : null}
 
-      {sheetView === "comanda" || !isDamageWo ? (
+      {sheetView === "mobilitate" ? (
+        <div className="border-b border-zinc-800 px-4 py-4 space-y-6">
+          <WorkOrderMobilitySummary workOrderId={wo.id} />
+          {canWrite ? (
+            <MobilityAssignmentForm
+              workOrderId={wo.id}
+              embedded
+              prefill={{
+                coveredVehicleReg: wo.registrationNumber,
+                workOrderDisplayNumber: workOrderDisplayLabel(wo),
+              }}
+              onSaved={() => {
+                setSheetView("comanda");
+                router.refresh();
+              }}
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">Nu ai drept de alocare pe această comandă.</p>
+          )}
+        </div>
+      ) : null}
+
+      {sheetView === "comanda" ? (
         <>
       <MobilityWoBanner
         workOrderId={wo.id}
         canWrite={canWrite}
         damageRequired={isDamageWo}
+        onAllocate={() => setSheetView("mobilitate")}
       />
       <WorkOrderMobilitySummary workOrderId={wo.id} />
 

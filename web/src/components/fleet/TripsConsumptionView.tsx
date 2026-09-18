@@ -58,7 +58,7 @@ function WeeklyChart({ weekly }: { weekly: ConsumptionPayload["weekly"] }) {
           <span className="inline-block h-2.5 w-2.5 rounded-sm bg-sky-500/70" /> Km curse
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-500/70" /> Litri alimentați
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-500/70" /> Energie alimentată (L / kWh)
         </span>
       </div>
     </div>
@@ -155,7 +155,10 @@ function FuelMixChart({ fuelMix }: { fuelMix: ConsumptionPayload["fuelMix"] }) {
           <li key={row.label} className="flex items-center gap-2 text-zinc-300">
             <span className={`inline-block h-2.5 w-2.5 rounded-sm ${colors[i % colors.length]}`} />
             <span>{row.label}</span>
-            <span className="font-mono text-amber-200/90">{row.liters.toLocaleString("ro-RO")} L</span>
+            <span className="font-mono text-amber-200/90">
+              {row.liters.toLocaleString("ro-RO")}{" "}
+              {row.fuelProductType === "electric" ? "kWh" : "L"}
+            </span>
             <span className="text-xs text-zinc-500">({Math.round((row.liters / total) * 100)}%)</span>
           </li>
         ))}
@@ -220,15 +223,52 @@ export function TripsConsumptionView({ data, showDriverColumn = true }: Props) {
           hint={`${summary.tripCount} curse — fără litri alocați`}
           accent="sky"
         />
-        <StatCard
-          label="Litri alimentați"
-          value={`${summary.totalFuelLiters.toLocaleString("ro-RO")} L`}
-          hint={`${summary.fillCount} alimentări · ${formatRonFromCents(summary.totalFuelCostCents)} RON`}
-          accent="amber"
-        />
+        {(() => {
+          const byEnergy = data.summaryByFuelType;
+          const hasMixedUnits =
+            byEnergy.some((r) => r.energyUnit === "L") && byEnergy.some((r) => r.energyUnit === "kWh");
+          if (hasMixedUnits || byEnergy.length > 1) {
+            const liters = byEnergy
+              .filter((r) => r.energyUnit === "L")
+              .reduce((s, r) => s + r.totalEnergy, 0);
+            const kwh = byEnergy
+              .filter((r) => r.energyUnit === "kWh")
+              .reduce((s, r) => s + r.totalEnergy, 0);
+            const parts: string[] = [];
+            if (liters > 0) parts.push(`${liters.toLocaleString("ro-RO")} L`);
+            if (kwh > 0) parts.push(`${kwh.toLocaleString("ro-RO")} kWh`);
+            return (
+              <StatCard
+                label="Energie alimentată"
+                value={parts.length > 0 ? parts.join(" · ") : "—"}
+                hint={`${summary.fillCount} alimentări · ${formatRonFromCents(summary.totalFuelCostCents)} RON — fără amestec L+kWh într-un singur total`}
+                accent="amber"
+              />
+            );
+          }
+          const unit = byEnergy[0]?.energyUnit === "kWh" ? "kWh" : "L";
+          return (
+            <StatCard
+              label={unit === "kWh" ? "kWh încărcați" : "Litri alimentați"}
+              value={`${summary.totalFuelLiters.toLocaleString("ro-RO")} ${unit}`}
+              hint={`${summary.fillCount} alimentări · ${formatRonFromCents(summary.totalFuelCostCents)} RON`}
+              accent="amber"
+            />
+          );
+        })()}
         <StatCard
           label="Consum mediu (segmente)"
-          value={summary.avgSegmentL100 != null ? `${summary.avgSegmentL100} L/100km` : "—"}
+          value={
+            data.summaryByFuelType.length > 1
+              ? "vezi pe tip ↓"
+              : summary.avgSegmentL100 != null
+                ? `${summary.avgSegmentL100} ${
+                    data.summaryByFuelType[0]
+                      ? consumptionPer100Label(data.summaryByFuelType[0].fuelType)
+                      : "L/100km"
+                  }`
+                : "—"
+          }
           hint={
             summary.segmentCount > 0
               ? `${summary.segmentCount} segmente fill-to-fill`
@@ -257,9 +297,9 @@ export function TripsConsumptionView({ data, showDriverColumn = true }: Props) {
                 value={
                   row.avgConsumptionPer100 != null
                     ? `${row.avgConsumptionPer100} ${consumptionPer100Label(row.fuelType)}`
-                    : "—"
+                    : `${row.totalEnergy.toLocaleString("ro-RO")} ${row.energyUnit}`
                 }
-                hint={`${row.totalEnergy.toLocaleString("ro-RO")} ${row.energyUnit} · ${row.totalTripKm.toLocaleString("ro-RO")} km · ${row.vehicleCount} vehicule · ${row.segmentCount} segmente`}
+                hint={`${row.totalEnergy.toLocaleString("ro-RO")} ${row.energyUnit} · ${row.totalTripKm.toLocaleString("ro-RO")} km · ${row.vehicleCount} vehicule · ${row.segmentCount} segmente · ${formatRonFromCents(row.totalFuelCostCents)} RON`}
                 accent={
                   row.fuelType === "electric"
                     ? "violet"
@@ -284,7 +324,7 @@ export function TripsConsumptionView({ data, showDriverColumn = true }: Props) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
-          <h3 className="mb-3 text-sm font-medium text-zinc-300">Km curse vs litri / săptămână</h3>
+          <h3 className="mb-3 text-sm font-medium text-zinc-300">Km curse vs energie / săptămână</h3>
           <WeeklyChart weekly={data.weekly} />
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">

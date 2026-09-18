@@ -35,6 +35,10 @@ export type VehicleRecord = {
   model: string | null;
   type: string;
   fuelType?: string | null;
+  fuelCardNumber?: string | null;
+  fuelCardProvider?: string | null;
+  fuelCardAccountRef?: string | null;
+  fuelCardStatus?: "active" | "inactive" | "blocked" | null;
   vin: string | null;
   status: string;
   odometerKm: number;
