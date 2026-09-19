@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DeleteReminderButton } from "@/components/fleet/DeleteReminderButton";
+import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { REMINDER_STATUS_TABS, RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolbar";
 import { ReminderActionStatusBadge } from "@/components/fleet/ReminderActionStatusBadge";
 import { formatOffsetDaysLabel } from "@/lib/document-reminders";
@@ -155,7 +156,8 @@ export function RemindersListView({
       ) : null}
 
       {!loading && !error && data && data.items.length > 0 ? (
-        <div className="space-y-3">
+        <FleetListDisplayScope hideToolbar={compact}>
+        <div className="fleet-list-card-stack space-y-3">
           {data.items.map((row) => (
             <article
               key={row.id}
@@ -192,7 +194,7 @@ export function RemindersListView({
                           ? `Cost: ${row.linkedCostCategory}`
                           : "Acțiune personalizată"}
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-2 flex flex-wrap gap-1.5" data-fleet-list-extra>
                     {row.reminderOffsetsDays?.map((d) => (
                       <span
                         key={`d-${d}`}
@@ -211,7 +213,10 @@ export function RemindersListView({
                     ))}
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-2 text-right text-xs text-zinc-500">
+                <div
+                  className="flex flex-col items-end gap-2 text-right text-xs text-zinc-500"
+                  data-fleet-list-extra
+                >
                   {row.dueOn ? (
                     <p>
                       Scadență:{" "}
@@ -295,6 +300,7 @@ export function RemindersListView({
             <p className="text-xs text-zinc-600">{data.total} acțiuni în total pentru filtrul curent</p>
           ) : null}
         </div>
+        </FleetListDisplayScope>
       ) : null}
 
       {!compact && write ? (

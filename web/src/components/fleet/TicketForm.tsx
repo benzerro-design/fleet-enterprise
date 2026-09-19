@@ -190,6 +190,7 @@ export function TicketForm({
                 onChange={ctx.setClientId}
                 required
                 disabled={lockClient}
+                hideLabel
               />
             </div>
 

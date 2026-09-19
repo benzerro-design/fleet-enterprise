@@ -25,6 +25,8 @@ export type CalendarAppointmentRecord = {
   driverDeclinedAt: string | null;
   driverDeclineNote: string | null;
   lastProposalNote: string | null;
+  requireDriverAckOverride: boolean | null;
+  requireDriverAck: boolean;
   location: string | null;
   notes: string | null;
   vehicleId: string;
@@ -83,6 +85,7 @@ export type CreateCalendarAppointmentInput = {
   recurrenceRule?: ServiceAppointmentRecurrence;
   /** Dacă true, programare directă de furnizor (fără pending_supplier). */
   createdBySupplier?: boolean;
+  requireDriverAckOverride?: boolean | null;
 };
 
 export type UpdateCalendarAppointmentInput = {
@@ -93,6 +96,7 @@ export type UpdateCalendarAppointmentInput = {
   location?: string | null;
   notes?: string | null;
   status?: ServiceAppointmentStatus;
+  requireDriverAckOverride?: boolean | null;
 };
 
 export function ticketDisplayId(ticketId: string | null | undefined): string | null {

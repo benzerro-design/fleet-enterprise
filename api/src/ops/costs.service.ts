@@ -24,6 +24,8 @@ import {
   reminderMenuSyncEnabledPatchValue,
   shouldRunReminderMenuSync,
 } from './reminder-sync';
+import { defaultDocumentTypeForCost } from './document-cost-link';
+import { isDocumentTypeCode } from './document-types';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -48,6 +50,14 @@ export type CreateCostInput = {
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
   syncReminderAction?: boolean;
+  /** FLEET-020: creează și un document legat, în același submit. */
+  linkedDocument?: {
+    documentTypeCode?: string;
+    title?: string;
+    expiresOn?: string | null;
+    fileUrl?: string | null;
+    fileName?: string | null;
+  } | null;
 };
 
 export type PatchCostInput = Partial<CreateCostInput>;
@@ -220,6 +230,7 @@ function toCostRow(row: {
   dueOdometerKm: number | null;
   reminderOffsetsKm: unknown;
   reminderMenuSyncEnabled: boolean;
+  vehicleDocumentId?: string | null;
   vehicle: { registrationNumber: string; client: { code: string } };
   tenant: { slug: string };
 }) {
@@ -247,6 +258,7 @@ function toCostRow(row: {
     dueOdometerKm: row.dueOdometerKm,
     reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
     reminderMenuSyncEnabled: row.reminderMenuSyncEnabled,
+    linkedDocumentId: row.vehicleDocumentId ?? null,
   };
 }
 
@@ -454,6 +466,29 @@ export class CostsService {
       }
     }
 
+    let linkedDocumentId: string | null = row.vehicleDocumentId ?? null;
+    if (dto.linkedDocument) {
+      const typeRaw = dto.linkedDocument.documentTypeCode?.trim() || defaultDocumentTypeForCost(row.category);
+      const documentTypeCode = isDocumentTypeCode(typeRaw) ? typeRaw : defaultDocumentTypeForCost(row.category);
+      const doc = await this.prisma.vehicleDocument.create({
+        data: {
+          vehicleId: row.vehicleId,
+          documentTypeCode,
+          title: dto.linkedDocument.title?.trim() || `${row.category} — document`,
+          expiresOn: dto.linkedDocument.expiresOn
+            ? new Date(dto.linkedDocument.expiresOn)
+            : row.nextDueOn,
+          fileUrl: dto.linkedDocument.fileUrl ?? row.invoiceAttachmentUrl,
+          fileName: dto.linkedDocument.fileName ?? null,
+        },
+      });
+      await this.prisma.costEntry.update({
+        where: { id: row.id },
+        data: { vehicleDocumentId: doc.id },
+      });
+      linkedDocumentId = doc.id;
+    }
+
     const vehicleOdometerSync = await this.odometerSync.syncFromOps({
       tenantId: tenant.id,
       vehicleId: row.vehicleId,
@@ -466,7 +501,11 @@ export class CostsService {
       actorUserId,
     });
 
-    return { ...toCostRow(row), reminderSyncFailed, vehicleOdometerSync };
+    return {
+      ...toCostRow({ ...row, vehicleDocumentId: linkedDocumentId }),
+      reminderSyncFailed,
+      vehicleOdometerSync,
+    };
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchCostInput, actorUserId?: string, access?: AccessContext) {

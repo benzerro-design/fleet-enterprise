@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import {
   FleetDataTable,
   fleetTableClass,
@@ -8,6 +8,7 @@ import {
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
@@ -573,6 +574,7 @@ export default async function TripsPage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există curse pentru filtrele curente.</p>
         ) : (
           <>
+            <FleetListDisplayScope>
             <FleetDataTable>
               <table className={fleetTableClass}>
                 <thead className={fleetTheadClass}>
@@ -629,6 +631,7 @@ export default async function TripsPage({ searchParams }: Props) {
                 </tbody>
               </table>
             </FleetDataTable>
+            </FleetListDisplayScope>
             <div className="flex justify-between text-sm text-zinc-400">
               <span>
                 Pagina {page} / {totalPages} · {data.total} curse

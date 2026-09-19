@@ -8,9 +8,11 @@ type Props = {
   onChange: (code: string) => void;
   disabled?: boolean;
   required?: boolean;
+  /** Când e deja un label în jur (TicketForm / OpsFormField). */
+  hideLabel?: boolean;
 };
 
-export function ClientSelect({ value, onChange, disabled, required }: Props) {
+export function ClientSelect({ value, onChange, disabled, required, hideLabel }: Props) {
   const [options, setOptions] = useState<Array<{ code: string; legalName: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,9 +47,11 @@ export function ClientSelect({ value, onChange, disabled, required }: Props) {
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-zinc-400">
-        Client {required ? <span className="text-rose-400">*</span> : null}
-      </label>
+      {!hideLabel ? (
+        <label className="text-sm text-zinc-400">
+          Client {required ? <span className="text-rose-400">*</span> : null}
+        </label>
+      ) : null}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}

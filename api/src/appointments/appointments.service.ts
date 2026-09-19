@@ -28,6 +28,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
+import { effectiveRequireDriverAck } from '../iam/client-iam-settings';
 import {
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
@@ -85,7 +86,7 @@ export class AppointmentsService {
           model: true,
           vin: true,
           clientId: true,
-          client: { select: { code: true, legalName: true } },
+          client: { select: { code: true, legalName: true, iamSettings: true } },
         },
       },
       supplier: { select: { id: true, code: true, legalName: true, category: true } },
@@ -126,6 +127,7 @@ export class AppointmentsService {
     driverDeclinedAt?: Date | null;
     driverDeclineNote?: string | null;
     lastProposalNote?: string | null;
+    requireDriverAckOverride?: boolean | null;
     location: string | null;
     notes: string | null;
     recurrenceRule: ServiceAppointmentRecurrence;
@@ -141,7 +143,7 @@ export class AppointmentsService {
       model: string | null;
       vin: string | null;
       clientId: string;
-      client: { code: string; legalName: string };
+      client: { code: string; legalName: string; iamSettings?: unknown };
     };
     supplier: { id: string; code: string; legalName: string; category: string } | null;
     serviceCase: {
@@ -176,6 +178,14 @@ export class AppointmentsService {
       driverDeclinedAt: row.driverDeclinedAt?.toISOString() ?? null,
       driverDeclineNote: row.driverDeclineNote ?? null,
       lastProposalNote: row.lastProposalNote ?? null,
+      requireDriverAckOverride:
+        row.requireDriverAckOverride === true || row.requireDriverAckOverride === false
+          ? row.requireDriverAckOverride
+          : null,
+      requireDriverAck: effectiveRequireDriverAck(
+        row.vehicle.client.iamSettings,
+        row.requireDriverAckOverride,
+      ),
       location: row.location,
       notes: row.notes,
       vehicleId: row.vehicleId,
@@ -548,6 +558,10 @@ export class AppointmentsService {
           proposedByRole,
           recurrenceRule,
           recurrenceSeriesId: seriesId,
+          requireDriverAckOverride:
+            dto.requireDriverAckOverride === true || dto.requireDriverAckOverride === false
+              ? dto.requireDriverAckOverride
+              : null,
         },
         include: this.calendarInclude(),
       });
@@ -568,6 +582,10 @@ export class AppointmentsService {
             proposedByRole,
             recurrenceRule,
             recurrenceSeriesId: seriesId,
+            requireDriverAckOverride:
+              dto.requireDriverAckOverride === true || dto.requireDriverAckOverride === false
+                ? dto.requireDriverAckOverride
+                : null,
           },
         });
       }
@@ -671,6 +689,15 @@ export class AppointmentsService {
       } else {
         data.supplier = { disconnect: true };
       }
+    }
+    if (dto.requireDriverAckOverride !== undefined) {
+      if (access && isPartnerUser(access)) {
+        throw new ForbiddenException('Partners cannot override driver-ack policy');
+      }
+      data.requireDriverAckOverride =
+        dto.requireDriverAckOverride === true || dto.requireDriverAckOverride === false
+          ? dto.requireDriverAckOverride
+          : null;
     }
 
     const row = await this.prisma.$transaction(async (tx) => {

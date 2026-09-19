@@ -10,9 +10,12 @@ import { VehicleMaintenancePlanTab } from "@/components/fleet/VehicleMaintenance
 import { VehicleOdometerTab } from "@/components/fleet/VehicleOdometerTab";
 import { VehiclePhotosTab } from "@/components/fleet/VehiclePhotosTab";
 import { VehicleEquipmentTab } from "@/components/fleet/VehicleEquipmentTab";
+import { VehicleDsrTab } from "@/components/fleet/VehicleDsrTab";
+import { VehicleInsuranceTab } from "@/components/fleet/VehicleInsuranceTab";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { FuelTypeFilter } from "@/components/fleet/FuelTypeFilter";
 import type { VehicleRecord } from "@/lib/fleet-api";
+import type { CostListPayload, DocumentListPayload, MaintenanceListPayload } from "@/lib/vehicle-detail-server";
 import { defaultConsumptionPeriod, type ConsumptionPayload } from "@/lib/consumption-types";
 import { parseFuelTypesCsv } from "@/lib/fuel-types";
 import {
@@ -37,6 +40,8 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "equipment", label: "Echipări" },
   { id: "odometer", label: "Odometru" },
   { id: "maintenance_plan", label: "Plan Mentenanță" },
+  { id: "dsr", label: "DSR" },
+  { id: "insurance", label: "Asigurări" },
   { id: "drivers", label: "Șoferi" },
   { id: "consumption", label: "Consum" },
 ];
@@ -54,6 +59,9 @@ type Props = {
   equipment: VehicleEquipmentPayload;
   odometer: OdometerReadingsPayload;
   maintenancePlan: MaintenancePlanPayload;
+  maintenanceList: MaintenanceListPayload | null;
+  documentsList: DocumentListPayload | null;
+  costsList: CostListPayload | null;
   driverAssignments: DriverAssignmentRecord[];
   consumption: ConsumptionPayload | null;
   /** true după fetch server (tab=consumption); false = încă nu s-a cerut */
@@ -75,6 +83,9 @@ export function VehicleProfileTabs({
   equipment,
   odometer,
   maintenancePlan,
+  maintenanceList,
+  documentsList,
+  costsList,
   driverAssignments,
   consumption,
   consumptionRequested = false,
@@ -99,6 +110,8 @@ export function VehicleProfileTabs({
       t === "odometer" ||
       t === "basic" ||
       t === "maintenance_plan" ||
+      t === "dsr" ||
+      t === "insurance" ||
       t === "drivers" ||
       t === "consumption"
     ) {
@@ -164,6 +177,22 @@ export function VehicleProfileTabs({
             write={planWrite ?? write}
             initial={maintenancePlan}
             highlightItemId={planItemHighlight}
+          />
+        ) : null}
+        {active === "dsr" ? (
+          <VehicleDsrTab
+            vehicle={vehicle}
+            maintenance={maintenanceList}
+            equipment={equipment}
+            printHref={`/fleet/vehicles/${vehicle.id}/dsr`}
+          />
+        ) : null}
+        {active === "insurance" ? (
+          <VehicleInsuranceTab
+            vehicleId={vehicle.id}
+            documents={documentsList}
+            costs={costsList}
+            write={write}
           />
         ) : null}
         {active === "drivers" ? (

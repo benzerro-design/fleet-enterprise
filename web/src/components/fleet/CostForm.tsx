@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { COST_CATEGORY_VALUES, DRIVER_WRITABLE_COST_CATEGORIES, isKnownCostCategory } from "@/lib/cost-categories";
+import { DOCUMENT_TYPE_OPTIONS } from "@/lib/document-types";
+import { defaultDocumentTypeForCost } from "@/lib/document-cost-link";
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
 import { isItpCostCategory } from "@/lib/itp-ops";
 import { isFuelCostCategory } from "@/lib/fuel-ops";
@@ -56,6 +58,7 @@ type CostRecord = {
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
   reminderMenuSyncEnabled?: boolean;
+  linkedDocumentId?: string | null;
 };
 
 type VehicleOption = {
@@ -195,6 +198,10 @@ export function CostForm(props: Props) {
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [alsoCreateDocument, setAlsoCreateDocument] = useState(false);
+  const [docTypeCode, setDocTypeCode] = useState(() => defaultDocumentTypeForCost(initial.category));
+  const [docTitle, setDocTitle] = useState("");
+  const [docExpiresOn, setDocExpiresOn] = useState("");
   const [odometerSync, setOdometerSync] = useState<VehicleOdometerSyncPayload | null>(null);
   const {
     confirmIfNeeded,
@@ -346,6 +353,16 @@ export function CostForm(props: Props) {
       dueOdometerKm: kmDue,
       reminderOffsetsKm: kmOffsets,
       syncReminderAction: configured ? syncReminderAction : false,
+      ...(alsoCreateDocument && !isEdit && !driverPortal
+        ? {
+            linkedDocument: {
+              documentTypeCode: docTypeCode,
+              title: docTitle.trim() || undefined,
+              expiresOn: docExpiresOn.trim() ? toIsoDate(docExpiresOn) : nextDue,
+              fileUrl: invoiceAttachmentUrl.trim() || null,
+            },
+          }
+        : {}),
     };
 
     const activeVehicleId = isEdit ? initial.vehicleId : boundVehicleId;
@@ -404,6 +421,7 @@ export function CostForm(props: Props) {
       onChange={(e) => {
         const v = e.target.value;
         setCategory(v);
+        setDocTypeCode(defaultDocumentTypeForCost(v));
         if (isItpCostCategory(v) && nextDueOn && reminderOffsetsDays.length === 0) {
           setReminderOffsetsDays(defaultDayOffsetsForMode(true));
         }
@@ -648,6 +666,28 @@ export function CostForm(props: Props) {
         <OpsFormCollapsible title="5. Termene & remindere (pliable)">
           {reminderBlock}
         </OpsFormCollapsible>
+        {!isEdit && !driverPortal ? (
+          <OpsFormCollapsible title="6. Salvează și ca document (opțional)">
+            <CostLinkedDocumentFields
+              enabled={alsoCreateDocument}
+              onEnabledChange={setAlsoCreateDocument}
+              documentTypeCode={docTypeCode}
+              onDocumentTypeCodeChange={setDocTypeCode}
+              title={docTitle}
+              onTitleChange={setDocTitle}
+              expiresOn={docExpiresOn}
+              onExpiresOnChange={setDocExpiresOn}
+            />
+          </OpsFormCollapsible>
+        ) : null}
+        {isEdit && props.initial.linkedDocumentId ? (
+          <p className="text-sm text-zinc-400">
+            Document legat:{" "}
+            <Link href={`/fleet/documents/${props.initial.linkedDocumentId}`} className="text-emerald-400 hover:underline">
+              deschide documentul
+            </Link>
+          </p>
+        ) : null}
 
         <OpsFormStickyActions
           submitLabel={isEdit ? "Salvează modificările" : "Creează costul"}
@@ -811,6 +851,26 @@ export function CostForm(props: Props) {
         ) : null}
       </div>
       {reminderBlock}
+      {!isEdit && !driverPortal ? (
+        <CostLinkedDocumentFields
+          enabled={alsoCreateDocument}
+          onEnabledChange={setAlsoCreateDocument}
+          documentTypeCode={docTypeCode}
+          onDocumentTypeCodeChange={setDocTypeCode}
+          title={docTitle}
+          onTitleChange={setDocTitle}
+          expiresOn={docExpiresOn}
+          onExpiresOnChange={setDocExpiresOn}
+        />
+      ) : null}
+      {isEdit && props.initial.linkedDocumentId ? (
+        <p className="text-sm text-zinc-400">
+          Document legat:{" "}
+          <Link href={`/fleet/documents/${props.initial.linkedDocumentId}`} className="text-emerald-400 hover:underline">
+            deschide documentul
+          </Link>
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">
@@ -822,5 +882,58 @@ export function CostForm(props: Props) {
       </div>
     </form>
     </>
+  );
+}
+
+function CostLinkedDocumentFields({
+  enabled,
+  onEnabledChange,
+  documentTypeCode,
+  onDocumentTypeCodeChange,
+  title,
+  onTitleChange,
+  expiresOn,
+  onExpiresOnChange,
+}: {
+  enabled: boolean;
+  onEnabledChange: (v: boolean) => void;
+  documentTypeCode: string;
+  onDocumentTypeCodeChange: (v: string) => void;
+  title: string;
+  onTitleChange: (v: string) => void;
+  expiresOn: string;
+  onExpiresOnChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="flex items-start gap-2 text-sm text-zinc-300">
+        <input type="checkbox" className="mt-0.5" checked={enabled} onChange={(e) => onEnabledChange(e.target.checked)} />
+        <span>
+          Salvează și ca document
+          <span className="block text-[11px] text-zinc-500">
+            Creează fișa de document (RCA, CASCO, ITP…) din același cost. Atașamentul facturii se copiază.
+          </span>
+        </span>
+      </label>
+      {enabled ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <OpsFormField label="Tip document" required>
+            <select value={documentTypeCode} onChange={(e) => onDocumentTypeCodeChange(e.target.value)} className={OPS_INPUT_CLASS}>
+              {DOCUMENT_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </OpsFormField>
+          <OpsFormField label="Titlu document">
+            <input value={title} onChange={(e) => onTitleChange(e.target.value)} className={OPS_INPUT_CLASS} placeholder="Opțional — implicit din categorie" />
+          </OpsFormField>
+          <OpsFormField label="Expiră la" hint="Gol = termenul de pe cost, dacă există.">
+            <input type="date" value={expiresOn} onChange={(e) => onExpiresOnChange(e.target.value)} className={OPS_INPUT_CLASS} />
+          </OpsFormField>
+        </div>
+      ) : null}
+    </div>
   );
 }

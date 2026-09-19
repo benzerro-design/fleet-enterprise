@@ -91,6 +91,8 @@ export type VehicleProfileTab =
   | "equipment"
   | "odometer"
   | "maintenance_plan"
+  | "dsr"
+  | "insurance"
   | "drivers"
   | "consumption";
 

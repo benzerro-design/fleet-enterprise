@@ -25,6 +25,9 @@ import {
   inferReminderConstraintMode,
   type ReminderConstraintMode,
 } from "@/lib/ops-reminder-fields";
+import { COST_CATEGORY_VALUES } from "@/lib/cost-categories";
+import { defaultCostCategoryForDocument } from "@/lib/document-cost-link";
+import { parseRonToCents } from "@/lib/money";
 
 type DocumentRecord = {
   id: string;
@@ -40,6 +43,7 @@ type DocumentRecord = {
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
   reminderMenuSyncEnabled?: boolean;
+  linkedCostEntryId?: string | null;
 };
 
 type VehicleOption = {
@@ -139,6 +143,11 @@ export function DocumentForm(props: Props) {
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [alsoCreateCost, setAlsoCreateCost] = useState(false);
+  const [costAmountRon, setCostAmountRon] = useState("");
+  const [costCategory, setCostCategory] = useState(() => defaultCostCategoryForDocument(initial.documentTypeCode));
+  const [costIncurredOn, setCostIncurredOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [costProvider, setCostProvider] = useState("");
 
   const isCivCreate = !isEdit && documentTypeCode === "civ";
   /** Un CIV are două pagini și la editare, nu doar la creare. */
@@ -204,6 +213,15 @@ export function DocumentForm(props: Props) {
       setError("Data expirării este invalidă.");
       setPending(false);
       return;
+    }
+
+    if (alsoCreateCost && !isEdit) {
+      const cents = parseRonToCents(costAmountRon);
+      if (cents === null) {
+        setError("Suma costului trebuie să fie în RON (maxim 2 zecimale).");
+        setPending(false);
+        return;
+      }
     }
 
     const kmDue = constraintMode !== "time" ? dueOdometerKm : null;
@@ -273,6 +291,16 @@ export function DocumentForm(props: Props) {
         dueOdometerKm: kmDue,
         reminderOffsetsKm: kmOffsets,
         syncReminderAction: configured ? syncReminderAction : false,
+        ...(alsoCreateCost && !isEdit
+          ? {
+              linkedCost: {
+                amountCents: parseRonToCents(costAmountRon) ?? 0,
+                category: costCategory,
+                provider: costProvider.trim() || null,
+                incurredOn: costIncurredOn ? new Date(`${costIncurredOn}T12:00:00.000Z`).toISOString() : undefined,
+              },
+            }
+          : {}),
       };
 
       const url = isEdit ? `/api/documents/${props.documentId}` : "/api/documents";
@@ -434,6 +462,7 @@ export function DocumentForm(props: Props) {
                   const next = e.target.value;
                   setDocumentTypeCode(next);
                   if (isCivDocumentTypeCode(next) || next === "civ") setSyncReminderAction(false);
+                  setCostCategory(defaultCostCategoryForDocument(next));
                 }}
                 required
                 className={OPS_INPUT_CLASS}
@@ -479,6 +508,30 @@ export function DocumentForm(props: Props) {
           {uploading && showCivDualUpload ? <p className="mt-2 text-xs text-zinc-400">Se încarcă fișierul…</p> : null}
         </OpsFormSection>
         {!isCivCreate ? <OpsFormCollapsible title="5. Termene & remindere (pliable)">{reminderBlock}</OpsFormCollapsible> : null}
+        {!isEdit && !isCivCreate ? (
+          <OpsFormCollapsible title="6. Adaugă și un cost (opțional)">
+            <DocumentLinkedCostFields
+              enabled={alsoCreateCost}
+              onEnabledChange={setAlsoCreateCost}
+              amountRon={costAmountRon}
+              onAmountRonChange={setCostAmountRon}
+              category={costCategory}
+              onCategoryChange={setCostCategory}
+              incurredOn={costIncurredOn}
+              onIncurredOnChange={setCostIncurredOn}
+              provider={costProvider}
+              onProviderChange={setCostProvider}
+            />
+          </OpsFormCollapsible>
+        ) : null}
+        {isEdit && props.initial.linkedCostEntryId ? (
+          <p className="text-sm text-zinc-400">
+            Cost legat:{" "}
+            <Link href={`/fleet/costs/${props.initial.linkedCostEntryId}`} className="text-emerald-400 hover:underline">
+              deschide costul
+            </Link>
+          </p>
+        ) : null}
         <OpsFormStickyActions
           submitLabel={isEdit ? "Salvează modificările" : isCivCreate ? "Creează documentul CIV" : "Creează documentul"}
           pendingLabel="Se salvează…"
@@ -540,6 +593,28 @@ export function DocumentForm(props: Props) {
       </div>
 
       {!isCivCreate ? reminderBlock : null}
+      {!isEdit && !isCivCreate ? (
+        <DocumentLinkedCostFields
+          enabled={alsoCreateCost}
+          onEnabledChange={setAlsoCreateCost}
+          amountRon={costAmountRon}
+          onAmountRonChange={setCostAmountRon}
+          category={costCategory}
+          onCategoryChange={setCostCategory}
+          incurredOn={costIncurredOn}
+          onIncurredOnChange={setCostIncurredOn}
+          provider={costProvider}
+          onProviderChange={setCostProvider}
+        />
+      ) : null}
+      {isEdit && props.initial.linkedCostEntryId ? (
+        <p className="text-sm text-zinc-400">
+          Cost legat:{" "}
+          <Link href={`/fleet/costs/${props.initial.linkedCostEntryId}`} className="text-emerald-400 hover:underline">
+            deschide costul
+          </Link>
+        </p>
+      ) : null}
 
       {showCivDualUpload ? (
         <div className="space-y-3">
@@ -612,5 +687,71 @@ export function DocumentForm(props: Props) {
         </Link>
       </div>
     </form>
+  );
+}
+
+function DocumentLinkedCostFields({
+  enabled,
+  onEnabledChange,
+  amountRon,
+  onAmountRonChange,
+  category,
+  onCategoryChange,
+  incurredOn,
+  onIncurredOnChange,
+  provider,
+  onProviderChange,
+}: {
+  enabled: boolean;
+  onEnabledChange: (v: boolean) => void;
+  amountRon: string;
+  onAmountRonChange: (v: string) => void;
+  category: string;
+  onCategoryChange: (v: string) => void;
+  incurredOn: string;
+  onIncurredOnChange: (v: string) => void;
+  provider: string;
+  onProviderChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="flex items-start gap-2 text-sm text-zinc-300">
+        <input type="checkbox" className="mt-0.5" checked={enabled} onChange={(e) => onEnabledChange(e.target.checked)} />
+        <span>
+          Adaugă și un cost
+          <span className="block text-[11px] text-zinc-500">
+            Salvează polita / factura și costul în același pas. Rămân legate.
+          </span>
+        </span>
+      </label>
+      {enabled ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <OpsFormField label="Sumă (RON fără TVA)" required>
+            <input
+              value={amountRon}
+              onChange={(e) => onAmountRonChange(e.target.value)}
+              inputMode="decimal"
+              className={OPS_INPUT_CLASS}
+              placeholder="0,00"
+            />
+          </OpsFormField>
+          <OpsFormField label="Categorie cost" required>
+            <select value={category} onChange={(e) => onCategoryChange(e.target.value)} className={OPS_INPUT_CLASS}>
+              {COST_CATEGORY_VALUES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </OpsFormField>
+          <OpsFormField label="Data costului">
+            <input type="date" value={incurredOn} onChange={(e) => onIncurredOnChange(e.target.value)} className={OPS_INPUT_CLASS} />
+          </OpsFormField>
+          <OpsFormField label="Furnizor">
+            <input value={provider} onChange={(e) => onProviderChange(e.target.value)} className={OPS_INPUT_CLASS} />
+          </OpsFormField>
+        </div>
+      ) : null}
+    </div>
   );
 }

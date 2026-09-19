@@ -9,6 +9,7 @@ import {
   appointmentHasSlot,
   appointmentsBrowserBase,
   appointmentProcessLabel,
+  appointmentRequiresDriverAck,
   formatAppointmentSlot,
   recurrenceLabel,
   workflowTypeLabel,
@@ -98,6 +99,7 @@ export function SchedulerInspector({
   const [cancelNote, setCancelNote] = useState("");
   const [requestingCancel, setRequestingCancel] = useState(false);
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
+  const [requireDriverAck, setRequireDriverAck] = useState(true);
 
   useEffect(() => {
     if (!appointment) return;
@@ -220,6 +222,7 @@ export function SchedulerInspector({
           ...(linkTicketId ? { sourceTicketId: linkTicketId } : {}),
           ...(linkServiceCaseId ? { serviceCaseId: linkServiceCaseId } : {}),
           ...(partnerMode ? { createdBySupplier: true } : {}),
+          ...(!partnerMode ? { requireDriverAckOverride: requireDriverAck } : {}),
         }),
       });
       if (!res.ok) {
@@ -525,6 +528,22 @@ export function SchedulerInspector({
             ) : null}
           </div>
           ) : null}
+          {!partnerMode ? (
+            <label className="flex items-start gap-2 text-sm text-zinc-300">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={requireDriverAck}
+                onChange={(e) => setRequireDriverAck(e.target.checked)}
+              />
+              <span>
+                Necesar acord șofer
+                <span className="block text-[11px] text-zinc-500">
+                  Debifează = Confirmă manager deschide WO, fără primire șofer.
+                </span>
+              </span>
+            </label>
+          ) : null}
         </div>
         <button
           type="button"
@@ -742,11 +761,31 @@ export function SchedulerInspector({
               <p className={appointment.managerConfirmedAt ? "text-emerald-400/90" : ""}>
                 {appointment.managerConfirmedAt ? "✓ Manager" : "○ Manager — neconfirmat"}
               </p>
-              <p className={appointment.driverAcknowledgedAt ? "text-sky-400/90" : ""}>
-                {appointment.driverAcknowledgedAt ? "✓ Șofer (primire)" : "○ Șofer — Confirmă primire"}
-              </p>
+              {appointmentRequiresDriverAck(appointment) ? (
+                <p className={appointment.driverAcknowledgedAt ? "text-sky-400/90" : ""}>
+                  {appointment.driverAcknowledgedAt ? "✓ Șofer (primire)" : "○ Șofer — Confirmă primire"}
+                </p>
+              ) : (
+                <p className="text-zinc-500">Șofer — nu e necesar (ordin ierarhic)</p>
+              )}
+              {canWrite &&
+              !appointment.managerConfirmedAt &&
+              appointment.status !== "cancelled" &&
+              appointment.status !== "completed" ? (
+                <label className="mt-1 flex items-start gap-2 text-[11px] text-zinc-400">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={appointmentRequiresDriverAck(appointment)}
+                    disabled={pending}
+                    onChange={(e) => void patchAppointment({ requireDriverAckOverride: e.target.checked })}
+                  />
+                  <span>Necesar acord șofer pe programarea asta</span>
+                </label>
+              ) : null}
               {appointment.workOrders.length === 0 &&
               appointment.managerConfirmedAt &&
+              appointmentRequiresDriverAck(appointment) &&
               !appointment.driverAcknowledgedAt ? (
                 <p className="mt-1 rounded border border-amber-800/40 bg-amber-950/20 px-2 py-1 text-[10px] text-amber-200">
                   Comanda (WO) se creează automat după Confirmă primire (șofer) pe tichet.
@@ -754,7 +793,7 @@ export function SchedulerInspector({
               ) : null}
               {appointment.workOrders.length === 0 &&
               appointment.managerConfirmedAt &&
-              appointment.driverAcknowledgedAt ? (
+              (!appointmentRequiresDriverAck(appointment) || appointment.driverAcknowledgedAt) ? (
                 <p className="mt-1 text-[10px] text-zinc-500">Confirmări complete — reîncarcă dacă WO nu apare.</p>
               ) : null}
             </dd>

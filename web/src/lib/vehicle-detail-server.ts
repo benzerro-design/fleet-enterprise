@@ -51,6 +51,7 @@ export type DocumentListPayload = {
     documentTypeCode: string;
     expiresOn: string | null;
     fileUrl: string | null;
+    linkedCostEntryId?: string | null;
     reminder?: import("@/lib/document-reminders").DocumentReminderSummary;
   }>;
   total: number;

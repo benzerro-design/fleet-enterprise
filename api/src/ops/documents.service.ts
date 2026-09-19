@@ -24,6 +24,7 @@ import {
   reminderMenuSyncEnabledPatchValue,
   shouldRunReminderMenuSync,
 } from './reminder-sync';
+import { defaultCostCategoryForDocument } from './document-cost-link';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -41,6 +42,13 @@ export type CreateDocumentInput = {
   reminderOffsetsKm?: number[] | null;
   /** Dacă true (implicit), creează/actualizează acțiune în meniul Remindere. */
   syncReminderAction?: boolean;
+  /** FLEET-020: creează și un cost legat, în același submit. */
+  linkedCost?: {
+    amountCents: number;
+    category?: string;
+    provider?: string | null;
+    incurredOn?: string;
+  } | null;
 };
 
 export type PatchDocumentInput = Partial<CreateDocumentInput>;
@@ -176,6 +184,7 @@ function toDocRow(row: {
   reminderMenuSyncEnabled: boolean;
   createdAt: Date;
   vehicle: { registrationNumber: string; client: { code: string }; tenant: { slug: string } };
+  costEntry?: { id: string } | null;
 }) {
   const reminderOffsetsDays = normalizeReminderOffsets(row.reminderOffsetsDays);
   const reminder = computeReminderSummary(row.expiresOn, reminderOffsetsDays);
@@ -198,6 +207,7 @@ function toDocRow(row: {
     reminderMenuSyncEnabled: row.reminderMenuSyncEnabled,
     reminder,
     createdAt: row.createdAt.toISOString(),
+    linkedCostEntryId: row.costEntry?.id ?? null,
   };
 }
 
@@ -240,6 +250,7 @@ export class DocumentsService {
               tenant: { select: { slug: true } },
             },
           },
+          costEntry: { select: { id: true } },
         },
         orderBy: [{ expiresOn: 'asc' }, { createdAt: 'desc' }],
         skip,
@@ -306,6 +317,7 @@ export class DocumentsService {
             tenant: { select: { slug: true } },
           },
         },
+        costEntry: { select: { id: true } },
       },
     });
     if (!row) throw new NotFoundException('Document not found');
@@ -349,6 +361,7 @@ export class DocumentsService {
             tenant: { select: { slug: true } },
           },
         },
+        costEntry: { select: { id: true } },
       },
     });
 
@@ -376,7 +389,29 @@ export class DocumentsService {
       }
     }
 
-    return { ...toDocRow(row), reminderSyncFailed };
+    let linkedCostId: string | null = null;
+    if (dto.linkedCost && Number.isFinite(dto.linkedCost.amountCents) && dto.linkedCost.amountCents >= 0) {
+      const cost = await this.prisma.costEntry.create({
+        data: {
+          tenantId: tenant.id,
+          vehicleId: dto.vehicleId,
+          category: (dto.linkedCost.category?.trim() ||
+            defaultCostCategoryForDocument(dto.documentTypeCode)).trim(),
+          amountCents: Math.round(dto.linkedCost.amountCents),
+          provider: dto.linkedCost.provider?.trim() || null,
+          incurredOn: dto.linkedCost.incurredOn ? new Date(dto.linkedCost.incurredOn) : new Date(),
+          invoiceAttachmentUrl: dto.fileUrl ?? null,
+          nextDueOn: row.expiresOn,
+          vehicleDocumentId: row.id,
+        },
+      });
+      linkedCostId = cost.id;
+    }
+
+    return {
+      ...toDocRow({ ...row, costEntry: linkedCostId ? { id: linkedCostId } : null }),
+      reminderSyncFailed,
+    };
   }
 
   async patch(tenantSlug: string, id: string, dto: PatchDocumentInput, actorUserId?: string, access?: AccessContext) {
@@ -420,6 +455,7 @@ export class DocumentsService {
             tenant: { select: { slug: true } },
           },
         },
+        costEntry: { select: { id: true } },
       },
     });
 

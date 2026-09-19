@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
@@ -38,6 +39,7 @@ type DocumentRow = {
   fileNameVerso?: string | null;
   reminder?: DocumentReminderSummary;
   createdAt: string;
+  linkedCostEntryId?: string | null;
 };
 
 type Payload = { items: DocumentRow[]; total: number; page: number; pageSize: number };
@@ -230,7 +232,8 @@ export default async function DocumentsPage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există documente pentru filtrele curente.</p>
         ) : (
           <>
-            <div className="space-y-3">
+            <FleetListDisplayScope>
+            <div className="fleet-list-card-stack space-y-3">
               {data.items.map((row) => {
                 const expiry = documentExpiryStatus(row.expiresOn);
                 const badge = documentExpiryBadge(expiry);
@@ -251,10 +254,12 @@ export default async function DocumentsPage({ searchParams }: Props) {
                           </span>
                         </div>
                         <p className="font-mono text-xs text-zinc-400">{row.registrationNumber}</p>
-                        <p className="text-xs text-zinc-500">Client: {row.clientId}</p>
+                        <p className="text-xs text-zinc-500" data-fleet-list-extra>
+                          Client: {row.clientId}
+                        </p>
                       </div>
                     </div>
-                    <dl className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                    <dl className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2" data-fleet-list-extra>
                       <div>
                         <dt className="text-xs uppercase tracking-wide text-zinc-500">Expiră</dt>
                         <dd>
@@ -281,6 +286,14 @@ export default async function DocumentsPage({ searchParams }: Props) {
                       >
                         Vehicul
                       </Link>
+                      {row.linkedCostEntryId ? (
+                        <Link
+                          href={`/fleet/costs/${row.linkedCostEntryId}`}
+                          className="rounded-lg border border-emerald-800/50 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-950/40"
+                        >
+                          Cost
+                        </Link>
+                      ) : null}
                       {row.fileUrl ? (
                         <a
                           href={row.fileUrl}
@@ -317,6 +330,7 @@ export default async function DocumentsPage({ searchParams }: Props) {
                 );
               })}
             </div>
+            </FleetListDisplayScope>
             <div className="flex justify-between text-sm text-zinc-400">
               <span>
                 Pagina {page} / {totalPages} · {data.total} documente

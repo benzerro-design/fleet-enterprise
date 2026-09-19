@@ -95,7 +95,12 @@ export function operationalHeadline(
     return "Factura e înregistrată — generează costul și închide comanda.";
   }
   if (wo?.approvedQuote) return "Deviz aprobat — după reparație înregistrează factura.";
-  if (wo && !wo.inServiceAt && appt?.managerConfirmedAt && appt?.driverAcknowledgedAt) {
+  if (
+    wo &&
+    !wo.inServiceAt &&
+    appt?.managerConfirmedAt &&
+    (appt.driverAcknowledgedAt || appt.requireDriverAck === false)
+  ) {
     const nr = wo.displayNumber ? `${wo.displayNumber} · ` : "";
     return `Comanda ${nr}deschisă — marchează când mașina intră la service.`;
   }
@@ -108,7 +113,7 @@ export function operationalHeadline(
   if (appt?.status === "pending_supplier" && !appt.scheduledAt) {
     return `Solicitare fără dată${appt.supplierLegalName ? ` la ${appt.supplierLegalName}` : ""} — așteaptă ca furnizorul să propună slotul.`;
   }
-  if (appt?.managerConfirmedAt && !appt.driverAcknowledgedAt) {
+  if (appt?.managerConfirmedAt && !appt.driverAcknowledgedAt && appt.requireDriverAck !== false) {
     return "Managerul a confirmat — așteaptă Confirmă primire (șofer) ca să se deschidă comanda (WO).";
   }
   if (appt && !appt.managerConfirmedAt) {
@@ -309,10 +314,12 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
           : "Fără dată — așteaptă ca furnizorul să propună slotul."
         : appt?.status === "needs_repropose"
           ? "Șoferul nu poate la ora curentă — aceeași cerere, altă oră."
-          : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
+          : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt && appt.requireDriverAck !== false
             ? "Confirmată de manager — așteaptă Confirmă primire (șofer)."
-            : appt?.managerConfirmedAt && appt.driverAcknowledgedAt
-              ? "Confirmată de manager și șofer."
+            : appt?.managerConfirmedAt && (appt.driverAcknowledgedAt || appt.requireDriverAck === false)
+              ? appt.requireDriverAck === false
+                ? "Confirmată de manager — WO fără acord șofer."
+                : "Confirmată de manager și șofer."
               : appt
                 ? "Slot pe masă — confirmă sau propune altă oră către furnizor."
                 : undefined,
@@ -324,9 +331,11 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
         ? `${wo.displayNumber ? `${wo.displayNumber} · ` : ""}${wo.title}${
             isDamage && wo.serviceOrderType === "D" ? " · tip D" : ""
           }`
-        : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
-          ? "Se deschide după Confirmă primire (șofer)."
-          : "Se deschide după confirmarea duală (manager + șofer).",
+        : appt?.managerConfirmedAt && appt.requireDriverAck === false
+          ? "Se deschide din Confirmă manager."
+          : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt
+            ? "Se deschide după Confirmă primire (șofer)."
+            : "Se deschide după confirmarea duală (manager + șofer).",
       detail: wo?.supplierLegalName ?? undefined,
       links: wo ? [{ href: `/fleet/work-orders/${wo.id}`, label: wo.displayNumber ?? "Comandă" }] : undefined,
     },

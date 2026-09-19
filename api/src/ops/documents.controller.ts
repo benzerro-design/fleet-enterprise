@@ -209,6 +209,7 @@ function assertCreateDocumentDto(body: unknown): CreateDocumentInput {
     dueOdometerKm: optionalNullableNonNegativeInt(body.dueOdometerKm, 'dueOdometerKm'),
     reminderOffsetsKm: parseReminderOffsetsKmField(body, 'reminderOffsetsKm'),
     syncReminderAction,
+    linkedCost: parseLinkedCost(body.linkedCost),
   };
 }
 
@@ -316,6 +317,21 @@ function optionalNullableNonNegativeInt(
     throw new BadRequestException(`Field "${field}" must be a non-negative integer`);
   }
   return v;
+}
+
+function parseLinkedCost(v: unknown): CreateDocumentInput['linkedCost'] {
+  if (v === undefined || v === null) return undefined;
+  if (!isRecord(v)) throw new BadRequestException('linkedCost must be an object');
+  const amount = v.amountCents;
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || !Number.isInteger(amount) || amount < 0) {
+    throw new BadRequestException('linkedCost.amountCents must be a non-negative integer');
+  }
+  return {
+    amountCents: amount,
+    category: typeof v.category === 'string' ? v.category : undefined,
+    provider: typeof v.provider === 'string' ? v.provider : v.provider === null ? null : undefined,
+    incurredOn: optionalIsoDateString(v.incurredOn),
+  };
 }
 
 function parseReminderOffsetsKmField(

@@ -57,6 +57,10 @@ import {
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
 } from '../appointments/appointment-status.utils';
+import {
+  effectiveRequireDriverAck,
+  parseClientIamSettings,
+} from '../iam/client-iam-settings';
 
 export const SERVICE_CASE_STAGE_ORDER: ServiceCaseStage[] = [
   ServiceCaseStage.intake,
@@ -132,6 +136,10 @@ export type ServiceAppointmentRecord = {
   driverDeclinedAt: string | null;
   driverDeclineNote: string | null;
   lastProposalNote: string | null;
+  /** null = moștenește politica clientului. */
+  requireDriverAckOverride: boolean | null;
+  /** Politică efectivă (override ?? client). */
+  requireDriverAck: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -147,6 +155,8 @@ export type CreateServiceAppointmentInput = {
   durationMin?: number;
   /** Programare directă de furnizor — fără pending_supplier. */
   createdBySupplier?: boolean;
+  /** Override L1: true/false pe cazul ăsta; null/lipsă = politica clientului. */
+  requireDriverAckOverride?: boolean | null;
 };
 
 export type SupplierValidateAppointmentInput = {
@@ -175,6 +185,7 @@ export type UpdateServiceAppointmentInput = {
   location?: string | null;
   notes?: string | null;
   status?: ServiceAppointmentStatus;
+  requireDriverAckOverride?: boolean | null;
 };
 
 export type DamageDocumentItem = {
@@ -332,6 +343,8 @@ export type ServiceCaseRecord = {
   damagePaymentAcceptances: DamagePaymentAcceptanceItem[];
   createdAt: string;
   updatedAt: string;
+  /** Default client (IAM-008) — folosit la programare nouă. */
+  clientRequireDriverAck: boolean;
   workOrders: WorkOrderRecord[];
   appointments: ServiceAppointmentRecord[];
 };
@@ -2413,6 +2426,10 @@ export class ServiceCasesService {
           notes: dto.notes?.trim() || null,
           status: initialStatus,
           proposedByRole,
+          requireDriverAckOverride:
+            dto.requireDriverAckOverride === true || dto.requireDriverAckOverride === false
+              ? dto.requireDriverAckOverride
+              : null,
         },
         include: { supplier: { select: { legalName: true } } },
       });
@@ -2507,6 +2524,12 @@ export class ServiceCasesService {
     if (dto.location !== undefined) data.location = dto.location?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
     if (dto.status !== undefined) data.status = dto.status;
+    if (dto.requireDriverAckOverride !== undefined) {
+      data.requireDriverAckOverride =
+        dto.requireDriverAckOverride === true || dto.requireDriverAckOverride === false
+          ? dto.requireDriverAckOverride
+          : null;
+    }
     if (dto.supplierId !== undefined) {
       data.supplier = supplierId
         ? { connect: { id: supplierId } }
@@ -2845,11 +2868,21 @@ export class ServiceCasesService {
 
     const existing = await this.prisma.serviceAppointment.findFirst({
       where: { id: appointmentId, tenantId: tenant.id },
-      include: { serviceCase: true },
+      include: { serviceCase: { include: { client: { select: { iamSettings: true } } } } },
     });
     if (!existing) throw new NotFoundException('Appointment not found');
     if (access && !canAckAppointmentAsDriver(access, existing.serviceCase.clientId)) {
       throw new ForbiddenException('Cannot acknowledge appointment');
+    }
+    if (
+      !effectiveRequireDriverAck(
+        existing.serviceCase.client?.iamSettings,
+        existing.requireDriverAckOverride,
+      )
+    ) {
+      throw new BadRequestException(
+        'Acordul șoferului nu e necesar pentru această programare — Confirmă manager deschide WO.',
+      );
     }
     if (
       existing.status === ServiceAppointmentStatus.needs_repropose ||
@@ -3229,15 +3262,26 @@ export class ServiceCasesService {
     actorUserId?: string,
   ): Promise<{ created: boolean; workOrderId: string | null }> {
     const appt = await tx.serviceAppointment.findFirst({ where: { id: appointmentId } });
-    if (!appt?.managerConfirmedAt || !appt?.driverAcknowledgedAt) {
+    if (!appt?.managerConfirmedAt) {
       return { created: false, workOrderId: null };
     }
     if (appt.status !== ServiceAppointmentStatus.confirmed) {
       return { created: false, workOrderId: null };
     }
 
-    const serviceCase = await tx.serviceCase.findFirst({ where: { id: appt.serviceCaseId } });
+    const serviceCase = await tx.serviceCase.findFirst({
+      where: { id: appt.serviceCaseId },
+      include: { client: { select: { iamSettings: true } } },
+    });
     if (!serviceCase?.vehicleId) return { created: false, workOrderId: null };
+
+    const requireDriverAck = effectiveRequireDriverAck(
+      serviceCase.client?.iamSettings,
+      appt.requireDriverAckOverride,
+    );
+    if (requireDriverAck && !appt.driverAcknowledgedAt) {
+      return { created: false, workOrderId: null };
+    }
 
     const prior = await tx.maintenanceWorkOrder.findFirst({
       where: { serviceCaseId: serviceCase.id },
@@ -3360,6 +3404,7 @@ export class ServiceCasesService {
 
   private caseInclude() {
     return {
+      client: { select: { iamSettings: true } },
       supplier: { select: { legalName: true } },
       workOrders: {
         orderBy: { createdAt: 'asc' as const },
@@ -3412,13 +3457,21 @@ export class ServiceCasesService {
     driverDeclinedAt?: Date | null;
     driverDeclineNote?: string | null;
     lastProposalNote?: string | null;
+    requireDriverAckOverride?: boolean | null;
     createdAt: Date;
     updatedAt: Date;
     supplier?: { legalName: string } | null;
-    serviceCase?: { title: string };
-  }): ServiceAppointmentRecord {
+    serviceCase?: { title: string; client?: { iamSettings?: unknown } | null };
+  },
+    clientIamSettings?: unknown,
+  ): ServiceAppointmentRecord {
     const durationMin = row.durationMin ?? 60;
     const title = row.title?.trim() || row.serviceCase?.title || 'Programare';
+    const settings = clientIamSettings ?? row.serviceCase?.client?.iamSettings;
+    const requireDriverAckOverride =
+      row.requireDriverAckOverride === true || row.requireDriverAckOverride === false
+        ? row.requireDriverAckOverride
+        : null;
     return {
       id: row.id,
       serviceCaseId: row.serviceCaseId,
@@ -3443,6 +3496,8 @@ export class ServiceCasesService {
       driverDeclinedAt: row.driverDeclinedAt?.toISOString() ?? null,
       driverDeclineNote: row.driverDeclineNote ?? null,
       lastProposalNote: row.lastProposalNote ?? null,
+      requireDriverAckOverride,
+      requireDriverAck: effectiveRequireDriverAck(settings, requireDriverAckOverride),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -3916,6 +3971,7 @@ export class ServiceCasesService {
       })(),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      clientRequireDriverAck,
       workOrders: (row.workOrders ?? []).map((wo) => {
         const quotes = wo.quotes ?? [];
         const approved = quotes.find((q) => q.status === WorkOrderQuoteStatus.approved);

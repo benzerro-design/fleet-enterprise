@@ -121,8 +121,7 @@ export function VehicleEquipmentTab({ vehicleId, write, initial }: Props) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-zinc-400">
-        Inventar echipări montate (cârlig, frig, lift, etc.). Documente / reparații per echipare — fază
-        ulterioară (DSR).
+        Inventar echipări montate (cârlig, frig, lift, etc.). Istoricul lucrărilor e pe tab-ul DSR.
       </p>
 
       {error ? (

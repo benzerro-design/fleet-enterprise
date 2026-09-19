@@ -1,5 +1,6 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteMaintenanceButton } from "@/components/fleet/DeleteMaintenanceButton";
@@ -206,19 +207,27 @@ export default async function MaintenancePage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există înregistrări pentru filtrele curente.</p>
         ) : (
           <>
-            <div className="space-y-3">
+            <FleetListDisplayScope>
+            <div className="fleet-list-card-stack space-y-3">
               {data.items.map((row) => (
                 <article key={row.id} className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <h2 className="text-base font-semibold text-zinc-100">{row.title}</h2>
                       <p className="mt-1 text-xs text-zinc-400">{maintenanceCostAllocationLabel(row.costAllocationCode)}</p>
-                      <p className="mt-1 text-xs text-zinc-500">Furnizor: {row.provider ?? "—"}</p>
+                      <p className="mt-1 text-xs text-zinc-500" data-fleet-list-extra>
+                        Furnizor: {row.provider ?? "—"}
+                      </p>
                     </div>
                     <p className="font-mono text-xs text-zinc-400">{row.registrationNumber}</p>
-                    <p className="text-xs text-zinc-500">Client: {row.clientId}</p>
+                    <p className="text-xs text-zinc-500" data-fleet-list-extra>
+                      Client: {row.clientId}
+                    </p>
                   </div>
-                  <dl className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <dl
+                    className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4"
+                    data-fleet-list-extra
+                  >
                     <div>
                       <dt className="text-xs uppercase tracking-wide text-zinc-500">Data</dt>
                       <dd>{row.performedAt ? new Date(row.performedAt).toLocaleDateString("ro-RO") : "—"}</dd>
@@ -268,6 +277,7 @@ export default async function MaintenancePage({ searchParams }: Props) {
                 </article>
               ))}
             </div>
+            </FleetListDisplayScope>
             <div className="flex justify-between text-sm text-zinc-400">
               <span>
                 Pagina {page} / {totalPages} · {data.total} înregistrări

@@ -84,6 +84,9 @@ export function VehicleDetailLayout({
               equipment={equipmentPayload}
               odometer={odometerPayload}
               maintenancePlan={maintenancePlanPayload}
+              maintenanceList={maintenanceList}
+              documentsList={documentsList}
+              costsList={costsList}
               driverAssignments={driverAssignments}
               consumption={consumption}
               consumptionRequested={consumptionRequested}

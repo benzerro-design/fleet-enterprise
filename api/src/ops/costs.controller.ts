@@ -163,6 +163,7 @@ function assertCreateCostDto(body: unknown): CreateCostInput {
     reminderOffsetsKm: parseReminderOffsetsKmField(body, 'reminderOffsetsKm'),
     syncReminderAction:
       'syncReminderAction' in body ? optionalBoolean(body.syncReminderAction) : undefined,
+    linkedDocument: parseLinkedDocument(body.linkedDocument),
   };
 }
 
@@ -339,4 +340,18 @@ function parseReminderOffsetsKmField(
     );
   }
   return normalized;
+}
+
+function parseLinkedDocument(v: unknown): CreateCostInput['linkedDocument'] {
+  if (v === undefined || v === null) return undefined;
+  if (!isRecord(v)) throw new BadRequestException('linkedDocument must be an object');
+  const expiresOn =
+    'expiresOn' in v ? (v.expiresOn === null ? null : optionalIsoDateString(v.expiresOn)) : undefined;
+  return {
+    documentTypeCode: typeof v.documentTypeCode === 'string' ? v.documentTypeCode : undefined,
+    title: typeof v.title === 'string' ? v.title : undefined,
+    expiresOn,
+    fileUrl: typeof v.fileUrl === 'string' ? v.fileUrl : v.fileUrl === null ? null : undefined,
+    fileName: typeof v.fileName === 'string' ? v.fileName : v.fileName === null ? null : undefined,
+  };
 }

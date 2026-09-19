@@ -118,8 +118,8 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
         <span>
           <span className="font-medium">Necesar acord șofer (programare)</span>
           <span className="block text-xs text-zinc-500">
-            Politică salvată. Dual confirm rămâne activ până la CRM-019 — bifa nu deschide încă WO
-            doar din Confirmă manager.
+            Da = WO după manager + șofer. Nu = Confirmă manager deschide WO (ordin ierarhic). L1
+            poate suprascrie pe o programare.
           </span>
         </span>
       </label>

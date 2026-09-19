@@ -9,7 +9,7 @@ export type ClientIamSettings = {
   allowClientOcr: boolean;
   /** L1 vede / editează tab Date achiziție. */
   allowClientAcquisition: boolean;
-  /** Politică stocată pentru CRM-019 — nu schimbă încă gate-ul WO. */
+  /** Default dual-confirm: WO doar după manager + șofer. false = Confirmă manager deschide WO. */
   requireDriverAck: boolean;
 };
 
@@ -90,4 +90,13 @@ export async function assertClientIamFeature(
         : 'Datele de achiziție nu sunt activate pentru acest client',
     );
   }
+}
+
+/** Override pe programare învinge politica clientului. Lipsă override = default client (true). */
+export function effectiveRequireDriverAck(
+  clientSettings: unknown,
+  override: boolean | null | undefined,
+): boolean {
+  if (override === true || override === false) return override;
+  return parseClientIamSettings(clientSettings).requireDriverAck;
 }

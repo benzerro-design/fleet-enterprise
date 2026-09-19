@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
-import { appointmentFleetCanCounterPropose, appointmentProcessLabel } from "@/lib/appointments-api";
+import {
+  appointmentFleetCanCounterPropose,
+  appointmentProcessLabel,
+  appointmentRequiresDriverAck,
+} from "@/lib/appointments-api";
 import {
   formatQuoteMoney,
   quoteStatusLabel,
@@ -71,6 +75,7 @@ export function TicketWorkflowStepper({
   const [reproposeApptId, setReproposeApptId] = useState<string | null>(null);
   const [reproposeAt, setReproposeAt] = useState("");
   const [reproposeNote, setReproposeNote] = useState("");
+  const [requireDriverAck, setRequireDriverAck] = useState(true);
 
   const loadMobility = useCallback(async (workOrderId: string) => {
     try {
@@ -136,6 +141,7 @@ export function TicketWorkflowStepper({
       const data = JSON.parse(raw) as ServiceCaseRecord | null;
       setServiceCase(data);
       setError(null);
+      if (data) setRequireDriverAck(data.clientRequireDriverAck !== false);
       if (data?.supplierId) setSupplierId(data.supplierId);
       const woId = data?.workOrders[0]?.id;
       if (woId) void loadMobility(woId);
@@ -193,6 +199,7 @@ export function TicketWorkflowStepper({
           supplierId: supplierId || null,
           location: appointmentLocation || null,
           notes: appointmentNotes || null,
+          requireDriverAckOverride: requireDriverAck,
         }),
       });
       if (!res.ok) {
@@ -210,6 +217,32 @@ export function TicketWorkflowStepper({
       const woId = serviceCase?.workOrders[0]?.id;
       if (woId) await loadMobility(woId);
       router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function patchDriverAck(appointmentId: string, next: boolean) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${serviceCasesBrowserBase}/appointments/${appointmentId}`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ requireDriverAckOverride: next }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      await load();
     } finally {
       setPending(false);
     }
@@ -715,11 +748,15 @@ export function TicketWorkflowStepper({
                       ) : (
                         <span>Neconfirmat manager</span>
                       )}
-                      {appt.driverAcknowledgedAt ? (
-                        <span className="text-sky-400/90">Confirmat șofer</span>
-                      ) : appt.status !== "needs_repropose" ? (
-                        <span>Fără confirmare șofer</span>
-                      ) : null}
+                      {appointmentRequiresDriverAck(appt) ? (
+                        appt.driverAcknowledgedAt ? (
+                          <span className="text-sky-400/90">Confirmat șofer</span>
+                        ) : appt.status !== "needs_repropose" ? (
+                          <span>Fără confirmare șofer</span>
+                        ) : null
+                      ) : (
+                        <span className="text-zinc-400">Fără acord șofer (ordin ierarhic)</span>
+                      )}
                       {appt.lastProposalNote ? (
                         <span className="w-full text-zinc-400">Notă propunere: {appt.lastProposalNote}</span>
                       ) : null}
@@ -747,10 +784,13 @@ export function TicketWorkflowStepper({
                             onClick={() => void confirmAppointment(appt.id)}
                             className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                           >
-                            Confirmă programarea
+                            {appointmentRequiresDriverAck(appt)
+                              ? "Confirmă programarea"
+                              : "Confirmă și deschide WO"}
                           </button>
                         ) : null}
                         {canAckAppointment &&
+                        appointmentRequiresDriverAck(appt) &&
                         appt.managerConfirmedAt &&
                         !appt.driverAcknowledgedAt &&
                         appt.status !== "needs_repropose" &&
@@ -794,13 +834,38 @@ export function TicketWorkflowStepper({
                             Propune altă oră
                           </button>
                         ) : null}
+                        {canOperate &&
+                        !appt.managerConfirmedAt &&
+                        appt.status !== "needs_repropose" &&
+                        appt.status !== "cancelled" &&
+                        appt.status !== "completed" ? (
+                          <label className="flex w-full items-start gap-2 text-[11px] text-zinc-400">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={appointmentRequiresDriverAck(appt)}
+                              disabled={pending}
+                              onChange={(e) => void patchDriverAck(appt.id, e.target.checked)}
+                            />
+                            <span>Necesar acord șofer pe programarea asta</span>
+                          </label>
+                        ) : null}
                         {appt.managerConfirmedAt &&
+                        appointmentRequiresDriverAck(appt) &&
                         !appt.driverAcknowledgedAt &&
                         appt.status !== "needs_repropose" &&
                         serviceCase.workOrders.length === 0 &&
                         !inRescheduleLoop ? (
                           <p className="w-full text-[11px] text-amber-200/90">
                             WO se creează automat după Confirmă primire (șofer) — nu există încă o comandă de deschis.
+                          </p>
+                        ) : null}
+                        {appt.managerConfirmedAt &&
+                        !appointmentRequiresDriverAck(appt) &&
+                        serviceCase.workOrders.length === 0 &&
+                        !inRescheduleLoop ? (
+                          <p className="w-full text-[11px] text-emerald-200/80">
+                            WO se deschide din Confirmă manager — acord șofer nu e cerut.
                           </p>
                         ) : null}
                         {declineApptId === appt.id ? (
@@ -954,6 +1019,20 @@ export function TicketWorkflowStepper({
                   placeholder="Adresă service"
                 />
               </div>
+              <label className="flex items-start gap-2 text-sm text-zinc-300">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={requireDriverAck}
+                  onChange={(e) => setRequireDriverAck(e.target.checked)}
+                />
+                <span>
+                  Necesar acord șofer
+                  <span className="block text-[11px] text-zinc-500">
+                    Debifează pentru ordin ierarhic: Confirmă manager deschide WO, fără primire șofer.
+                  </span>
+                </span>
+              </label>
               <button
                 type="button"
                 disabled={pending || (!scheduledAt && !supplierId)}

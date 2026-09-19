@@ -762,10 +762,13 @@ model CostEntry {
   reminderOffsetsKm    Json?
   /** Dacă false, acțiunea nu apare în meniul Remindere până la reactivare din sursă. */
   reminderMenuSyncEnabled Boolean @default(true)
+  /** FLEET-020: cost creat odată cu un document (sau invers). */
+  vehicleDocumentId    String?   @unique
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   supplier             Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   trip                 Trip?     @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  vehicleDocument      VehicleDocument? @relation(fields: [vehicleDocumentId], references: [id], onDelete: SetNull)
   reminderAction       ReminderAction?
   workOrderQuote       WorkOrderQuote?
   maintenanceEntry     MaintenanceEntry?
@@ -812,6 +815,7 @@ model VehicleDocument {
   createdAt           DateTime  @default(now())
   vehicle             Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   reminderAction      ReminderAction?
+  costEntry           CostEntry?
 
   @@index([vehicleId])
   @@index([expiresOn])
@@ -1604,6 +1608,8 @@ model ServiceAppointment {
   driverAcknowledgedAt DateTime?
   driverDeclinedAt     DateTime?
   driverDeclineNote    String?
+  /** null = moștenește Client.iamSettings.requireDriverAck; true/false = override L1 pe programare. */
+  requireDriverAckOverride Boolean?
   lastProposalNote     String?
   recurrenceRule       ServiceAppointmentRecurrence @default(none)
   recurrenceSeriesId   String?

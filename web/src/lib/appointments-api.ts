@@ -57,6 +57,8 @@ export type CalendarAppointment = {
   driverDeclinedAt: string | null;
   driverDeclineNote: string | null;
   lastProposalNote: string | null;
+  requireDriverAckOverride?: boolean | null;
+  requireDriverAck?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -86,13 +88,22 @@ export function appointmentStatusLabel(status: AppointmentStatus | string): stri
   return APPOINTMENT_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
+export function appointmentRequiresDriverAck(a: {
+  requireDriverAck?: boolean | null;
+}): boolean {
+  return a.requireDriverAck !== false;
+}
+
 export function appointmentIsFullyValidated(a: {
   status?: string | null;
   managerConfirmedAt?: string | null;
   driverAcknowledgedAt?: string | null;
+  requireDriverAck?: boolean | null;
 }): boolean {
   if (a.status === "cancelled" || a.status === "completed" || a.status === "no_show") return false;
-  return Boolean(a.managerConfirmedAt && a.driverAcknowledgedAt);
+  if (!a.managerConfirmedAt) return false;
+  if (!appointmentRequiresDriverAck(a)) return true;
+  return Boolean(a.driverAcknowledgedAt);
 }
 
 /** Chenar punctat până confirmă furnizor + manager + șofer. */
@@ -122,9 +133,7 @@ export function appointmentProcessLabel(a: {
   }
   if (a.status === "pending_supplier") return "Așteaptă furnizor";
   if (appointmentIsFullyValidated(a) || a.status === "confirmed") {
-    return a.driverAcknowledgedAt && a.managerConfirmedAt
-      ? "Confirmat"
-      : "În curs de validare";
+    return appointmentIsFullyValidated(a) ? "Confirmat" : "În curs de validare";
   }
   return "În curs de validare";
 }

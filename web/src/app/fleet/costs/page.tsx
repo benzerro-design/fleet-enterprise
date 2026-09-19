@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import {
   FleetDataTable,
   fleetTableClass,
@@ -8,6 +8,7 @@ import {
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
@@ -43,6 +44,7 @@ type CostRow = {
   invoiceAttachmentUrl: string | null;
   incurredOn: string;
   notes: string | null;
+  linkedDocumentId?: string | null;
 };
 
 type Payload = { items: CostRow[]; total: number; page: number; pageSize: number };
@@ -225,6 +227,7 @@ export default async function CostsPage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există costuri pentru filtrele curente.</p>
         ) : (
           <>
+            <FleetListDisplayScope>
             <FleetDataTable>
               <table className={fleetTableClass}>
                 <thead className={fleetTheadClass}>
@@ -268,6 +271,14 @@ export default async function CostsPage({ searchParams }: Props) {
                         <Link href={`/fleet/costs/${row.id}`} className="text-emerald-400 hover:underline">
                           Vezi
                         </Link>
+                        {row.linkedDocumentId ? (
+                          <>
+                            {" · "}
+                            <Link href={`/fleet/documents/${row.linkedDocumentId}`} className="text-sky-400 hover:underline">
+                              Doc
+                            </Link>
+                          </>
+                        ) : null}
                       </td>
                       {write ? (
                         <td className={fleetTdClass}>
@@ -287,6 +298,7 @@ export default async function CostsPage({ searchParams }: Props) {
                 </tbody>
               </table>
             </FleetDataTable>
+            </FleetListDisplayScope>
             <div className="flex justify-between text-sm text-zinc-400">
               <span>
                 Pagina {page} / {totalPages} · {data.total} costuri

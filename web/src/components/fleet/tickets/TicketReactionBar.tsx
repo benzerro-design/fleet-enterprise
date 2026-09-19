@@ -12,6 +12,17 @@ type Props = {
   currentUserId?: string;
 };
 
+function namesForEmoji(
+  reactions: ReturnType<typeof ticketEventReactions>,
+  emoji: string,
+): string {
+  const names = reactions
+    .filter((r) => r.emoji === emoji)
+    .map((r) => r.displayName.trim() || "?");
+  if (names.length === 0) return "";
+  return names.join(", ");
+}
+
 export function TicketReactionBar({ ticketId, event, canWrite, currentUserId }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
@@ -19,15 +30,24 @@ export function TicketReactionBar({ ticketId, event, canWrite, currentUserId }: 
 
   if (!canWrite) {
     if (reactions.length === 0) return null;
+    const byEmoji = new Map<string, string[]>();
+    for (const r of reactions) {
+      const list = byEmoji.get(r.emoji) ?? [];
+      list.push(r.displayName.trim() || "?");
+      byEmoji.set(r.emoji, list);
+    }
     return (
       <div className="mt-2 flex flex-wrap gap-1">
-        {reactions.map((r) => (
+        {[...byEmoji.entries()].map(([emoji, names]) => (
           <span
-            key={`${r.userId}-${r.emoji}`}
+            key={emoji}
             className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs text-zinc-300"
-            title={r.displayName}
+            title={names.join(", ")}
           >
-            {r.emoji}
+            {emoji}
+            {names.length > 1 ? (
+              <span className="ml-1 font-mono text-[10px]">{names.length}</span>
+            ) : null}
           </span>
         ))}
       </div>
@@ -58,11 +78,13 @@ export function TicketReactionBar({ ticketId, event, canWrite, currentUserId }: 
       {TICKET_REACTION_EMOJIS.map((emoji) => {
         const count = counts.get(emoji) ?? 0;
         const mine = reactions.some((r) => r.userId === currentUserId && r.emoji === emoji);
+        const who = namesForEmoji(reactions, emoji);
         return (
           <button
             key={emoji}
             type="button"
             disabled={pending != null}
+            title={who || undefined}
             onClick={() => void toggle(emoji)}
             className={`rounded-full border px-2 py-0.5 text-xs transition ${
               mine
