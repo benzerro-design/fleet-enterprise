@@ -837,7 +837,6 @@ export function TicketWorkflowStepper({
                         {canOperate &&
                         !appt.managerConfirmedAt &&
                         appt.status !== "needs_repropose" &&
-                        appt.status !== "cancelled" &&
                         appt.status !== "completed" ? (
                           <label className="flex w-full items-start gap-2 text-[11px] text-zinc-400">
                             <input
