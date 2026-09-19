@@ -768,10 +768,7 @@ export function SchedulerInspector({
               ) : (
                 <p className="text-zinc-500">Șofer — nu e necesar (ordin ierarhic)</p>
               )}
-              {canWrite &&
-              !appointment.managerConfirmedAt &&
-              appointment.status !== "cancelled" &&
-              appointment.status !== "completed" ? (
+              {canWrite && !appointment.managerConfirmedAt ? (
                 <label className="mt-1 flex items-start gap-2 text-[11px] text-zinc-400">
                   <input
                     type="checkbox"

@@ -3823,6 +3823,7 @@ export class ServiceCasesService {
       closedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
+      client?: { iamSettings?: unknown } | null;
       supplier?: { legalName: string } | null;
       workOrders?: Array<{
         id: string;
@@ -3876,6 +3877,7 @@ export class ServiceCasesService {
       }>;
     },
   ): ServiceCaseRecord {
+    const clientRequireDriverAck = parseClientIamSettings(row.client?.iamSettings).requireDriverAck;
     return {
       id: row.id,
       clientId: row.clientId,
@@ -4021,7 +4023,9 @@ export class ServiceCasesService {
           quotes: quotes.map((q) => toSummary(q)!).filter(Boolean),
         };
       }),
-      appointments: (row.appointments ?? []).map((a) => this.toAppointmentRecord(a)),
+      appointments: (row.appointments ?? []).map((a) =>
+        this.toAppointmentRecord(a, row.client?.iamSettings),
+      ),
     };
   }
 }
