@@ -27,6 +27,7 @@ type Props = {
   onProposeReschedule?: (id: string) => void;
   partnerMode?: boolean;
   compact?: boolean;
+  emptyHint?: string;
 };
 
 export function AppointmentQueueList({
@@ -41,6 +42,7 @@ export function AppointmentQueueList({
   onProposeReschedule,
   partnerMode,
   compact,
+  emptyHint,
 }: Props) {
   const sorted = [...appointments].sort((a, b) => {
     if (!a.scheduledAt && !b.scheduledAt) return 0;
@@ -52,7 +54,9 @@ export function AppointmentQueueList({
   if (sorted.length === 0) {
     return (
       <div className={`flex flex-col items-center justify-center p-6 text-center ${compact ? "min-h-[12rem]" : "min-h-[20rem]"}`}>
-        <p className="text-sm text-zinc-500">Nicio programare în filtrul curent.</p>
+        <p className="text-sm text-zinc-500">
+          {emptyHint ?? "Nicio programare în filtrul curent."}
+        </p>
       </div>
     );
   }
@@ -144,7 +148,7 @@ export function AppointmentQueueList({
                       onClick={() => onProposeReschedule(a.id)}
                       className="rounded-md border border-amber-500/50 bg-amber-950/30 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-950/50"
                     >
-                      {appointmentHasSlot(a.scheduledAt) ? "Propune altă oră" : "Propune dată"}
+                      {appointmentHasSlot(a.scheduledAt) ? "Propune altă dată/oră" : "Propune dată"}
                     </button>
                   ) : null}
                   {a.status === "scheduled" && onConfirm && !partnerMode ? (
@@ -164,7 +168,7 @@ export function AppointmentQueueList({
                       onClick={() => onProposeReschedule(a.id)}
                       className="rounded-md border border-amber-500/50 bg-amber-950/30 px-2 py-1 text-[10px] font-medium text-amber-100 hover:bg-amber-950/50"
                     >
-                      Propune altă oră
+                      Propune altă dată/oră
                     </button>
                   ) : null}
                   {a.status !== "cancelled" && a.status !== "completed" && onCancel && !partnerMode ? (

@@ -54,6 +54,8 @@ export class AppointmentsController {
     @Query('from') from: string,
     @Query('to') to: string,
     @Query('supplierIds') supplierIds?: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
     @Query('vehicleId') vehicleId?: string,
     @Query('clientId') clientId?: string,
     @Query('status') status?: string,
@@ -61,12 +63,15 @@ export class AppointmentsController {
     if (!from?.trim() || !to?.trim()) {
       throw new BadRequestException('from and to are required');
     }
+    const fromCsv = parseSupplierIds(supplierIds);
+    const fromQuery = parseSupplierIdsQuery(supplierId, suppliers);
+    const requested = fromCsv?.length ? fromCsv : fromQuery;
     return this.appointments.listCalendar(
       tenantSlug,
       {
         from: from.trim(),
         to: to.trim(),
-        supplierIds: resolvePartnerSupplierIdsFilter(access, parseSupplierIds(supplierIds)),
+        supplierIds: resolvePartnerSupplierIdsFilter(access, requested),
         vehicleId: vehicleId?.trim(),
         clientId: clientId?.trim(),
         status: parseStatus(status),

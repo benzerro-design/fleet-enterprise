@@ -651,11 +651,11 @@ export function SchedulerInspector({
       {editing && editable ? (
         <div className="mb-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
           <p className="text-xs font-semibold uppercase text-zinc-500">
-            {appointmentHasSlot(appointment.scheduledAt) ? "Altă oră" : "Propune programare"}
+            {appointmentHasSlot(appointment.scheduledAt) ? "Altă dată/oră" : "Propune programare"}
           </p>
           <p className="text-[11px] text-sky-300/90">
             {appointmentHasSlot(appointment.scheduledAt)
-              ? "Aceeași solicitare, altă oră. Click pe un slot liber din calendar."
+              ? "Aceeași solicitare, altă dată/oră. Click pe un slot liber din calendar."
               : "Clientul a solicitat un slot. Click pe un interval liber din calendar sau completează data."}
           </p>
           {returnTicketId ? (
@@ -687,7 +687,7 @@ export function SchedulerInspector({
                       negotiate: appointment.driverCanNegotiateAppointment === true,
                     })
                   ? partnerMode
-                    ? "Trimite altă oră"
+                    ? "Trimite altă dată/oră"
                     : "Trimite propunere"
                   : "Salvează"}
             </button>
@@ -936,7 +936,7 @@ export function SchedulerInspector({
                   className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
                 >
                   {appointmentHasSlot(appointment.scheduledAt)
-                    ? "Propune altă oră"
+                    ? "Propune altă dată/oră"
                     : "Propune dată"}
                 </button>
               ) : null}
@@ -965,7 +965,7 @@ export function SchedulerInspector({
                   }}
                   className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
                 >
-                  Propune altă oră
+                  Propune altă dată/oră
                 </button>
           ) : null}
           {appointment.status === "scheduled" && partnerMode ? (

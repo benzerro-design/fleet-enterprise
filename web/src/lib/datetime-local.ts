@@ -1,11 +1,25 @@
+import { getAppearanceDateFormatCache } from "@/lib/appearance-prefs";
+
 /** Fus pentru afișare în UI (liste/detaliu pe server Cloud Run = UTC implicit). */
 export const FLEET_DISPLAY_TIMEZONE = "Europe/Bucharest";
 
-/** ISO UTC → text ro-RO în ora României (liste, detaliu curse). */
+/** ISO UTC → text în ora României (liste, detaliu curse). */
 export function formatDateTimeRo(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
+  const fmt = getAppearanceDateFormatCache();
+  if (fmt === "iso") {
+    return d.toLocaleString("sv-SE", {
+      timeZone: FLEET_DISPLAY_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
   return d.toLocaleString("ro-RO", {
     timeZone: FLEET_DISPLAY_TIMEZONE,
     year: "numeric",
@@ -53,10 +67,32 @@ export function toDateInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** Dată scurtă ro-RO (fără oră). */
+/** Dată scurtă (fără oră) — respectă preferința de afișare pe client. */
 export function formatDateRo(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
+  const fmt = getAppearanceDateFormatCache();
+  if (fmt === "iso") {
+    return d.toLocaleDateString("sv-SE", {
+      timeZone: FLEET_DISPLAY_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  }
+  if (fmt === "numeric") {
+    return d.toLocaleDateString("ro-RO", {
+      timeZone: FLEET_DISPLAY_TIMEZONE,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
+  return d.toLocaleDateString("ro-RO", {
+    timeZone: FLEET_DISPLAY_TIMEZONE,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }

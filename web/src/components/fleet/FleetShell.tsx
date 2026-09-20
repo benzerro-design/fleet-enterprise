@@ -79,7 +79,13 @@ export function FleetShell({
           {readOnly ? (
             <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-600">Doar citire</p>
           ) : null}
-          <div className="mt-2">
+          <div className="mt-2 space-y-1.5">
+            <Link
+              href="/fleet/preferences"
+              className="block text-xs font-medium text-sky-400 hover:text-sky-300 hover:underline"
+            >
+              Preferințe
+            </Link>
             <LogoutButton />
           </div>
         </div>
@@ -109,7 +115,7 @@ export function FleetShell({
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] print:overflow-visible print:pb-0 lg:pb-0">
-          <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 sm:px-6 lg:px-8" style={{ paddingTop: "var(--fleet-pad-y)", paddingBottom: "var(--fleet-pad-y)" }}>
             {children}
           </div>
         </div>
@@ -185,6 +191,13 @@ export function FleetShell({
               {readOnly ? (
                 <p className="mt-1 text-[10px] uppercase tracking-wide text-zinc-600">Doar citire</p>
               ) : null}
+              <Link
+                href="/fleet/preferences"
+                onClick={closeMenu}
+                className="mt-2 block text-xs font-medium text-sky-400 hover:underline"
+              >
+                Preferințe
+              </Link>
             </div>
           </div>
         </div>

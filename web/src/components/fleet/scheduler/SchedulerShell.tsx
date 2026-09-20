@@ -14,6 +14,7 @@ import { fleetJsonHeaders } from "@/lib/fleet-api";
 import { serviceCasesBrowserBase } from "@/lib/service-cases-api";
 import {
   schedulerHref,
+  schedulerOpensInReschedulePick,
   type SchedulerInboxFilter,
   type SchedulerViewMode,
 } from "@/lib/scheduler-deep-link";
@@ -52,6 +53,8 @@ type Props = {
   initialServiceCaseId?: string;
   initialSupplierId?: string;
   initialCreate?: boolean;
+  /** Deep-link din tichet «Propune altă dată/oră» — click pe slot nu deschide programare nouă. */
+  initialReschedule?: boolean;
   /** După repropunere / reprogramare, navighează înapoi la tichet. */
   returnToTicket?: boolean;
   basePath?: string;
@@ -72,6 +75,48 @@ function filterByInbox(items: CalendarAppointment[], inbox: SchedulerInboxFilter
   return items.filter((a) => a.status === inbox);
 }
 
+/** Statusuri pentru coada de inbox (listă ±365z, nu săptămâna calendarului). */
+function inboxStatusesForFilter(
+  inbox: SchedulerInboxFilter,
+): Array<"pending_supplier" | "needs_repropose" | "scheduled" | "confirmed" | "completed" | "cancelled" | "no_show"> | null {
+  if (inbox === "all") return null;
+  if (inbox === "action") return ["pending_supplier", "needs_repropose", "scheduled"];
+  return [inbox];
+}
+
+function supplierIdsFromExtraSearch(extraSearch?: string): string[] {
+  if (!extraSearch?.trim()) return [];
+  const p = new URLSearchParams(extraSearch);
+  const multi = p.get("suppliers")?.trim();
+  if (multi) {
+    return multi
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  const one = p.get("supplierId")?.trim();
+  return one ? [one] : [];
+}
+
+function applyCalendarSupplierParams(
+  params: URLSearchParams,
+  opts: { extraSearch?: string; supplierFilter: string[]; suppliersTotal: number },
+) {
+  const fromExtra = supplierIdsFromExtraSearch(opts.extraSearch);
+  if (fromExtra.length > 0) {
+    params.set("supplierIds", fromExtra.join(","));
+    return;
+  }
+  if (
+    opts.supplierFilter.length > 0 &&
+    opts.supplierFilter.length < opts.suppliersTotal
+  ) {
+    params.set("supplierIds", opts.supplierFilter.join(","));
+  }
+}
+
+const INBOX_RANGE_DAYS = 365;
+
 export function SchedulerShell({
   canWrite,
   initialStats,
@@ -88,6 +133,7 @@ export function SchedulerShell({
   initialServiceCaseId,
   initialSupplierId,
   initialCreate = false,
+  initialReschedule = false,
   returnToTicket = false,
   basePath = "/fleet/scheduler",
   extraSearch,
@@ -101,6 +147,8 @@ export function SchedulerShell({
       : startOfWeekMonday(new Date());
   });
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
+  /** Coadă inbox (KPI) — fără fereastră de săptămână; calendarul rămâne pe `appointments`. */
+  const [inboxAppointments, setInboxAppointments] = useState<CalendarAppointment[]>([]);
   const [stats, setStats] = useState<AppointmentStats | null>(initialStats);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectId ?? null);
   const [supplierFilter, setSupplierFilter] = useState<string[]>(() => suppliers.map((s) => s.id));
@@ -117,16 +165,26 @@ export function SchedulerShell({
   const [returnTicketId] = useState(() =>
     returnToTicket && initialTicketId ? initialTicketId : null,
   );
+  const opensInReschedulePick = schedulerOpensInReschedulePick({
+    canWrite,
+    selectId: initialSelectId,
+    reschedule: initialReschedule,
+    create: initialCreate,
+  });
   const [createMode, setCreateMode] = useState(
-    () => !!(initialCreate && canWrite && (initialTicketId || initialVehicleId || initialServiceCaseId)),
+    () =>
+      !opensInReschedulePick &&
+      !!(initialCreate && canWrite && (initialTicketId || initialVehicleId || initialServiceCaseId)),
   );
-  const [mobileDetail, setMobileDetail] = useState(false);
+  const [mobileDetail, setMobileDetail] = useState(opensInReschedulePick);
   const [isMobile, setIsMobile] = useState(false);
   /** Repropunere / edit interval — click pe slot umple data, nu deschide programare nouă. */
-  const [rescheduleEditing, setRescheduleEditing] = useState(false);
+  const [rescheduleEditing, setRescheduleEditing] = useState(opensInReschedulePick);
   const [reschedulePickAt, setReschedulePickAt] = useState<string | undefined>();
   /** Deschide inspectorul în modul „propune altă dată” (listă partener). */
-  const [proposeRescheduleForId, setProposeRescheduleForId] = useState<string | null>(null);
+  const [proposeRescheduleForId, setProposeRescheduleForId] = useState<string | null>(
+    () => (opensInReschedulePick && initialSelectId ? initialSelectId : null),
+  );
 
   const visibleSuppliers = useMemo(() => {
     if (!serviceTypeCode) return suppliers;
@@ -170,12 +228,16 @@ export function SchedulerShell({
       view?: SchedulerViewMode;
       inbox?: SchedulerInboxFilter;
       clearTicketLink?: boolean;
+      reschedule?: boolean;
     }) => {
+      const selectId = opts.select === undefined ? selectedId : opts.select;
+      const inReschedulePick =
+        opts.reschedule !== undefined ? opts.reschedule : !!(rescheduleEditing && selectId);
       const href = schedulerHref({
         basePath,
         extraSearch,
         week: opts.week ?? weekStart,
-        select: opts.select ?? undefined,
+        select: selectId ?? undefined,
         view: opts.view ?? viewMode,
         inbox: opts.inbox ?? inboxFilter,
         ticket: opts.clearTicketLink && !returnTicketId ? undefined : linkTicketId ?? returnTicketId ?? undefined,
@@ -183,14 +245,32 @@ export function SchedulerShell({
         reg: opts.clearTicketLink && !returnTicketId ? undefined : linkVehicleLabel ?? undefined,
         case: opts.clearTicketLink && !returnTicketId ? undefined : linkServiceCaseId ?? undefined,
         create:
-          !opts.clearTicketLink && createMode && (linkTicketId || linkVehicleId || linkServiceCaseId)
+          !inReschedulePick &&
+          !opts.clearTicketLink &&
+          createMode &&
+          (linkTicketId || linkVehicleId || linkServiceCaseId)
             ? true
             : undefined,
+        reschedule: !!(inReschedulePick && selectId),
         returnToTicket: !!returnTicketId,
       });
       window.history.replaceState(null, "", href);
     },
-    [basePath, extraSearch, weekStart, viewMode, inboxFilter, linkTicketId, linkVehicleId, linkVehicleLabel, linkServiceCaseId, createMode, returnTicketId],
+    [
+      basePath,
+      extraSearch,
+      weekStart,
+      viewMode,
+      inboxFilter,
+      linkTicketId,
+      linkVehicleId,
+      linkVehicleLabel,
+      linkServiceCaseId,
+      createMode,
+      returnTicketId,
+      selectedId,
+      rescheduleEditing,
+    ],
   );
 
   const load = useCallback(
@@ -199,13 +279,32 @@ export function SchedulerShell({
       else setInitialLoading(true);
       try {
         const params = new URLSearchParams({ from: range.from, to: range.to });
-        if (supplierFilter.length > 0 && supplierFilter.length < suppliers.length) {
-          params.set("supplierIds", supplierFilter.join(","));
-        }
+        applyCalendarSupplierParams(params, {
+          extraSearch,
+          supplierFilter,
+          suppliersTotal: suppliers.length,
+        });
         const statsParams = extraSearch ? `?${extraSearch}` : "";
-        const [calRes, statsRes] = await Promise.all([
+        const inboxStatuses = inboxStatusesForFilter(inboxFilter);
+        const inboxFetches =
+          inboxStatuses?.map((status) => {
+            const inboxParams = new URLSearchParams({
+              from: new Date(Date.now() - INBOX_RANGE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+              to: new Date(Date.now() + INBOX_RANGE_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+              status,
+            });
+            applyCalendarSupplierParams(inboxParams, {
+              extraSearch,
+              supplierFilter,
+              suppliersTotal: suppliers.length,
+            });
+            return fetch(`${appointmentsBrowserBase}/calendar?${inboxParams.toString()}`);
+          }) ?? [];
+
+        const [calRes, statsRes, ...inboxResList] = await Promise.all([
           fetch(`${appointmentsBrowserBase}/calendar?${params.toString()}`),
           fetch(`${appointmentsBrowserBase}/stats${statsParams}`),
+          ...inboxFetches,
         ]);
         if (calRes.ok) {
           setAppointments((await calRes.json()) as CalendarAppointment[]);
@@ -213,23 +312,47 @@ export function SchedulerShell({
         if (statsRes.ok) {
           setStats((await statsRes.json()) as AppointmentStats);
         }
+        if (inboxStatuses) {
+          const byId = new Map<string, CalendarAppointment>();
+          for (const res of inboxResList) {
+            if (!res.ok) continue;
+            const rows = (await res.json()) as CalendarAppointment[];
+            for (const row of rows) byId.set(row.id, row);
+          }
+          setInboxAppointments(Array.from(byId.values()));
+        } else {
+          setInboxAppointments([]);
+        }
       } finally {
         setInitialLoading(false);
         setRefreshing(false);
       }
     },
-    [range.from, range.to, supplierFilter, suppliers.length, extraSearch],
+    [range.from, range.to, supplierFilter, suppliers.length, extraSearch, inboxFilter],
   );
 
   useEffect(() => {
     void load(false);
   }, [load]);
 
-  const filteredAppointments = useMemo(
-    () => filterByInbox(appointments, inboxFilter),
-    [appointments, inboxFilter],
-  );
-  /** Grila/agenda = toată săptămâna. Inbox-ul filtrează doar lista. */
+  /** Deep-link / select din coadă: sare calendarul la săptămâna slotului. */
+  useEffect(() => {
+    if (!selectedId || initialLoading) return;
+    if (appointments.some((a) => a.id === selectedId)) return;
+    const row = inboxAppointments.find((a) => a.id === selectedId);
+    if (!row?.scheduledAt) return;
+    const week = startOfWeekMonday(new Date(row.scheduledAt));
+    if (Number.isNaN(week.getTime()) || week.getTime() === weekStart.getTime()) return;
+    setWeekStart(week);
+    syncUrlHistory({ week, select: selectedId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- doar când lipsește din săptămâna curentă
+  }, [selectedId, appointments, inboxAppointments, initialLoading]);
+
+  const filteredAppointments = useMemo(() => {
+    if (inboxFilter === "all") return appointments;
+    return filterByInbox(inboxAppointments, inboxFilter);
+  }, [appointments, inboxAppointments, inboxFilter]);
+  /** Grila/agenda = săptămâna curentă. Lista din inbox = coadă all-time (±365z). */
   const slottedAppointments = useMemo(
     () =>
       appointments.filter((a): a is SlottedCalendarAppointment =>
@@ -238,7 +361,13 @@ export function SchedulerShell({
     [appointments],
   );
 
-  const selected = appointments.find((a) => a.id === selectedId) ?? null;
+  const findAppointment = useCallback(
+    (id: string) =>
+      appointments.find((a) => a.id === id) ?? inboxAppointments.find((a) => a.id === id) ?? null,
+    [appointments, inboxAppointments],
+  );
+
+  const selected = selectedId ? findAppointment(selectedId) : null;
   const slotClickMode =
     rescheduleEditing && selectedId
       ? selected && !appointmentHasSlot(selected.scheduledAt)
@@ -248,7 +377,7 @@ export function SchedulerShell({
 
   const reschedule = useCallback(
     async (id: string, scheduledAt: Date) => {
-      const row = appointments.find((a) => a.id === id);
+      const row = findAppointment(id);
       if (!partnerMode && row && appointmentFleetCanRepropose(row)) {
         const res = await fetch(`${serviceCasesBrowserBase}/appointments/${id}/repropose`, {
           method: "POST",
@@ -267,7 +396,7 @@ export function SchedulerShell({
       if (!res.ok) return;
       await load(true);
     },
-    [appointments, load, partnerMode],
+    [findAppointment, load, partnerMode],
   );
 
   const setAppointmentStatus = useCallback(
@@ -293,7 +422,7 @@ export function SchedulerShell({
 
   const supplierValidateById = useCallback(
     async (id: string) => {
-      const row = appointments.find((a) => a.id === id);
+      const row = findAppointment(id);
       if (row && !appointmentHasSlot(row.scheduledAt)) {
         proposeAlternateDate(id);
         return;
@@ -307,7 +436,8 @@ export function SchedulerShell({
       await load(true);
       revealProposedAppointment(row?.scheduledAt ?? null);
     },
-    [appointments, load],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- proposeAlternateDate / revealProposedAppointment are local fns
+    [findAppointment, load],
   );
 
   const requestCancelById = useCallback(
@@ -335,7 +465,7 @@ export function SchedulerShell({
     setProposeRescheduleForId(null);
     setCreatePrefillAt(undefined);
     setMobileDetail(false);
-    syncUrlHistory({ select: null, clearTicketLink: true });
+    syncUrlHistory({ select: null, clearTicketLink: true, reschedule: false });
   }
 
   function selectAppointment(id: string) {
@@ -349,7 +479,21 @@ export function SchedulerShell({
     setReschedulePickAt(undefined);
     setProposeRescheduleForId(null);
     if (isMobile) setMobileDetail(true);
-    syncUrlHistory({ select: id, clearTicketLink: !returnTicketId });
+    const row = findAppointment(id);
+    if (row?.scheduledAt) {
+      const week = startOfWeekMonday(new Date(row.scheduledAt));
+      if (!Number.isNaN(week.getTime()) && week.getTime() !== weekStart.getTime()) {
+        setWeekStart(week);
+        syncUrlHistory({
+          week,
+          select: id,
+          clearTicketLink: !returnTicketId,
+          reschedule: false,
+        });
+        return;
+      }
+    }
+    syncUrlHistory({ select: id, clearTicketLink: !returnTicketId, reschedule: false });
   }
 
   function proposeAlternateDate(id: string) {
@@ -359,7 +503,21 @@ export function SchedulerShell({
     setReschedulePickAt(undefined);
     setProposeRescheduleForId(id);
     if (isMobile) setMobileDetail(true);
-    syncUrlHistory({ select: id, clearTicketLink: !returnTicketId });
+    const row = findAppointment(id);
+    if (row?.scheduledAt) {
+      const week = startOfWeekMonday(new Date(row.scheduledAt));
+      if (!Number.isNaN(week.getTime()) && week.getTime() !== weekStart.getTime()) {
+        setWeekStart(week);
+        syncUrlHistory({
+          week,
+          select: id,
+          clearTicketLink: !returnTicketId,
+          reschedule: true,
+        });
+        return;
+      }
+    }
+    syncUrlHistory({ select: id, clearTicketLink: !returnTicketId, reschedule: true });
   }
 
   function goBackToTicket() {
@@ -410,8 +568,9 @@ export function SchedulerShell({
     setSelectedId(null);
     setRescheduleEditing(false);
     setReschedulePickAt(undefined);
+    setProposeRescheduleForId(null);
     if (isMobile) setMobileDetail(true);
-    syncUrlHistory({ select: null, clearTicketLink: !keepCaseLink });
+    syncUrlHistory({ select: null, clearTicketLink: !keepCaseLink, reschedule: false });
   }
 
   function handleSlotClick(when: Date) {
@@ -430,7 +589,12 @@ export function SchedulerShell({
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <div className="flex min-h-0 w-full flex-col border-b border-zinc-800 lg:w-1/2 lg:border-b-0 lg:border-r">
             <p className="border-b border-zinc-800/80 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-              Listă programări {refreshing ? "· actualizare…" : ""}
+              Listă programări
+              {inboxFilter !== "all" ? " · coadă" : ""}
+              {refreshing ? " · actualizare…" : ""}
+              {inboxFilter !== "all" && filteredAppointments.length > 0
+                ? ` · ${filteredAppointments.length}`
+                : ""}
             </p>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <AppointmentQueueList
@@ -447,6 +611,11 @@ export function SchedulerShell({
                 onProposeReschedule={canWrite ? (id) => proposeAlternateDate(id) : undefined}
                 partnerMode={partnerMode}
                 compact
+                emptyHint={
+                  inboxFilter !== "all"
+                    ? "Nicio programare în coadă (toate săptămânile)."
+                    : undefined
+                }
               />
             </div>
           </div>
@@ -513,6 +682,11 @@ export function SchedulerShell({
             }
             onProposeReschedule={canWrite ? (id) => proposeAlternateDate(id) : undefined}
             partnerMode={partnerMode}
+            emptyHint={
+              inboxFilter !== "all"
+                ? "Nicio programare în coadă (toate săptămânile)."
+                : undefined
+            }
           />
         </div>
       ) : null}
@@ -587,7 +761,7 @@ export function SchedulerShell({
                 setReschedulePickAt(undefined);
                 setProposeRescheduleForId(null);
                 if (isMobile) setMobileDetail(true);
-                syncUrlHistory({ select: null, clearTicketLink: !keepCaseLink });
+                syncUrlHistory({ select: null, clearTicketLink: !keepCaseLink, reschedule: false });
               }}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
             >

@@ -18,6 +18,11 @@ export function schedulerHref(opts?: {
   /** Service case — partener leagă programarea de WO existent. */
   case?: string;
   create?: boolean;
+  /**
+   * Click pe slot = altă dată/oră pe cererea `select` (POST repropose).
+   * Mutually exclusive with `create`.
+   */
+  reschedule?: boolean;
   /** Prefill furnizor la „Solicită programare”. */
   supplier?: string;
   /** După reprogramare / repropunere, UI poate întoarce userul la tichet. */
@@ -50,8 +55,16 @@ export function schedulerHref(opts?: {
   if (opts?.case?.trim()) {
     params.set("case", opts.case.trim());
   }
-  if (opts?.create) {
+  const pick = schedulerDeepLinkPickMode({
+    create: opts?.create,
+    reschedule: opts?.reschedule,
+    select: opts?.select,
+  });
+  if (pick === "create") {
     params.set("create", "1");
+  }
+  if (pick === "reschedule") {
+    params.set("reschedule", "1");
   }
   if (opts?.supplier?.trim()) {
     params.set("supplier", opts.supplier.trim());
@@ -87,6 +100,36 @@ export function parseSchedulerInboxParam(raw?: string | null): SchedulerInboxFil
     "no_show",
   ];
   return allowed.includes(raw as AppointmentStatus) ? (raw as AppointmentStatus) : "all";
+}
+
+export function parseSchedulerFlagParam(raw?: string | null): boolean {
+  return raw === "1";
+}
+
+/** Ușa din URL: programare nouă vs altă dată/oră vs doar vizualizare. */
+export function schedulerDeepLinkPickMode(opts?: {
+  create?: boolean;
+  reschedule?: boolean;
+  select?: string | null;
+}): "create" | "reschedule" | "view" {
+  if (opts?.reschedule && opts.select) return "reschedule";
+  if (opts?.create && !opts?.reschedule) return "create";
+  return "view";
+}
+
+export function schedulerOpensInReschedulePick(opts: {
+  canWrite: boolean;
+  selectId?: string | null;
+  reschedule?: boolean;
+  create?: boolean;
+}): boolean {
+  return (
+    schedulerDeepLinkPickMode({
+      create: opts.create,
+      reschedule: opts.reschedule,
+      select: opts.selectId,
+    }) === "reschedule" && opts.canWrite
+  );
 }
 
 export function ticketDisplayIdFromTicketId(ticketId: string): string {

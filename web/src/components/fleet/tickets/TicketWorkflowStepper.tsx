@@ -701,24 +701,26 @@ export function TicketWorkflowStepper({
                   <p className="text-xs uppercase text-zinc-500">Programări</p>
                   <p className="mt-0.5 text-[10px] text-zinc-500">
                     {serviceCase.clientDriverCanNegotiateAppointment
-                      ? "Manager și șofer confirmă sau propun altă oră. O propunere pleacă la furnizor."
-                      : "Aceeași cerere până e confirmată de toți. Altă oră nu deschide un flux nou."}
+                      ? "Manager și șofer confirmă sau propun altă dată/oră. O propunere pleacă la furnizor."
+                      : "Aceeași cerere până e confirmată de toți. Altă dată/oră nu deschide un flux nou."}
                   </p>
                 </div>
-                <Link
-                  href={schedulerHref({
-                    week: serviceCase.appointments[0]!.scheduledAt
-                      ? new Date(serviceCase.appointments[0]!.scheduledAt)
-                      : undefined,
-                    select: serviceCase.appointments[0]!.id,
-                    inbox: serviceCase.appointments[0]!.scheduledAt
-                      ? undefined
-                      : "pending_supplier",
-                  })}
-                  className="text-[10px] font-medium text-emerald-400 hover:underline"
-                >
-                  Deschide în programator →
-                </Link>
+                {canOperate ? (
+                  <Link
+                    href={schedulerHref({
+                      week: serviceCase.appointments[0]!.scheduledAt
+                        ? new Date(serviceCase.appointments[0]!.scheduledAt)
+                        : undefined,
+                      select: serviceCase.appointments[0]!.id,
+                      inbox: serviceCase.appointments[0]!.scheduledAt
+                        ? undefined
+                        : "pending_supplier",
+                    })}
+                    className="text-[10px] font-medium text-emerald-400 hover:underline"
+                  >
+                    Deschide în programator →
+                  </Link>
+                ) : null}
               </div>
               <ul className="mt-2 space-y-3">
                 {serviceCase.appointments.map((appt) => {
@@ -728,16 +730,22 @@ export function TicketWorkflowStepper({
                   return (
                   <li key={appt.id} className="rounded-md border border-zinc-800/80 bg-zinc-900/40 p-2.5">
                     <div className="text-zinc-300">
-                      <Link
-                        href={schedulerHref({
-                          week: appt.scheduledAt ? new Date(appt.scheduledAt) : undefined,
-                          select: appt.id,
-                          inbox: appt.scheduledAt ? undefined : "pending_supplier",
-                        })}
-                        className="font-medium text-zinc-100 hover:text-emerald-300"
-                      >
-                        {formatAppointmentWhen(appt.scheduledAt)}
-                      </Link>
+                      {canOperate ? (
+                        <Link
+                          href={schedulerHref({
+                            week: appt.scheduledAt ? new Date(appt.scheduledAt) : undefined,
+                            select: appt.id,
+                            inbox: appt.scheduledAt ? undefined : "pending_supplier",
+                          })}
+                          className="font-medium text-zinc-100 hover:text-emerald-300"
+                        >
+                          {formatAppointmentWhen(appt.scheduledAt)}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-zinc-100">
+                          {formatAppointmentWhen(appt.scheduledAt)}
+                        </span>
+                      )}
                       {" · "}
                       {appointmentProcessLabel(appt)}
                       {appt.supplierLegalName ? ` · ${appt.supplierLegalName}` : ""}
@@ -862,7 +870,7 @@ export function TicketWorkflowStepper({
                             }}
                             className="rounded-lg border border-amber-500/40 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-950/40 disabled:opacity-50"
                           >
-                            Propune altă oră
+                            Propune altă dată/oră
                           </button>
                         ) : null}
                         {canOperate &&
@@ -956,8 +964,10 @@ export function TicketWorkflowStepper({
                               placeholder="Context pentru furnizor"
                             />
                             <p className="text-[10px] text-zinc-500">
-                              Aceeași cerere, altă oră — se trimite din nou la furnizor. După trimitere te
-                              întorci pe tichet.
+                              Aceeași cerere, altă dată/oră — se trimite din nou la furnizor.
+                              {canOperate
+                                ? " După trimitere te întorci pe tichet."
+                                : " Alege data/ora aici pe tichet."}
                             </p>
                             <div className="flex flex-wrap gap-2">
                               <button
@@ -968,17 +978,20 @@ export function TicketWorkflowStepper({
                               >
                                 Trimite propunere
                               </button>
-                              <Link
-                                href={schedulerHref({
-                                  week: appt.scheduledAt ? new Date(appt.scheduledAt) : undefined,
-                                  select: appt.id,
-                                  ticket: ticketId,
-                                  returnToTicket: true,
-                                })}
-                                className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-sky-300 hover:bg-zinc-900"
-                              >
-                                Deschide calendar →
-                              </Link>
+                              {canOperate ? (
+                                <Link
+                                  href={schedulerHref({
+                                    week: appt.scheduledAt ? new Date(appt.scheduledAt) : undefined,
+                                    select: appt.id,
+                                    ticket: ticketId,
+                                    returnToTicket: true,
+                                    reschedule: true,
+                                  })}
+                                  className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-sky-300 hover:bg-zinc-900"
+                                >
+                                  Deschide calendar →
+                                </Link>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => {

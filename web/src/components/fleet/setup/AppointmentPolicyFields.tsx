@@ -29,7 +29,7 @@ export function AppointmentPolicyFields({ draft, onChange, disabled }: Props) {
         <span>
           <span className="font-medium">Șoferul poate decide data programării (în paralel cu managerul)</span>
           <span className="mt-0.5 block text-xs text-zinc-500">
-            Bifat: manager și șofer văd Confirmă și Propune altă oră în același timp. Un accept așteaptă
+            Bifat: manager și șofer văd Confirmă și Propune altă dată/oră în același timp. Un accept așteaptă
             pe celălalt. O propunere de dată pleacă singură la furnizor; după validare, cel care a
             propus rămâne bifat.
           </span>
@@ -38,7 +38,7 @@ export function AppointmentPolicyFields({ draft, onChange, disabled }: Props) {
 
       {draft.driverCanNegotiateAppointment ? (
         <p className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-100/90">
-          WO se deschide după acceptul ambilor. Propunerea de altă oră anulează acceptul celuilalt și
+          WO se deschide după acceptul ambilor. Propunerea de altă dată/oră anulează acceptul celuilalt și
           merge la furnizor.
         </p>
       ) : (

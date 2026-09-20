@@ -37,7 +37,7 @@ type Props = {
   onDeselect?: () => void;
   onReschedule?: (id: string, scheduledAt: Date) => Promise<void>;
   onSlotClick?: (scheduledAt: Date) => void;
-  /** create = programare nouă; propose = primul slot; reschedule = altă dată. */
+  /** create = programare nouă; propose = primul slot; reschedule = altă dată/oră. */
   slotClickMode?: "create" | "propose" | "reschedule";
   onStatusChange?: (id: string, status: "confirmed" | "cancelled") => Promise<void>;
   onSupplierValidate?: (id: string) => Promise<void>;
@@ -484,10 +484,10 @@ export function SchedulerWeekView({
             ? slotClickMode === "propose"
               ? " Click pe slot liber = propune data solicitată de client."
               : slotClickMode === "reschedule"
-                ? " Click pe slot liber = alege altă oră (aceeași cerere)."
+                ? " Click pe slot liber = alege altă dată/oră (aceeași cerere)."
                 : " Click pe slot liber = programare nouă."
             : ""}
-          {partnerMode ? " Programările de validat: Propune dată / altă oră, apoi click pe calendar." : ""}
+          {partnerMode ? " Programările de validat: Propune dată / altă dată/oră, apoi click pe calendar." : ""}
         </p>
       ) : null}
       {ctxMenu ? (
@@ -555,7 +555,7 @@ export function SchedulerWeekView({
                 setCtxMenu(null);
               }}
             >
-              Propune altă oră
+              Propune altă dată/oră
             </button>
           ) : null}
           {canWrite &&

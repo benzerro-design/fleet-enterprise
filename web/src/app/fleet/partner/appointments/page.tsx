@@ -8,7 +8,7 @@ import { fleetServerFetch } from "@/lib/fleet-server";
 import { parsePartnerSupplierQuery, partnerSupplierSearchParams } from "@/lib/partner-context";
 import { primarySupplierMembership } from "@/lib/partner-auth";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
-import { parseSchedulerInboxParam, parseSchedulerViewParam } from "@/lib/scheduler-deep-link";
+import { parseSchedulerFlagParam, parseSchedulerInboxParam, parseSchedulerViewParam } from "@/lib/scheduler-deep-link";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 async function loadStats(supplierQuery: ReturnType<typeof parsePartnerSupplierQuery>): Promise<AppointmentStats | null> {
@@ -41,6 +41,8 @@ type PageProps = {
     ticket?: string;
     vehicle?: string;
     create?: string;
+    reschedule?: string;
+    return?: string;
     supplierId?: string;
     suppliers?: string;
     reg?: string;
@@ -124,7 +126,9 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
               initialVehicleId={sp.vehicle?.trim()}
               initialVehicleLabel={sp.reg?.trim()}
               initialServiceCaseId={sp.case?.trim()}
-              initialCreate={sp.create === "1"}
+              initialCreate={parseSchedulerFlagParam(sp.create)}
+              initialReschedule={parseSchedulerFlagParam(sp.reschedule)}
+              returnToTicket={parseSchedulerFlagParam(sp.return) && !!sp.ticket?.trim()}
               basePath="/fleet/partner/appointments"
               extraSearch={extraSearch || undefined}
               partnerMode

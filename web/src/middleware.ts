@@ -33,6 +33,7 @@ const CLIENT_FLEET_PREFIXES = [
   "/fleet/scheduler",
   "/fleet/work-orders",
   "/fleet/suppliers",
+  "/fleet/preferences",
 ];
 
 /** Rute permise șoferului client (fără clienți/șoferi/panou). */
@@ -44,6 +45,7 @@ const CLIENT_DRIVER_PREFIXES = [
   "/fleet/maintenance",
   "/fleet/costs",
   "/fleet/tickets",
+  "/fleet/preferences",
 ];
 
 const CLIENT_FLEET_HOME = "/fleet/dashboard";
@@ -53,6 +55,9 @@ const PARTNER_HOME = "/fleet/partner";
 const PARTNER_PREFIXES = [
   "/fleet/partner",
 ];
+
+/** Rute comune tuturor portalurilor autentificate. */
+const SHARED_FLEET_PREFIXES = ["/fleet/preferences"];
 
 const ADMIN_ONLY_PREFIXES = [
   "/fleet/members",
@@ -88,7 +93,10 @@ export function middleware(request: NextRequest) {
     if (pathname === "/fleet" || pathname === "/fleet/") {
       return NextResponse.redirect(new URL(PARTNER_HOME, request.url));
     }
-    if (!pathAllowed(PARTNER_PREFIXES, pathname)) {
+    if (
+      !pathAllowed(PARTNER_PREFIXES, pathname) &&
+      !pathAllowed(SHARED_FLEET_PREFIXES, pathname)
+    ) {
       return NextResponse.redirect(new URL(PARTNER_HOME, request.url));
     }
     return NextResponse.next();
@@ -117,7 +125,10 @@ export function middleware(request: NextRequest) {
 
   if (portal === "driver" || portal === "tickets") {
     const home = portal === "driver" ? CLIENT_DRIVER_HOME : "/fleet/tickets";
-    const allowed = portal === "driver" ? CLIENT_DRIVER_PREFIXES : ["/fleet/tickets"];
+    const allowed =
+      portal === "driver"
+        ? CLIENT_DRIVER_PREFIXES
+        : ["/fleet/tickets", ...SHARED_FLEET_PREFIXES];
 
     if (isAdminOnlyRoute(pathname)) {
       return NextResponse.redirect(new URL(home, request.url));

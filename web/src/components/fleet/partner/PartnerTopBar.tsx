@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { LogoutButton } from "@/app/fleet/logout-button";
 import { PartnerNotificationBell } from "@/components/fleet/partner/PartnerNotificationBell";
 import { PartnerPendingActionsList } from "@/components/fleet/partner/PartnerPendingActionsList";
@@ -152,7 +153,14 @@ export function PartnerTopBar({ ctx }: Props) {
                   onNavigate={() => setMenuOpen(false)}
                 />
               ) : null}
-              <div className="border-t border-zinc-800 px-3 py-2">
+              <div className="border-t border-zinc-800 px-3 py-2 space-y-2">
+                <Link
+                  href="/fleet/preferences"
+                  className="block text-xs font-medium text-sky-400 hover:underline"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Preferințe
+                </Link>
                 <LogoutButton />
               </div>
             </div>

@@ -5,7 +5,7 @@ import { SchedulerShell } from "@/components/fleet/scheduler/SchedulerShell";
 import type { AppointmentStats } from "@/lib/appointments-api";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
-import { parseSchedulerInboxParam, parseSchedulerViewParam } from "@/lib/scheduler-deep-link";
+import { parseSchedulerFlagParam, parseSchedulerInboxParam, parseSchedulerViewParam } from "@/lib/scheduler-deep-link";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
@@ -56,6 +56,7 @@ type PageProps = {
     ticket?: string;
     vehicle?: string;
     create?: string;
+    reschedule?: string;
     return?: string;
     reg?: string;
     case?: string;
@@ -115,8 +116,9 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               initialVehicleLabel={sp.reg?.trim()}
               initialServiceCaseId={sp.case?.trim()}
               initialSupplierId={sp.supplier?.trim()}
-              initialCreate={sp.create === "1"}
-              returnToTicket={sp.return === "1" && !!sp.ticket?.trim()}
+              initialCreate={parseSchedulerFlagParam(sp.create)}
+              initialReschedule={parseSchedulerFlagParam(sp.reschedule)}
+              returnToTicket={parseSchedulerFlagParam(sp.return) && !!sp.ticket?.trim()}
             />
           </Suspense>
         </div>
