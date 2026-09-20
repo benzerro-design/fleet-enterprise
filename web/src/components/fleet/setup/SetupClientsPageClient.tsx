@@ -23,6 +23,10 @@ export function SetupClientsPageClient({ initialItems }: Props) {
   const searchParams = useSearchParams();
   const tab = (searchParams.get("tab") as ClientTab | null) ?? "tip-servicii";
   const activeTab = TABS.some((t) => t.id === tab) ? tab : "tip-servicii";
+  const intro =
+    activeTab === "forms"
+      ? "Politica de programare pe client: cine decide data și dacă șoferul confirmă după manager sau în paralel."
+      : "Catalog tenant de tipuri service — etichete și descrieri pentru portal client. Furnizorii bifează din acest catalog ce prestează.";
 
   return (
     <>
@@ -30,10 +34,7 @@ export function SetupClientsPageClient({ initialItems }: Props) {
         <div>
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Setup · Clienți</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Configurare experiență client</h1>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-            Catalog tenant de tipuri service — etichete și descrieri pentru portal client. Furnizorii bifează din
-            acest catalog ce prestează.
-          </p>
+          <p className="mt-2 max-w-2xl text-sm text-zinc-400">{intro}</p>
         </div>
       </div>
 

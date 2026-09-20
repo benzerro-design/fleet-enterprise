@@ -809,28 +809,14 @@ export function TicketWorkflowStepper({
                         (appt.status === "scheduled" || appt.status === "confirmed") &&
                         !appt.driverAcknowledgedAt &&
                         !appt.driverDeclinedAt ? (
-                          <>
-                            <button
-                              type="button"
-                              disabled={pending}
-                              onClick={() => void acknowledgeAppointment(appt.id)}
-                              className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-                            >
-                              {canConfirmAppointment ? "Confirmă (șofer)" : "Confirmă programarea"}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={pending}
-                              onClick={() => {
-                                setDeclineApptId(appt.id);
-                                setDeclineNote("");
-                                setReproposeApptId(null);
-                              }}
-                              className="rounded-lg border border-rose-500/40 px-2.5 py-1 text-xs text-rose-200 hover:bg-rose-950/40 disabled:opacity-50"
-                            >
-                              Nu pot la data asta
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => void acknowledgeAppointment(appt.id)}
+                            className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                          >
+                            {canConfirmAppointment ? "Confirmă (șofer)" : "Confirmă programarea"}
+                          </button>
                         ) : null}
                         {canAckAppointment &&
                         !negotiate &&
