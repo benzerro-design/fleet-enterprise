@@ -94,6 +94,16 @@ export class AppointmentsController {
     return this.appointments.getStats(tenantSlug, clientId?.trim(), access, supplierIds);
   }
 
+  @Get(':id/proposal-history')
+  @Roles(...FLEET_READ_ROLES)
+  proposalHistory(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.appointments.listProposalHistory(tenantSlug, id, access);
+  }
+
   @Get(':id')
   @Roles(...FLEET_READ_ROLES)
   get(

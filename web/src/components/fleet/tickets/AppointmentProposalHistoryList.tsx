@@ -3,22 +3,32 @@
 import {
   extractAppointmentProposalHistory,
   formatProposalHistoryWhen,
+  type ProposalHistoryEntry,
 } from "@/lib/appointment-proposal-history";
 import type { TicketEventRecord } from "@/lib/tickets-api";
 
 type Props = {
-  events: TicketEventRecord[];
+  events?: TicketEventRecord[];
+  entries?: ProposalHistoryEntry[];
   appointmentId?: string | null;
+  emptyHint?: string;
 };
 
-export function AppointmentProposalHistoryList({ events, appointmentId }: Props) {
-  const entries = extractAppointmentProposalHistory(events, { appointmentId });
+export function AppointmentProposalHistoryList({
+  events,
+  entries: entriesProp,
+  appointmentId,
+  emptyHint,
+}: Props) {
+  const entries =
+    entriesProp ??
+    extractAppointmentProposalHistory(events ?? [], { appointmentId });
 
   if (entries.length === 0) {
     return (
       <p className="mt-2 text-[11px] text-zinc-500">
-        Nicio propunere înregistrată încă pe acest tichet. După repropose / altă oră de la furnizor,
-        apar aici.
+        {emptyHint ??
+          "Nicio propunere înregistrată încă. După repropose / altă oră, apar aici."}
       </p>
     );
   }
@@ -43,9 +53,7 @@ export function AppointmentProposalHistoryList({ events, appointmentId }: Props)
               Slot: {formatProposalHistoryWhen(e.scheduledAt)}
             </p>
           ) : null}
-          {e.note ? (
-            <p className="mt-0.5 text-zinc-400">„{e.note}”</p>
-          ) : null}
+          {e.note ? <p className="mt-0.5 text-zinc-400">„{e.note}”</p> : null}
           <p className="mt-1 text-zinc-500">{e.summary}</p>
         </li>
       ))}

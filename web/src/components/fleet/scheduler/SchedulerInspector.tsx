@@ -26,6 +26,8 @@ import {
   AppointmentProposalCallout,
   appointmentProposalSource,
 } from "@/components/fleet/tickets/DriverProposalCallout";
+import { AppointmentProposalHistoryList } from "@/components/fleet/tickets/AppointmentProposalHistoryList";
+import type { ProposalHistoryEntry } from "@/lib/appointment-proposal-history";
 import { supplierDotClass } from "./supplier-colors";
 
 type VehicleOption = { id: string; registrationNumber: string; clientId: string };
@@ -108,6 +110,9 @@ export function SchedulerInspector({
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [requireDriverAck, setRequireDriverAck] = useState(true);
   const [pickPulseKey, setPickPulseKey] = useState(0);
+  const [partnerApptTab, setPartnerApptTab] = useState<"current" | "history">("current");
+  const [proposalHistory, setProposalHistory] = useState<ProposalHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (!appointment) return;
@@ -123,6 +128,7 @@ export function SchedulerInspector({
     setError(null);
     setRequestingCancel(false);
     setCancelNote("");
+    setPartnerApptTab("current");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when appointment identity/time/mode changes
   }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin, openInRescheduleMode]);
 
@@ -131,6 +137,33 @@ export function SchedulerInspector({
     setRequestingCancel(false);
     setCancelNote("");
   }, [createMode, appointment?.id]);
+
+  useEffect(() => {
+    if (!partnerMode || !appointment?.id) {
+      setProposalHistory([]);
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`${appointmentsBrowserBase}/${appointment.id}/proposal-history`);
+        if (!res.ok) {
+          if (!cancelled) setProposalHistory([]);
+          return;
+        }
+        const data = (await res.json()) as ProposalHistoryEntry[];
+        if (!cancelled) setProposalHistory(Array.isArray(data) ? data : []);
+      } catch {
+        if (!cancelled) setProposalHistory([]);
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [partnerMode, appointment?.id, appointment?.scheduledAt, appointment?.lastProposalNote, appointment?.fleetCounterProposedBy]);
 
   useEffect(() => {
     if (!editing || !calendarPickAt) return;
@@ -598,6 +631,54 @@ export function SchedulerInspector({
 
   const panel = (
     <>
+      {partnerMode ? (
+        <div className="mb-3 flex gap-1 border-b border-zinc-800">
+          <button
+            type="button"
+            onClick={() => setPartnerApptTab("current")}
+            className={`-mb-px border-b-2 px-2 py-1.5 text-[11px] font-medium ${
+              partnerApptTab === "current"
+                ? "border-emerald-500 text-emerald-300"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Programări curente
+          </button>
+          <button
+            type="button"
+            onClick={() => setPartnerApptTab("history")}
+            className={`-mb-px border-b-2 px-2 py-1.5 text-[11px] font-medium ${
+              partnerApptTab === "history"
+                ? "border-emerald-500 text-emerald-300"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Istoric programări
+          </button>
+        </div>
+      ) : null}
+
+      {partnerMode && partnerApptTab === "history" ? (
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-zinc-400">Istoric propuneri</p>
+            {onClose ? (
+              <button type="button" onClick={onClose} className="text-xs text-zinc-500 hover:text-zinc-300">
+                Închide
+              </button>
+            ) : null}
+          </div>
+          {historyLoading ? (
+            <p className="text-[11px] text-zinc-500">Se încarcă…</p>
+          ) : (
+            <AppointmentProposalHistoryList
+              entries={proposalHistory}
+              emptyHint="Nicio propunere înregistrată pe această programare."
+            />
+          )}
+        </div>
+      ) : (
+        <>
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -1059,6 +1140,8 @@ export function SchedulerInspector({
           ) : null}
         </div>
       ) : null}
+        </>
+      )}
     </>
   );
 

@@ -30,7 +30,6 @@ import {
   isDriverCounterProposal,
 } from "@/components/fleet/tickets/DriverProposalCallout";
 import { AppointmentProposalHistoryList } from "@/components/fleet/tickets/AppointmentProposalHistoryList";
-import { readAppointmentProposalHistoryTabs } from "@/lib/appointment-proposal-history-prefs";
 import type { TicketEventRecord } from "@/lib/tickets-api";
 import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/WorkOrderQuoteBillingActions";
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
@@ -93,27 +92,9 @@ export function TicketWorkflowStepper({
   const [reproposeNote, setReproposeNote] = useState("");
   const [requireDriverAck, setRequireDriverAck] = useState(true);
   const [proposalTab, setProposalTab] = useState<"current" | "history">("current");
-  const [historyTabsEnabled, setHistoryTabsEnabled] = useState(false);
 
-  useEffect(() => {
-    function sync() {
-      setHistoryTabsEnabled(readAppointmentProposalHistoryTabs());
-    }
-    sync();
-    function onStorage(e: StorageEvent) {
-      if (e.key === "fleet-appt-proposal-history-tabs" || e.key === null) sync();
-    }
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("fleet-appt-proposal-history-tabs", sync);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("fleet-appt-proposal-history-tabs", sync);
-    };
-  }, []);
-
-  /** Manager / admin — nu șofer. */
-  const showProposalHistoryTabs =
-    historyTabsEnabled && (canConfirmAppointment || canOperate);
+  /** Manager / admin — nu șofer. Implicit activ (fără Preferințe). */
+  const showProposalHistoryTabs = canConfirmAppointment || canOperate;
 
   const loadMobility = useCallback(async (workOrderId: string) => {
     try {

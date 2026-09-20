@@ -434,6 +434,126 @@ export class AppointmentsService {
     return this.toCalendarRecord(row);
   }
 
+  /**
+   * Istoric propuneri slot (repropose / altă oră furnizor) — din CrmTicketEvent.
+   * Accesibil și partenerului pe programarea sa (fără citire CRM completă).
+   */
+  async listProposalHistory(
+    tenantSlug: string,
+    appointmentId: string,
+    access?: AccessContext,
+  ): Promise<
+    Array<{
+      id: string;
+      at: string;
+      actor: 'manager' | 'driver' | 'supplier' | 'admin' | 'unknown';
+      actorLabel: string;
+      scheduledAt: string | null;
+      note: string | null;
+      summary: string;
+      appointmentId: string | null;
+    }>
+  > {
+    const clientScope = this.appointmentClientScope(access);
+    const partnerScope = this.appointmentPartnerScope(access);
+    const row = await this.prisma.serviceAppointment.findFirst({
+      where: {
+        id: appointmentId,
+        tenant: { slug: tenantSlug },
+        ...(Object.keys(clientScope).length > 0 ? clientScope : {}),
+        ...(Object.keys(partnerScope).length > 0 ? partnerScope : {}),
+      },
+      select: {
+        id: true,
+        supplierId: true,
+        serviceCase: { select: { sourceTicketId: true } },
+      },
+    });
+    if (!row) throw new NotFoundException('Appointment not found');
+    if (access && isPartnerUser(access)) {
+      assertPartnerSupplierId(access, row.supplierId);
+    }
+
+    const ticketId = row.serviceCase.sourceTicketId;
+    if (!ticketId) return [];
+
+    const events = await this.prisma.crmTicketEvent.findMany({
+      where: {
+        ticketId,
+        kind: CrmTicketEventKind.workflow_advance,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 80,
+      select: { id: true, body: true, payload: true, createdAt: true },
+    });
+
+    const out: Array<{
+      id: string;
+      at: string;
+      actor: 'manager' | 'driver' | 'supplier' | 'admin' | 'unknown';
+      actorLabel: string;
+      scheduledAt: string | null;
+      note: string | null;
+      summary: string;
+      appointmentId: string | null;
+    }> = [];
+
+    for (const ev of events) {
+      const payload =
+        ev.payload && typeof ev.payload === 'object'
+          ? (ev.payload as Record<string, unknown>)
+          : {};
+      const isProposal =
+        payload.reproposed === true ||
+        payload.slotChanged === true ||
+        (typeof payload.proposalBy === 'string' && !!payload.proposalBy) ||
+        /a repropus programarea|a propus altă dată|a propus altă oră/i.test(ev.body ?? '');
+      if (!isProposal) continue;
+
+      const apptId = typeof payload.appointmentId === 'string' ? payload.appointmentId : null;
+      if (apptId && apptId !== appointmentId) continue;
+
+      const by = payload.proposalBy;
+      let actor: 'manager' | 'driver' | 'supplier' | 'admin' | 'unknown' = 'unknown';
+      if (by === 'manager' || by === 'driver' || by === 'supplier' || by === 'admin') {
+        actor = by;
+      } else {
+        const text = ev.body ?? '';
+        if (/Șoferul/i.test(text)) actor = 'driver';
+        else if (/Managerul/i.test(text)) actor = 'manager';
+        else if (/Furnizorul/i.test(text)) actor = 'supplier';
+        else if (/Adminul/i.test(text)) actor = 'admin';
+      }
+
+      const actorLabel =
+        actor === 'driver'
+          ? 'Șofer'
+          : actor === 'manager'
+            ? 'Manager'
+            : actor === 'supplier'
+              ? 'Furnizor'
+              : actor === 'admin'
+                ? 'Admin L*'
+                : 'Propunere';
+
+      out.push({
+        id: ev.id,
+        at: ev.createdAt.toISOString(),
+        actor,
+        actorLabel,
+        scheduledAt: typeof payload.scheduledAt === 'string' ? payload.scheduledAt : null,
+        note:
+          typeof payload.note === 'string' && payload.note.trim()
+            ? payload.note.trim()
+            : null,
+        summary: (ev.body ?? '').trim() || `${actorLabel} — propunere slot`,
+        appointmentId: apptId ?? appointmentId,
+      });
+    }
+
+    return out;
+  }
+
   async create(
     tenantSlug: string,
     dto: CreateCalendarAppointmentInput,
