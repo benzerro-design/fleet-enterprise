@@ -30,7 +30,10 @@ export type FleetDashboardReminderRow = {
 
 export type FleetDashboardSnapshot = {
   generatedAt: string;
+  /** Luna selectată pentru costuri/curse (UTC). */
   currentMonth: { from: string; to: string };
+  /** Offset față de luna calendaristică curentă: 0 = acum, -1 = luna trecută. */
+  monthOffset: number;
   kpis: {
     vehiclesActive: number;
     vehiclesTotal: number;
@@ -43,6 +46,9 @@ export type FleetDashboardSnapshot = {
     remindersActive: number;
     costsCurrentMonthCents: number;
     tripsCurrentMonth: number;
+    /** Luna imediat anterioară celei selectate — pentru trend. */
+    costsPriorMonthCents: number;
+    tripsPriorMonth: number;
   };
   links: FleetDashboardKpiLinks;
   itpSoon: FleetDashboardItpRow[];

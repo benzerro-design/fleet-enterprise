@@ -10,7 +10,7 @@ import { OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 
 const THEME_OPTIONS: { value: AppearanceTheme; label: string; hint: string }[] = [
   { value: "dark", label: "Întunecat", hint: "Implicit — zinc pe fundal închis" },
-  { value: "light", label: "Luminos", hint: "Inspirat PrestaShop / Polaris light" },
+  { value: "light", label: "Luminos", hint: "Fundal deschis — liste și formulare" },
   { value: "system", label: "Sistem", hint: "Urmează OS-ul" },
 ];
 

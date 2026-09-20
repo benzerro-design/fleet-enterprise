@@ -19,6 +19,8 @@ import type {
 const ITP_LIST_LIMIT = 8;
 const REMINDER_LIST_LIMIT = 8;
 const REMINDER_SCAN_LIMIT = 1000;
+const MONTH_OFFSET_MIN = -11;
+const MONTH_OFFSET_MAX = 0;
 
 function startOfUtcDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -37,21 +39,28 @@ function formatUtcDay(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function currentMonthRangeUtc(): { from: string; to: string; start: Date; end: Date } {
+function clampMonthOffset(raw: number | undefined): number {
+  if (raw == null || Number.isNaN(raw)) return 0;
+  return Math.min(MONTH_OFFSET_MAX, Math.max(MONTH_OFFSET_MIN, Math.trunc(raw)));
+}
+
+/** offset 0 = luna curentă UTC; -1 = luna anterioară. */
+function monthRangeUtc(offsetMonths = 0): { from: string; to: string; start: Date; end: Date } {
   const now = new Date();
   const y = now.getUTCFullYear();
-  const m = now.getUTCMonth();
+  const m = now.getUTCMonth() + offsetMonths;
   const start = new Date(Date.UTC(y, m, 1));
   const end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999));
   return { from: formatUtcDay(start), to: formatUtcDay(end), start, end };
 }
 
-function emptySnapshot(): FleetDashboardSnapshot {
-  const month = currentMonthRangeUtc();
+function emptySnapshot(monthOffset = 0): FleetDashboardSnapshot {
+  const month = monthRangeUtc(monthOffset);
   const links = buildKpiLinks(month.from, month.to);
   return {
     generatedAt: new Date().toISOString(),
     currentMonth: { from: month.from, to: month.to },
+    monthOffset,
     kpis: {
       vehiclesActive: 0,
       vehiclesTotal: 0,
@@ -64,6 +73,8 @@ function emptySnapshot(): FleetDashboardSnapshot {
       remindersActive: 0,
       costsCurrentMonthCents: 0,
       tripsCurrentMonth: 0,
+      costsPriorMonthCents: 0,
+      tripsPriorMonth: 0,
     },
     links,
     itpSoon: [],
@@ -99,20 +110,27 @@ const reminderInclude = {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSnapshot(tenantSlug: string, access?: AccessContext): Promise<FleetDashboardSnapshot> {
+  async getSnapshot(
+    tenantSlug: string,
+    access?: AccessContext,
+    monthOffsetRaw?: number,
+  ): Promise<FleetDashboardSnapshot> {
+    const monthOffset = clampMonthOffset(monthOffsetRaw);
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) return emptySnapshot();
+    if (!tenant) return emptySnapshot(monthOffset);
 
     const today = startOfUtcDay(new Date());
     const in30 = addUtcDays(today, 30);
     const in60 = addUtcDays(today, 60);
     const expiringUntil = addUtcDays(today, DOCUMENT_EXPIRING_WITHIN_DAYS);
-    const month = currentMonthRangeUtc();
+    const month = monthRangeUtc(monthOffset);
+    const prior = monthRangeUtc(monthOffset - 1);
     const clientVehicleScope = access ? vehicleClientScope(access) : {};
     const vehicleBase = { tenantId: tenant.id, ...clientVehicleScope };
-    const vehicleLinked = access && !access.isTenantWide
-      ? { vehicle: { tenantId: tenant.id, ...clientVehicleScope } }
-      : { vehicle: vehicleBase };
+    const vehicleLinked =
+      access && !access.isTenantWide
+        ? { vehicle: { tenantId: tenant.id, ...clientVehicleScope } }
+        : { vehicle: vehicleBase };
     const activeItpWindow = {
       status: VehicleStatus.active,
       itpExpiresOn: { not: null },
@@ -127,6 +145,8 @@ export class DashboardService {
       documentsExpiringSoon,
       costsAgg,
       tripsCurrentMonth,
+      costsPriorAgg,
+      tripsPriorMonth,
       itpSoonRows,
       reminderRows,
       remindersActive,
@@ -174,6 +194,21 @@ export class DashboardService {
           tenantId: tenant.id,
           ...vehicleLinked,
           startedAt: { gte: month.start, lte: month.end },
+        },
+      }),
+      this.prisma.costEntry.aggregate({
+        where: {
+          tenantId: tenant.id,
+          ...vehicleLinked,
+          incurredOn: { gte: prior.start, lte: prior.end },
+        },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.trip.count({
+        where: {
+          tenantId: tenant.id,
+          ...vehicleLinked,
+          startedAt: { gte: prior.start, lte: prior.end },
         },
       }),
       this.prisma.vehicle.findMany({
@@ -262,6 +297,7 @@ export class DashboardService {
     return {
       generatedAt: new Date().toISOString(),
       currentMonth: { from: month.from, to: month.to },
+      monthOffset,
       kpis: {
         vehiclesActive,
         vehiclesTotal,
@@ -274,6 +310,8 @@ export class DashboardService {
         remindersActive,
         costsCurrentMonthCents: costsAgg._sum.amountCents ?? 0,
         tripsCurrentMonth,
+        costsPriorMonthCents: costsPriorAgg._sum.amountCents ?? 0,
+        tripsPriorMonth,
       },
       links: buildKpiLinks(month.from, month.to),
       itpSoon,

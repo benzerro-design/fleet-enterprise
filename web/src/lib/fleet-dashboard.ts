@@ -1,6 +1,7 @@
 export type FleetDashboardSnapshot = {
   generatedAt: string;
   currentMonth: { from: string; to: string };
+  monthOffset?: number;
   kpis: {
     vehiclesActive: number;
     vehiclesTotal: number;
@@ -13,6 +14,8 @@ export type FleetDashboardSnapshot = {
     remindersActive: number;
     costsCurrentMonthCents: number;
     tripsCurrentMonth: number;
+    costsPriorMonthCents?: number;
+    tripsPriorMonth?: number;
   };
   links: {
     vehiclesActive: string;
@@ -107,24 +110,10 @@ export function buildDashboardKpiCards(data: FleetDashboardSnapshot): DashboardK
       href: links.documentsExpiringSoon,
       tone: kpis.documentsExpiringSoon > 0 ? "warn" : "neutral",
     },
-    {
-      key: "costs",
-      label: "Costuri luna curentă",
-      value: formatRonCompact(kpis.costsCurrentMonthCents),
-      href: links.costsCurrentMonth,
-      tone: "neutral",
-    },
-    {
-      key: "trips",
-      label: "Curse luna curentă",
-      value: String(kpis.tripsCurrentMonth),
-      href: links.tripsCurrentMonth,
-      tone: "neutral",
-    },
   ];
 }
 
-function formatRonCompact(cents: number): string {
+export function formatRonCompact(cents: number): string {
   const ron = cents / 100;
   return new Intl.NumberFormat("ro-RO", {
     style: "currency",
@@ -137,3 +126,19 @@ export function formatDashboardMonthLabel(from: string): string {
   const d = new Date(`${from}T12:00:00.000Z`);
   return d.toLocaleDateString("ro-RO", { month: "long", year: "numeric", timeZone: "UTC" });
 }
+
+/** Delta vs luna anterioară: pozitiv = creștere. */
+export function periodDeltaLabel(current: number, prior: number): { text: string; tone: "up" | "down" | "flat" } {
+  if (prior === 0 && current === 0) return { text: "la fel ca luna anterioară", tone: "flat" };
+  if (prior === 0) return { text: "față de 0 luna anterioară", tone: "up" };
+  const pct = Math.round(((current - prior) / prior) * 100);
+  if (pct === 0) return { text: "≈0% vs luna anterioară", tone: "flat" };
+  if (pct > 0) return { text: `+${pct}% vs luna anterioară`, tone: "up" };
+  return { text: `${pct}% vs luna anterioară`, tone: "down" };
+}
+
+export const DASHBOARD_PERIOD_OPTIONS: { offset: number; label: string }[] = [
+  { offset: 0, label: "Luna curentă" },
+  { offset: -1, label: "Luna trecută" },
+  { offset: -2, label: "Acum 2 luni" },
+];

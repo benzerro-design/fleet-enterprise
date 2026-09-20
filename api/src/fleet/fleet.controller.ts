@@ -65,8 +65,10 @@ export class FleetController {
   getDashboard(
     @TenantId() tenantSlug: string,
     @CurrentAccess() access: AccessContext,
+    @Query('monthOffset') monthOffsetStr?: string,
   ) {
-    return this.dashboard.getSnapshot(tenantSlug, access);
+    const monthOffset = monthOffsetStr != null && monthOffsetStr !== '' ? Number(monthOffsetStr) : 0;
+    return this.dashboard.getSnapshot(tenantSlug, access, monthOffset);
   }
 
   @Get('vehicles/export')
