@@ -37,6 +37,8 @@ type Props = {
   vehicleId?: string | null;
   ticketCreatedAt?: string;
   canOperate: boolean;
+  /** Validare în locul furnizorului — doar tenant_admin. */
+  canSupplierValidate?: boolean;
   canApproveQuote: boolean;
   canConfirmAppointment: boolean;
   canAckAppointment: boolean;
@@ -52,6 +54,7 @@ export function TicketWorkflowStepper({
   vehicleId,
   ticketCreatedAt,
   canOperate,
+  canSupplierValidate = false,
   canApproveQuote,
   canConfirmAppointment,
   canAckAppointment,
@@ -262,6 +265,33 @@ export function TicketWorkflowStepper({
       const res = await fetch(
         `${serviceCasesBrowserBase}/appointments/${appointmentId}/confirm`,
         { method: "POST", headers: fleetJsonHeaders() },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const data = (await res.json()) as ServiceCaseRecord;
+      setServiceCase(data);
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function supplierValidateAppointment(appointmentId: string) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${serviceCasesBrowserBase}/appointments/${appointmentId}/supplier-validate`,
+        { method: "POST", headers: fleetJsonHeaders(), body: JSON.stringify({}) },
       );
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
@@ -757,6 +787,18 @@ export function TicketWorkflowStepper({
                     </div>
                     {!closed && appt.status !== "cancelled" ? (
                       <div className="mt-2 flex flex-wrap gap-2">
+                        {canSupplierValidate &&
+                        appt.scheduledAt &&
+                        (appt.status === "pending_supplier" || appt.status === "needs_repropose") ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => void supplierValidateAppointment(appt.id)}
+                            className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                          >
+                            Validează (furnizor)
+                          </button>
+                        ) : null}
                         {canConfirmAppointment &&
                         appt.status === "scheduled" &&
                         !appt.managerConfirmedAt ? (

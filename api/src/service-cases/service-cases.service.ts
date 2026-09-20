@@ -2701,11 +2701,16 @@ export class ServiceCasesService {
       throw new BadRequestException('Appointment is not awaiting supplier validation');
     }
     if (access) {
-      if (!isPartnerUser(access)) {
-        throw new ForbiddenException('Only the supplier can validate this appointment');
+      if (isPartnerUser(access)) {
+        assertPartnerWrite(access);
+        assertPartnerSupplierId(access, existing.supplierId);
+      } else if (access.membershipRole === MembershipRole.tenant_admin) {
+        assertServiceCaseWrite(access, existing.serviceCase.clientId);
+      } else {
+        throw new ForbiddenException(
+          'Only the supplier or tenant admin can validate this appointment',
+        );
       }
-      assertPartnerWrite(access);
-      assertPartnerSupplierId(access, existing.supplierId);
     }
 
     let scheduledAt = existing.scheduledAt;

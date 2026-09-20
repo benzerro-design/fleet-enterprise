@@ -8,6 +8,7 @@ import {
   canConfirmAppointment,
   canOperateServiceCase,
   canPatchTickets,
+  canSupplierValidateAppointment,
   canWriteTickets,
   getAuthMeResult,
 } from "@/lib/auth-server";
@@ -33,6 +34,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
   const write = canWriteTickets(auth);
   const patch = canPatchTickets(auth);
   const canOperate = canOperateServiceCase(auth);
+  const canSupplierValidate = canSupplierValidateAppointment(auth);
   const canApproveQuote = canApproveQuotes(auth);
   const canConfirmAppt = canConfirmAppointment(auth);
   const canAckAppt = canAckAppointment(auth);
@@ -53,6 +55,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
           write={write}
           patch={patch}
           canOperate={canOperate}
+          canSupplierValidate={canSupplierValidate}
           canApproveQuote={canApproveQuote}
           canConfirmAppt={canConfirmAppt}
           canAckAppt={canAckAppt}

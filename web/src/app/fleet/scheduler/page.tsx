@@ -3,7 +3,7 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { SchedulerShell } from "@/components/fleet/scheduler/SchedulerShell";
 import type { AppointmentStats } from "@/lib/appointments-api";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canSupplierValidateAppointment, canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { parseSchedulerFlagParam, parseSchedulerInboxParam, parseSchedulerViewParam } from "@/lib/scheduler-deep-link";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
@@ -77,6 +77,7 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
     getVehicleOptions(),
   ]);
   const canWrite = canWriteFleetOps(auth);
+  const canSupplierValidate = canSupplierValidateAppointment(auth);
 
   const vehicleOptions = vehicles.map((v) => ({
     id: v.id,
@@ -103,6 +104,7 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
           <Suspense fallback={<p className="p-6 text-sm text-zinc-500">Se încarcă programatorul…</p>}>
             <SchedulerShell
               canWrite={canWrite}
+              canSupplierValidate={canSupplierValidate}
               initialStats={stats}
               suppliers={suppliers}
               serviceTypes={serviceTypes}

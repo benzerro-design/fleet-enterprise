@@ -20,6 +20,7 @@ type Props = {
   write: boolean;
   patch: boolean;
   canOperate: boolean;
+  canSupplierValidate?: boolean;
   canApproveQuote: boolean;
   canConfirmAppt: boolean;
   canAckAppt: boolean;
@@ -32,6 +33,7 @@ export function TicketDetailShell({
   write,
   patch,
   canOperate,
+  canSupplierValidate = false,
   canApproveQuote,
   canConfirmAppt,
   canAckAppt,
@@ -123,6 +125,7 @@ export function TicketDetailShell({
               vehicleId={ticket.vehicleId}
               ticketCreatedAt={ticket.createdAt}
               canOperate={canOperate}
+              canSupplierValidate={canSupplierValidate}
               canApproveQuote={canApproveQuote}
               canConfirmAppointment={canConfirmAppt}
               canAckAppointment={canAckAppt}

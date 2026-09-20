@@ -113,6 +113,11 @@ export function canOperateServiceCase(auth: AuthMeResult): boolean {
   return canWriteClientFleet(auth) || canManageFleet(auth);
 }
 
+/** Validare programare în locul furnizorului — doar tenant_admin (nu manager client). */
+export function canSupplierValidateAppointment(auth: AuthMeResult): boolean {
+  return canManageFleet(auth);
+}
+
 /** Aprobare deviz — client_admin sau tenant_admin. */
 export function canApproveQuotes(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;

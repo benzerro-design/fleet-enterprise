@@ -39,6 +39,8 @@ type VehicleOption = { id: string; registrationNumber: string; clientId: string 
 
 type Props = {
   canWrite: boolean;
+  /** Tenant admin: poate valida în locul furnizorului (UI flotă). Partenerul are mereu via partnerMode. */
+  canSupplierValidate?: boolean;
   initialStats: AppointmentStats | null;
   suppliers: SupplierOption[];
   serviceTypes?: ServiceTypeOption[];
@@ -119,6 +121,7 @@ const INBOX_RANGE_DAYS = 365;
 
 export function SchedulerShell({
   canWrite,
+  canSupplierValidate = false,
   initialStats,
   suppliers,
   serviceTypes = [],
@@ -205,6 +208,7 @@ export function SchedulerShell({
     ];
   }, [vehicles, linkVehicleId, linkVehicleLabel]);
   const partnerSupplier = partnerMode && suppliers.length > 0 ? suppliers[0] : undefined;
+  const allowSupplierValidate = canWrite && (partnerMode || canSupplierValidate);
 
   useEffect(() => {
     setSupplierFilter(visibleSuppliers.map((s) => s.id));
@@ -607,7 +611,7 @@ export function SchedulerShell({
                 onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
                 onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
                 onSupplierValidate={
-                  canWrite && partnerMode ? (id) => void supplierValidateById(id) : undefined
+                  allowSupplierValidate ? (id) => void supplierValidateById(id) : undefined
                 }
                 onRequestCancel={
                   canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
@@ -637,7 +641,7 @@ export function SchedulerShell({
               slotClickMode={slotClickMode}
               onStatusChange={canWrite ? setAppointmentStatus : undefined}
               onSupplierValidate={
-                canWrite && partnerMode ? supplierValidateById : undefined
+                allowSupplierValidate ? supplierValidateById : undefined
               }
               onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
               onProposeReschedule={canWrite ? proposeAlternateDate : undefined}
@@ -659,7 +663,7 @@ export function SchedulerShell({
           slotClickMode={slotClickMode}
           onStatusChange={canWrite ? setAppointmentStatus : undefined}
           onSupplierValidate={
-            canWrite && partnerMode ? supplierValidateById : undefined
+            allowSupplierValidate ? supplierValidateById : undefined
           }
           onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
           onProposeReschedule={canWrite ? proposeAlternateDate : undefined}
@@ -685,7 +689,7 @@ export function SchedulerShell({
             onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
             onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
             onSupplierValidate={
-              canWrite && partnerMode ? (id) => void supplierValidateById(id) : undefined
+              allowSupplierValidate ? (id) => void supplierValidateById(id) : undefined
             }
             onRequestCancel={
               canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
@@ -808,6 +812,7 @@ export function SchedulerShell({
             canWrite={canWrite}
             createMode={createMode}
             partnerMode={partnerMode}
+            canSupplierValidate={allowSupplierValidate}
             openInRescheduleMode={proposeRescheduleForId === selected?.id}
             onClose={clearSelection}
             onRescheduleEditingChange={setRescheduleEditing}
@@ -852,6 +857,7 @@ export function SchedulerShell({
           mobile
           createMode={createMode}
           partnerMode={partnerMode}
+          canSupplierValidate={allowSupplierValidate}
           openInRescheduleMode={proposeRescheduleForId === selected?.id}
           onClose={clearSelection}
           onRescheduleEditingChange={setRescheduleEditing}

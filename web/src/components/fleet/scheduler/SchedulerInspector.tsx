@@ -43,6 +43,8 @@ type Props = {
   initialVehicleLabel?: string;
   serviceTypeCode?: string;
   partnerMode?: boolean;
+  /** Partner sau tenant admin — arată CTA Validează (furnizor). */
+  canSupplierValidate?: boolean;
   partnerSupplier?: { id: string; code: string; legalName: string };
   /** Notifică shell-ul când e activă reprogramarea (pick din calendar). */
   onRescheduleEditingChange?: (editing: boolean) => void;
@@ -75,6 +77,7 @@ export function SchedulerInspector({
   initialVehicleLabel,
   serviceTypeCode,
   partnerMode,
+  canSupplierValidate = false,
   partnerSupplier,
   onRescheduleEditingChange,
   openInRescheduleMode,
@@ -929,34 +932,33 @@ export function SchedulerInspector({
 
       {canWrite ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          {partnerMode &&
+          {canSupplierValidate &&
+          appointmentHasSlot(appointment.scheduledAt) &&
           (appointment.status === "pending_supplier" || appointment.status === "needs_repropose") ? (
-            <>
-              {appointmentHasSlot(appointment.scheduledAt) ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void supplierValidate()}
-                className="rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs text-white hover:bg-sky-500 disabled:opacity-50"
-              >
-                Validează (furnizor)
-              </button>
-              ) : null}
-              {!editing ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(true);
-                    onRescheduleEditingChange?.(true);
-                  }}
-                  className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
-                >
-                  {appointmentHasSlot(appointment.scheduledAt)
-                    ? "Propune altă dată/oră"
-                    : "Propune dată"}
-                </button>
-              ) : null}
-            </>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void supplierValidate()}
+              className="rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs text-white hover:bg-sky-500 disabled:opacity-50"
+            >
+              Validează (furnizor)
+            </button>
+          ) : null}
+          {partnerMode &&
+          (appointment.status === "pending_supplier" || appointment.status === "needs_repropose") &&
+          !editing ? (
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(true);
+                onRescheduleEditingChange?.(true);
+              }}
+              className="rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-xs text-amber-200 hover:bg-amber-950/40"
+            >
+              {appointmentHasSlot(appointment.scheduledAt)
+                ? "Propune altă dată/oră"
+                : "Propune dată"}
+            </button>
           ) : null}
           {appointment.status === "scheduled" && !partnerMode && !appointment.managerConfirmedAt ? (
               <button
