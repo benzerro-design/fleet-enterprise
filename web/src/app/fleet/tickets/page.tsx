@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
+import { FleetIndexFilterChips, type FleetIndexFilterChip } from "@/components/fleet/FleetIndexFilterChips";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
-import { TicketNotificationBell } from "@/components/fleet/tickets/TicketNotificationBell";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
 import { canPatchTickets, canWriteTickets, getAuthMeResult, isClientPortalUser } from "@/lib/auth-server";
@@ -163,6 +163,51 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
   if (sp.routingLevel?.trim()) filterParams.routingLevel = sp.routingLevel.trim();
   if (sp.inbox?.trim()) filterParams.inbox = sp.inbox.trim();
 
+  const filterChips: FleetIndexFilterChip[] = [];
+  if (sp.q?.trim()) {
+    filterChips.push({ key: "q", label: `Căutare: ${sp.q.trim()}`, clearHref: withParams({ q: undefined, page: "1" }) });
+  }
+  if (sp.status?.trim()) {
+    filterChips.push({ key: "status", label: `Status: ${sp.status}`, clearHref: withParams({ status: undefined, page: "1" }) });
+  }
+  if (sp.ticketType?.trim()) {
+    const typeLabel = TICKET_TYPES.find((t) => t.value === sp.ticketType)?.label ?? sp.ticketType;
+    filterChips.push({
+      key: "ticketType",
+      label: `Tip: ${typeLabel}`,
+      clearHref: withParams({ ticketType: undefined, page: "1" }),
+    });
+  }
+  if (sp.clientId?.trim()) {
+    filterChips.push({
+      key: "clientId",
+      label: `Client: ${sp.clientId}`,
+      clearHref: withParams({ clientId: undefined, page: "1" }),
+    });
+  }
+  if (sp.inbox?.trim()) {
+    filterChips.push({
+      key: "inbox",
+      label: `Inbox: ${sp.inbox === "lstar" ? "L★" : sp.inbox}`,
+      clearHref: withParams({ inbox: undefined, page: "1" }),
+    });
+  }
+  if (sp.vehicleId?.trim()) {
+    const v = vehicles.find((x) => x.id === sp.vehicleId);
+    filterChips.push({
+      key: "vehicleId",
+      label: `Vehicul: ${v?.registrationNumber ?? sp.vehicleId}`,
+      clearHref: withParams({ vehicleId: undefined, page: "1" }),
+    });
+  }
+  if (sp.routingLevel?.trim()) {
+    filterChips.push({
+      key: "routingLevel",
+      label: `Rutare: ${sp.routingLevel}`,
+      clearHref: withParams({ routingLevel: undefined, page: "1" }),
+    });
+  }
+
   return (
     <FleetPageMain fill>
       <FleetListPageLayout
@@ -183,14 +228,14 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
                 Solicitare nouă
               </Link>
             ) : null}
-            <TicketNotificationBell />
           </div>
         }
         filters={
-          <form method="get" className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+          <form method="get" className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 shadow-sm shadow-black/20">
             {viewBoard || viewFocus ? (
               <input type="hidden" name="view" value={sp.view ?? ""} />
             ) : null}
+            <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="text-xs text-zinc-500">Căutare</label>
               <input
@@ -301,6 +346,8 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
               Filtrează
             </button>
             <FilterResetLink href="/fleet/tickets" />
+            </div>
+            <FleetIndexFilterChips chips={filterChips} resetHref="/fleet/tickets" />
           </form>
         }
         toolbar={

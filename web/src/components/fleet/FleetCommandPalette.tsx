@@ -16,6 +16,14 @@ type Props = {
   items: FleetCommandItem[];
 };
 
+export const FLEET_OPEN_COMMAND_PALETTE = "fleet:open-command-palette";
+
+/** Deschide paleta din top bar / search stub (Ctrl/Cmd+K rămâne). */
+export function openFleetCommandPalette(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(FLEET_OPEN_COMMAND_PALETTE));
+}
+
 function normalize(s: string): string {
   return s
     .toLowerCase()
@@ -32,6 +40,16 @@ export function FleetCommandPalette({ items }: Props) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    function onOpen() {
+      setOpen(true);
+      setQuery("");
+      setHighlight(0);
+    }
+    window.addEventListener(FLEET_OPEN_COMMAND_PALETTE, onOpen);
+    return () => window.removeEventListener(FLEET_OPEN_COMMAND_PALETTE, onOpen);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = normalize(query.trim());

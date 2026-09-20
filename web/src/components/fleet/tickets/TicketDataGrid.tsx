@@ -9,6 +9,7 @@ import {
   fleetThClass,
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
+import { FleetListEmptyState } from "@/components/fleet/FleetListEmptyState";
 import { TicketColumnPicker } from "@/components/fleet/tickets/TicketColumnPicker";
 import { TicketGlyphLegendPanel } from "@/components/fleet/tickets/TicketGlyphLegendPanel";
 import { TicketGridViewsPanel } from "@/components/fleet/tickets/TicketGridViewsPanel";
@@ -61,7 +62,44 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
   const [layout, setLayout] = useState<TicketGridLayout>(() => readTicketGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const columns = useMemo(() => visibleTicketColumns(layout), [layout]);
+  const hasFilters = Object.keys(filterParams).length > 0;
+  const allSelected = items.length > 0 && items.every((r) => selected.has(r.id));
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected(new Set());
+      return;
+    }
+    setSelected(new Set(items.map((r) => r.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function openSelected() {
+    const ids = items.filter((r) => selected.has(r.id)).map((r) => r.id).slice(0, 5);
+    for (const id of ids) {
+      window.open(`/fleet/tickets/${id}`, "_blank", "noopener,noreferrer");
+    }
+  }
+
+  async function copySelectedIds() {
+    const rows = items.filter((r) => selected.has(r.id));
+    const text = rows.map((r) => `#${r.displayId}`).join(", ");
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* ignore */
+    }
+  }
 
   function renderCell(key: TicketGridColumnKey, row: TicketRecord) {
     switch (key) {
@@ -159,6 +197,22 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
     }
   }
 
+  if (items.length === 0) {
+    return (
+      <FleetListEmptyState
+        title={hasFilters ? "Niciun tichet pentru filtrele curente" : "Niciun tichet încă"}
+        description={
+          hasFilters
+            ? "Schimbă sau resetează filtrele ca să vezi alte rezultate."
+            : "Creează o solicitare nouă sau așteaptă primul tichet din inbox."
+        }
+        hasFilters={hasFilters}
+        clearFiltersHref="/fleet/tickets"
+        primaryAction={canWrite ? { label: "Solicitare nouă", href: "/fleet/tickets/new" } : undefined}
+      />
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -193,6 +247,29 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         ) : null}
       </div>
 
+      {selected.size > 0 ? (
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-100 backdrop-blur">
+          <span className="font-medium">{selected.size} selectate</span>
+          <button
+            type="button"
+            onClick={openSelected}
+            className="rounded-md border border-emerald-700/60 px-2.5 py-1 hover:bg-emerald-900/50"
+          >
+            Deschide (max 5)
+          </button>
+          <button
+            type="button"
+            onClick={() => void copySelectedIds()}
+            className="rounded-md border border-emerald-700/60 px-2.5 py-1 hover:bg-emerald-900/50"
+          >
+            Copiază ID-uri
+          </button>
+          <button type="button" onClick={() => setSelected(new Set())} className="text-emerald-400/80 hover:underline">
+            Debifează
+          </button>
+        </div>
+      ) : null}
+
       {showColumns ? (
         <TicketColumnPicker layout={layout} onChange={setLayout} onClose={() => setShowColumns(false)} />
       ) : null}
@@ -202,6 +279,15 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         <table className={`${fleetTableClass} text-xs`}>
           <thead className={fleetTheadClass}>
             <tr>
+              <th className={`${fleetThClass} w-8`}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="Selectează toate pe pagină"
+                  className="rounded border-zinc-600"
+                />
+              </th>
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -214,15 +300,27 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/80">
-            {items.map((row) => (
-              <tr key={row.id} className="hover:bg-zinc-900/40">
-                {columns.map((col) => (
-                  <td key={col.key} className={`${fleetTdClass} max-w-[280px] truncate`}>
-                    {renderCell(col.key, row)}
+            {items.map((row) => {
+              const isSel = selected.has(row.id);
+              return (
+                <tr key={row.id} className={isSel ? "bg-emerald-950/20 hover:bg-emerald-950/30" : "hover:bg-zinc-900/40"}>
+                  <td className={`${fleetTdClass} w-8`}>
+                    <input
+                      type="checkbox"
+                      checked={isSel}
+                      onChange={() => toggleOne(row.id)}
+                      aria-label={`Selectează #${row.displayId}`}
+                      className="rounded border-zinc-600"
+                    />
                   </td>
-                ))}
-              </tr>
-            ))}
+                  {columns.map((col) => (
+                    <td key={col.key} className={`${fleetTdClass} max-w-[280px] truncate`}>
+                      {renderCell(col.key, row)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </FleetDataTable>

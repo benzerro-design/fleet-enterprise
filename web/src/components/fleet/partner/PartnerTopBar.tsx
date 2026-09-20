@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LogoutButton } from "@/app/fleet/logout-button";
+import { openFleetCommandPalette } from "@/components/fleet/FleetCommandPalette";
 import { PartnerNotificationBell } from "@/components/fleet/partner/PartnerNotificationBell";
 import { PartnerPendingActionsList } from "@/components/fleet/partner/PartnerPendingActionsList";
 import {
@@ -105,6 +106,16 @@ export function PartnerTopBar({ ctx }: Props) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => openFleetCommandPalette()}
+          className="hidden items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/50 px-2 py-1 text-[11px] text-zinc-500 hover:border-zinc-700 hover:text-zinc-300 sm:inline-flex"
+          aria-label="Căutare rapidă"
+        >
+          <span>Caută…</span>
+          <kbd className="rounded border border-zinc-700 px-1 font-mono text-[9px] text-zinc-600">⌘K</kbd>
+        </button>
+
         <span
           className="font-mono text-[9px] text-zinc-500"
           title={`Cod furnizor · tenant ${ctx.tenantSlug}`}

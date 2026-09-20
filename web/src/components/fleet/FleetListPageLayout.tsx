@@ -13,13 +13,15 @@ type FleetListPageLayoutProps = {
 };
 
 /**
- * Layout listă operațională: filtre vizibile permanent, conținutul de dedesubt scroll-ează ca un bloc.
+ * Layout listă operațională: filtre vizibile permanent (sticky), conținutul de dedesubt scroll-ează.
  */
 export function FleetListPageLayout({ header, filters, toolbar, children }: FleetListPageLayoutProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {header ? <div className="shrink-0 space-y-3">{header}</div> : null}
-      {filters ? <div className="shrink-0">{filters}</div> : null}
+      {filters ? (
+        <div className="sticky top-0 z-20 shrink-0 bg-zinc-950/90 backdrop-blur-sm">{filters}</div>
+      ) : null}
       {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
       <div className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col`}>
         <div className="flex flex-col gap-4 pb-1">{children}</div>

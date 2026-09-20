@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FleetCommandPalette, type FleetCommandItem } from "@/components/fleet/FleetCommandPalette";
 import { FleetSidebarNav } from "@/components/fleet/FleetSidebarNav";
+import { FleetTopBar } from "@/components/fleet/FleetTopBar";
 import { FLEET_MOBILE_TABS, type FleetMobileTab, type FleetNavGroup } from "@/lib/fleet-nav";
 import { LogoutButton } from "@/app/fleet/logout-button";
 
@@ -70,6 +71,7 @@ export function FleetShell({
     () => commandItemsFromGroups([...groups, setup, admin, bot]),
     [groups, setup, admin, bot],
   );
+  const allowedHrefs = useMemo(() => commandItems.map((i) => i.href), [commandItems]);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
@@ -124,6 +126,8 @@ export function FleetShell({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {authBanner}
+
+        <FleetTopBar userEmail={userEmail} allowedHrefs={allowedHrefs} />
 
         {/* Mobile top bar — fix deasupra zonei scrollabile */}
         <header className="z-30 flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950 px-4 py-3 print:hidden lg:hidden">
