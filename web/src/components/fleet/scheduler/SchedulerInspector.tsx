@@ -110,7 +110,7 @@ export function SchedulerInspector({
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [requireDriverAck, setRequireDriverAck] = useState(true);
   const [pickPulseKey, setPickPulseKey] = useState(0);
-  const [partnerApptTab, setPartnerApptTab] = useState<"current" | "history">("current");
+  const [inspectorApptTab, setInspectorApptTab] = useState<"current" | "history">("current");
   const [proposalHistory, setProposalHistory] = useState<ProposalHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -128,7 +128,7 @@ export function SchedulerInspector({
     setError(null);
     setRequestingCancel(false);
     setCancelNote("");
-    setPartnerApptTab("current");
+    setInspectorApptTab("current");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when appointment identity/time/mode changes
   }, [appointment?.id, appointment?.scheduledAt, appointment?.durationMin, openInRescheduleMode]);
 
@@ -138,8 +138,10 @@ export function SchedulerInspector({
     setCancelNote("");
   }, [createMode, appointment?.id]);
 
+  const showHistoryTabs = appointment?.appointmentProposalHistoryTabs === true;
+
   useEffect(() => {
-    if (!partnerMode || !appointment?.id) {
+    if (!showHistoryTabs || !appointment?.id) {
       setProposalHistory([]);
       return;
     }
@@ -163,7 +165,13 @@ export function SchedulerInspector({
     return () => {
       cancelled = true;
     };
-  }, [partnerMode, appointment?.id, appointment?.scheduledAt, appointment?.lastProposalNote, appointment?.fleetCounterProposedBy]);
+  }, [
+    showHistoryTabs,
+    appointment?.id,
+    appointment?.scheduledAt,
+    appointment?.lastProposalNote,
+    appointment?.fleetCounterProposedBy,
+  ]);
 
   useEffect(() => {
     if (!editing || !calendarPickAt) return;
@@ -631,13 +639,13 @@ export function SchedulerInspector({
 
   const panel = (
     <>
-      {partnerMode && appointment.appointmentProposalHistoryTabs ? (
+      {showHistoryTabs ? (
         <div className="mb-3 flex gap-1 border-b border-zinc-800">
           <button
             type="button"
-            onClick={() => setPartnerApptTab("current")}
+            onClick={() => setInspectorApptTab("current")}
             className={`-mb-px border-b-2 px-2 py-1.5 text-[11px] font-medium ${
-              partnerApptTab === "current"
+              inspectorApptTab === "current"
                 ? "border-emerald-500 text-emerald-300"
                 : "border-transparent text-zinc-500 hover:text-zinc-300"
             }`}
@@ -646,9 +654,9 @@ export function SchedulerInspector({
           </button>
           <button
             type="button"
-            onClick={() => setPartnerApptTab("history")}
+            onClick={() => setInspectorApptTab("history")}
             className={`-mb-px border-b-2 px-2 py-1.5 text-[11px] font-medium ${
-              partnerApptTab === "history"
+              inspectorApptTab === "history"
                 ? "border-emerald-500 text-emerald-300"
                 : "border-transparent text-zinc-500 hover:text-zinc-300"
             }`}
@@ -658,9 +666,7 @@ export function SchedulerInspector({
         </div>
       ) : null}
 
-      {partnerMode &&
-      appointment.appointmentProposalHistoryTabs &&
-      partnerApptTab === "history" ? (
+      {showHistoryTabs && inspectorApptTab === "history" ? (
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-zinc-400">Istoric propuneri</p>
