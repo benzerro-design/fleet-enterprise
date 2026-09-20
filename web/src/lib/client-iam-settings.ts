@@ -5,6 +5,8 @@ export type ClientIamSettings = {
   driverCanNegotiateAppointment: boolean;
   /** Manager client: selecție multiplă pe lista de tichete. Admin L* are oricum. Șoferul niciodată. */
   ticketListBulkSelect: boolean;
+  /** Tab-uri Curente/Istoric pe PROGRAMĂRI. Admin L* are oricum. Șoferul niciodată. */
+  appointmentProposalHistoryTabs: boolean;
 };
 
 export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
@@ -13,6 +15,7 @@ export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
   requireDriverAck: true,
   driverCanNegotiateAppointment: false,
   ticketListBulkSelect: false,
+  appointmentProposalHistoryTabs: false,
 };
 
 /** Normalizează răspunsul API (câmpuri lipsă = default). */
@@ -23,5 +26,6 @@ export function normalizeClientIamSettings(data: Partial<ClientIamSettings> | nu
     requireDriverAck: data?.requireDriverAck !== false,
     driverCanNegotiateAppointment: data?.driverCanNegotiateAppointment === true,
     ticketListBulkSelect: data?.ticketListBulkSelect === true,
+    appointmentProposalHistoryTabs: data?.appointmentProposalHistoryTabs === true,
   };
 }

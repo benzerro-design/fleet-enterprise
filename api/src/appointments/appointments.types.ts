@@ -29,6 +29,8 @@ export type CalendarAppointmentRecord = {
   requireDriverAckOverride: boolean | null;
   requireDriverAck: boolean;
   driverCanNegotiateAppointment: boolean;
+  /** Tab-uri istoric propuneri — din politica clientului. */
+  appointmentProposalHistoryTabs: boolean;
   location: string | null;
   notes: string | null;
   vehicleId: string;

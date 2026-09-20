@@ -56,6 +56,8 @@ type Props = {
   onServiceCaseChange?: (record: ServiceCaseRecord | null | undefined) => void;
   /** Event-uri tichet — pentru tab Istoric propuneri (Slice A). */
   ticketEvents?: TicketEventRecord[];
+  /** Manager / admin — gated by prop (setare client / admin always). */
+  showProposalHistoryTabs?: boolean;
   compact?: boolean;
 };
 
@@ -73,6 +75,7 @@ export function TicketWorkflowStepper({
   ticketLinks = [],
   onServiceCaseChange,
   ticketEvents = [],
+  showProposalHistoryTabs: showProposalHistoryTabsProp = false,
   compact = false,
 }: Props) {
   const router = useRouter();
@@ -93,8 +96,9 @@ export function TicketWorkflowStepper({
   const [requireDriverAck, setRequireDriverAck] = useState(true);
   const [proposalTab, setProposalTab] = useState<"current" | "history">("current");
 
-  /** Manager / admin — nu șofer. Implicit activ (fără Preferințe). */
-  const showProposalHistoryTabs = canConfirmAppointment || canOperate;
+  /** Manager / admin — nu șofer. Gate din setarea pe client (sau admin L*). */
+  const showProposalHistoryTabs =
+    showProposalHistoryTabsProp && (canConfirmAppointment || canOperate);
 
   const loadMobility = useCallback(async (workOrderId: string) => {
     try {

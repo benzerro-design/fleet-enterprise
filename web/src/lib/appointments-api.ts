@@ -61,6 +61,7 @@ export type CalendarAppointment = {
   requireDriverAckOverride?: boolean | null;
   requireDriverAck?: boolean;
   driverCanNegotiateAppointment?: boolean;
+  appointmentProposalHistoryTabs?: boolean;
   createdAt: string;
   updatedAt: string;
 };

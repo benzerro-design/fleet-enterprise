@@ -81,6 +81,23 @@ export function AppointmentPolicyFields({ draft, onChange, disabled }: Props) {
           </label>
         </fieldset>
       )}
+
+      <label className="flex items-start gap-3 text-sm text-zinc-200">
+        <input
+          type="checkbox"
+          checked={draft.appointmentProposalHistoryTabs}
+          disabled={disabled}
+          onChange={(e) => onChange({ ...draft, appointmentProposalHistoryTabs: e.target.checked })}
+          className="mt-0.5"
+        />
+        <span>
+          <span className="font-medium">Istoric propuneri pe PROGRAMĂRI</span>
+          <span className="mt-0.5 block text-xs text-zinc-500">
+            Tab-uri Curente / Istoric pe tichet (manager) și în programatorul partener. Adminul abonatului
+            le vede oricum. Șoferii nu.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }

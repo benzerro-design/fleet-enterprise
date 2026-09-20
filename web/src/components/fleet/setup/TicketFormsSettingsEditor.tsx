@@ -85,6 +85,7 @@ export function TicketFormsSettingsEditor() {
           requireDriverAck: draft.requireDriverAck,
           driverCanNegotiateAppointment: draft.driverCanNegotiateAppointment,
           ticketListBulkSelect: draft.ticketListBulkSelect,
+          appointmentProposalHistoryTabs: draft.appointmentProposalHistoryTabs,
         }),
       });
       if (!res.ok) {

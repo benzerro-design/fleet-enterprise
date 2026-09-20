@@ -9,6 +9,7 @@ import {
   canOperateServiceCase,
   canPatchTickets,
   canSupplierValidateAppointment,
+  canUseAppointmentProposalHistory,
   canWriteTickets,
   getAuthMeResult,
 } from "@/lib/auth-server";
@@ -39,6 +40,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
   const canConfirmAppt = canConfirmAppointment(auth);
   const canAckAppt = canAckAppointment(auth);
   const { ticket } = detail;
+  const showProposalHistoryTabs = canUseAppointmentProposalHistory(auth, ticket.clientId);
   const closed = ticket.status === "resolved" || ticket.status === "cancelled";
   const currentUserId = auth.ok ? auth.me.userId : undefined;
 
@@ -59,6 +61,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
           canApproveQuote={canApproveQuote}
           canConfirmAppt={canConfirmAppt}
           canAckAppt={canAckAppt}
+          showProposalHistoryTabs={showProposalHistoryTabs}
           currentUserId={currentUserId}
         />
       </div>

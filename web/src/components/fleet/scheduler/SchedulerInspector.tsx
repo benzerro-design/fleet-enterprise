@@ -631,7 +631,7 @@ export function SchedulerInspector({
 
   const panel = (
     <>
-      {partnerMode ? (
+      {partnerMode && appointment.appointmentProposalHistoryTabs ? (
         <div className="mb-3 flex gap-1 border-b border-zinc-800">
           <button
             type="button"
@@ -658,7 +658,9 @@ export function SchedulerInspector({
         </div>
       ) : null}
 
-      {partnerMode && partnerApptTab === "history" ? (
+      {partnerMode &&
+      appointment.appointmentProposalHistoryTabs &&
+      partnerApptTab === "history" ? (
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-zinc-400">Istoric propuneri</p>

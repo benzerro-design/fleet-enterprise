@@ -24,6 +24,7 @@ type Props = {
   canApproveQuote: boolean;
   canConfirmAppt: boolean;
   canAckAppt: boolean;
+  showProposalHistoryTabs?: boolean;
   currentUserId?: string;
 };
 
@@ -37,6 +38,7 @@ export function TicketDetailShell({
   canApproveQuote,
   canConfirmAppt,
   canAckAppt,
+  showProposalHistoryTabs = false,
   currentUserId,
 }: Props) {
   const router = useRouter();
@@ -134,6 +136,7 @@ export function TicketDetailShell({
               compact
               ticketLinks={detail.links}
               ticketEvents={detail.events}
+              showProposalHistoryTabs={showProposalHistoryTabs}
               onServiceCaseChange={setServiceCase}
             />
           }

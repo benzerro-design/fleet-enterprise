@@ -8,6 +8,7 @@ export type ClientIamSettingsMe = {
   requireDriverAck: boolean;
   driverCanNegotiateAppointment: boolean;
   ticketListBulkSelect: boolean;
+  appointmentProposalHistoryTabs: boolean;
 };
 
 export type ClientMembershipMe = {
@@ -130,6 +131,25 @@ export function canUseTicketListBulk(auth: AuthMeResult): boolean {
   if (auth.me.role !== "client_user" || !isClientFleetPortal(auth)) return false;
   return (auth.me.access?.clientMemberships ?? []).some(
     (m) => m.role !== "driver" && m.iamSettings?.ticketListBulkSelect === true,
+  );
+}
+
+/**
+ * Tab-uri Curente/Istoric propuneri pe PROGRAMĂRI.
+ * Admin L*: da. Șofer: nu. Manager: doar dacă e bifat pe clientul tichetului.
+ */
+export function canUseAppointmentProposalHistory(
+  auth: AuthMeResult,
+  clientId?: string | null,
+): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") return true;
+  if (isClientDriverPortal(auth)) return false;
+  if (auth.me.role !== "client_user" || !isClientFleetPortal(auth)) return false;
+  const memberships = auth.me.access?.clientMemberships ?? [];
+  const scoped = clientId ? memberships.filter((m) => m.clientId === clientId) : memberships;
+  return scoped.some(
+    (m) => m.role !== "driver" && m.iamSettings?.appointmentProposalHistoryTabs === true,
   );
 }
 

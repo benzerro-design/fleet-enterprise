@@ -11,6 +11,7 @@ export type ClientMembershipContext = {
     requireDriverAck: boolean;
     driverCanNegotiateAppointment: boolean;
     ticketListBulkSelect: boolean;
+    appointmentProposalHistoryTabs: boolean;
   };
 };
 

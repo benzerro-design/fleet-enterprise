@@ -19,6 +19,8 @@ export type ClientIamSettings = {
   driverCanNegotiateAppointment: boolean;
   /** Manager client: bulk select pe lista de tichete (admin L* are oricum). */
   ticketListBulkSelect: boolean;
+  /** Tab-uri Curente/Istoric propuneri pe PROGRAMĂRI (manager + furnizor pe client). Admin L* are oricum. */
+  appointmentProposalHistoryTabs: boolean;
 };
 
 export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
@@ -27,6 +29,7 @@ export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
   requireDriverAck: true,
   driverCanNegotiateAppointment: false,
   ticketListBulkSelect: false,
+  appointmentProposalHistoryTabs: false,
 };
 
 export function parseClientIamSettings(raw: unknown): ClientIamSettings {
@@ -41,6 +44,7 @@ export function parseClientIamSettings(raw: unknown): ClientIamSettings {
     requireDriverAck: driverCanNegotiateAppointment ? true : o.requireDriverAck !== false,
     driverCanNegotiateAppointment,
     ticketListBulkSelect: o.ticketListBulkSelect === true,
+    appointmentProposalHistoryTabs: o.appointmentProposalHistoryTabs === true,
   };
 }
 
@@ -75,6 +79,12 @@ export function parseClientIamSettingsPatch(body: unknown): Partial<ClientIamSet
       throw new Error('ticketListBulkSelect must be boolean');
     }
     patch.ticketListBulkSelect = o.ticketListBulkSelect;
+  }
+  if (o.appointmentProposalHistoryTabs !== undefined) {
+    if (typeof o.appointmentProposalHistoryTabs !== 'boolean') {
+      throw new Error('appointmentProposalHistoryTabs must be boolean');
+    }
+    patch.appointmentProposalHistoryTabs = o.appointmentProposalHistoryTabs;
   }
   return patch;
 }
