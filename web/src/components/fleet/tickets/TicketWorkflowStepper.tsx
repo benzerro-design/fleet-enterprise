@@ -24,7 +24,9 @@ import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-pr
 import { OperationalFlowFork } from "@/components/fleet/tickets/OperationalFlowFork";
 import { OperationalStoryTimeline } from "@/components/fleet/tickets/OperationalStoryTimeline";
 import {
-  DriverProposalCallout,
+  AppointmentProposalCallout,
+  appointmentProposalSource,
+  counterProposalStatusLabel,
   isDriverCounterProposal,
 } from "@/components/fleet/tickets/DriverProposalCallout";
 import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/WorkOrderQuoteBillingActions";
@@ -765,8 +767,10 @@ export function TicketWorkflowStepper({
                           Șoferul nu poate
                           {appt.driverDeclineNote ? `: ${appt.driverDeclineNote}` : ""}
                         </span>
-                      ) : isDriverCounterProposal(appt) ? (
-                        <span className="font-medium text-amber-300">Șoferul a propus altă oră</span>
+                      ) : appointmentProposalSource(appt) ? (
+                        <span className="font-medium text-amber-300">
+                          {counterProposalStatusLabel(appointmentProposalSource(appt)!)}
+                        </span>
                       ) : appt.status === "pending_supplier" ? (
                         <span className="text-amber-400/90">
                           {appt.scheduledAt
@@ -788,8 +792,9 @@ export function TicketWorkflowStepper({
                         <span className="text-zinc-400">Fără acord șofer (ordin ierarhic)</span>
                       )}
                     </div>
-                    {isDriverCounterProposal(appt) ? (
-                      <DriverProposalCallout
+                    {appointmentProposalSource(appt) ? (
+                      <AppointmentProposalCallout
+                        source={appointmentProposalSource(appt)!}
                         scheduledAt={appt.scheduledAt}
                         note={appt.lastProposalNote}
                       />

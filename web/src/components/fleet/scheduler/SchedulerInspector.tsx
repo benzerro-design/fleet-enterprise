@@ -23,8 +23,8 @@ import { ticketDisplayIdFromTicketId } from "@/lib/scheduler-deep-link";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import {
-  DriverProposalCallout,
-  isDriverCounterProposal,
+  AppointmentProposalCallout,
+  appointmentProposalSource,
 } from "@/components/fleet/tickets/DriverProposalCallout";
 import { supplierDotClass } from "./supplier-colors";
 
@@ -774,8 +774,9 @@ export function SchedulerInspector({
                 : " — aceeași cerere: propune altă oră."}
             </p>
           ) : null}
-          {isDriverCounterProposal(appointment) ? (
-            <DriverProposalCallout
+          {appointmentProposalSource(appointment) ? (
+            <AppointmentProposalCallout
+              source={appointmentProposalSource(appointment)!}
               scheduledAt={appointment.scheduledAt}
               note={appointment.lastProposalNote}
               compact

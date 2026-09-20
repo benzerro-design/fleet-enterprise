@@ -6,10 +6,12 @@ import {
 import type { AccessContext } from '../iam/access-context.types';
 import { MembershipRole } from '@prisma/client';
 
-export type FleetCounterProposedBy = 'manager' | 'driver';
+export type FleetCounterProposedBy = 'manager' | 'driver' | 'supplier' | 'admin';
 
 export function parseFleetCounterProposedBy(raw: unknown): FleetCounterProposedBy | null {
-  return raw === 'manager' || raw === 'driver' ? raw : null;
+  return raw === 'manager' || raw === 'driver' || raw === 'supplier' || raw === 'admin'
+    ? raw
+    : null;
 }
 
 export function proposedByFromAccess(access?: AccessContext): ServiceAppointmentProposedBy {
@@ -21,6 +23,40 @@ export function proposedByFromAccess(access?: AccessContext): ServiceAppointment
     return ServiceAppointmentProposedBy.supplier;
   }
   return ServiceAppointmentProposedBy.client_manager;
+}
+
+/** Cine a propus slotul (contrapropunere / pending_supplier), pentru callout UI. */
+export function fleetCounterFromAccess(
+  access: AccessContext | undefined,
+  opts?: { driverActor?: boolean },
+): FleetCounterProposedBy {
+  if (opts?.driverActor) return 'driver';
+  if (!access) return 'admin';
+  if (access.membershipRole === MembershipRole.tenant_admin) return 'admin';
+  if (access.membershipRole === MembershipRole.supplier_user) return 'supplier';
+  return 'manager';
+}
+
+export function fleetCounterFromProposedBy(
+  role: ServiceAppointmentProposedBy | null | undefined,
+): FleetCounterProposedBy | null {
+  if (role === ServiceAppointmentProposedBy.tenant_admin) return 'admin';
+  if (role === ServiceAppointmentProposedBy.client_manager) return 'manager';
+  if (role === ServiceAppointmentProposedBy.supplier) return 'supplier';
+  return null;
+}
+
+export function fleetCounterActorLabel(by: FleetCounterProposedBy): string {
+  switch (by) {
+    case 'driver':
+      return 'Șoferul';
+    case 'manager':
+      return 'Managerul';
+    case 'supplier':
+      return 'Furnizorul';
+    case 'admin':
+      return 'Adminul L*';
+  }
 }
 
 /** Programare propusă de flotă/client → așteaptă validare furnizor dacă există supplier. */

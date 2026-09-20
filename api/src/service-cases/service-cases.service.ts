@@ -56,9 +56,13 @@ import { nextRoadsideDisplayNumber } from '../roadside/roadside-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import { assertDamageReadyForRepair } from '../work-orders/damage-repair-gates';
 import {
+  fleetCounterActorLabel,
+  fleetCounterFromAccess,
+  fleetCounterFromProposedBy,
   parseFleetCounterProposedBy,
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
+  type FleetCounterProposedBy,
 } from '../appointments/appointment-status.utils';
 import {
   effectiveDriverCanNegotiate,
@@ -140,8 +144,8 @@ export type ServiceAppointmentRecord = {
   driverDeclinedAt: string | null;
   driverDeclineNote: string | null;
   lastProposalNote: string | null;
-  /** Ultima contrapopunere flotă: manager | driver (null = fără / după validare furnizor). */
-  fleetCounterProposedBy: 'manager' | 'driver' | null;
+  /** Ultima propunere slot: manager | driver | supplier | admin (null = fără / după validare). */
+  fleetCounterProposedBy: FleetCounterProposedBy | null;
   /** null = moștenește politica clientului. */
   requireDriverAckOverride: boolean | null;
   /** Politică efectivă (override ?? client). */
@@ -2421,6 +2425,12 @@ export class ServiceCasesService {
         : dto.createdBySupplier
           ? ServiceAppointmentProposedBy.supplier
           : null;
+    const fleetCounterProposedBy =
+      initialStatus === ServiceAppointmentStatus.pending_supplier
+        ? fleetCounterFromProposedBy(proposedByRole) ?? fleetCounterFromAccess(access)
+        : dto.createdBySupplier
+          ? 'supplier'
+          : null;
 
     const appointment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.serviceAppointment.create({
@@ -2436,6 +2446,7 @@ export class ServiceCasesService {
           notes: dto.notes?.trim() || null,
           status: initialStatus,
           proposedByRole,
+          fleetCounterProposedBy,
           requireDriverAckOverride:
             dto.requireDriverAckOverride === true || dto.requireDriverAckOverride === false
               ? dto.requireDriverAckOverride
@@ -2632,6 +2643,7 @@ export class ServiceCasesService {
         data: {
           status: ServiceAppointmentStatus.confirmed,
           managerConfirmedAt: new Date(),
+          fleetCounterProposedBy: null,
         },
       });
 
@@ -2741,7 +2753,8 @@ export class ServiceCasesService {
       (existing.scheduledAt != null && scheduledAt.getTime() === existing.scheduledAt.getTime());
     const preAck =
       negotiate && slotUnchanged ? priorCounter : null;
-    const managerConfirmedAt = preAck === 'manager' ? new Date() : null;
+    const managerConfirmedAt =
+      preAck === 'manager' || preAck === 'admin' ? new Date() : null;
     const driverAcknowledgedAt = preAck === 'driver' ? new Date() : null;
     const nextStatus =
       managerConfirmedAt != null
@@ -3146,15 +3159,20 @@ export class ServiceCasesService {
     const nextStatus = existing.supplierId
       ? ServiceAppointmentStatus.pending_supplier
       : ServiceAppointmentStatus.scheduled;
-    const counterBy = driverActor ? 'driver' : 'manager';
-    const actorLabel = driverActor ? 'Șoferul' : 'Managerul';
+    const counterBy = fleetCounterFromAccess(access, { driverActor });
+    const actorLabel = fleetCounterActorLabel(counterBy);
     const preAckManager =
-      negotiate && nextStatus === ServiceAppointmentStatus.scheduled && !driverActor;
+      negotiate &&
+      nextStatus === ServiceAppointmentStatus.scheduled &&
+      (counterBy === 'manager' || counterBy === 'admin');
     const preAckDriver =
-      negotiate && nextStatus === ServiceAppointmentStatus.scheduled && driverActor;
+      negotiate && nextStatus === ServiceAppointmentStatus.scheduled && counterBy === 'driver';
     const storedStatus = preAckManager
       ? ServiceAppointmentStatus.confirmed
       : nextStatus;
+    const stampCounter =
+      nextStatus === ServiceAppointmentStatus.pending_supplier ||
+      (nextStatus === ServiceAppointmentStatus.scheduled && counterBy === 'supplier');
 
     await this.prisma.$transaction(async (tx) => {
       await tx.serviceAppointment.update({
@@ -3169,10 +3187,7 @@ export class ServiceCasesService {
           managerConfirmedAt: preAckManager ? new Date() : null,
           driverAcknowledgedAt: preAckDriver ? new Date() : null,
           supplierValidatedAt: null,
-          fleetCounterProposedBy:
-            negotiate && nextStatus === ServiceAppointmentStatus.pending_supplier
-              ? counterBy
-              : null,
+          fleetCounterProposedBy: stampCounter ? counterBy : null,
           proposedByRole: nextStatus === ServiceAppointmentStatus.pending_supplier
             ? proposedByFromAccess(access)
             : existing.proposedByRole,

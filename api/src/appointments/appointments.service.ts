@@ -31,6 +31,8 @@ import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import { effectiveDriverCanNegotiate, effectiveRequireDriverAck } from '../iam/client-iam-settings';
 import {
+  fleetCounterFromAccess,
+  fleetCounterFromProposedBy,
   parseFleetCounterProposedBy,
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
@@ -496,6 +498,12 @@ export class AppointmentsService {
         : createdBySupplier
           ? ServiceAppointmentProposedBy.supplier
           : null;
+    const fleetCounterProposedBy =
+      initialStatus === ServiceAppointmentStatus.pending_supplier
+        ? fleetCounterFromProposedBy(proposedByRole) ?? fleetCounterFromAccess(access)
+        : createdBySupplier
+          ? 'supplier'
+          : null;
 
     const row = await this.prisma.$transaction(async (tx) => {
       let serviceCase = dto.serviceCaseId
@@ -561,6 +569,7 @@ export class AppointmentsService {
           notes: dto.notes?.trim() || null,
           status: initialStatus,
           proposedByRole,
+          fleetCounterProposedBy,
           recurrenceRule,
           recurrenceSeriesId: seriesId,
           requireDriverAckOverride:
@@ -585,6 +594,7 @@ export class AppointmentsService {
             notes: dto.notes?.trim() || null,
             status: initialStatus,
             proposedByRole,
+            fleetCounterProposedBy,
             recurrenceRule,
             recurrenceSeriesId: seriesId,
             requireDriverAckOverride:
