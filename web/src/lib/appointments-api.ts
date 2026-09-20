@@ -57,6 +57,7 @@ export type CalendarAppointment = {
   driverDeclinedAt: string | null;
   driverDeclineNote: string | null;
   lastProposalNote: string | null;
+  fleetCounterProposedBy?: "manager" | "driver" | null;
   requireDriverAckOverride?: boolean | null;
   requireDriverAck?: boolean;
   driverCanNegotiateAppointment?: boolean;

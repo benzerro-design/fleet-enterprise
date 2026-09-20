@@ -31,6 +31,7 @@ import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import { effectiveDriverCanNegotiate, effectiveRequireDriverAck } from '../iam/client-iam-settings';
 import {
+  parseFleetCounterProposedBy,
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
 } from './appointment-status.utils';
@@ -128,6 +129,7 @@ export class AppointmentsService {
     driverDeclinedAt?: Date | null;
     driverDeclineNote?: string | null;
     lastProposalNote?: string | null;
+    fleetCounterProposedBy?: string | null;
     requireDriverAckOverride?: boolean | null;
     location: string | null;
     notes: string | null;
@@ -179,6 +181,7 @@ export class AppointmentsService {
       driverDeclinedAt: row.driverDeclinedAt?.toISOString() ?? null,
       driverDeclineNote: row.driverDeclineNote ?? null,
       lastProposalNote: row.lastProposalNote ?? null,
+      fleetCounterProposedBy: parseFleetCounterProposedBy(row.fleetCounterProposedBy),
       requireDriverAckOverride:
         row.requireDriverAckOverride === true || row.requireDriverAckOverride === false
           ? row.requireDriverAckOverride

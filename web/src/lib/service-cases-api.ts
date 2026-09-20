@@ -433,6 +433,8 @@ export type ServiceAppointmentRecord = {
   driverDeclinedAt?: string | null;
   driverDeclineNote?: string | null;
   lastProposalNote?: string | null;
+  /** Ultima contrapopunere: manager | driver. */
+  fleetCounterProposedBy?: "manager" | "driver" | null;
   requireDriverAckOverride?: boolean | null;
   requireDriverAck?: boolean;
   driverCanNegotiateAppointment?: boolean;

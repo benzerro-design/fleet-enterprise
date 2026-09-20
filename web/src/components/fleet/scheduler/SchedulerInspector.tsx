@@ -22,6 +22,10 @@ import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
 import { ticketDisplayIdFromTicketId } from "@/lib/scheduler-deep-link";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import {
+  DriverProposalCallout,
+  isDriverCounterProposal,
+} from "@/components/fleet/tickets/DriverProposalCallout";
 import { supplierDotClass } from "./supplier-colors";
 
 type VehicleOption = { id: string; registrationNumber: string; clientId: string };
@@ -770,7 +774,13 @@ export function SchedulerInspector({
                 : " — aceeași cerere: propune altă oră."}
             </p>
           ) : null}
-          {appointment.lastProposalNote ? (
+          {isDriverCounterProposal(appointment) ? (
+            <DriverProposalCallout
+              scheduledAt={appointment.scheduledAt}
+              note={appointment.lastProposalNote}
+              compact
+            />
+          ) : appointment.lastProposalNote ? (
             <p className="mt-1 rounded border border-zinc-700 bg-zinc-900/50 px-2 py-1 text-[10px] text-zinc-300">
               Ultima notă propunere: {appointment.lastProposalNote}
             </p>

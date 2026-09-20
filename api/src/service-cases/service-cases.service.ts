@@ -140,6 +140,8 @@ export type ServiceAppointmentRecord = {
   driverDeclinedAt: string | null;
   driverDeclineNote: string | null;
   lastProposalNote: string | null;
+  /** Ultima contrapopunere flotă: manager | driver (null = fără / după validare furnizor). */
+  fleetCounterProposedBy: 'manager' | 'driver' | null;
   /** null = moștenește politica clientului. */
   requireDriverAckOverride: boolean | null;
   /** Politică efectivă (override ?? client). */
@@ -3540,6 +3542,7 @@ export class ServiceCasesService {
     driverDeclinedAt?: Date | null;
     driverDeclineNote?: string | null;
     lastProposalNote?: string | null;
+    fleetCounterProposedBy?: string | null;
     requireDriverAckOverride?: boolean | null;
     createdAt: Date;
     updatedAt: Date;
@@ -3579,6 +3582,7 @@ export class ServiceCasesService {
       driverDeclinedAt: row.driverDeclinedAt?.toISOString() ?? null,
       driverDeclineNote: row.driverDeclineNote ?? null,
       lastProposalNote: row.lastProposalNote ?? null,
+      fleetCounterProposedBy: parseFleetCounterProposedBy(row.fleetCounterProposedBy),
       requireDriverAckOverride,
       requireDriverAck: effectiveRequireDriverAck(settings, requireDriverAckOverride),
       driverCanNegotiateAppointment: effectiveDriverCanNegotiate(settings),

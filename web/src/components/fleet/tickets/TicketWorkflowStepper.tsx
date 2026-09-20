@@ -23,6 +23,10 @@ import { schedulerHref } from "@/lib/scheduler-deep-link";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 import { OperationalFlowFork } from "@/components/fleet/tickets/OperationalFlowFork";
 import { OperationalStoryTimeline } from "@/components/fleet/tickets/OperationalStoryTimeline";
+import {
+  DriverProposalCallout,
+  isDriverCounterProposal,
+} from "@/components/fleet/tickets/DriverProposalCallout";
 import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/WorkOrderQuoteBillingActions";
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 import { formatDateRo } from "@/lib/datetime-local";
@@ -761,6 +765,8 @@ export function TicketWorkflowStepper({
                           Șoferul nu poate
                           {appt.driverDeclineNote ? `: ${appt.driverDeclineNote}` : ""}
                         </span>
+                      ) : isDriverCounterProposal(appt) ? (
+                        <span className="font-medium text-amber-300">Șoferul a propus altă oră</span>
                       ) : appt.status === "pending_supplier" ? (
                         <span className="text-amber-400/90">
                           {appt.scheduledAt
@@ -775,16 +781,23 @@ export function TicketWorkflowStepper({
                       {appointmentRequiresDriverAck(appt) ? (
                         appt.driverAcknowledgedAt ? (
                           <span className="text-sky-400/90">Confirmat șofer</span>
-                        ) : appt.status !== "needs_repropose" ? (
+                        ) : isDriverCounterProposal(appt) || appt.status === "needs_repropose" ? null : (
                           <span>Fără confirmare șofer</span>
-                        ) : null
+                        )
                       ) : (
                         <span className="text-zinc-400">Fără acord șofer (ordin ierarhic)</span>
                       )}
-                      {appt.lastProposalNote ? (
-                        <span className="w-full text-zinc-400">Notă propunere: {appt.lastProposalNote}</span>
-                      ) : null}
                     </div>
+                    {isDriverCounterProposal(appt) ? (
+                      <DriverProposalCallout
+                        scheduledAt={appt.scheduledAt}
+                        note={appt.lastProposalNote}
+                      />
+                    ) : appt.lastProposalNote ? (
+                      <p className="mt-2 w-full text-[11px] text-zinc-400">
+                        Notă propunere: {appt.lastProposalNote}
+                      </p>
+                    ) : null}
                     {!closed && appt.status !== "cancelled" ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {canSupplierValidate &&
