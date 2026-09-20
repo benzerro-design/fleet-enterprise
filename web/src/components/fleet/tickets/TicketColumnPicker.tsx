@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  clearColumnWidths,
+  defaultTicketGridLayout,
   TICKET_GRID_COLUMNS,
   type TicketGridColumnKey,
   type TicketGridLayout,
@@ -15,6 +17,7 @@ type Props = {
 
 export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
   const hidden = new Set(layout.hidden);
+  const hasCustomWidths = Object.keys(layout.widths ?? {}).length > 0;
 
   function toggle(key: TicketGridColumnKey) {
     const def = TICKET_GRID_COLUMNS.find((c) => c.key === key);
@@ -40,9 +43,13 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
   }
 
   function reset() {
-    const order = TICKET_GRID_COLUMNS.map((c) => c.key);
-    const hidden = TICKET_GRID_COLUMNS.filter((c) => !c.defaultVisible).map((c) => c.key);
-    const next = { order, hidden };
+    const next = defaultTicketGridLayout();
+    onChange(next);
+    writeTicketGridLayout(next);
+  }
+
+  function resetWidths() {
+    const next = clearColumnWidths(layout);
     onChange(next);
     writeTicketGridLayout(next);
   }
@@ -55,7 +62,9 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
           Închide
         </button>
       </div>
-      <p className="mb-3 text-xs text-zinc-500">Mutare, ascundere sau reactivare coloane. Layout salvat local.</p>
+      <p className="mb-3 text-xs text-zinc-500">
+        Mutare, ascundere, lățimi (trage muchia header-ului). Layout salvat local.
+      </p>
       <ul className="max-h-64 space-y-1 overflow-y-auto">
         {layout.order.map((key) => {
           const def = TICKET_GRID_COLUMNS.find((c) => c.key === key);
@@ -88,10 +97,15 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
           );
         })}
       </ul>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={reset} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800">
           Reset layout
         </button>
+        {hasCustomWidths ? (
+          <button type="button" onClick={resetWidths} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800">
+            Resetează lățimi
+          </button>
+        ) : null}
       </div>
     </div>
   );

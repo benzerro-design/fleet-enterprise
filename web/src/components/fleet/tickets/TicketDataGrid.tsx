@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FleetDataTable,
   fleetTableClass,
@@ -26,9 +26,13 @@ import { TicketRowActions } from "@/components/fleet/tickets/TicketRowActions";
 import { FleetGlyphTooltip } from "@/components/fleet/FleetGlyphTooltip";
 import {
   readTicketGridLayout,
+  resolveColumnWidthPx,
+  ticketColumnDef,
   type TicketGridColumnKey,
   type TicketGridLayout,
   visibleTicketColumns,
+  withColumnWidth,
+  writeTicketGridLayout,
 } from "@/lib/ticket-grid-columns";
 import {
   ticketPriorityLabel,
@@ -72,9 +76,56 @@ export function TicketDataGrid({
   const [showColumns, setShowColumns] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [resizingKey, setResizingKey] = useState<TicketGridColumnKey | null>(null);
+  const layoutRef = useRef(layout);
   const columns = useMemo(() => visibleTicketColumns(layout), [layout]);
   const hasFilters = Object.keys(filterParams).length > 0;
   const allSelected = enableBulk && items.length > 0 && items.every((r) => selected.has(r.id));
+
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
+
+  const persistLayout = useCallback((next: TicketGridLayout) => {
+    setLayout(next);
+    writeTicketGridLayout(next);
+  }, []);
+
+  const startResize = useCallback(
+    (key: TicketGridColumnKey, clientX: number) => {
+      const def = ticketColumnDef(key);
+      if (!def) return;
+      const startW = resolveColumnWidthPx(layoutRef.current, key) ?? def.defaultWidth;
+      setResizingKey(key);
+
+      function onMove(ev: MouseEvent) {
+        const next = withColumnWidth(layoutRef.current, key, startW + (ev.clientX - clientX));
+        layoutRef.current = next;
+        setLayout(next);
+      }
+
+      function onUp() {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.removeProperty("cursor");
+        document.body.style.removeProperty("user-select");
+        setResizingKey(null);
+        writeTicketGridLayout(layoutRef.current);
+      }
+
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [],
+  );
+
+  function resetColumnWidth(key: TicketGridColumnKey) {
+    const widths = { ...layoutRef.current.widths };
+    delete widths[key];
+    persistLayout({ ...layoutRef.current, widths });
+  }
 
   function toggleAll() {
     if (allSelected) {
@@ -158,7 +209,7 @@ export function TicketDataGrid({
         return (
           <Link
             href={`/fleet/tickets/${row.id}`}
-            className="block max-w-[18rem] truncate font-medium text-zinc-100 hover:text-white xl:max-w-[24rem]"
+            className="block truncate font-medium text-zinc-100 hover:text-white"
             title={row.subject}
           >
             {row.subject}
@@ -177,7 +228,7 @@ export function TicketDataGrid({
         );
       case "driver":
         return row.driverFullName ? (
-          <span className="inline-flex max-w-[7rem] items-center gap-1.5">
+          <span className="inline-flex max-w-full items-center gap-1.5">
             <FleetAvatar name={row.driverFullName} size={18} />
             <span className="truncate">{row.driverFullName}</span>
           </span>
@@ -192,7 +243,7 @@ export function TicketDataGrid({
         );
       case "owner":
         return row.ownerEmail ? (
-          <span className="inline-flex max-w-[6.5rem] items-center gap-1.5 text-zinc-400">
+          <span className="inline-flex max-w-full items-center gap-1.5 text-zinc-400">
             <FleetAvatar name={row.ownerEmail.split("@")[0]} size={18} />
             <span className="truncate text-xs">{row.ownerEmail.split("@")[0]}</span>
           </span>
@@ -296,32 +347,22 @@ export function TicketDataGrid({
       ) : null}
 
       {showColumns ? (
-        <TicketColumnPicker layout={layout} onChange={setLayout} onClose={() => setShowColumns(false)} />
+        <TicketColumnPicker layout={layout} onChange={persistLayout} onClose={() => setShowColumns(false)} />
       ) : null}
       {showLegend ? <TicketGlyphLegendPanel onClose={() => setShowLegend(false)} /> : null}
 
       <FleetDataTable>
-        <table className={`${fleetTableClass} w-full table-fixed text-xs`}>
+        <table className={`${fleetTableClass} w-full table-fixed text-xs ${resizingKey ? "select-none" : ""}`}>
+          <colgroup>
+            {columns.map((col) => {
+              const px = resolveColumnWidthPx(layout, col.key);
+              return <col key={col.key} style={px != null ? { width: px } : undefined} />;
+            })}
+          </colgroup>
           <thead className={fleetTheadClass}>
             <tr>
               {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={`${fleetThClass} whitespace-nowrap ${
-                    col.key === "type" || col.key === "priority" || col.key === "routing"
-                      ? "w-10"
-                      : col.key === "subject"
-                        ? "w-[28%]"
-                        : col.key === "id"
-                          ? "w-[6.5rem]"
-                          : ""
-                  }`}
-                  style={
-                    col.key === "subject" || col.key === "type"
-                      ? undefined
-                      : { width: col.minWidth, minWidth: col.minWidth }
-                  }
-                >
+                <th key={col.key} className={`${fleetThClass} relative whitespace-nowrap`}>
                   {col.key === "id" && enableBulk ? (
                     <span className="inline-flex items-center gap-1.5">
                       <input
@@ -336,6 +377,25 @@ export function TicketDataGrid({
                   ) : (
                     col.label
                   )}
+                  <span
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label={`Redimensionează coloana ${col.label || col.key}`}
+                    title="Trage pentru lățime · dublu-click = reset"
+                    className={`absolute top-0 right-0 z-30 h-full w-1.5 cursor-col-resize hover:bg-emerald-500/40 ${
+                      resizingKey === col.key ? "bg-emerald-500/50" : ""
+                    }`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      startResize(col.key, e.clientX);
+                    }}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      resetColumnWidth(col.key);
+                    }}
+                  />
                 </th>
               ))}
             </tr>
@@ -364,4 +424,3 @@ export function TicketDataGrid({
     </div>
   );
 }
-
