@@ -2760,6 +2760,14 @@ export class ServiceCasesService {
       managerConfirmedAt != null
         ? ServiceAppointmentStatus.confirmed
         : ServiceAppointmentStatus.scheduled;
+    /** Altă oră de la furnizor → callout „Propunere furnizor”; accept aceeași oră → clear. */
+    const nextCounter: FleetCounterProposedBy | null = !slotUnchanged ? 'supplier' : null;
+    const noteFromDto = dto.notes !== undefined ? dto.notes?.trim() || null : undefined;
+    const nextLastProposalNote = !slotUnchanged
+      ? noteFromDto !== undefined
+        ? noteFromDto
+        : existing.lastProposalNote
+      : null;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.serviceAppointment.update({
@@ -2769,12 +2777,13 @@ export class ServiceCasesService {
           supplierValidatedAt: new Date(),
           scheduledAt,
           durationMin,
-          notes: dto.notes !== undefined ? dto.notes?.trim() || null : undefined,
+          notes: noteFromDto !== undefined ? noteFromDto : undefined,
+          lastProposalNote: nextLastProposalNote,
           managerConfirmedAt,
           driverAcknowledgedAt,
           driverDeclinedAt: null,
           driverDeclineNote: null,
-          fleetCounterProposedBy: null,
+          fleetCounterProposedBy: nextCounter,
         },
       });
 
@@ -2784,8 +2793,8 @@ export class ServiceCasesService {
       });
 
       if (existing.serviceCase.sourceTicketId) {
-        const body = dto.scheduledAt
-          ? `Furnizorul a acceptat cu altă dată: ${formatRoDateTime(scheduledAt)}.`
+        const body = !slotUnchanged
+          ? `Furnizorul a propus altă dată/oră: ${formatRoDateTime(scheduledAt)}.`
           : `Furnizorul a validat programarea: ${formatRoDateTime(scheduledAt)}.`;
         await tx.crmTicketEvent.create({
           data: {
@@ -2793,7 +2802,12 @@ export class ServiceCasesService {
             ticketId: existing.serviceCase.sourceTicketId,
             kind: CrmTicketEventKind.workflow_advance,
             body,
-            payload: { appointmentId, serviceCaseId: existing.serviceCaseId, supplierValidated: true },
+            payload: {
+              appointmentId,
+              serviceCaseId: existing.serviceCaseId,
+              supplierValidated: true,
+              slotChanged: !slotUnchanged,
+            },
             actorUserId: actorUserId ?? null,
           },
         });

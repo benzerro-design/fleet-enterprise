@@ -11,6 +11,9 @@ type Props = {
   field: "status" | "priority";
 };
 
+const selectClass =
+  "min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-[10px] text-zinc-200";
+
 export function TicketInlinePatchCell({ ticket, field }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -31,7 +34,7 @@ export function TicketInlinePatchCell({ ticket, field }: Props) {
 
   if (field === "status") {
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex w-full min-w-0 items-center gap-1">
         <FleetGlyphTooltip label={ticketStatusLabel(ticket.status)}>
           <TicketStatusGlyph status={ticket.status} />
         </FleetGlyphTooltip>
@@ -39,7 +42,7 @@ export function TicketInlinePatchCell({ ticket, field }: Props) {
           value={ticket.status}
           disabled={pending}
           onChange={(e) => void patch(e.target.value)}
-          className="max-w-[110px] rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-[10px] text-zinc-200"
+          className={selectClass}
           onClick={(e) => e.stopPropagation()}
         >
           <option value="open">Deschis</option>
@@ -52,7 +55,7 @@ export function TicketInlinePatchCell({ ticket, field }: Props) {
   }
 
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex w-full min-w-0 items-center gap-1">
       <FleetGlyphTooltip label={ticketPriorityLabel(ticket.priority)}>
         <TicketPriorityGlyph priority={ticket.priority} />
       </FleetGlyphTooltip>
@@ -60,7 +63,7 @@ export function TicketInlinePatchCell({ ticket, field }: Props) {
         value={ticket.priority}
         disabled={pending}
         onChange={(e) => void patch(e.target.value)}
-        className="max-w-[90px] rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-[10px] text-zinc-200"
+        className={selectClass}
         onClick={(e) => e.stopPropagation()}
       >
         <option value="low">Scăzută</option>

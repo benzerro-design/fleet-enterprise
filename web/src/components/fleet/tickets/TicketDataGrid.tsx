@@ -228,7 +228,7 @@ export function TicketDataGrid({
         );
       case "driver":
         return row.driverFullName ? (
-          <span className="inline-flex max-w-full items-center gap-1.5">
+          <span className="inline-flex max-w-full items-center gap-1.5" title={row.driverFullName}>
             <FleetAvatar name={row.driverFullName} size={18} />
             <span className="truncate">{row.driverFullName}</span>
           </span>
@@ -243,7 +243,10 @@ export function TicketDataGrid({
         );
       case "owner":
         return row.ownerEmail ? (
-          <span className="inline-flex max-w-full items-center gap-1.5 text-zinc-400">
+          <span
+            className="inline-flex max-w-full items-center gap-1.5 text-zinc-400"
+            title={row.ownerEmail}
+          >
             <FleetAvatar name={row.ownerEmail.split("@")[0]} size={18} />
             <span className="truncate text-xs">{row.ownerEmail.split("@")[0]}</span>
           </span>
@@ -409,7 +412,11 @@ export function TicketDataGrid({
                     <td
                       key={col.key}
                       className={`${fleetTdClass} ${
-                        col.key === "subject" ? "overflow-hidden" : "truncate"
+                        col.key === "status" || col.key === "priority" || col.key === "actions"
+                          ? "overflow-visible"
+                          : col.key === "subject"
+                            ? "overflow-hidden"
+                            : "truncate"
                       }`}
                     >
                       {renderCell(col.key, row)}
