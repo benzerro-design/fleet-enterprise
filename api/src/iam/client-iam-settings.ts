@@ -9,14 +9,21 @@ export type ClientIamSettings = {
   allowClientOcr: boolean;
   /** L1 vede / editează tab Date achiziție. */
   allowClientAcquisition: boolean;
-  /** Default dual-confirm: WO doar după manager + șofer. false = Confirmă manager deschide WO. */
+  /**
+   * Când driverCanNegotiateAppointment e false:
+   * true = A (după manager, șoferul Confirmă primire);
+   * false = B (șoferul nu e în validare, WO după manager).
+   */
   requireDriverAck: boolean;
+  /** Șoferul acceptă / propune data în paralel cu managerul. */
+  driverCanNegotiateAppointment: boolean;
 };
 
 export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
   allowClientOcr: false,
   allowClientAcquisition: false,
   requireDriverAck: true,
+  driverCanNegotiateAppointment: false,
 };
 
 export function parseClientIamSettings(raw: unknown): ClientIamSettings {
@@ -24,10 +31,12 @@ export function parseClientIamSettings(raw: unknown): ClientIamSettings {
     return { ...DEFAULT_CLIENT_IAM_SETTINGS };
   }
   const o = raw as Record<string, unknown>;
+  const driverCanNegotiateAppointment = o.driverCanNegotiateAppointment === true;
   return {
     allowClientOcr: o.allowClientOcr === true,
     allowClientAcquisition: o.allowClientAcquisition === true,
-    requireDriverAck: o.requireDriverAck !== false,
+    requireDriverAck: driverCanNegotiateAppointment ? true : o.requireDriverAck !== false,
+    driverCanNegotiateAppointment,
   };
 }
 
@@ -50,6 +59,12 @@ export function parseClientIamSettingsPatch(body: unknown): Partial<ClientIamSet
   if (o.requireDriverAck !== undefined) {
     if (typeof o.requireDriverAck !== 'boolean') throw new Error('requireDriverAck must be boolean');
     patch.requireDriverAck = o.requireDriverAck;
+  }
+  if (o.driverCanNegotiateAppointment !== undefined) {
+    if (typeof o.driverCanNegotiateAppointment !== 'boolean') {
+      throw new Error('driverCanNegotiateAppointment must be boolean');
+    }
+    patch.driverCanNegotiateAppointment = o.driverCanNegotiateAppointment;
   }
   return patch;
 }
@@ -98,5 +113,11 @@ export function effectiveRequireDriverAck(
   override: boolean | null | undefined,
 ): boolean {
   if (override === true || override === false) return override;
-  return parseClientIamSettings(clientSettings).requireDriverAck;
+  const settings = parseClientIamSettings(clientSettings);
+  if (settings.driverCanNegotiateAppointment) return true;
+  return settings.requireDriverAck;
+}
+
+export function effectiveDriverCanNegotiate(clientSettings: unknown): boolean {
+  return parseClientIamSettings(clientSettings).driverCanNegotiateAppointment;
 }

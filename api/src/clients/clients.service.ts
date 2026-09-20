@@ -691,10 +691,10 @@ export class ClientsService {
       throw new BadRequestException(e instanceof Error ? e.message : 'Invalid body');
     }
 
-    const next: ClientIamSettings = {
+    const next = parseClientIamSettings({
       ...parseClientIamSettings(row.iamSettings),
       ...patch,
-    };
+    });
 
     await this.prisma.client.update({
       where: { id: row.id },

@@ -45,6 +45,7 @@ import {
   canAckAppointmentAsDriver,
   canConfirmAppointment,
   canReadTicket,
+  isClientDriverForClient,
   isTenantWideAccess,
 } from '../iam/client-access';
 import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser, allowedSupplierIds } from '../iam/partner-access';
@@ -54,10 +55,12 @@ import { nextRoadsideDisplayNumber } from '../roadside/roadside-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import { assertDamageReadyForRepair } from '../work-orders/damage-repair-gates';
 import {
+  parseFleetCounterProposedBy,
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
 } from '../appointments/appointment-status.utils';
 import {
+  effectiveDriverCanNegotiate,
   effectiveRequireDriverAck,
   parseClientIamSettings,
 } from '../iam/client-iam-settings';
@@ -140,6 +143,8 @@ export type ServiceAppointmentRecord = {
   requireDriverAckOverride: boolean | null;
   /** Politică efectivă (override ?? client). */
   requireDriverAck: boolean;
+  /** Șoferul poate accepta / propune data în paralel. */
+  driverCanNegotiateAppointment: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -345,6 +350,8 @@ export type ServiceCaseRecord = {
   updatedAt: string;
   /** Default client (IAM-008) — folosit la programare nouă. */
   clientRequireDriverAck: boolean;
+  /** Șoferul acceptă / propune data în paralel cu managerul. */
+  clientDriverCanNegotiateAppointment: boolean;
   workOrders: WorkOrderRecord[];
   appointments: ServiceAppointmentRecord[];
 };
@@ -2683,7 +2690,7 @@ export class ServiceCasesService {
 
     const existing = await this.prisma.serviceAppointment.findFirst({
       where: { id: appointmentId, tenantId: tenant.id },
-      include: { serviceCase: true },
+      include: { serviceCase: { include: { client: { select: { iamSettings: true } } } } },
     });
     if (!existing) throw new NotFoundException('Appointment not found');
     const canValidate =
@@ -2720,19 +2727,34 @@ export class ServiceCasesService {
       durationMin = dto.durationMin;
     }
 
+    const negotiate = effectiveDriverCanNegotiate(existing.serviceCase.client?.iamSettings);
+    const priorCounter = parseFleetCounterProposedBy(existing.fleetCounterProposedBy);
+    const slotUnchanged =
+      !dto.scheduledAt ||
+      (existing.scheduledAt != null && scheduledAt.getTime() === existing.scheduledAt.getTime());
+    const preAck =
+      negotiate && slotUnchanged ? priorCounter : null;
+    const managerConfirmedAt = preAck === 'manager' ? new Date() : null;
+    const driverAcknowledgedAt = preAck === 'driver' ? new Date() : null;
+    const nextStatus =
+      managerConfirmedAt != null
+        ? ServiceAppointmentStatus.confirmed
+        : ServiceAppointmentStatus.scheduled;
+
     await this.prisma.$transaction(async (tx) => {
       await tx.serviceAppointment.update({
         where: { id: appointmentId },
         data: {
-          status: ServiceAppointmentStatus.scheduled,
+          status: nextStatus,
           supplierValidatedAt: new Date(),
           scheduledAt,
           durationMin,
           notes: dto.notes !== undefined ? dto.notes?.trim() || null : undefined,
-          managerConfirmedAt: null,
-          driverAcknowledgedAt: null,
+          managerConfirmedAt,
+          driverAcknowledgedAt,
           driverDeclinedAt: null,
           driverDeclineNote: null,
+          fleetCounterProposedBy: null,
         },
       });
 
@@ -2890,6 +2912,20 @@ export class ServiceCasesService {
     ) {
       throw new BadRequestException('Appointment was declined — awaiting manager reproposal');
     }
+    if (existing.status === ServiceAppointmentStatus.pending_supplier) {
+      throw new BadRequestException(
+        'Programarea trebuie validată de furnizor înainte de confirmare.',
+      );
+    }
+    if (existing.driverAcknowledgedAt) {
+      throw new BadRequestException('Appointment already acknowledged by driver');
+    }
+    const negotiate = effectiveDriverCanNegotiate(existing.serviceCase.client?.iamSettings);
+    if (!negotiate && !existing.managerConfirmedAt) {
+      throw new BadRequestException(
+        'Așteaptă Confirmă manager înainte de Confirmă primire (șofer).',
+      );
+    }
     const ackSlot = existing.scheduledAt;
     if (!ackSlot) {
       throw new BadRequestException('Programarea nu are dată — furnizorul trebuie să propună slotul.');
@@ -2952,7 +2988,7 @@ export class ServiceCasesService {
 
     const existing = await this.prisma.serviceAppointment.findFirst({
       where: { id: appointmentId, tenantId: tenant.id },
-      include: { serviceCase: true },
+      include: { serviceCase: { include: { client: { select: { iamSettings: true } } } } },
     });
     if (!existing) throw new NotFoundException('Appointment not found');
     if (access && !canAckAppointmentAsDriver(access, existing.serviceCase.clientId)) {
@@ -2964,7 +3000,8 @@ export class ServiceCasesService {
       throw new BadRequestException('Decline note is required (min 3 characters)');
     }
 
-    if (!existing.managerConfirmedAt) {
+    const negotiate = effectiveDriverCanNegotiate(existing.serviceCase.client?.iamSettings);
+    if (!negotiate && !existing.managerConfirmedAt) {
       throw new BadRequestException('Appointment is not manager-confirmed yet');
     }
     if (existing.driverAcknowledgedAt) {
@@ -2975,7 +3012,7 @@ export class ServiceCasesService {
     }
     const declineAllowed =
       existing.status === ServiceAppointmentStatus.confirmed ||
-      (existing.status === ServiceAppointmentStatus.scheduled && !!existing.managerConfirmedAt);
+      existing.status === ServiceAppointmentStatus.scheduled;
     if (!declineAllowed) {
       throw new BadRequestException('Appointment cannot be declined in current status');
     }
@@ -3039,11 +3076,29 @@ export class ServiceCasesService {
 
     const existing = await this.prisma.serviceAppointment.findFirst({
       where: { id: appointmentId, tenantId: tenant.id },
-      include: { serviceCase: true },
+      include: { serviceCase: { include: { client: { select: { iamSettings: true } } } } },
     });
     if (!existing) throw new NotFoundException('Appointment not found');
-    if (access) assertServiceCaseWrite(access, existing.serviceCase.clientId);
 
+    const negotiate = effectiveDriverCanNegotiate(existing.serviceCase.client?.iamSettings);
+    const driverActor = access ? isClientDriverForClient(access, existing.serviceCase.clientId) : false;
+    if (access) {
+      if (driverActor) {
+        if (!negotiate) {
+          throw new ForbiddenException('Șoferul nu poate propune altă dată pentru acest client.');
+        }
+      } else {
+        assertServiceCaseWrite(access, existing.serviceCase.clientId);
+      }
+    }
+
+    const requireDriverAck = effectiveRequireDriverAck(
+      existing.serviceCase.client?.iamSettings,
+      existing.requireDriverAckOverride,
+    );
+    const fullyValidated =
+      !!existing.managerConfirmedAt &&
+      (!requireDriverAck || !!existing.driverAcknowledgedAt);
     const canReproposeAfterDriverDecline =
       existing.status === ServiceAppointmentStatus.needs_repropose ||
       !!existing.driverDeclinedAt;
@@ -3052,7 +3107,17 @@ export class ServiceCasesService {
       !!existing.scheduledAt &&
       !existing.managerConfirmedAt &&
       !existing.driverAcknowledgedAt;
-    if (!canReproposeAfterDriverDecline && !canCounterProposeBeforeConfirm) {
+    const canCounterProposeParallel =
+      negotiate &&
+      (existing.status === ServiceAppointmentStatus.scheduled ||
+        existing.status === ServiceAppointmentStatus.confirmed) &&
+      !!existing.scheduledAt &&
+      !fullyValidated;
+    if (
+      !canReproposeAfterDriverDecline &&
+      !canCounterProposeBeforeConfirm &&
+      !canCounterProposeParallel
+    ) {
       throw new BadRequestException('Appointment is not awaiting reproposal');
     }
 
@@ -3074,6 +3139,15 @@ export class ServiceCasesService {
     const nextStatus = existing.supplierId
       ? ServiceAppointmentStatus.pending_supplier
       : ServiceAppointmentStatus.scheduled;
+    const counterBy = driverActor ? 'driver' : 'manager';
+    const actorLabel = driverActor ? 'Șoferul' : 'Managerul';
+    const preAckManager =
+      negotiate && nextStatus === ServiceAppointmentStatus.scheduled && !driverActor;
+    const preAckDriver =
+      negotiate && nextStatus === ServiceAppointmentStatus.scheduled && driverActor;
+    const storedStatus = preAckManager
+      ? ServiceAppointmentStatus.confirmed
+      : nextStatus;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.serviceAppointment.update({
@@ -3081,13 +3155,17 @@ export class ServiceCasesService {
         data: {
           scheduledAt,
           durationMin,
-          status: nextStatus,
+          status: storedStatus,
           lastProposalNote: proposalNote,
           driverDeclinedAt: null,
           driverDeclineNote: null,
-          managerConfirmedAt: null,
-          driverAcknowledgedAt: null,
+          managerConfirmedAt: preAckManager ? new Date() : null,
+          driverAcknowledgedAt: preAckDriver ? new Date() : null,
           supplierValidatedAt: null,
+          fleetCounterProposedBy:
+            negotiate && nextStatus === ServiceAppointmentStatus.pending_supplier
+              ? counterBy
+              : null,
           proposedByRole: nextStatus === ServiceAppointmentStatus.pending_supplier
             ? proposedByFromAccess(access)
             : existing.proposedByRole,
@@ -3101,8 +3179,8 @@ export class ServiceCasesService {
 
       if (existing.serviceCase.sourceTicketId) {
         const body = proposalNote
-          ? `Managerul a repropus programarea: ${scheduledAt.toLocaleString('ro-RO')}. ${proposalNote}`
-          : `Managerul a repropus programarea: ${scheduledAt.toLocaleString('ro-RO')}.`;
+          ? `${actorLabel} a repropus programarea: ${scheduledAt.toLocaleString('ro-RO')}. ${proposalNote}`
+          : `${actorLabel} a repropus programarea: ${scheduledAt.toLocaleString('ro-RO')}.`;
         await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,
@@ -3116,7 +3194,7 @@ export class ServiceCasesService {
               note: proposalNote,
               priorDeclineNote,
               scheduledAt: scheduledAt.toISOString(),
-              status: nextStatus,
+              status: storedStatus,
             },
             actorUserId: actorUserId ?? null,
           },
@@ -3498,6 +3576,7 @@ export class ServiceCasesService {
       lastProposalNote: row.lastProposalNote ?? null,
       requireDriverAckOverride,
       requireDriverAck: effectiveRequireDriverAck(settings, requireDriverAckOverride),
+      driverCanNegotiateAppointment: effectiveDriverCanNegotiate(settings),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -3877,7 +3956,9 @@ export class ServiceCasesService {
       }>;
     },
   ): ServiceCaseRecord {
-    const clientRequireDriverAck = parseClientIamSettings(row.client?.iamSettings).requireDriverAck;
+    const iam = parseClientIamSettings(row.client?.iamSettings);
+    const clientRequireDriverAck = iam.requireDriverAck;
+    const clientDriverCanNegotiateAppointment = iam.driverCanNegotiateAppointment;
     return {
       id: row.id,
       clientId: row.clientId,
@@ -3974,6 +4055,7 @@ export class ServiceCasesService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       clientRequireDriverAck,
+      clientDriverCanNegotiateAppointment,
       workOrders: (row.workOrders ?? []).map((wo) => {
         const quotes = wo.quotes ?? [];
         const approved = quotes.find((q) => q.status === WorkOrderQuoteStatus.approved);

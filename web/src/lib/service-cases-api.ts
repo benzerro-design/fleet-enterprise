@@ -435,6 +435,7 @@ export type ServiceAppointmentRecord = {
   lastProposalNote?: string | null;
   requireDriverAckOverride?: boolean | null;
   requireDriverAck?: boolean;
+  driverCanNegotiateAppointment?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -493,6 +494,7 @@ export type ServiceCaseRecord = {
   createdAt: string;
   updatedAt: string;
   clientRequireDriverAck?: boolean;
+  clientDriverCanNegotiateAppointment?: boolean;
   workOrders: WorkOrderRecord[];
   appointments: ServiceAppointmentRecord[];
 };

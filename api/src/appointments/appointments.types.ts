@@ -27,6 +27,7 @@ export type CalendarAppointmentRecord = {
   lastProposalNote: string | null;
   requireDriverAckOverride: boolean | null;
   requireDriverAck: boolean;
+  driverCanNegotiateAppointment: boolean;
   location: string | null;
   notes: string | null;
   vehicleId: string;

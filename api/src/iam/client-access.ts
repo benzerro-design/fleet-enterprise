@@ -291,18 +291,23 @@ export function assertApproveServiceQuote(ctx: AccessContext, clientId: string):
   assertClientAccess(ctx, clientId);
 }
 
-/** Confirmare programare — manager sau șofer scoped. */
+/** Confirmare programare ca manager — nu șofer (șoferul folosește ack / negociere). */
 export function canConfirmAppointment(ctx: AccessContext, clientId: string): boolean {
   if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
   const m = membershipForClient(ctx, clientId);
   if (!m) return false;
-  if (m.role === ClientRole.client_admin || m.role === ClientRole.client_dispatcher) return true;
-  if (m.role === ClientRole.driver) return true;
-  return false;
+  return m.role === ClientRole.client_admin || m.role === ClientRole.client_dispatcher;
 }
 
 export function canAckAppointmentAsDriver(ctx: AccessContext, clientId: string): boolean {
   if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
+  const m = membershipForClient(ctx, clientId);
+  return !!m && m.role === ClientRole.driver;
+}
+
+/** Șofer L0 pe acest client — nu tenant_admin (adminul semnează ca manager). */
+export function isClientDriverForClient(ctx: AccessContext, clientId: string): boolean {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) return false;
   const m = membershipForClient(ctx, clientId);
   return !!m && m.role === ClientRole.driver;
 }

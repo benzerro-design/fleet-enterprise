@@ -9,6 +9,7 @@ export type ClientMembershipContext = {
     allowClientOcr: boolean;
     allowClientAcquisition: boolean;
     requireDriverAck: boolean;
+    driverCanNegotiateAppointment: boolean;
   };
 };
 

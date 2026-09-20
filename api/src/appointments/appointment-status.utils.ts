@@ -6,6 +6,12 @@ import {
 import type { AccessContext } from '../iam/access-context.types';
 import { MembershipRole } from '@prisma/client';
 
+export type FleetCounterProposedBy = 'manager' | 'driver';
+
+export function parseFleetCounterProposedBy(raw: unknown): FleetCounterProposedBy | null {
+  return raw === 'manager' || raw === 'driver' ? raw : null;
+}
+
 export function proposedByFromAccess(access?: AccessContext): ServiceAppointmentProposedBy {
   if (!access) return ServiceAppointmentProposedBy.tenant_admin;
   if (access.membershipRole === MembershipRole.tenant_admin) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AppointmentPolicyFields } from "@/components/fleet/setup/AppointmentPolicyFields";
 import { clientsBrowserBase } from "@/lib/clients-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import {
@@ -32,6 +33,7 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
         allowClientOcr: data.allowClientOcr === true,
         allowClientAcquisition: data.allowClientAcquisition === true,
         requireDriverAck: data.requireDriverAck !== false,
+        driverCanNegotiateAppointment: data.driverCanNegotiateAppointment === true,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Încărcare eșuată");
@@ -62,6 +64,7 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
         allowClientOcr: next.allowClientOcr === true,
         allowClientAcquisition: next.allowClientAcquisition === true,
         requireDriverAck: next.requireDriverAck !== false,
+        driverCanNegotiateAppointment: next.driverCanNegotiateAppointment === true,
       });
       setSaved(true);
     } catch (e) {
@@ -107,22 +110,16 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
           </span>
         </span>
       </label>
-      <label className="flex items-start gap-3 text-sm text-zinc-200">
-        <input
-          type="checkbox"
-          checked={draft.requireDriverAck}
+      <div className="border-t border-zinc-800 pt-4">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
+          Programare service
+        </p>
+        <AppointmentPolicyFields
+          draft={draft}
+          onChange={setDraft}
           disabled={!canWrite || pending}
-          onChange={(e) => setDraft((d) => ({ ...d, requireDriverAck: e.target.checked }))}
-          className="mt-0.5"
         />
-        <span>
-          <span className="font-medium">Necesar acord șofer (programare)</span>
-          <span className="block text-xs text-zinc-500">
-            Da = WO după manager + șofer. Nu = Confirmă manager deschide WO (ordin ierarhic). L1
-            poate suprascrie pe o programare.
-          </span>
-        </span>
-      </label>
+      </div>
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
       {saved ? <p className="text-sm text-emerald-300">Salvat.</p> : null}
       {canWrite ? (

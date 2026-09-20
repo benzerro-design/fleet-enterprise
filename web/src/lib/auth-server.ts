@@ -6,6 +6,7 @@ export type ClientIamSettingsMe = {
   allowClientOcr: boolean;
   allowClientAcquisition: boolean;
   requireDriverAck: boolean;
+  driverCanNegotiateAppointment: boolean;
 };
 
 export type ClientMembershipMe = {
@@ -120,15 +121,13 @@ export function canApproveQuotes(auth: AuthMeResult): boolean {
   return roles.some((r) => r === "client_admin");
 }
 
-/** Confirmare programare — manager, dispecer sau șofer scoped. */
+/** Confirmare programare ca manager — nu șofer. */
 export function canConfirmAppointment(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
   if (auth.me.role === "tenant_admin") return true;
   if (auth.me.role === "client_user") {
     const roles = auth.me.access?.clientMemberships.map((m) => m.role) ?? [];
-    return roles.some(
-      (r) => r === "client_admin" || r === "client_dispatcher" || r === "driver",
-    );
+    return roles.some((r) => r === "client_admin" || r === "client_dispatcher");
   }
   return false;
 }

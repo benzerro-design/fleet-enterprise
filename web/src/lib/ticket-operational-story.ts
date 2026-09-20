@@ -114,10 +114,15 @@ export function operationalHeadline(
     return `Solicitare fără dată${appt.supplierLegalName ? ` la ${appt.supplierLegalName}` : ""} — așteaptă ca furnizorul să propună slotul.`;
   }
   if (appt?.managerConfirmedAt && !appt.driverAcknowledgedAt && appt.requireDriverAck !== false) {
-    return "Managerul a confirmat — așteaptă Confirmă primire (șofer) ca să se deschidă comanda (WO).";
+    return "Managerul a confirmat — așteaptă confirmarea șoferului ca să se deschidă comanda (WO).";
+  }
+  if (appt && !appt.managerConfirmedAt && appt.driverAcknowledgedAt) {
+    return "Șoferul a confirmat — așteaptă Confirmă manager ca să se deschidă comanda (WO).";
   }
   if (appt && !appt.managerConfirmedAt) {
-    return "Slot pe masă — confirmă sau propune altă oră către furnizor.";
+    return appt.driverCanNegotiateAppointment
+      ? "Slot pe masă — managerul și șoferul confirmă sau propun altă oră către furnizor."
+      : "Slot pe masă — confirmă sau propune altă oră către furnizor.";
   }
   if (serviceCase.currentStage === "scheduled" || !appt) {
     return "Stabilește programarea la service (dată, furnizor).";
@@ -315,7 +320,9 @@ export function buildOperationalChapters(input: OperationalStoryInput): Operatio
         : appt?.status === "needs_repropose"
           ? "Șoferul nu poate la ora curentă — aceeași cerere, altă oră."
           : appt?.managerConfirmedAt && !appt.driverAcknowledgedAt && appt.requireDriverAck !== false
-            ? "Confirmată de manager — așteaptă Confirmă primire (șofer)."
+            ? "Confirmată de manager — așteaptă confirmarea șoferului."
+            : appt && !appt.managerConfirmedAt && appt.driverAcknowledgedAt
+              ? "Confirmată de șofer — așteaptă Confirmă manager."
             : appt?.managerConfirmedAt && (appt.driverAcknowledgedAt || appt.requireDriverAck === false)
               ? appt.requireDriverAck === false
                 ? "Confirmată de manager — WO fără acord șofer."

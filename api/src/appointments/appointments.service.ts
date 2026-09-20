@@ -28,7 +28,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
-import { effectiveRequireDriverAck } from '../iam/client-iam-settings';
+import { effectiveDriverCanNegotiate, effectiveRequireDriverAck } from '../iam/client-iam-settings';
 import {
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
@@ -186,6 +186,7 @@ export class AppointmentsService {
         row.vehicle.client.iamSettings,
         row.requireDriverAckOverride,
       ),
+      driverCanNegotiateAppointment: effectiveDriverCanNegotiate(row.vehicle.client.iamSettings),
       location: row.location,
       notes: row.notes,
       vehicleId: row.vehicleId,

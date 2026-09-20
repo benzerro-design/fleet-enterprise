@@ -11,6 +11,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         `ALTER TABLE "ServiceAppointment" ADD COLUMN IF NOT EXISTS "requireDriverAckOverride" BOOLEAN`,
       );
       await this.$executeRawUnsafe(
+        `ALTER TABLE "ServiceAppointment" ADD COLUMN IF NOT EXISTS "fleetCounterProposedBy" TEXT`,
+      );
+      await this.$executeRawUnsafe(
         `ALTER TABLE "CostEntry" ADD COLUMN IF NOT EXISTS "vehicleDocumentId" TEXT`,
       );
     } catch {

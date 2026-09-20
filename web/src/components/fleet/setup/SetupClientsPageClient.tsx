@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { TenantServiceTypesEditor } from "@/components/fleet/setup/TenantServiceTypesEditor";
+import { TicketFormsSettingsEditor } from "@/components/fleet/setup/TicketFormsSettingsEditor";
 import type { TenantServiceType } from "@/lib/tenant-service-types/types";
 
 type ClientTab = "tip-servicii" | "sla" | "forms" | "notifications";
@@ -10,7 +11,7 @@ type ClientTab = "tip-servicii" | "sla" | "forms" | "notifications";
 const TABS: { id: ClientTab; label: string; live: boolean }[] = [
   { id: "tip-servicii", label: "Tip & Servicii", live: true },
   { id: "sla", label: "SLA & priorități", live: false },
-  { id: "forms", label: "Formulare tichet", live: false },
+  { id: "forms", label: "Formulare tichet", live: true },
   { id: "notifications", label: "Notificări client", live: false },
 ];
 
@@ -63,6 +64,7 @@ export function SetupClientsPageClient({ initialItems }: Props) {
       </div>
 
       {activeTab === "tip-servicii" ? <TenantServiceTypesEditor initialItems={initialItems} /> : null}
+      {activeTab === "forms" ? <TicketFormsSettingsEditor /> : null}
     </>
   );
 }

@@ -683,7 +683,9 @@ export function SchedulerInspector({
                 ? "Trimite propunere"
                 : appointment.status === "pending_supplier" ||
                     appointment.status === "needs_repropose" ||
-                    appointmentFleetCanCounterPropose(appointment)
+                    appointmentFleetCanCounterPropose(appointment, {
+                      negotiate: appointment.driverCanNegotiateAppointment === true,
+                    })
                   ? partnerMode
                     ? "Trimite altă oră"
                     : "Trimite propunere"
@@ -713,7 +715,9 @@ export function SchedulerInspector({
             {editable &&
             !editing &&
             appointment.status !== "pending_supplier" &&
-            !appointmentFleetCanCounterPropose(appointment) ? (
+            !appointmentFleetCanCounterPropose(appointment, {
+              negotiate: appointment.driverCanNegotiateAppointment === true,
+            }) ? (
               <button
                 type="button"
                 onClick={() => {
@@ -938,8 +942,7 @@ export function SchedulerInspector({
               ) : null}
             </>
           ) : null}
-          {appointment.status === "scheduled" && !partnerMode ? (
-            <>
+          {appointment.status === "scheduled" && !partnerMode && !appointment.managerConfirmedAt ? (
               <button
                 type="button"
                 disabled={pending}
@@ -948,7 +951,12 @@ export function SchedulerInspector({
               >
                 Confirmă (manager)
               </button>
-              {!editing && appointmentFleetCanCounterPropose(appointment) ? (
+          ) : null}
+          {!partnerMode &&
+          !editing &&
+          appointmentFleetCanCounterPropose(appointment, {
+            negotiate: appointment.driverCanNegotiateAppointment === true,
+          }) ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -959,8 +967,6 @@ export function SchedulerInspector({
                 >
                   Propune altă oră
                 </button>
-              ) : null}
-            </>
           ) : null}
           {appointment.status === "scheduled" && partnerMode ? (
             <p className="w-full rounded-lg border border-sky-800/40 bg-sky-950/20 px-2.5 py-2 text-[11px] text-sky-200">

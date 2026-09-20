@@ -1,4 +1,5 @@
 import {
+  effectiveDriverCanNegotiate,
   effectiveRequireDriverAck,
   parseClientIamSettings,
   parseClientIamSettingsPatch,
@@ -10,6 +11,7 @@ describe('parseClientIamSettings', () => {
       allowClientOcr: false,
       allowClientAcquisition: false,
       requireDriverAck: true,
+      driverCanNegotiateAppointment: false,
     });
   });
 
@@ -24,6 +26,21 @@ describe('parseClientIamSettings', () => {
       allowClientOcr: true,
       allowClientAcquisition: true,
       requireDriverAck: false,
+      driverCanNegotiateAppointment: false,
+    });
+  });
+
+  it('forces driver ack when negotiate is on', () => {
+    expect(
+      parseClientIamSettings({
+        requireDriverAck: false,
+        driverCanNegotiateAppointment: true,
+      }),
+    ).toEqual({
+      allowClientOcr: false,
+      allowClientAcquisition: false,
+      requireDriverAck: true,
+      driverCanNegotiateAppointment: true,
     });
   });
 });
@@ -31,6 +48,12 @@ describe('parseClientIamSettings', () => {
 describe('parseClientIamSettingsPatch', () => {
   it('rejects non-boolean', () => {
     expect(() => parseClientIamSettingsPatch({ allowClientOcr: 'yes' })).toThrow(/boolean/);
+  });
+
+  it('accepts negotiate flag', () => {
+    expect(parseClientIamSettingsPatch({ driverCanNegotiateAppointment: true })).toEqual({
+      driverCanNegotiateAppointment: true,
+    });
   });
 });
 
@@ -44,5 +67,21 @@ describe('effectiveRequireDriverAck', () => {
   it('lets L1 override win', () => {
     expect(effectiveRequireDriverAck({ requireDriverAck: true }, false)).toBe(false);
     expect(effectiveRequireDriverAck({ requireDriverAck: false }, true)).toBe(true);
+  });
+
+  it('requires driver ack when negotiate is on unless override is false', () => {
+    expect(
+      effectiveRequireDriverAck({ driverCanNegotiateAppointment: true, requireDriverAck: false }, null),
+    ).toBe(true);
+    expect(
+      effectiveRequireDriverAck({ driverCanNegotiateAppointment: true }, false),
+    ).toBe(false);
+  });
+});
+
+describe('effectiveDriverCanNegotiate', () => {
+  it('defaults off', () => {
+    expect(effectiveDriverCanNegotiate(null)).toBe(false);
+    expect(effectiveDriverCanNegotiate({ driverCanNegotiateAppointment: true })).toBe(true);
   });
 });

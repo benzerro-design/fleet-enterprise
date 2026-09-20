@@ -141,7 +141,11 @@ export function TicketWorkflowStepper({
       const data = JSON.parse(raw) as ServiceCaseRecord | null;
       setServiceCase(data);
       setError(null);
-      if (data) setRequireDriverAck(data.clientRequireDriverAck !== false);
+      if (data) {
+        setRequireDriverAck(
+          data.clientDriverCanNegotiateAppointment === true || data.clientRequireDriverAck !== false,
+        );
+      }
       if (data?.supplierId) setSupplierId(data.supplierId);
       const woId = data?.workOrders[0]?.id;
       if (woId) void loadMobility(woId);
@@ -199,7 +203,9 @@ export function TicketWorkflowStepper({
           supplierId: supplierId || null,
           location: appointmentLocation || null,
           notes: appointmentNotes || null,
-          requireDriverAckOverride: requireDriverAck,
+          requireDriverAckOverride: serviceCase.clientDriverCanNegotiateAppointment
+            ? true
+            : requireDriverAck,
         }),
       });
       if (!res.ok) {
@@ -694,7 +700,9 @@ export function TicketWorkflowStepper({
                 <div>
                   <p className="text-xs uppercase text-zinc-500">Programări</p>
                   <p className="mt-0.5 text-[10px] text-zinc-500">
-                    Aceeași cerere până e confirmată de toți. Altă oră nu deschide un flux nou.
+                    {serviceCase.clientDriverCanNegotiateAppointment
+                      ? "Manager și șofer confirmă sau propun altă oră. O propunere pleacă la furnizor."
+                      : "Aceeași cerere până e confirmată de toți. Altă oră nu deschide un flux nou."}
                   </p>
                 </div>
                 <Link
@@ -713,7 +721,11 @@ export function TicketWorkflowStepper({
                 </Link>
               </div>
               <ul className="mt-2 space-y-3">
-                {serviceCase.appointments.map((appt) => (
+                {serviceCase.appointments.map((appt) => {
+                  const negotiate = serviceCase.clientDriverCanNegotiateAppointment === true;
+                  const canProposeSlot =
+                    canOperate || (canAckAppointment && negotiate);
+                  return (
                   <li key={appt.id} className="rounded-md border border-zinc-800/80 bg-zinc-900/40 p-2.5">
                     <div className="text-zinc-300">
                       <Link
@@ -785,11 +797,43 @@ export function TicketWorkflowStepper({
                             className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                           >
                             {appointmentRequiresDriverAck(appt)
-                              ? "Confirmă programarea"
+                              ? negotiate && canAckAppointment
+                                ? "Confirmă (manager)"
+                                : "Confirmă programarea"
                               : "Confirmă și deschide WO"}
                           </button>
                         ) : null}
                         {canAckAppointment &&
+                        appointmentRequiresDriverAck(appt) &&
+                        negotiate &&
+                        (appt.status === "scheduled" || appt.status === "confirmed") &&
+                        !appt.driverAcknowledgedAt &&
+                        !appt.driverDeclinedAt ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => void acknowledgeAppointment(appt.id)}
+                              className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                            >
+                              {canConfirmAppointment ? "Confirmă (șofer)" : "Confirmă programarea"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => {
+                                setDeclineApptId(appt.id);
+                                setDeclineNote("");
+                                setReproposeApptId(null);
+                              }}
+                              className="rounded-lg border border-rose-500/40 px-2.5 py-1 text-xs text-rose-200 hover:bg-rose-950/40 disabled:opacity-50"
+                            >
+                              Nu pot la data asta
+                            </button>
+                          </>
+                        ) : null}
+                        {canAckAppointment &&
+                        !negotiate &&
                         appointmentRequiresDriverAck(appt) &&
                         appt.managerConfirmedAt &&
                         !appt.driverAcknowledgedAt &&
@@ -818,8 +862,9 @@ export function TicketWorkflowStepper({
                             </button>
                           </>
                         ) : null}
-                        {canOperate &&
-                        (appt.status === "needs_repropose" || appointmentFleetCanCounterPropose(appt)) ? (
+                        {canProposeSlot &&
+                        (appt.status === "needs_repropose" ||
+                          appointmentFleetCanCounterPropose(appt, { negotiate })) ? (
                           <button
                             type="button"
                             disabled={pending}
@@ -835,6 +880,7 @@ export function TicketWorkflowStepper({
                           </button>
                         ) : null}
                         {canOperate &&
+                        !negotiate &&
                         !appt.managerConfirmedAt &&
                         appt.status !== "needs_repropose" &&
                         appt.status !== "completed" ? (
@@ -856,7 +902,16 @@ export function TicketWorkflowStepper({
                         serviceCase.workOrders.length === 0 &&
                         !inRescheduleLoop ? (
                           <p className="w-full text-[11px] text-amber-200/90">
-                            WO se creează automat după Confirmă primire (șofer) — nu există încă o comandă de deschis.
+                            WO se creează automat după confirmarea șoferului — nu există încă o comandă de deschis.
+                          </p>
+                        ) : null}
+                        {!appt.managerConfirmedAt &&
+                        appt.driverAcknowledgedAt &&
+                        negotiate &&
+                        serviceCase.workOrders.length === 0 &&
+                        !inRescheduleLoop ? (
+                          <p className="w-full text-[11px] text-amber-200/90">
+                            Șoferul a confirmat — WO se deschide după Confirmă manager.
                           </p>
                         ) : null}
                         {appt.managerConfirmedAt &&
@@ -955,7 +1010,8 @@ export function TicketWorkflowStepper({
                       </div>
                     ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
           ) : null}
@@ -1018,6 +1074,11 @@ export function TicketWorkflowStepper({
                   placeholder="Adresă service"
                 />
               </div>
+              {serviceCase.clientDriverCanNegotiateAppointment ? (
+                <p className="text-[11px] text-zinc-500">
+                  Politica clientului: șoferul confirmă sau propune data în paralel cu managerul.
+                </p>
+              ) : (
               <label className="flex items-start gap-2 text-sm text-zinc-300">
                 <input
                   type="checkbox"
@@ -1032,6 +1093,7 @@ export function TicketWorkflowStepper({
                   </span>
                 </span>
               </label>
+              )}
               <button
                 type="button"
                 disabled={pending || (!scheduledAt && !supplierId)}
