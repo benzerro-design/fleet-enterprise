@@ -1,4 +1,4 @@
-import { formatAppointmentSlot } from "@/lib/appointments-api";
+import { FLEET_DISPLAY_TIMEZONE } from "@/lib/datetime-local";
 
 type Props = {
   scheduledAt: string | null | undefined;
@@ -7,9 +7,23 @@ type Props = {
   compact?: boolean;
 };
 
+function formatDriverRequestedWhen(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("ro-RO", {
+    timeZone: FLEET_DISPLAY_TIMEZONE,
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** Callout vizual: șoferul a solicitat ziua/ora (nu doar o notă gri). */
 export function DriverProposalCallout({ scheduledAt, note, compact }: Props) {
-  const when = formatAppointmentSlot(scheduledAt);
+  const when = formatDriverRequestedWhen(scheduledAt);
   const noteText = note?.trim() || null;
 
   if (compact) {
