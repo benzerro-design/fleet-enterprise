@@ -11,7 +11,7 @@ type ClientTab = "tip-servicii" | "sla" | "forms" | "notifications";
 const TABS: { id: ClientTab; label: string; live: boolean }[] = [
   { id: "tip-servicii", label: "Tip & Servicii", live: true },
   { id: "sla", label: "SLA & priorități", live: false },
-  { id: "forms", label: "Formulare tichet", live: true },
+  { id: "forms", label: "Politici tichet", live: true },
   { id: "notifications", label: "Notificări client", live: false },
 ];
 
@@ -25,7 +25,7 @@ export function SetupClientsPageClient({ initialItems }: Props) {
   const activeTab = TABS.some((t) => t.id === tab) ? tab : "tip-servicii";
   const intro =
     activeTab === "forms"
-      ? "Politica de programare pe client: cine decide data și dacă șoferul confirmă după manager sau în paralel."
+      ? "Politici pe client: programare service și ce vede managerul pe lista de tichete."
       : "Catalog tenant de tipuri service — etichete și descrieri pentru portal client. Furnizorii bifează din acest catalog ce prestează.";
 
   return (

@@ -54,18 +54,27 @@ type Props = {
   items: TicketRecord[];
   canWrite: boolean;
   canPatch?: boolean;
+  /** Admin L* sau manager cu setare pe client. Șofer: false. */
+  enableBulk?: boolean;
   exportHref?: string;
   filterParams?: Record<string, string>;
 };
 
-export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, filterParams = {} }: Props) {
+export function TicketDataGrid({
+  items,
+  canWrite,
+  canPatch = false,
+  enableBulk = false,
+  exportHref,
+  filterParams = {},
+}: Props) {
   const [layout, setLayout] = useState<TicketGridLayout>(() => readTicketGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const columns = useMemo(() => visibleTicketColumns(layout), [layout]);
   const hasFilters = Object.keys(filterParams).length > 0;
-  const allSelected = items.length > 0 && items.every((r) => selected.has(r.id));
+  const allSelected = enableBulk && items.length > 0 && items.every((r) => selected.has(r.id));
 
   function toggleAll() {
     if (allSelected) {
@@ -107,9 +116,21 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         return <span className="text-zinc-600">◎</span>;
       case "id":
         return (
-          <Link href={`/fleet/tickets/${row.id}`} className="font-mono text-emerald-400 hover:underline">
-            #{row.displayId}
-          </Link>
+          <span className="inline-flex items-center gap-1.5">
+            {enableBulk ? (
+              <input
+                type="checkbox"
+                checked={selected.has(row.id)}
+                onChange={() => toggleOne(row.id)}
+                aria-label={`Selectează #${row.displayId}`}
+                className="rounded border-zinc-600"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : null}
+            <Link href={`/fleet/tickets/${row.id}`} className="font-mono text-emerald-400 hover:underline">
+              #{row.displayId}
+            </Link>
+          </span>
         );
       case "status":
         return canPatch ? (
@@ -135,7 +156,11 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         );
       case "subject":
         return (
-          <Link href={`/fleet/tickets/${row.id}`} className="font-medium text-zinc-100 hover:text-white">
+          <Link
+            href={`/fleet/tickets/${row.id}`}
+            className="block max-w-[18rem] truncate font-medium text-zinc-100 hover:text-white xl:max-w-[24rem]"
+            title={row.subject}
+          >
             {row.subject}
           </Link>
         );
@@ -152,7 +177,7 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         );
       case "driver":
         return row.driverFullName ? (
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex max-w-[7rem] items-center gap-1.5">
             <FleetAvatar name={row.driverFullName} size={18} />
             <span className="truncate">{row.driverFullName}</span>
           </span>
@@ -167,7 +192,7 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         );
       case "owner":
         return row.ownerEmail ? (
-          <span className="inline-flex items-center gap-1.5 text-zinc-400">
+          <span className="inline-flex max-w-[6.5rem] items-center gap-1.5 text-zinc-400">
             <FleetAvatar name={row.ownerEmail.split("@")[0]} size={18} />
             <span className="truncate text-xs">{row.ownerEmail.split("@")[0]}</span>
           </span>
@@ -247,7 +272,7 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
         ) : null}
       </div>
 
-      {selected.size > 0 ? (
+      {enableBulk && selected.size > 0 ? (
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-100 backdrop-blur">
           <span className="font-medium">{selected.size} selectate</span>
           <button
@@ -276,45 +301,57 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
       {showLegend ? <TicketGlyphLegendPanel onClose={() => setShowLegend(false)} /> : null}
 
       <FleetDataTable>
-        <table className={`${fleetTableClass} text-xs`}>
+        <table className={`${fleetTableClass} w-full table-fixed text-xs`}>
           <thead className={fleetTheadClass}>
             <tr>
-              <th className={`${fleetThClass} w-8`}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Selectează toate pe pagină"
-                  className="rounded border-zinc-600"
-                />
-              </th>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`${fleetThClass} whitespace-nowrap`}
-                  style={{ minWidth: col.minWidth }}
+                  className={`${fleetThClass} whitespace-nowrap ${
+                    col.key === "type" || col.key === "priority" || col.key === "routing"
+                      ? "w-10"
+                      : col.key === "subject"
+                        ? "w-[28%]"
+                        : col.key === "id"
+                          ? "w-[6.5rem]"
+                          : ""
+                  }`}
+                  style={
+                    col.key === "subject" || col.key === "type"
+                      ? undefined
+                      : { width: col.minWidth, minWidth: col.minWidth }
+                  }
                 >
-                  {col.label}
+                  {col.key === "id" && enableBulk ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label="Selectează toate pe pagină"
+                        className="rounded border-zinc-600"
+                      />
+                      <span>#</span>
+                    </span>
+                  ) : (
+                    col.label
+                  )}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/80">
             {items.map((row) => {
-              const isSel = selected.has(row.id);
+              const isSel = enableBulk && selected.has(row.id);
               return (
                 <tr key={row.id} className={isSel ? "bg-emerald-950/20 hover:bg-emerald-950/30" : "hover:bg-zinc-900/40"}>
-                  <td className={`${fleetTdClass} w-8`}>
-                    <input
-                      type="checkbox"
-                      checked={isSel}
-                      onChange={() => toggleOne(row.id)}
-                      aria-label={`Selectează #${row.displayId}`}
-                      className="rounded border-zinc-600"
-                    />
-                  </td>
                   {columns.map((col) => (
-                    <td key={col.key} className={`${fleetTdClass} max-w-[280px] truncate`}>
+                    <td
+                      key={col.key}
+                      className={`${fleetTdClass} ${
+                        col.key === "subject" ? "overflow-hidden" : "truncate"
+                      }`}
+                    >
                       {renderCell(col.key, row)}
                     </td>
                   ))}
@@ -327,3 +364,4 @@ export function TicketDataGrid({ items, canWrite, canPatch = false, exportHref, 
     </div>
   );
 }
+

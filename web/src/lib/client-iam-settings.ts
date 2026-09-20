@@ -3,6 +3,8 @@ export type ClientIamSettings = {
   allowClientAcquisition: boolean;
   requireDriverAck: boolean;
   driverCanNegotiateAppointment: boolean;
+  /** Manager client: selecție multiplă pe lista de tichete. Admin L* are oricum. Șoferul niciodată. */
+  ticketListBulkSelect: boolean;
 };
 
 export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
@@ -10,4 +12,16 @@ export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
   allowClientAcquisition: false,
   requireDriverAck: true,
   driverCanNegotiateAppointment: false,
+  ticketListBulkSelect: false,
 };
+
+/** Normalizează răspunsul API (câmpuri lipsă = default). */
+export function normalizeClientIamSettings(data: Partial<ClientIamSettings> | null | undefined): ClientIamSettings {
+  return {
+    allowClientOcr: data?.allowClientOcr === true,
+    allowClientAcquisition: data?.allowClientAcquisition === true,
+    requireDriverAck: data?.requireDriverAck !== false,
+    driverCanNegotiateAppointment: data?.driverCanNegotiateAppointment === true,
+    ticketListBulkSelect: data?.ticketListBulkSelect === true,
+  };
+}

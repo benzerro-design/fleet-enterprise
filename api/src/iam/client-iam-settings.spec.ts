@@ -12,6 +12,7 @@ describe('parseClientIamSettings', () => {
       allowClientAcquisition: false,
       requireDriverAck: true,
       driverCanNegotiateAppointment: false,
+      ticketListBulkSelect: false,
     });
   });
 
@@ -21,12 +22,14 @@ describe('parseClientIamSettings', () => {
         allowClientOcr: true,
         allowClientAcquisition: true,
         requireDriverAck: false,
+        ticketListBulkSelect: true,
       }),
     ).toEqual({
       allowClientOcr: true,
       allowClientAcquisition: true,
       requireDriverAck: false,
       driverCanNegotiateAppointment: false,
+      ticketListBulkSelect: true,
     });
   });
 
@@ -41,6 +44,7 @@ describe('parseClientIamSettings', () => {
       allowClientAcquisition: false,
       requireDriverAck: true,
       driverCanNegotiateAppointment: true,
+      ticketListBulkSelect: false,
     });
   });
 });
@@ -53,6 +57,12 @@ describe('parseClientIamSettingsPatch', () => {
   it('accepts negotiate flag', () => {
     expect(parseClientIamSettingsPatch({ driverCanNegotiateAppointment: true })).toEqual({
       driverCanNegotiateAppointment: true,
+    });
+  });
+
+  it('accepts ticket list bulk flag', () => {
+    expect(parseClientIamSettingsPatch({ ticketListBulkSelect: true })).toEqual({
+      ticketListBulkSelect: true,
     });
   });
 });

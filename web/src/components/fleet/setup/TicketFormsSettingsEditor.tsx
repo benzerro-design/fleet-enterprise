@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AppointmentPolicyFields } from "@/components/fleet/setup/AppointmentPolicyFields";
+import { TicketListPolicyFields } from "@/components/fleet/setup/TicketListPolicyFields";
 import { clientsBrowserBase, type ClientListPayload } from "@/lib/clients-api";
 import {
   DEFAULT_CLIENT_IAM_SETTINGS,
+  normalizeClientIamSettings,
   type ClientIamSettings,
 } from "@/lib/client-iam-settings";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
@@ -60,12 +62,7 @@ export function TicketFormsSettingsEditor() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as ClientIamSettings;
-      setDraft({
-        allowClientOcr: data.allowClientOcr === true,
-        allowClientAcquisition: data.allowClientAcquisition === true,
-        requireDriverAck: data.requireDriverAck !== false,
-        driverCanNegotiateAppointment: data.driverCanNegotiateAppointment === true,
-      });
+      setDraft(normalizeClientIamSettings(data));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Încărcare eșuată");
     }
@@ -87,6 +84,7 @@ export function TicketFormsSettingsEditor() {
         body: JSON.stringify({
           requireDriverAck: draft.requireDriverAck,
           driverCanNegotiateAppointment: draft.driverCanNegotiateAppointment,
+          ticketListBulkSelect: draft.ticketListBulkSelect,
         }),
       });
       if (!res.ok) {
@@ -94,11 +92,7 @@ export function TicketFormsSettingsEditor() {
         throw new Error(j.message ?? `HTTP ${res.status}`);
       }
       const next = (await res.json()) as ClientIamSettings;
-      setDraft((d) => ({
-        ...d,
-        requireDriverAck: next.requireDriverAck !== false,
-        driverCanNegotiateAppointment: next.driverCanNegotiateAppointment === true,
-      }));
+      setDraft((d) => normalizeClientIamSettings({ ...d, ...next }));
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Salvare eșuată");
@@ -108,12 +102,11 @@ export function TicketFormsSettingsEditor() {
   }
 
   return (
-    <div className="max-w-xl space-y-5">
+    <div className="max-w-xl space-y-6">
       <div>
-        <h2 className="text-lg font-medium text-zinc-100">Formulare tichet</h2>
+        <h2 className="text-lg font-medium text-zinc-100">Experiență client pe tichet</h2>
         <p className="mt-1 text-sm text-zinc-400">
-          Politica de confirmare a programării pe client: cine decide data și dacă șoferul mai
-          confirmă după manager.
+          Politici pe client (doar admin L*): programare + ce vede managerul pe lista de tichete.
         </p>
       </div>
 
@@ -135,11 +128,20 @@ export function TicketFormsSettingsEditor() {
       </label>
 
       {clientId ? (
-        <AppointmentPolicyFields
-          draft={draft}
-          onChange={setDraft}
-          disabled={pending || loading}
-        />
+        <>
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Programare service
+            </h3>
+            <AppointmentPolicyFields draft={draft} onChange={setDraft} disabled={pending || loading} />
+          </section>
+          <section className="space-y-3 border-t border-zinc-800 pt-5">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Listă tichete
+            </h3>
+            <TicketListPolicyFields draft={draft} onChange={setDraft} disabled={pending || loading} />
+          </section>
+        </>
       ) : null}
 
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
@@ -151,7 +153,7 @@ export function TicketFormsSettingsEditor() {
         onClick={() => void save()}
         className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
       >
-        {pending ? "Salvez…" : "Salvează politica"}
+        {pending ? "Salvez…" : "Salvează politicile"}
       </button>
     </div>
   );

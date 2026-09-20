@@ -7,6 +7,7 @@ export type ClientIamSettingsMe = {
   allowClientAcquisition: boolean;
   requireDriverAck: boolean;
   driverCanNegotiateAppointment: boolean;
+  ticketListBulkSelect: boolean;
 };
 
 export type ClientMembershipMe = {
@@ -116,6 +117,20 @@ export function canOperateServiceCase(auth: AuthMeResult): boolean {
 /** Validare programare în locul furnizorului — doar tenant_admin (nu manager client). */
 export function canSupplierValidateAppointment(auth: AuthMeResult): boolean {
   return canManageFleet(auth);
+}
+
+/**
+ * Selecție multiplă pe lista de tichete.
+ * Admin L*: da. Șofer: nu. Manager client: doar dacă adminul a bifat pe client.
+ */
+export function canUseTicketListBulk(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") return true;
+  if (isClientDriverPortal(auth)) return false;
+  if (auth.me.role !== "client_user" || !isClientFleetPortal(auth)) return false;
+  return (auth.me.access?.clientMemberships ?? []).some(
+    (m) => m.role !== "driver" && m.iamSettings?.ticketListBulkSelect === true,
+  );
 }
 
 /** Aprobare deviz — client_admin sau tenant_admin. */

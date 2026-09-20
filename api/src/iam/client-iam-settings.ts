@@ -17,6 +17,8 @@ export type ClientIamSettings = {
   requireDriverAck: boolean;
   /** Șoferul acceptă / propune data în paralel cu managerul. */
   driverCanNegotiateAppointment: boolean;
+  /** Manager client: bulk select pe lista de tichete (admin L* are oricum). */
+  ticketListBulkSelect: boolean;
 };
 
 export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
@@ -24,6 +26,7 @@ export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
   allowClientAcquisition: false,
   requireDriverAck: true,
   driverCanNegotiateAppointment: false,
+  ticketListBulkSelect: false,
 };
 
 export function parseClientIamSettings(raw: unknown): ClientIamSettings {
@@ -37,6 +40,7 @@ export function parseClientIamSettings(raw: unknown): ClientIamSettings {
     allowClientAcquisition: o.allowClientAcquisition === true,
     requireDriverAck: driverCanNegotiateAppointment ? true : o.requireDriverAck !== false,
     driverCanNegotiateAppointment,
+    ticketListBulkSelect: o.ticketListBulkSelect === true,
   };
 }
 
@@ -65,6 +69,12 @@ export function parseClientIamSettingsPatch(body: unknown): Partial<ClientIamSet
       throw new Error('driverCanNegotiateAppointment must be boolean');
     }
     patch.driverCanNegotiateAppointment = o.driverCanNegotiateAppointment;
+  }
+  if (o.ticketListBulkSelect !== undefined) {
+    if (typeof o.ticketListBulkSelect !== 'boolean') {
+      throw new Error('ticketListBulkSelect must be boolean');
+    }
+    patch.ticketListBulkSelect = o.ticketListBulkSelect;
   }
   return patch;
 }

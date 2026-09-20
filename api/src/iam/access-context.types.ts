@@ -10,6 +10,7 @@ export type ClientMembershipContext = {
     allowClientAcquisition: boolean;
     requireDriverAck: boolean;
     driverCanNegotiateAppointment: boolean;
+    ticketListBulkSelect: boolean;
   };
 };
 

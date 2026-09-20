@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AppointmentPolicyFields } from "@/components/fleet/setup/AppointmentPolicyFields";
+import { TicketListPolicyFields } from "@/components/fleet/setup/TicketListPolicyFields";
 import { clientsBrowserBase } from "@/lib/clients-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import {
   DEFAULT_CLIENT_IAM_SETTINGS,
+  normalizeClientIamSettings,
   type ClientIamSettings,
 } from "@/lib/client-iam-settings";
 
@@ -29,12 +31,7 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as ClientIamSettings;
-      setDraft({
-        allowClientOcr: data.allowClientOcr === true,
-        allowClientAcquisition: data.allowClientAcquisition === true,
-        requireDriverAck: data.requireDriverAck !== false,
-        driverCanNegotiateAppointment: data.driverCanNegotiateAppointment === true,
-      });
+      setDraft(normalizeClientIamSettings(data));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Încărcare eșuată");
     }
@@ -60,12 +57,7 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
         throw new Error(j.message ?? `HTTP ${res.status}`);
       }
       const next = (await res.json()) as ClientIamSettings;
-      setDraft({
-        allowClientOcr: next.allowClientOcr === true,
-        allowClientAcquisition: next.allowClientAcquisition === true,
-        requireDriverAck: next.requireDriverAck !== false,
-        driverCanNegotiateAppointment: next.driverCanNegotiateAppointment === true,
-      });
+      setDraft(normalizeClientIamSettings(next));
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Salvare eșuată");
@@ -75,51 +67,56 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
   }
 
   return (
-    <div className="max-w-xl space-y-4">
+    <div className="max-w-xl space-y-6">
       <p className="text-sm text-zinc-400">
-        Drepturi pentru managerul acestui client (L1). Default oprit — le aprinde adminul
-        abonatului. Adminul abonatului (L*) le are oricum.
+        Drepturi pe client — doar adminul abonatului (L*) le schimbă. Managerul L1 le moștenește.
+        Șoferul nu primește niciodată selecție multiplă pe listă.
       </p>
-      <label className="flex items-start gap-3 text-sm text-zinc-200">
-        <input
-          type="checkbox"
-          checked={draft.allowClientOcr}
-          disabled={!canWrite || pending}
-          onChange={(e) => setDraft((d) => ({ ...d, allowClientOcr: e.target.checked }))}
-          className="mt-0.5"
-        />
-        <span>
-          <span className="font-medium">OCR CIV</span>
-          <span className="block text-xs text-zinc-500">
-            L1 poate extrage și salva date din scanul CIV pe vehiculele clientului.
+
+      <section className="space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Capacități L1</h3>
+        <label className="flex items-start gap-3 text-sm text-zinc-200">
+          <input
+            type="checkbox"
+            checked={draft.allowClientOcr}
+            disabled={!canWrite || pending}
+            onChange={(e) => setDraft((d) => ({ ...d, allowClientOcr: e.target.checked }))}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium">OCR CIV</span>
+            <span className="block text-xs text-zinc-500">
+              L1 poate extrage și salva date din scanul CIV pe vehiculele clientului.
+            </span>
           </span>
-        </span>
-      </label>
-      <label className="flex items-start gap-3 text-sm text-zinc-200">
-        <input
-          type="checkbox"
-          checked={draft.allowClientAcquisition}
-          disabled={!canWrite || pending}
-          onChange={(e) => setDraft((d) => ({ ...d, allowClientAcquisition: e.target.checked }))}
-          className="mt-0.5"
-        />
-        <span>
-          <span className="font-medium">Date achiziție</span>
-          <span className="block text-xs text-zinc-500">
-            L1 vede și editează tab-ul Date achiziție (preț, leasing, contract).
+        </label>
+        <label className="flex items-start gap-3 text-sm text-zinc-200">
+          <input
+            type="checkbox"
+            checked={draft.allowClientAcquisition}
+            disabled={!canWrite || pending}
+            onChange={(e) => setDraft((d) => ({ ...d, allowClientAcquisition: e.target.checked }))}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium">Date achiziție</span>
+            <span className="block text-xs text-zinc-500">
+              L1 vede și editează tab-ul Date achiziție (preț, leasing, contract).
+            </span>
           </span>
-        </span>
-      </label>
-      <div className="border-t border-zinc-800 pt-4">
-        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Programare service
-        </p>
-        <AppointmentPolicyFields
-          draft={draft}
-          onChange={setDraft}
-          disabled={!canWrite || pending}
-        />
-      </div>
+        </label>
+      </section>
+
+      <section className="space-y-3 border-t border-zinc-800 pt-5">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Programare service</h3>
+        <AppointmentPolicyFields draft={draft} onChange={setDraft} disabled={!canWrite || pending} />
+      </section>
+
+      <section className="space-y-3 border-t border-zinc-800 pt-5">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Listă tichete</h3>
+        <TicketListPolicyFields draft={draft} onChange={setDraft} disabled={!canWrite || pending} />
+      </section>
+
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
       {saved ? <p className="text-sm text-emerald-300">Salvat.</p> : null}
       {canWrite ? (

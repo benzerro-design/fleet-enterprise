@@ -7,7 +7,7 @@ import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
-import { canPatchTickets, canWriteTickets, getAuthMeResult, isClientPortalUser } from "@/lib/auth-server";
+import { canPatchTickets, canUseTicketListBulk, canWriteTickets, getAuthMeResult, isClientPortalUser } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { ticketsBrowserBase } from "@/lib/tickets-api";
@@ -119,6 +119,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
   ]);
   const write = canWriteTickets(auth);
   const patch = canPatchTickets(auth);
+  const enableBulk = canUseTicketListBulk(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const withParams = (overrides: Partial<Search>) => {
@@ -389,6 +390,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
               items={list.items}
               canWrite={write}
               canPatch={patch}
+              enableBulk={enableBulk}
               exportHref={exportHref}
               filterParams={filterParams}
             />
