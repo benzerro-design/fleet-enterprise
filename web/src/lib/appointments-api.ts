@@ -218,6 +218,7 @@ export function formatAppointmentSlot(
       : "Fără dată — furnizorul propune";
   }
   return new Date(scheduledAt).toLocaleString("ro-RO", {
+    timeZone: "Europe/Bucharest",
     day: "numeric",
     month: "short",
     hour: "2-digit",

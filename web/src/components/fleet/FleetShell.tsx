@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FleetCommandPalette, type FleetCommandItem } from "@/components/fleet/FleetCommandPalette";
 import { FleetSidebarNav } from "@/components/fleet/FleetSidebarNav";
 import { FLEET_MOBILE_TABS, type FleetMobileTab, type FleetNavGroup } from "@/lib/fleet-nav";
 import { LogoutButton } from "@/app/fleet/logout-button";
@@ -26,6 +27,30 @@ function mobileTabActive(pathname: string, prefixes: string[]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function commandItemsFromGroups(groups: (FleetNavGroup | null | undefined)[]): FleetCommandItem[] {
+  const out: FleetCommandItem[] = [];
+  for (const group of groups) {
+    if (!group) continue;
+    for (const item of group.items) {
+      if (item.kind !== "link") continue;
+      out.push({
+        id: item.href,
+        label: item.label,
+        href: item.href,
+        group: group.label,
+      });
+    }
+  }
+  out.push({
+    id: "/fleet/preferences",
+    label: "Preferințe",
+    href: "/fleet/preferences",
+    group: "Cont",
+    keywords: "aspect tema densitate",
+  });
+  return out;
+}
+
 export function FleetShell({
   children,
   groups,
@@ -41,6 +66,10 @@ export function FleetShell({
 }: FleetShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "";
+  const commandItems = useMemo(
+    () => commandItemsFromGroups([...groups, setup, admin, bot]),
+    [groups, setup, admin, bot],
+  );
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
@@ -63,6 +92,7 @@ export function FleetShell({
 
   return (
     <div data-fleet-shell className="flex h-dvh max-h-dvh overflow-hidden bg-zinc-950 print:h-auto print:max-h-none print:overflow-visible">
+      <FleetCommandPalette items={commandItems} />
       {/* Desktop sidebar */}
       <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 print:hidden lg:flex">
         <div className="shrink-0 border-b border-zinc-800 px-4 py-4">
@@ -86,6 +116,7 @@ export function FleetShell({
             >
               Preferințe
             </Link>
+            <p className="text-[10px] text-zinc-600">Ctrl/Cmd+K — navigare rapidă</p>
             <LogoutButton />
           </div>
         </div>

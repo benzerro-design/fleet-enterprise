@@ -207,6 +207,7 @@ export function SchedulerWeekView({
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didDragRef = useRef(false);
   const suppressSlotClickUntilRef = useRef(0);
+  const [slotFlash, setSlotFlash] = useState<{ dayIndex: number; top: number; key: number } | null>(null);
 
   const canDragAppt = useCallback(
     (a: SlottedCalendarAppointment) =>
@@ -423,7 +424,9 @@ export function SchedulerWeekView({
                     if ((e.target as HTMLElement).closest("[data-appt-block]")) return;
                     const rect = e.currentTarget.getBoundingClientRect();
                     const offsetY = e.clientY - rect.top;
-                    onSlotClick(snapTimeFromOffsetY(offsetY, day.date));
+                    const when = snapTimeFromOffsetY(offsetY, day.date);
+                    setSlotFlash({ dayIndex, top: topOffsetForTime(when), key: Date.now() });
+                    onSlotClick(when);
                   }}
                 >
                   {SCHEDULER_HOURS.map((h) => (
@@ -433,6 +436,14 @@ export function SchedulerWeekView({
                       style={{ top: (h - SCHEDULER_HOURS[0]) * PX_PER_HOUR }}
                     />
                   ))}
+                  {slotFlash && slotFlash.dayIndex === dayIndex ? (
+                    <div
+                      key={slotFlash.key}
+                      className="fleet-slot-flash pointer-events-none absolute left-1 right-1 z-20 rounded-md border border-emerald-400/80 bg-emerald-500/30"
+                      style={{ top: slotFlash.top, height: Math.max(24, PX_PER_HOUR / 2 - 4) }}
+                      onAnimationEnd={() => setSlotFlash((cur) => (cur?.key === slotFlash.key ? null : cur))}
+                    />
+                  ) : null}
                   {dayAppts.map((a) => (
                     <AppointmentBlock
                       key={a.id}

@@ -29,6 +29,7 @@ import { formatDateRo } from "@/lib/datetime-local";
 import { mobilityBrowserBase, type MobilityEligibilityRecord } from "@/lib/mobility-api";
 import { roadsideBrowserBase, type RoadsideInterventionRecord } from "@/lib/roadside-api";
 import { fleetJsonHeaders as ticketFleetHeaders, ticketsBrowserBase, type TicketLinkRecord } from "@/lib/tickets-api";
+import { formatDateTimeRo } from "@/lib/datetime-local";
 import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
 
 type Props = {
@@ -281,33 +282,6 @@ export function TicketWorkflowStepper({
     }
   }
 
-  async function supplierValidateAppointment(appointmentId: string) {
-    setPending(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `${serviceCasesBrowserBase}/appointments/${appointmentId}/supplier-validate`,
-        { method: "POST", headers: fleetJsonHeaders(), body: JSON.stringify({}) },
-      );
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const j = (await res.json()) as { message?: string | string[] };
-          if (typeof j.message === "string") msg = j.message;
-        } catch {
-          /* ignore */
-        }
-        setError(msg);
-        return;
-      }
-      const data = (await res.json()) as ServiceCaseRecord;
-      setServiceCase(data);
-      router.refresh();
-    } finally {
-      setPending(false);
-    }
-  }
-
   async function transformToMaintenance() {
     setPending(true);
     setError(null);
@@ -512,7 +486,7 @@ export function TicketWorkflowStepper({
     if (!iso) return "Fără dată — furnizorul propune";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "Fără dată — furnizorul propune";
-    return d.toLocaleString("ro-RO");
+    return formatDateTimeRo(iso);
   }
 
   if (serviceCase === undefined) {
@@ -783,18 +757,6 @@ export function TicketWorkflowStepper({
                     </div>
                     {!closed && appt.status !== "cancelled" ? (
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {canOperate &&
-                        appt.scheduledAt &&
-                        (appt.status === "pending_supplier" || appt.status === "needs_repropose") ? (
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => void supplierValidateAppointment(appt.id)}
-                            className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-                          >
-                            Validează (furnizor)
-                          </button>
-                        ) : null}
                         {canConfirmAppointment &&
                         appt.status === "scheduled" &&
                         !appt.managerConfirmedAt ? (

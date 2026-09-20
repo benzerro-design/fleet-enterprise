@@ -35,6 +35,7 @@ import {
 } from '@prisma/client';
 import { PartnerNotificationService } from '../partner/partner-notification.service';
 import { PartnerMailService } from '../partner/partner-mail.service';
+import { formatRoDateTime } from '../common/datetime-ro';
 import { parseTenantMailSettings } from '../tenant/mail-settings';
 import { parseClientMailSettings } from '../clients/client-mail-settings';
 import { AuditService } from '../audit/audit.service';
@@ -2455,7 +2456,7 @@ export class ServiceCasesService {
               ticketId: serviceCase.sourceTicketId,
               kind: CrmTicketEventKind.workflow_advance,
               body: scheduledAt
-                ? `Programare stabilită: ${scheduledAt.toLocaleString('ro-RO')}.`
+                ? `Programare stabilită: ${formatRoDateTime(scheduledAt)}.`
                 : 'Solicitare programare fără dată — furnizorul propune slotul.',
               payload: {
                 fromStage: serviceCase.currentStage,
@@ -2639,7 +2640,7 @@ export class ServiceCasesService {
             tenantId: tenant.id,
             ticketId: serviceCase.sourceTicketId,
             kind: CrmTicketEventKind.workflow_advance,
-            body: `Programare confirmată de manager: ${existing.scheduledAt?.toLocaleString('ro-RO') ?? '—'}.`,
+            body: `Programare confirmată de manager: ${formatRoDateTime(existing.scheduledAt)}.`,
             payload: { appointmentId, serviceCaseId: serviceCase.id },
             actorUserId: actorUserId ?? null,
           },
@@ -2700,12 +2701,11 @@ export class ServiceCasesService {
       throw new BadRequestException('Appointment is not awaiting supplier validation');
     }
     if (access) {
-      if (isPartnerUser(access)) {
-        assertPartnerWrite(access);
-        assertPartnerSupplierId(access, existing.supplierId);
-      } else {
-        assertServiceCaseWrite(access, existing.serviceCase.clientId);
+      if (!isPartnerUser(access)) {
+        throw new ForbiddenException('Only the supplier can validate this appointment');
       }
+      assertPartnerWrite(access);
+      assertPartnerSupplierId(access, existing.supplierId);
     }
 
     let scheduledAt = existing.scheduledAt;
@@ -2765,8 +2765,8 @@ export class ServiceCasesService {
 
       if (existing.serviceCase.sourceTicketId) {
         const body = dto.scheduledAt
-          ? `Furnizorul a acceptat cu altă dată: ${scheduledAt.toLocaleString('ro-RO')}.`
-          : `Furnizorul a validat programarea: ${scheduledAt.toLocaleString('ro-RO')}.`;
+          ? `Furnizorul a acceptat cu altă dată: ${formatRoDateTime(scheduledAt)}.`
+          : `Furnizorul a validat programarea: ${formatRoDateTime(scheduledAt)}.`;
         await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,
@@ -2840,7 +2840,7 @@ export class ServiceCasesService {
       });
 
       if (existing.serviceCase.sourceTicketId) {
-        const when = existing.scheduledAt?.toLocaleString('ro-RO') ?? 'fără dată';
+        const when = existing.scheduledAt ? formatRoDateTime(existing.scheduledAt) : 'fără dată';
         const reg = existing.vehicle.registrationNumber;
         const body = note
           ? `Furnizorul solicită anularea programării (${reg}, ${when}): ${note}`
@@ -3035,7 +3035,7 @@ export class ServiceCasesService {
             tenantId: tenant.id,
             ticketId: existing.serviceCase.sourceTicketId,
             kind: CrmTicketEventKind.workflow_advance,
-            body: `Șoferul a refuzat programarea (${existing.scheduledAt?.toLocaleString('ro-RO') ?? 'fără dată'}): ${note}`,
+            body: `Șoferul a refuzat programarea (${existing.scheduledAt ? formatRoDateTime(existing.scheduledAt) : 'fără dată'}): ${note}`,
             payload: {
               appointmentId,
               serviceCaseId: existing.serviceCaseId,
@@ -3179,8 +3179,8 @@ export class ServiceCasesService {
 
       if (existing.serviceCase.sourceTicketId) {
         const body = proposalNote
-          ? `${actorLabel} a repropus programarea: ${scheduledAt.toLocaleString('ro-RO')}. ${proposalNote}`
-          : `${actorLabel} a repropus programarea: ${scheduledAt.toLocaleString('ro-RO')}.`;
+          ? `${actorLabel} a repropus programarea: ${formatRoDateTime(scheduledAt)}. ${proposalNote}`
+          : `${actorLabel} a repropus programarea: ${formatRoDateTime(scheduledAt)}.`;
         await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,

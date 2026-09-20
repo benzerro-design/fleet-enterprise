@@ -38,7 +38,7 @@ export function AppearancePreferencesForm() {
         <div>
           <h2 className="text-sm font-semibold text-zinc-100">Temă</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Se aplică imediat pe tot UI-ul (browser local — nu e setare tenant).
+            Se aplică imediat pe tot UI-ul din acest browser — preferință personală, nu setare tenant.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">

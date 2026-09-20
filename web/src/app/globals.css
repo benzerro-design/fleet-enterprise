@@ -45,6 +45,48 @@
   scroll-behavior: auto !important;
 }
 
+@keyframes fleet-slot-flash {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.85);
+  }
+  25% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes fleet-pick-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(16 185 129 / 0);
+  }
+  40% {
+    box-shadow: 0 0 0 3px rgb(16 185 129 / 0.45);
+  }
+}
+
+.fleet-slot-flash {
+  animation: fleet-slot-flash 0.85s ease-out forwards;
+}
+
+.fleet-pick-pulse {
+  animation: fleet-pick-pulse 0.9s ease-out;
+  border-color: rgb(52 211 153 / 0.7) !important;
+}
+
+[data-reduce-motion="1"] .fleet-slot-flash,
+[data-reduce-motion="1"] .fleet-pick-pulse {
+  animation: none;
+  opacity: 1;
+  border-color: rgb(52 211 153 / 0.8) !important;
+  box-shadow: 0 0 0 2px rgb(16 185 129 / 0.35);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

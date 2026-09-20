@@ -133,19 +133,6 @@ export function VehicleSwitcher({
   }, [open, highlightIdx, listItems, navigateTo]);
 
   useEffect(() => {
-    function onGlobalKey(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        const tag = (e.target as HTMLElement | null)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-        e.preventDefault();
-        setOpen(true);
-      }
-    }
-    document.addEventListener("keydown", onGlobalKey);
-    return () => document.removeEventListener("keydown", onGlobalKey);
-  }, []);
-
-  useEffect(() => {
     setHighlightIdx(0);
   }, [query]);
 

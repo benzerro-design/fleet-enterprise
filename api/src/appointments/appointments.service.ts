@@ -17,6 +17,7 @@ import {
   ServiceCaseWorkflowType,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { formatRoDateTime } from '../common/datetime-ro';
 import { assertClientFleetWrite } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -618,7 +619,7 @@ export class AppointmentsService {
             tenantId: tenant.id,
             ticketId: serviceCase.sourceTicketId,
             kind: CrmTicketEventKind.workflow_advance,
-            body: `Programare în programator: ${scheduledAt.toLocaleString('ro-RO')}.`,
+            body: `Programare în programator: ${formatRoDateTime(scheduledAt)}.`,
             payload: { serviceCaseId: serviceCase.id, appointmentId: created.id },
             actorUserId: actorUserId ?? null,
           },

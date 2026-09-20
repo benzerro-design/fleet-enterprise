@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { appendPartnerSupplierQuery, parsePartnerSupplierQuery } from "@/lib/partner-context";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FleetCommandPalette, type FleetCommandItem } from "@/components/fleet/FleetCommandPalette";
 import { PartnerNavLinks } from "@/components/fleet/partner/PartnerNavLinks";
 import { PartnerTopBar, type PartnerTopBarContext } from "@/components/fleet/partner/PartnerTopBar";
 import { PARTNER_NAV_ITEMS, partnerNavActive } from "@/lib/partner-nav";
@@ -34,12 +35,27 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
-  const homeHref = appendPartnerSupplierQuery(
-    "/fleet/partner",
-    parsePartnerSupplierQuery(Object.fromEntries(searchParams.entries())),
-  );
+  const supplierQ = parsePartnerSupplierQuery(Object.fromEntries(searchParams.entries()));
+  const homeHref = appendPartnerSupplierQuery("/fleet/partner", supplierQ);
   const pageTitle = partnerPageTitle(pathname);
   const topBarCtx = { ...topBar, pageTitle };
+
+  const commandItems = useMemo<FleetCommandItem[]>(() => {
+    const nav: FleetCommandItem[] = PARTNER_NAV_ITEMS.map((item) => ({
+      id: item.href,
+      label: item.label,
+      href: appendPartnerSupplierQuery(item.href, supplierQ),
+      group: "Partener",
+    }));
+    nav.push({
+      id: "/fleet/preferences",
+      label: "Preferințe",
+      href: "/fleet/preferences",
+      group: "Cont",
+      keywords: "aspect tema densitate",
+    });
+    return nav;
+  }, [supplierQ]);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
@@ -80,7 +96,8 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-zinc-950">
+    <div data-fleet-shell className="flex h-dvh overflow-hidden bg-zinc-950">
+      <FleetCommandPalette items={commandItems} />
       <aside className="hidden h-full w-[220px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
         {sidebar}
       </aside>

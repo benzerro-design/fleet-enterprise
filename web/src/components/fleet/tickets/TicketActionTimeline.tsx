@@ -1,6 +1,7 @@
 "use client";
 
 import { FleetAvatar } from "@/components/fleet/tickets/TicketListGlyphs";
+import { formatDateTimeRo } from "@/lib/datetime-local";
 import { ticketEventKindLabel, ticketRoutingLabel, type TicketEventRecord } from "@/lib/tickets-api";
 
 const ACTION_KINDS = new Set([
@@ -51,7 +52,7 @@ export function TicketActionTimeline({ events }: { events: TicketEventRecord[] }
             {ev.kind === "odometer" ? <OdometerGlyph /> : null}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                <span>{new Date(ev.createdAt).toLocaleString("ro-RO")}</span>
+                <span>{formatDateTimeRo(ev.createdAt)}</span>
                 <span className="rounded border border-zinc-700 px-1.5 py-0.5">
                   {ticketEventKindLabel(ev.kind)}
                 </span>

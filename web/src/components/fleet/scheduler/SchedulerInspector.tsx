@@ -100,6 +100,7 @@ export function SchedulerInspector({
   const [requestingCancel, setRequestingCancel] = useState(false);
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [requireDriverAck, setRequireDriverAck] = useState(true);
+  const [pickPulseKey, setPickPulseKey] = useState(0);
 
   useEffect(() => {
     if (!appointment) return;
@@ -127,12 +128,14 @@ export function SchedulerInspector({
   useEffect(() => {
     if (!editing || !calendarPickAt) return;
     setEditScheduledAt(calendarPickAt);
+    setPickPulseKey((k) => k + 1);
     onCalendarPickConsumed?.();
   }, [calendarPickAt, editing, onCalendarPickConsumed]);
 
   useEffect(() => {
     if (createMode && initialCreateScheduledAt) {
       setScheduledAt(initialCreateScheduledAt);
+      setPickPulseKey((k) => k + 1);
     }
   }, [createMode, initialCreateScheduledAt]);
 
@@ -503,7 +506,13 @@ export function SchedulerInspector({
           </div>
           <div>
             <label className={OPS_LABEL_CLASS}>Data și ora</label>
-            <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={OPS_INPUT_CLASS} />
+            <input
+              key={`create-dt-${pickPulseKey}`}
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              className={`${OPS_INPUT_CLASS}${pickPulseKey > 0 ? " fleet-pick-pulse" : ""}`}
+            />
           </div>
           <div>
             <label className={OPS_LABEL_CLASS}>Durată (min)</label>
@@ -666,7 +675,13 @@ export function SchedulerInspector({
           ) : null}
           <div>
             <label className={OPS_LABEL_CLASS}>Data și ora</label>
-            <input type="datetime-local" value={editScheduledAt} onChange={(e) => setEditScheduledAt(e.target.value)} className={OPS_INPUT_CLASS} />
+            <input
+              key={`edit-dt-${pickPulseKey}`}
+              type="datetime-local"
+              value={editScheduledAt}
+              onChange={(e) => setEditScheduledAt(e.target.value)}
+              className={`${OPS_INPUT_CLASS}${pickPulseKey > 0 ? " fleet-pick-pulse" : ""}`}
+            />
           </div>
           <div>
             <label className={OPS_LABEL_CLASS}>Durată (min)</label>
@@ -914,7 +929,8 @@ export function SchedulerInspector({
 
       {canWrite ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          {appointment.status === "pending_supplier" || appointment.status === "needs_repropose" ? (
+          {partnerMode &&
+          (appointment.status === "pending_supplier" || appointment.status === "needs_repropose") ? (
             <>
               {appointmentHasSlot(appointment.scheduledAt) ? (
               <button

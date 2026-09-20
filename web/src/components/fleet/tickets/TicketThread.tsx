@@ -6,6 +6,7 @@ import { useState } from "react";
 import { FleetAvatar } from "@/components/fleet/tickets/TicketListGlyphs";
 import { TicketAttachmentList } from "@/components/fleet/tickets/TicketAttachmentList";
 import { TicketReactionBar } from "@/components/fleet/tickets/TicketReactionBar";
+import { formatDateTimeRo } from "@/lib/datetime-local";
 import {
   fleetJsonHeaders,
   ticketCommentText,
@@ -111,7 +112,7 @@ function TicketThreadItem({
       <div className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
           <span className="font-medium text-zinc-300">{name}</span>
-          <span>{new Date(ev.createdAt).toLocaleString("ro-RO")}</span>
+          <span>{formatDateTimeRo(ev.createdAt)}</span>
           {ev.editedAt ? <span className="text-zinc-600">(editat)</span> : null}
           {forward ? (
             <Link

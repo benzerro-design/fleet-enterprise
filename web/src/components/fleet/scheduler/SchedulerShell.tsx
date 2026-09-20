@@ -335,9 +335,11 @@ export function SchedulerShell({
     void load(false);
   }, [load]);
 
-  /** Deep-link / select din coadă: sare calendarul la săptămâna slotului. */
+  /** Deep-link / select din coadă: sare calendarul la săptămâna slotului.
+   *  Nu în pick-mode (Propune altă dată/oră) — altfel săgețile săptămână se blochează (UAT-052). */
   useEffect(() => {
     if (!selectedId || initialLoading) return;
+    if (rescheduleEditing || proposeRescheduleForId) return;
     if (appointments.some((a) => a.id === selectedId)) return;
     const row = inboxAppointments.find((a) => a.id === selectedId);
     if (!row?.scheduledAt) return;
@@ -346,7 +348,7 @@ export function SchedulerShell({
     setWeekStart(week);
     syncUrlHistory({ week, select: selectedId });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- doar când lipsește din săptămâna curentă
-  }, [selectedId, appointments, inboxAppointments, initialLoading]);
+  }, [selectedId, appointments, inboxAppointments, initialLoading, rescheduleEditing, proposeRescheduleForId]);
 
   const filteredAppointments = useMemo(() => {
     if (inboxFilter === "all") return appointments;
@@ -604,7 +606,9 @@ export function SchedulerShell({
                 onSelect={selectAppointment}
                 onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
                 onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
-                onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
+                onSupplierValidate={
+                  canWrite && partnerMode ? (id) => void supplierValidateById(id) : undefined
+                }
                 onRequestCancel={
                   canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
                 }
@@ -632,7 +636,9 @@ export function SchedulerShell({
               onSlotClick={canWrite ? handleSlotClick : undefined}
               slotClickMode={slotClickMode}
               onStatusChange={canWrite ? setAppointmentStatus : undefined}
-              onSupplierValidate={canWrite ? supplierValidateById : undefined}
+              onSupplierValidate={
+                canWrite && partnerMode ? supplierValidateById : undefined
+              }
               onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
               onProposeReschedule={canWrite ? proposeAlternateDate : undefined}
             />
@@ -652,7 +658,9 @@ export function SchedulerShell({
           onSlotClick={canWrite ? handleSlotClick : undefined}
           slotClickMode={slotClickMode}
           onStatusChange={canWrite ? setAppointmentStatus : undefined}
-          onSupplierValidate={canWrite ? supplierValidateById : undefined}
+          onSupplierValidate={
+            canWrite && partnerMode ? supplierValidateById : undefined
+          }
           onRequestCancel={canWrite && partnerMode ? requestCancelById : undefined}
           onProposeReschedule={canWrite ? proposeAlternateDate : undefined}
         />
@@ -676,7 +684,9 @@ export function SchedulerShell({
             onSelect={selectAppointment}
             onConfirm={canWrite ? (id) => void setAppointmentStatus(id, "confirmed") : undefined}
             onCancel={canWrite ? (id) => void setAppointmentStatus(id, "cancelled") : undefined}
-            onSupplierValidate={canWrite ? (id) => void supplierValidateById(id) : undefined}
+            onSupplierValidate={
+              canWrite && partnerMode ? (id) => void supplierValidateById(id) : undefined
+            }
             onRequestCancel={
               canWrite && partnerMode ? (id) => void requestCancelById(id) : undefined
             }
