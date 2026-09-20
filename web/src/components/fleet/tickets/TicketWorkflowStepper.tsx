@@ -29,6 +29,9 @@ import {
   counterProposalStatusLabel,
   isDriverCounterProposal,
 } from "@/components/fleet/tickets/DriverProposalCallout";
+import { AppointmentProposalHistoryList } from "@/components/fleet/tickets/AppointmentProposalHistoryList";
+import { readAppointmentProposalHistoryTabs } from "@/lib/appointment-proposal-history-prefs";
+import type { TicketEventRecord } from "@/lib/tickets-api";
 import { WorkOrderQuoteBillingActions } from "@/components/fleet/work-orders/WorkOrderQuoteBillingActions";
 import { buildOperationalChapters } from "@/lib/ticket-operational-story";
 import { formatDateRo } from "@/lib/datetime-local";
@@ -52,6 +55,8 @@ type Props = {
   hasVehicle: boolean;
   ticketLinks?: TicketLinkRecord[];
   onServiceCaseChange?: (record: ServiceCaseRecord | null | undefined) => void;
+  /** Event-uri tichet — pentru tab Istoric propuneri (Slice A). */
+  ticketEvents?: TicketEventRecord[];
   compact?: boolean;
 };
 
@@ -68,6 +73,7 @@ export function TicketWorkflowStepper({
   hasVehicle,
   ticketLinks = [],
   onServiceCaseChange,
+  ticketEvents = [],
   compact = false,
 }: Props) {
   const router = useRouter();
@@ -86,6 +92,28 @@ export function TicketWorkflowStepper({
   const [reproposeAt, setReproposeAt] = useState("");
   const [reproposeNote, setReproposeNote] = useState("");
   const [requireDriverAck, setRequireDriverAck] = useState(true);
+  const [proposalTab, setProposalTab] = useState<"current" | "history">("current");
+  const [historyTabsEnabled, setHistoryTabsEnabled] = useState(false);
+
+  useEffect(() => {
+    function sync() {
+      setHistoryTabsEnabled(readAppointmentProposalHistoryTabs());
+    }
+    sync();
+    function onStorage(e: StorageEvent) {
+      if (e.key === "fleet-appt-proposal-history-tabs" || e.key === null) sync();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("fleet-appt-proposal-history-tabs", sync);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("fleet-appt-proposal-history-tabs", sync);
+    };
+  }, []);
+
+  /** Manager / admin — nu șofer. */
+  const showProposalHistoryTabs =
+    historyTabsEnabled && (canConfirmAppointment || canOperate);
 
   const loadMobility = useCallback(async (workOrderId: string) => {
     try {
@@ -732,6 +760,35 @@ export function TicketWorkflowStepper({
                   </Link>
                 ) : null}
               </div>
+              {showProposalHistoryTabs ? (
+                <div className="mt-2 flex gap-1 border-b border-zinc-800 pb-0">
+                  <button
+                    type="button"
+                    onClick={() => setProposalTab("current")}
+                    className={`-mb-px border-b-2 px-2.5 py-1.5 text-[11px] font-medium ${
+                      proposalTab === "current"
+                        ? "border-emerald-500 text-emerald-300"
+                        : "border-transparent text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    Curente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProposalTab("history")}
+                    className={`-mb-px border-b-2 px-2.5 py-1.5 text-[11px] font-medium ${
+                      proposalTab === "history"
+                        ? "border-emerald-500 text-emerald-300"
+                        : "border-transparent text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    Istoric
+                  </button>
+                </div>
+              ) : null}
+              {showProposalHistoryTabs && proposalTab === "history" ? (
+                <AppointmentProposalHistoryList events={ticketEvents} />
+              ) : (
               <ul className="mt-2 space-y-3">
                 {serviceCase.appointments.map((appt) => {
                   const negotiate = serviceCase.clientDriverCanNegotiateAppointment === true;
@@ -1034,6 +1091,7 @@ export function TicketWorkflowStepper({
                   );
                 })}
               </ul>
+              )}
             </div>
           ) : null}
 

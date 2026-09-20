@@ -1,11 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAppearancePrefs } from "@/components/fleet/AppearanceProvider";
 import type {
   AppearanceDateFormat,
   AppearanceDensity,
   AppearanceTheme,
 } from "@/lib/appearance-prefs";
+import {
+  readAppointmentProposalHistoryTabs,
+  writeAppointmentProposalHistoryTabs,
+} from "@/lib/appointment-proposal-history-prefs";
 import { OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 
 const THEME_OPTIONS: { value: AppearanceTheme; label: string; hint: string }[] = [
@@ -27,6 +32,11 @@ const DATE_OPTIONS: { value: AppearanceDateFormat; label: string; example: strin
 
 export function AppearancePreferencesForm() {
   const { prefs, hydrated, update } = useAppearancePrefs();
+  const [historyTabs, setHistoryTabs] = useState(false);
+
+  useEffect(() => {
+    setHistoryTabs(readAppointmentProposalHistoryTabs());
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -144,6 +154,34 @@ export function AppearancePreferencesForm() {
             );
           })}
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">Programări (experimental)</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Tab-uri Curente / Istoric pe PROGRAMĂRI (manager și admin). Implicit oprit — dacă nu-ți place,
+            debifează și revii la UI-ul actual.
+          </p>
+        </div>
+        <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5 text-sm text-zinc-200">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={historyTabs}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setHistoryTabs(on);
+              writeAppointmentProposalHistoryTabs(on);
+            }}
+          />
+          <span>
+            <span className="font-medium">Istoric propuneri pe tichet</span>
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Nu apare pentru șofer. Furnizor (inspector) = Slice B, separat.
+            </span>
+          </span>
+        </label>
       </section>
     </div>
   );

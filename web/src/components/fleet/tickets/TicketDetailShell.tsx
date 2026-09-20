@@ -133,6 +133,7 @@ export function TicketDetailShell({
               hasVehicle={!!ticket.vehicleId}
               compact
               ticketLinks={detail.links}
+              ticketEvents={detail.events}
               onServiceCaseChange={setServiceCase}
             />
           }
