@@ -9,6 +9,7 @@ import {
   appointmentProtocolBlocksSilentSlotEdit,
   appointmentsBrowserBase,
   type AppointmentStats,
+  type AppointmentStatus,
   type CalendarAppointment,
   type SlottedCalendarAppointment,
 } from "@/lib/appointments-api";
@@ -72,6 +73,7 @@ function filterByInbox(items: CalendarAppointment[], inbox: SchedulerInboxFilter
     return items.filter(
       (a) =>
         a.status === "pending_supplier" ||
+        a.status === "pending_fleet_peer" ||
         a.status === "needs_repropose" ||
         a.status === "scheduled",
     );
@@ -80,11 +82,11 @@ function filterByInbox(items: CalendarAppointment[], inbox: SchedulerInboxFilter
 }
 
 /** Statusuri pentru coada de inbox (listă ±365z, nu săptămâna calendarului). */
-function inboxStatusesForFilter(
-  inbox: SchedulerInboxFilter,
-): Array<"pending_supplier" | "needs_repropose" | "scheduled" | "confirmed" | "completed" | "cancelled" | "no_show"> | null {
+function inboxStatusesForFilter(inbox: SchedulerInboxFilter): AppointmentStatus[] | null {
   if (inbox === "all") return null;
-  if (inbox === "action") return ["pending_supplier", "needs_repropose", "scheduled"];
+  if (inbox === "action") {
+    return ["pending_supplier", "pending_fleet_peer", "needs_repropose", "scheduled"];
+  }
   return [inbox];
 }
 

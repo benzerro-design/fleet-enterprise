@@ -405,6 +405,7 @@ export type WorkOrderRecord = {
 export type ServiceAppointmentStatus =
   | "scheduled"
   | "pending_supplier"
+  | "pending_fleet_peer"
   | "needs_repropose"
   | "confirmed"
   | "completed"
