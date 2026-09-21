@@ -5,6 +5,8 @@ export function appointmentStatusAccentClass(status: AppointmentStatus | string)
   switch (status) {
     case "pending_supplier":
       return "border-l-amber-500 bg-amber-950/35";
+    case "pending_fleet_peer":
+      return "border-l-violet-500 bg-violet-950/30";
     case "needs_repropose":
       return "border-l-rose-500 bg-rose-950/30";
     case "scheduled":
@@ -26,6 +28,8 @@ export function appointmentStatusBadgeClass(status: AppointmentStatus | string):
   switch (status) {
     case "pending_supplier":
       return "bg-amber-950/60 text-amber-200 border-amber-800/50";
+    case "pending_fleet_peer":
+      return "bg-violet-950/60 text-violet-200 border-violet-800/50";
     case "needs_repropose":
       return "bg-rose-950/50 text-rose-200 border-rose-800/50";
     case "scheduled":
@@ -45,6 +49,7 @@ export function appointmentStatusBadgeClass(status: AppointmentStatus | string):
 
 export const APPOINTMENT_STATUS_LEGEND: { status: AppointmentStatus; label: string }[] = [
   { status: "pending_supplier", label: "De validat (furnizor)" },
+  { status: "pending_fleet_peer", label: "Așteaptă flotă" },
   { status: "needs_repropose", label: "Șofer nu poate" },
   { status: "scheduled", label: "În curs de validare" },
   { status: "confirmed", label: "Confirmat" },

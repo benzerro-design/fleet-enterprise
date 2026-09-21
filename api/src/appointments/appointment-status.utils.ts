@@ -59,6 +59,28 @@ export function fleetCounterActorLabel(by: FleetCounterProposedBy): string {
   }
 }
 
+/** L* semnează în numele unui rol — asterisc pe UI/istoric; realitatea doar în audit Admin. */
+export function isTenantAdminAccess(access?: AccessContext): boolean {
+  return access?.membershipRole === MembershipRole.tenant_admin;
+}
+
+export type AppointmentProxyRole = 'manager' | 'driver' | 'supplier';
+
+export function appointmentProxyTicketMark(adminProxy: boolean): string {
+  return adminProxy ? '*' : '';
+}
+
+export function appointmentProxyAuditMeta(
+  adminProxy: boolean,
+  proxyFor: AppointmentProxyRole,
+): { proxyFor: AppointmentProxyRole; detail: string } | Record<string, never> {
+  if (!adminProxy) return {};
+  return {
+    proxyFor,
+    detail: `L* a acționat în numele ${proxyFor}`,
+  };
+}
+
 /** Programare propusă de flotă/client → așteaptă validare furnizor dacă există supplier. */
 export function resolveInitialAppointmentStatus(
   supplierId: string | null | undefined,
@@ -89,6 +111,7 @@ export function blocksSilentScheduledAtEdit(opts: {
   if (opts.existingScheduledAt.getTime() === opts.nextScheduledAt.getTime()) return false;
   return (
     opts.status === ServiceAppointmentStatus.pending_supplier ||
+    opts.status === ServiceAppointmentStatus.pending_fleet_peer ||
     opts.status === ServiceAppointmentStatus.scheduled ||
     opts.status === ServiceAppointmentStatus.confirmed ||
     opts.status === ServiceAppointmentStatus.needs_repropose
@@ -101,6 +124,7 @@ export const SILENT_SLOT_EDIT_BLOCKED_MESSAGE =
 export const SERVICE_APPOINTMENT_STATUSES: ServiceAppointmentStatus[] = [
   ServiceAppointmentStatus.scheduled,
   ServiceAppointmentStatus.pending_supplier,
+  ServiceAppointmentStatus.pending_fleet_peer,
   ServiceAppointmentStatus.confirmed,
   ServiceAppointmentStatus.needs_repropose,
   ServiceAppointmentStatus.completed,

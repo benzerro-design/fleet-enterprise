@@ -3,6 +3,7 @@ export const appointmentsBrowserBase = "/api/appointments";
 export type AppointmentStatus =
   | "scheduled"
   | "pending_supplier"
+  | "pending_fleet_peer"
   | "needs_repropose"
   | "confirmed"
   | "completed"
@@ -61,6 +62,7 @@ export type CalendarAppointment = {
   requireDriverAckOverride?: boolean | null;
   requireDriverAck?: boolean;
   driverCanNegotiateAppointment?: boolean;
+  appointmentProposeFleetFirst?: boolean;
   appointmentProposalHistoryTabs?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -80,6 +82,7 @@ export type AppointmentStats = {
 export const APPOINTMENT_STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "scheduled", label: "În curs de validare" },
   { value: "pending_supplier", label: "Așteaptă furnizor" },
+  { value: "pending_fleet_peer", label: "Așteaptă flotă" },
   { value: "needs_repropose", label: "Șofer nu poate — altă oră" },
   { value: "confirmed", label: "Confirmat" },
   { value: "completed", label: "Finalizat" },
@@ -135,6 +138,7 @@ export function appointmentProcessLabel(a: {
     return "Așteaptă propunere slot";
   }
   if (a.status === "pending_supplier") return "Așteaptă furnizor";
+  if (a.status === "pending_fleet_peer") return "Așteaptă flotă";
   if (appointmentIsFullyValidated(a) || a.status === "confirmed") {
     return appointmentIsFullyValidated(a) ? "Confirmat" : "În curs de validare";
   }
@@ -190,6 +194,7 @@ export function appointmentProtocolBlocksSilentSlotEdit(a: {
   if (!appointmentHasSlot(a.scheduledAt)) return false;
   return (
     a.status === "pending_supplier" ||
+    a.status === "pending_fleet_peer" ||
     a.status === "scheduled" ||
     a.status === "confirmed" ||
     a.status === "needs_repropose"
@@ -207,6 +212,9 @@ export function appointmentFleetCanCounterPropose(
   },
   opts?: { negotiate?: boolean },
 ): boolean {
+  if (a.status === "pending_fleet_peer" && opts?.negotiate) {
+    return appointmentHasSlot(a.scheduledAt);
+  }
   if (
     a.status !== "scheduled" &&
     !(a.status === "confirmed" && opts?.negotiate)

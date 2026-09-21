@@ -60,6 +60,9 @@ import {
   fleetCounterActorLabel,
   fleetCounterFromAccess,
   fleetCounterFromProposedBy,
+  isTenantAdminAccess,
+  appointmentProxyAuditMeta,
+  appointmentProxyTicketMark,
   parseFleetCounterProposedBy,
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
@@ -67,6 +70,7 @@ import {
   type FleetCounterProposedBy,
 } from '../appointments/appointment-status.utils';
 import {
+  effectiveAppointmentProposeFleetFirst,
   effectiveDriverCanNegotiate,
   effectiveRequireDriverAck,
   parseClientIamSettings,
@@ -154,6 +158,8 @@ export type ServiceAppointmentRecord = {
   requireDriverAck: boolean;
   /** Șoferul poate accepta / propune data în paralel. */
   driverCanNegotiateAppointment: boolean;
+  /** Mod B: Propune trece mai întâi prin flotă. */
+  appointmentProposeFleetFirst: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -2617,7 +2623,7 @@ export class ServiceCasesService {
 
     const existing = await this.prisma.serviceAppointment.findFirst({
       where: { id: appointmentId, tenantId: tenant.id },
-      include: { serviceCase: true },
+      include: { serviceCase: { include: { client: { select: { iamSettings: true } } } } },
     });
     if (!existing) throw new NotFoundException('Appointment not found');
     if (existing.status === ServiceAppointmentStatus.cancelled) {
@@ -2644,6 +2650,71 @@ export class ServiceCasesService {
       throw new BadRequestException('Programarea nu are dată — furnizorul trebuie să propună slotul.');
     }
 
+    const fleetFirst = effectiveAppointmentProposeFleetFirst(
+      existing.serviceCase.client?.iamSettings,
+    );
+    const priorCounter = parseFleetCounterProposedBy(existing.fleetCounterProposedBy);
+    const adminProxy = isTenantAdminAccess(access);
+    const star = appointmentProxyTicketMark(adminProxy);
+
+    /** Mod B: manager Confirmă propunerea șoferului → pleacă la furnizor. */
+    if (
+      existing.status === ServiceAppointmentStatus.pending_fleet_peer &&
+      fleetFirst &&
+      priorCounter === 'driver'
+    ) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.serviceAppointment.update({
+          where: { id: appointmentId },
+          data: {
+            status: ServiceAppointmentStatus.pending_supplier,
+            managerConfirmedAt: new Date(),
+            // păstrează stamp driver pentru preAck după validare furnizor
+          },
+        });
+        if (existing.serviceCase.sourceTicketId) {
+          await tx.crmTicketEvent.create({
+            data: {
+              tenantId: tenant.id,
+              ticketId: existing.serviceCase.sourceTicketId,
+              kind: CrmTicketEventKind.workflow_advance,
+              body: `Programare confirmată de manager${star}: ${formatRoDateTime(confirmedSlot)}. Trimisă la furnizor.`,
+              payload: {
+                appointmentId,
+                serviceCaseId: existing.serviceCaseId,
+                signedAs: 'manager',
+                proxyByAdmin: adminProxy,
+              },
+              actorUserId: actorUserId ?? null,
+            },
+          });
+        }
+      });
+      await this.audit.log({
+        tenantId: tenant.id,
+        actorUserId,
+        action: 'service_appointment.confirm',
+        entityType: 'service_appointment',
+        entityId: appointmentId,
+        meta: {
+          serviceCaseId: existing.serviceCaseId,
+          phase: 'fleet_peer_to_supplier',
+          ...appointmentProxyAuditMeta(adminProxy, 'manager'),
+        },
+      });
+      const reloadedPeer = await this.prisma.serviceCase.findFirst({
+        where: { id: existing.serviceCaseId },
+        include: this.caseInclude(),
+      });
+      return this.toRecord(reloadedPeer!);
+    }
+
+    if (existing.status === ServiceAppointmentStatus.pending_fleet_peer) {
+      throw new BadRequestException(
+        'Așteaptă confirmarea șoferului pe propunerea din flotă (sau Propune altă oră).',
+      );
+    }
+
     let woCreated: { created: boolean; workOrderId: string | null } = {
       created: false,
       workOrderId: null,
@@ -2665,8 +2736,13 @@ export class ServiceCasesService {
             tenantId: tenant.id,
             ticketId: serviceCase.sourceTicketId,
             kind: CrmTicketEventKind.workflow_advance,
-            body: `Programare confirmată de manager: ${formatRoDateTime(existing.scheduledAt)}.`,
-            payload: { appointmentId, serviceCaseId: serviceCase.id },
+            body: `Programare confirmată de manager${star}: ${formatRoDateTime(existing.scheduledAt)}.`,
+            payload: {
+              appointmentId,
+              serviceCaseId: serviceCase.id,
+              signedAs: 'manager',
+              proxyByAdmin: adminProxy,
+            },
             actorUserId: actorUserId ?? null,
           },
         });
@@ -2696,6 +2772,18 @@ export class ServiceCasesService {
         },
       );
     }
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_appointment.confirm',
+      entityType: 'service_appointment',
+      entityId: appointmentId,
+      meta: {
+        serviceCaseId: existing.serviceCaseId,
+        ...appointmentProxyAuditMeta(adminProxy, 'manager'),
+      },
+    });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
       where: { id: existing.serviceCaseId },
@@ -2804,9 +2892,11 @@ export class ServiceCasesService {
       });
 
       if (existing.serviceCase.sourceTicketId) {
+        const adminProxy = isTenantAdminAccess(access);
+        const star = appointmentProxyTicketMark(adminProxy);
         const body = !slotUnchanged
-          ? `Furnizorul a propus altă dată/oră: ${formatRoDateTime(scheduledAt)}.`
-          : `Furnizorul a validat programarea: ${formatRoDateTime(scheduledAt)}.`;
+          ? `Furnizorul${star} a propus altă dată/oră: ${formatRoDateTime(scheduledAt)}.`
+          : `Furnizorul${star} a validat programarea: ${formatRoDateTime(scheduledAt)}.`;
         await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,
@@ -2821,6 +2911,8 @@ export class ServiceCasesService {
               proposalBy: !slotUnchanged ? 'supplier' : null,
               scheduledAt: scheduledAt.toISOString(),
               note: nextLastProposalNote,
+              signedAs: 'supplier',
+              proxyByAdmin: adminProxy,
             },
             actorUserId: actorUserId ?? null,
           },
@@ -2834,7 +2926,10 @@ export class ServiceCasesService {
       action: 'service_appointment.supplier_validate',
       entityType: 'service_appointment',
       entityId: appointmentId,
-      meta: { serviceCaseId: existing.serviceCaseId },
+      meta: {
+        serviceCaseId: existing.serviceCaseId,
+        ...appointmentProxyAuditMeta(isTenantAdminAccess(access), 'supplier'),
+      },
     });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
@@ -2965,7 +3060,18 @@ export class ServiceCasesService {
         'Programarea trebuie validată de furnizor înainte de confirmare.',
       );
     }
-    if (existing.driverAcknowledgedAt) {
+    const fleetFirst = effectiveAppointmentProposeFleetFirst(
+      existing.serviceCase.client?.iamSettings,
+    );
+    const priorCounter = parseFleetCounterProposedBy(existing.fleetCounterProposedBy);
+    const adminProxy = isTenantAdminAccess(access);
+    const star = appointmentProxyTicketMark(adminProxy);
+    const waitingFleetPeerForDriver =
+      existing.status === ServiceAppointmentStatus.pending_fleet_peer &&
+      fleetFirst &&
+      (priorCounter === 'manager' || priorCounter === 'admin');
+
+    if (existing.driverAcknowledgedAt && !waitingFleetPeerForDriver) {
       throw new BadRequestException('Appointment already acknowledged by driver');
     }
     const negotiate = effectiveDriverCanNegotiate(existing.serviceCase.client?.iamSettings);
@@ -2974,9 +3080,64 @@ export class ServiceCasesService {
         'Așteaptă Confirmă manager înainte de Confirmă primire (șofer).',
       );
     }
+    if (
+      existing.status === ServiceAppointmentStatus.pending_fleet_peer &&
+      !waitingFleetPeerForDriver
+    ) {
+      throw new BadRequestException(
+        'Așteaptă confirmarea managerului pe propunerea din flotă (sau Propune altă oră).',
+      );
+    }
     const ackSlot = existing.scheduledAt;
     if (!ackSlot) {
       throw new BadRequestException('Programarea nu are dată — furnizorul trebuie să propună slotul.');
+    }
+
+    /** Mod B: șofer Confirmă propunerea managerului → pleacă la furnizor. */
+    if (waitingFleetPeerForDriver) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.serviceAppointment.update({
+          where: { id: appointmentId },
+          data: {
+            status: ServiceAppointmentStatus.pending_supplier,
+            driverAcknowledgedAt: new Date(),
+          },
+        });
+        if (existing.serviceCase.sourceTicketId) {
+          await tx.crmTicketEvent.create({
+            data: {
+              tenantId: tenant.id,
+              ticketId: existing.serviceCase.sourceTicketId,
+              kind: CrmTicketEventKind.workflow_advance,
+              body: `Programare confirmată de șofer${star}: ${formatRoDateTime(ackSlot)}. Trimisă la furnizor.`,
+              payload: {
+                appointmentId,
+                serviceCaseId: existing.serviceCaseId,
+                signedAs: 'driver',
+                proxyByAdmin: adminProxy,
+              },
+              actorUserId: actorUserId ?? null,
+            },
+          });
+        }
+      });
+      await this.audit.log({
+        tenantId: tenant.id,
+        actorUserId,
+        action: 'service_appointment.acknowledge',
+        entityType: 'service_appointment',
+        entityId: appointmentId,
+        meta: {
+          serviceCaseId: existing.serviceCaseId,
+          phase: 'fleet_peer_to_supplier',
+          ...appointmentProxyAuditMeta(adminProxy, 'driver'),
+        },
+      });
+      const reloadedPeer = await this.prisma.serviceCase.findFirst({
+        where: { id: existing.serviceCaseId },
+        include: this.caseInclude(),
+      });
+      return this.toRecord(reloadedPeer!);
     }
 
     let woCreated: { created: boolean; workOrderId: string | null } = {
@@ -2988,6 +3149,24 @@ export class ServiceCasesService {
         where: { id: appointmentId },
         data: { driverAcknowledgedAt: new Date() },
       });
+
+      if (existing.serviceCase.sourceTicketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId: existing.serviceCase.sourceTicketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Programare confirmată de șofer${star}: ${formatRoDateTime(ackSlot)}.`,
+            payload: {
+              appointmentId,
+              serviceCaseId: existing.serviceCaseId,
+              signedAs: 'driver',
+              proxyByAdmin: adminProxy,
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
 
       woCreated = await this.maybeCreateWorkOrderAfterDualConfirmTx(
         tx,
@@ -3016,6 +3195,18 @@ export class ServiceCasesService {
         );
       }
     }
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'service_appointment.acknowledge',
+      entityType: 'service_appointment',
+      entityId: appointmentId,
+      meta: {
+        serviceCaseId: existing.serviceCaseId,
+        ...appointmentProxyAuditMeta(adminProxy, 'driver'),
+      },
+    });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
       where: { id: existing.serviceCaseId },
@@ -3144,6 +3335,9 @@ export class ServiceCasesService {
       existing.serviceCase.client?.iamSettings,
       existing.requireDriverAckOverride,
     );
+    const fleetFirst = effectiveAppointmentProposeFleetFirst(
+      existing.serviceCase.client?.iamSettings,
+    );
     const fullyValidated =
       !!existing.managerConfirmedAt &&
       (!requireDriverAck || !!existing.driverAcknowledgedAt);
@@ -3161,10 +3355,16 @@ export class ServiceCasesService {
         existing.status === ServiceAppointmentStatus.confirmed) &&
       !!existing.scheduledAt &&
       !fullyValidated;
+    const canReproposeFromFleetPeer =
+      negotiate &&
+      fleetFirst &&
+      existing.status === ServiceAppointmentStatus.pending_fleet_peer &&
+      !!existing.scheduledAt;
     if (
       !canReproposeAfterDriverDecline &&
       !canCounterProposeBeforeConfirm &&
-      !canCounterProposeParallel
+      !canCounterProposeParallel &&
+      !canReproposeFromFleetPeer
     ) {
       throw new BadRequestException('Appointment is not awaiting reproposal');
     }
@@ -3184,11 +3384,40 @@ export class ServiceCasesService {
 
     const proposalNote = dto.note?.trim() || null;
     const priorDeclineNote = existing.driverDeclineNote;
-    const nextStatus = existing.supplierId
-      ? ServiceAppointmentStatus.pending_supplier
-      : ServiceAppointmentStatus.scheduled;
     const counterBy = fleetCounterFromAccess(access, { driverActor });
     const actorLabel = fleetCounterActorLabel(counterBy);
+    const priorCounter = parseFleetCounterProposedBy(existing.fleetCounterProposedBy);
+    const adminProxy = isTenantAdminAccess(access);
+    const star = appointmentProxyTicketMark(adminProxy);
+
+    let peerExitsToSupplier = false;
+    if (canReproposeFromFleetPeer) {
+      const priorIsManagerCamp = priorCounter === 'manager' || priorCounter === 'admin';
+      const priorIsDriver = priorCounter === 'driver';
+      const actorIsManagerCamp = counterBy === 'manager' || counterBy === 'admin';
+      peerExitsToSupplier =
+        (priorIsManagerCamp && counterBy === 'driver') ||
+        (priorIsDriver && actorIsManagerCamp);
+    }
+
+    let nextStatus: ServiceAppointmentStatus;
+    if (!existing.supplierId) {
+      nextStatus = ServiceAppointmentStatus.scheduled;
+    } else if (peerExitsToSupplier) {
+      nextStatus = ServiceAppointmentStatus.pending_supplier;
+    } else if (
+      fleetFirst &&
+      negotiate &&
+      (canCounterProposeParallel ||
+        canCounterProposeBeforeConfirm ||
+        canReproposeAfterDriverDecline ||
+        (canReproposeFromFleetPeer && !peerExitsToSupplier))
+    ) {
+      nextStatus = ServiceAppointmentStatus.pending_fleet_peer;
+    } else {
+      nextStatus = ServiceAppointmentStatus.pending_supplier;
+    }
+
     const preAckManager =
       negotiate &&
       nextStatus === ServiceAppointmentStatus.scheduled &&
@@ -3200,6 +3429,7 @@ export class ServiceCasesService {
       : nextStatus;
     const stampCounter =
       nextStatus === ServiceAppointmentStatus.pending_supplier ||
+      nextStatus === ServiceAppointmentStatus.pending_fleet_peer ||
       (nextStatus === ServiceAppointmentStatus.scheduled && counterBy === 'supplier');
 
     await this.prisma.$transaction(async (tx) => {
@@ -3216,9 +3446,11 @@ export class ServiceCasesService {
           driverAcknowledgedAt: preAckDriver ? new Date() : null,
           supplierValidatedAt: null,
           fleetCounterProposedBy: stampCounter ? counterBy : null,
-          proposedByRole: nextStatus === ServiceAppointmentStatus.pending_supplier
-            ? proposedByFromAccess(access)
-            : existing.proposedByRole,
+          proposedByRole:
+            nextStatus === ServiceAppointmentStatus.pending_supplier ||
+            nextStatus === ServiceAppointmentStatus.pending_fleet_peer
+              ? proposedByFromAccess(access)
+              : existing.proposedByRole,
         },
       });
 
@@ -3228,9 +3460,15 @@ export class ServiceCasesService {
       });
 
       if (existing.serviceCase.sourceTicketId) {
+        const dest =
+          nextStatus === ServiceAppointmentStatus.pending_fleet_peer
+            ? ' Așteaptă confirmare în flotă.'
+            : nextStatus === ServiceAppointmentStatus.pending_supplier
+              ? ' Trimisă la furnizor.'
+              : '';
         const body = proposalNote
-          ? `${actorLabel} a repropus programarea: ${formatRoDateTime(scheduledAt)}. ${proposalNote}`
-          : `${actorLabel} a repropus programarea: ${formatRoDateTime(scheduledAt)}.`;
+          ? `${actorLabel}${star} a repropus programarea: ${formatRoDateTime(scheduledAt)}.${dest} ${proposalNote}`
+          : `${actorLabel}${star} a repropus programarea: ${formatRoDateTime(scheduledAt)}.${dest}`;
         await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,
@@ -3246,6 +3484,7 @@ export class ServiceCasesService {
               priorDeclineNote,
               scheduledAt: scheduledAt.toISOString(),
               status: storedStatus,
+              proxyByAdmin: adminProxy,
             },
             actorUserId: actorUserId ?? null,
           },
@@ -3259,7 +3498,16 @@ export class ServiceCasesService {
       action: 'service_appointment.repropose',
       entityType: 'service_appointment',
       entityId: appointmentId,
-      meta: { serviceCaseId: existing.serviceCaseId, scheduledAt: scheduledAt.toISOString(), note: proposalNote },
+      meta: {
+        serviceCaseId: existing.serviceCaseId,
+        scheduledAt: scheduledAt.toISOString(),
+        note: proposalNote,
+        nextStatus,
+        ...appointmentProxyAuditMeta(
+          adminProxy,
+          counterBy === 'driver' ? 'driver' : counterBy === 'supplier' ? 'supplier' : 'manager',
+        ),
+      },
     });
 
     const reloaded = await this.prisma.serviceCase.findFirst({
@@ -3630,6 +3878,7 @@ export class ServiceCasesService {
       requireDriverAckOverride,
       requireDriverAck: effectiveRequireDriverAck(settings, requireDriverAckOverride),
       driverCanNegotiateAppointment: effectiveDriverCanNegotiate(settings),
+      appointmentProposeFleetFirst: effectiveAppointmentProposeFleetFirst(settings),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

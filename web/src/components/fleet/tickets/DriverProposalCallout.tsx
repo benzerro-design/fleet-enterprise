@@ -37,7 +37,13 @@ function proposalTitle(source: AppointmentProposalSource): string {
   }
 }
 
-function proposalFooter(source: AppointmentProposalSource): string | null {
+function proposalFooter(
+  source: AppointmentProposalSource,
+  status?: string | null,
+): string | null {
+  if (status === "pending_fleet_peer") {
+    return "Așteaptă confirmare în flotă";
+  }
   switch (source) {
     case "driver":
     case "manager":
@@ -50,11 +56,17 @@ function proposalFooter(source: AppointmentProposalSource): string | null {
 }
 
 /** Callout vizual: cine a propus ziua/ora (nu doar o notă gri). */
-export function AppointmentProposalCallout({ source, scheduledAt, note, compact }: Props) {
+export function AppointmentProposalCallout({
+  source,
+  scheduledAt,
+  note,
+  compact,
+  status,
+}: Props & { status?: string | null }) {
   const title = proposalTitle(source);
   const when = formatProposedWhen(scheduledAt);
   const noteText = note?.trim() || null;
-  const footer = proposalFooter(source);
+  const footer = proposalFooter(source, status);
 
   /** Admin: doar eticheta „Propunere L*”. */
   if (source === "admin") {

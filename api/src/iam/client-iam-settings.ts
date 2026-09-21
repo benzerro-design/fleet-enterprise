@@ -17,6 +17,12 @@ export type ClientIamSettings = {
   requireDriverAck: boolean;
   /** Șoferul acceptă / propune data în paralel cu managerul. */
   driverCanNegotiateAppointment: boolean;
+  /**
+   * Doar cu negociere ON.
+   * false = Propune → direct la furnizor (mod A).
+   * true = Propune → mai întâi celălalt din flotă Confirmă/Propune, apoi furnizor (mod B).
+   */
+  appointmentProposeFleetFirst: boolean;
   /** Manager client: bulk select pe lista de tichete (admin L* are oricum). */
   ticketListBulkSelect: boolean;
   /** Tab-uri Curente/Istoric propuneri pe PROGRAMĂRI (manager + furnizor pe client). Admin L* are oricum. */
@@ -28,6 +34,7 @@ export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
   allowClientAcquisition: false,
   requireDriverAck: true,
   driverCanNegotiateAppointment: false,
+  appointmentProposeFleetFirst: false,
   ticketListBulkSelect: false,
   appointmentProposalHistoryTabs: false,
 };
@@ -43,6 +50,8 @@ export function parseClientIamSettings(raw: unknown): ClientIamSettings {
     allowClientAcquisition: o.allowClientAcquisition === true,
     requireDriverAck: driverCanNegotiateAppointment ? true : o.requireDriverAck !== false,
     driverCanNegotiateAppointment,
+    appointmentProposeFleetFirst:
+      driverCanNegotiateAppointment && o.appointmentProposeFleetFirst === true,
     ticketListBulkSelect: o.ticketListBulkSelect === true,
     appointmentProposalHistoryTabs: o.appointmentProposalHistoryTabs === true,
   };
@@ -73,6 +82,12 @@ export function parseClientIamSettingsPatch(body: unknown): Partial<ClientIamSet
       throw new Error('driverCanNegotiateAppointment must be boolean');
     }
     patch.driverCanNegotiateAppointment = o.driverCanNegotiateAppointment;
+  }
+  if (o.appointmentProposeFleetFirst !== undefined) {
+    if (typeof o.appointmentProposeFleetFirst !== 'boolean') {
+      throw new Error('appointmentProposeFleetFirst must be boolean');
+    }
+    patch.appointmentProposeFleetFirst = o.appointmentProposeFleetFirst;
   }
   if (o.ticketListBulkSelect !== undefined) {
     if (typeof o.ticketListBulkSelect !== 'boolean') {
@@ -140,4 +155,10 @@ export function effectiveRequireDriverAck(
 
 export function effectiveDriverCanNegotiate(clientSettings: unknown): boolean {
   return parseClientIamSettings(clientSettings).driverCanNegotiateAppointment;
+}
+
+/** Mod B: Propune trece mai întâi prin celălalt din flotă. Necesită negociere ON. */
+export function effectiveAppointmentProposeFleetFirst(clientSettings: unknown): boolean {
+  const s = parseClientIamSettings(clientSettings);
+  return s.driverCanNegotiateAppointment && s.appointmentProposeFleetFirst;
 }

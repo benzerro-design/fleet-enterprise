@@ -195,6 +195,8 @@ export class AppointmentsService {
         row.requireDriverAckOverride,
       ),
       driverCanNegotiateAppointment: effectiveDriverCanNegotiate(row.vehicle.client.iamSettings),
+      appointmentProposeFleetFirst: parseClientIamSettings(row.vehicle.client.iamSettings)
+        .appointmentProposeFleetFirst,
       appointmentProposalHistoryTabs: parseClientIamSettings(row.vehicle.client.iamSettings)
         .appointmentProposalHistoryTabs,
       location: row.location,

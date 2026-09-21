@@ -438,6 +438,7 @@ export type ServiceAppointmentRecord = {
   requireDriverAckOverride?: boolean | null;
   requireDriverAck?: boolean;
   driverCanNegotiateAppointment?: boolean;
+  appointmentProposeFleetFirst?: boolean;
   createdAt: string;
   updatedAt: string;
 };

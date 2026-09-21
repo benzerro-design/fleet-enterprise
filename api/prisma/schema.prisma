@@ -1567,6 +1567,7 @@ model MaintenanceWorkOrder {
 enum ServiceAppointmentStatus {
   scheduled
   pending_supplier
+  pending_fleet_peer
   confirmed
   needs_repropose
   completed

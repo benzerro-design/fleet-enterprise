@@ -813,6 +813,8 @@ export function TicketWorkflowStepper({
                         <span className="font-medium text-amber-300">
                           {counterProposalStatusLabel(appointmentProposalSource(appt)!)}
                         </span>
+                      ) : appt.status === "pending_fleet_peer" ? (
+                        <span className="text-violet-300">Așteaptă confirmare în flotă</span>
                       ) : appt.status === "pending_supplier" ? (
                         <span className="text-amber-400/90">
                           {appt.scheduledAt
@@ -839,6 +841,7 @@ export function TicketWorkflowStepper({
                         source={appointmentProposalSource(appt)!}
                         scheduledAt={appt.scheduledAt}
                         note={appt.lastProposalNote}
+                        status={appt.status}
                       />
                     ) : appt.lastProposalNote ? (
                       <p className="mt-2 w-full text-[11px] text-zinc-400">
@@ -860,25 +863,31 @@ export function TicketWorkflowStepper({
                           </button>
                         ) : null}
                         {canConfirmAppointment &&
-                        appt.status === "scheduled" &&
-                        !appt.managerConfirmedAt ? (
+                        ((appt.status === "scheduled" && !appt.managerConfirmedAt) ||
+                          (appt.status === "pending_fleet_peer" &&
+                            appointmentProposalSource(appt) === "driver")) ? (
                           <button
                             type="button"
                             disabled={pending}
                             onClick={() => void confirmAppointment(appt.id)}
                             className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                           >
-                            {appointmentRequiresDriverAck(appt)
-                              ? negotiate && canAckAppointment
-                                ? "Confirmă (manager)"
-                                : "Confirmă programarea"
-                              : "Confirmă și deschide WO"}
+                            {appt.status === "pending_fleet_peer"
+                              ? "Confirmă (manager) → furnizor"
+                              : appointmentRequiresDriverAck(appt)
+                                ? negotiate && canAckAppointment
+                                  ? "Confirmă (manager)"
+                                  : "Confirmă programarea"
+                                : "Confirmă și deschide WO"}
                           </button>
                         ) : null}
                         {canAckAppointment &&
                         appointmentRequiresDriverAck(appt) &&
                         negotiate &&
-                        (appt.status === "scheduled" || appt.status === "confirmed") &&
+                        ((appt.status === "scheduled" || appt.status === "confirmed") ||
+                          (appt.status === "pending_fleet_peer" &&
+                            (appointmentProposalSource(appt) === "manager" ||
+                              appointmentProposalSource(appt) === "admin"))) &&
                         !appt.driverAcknowledgedAt &&
                         !appt.driverDeclinedAt ? (
                           <button
@@ -887,7 +896,11 @@ export function TicketWorkflowStepper({
                             onClick={() => void acknowledgeAppointment(appt.id)}
                             className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
                           >
-                            {canConfirmAppointment ? "Confirmă (șofer)" : "Confirmă programarea"}
+                            {appt.status === "pending_fleet_peer"
+                              ? "Confirmă (șofer) → furnizor"
+                              : canConfirmAppointment
+                                ? "Confirmă (șofer)"
+                                : "Confirmă programarea"}
                           </button>
                         ) : null}
                         {canAckAppointment &&

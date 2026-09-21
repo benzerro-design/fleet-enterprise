@@ -1,4 +1,5 @@
 import {
+  effectiveAppointmentProposeFleetFirst,
   effectiveDriverCanNegotiate,
   effectiveRequireDriverAck,
   parseClientIamSettings,
@@ -12,6 +13,7 @@ describe('parseClientIamSettings', () => {
       allowClientAcquisition: false,
       requireDriverAck: true,
       driverCanNegotiateAppointment: false,
+      appointmentProposeFleetFirst: false,
       ticketListBulkSelect: false,
       appointmentProposalHistoryTabs: false,
     });
@@ -25,12 +27,15 @@ describe('parseClientIamSettings', () => {
         requireDriverAck: false,
         ticketListBulkSelect: true,
         appointmentProposalHistoryTabs: true,
+        appointmentProposeFleetFirst: true,
+        driverCanNegotiateAppointment: true,
       }),
     ).toEqual({
       allowClientOcr: true,
       allowClientAcquisition: true,
-      requireDriverAck: false,
-      driverCanNegotiateAppointment: false,
+      requireDriverAck: true,
+      driverCanNegotiateAppointment: true,
+      appointmentProposeFleetFirst: true,
       ticketListBulkSelect: true,
       appointmentProposalHistoryTabs: true,
     });
@@ -47,9 +52,19 @@ describe('parseClientIamSettings', () => {
       allowClientAcquisition: false,
       requireDriverAck: true,
       driverCanNegotiateAppointment: true,
+      appointmentProposeFleetFirst: false,
       ticketListBulkSelect: false,
       appointmentProposalHistoryTabs: false,
     });
+  });
+
+  it('ignores fleet-first when negotiate is off', () => {
+    expect(
+      parseClientIamSettings({
+        appointmentProposeFleetFirst: true,
+        driverCanNegotiateAppointment: false,
+      }).appointmentProposeFleetFirst,
+    ).toBe(false);
   });
 });
 
@@ -73,6 +88,12 @@ describe('parseClientIamSettingsPatch', () => {
   it('accepts appointment proposal history flag', () => {
     expect(parseClientIamSettingsPatch({ appointmentProposalHistoryTabs: true })).toEqual({
       appointmentProposalHistoryTabs: true,
+    });
+  });
+
+  it('accepts propose fleet-first flag', () => {
+    expect(parseClientIamSettingsPatch({ appointmentProposeFleetFirst: true })).toEqual({
+      appointmentProposeFleetFirst: true,
     });
   });
 });
@@ -103,5 +124,17 @@ describe('effectiveDriverCanNegotiate', () => {
   it('defaults off', () => {
     expect(effectiveDriverCanNegotiate(null)).toBe(false);
     expect(effectiveDriverCanNegotiate({ driverCanNegotiateAppointment: true })).toBe(true);
+  });
+});
+
+describe('effectiveAppointmentProposeFleetFirst', () => {
+  it('requires negotiate', () => {
+    expect(effectiveAppointmentProposeFleetFirst({ appointmentProposeFleetFirst: true })).toBe(false);
+    expect(
+      effectiveAppointmentProposeFleetFirst({
+        appointmentProposeFleetFirst: true,
+        driverCanNegotiateAppointment: true,
+      }),
+    ).toBe(true);
   });
 });

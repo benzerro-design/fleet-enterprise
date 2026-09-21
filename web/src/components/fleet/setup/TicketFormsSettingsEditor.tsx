@@ -84,6 +84,7 @@ export function TicketFormsSettingsEditor() {
         body: JSON.stringify({
           requireDriverAck: draft.requireDriverAck,
           driverCanNegotiateAppointment: draft.driverCanNegotiateAppointment,
+          appointmentProposeFleetFirst: draft.appointmentProposeFleetFirst,
           ticketListBulkSelect: draft.ticketListBulkSelect,
           appointmentProposalHistoryTabs: draft.appointmentProposalHistoryTabs,
         }),

@@ -37,9 +37,10 @@ describe('blocksSilentScheduledAtEdit', () => {
     ).toBe(true);
   });
 
-  it('blocks on pending_supplier / confirmed / needs_repropose', () => {
+  it('blocks on pending_supplier / confirmed / needs_repropose / pending_fleet_peer', () => {
     for (const status of [
       ServiceAppointmentStatus.pending_supplier,
+      ServiceAppointmentStatus.pending_fleet_peer,
       ServiceAppointmentStatus.confirmed,
       ServiceAppointmentStatus.needs_repropose,
     ]) {

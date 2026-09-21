@@ -879,6 +879,7 @@ export function SchedulerInspector({
               source={appointmentProposalSource(appointment)!}
               scheduledAt={appointment.scheduledAt}
               note={appointment.lastProposalNote}
+              status={appointment.status}
               compact
             />
           ) : appointment.lastProposalNote ? (
@@ -1071,14 +1072,19 @@ export function SchedulerInspector({
                 : "Propune dată"}
             </button>
           ) : null}
-          {appointment.status === "scheduled" && !partnerMode && !appointment.managerConfirmedAt ? (
+          {(appointment.status === "scheduled" && !partnerMode && !appointment.managerConfirmedAt) ||
+          (appointment.status === "pending_fleet_peer" &&
+            !partnerMode &&
+            appointmentProposalSource(appointment) === "driver") ? (
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => void confirmAppointment()}
                 className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
               >
-                Confirmă (manager)
+                {appointment.status === "pending_fleet_peer"
+                  ? "Confirmă (manager) → furnizor"
+                  : "Confirmă (manager)"}
               </button>
           ) : null}
           {!partnerMode &&
