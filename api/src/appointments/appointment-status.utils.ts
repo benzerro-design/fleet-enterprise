@@ -121,6 +121,22 @@ export function blocksSilentScheduledAtEdit(opts: {
 export const SILENT_SLOT_EDIT_BLOCKED_MESSAGE =
   'Schimbarea orei pe o programare activă trebuie făcută ca propunere (repropose / supplier-validate), nu prin editare directă.';
 
+/** Repropunere / „altă dată” pe același minut = no-op confuz — blocat pe flotă + partener. */
+export const SAME_SLOT_REPROPOSE_MESSAGE =
+  'Ați ales aceeași dată și oră — nu se poate solicita reprogramare pe același slot.';
+
+/** Compară la minut (datetime-local pierde secundele). */
+export function isSameAppointmentSlot(
+  existing: Date | string | null | undefined,
+  next: Date | string,
+): boolean {
+  if (existing == null || existing === '') return false;
+  const a = existing instanceof Date ? existing : new Date(existing);
+  const b = next instanceof Date ? next : new Date(next);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return false;
+  return Math.floor(a.getTime() / 60_000) === Math.floor(b.getTime() / 60_000);
+}
+
 export const SERVICE_APPOINTMENT_STATUSES: ServiceAppointmentStatus[] = [
   ServiceAppointmentStatus.scheduled,
   ServiceAppointmentStatus.pending_supplier,

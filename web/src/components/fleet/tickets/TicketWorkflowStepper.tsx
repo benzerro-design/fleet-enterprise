@@ -8,6 +8,8 @@ import {
   appointmentFleetCanCounterPropose,
   appointmentProcessLabel,
   appointmentRequiresDriverAck,
+  SAME_SLOT_REPROPOSE_MESSAGE,
+  warnIfSameAppointmentSlot,
 } from "@/lib/appointments-api";
 import {
   formatQuoteMoney,
@@ -429,6 +431,11 @@ export function TicketWorkflowStepper({
   async function reproposeAppointment(appointmentId: string) {
     if (!reproposeAt) {
       setError("Alege data și ora nouă.");
+      return;
+    }
+    const current = serviceCase?.appointments?.find((a) => a.id === appointmentId);
+    if (warnIfSameAppointmentSlot(current?.scheduledAt, reproposeAt)) {
+      setError(SAME_SLOT_REPROPOSE_MESSAGE);
       return;
     }
     setPending(true);

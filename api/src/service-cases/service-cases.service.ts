@@ -60,12 +60,14 @@ import {
   fleetCounterActorLabel,
   fleetCounterFromAccess,
   fleetCounterFromProposedBy,
+  isSameAppointmentSlot,
   isTenantAdminAccess,
   appointmentProxyAuditMeta,
   appointmentProxyTicketMark,
   parseFleetCounterProposedBy,
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
+  SAME_SLOT_REPROPOSE_MESSAGE,
   SILENT_SLOT_EDIT_BLOCKED_MESSAGE,
   type FleetCounterProposedBy,
 } from '../appointments/appointment-status.utils';
@@ -2833,6 +2835,10 @@ export class ServiceCasesService {
       if (Number.isNaN(next.getTime())) {
         throw new BadRequestException('Invalid scheduledAt');
       }
+      /** Body cu scheduledAt = propunere/setare slot; același minut = no-op confuz. Validarea „accept” e POST fără scheduledAt. */
+      if (isSameAppointmentSlot(existing.scheduledAt, next)) {
+        throw new BadRequestException(SAME_SLOT_REPROPOSE_MESSAGE);
+      }
       scheduledAt = next;
     }
     if (!scheduledAt) {
@@ -3372,6 +3378,9 @@ export class ServiceCasesService {
     const scheduledAt = new Date(dto.scheduledAt);
     if (Number.isNaN(scheduledAt.getTime())) {
       throw new BadRequestException('Invalid scheduledAt');
+    }
+    if (isSameAppointmentSlot(existing.scheduledAt, scheduledAt)) {
+      throw new BadRequestException(SAME_SLOT_REPROPOSE_MESSAGE);
     }
 
     let durationMin = existing.durationMin;

@@ -1,6 +1,7 @@
 import { ServiceAppointmentStatus } from '@prisma/client';
 import {
   blocksSilentScheduledAtEdit,
+  isSameAppointmentSlot,
 } from './appointment-status.utils';
 
 describe('blocksSilentScheduledAtEdit', () => {
@@ -67,5 +68,21 @@ describe('blocksSilentScheduledAtEdit', () => {
         }),
       ).toBe(false);
     }
+  });
+});
+
+describe('isSameAppointmentSlot', () => {
+  const t0 = new Date('2026-09-24T10:00:00.000Z');
+
+  it('false when no existing slot', () => {
+    expect(isSameAppointmentSlot(null, t0)).toBe(false);
+  });
+
+  it('true for same minute despite seconds', () => {
+    expect(isSameAppointmentSlot(t0, new Date('2026-09-24T10:00:45.000Z'))).toBe(true);
+  });
+
+  it('false for different minute', () => {
+    expect(isSameAppointmentSlot(t0, new Date('2026-09-24T10:01:00.000Z'))).toBe(false);
   });
 });

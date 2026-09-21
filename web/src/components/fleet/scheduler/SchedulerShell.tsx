@@ -8,6 +8,7 @@ import {
   appointmentNegotiateOpts,
   appointmentProtocolBlocksSilentSlotEdit,
   appointmentsBrowserBase,
+  warnIfSameAppointmentSlot,
   type AppointmentStats,
   type AppointmentStatus,
   type CalendarAppointment,
@@ -389,6 +390,10 @@ export function SchedulerShell({
     async (id: string, scheduledAt: Date) => {
       const row = findAppointment(id);
       if (!row) return;
+
+      if (warnIfSameAppointmentSlot(row.scheduledAt, scheduledAt)) {
+        return;
+      }
 
       if (
         partnerMode &&

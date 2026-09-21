@@ -201,6 +201,33 @@ export function appointmentProtocolBlocksSilentSlotEdit(a: {
   );
 }
 
+/** Repropunere pe același minut — mesaj UI + API. */
+export const SAME_SLOT_REPROPOSE_MESSAGE =
+  "Ați ales aceeași dată și oră — nu se poate solicita reprogramare pe același slot.";
+
+export function isSameAppointmentSlot(
+  existing: string | Date | null | undefined,
+  next: string | Date,
+): boolean {
+  if (existing == null || existing === "") return false;
+  const a = existing instanceof Date ? existing : new Date(existing);
+  const b = next instanceof Date ? next : new Date(next);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return false;
+  return Math.floor(a.getTime() / 60_000) === Math.floor(b.getTime() / 60_000);
+}
+
+/** Avertizare blocantă înainte de POST repropose / supplier-validate cu același slot. */
+export function warnIfSameAppointmentSlot(
+  existing: string | Date | null | undefined,
+  next: string | Date,
+): boolean {
+  if (!isSameAppointmentSlot(existing, next)) return false;
+  if (typeof window !== "undefined") {
+    window.alert(SAME_SLOT_REPROPOSE_MESSAGE);
+  }
+  return true;
+}
+
 /** Slot pe masă — flotă poate trimite altă oră la furnizor. */
 export function appointmentFleetCanCounterPropose(
   a: {

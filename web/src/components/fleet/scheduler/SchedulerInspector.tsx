@@ -14,6 +14,8 @@ import {
   appointmentRequiresDriverAck,
   formatAppointmentSlot,
   recurrenceLabel,
+  SAME_SLOT_REPROPOSE_MESSAGE,
+  warnIfSameAppointmentSlot,
   workflowTypeLabel,
   type CalendarAppointment,
 } from "@/lib/appointments-api";
@@ -313,6 +315,10 @@ export function SchedulerInspector({
 
   async function saveReschedule() {
     if (!editScheduledAt || !appointment) return;
+    if (warnIfSameAppointmentSlot(appointment.scheduledAt, editScheduledAt)) {
+      setError(SAME_SLOT_REPROPOSE_MESSAGE);
+      return;
+    }
     if (
       (appointment.status === "pending_supplier" || appointment.status === "needs_repropose") &&
       partnerMode
@@ -427,6 +433,10 @@ export function SchedulerInspector({
 
   async function supplierValidateWithReschedule() {
     if (!appointment || !editScheduledAt) return;
+    if (warnIfSameAppointmentSlot(appointment.scheduledAt, editScheduledAt)) {
+      setError(SAME_SLOT_REPROPOSE_MESSAGE);
+      return;
+    }
     setPending(true);
     setError(null);
     try {
