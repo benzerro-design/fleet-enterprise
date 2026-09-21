@@ -172,6 +172,30 @@ export function appointmentHasSlot(
   return Boolean(scheduledAt && !Number.isNaN(new Date(scheduledAt).getTime()));
 }
 
+/** Citește politica de negociere de pe rândul programării (calendar / tichet). */
+export function appointmentNegotiateOpts(a: {
+  driverCanNegotiateAppointment?: boolean | null;
+}): { negotiate: boolean } {
+  return { negotiate: a.driverCanNegotiateAppointment === true };
+}
+
+/**
+ * Slot deja pe protocol — schimbarea orei trebuie /repropose sau /supplier-validate,
+ * nu PATCH silențios (altfel rămân stamp-uri/ack-uri vechi).
+ */
+export function appointmentProtocolBlocksSilentSlotEdit(a: {
+  status: string;
+  scheduledAt?: string | null;
+}): boolean {
+  if (!appointmentHasSlot(a.scheduledAt)) return false;
+  return (
+    a.status === "pending_supplier" ||
+    a.status === "scheduled" ||
+    a.status === "confirmed" ||
+    a.status === "needs_repropose"
+  );
+}
+
 /** Slot pe masă — flotă poate trimite altă oră la furnizor. */
 export function appointmentFleetCanCounterPropose(
   a: {

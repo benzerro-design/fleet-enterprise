@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   appointmentFleetCanRepropose,
   appointmentHasSlot,
+  appointmentNegotiateOpts,
+  appointmentProtocolBlocksSilentSlotEdit,
   appointmentsBrowserBase,
   type AppointmentStats,
   type CalendarAppointment,
@@ -384,7 +386,26 @@ export function SchedulerShell({
   const reschedule = useCallback(
     async (id: string, scheduledAt: Date) => {
       const row = findAppointment(id);
-      if (!partnerMode && row && appointmentFleetCanRepropose(row)) {
+      if (!row) return;
+
+      if (
+        partnerMode &&
+        (row.status === "pending_supplier" || row.status === "needs_repropose")
+      ) {
+        const res = await fetch(
+          `${serviceCasesBrowserBase}/appointments/${id}/supplier-validate`,
+          {
+            method: "POST",
+            headers: fleetJsonHeaders(),
+            body: JSON.stringify({ scheduledAt: scheduledAt.toISOString() }),
+          },
+        );
+        if (!res.ok) return;
+        await load(true);
+        return;
+      }
+
+      if (!partnerMode && appointmentFleetCanRepropose(row, appointmentNegotiateOpts(row))) {
         const res = await fetch(`${serviceCasesBrowserBase}/appointments/${id}/repropose`, {
           method: "POST",
           headers: fleetJsonHeaders(),
@@ -394,6 +415,11 @@ export function SchedulerShell({
         await load(true);
         return;
       }
+
+      if (appointmentProtocolBlocksSilentSlotEdit(row)) {
+        return;
+      }
+
       const res = await fetch(`${appointmentsBrowserBase}/${id}`, {
         method: "PATCH",
         headers: fleetJsonHeaders(),

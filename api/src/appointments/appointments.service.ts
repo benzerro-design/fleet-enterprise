@@ -36,6 +36,8 @@ import {
   parseFleetCounterProposedBy,
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
+  blocksSilentScheduledAtEdit,
+  SILENT_SLOT_EDIT_BLOCKED_MESSAGE,
 } from './appointment-status.utils';
 import {
   type AppointmentStats,
@@ -817,6 +819,15 @@ export class AppointmentsService {
     if (dto.scheduledAt !== undefined) {
       const scheduledAt = new Date(dto.scheduledAt);
       if (Number.isNaN(scheduledAt.getTime())) throw new BadRequestException('Invalid scheduledAt');
+      if (
+        blocksSilentScheduledAtEdit({
+          status: existing.status,
+          existingScheduledAt: existing.scheduledAt,
+          nextScheduledAt: scheduledAt,
+        })
+      ) {
+        throw new BadRequestException(SILENT_SLOT_EDIT_BLOCKED_MESSAGE);
+      }
       data.scheduledAt = scheduledAt;
     }
     if (dto.supplierId !== undefined) {

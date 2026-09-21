@@ -7,6 +7,8 @@ import {
   appointmentFleetCanCounterPropose,
   appointmentFleetCanRepropose,
   appointmentHasSlot,
+  appointmentNegotiateOpts,
+  appointmentProtocolBlocksSilentSlotEdit,
   appointmentsBrowserBase,
   appointmentProcessLabel,
   appointmentRequiresDriverAck,
@@ -318,7 +320,8 @@ export function SchedulerInspector({
       await supplierValidateWithReschedule();
       return;
     }
-    if (!partnerMode && appointmentFleetCanRepropose(appointment)) {
+    const negotiateOpts = appointmentNegotiateOpts(appointment);
+    if (!partnerMode && appointmentFleetCanRepropose(appointment, negotiateOpts)) {
       setPending(true);
       setError(null);
       try {
@@ -346,6 +349,12 @@ export function SchedulerInspector({
       } finally {
         setPending(false);
       }
+      return;
+    }
+    if (appointmentProtocolBlocksSilentSlotEdit(appointment)) {
+      setError(
+        "Schimbarea orei pe o programare activă trebuie trimisă ca propunere (nu editare directă).",
+      );
       return;
     }
     await patchAppointment({
@@ -794,9 +803,10 @@ export function SchedulerInspector({
                 ? "Trimite propunere"
                 : appointment.status === "pending_supplier" ||
                     appointment.status === "needs_repropose" ||
-                    appointmentFleetCanCounterPropose(appointment, {
-                      negotiate: appointment.driverCanNegotiateAppointment === true,
-                    })
+                    appointmentFleetCanCounterPropose(
+                      appointment,
+                      appointmentNegotiateOpts(appointment),
+                    )
                   ? partnerMode
                     ? "Trimite altă dată/oră"
                     : "Trimite propunere"
@@ -826,9 +836,10 @@ export function SchedulerInspector({
             {editable &&
             !editing &&
             appointment.status !== "pending_supplier" &&
-            !appointmentFleetCanCounterPropose(appointment, {
-              negotiate: appointment.driverCanNegotiateAppointment === true,
-            }) ? (
+            !appointmentFleetCanCounterPropose(
+              appointment,
+              appointmentNegotiateOpts(appointment),
+            ) ? (
               <button
                 type="button"
                 onClick={() => {
@@ -1072,9 +1083,10 @@ export function SchedulerInspector({
           ) : null}
           {!partnerMode &&
           !editing &&
-          appointmentFleetCanCounterPropose(appointment, {
-            negotiate: appointment.driverCanNegotiateAppointment === true,
-          }) ? (
+          appointmentFleetCanCounterPropose(
+            appointment,
+            appointmentNegotiateOpts(appointment),
+          ) ? (
                 <button
                   type="button"
                   onClick={() => {

@@ -76,6 +76,28 @@ export function appointmentStatusAllowsManagerConfirm(status: ServiceAppointment
   );
 }
 
+/**
+ * true ⇒ refuză PATCH pe scheduledAt: trebuie /repropose sau /supplier-validate.
+ * Permite setarea primului slot (existing null) și no-op pe același timp.
+ */
+export function blocksSilentScheduledAtEdit(opts: {
+  status: ServiceAppointmentStatus;
+  existingScheduledAt: Date | null | undefined;
+  nextScheduledAt: Date;
+}): boolean {
+  if (!opts.existingScheduledAt) return false;
+  if (opts.existingScheduledAt.getTime() === opts.nextScheduledAt.getTime()) return false;
+  return (
+    opts.status === ServiceAppointmentStatus.pending_supplier ||
+    opts.status === ServiceAppointmentStatus.scheduled ||
+    opts.status === ServiceAppointmentStatus.confirmed ||
+    opts.status === ServiceAppointmentStatus.needs_repropose
+  );
+}
+
+export const SILENT_SLOT_EDIT_BLOCKED_MESSAGE =
+  'Schimbarea orei pe o programare activă trebuie făcută ca propunere (repropose / supplier-validate), nu prin editare directă.';
+
 export const SERVICE_APPOINTMENT_STATUSES: ServiceAppointmentStatus[] = [
   ServiceAppointmentStatus.scheduled,
   ServiceAppointmentStatus.pending_supplier,

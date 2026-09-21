@@ -56,12 +56,14 @@ import { nextRoadsideDisplayNumber } from '../roadside/roadside-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import { assertDamageReadyForRepair } from '../work-orders/damage-repair-gates';
 import {
+  blocksSilentScheduledAtEdit,
   fleetCounterActorLabel,
   fleetCounterFromAccess,
   fleetCounterFromProposedBy,
   parseFleetCounterProposedBy,
   proposedByFromAccess,
   resolveInitialAppointmentStatus,
+  SILENT_SLOT_EDIT_BLOCKED_MESSAGE,
   type FleetCounterProposedBy,
 } from '../appointments/appointment-status.utils';
 import {
@@ -2540,6 +2542,15 @@ export class ServiceCasesService {
     if (dto.scheduledAt !== undefined) {
       const scheduledAt = new Date(dto.scheduledAt);
       if (Number.isNaN(scheduledAt.getTime())) throw new BadRequestException('Invalid scheduledAt');
+      if (
+        blocksSilentScheduledAtEdit({
+          status: existing.status,
+          existingScheduledAt: existing.scheduledAt,
+          nextScheduledAt: scheduledAt,
+        })
+      ) {
+        throw new BadRequestException(SILENT_SLOT_EDIT_BLOCKED_MESSAGE);
+      }
       data.scheduledAt = scheduledAt;
     }
     if (dto.location !== undefined) data.location = dto.location?.trim() || null;

@@ -3,6 +3,7 @@
 import {
   appointmentFleetCanRepropose,
   appointmentHasSlot,
+  appointmentNegotiateOpts,
   appointmentProcessLabel,
   appointmentUsesDashedOutline,
   formatAppointmentSlot,
@@ -162,7 +163,7 @@ export function AppointmentQueueList({
                   ) : null}
                   {!partnerMode &&
                   onProposeReschedule &&
-                  appointmentFleetCanRepropose(a) ? (
+                  appointmentFleetCanRepropose(a, appointmentNegotiateOpts(a)) ? (
                     <button
                       type="button"
                       onClick={() => onProposeReschedule(a.id)}

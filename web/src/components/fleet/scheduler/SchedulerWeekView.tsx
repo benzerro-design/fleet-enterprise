@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import type { SlottedCalendarAppointment } from "@/lib/appointments-api";
 import {
   appointmentFleetCanRepropose,
+  appointmentNegotiateOpts,
   appointmentProcessLabel,
   appointmentUsesDashedOutline,
   workflowTypeLabel,
@@ -210,12 +211,15 @@ export function SchedulerWeekView({
   const [slotFlash, setSlotFlash] = useState<{ dayIndex: number; top: number; key: number } | null>(null);
 
   const canDragAppt = useCallback(
-    (a: SlottedCalendarAppointment) =>
-      canWrite &&
-      !!onReschedule &&
-      a.status !== "cancelled" &&
-      a.status !== "completed" &&
-      !(partnerMode && (a.status === "pending_supplier" || a.status === "needs_repropose")),
+    (a: SlottedCalendarAppointment) => {
+      if (!canWrite || !onReschedule) return false;
+      if (a.status === "cancelled" || a.status === "completed") return false;
+      // Partener: doar pe stări unde drag → supplier-validate (altă oră).
+      if (partnerMode) {
+        return a.status === "pending_supplier" || a.status === "needs_repropose";
+      }
+      return true;
+    },
     [canWrite, onReschedule, partnerMode],
   );
 
@@ -557,7 +561,7 @@ export function SchedulerWeekView({
           {canWrite &&
           !partnerMode &&
           onProposeReschedule &&
-          appointmentFleetCanRepropose(ctxMenu.appt) ? (
+          appointmentFleetCanRepropose(ctxMenu.appt, appointmentNegotiateOpts(ctxMenu.appt)) ? (
             <button
               type="button"
               className="block w-full px-3 py-1.5 text-left text-xs text-amber-200 hover:bg-zinc-800"
