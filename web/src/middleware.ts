@@ -64,6 +64,7 @@ const ADMIN_ONLY_PREFIXES = [
   "/fleet/audit",
   "/fleet/user-strategy",
   "/fleet/setup",
+  "/fleet/help",
 ];
 
 function isAdminOnlyRoute(pathname: string): boolean {

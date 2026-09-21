@@ -300,6 +300,14 @@ export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
       requireAuth: true,
       activePrefixes: ["/fleet/audit"],
     },
+    {
+      kind: "link",
+      label: "Help",
+      href: "/fleet/help",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/help"],
+    },
   ],
 };
 
