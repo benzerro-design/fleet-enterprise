@@ -165,8 +165,12 @@ export function WorkOrderSheetShell({
     (wo.odometerKmIn != null && wo.vehicle.odometerKm === wo.odometerKmIn);
 
   const milestones = useMemo(
-    () => buildWorkOrderMilestones({ ...wo, serviceOrderType: serviceType }, { canMarkReady: canWrite }),
-    [wo, serviceType, canWrite],
+    () =>
+      buildWorkOrderMilestones(
+        { ...wo, serviceOrderType: serviceType },
+        { canMarkReady: canWrite, tilaTrack },
+      ),
+    [wo, serviceType, canWrite, tilaTrack],
   );
 
   const totalDisplay =
@@ -390,7 +394,8 @@ export function WorkOrderSheetShell({
 
   const hasLucrare2 = Boolean(
     wo.supplementRepairAt ||
-      (wo.supplementQuoteVersion != null && wo.supplementQuoteVersion >= 2),
+      (wo.supplementQuoteVersion != null && wo.supplementQuoteVersion >= 2) ||
+      wo.lucrare1ReadyAt,
   );
 
   useEffect(() => {
@@ -767,18 +772,26 @@ export function WorkOrderSheetShell({
         <div className={`${panelClass()} bg-zinc-900/40`}>
           {panelTitle("Stare (Tila)")}
           {hasLucrare2 ? (
-            <div className="mb-2 flex flex-wrap gap-1 border-b border-zinc-800 pb-2">
+            <div className="mb-2 flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
               <button
                 type="button"
                 onClick={() => setTilaTrack(1)}
-                className={fleetSheetTabClass(tilaTrack === 1)}
+                className={`rounded px-1.5 py-0.5 text-[10px] ${
+                  tilaTrack === 1
+                    ? "bg-violet-900/50 text-violet-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
               >
                 Lucrare #1
               </button>
               <button
                 type="button"
                 onClick={() => setTilaTrack(2)}
-                className={fleetSheetTabClass(tilaTrack === 2)}
+                className={`rounded px-1.5 py-0.5 text-[10px] ${
+                  tilaTrack === 2
+                    ? "bg-violet-900/50 text-violet-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
               >
                 Lucrare #2
                 {wo.supplementQuoteVersion != null ? ` · Deviz v${wo.supplementQuoteVersion}` : ""}
@@ -792,13 +805,13 @@ export function WorkOrderSheetShell({
             </p>
           ) : wo.supplementRepairAt && !wo.readyAt && tilaTrack === 1 ? (
             <p className="mb-2 rounded border border-zinc-700/60 bg-zinc-900/50 px-2 py-1.5 text-[11px] text-zinc-400">
-              Lucrare #1 (istoric). Activă acum: Lucrare #2.
+              Lucrare #1 (istoric înghețat). Activă acum: Lucrare #2.
             </p>
           ) : null}
           <ul className="space-y-1">
             {milestones.map((m) => {
               const dimHistory =
-                tilaTrack === 1 && hasLucrare2 && wo.supplementRepairAt && !wo.readyAt;
+                tilaTrack === 1 && hasLucrare2 && Boolean(wo.supplementRepairAt || wo.lucrare1ReadyAt);
               return (
               <li
                 key={m.id}
@@ -811,15 +824,11 @@ export function WorkOrderSheetShell({
                     m.done ? "border-violet-500 bg-violet-600" : m.active ? "border-violet-400" : "border-zinc-600"
                   }`}
                 />
-                <span className={m.active && tilaTrack === 2 ? "font-semibold text-amber-100" : m.active ? "font-semibold text-zinc-100" : "text-zinc-300"}>
-                  {tilaTrack === 2 && m.id === "repair_in_progress"
-                    ? `În lucru (Lucrare #2)`
-                    : tilaTrack === 2 && m.id === "work_ready"
-                      ? "Lucrare gata (#2)"
-                      : m.label}
+                <span className={m.active ? "font-semibold text-zinc-100" : "text-zinc-300"}>
+                  {m.label}
                 </span>
                 <span className="ml-auto text-[10px] text-zinc-500">{m.date ?? "—"}</span>
-                {m.canToggle && tilaTrack === (hasLucrare2 && wo.supplementRepairAt && !wo.readyAt ? 2 : 1) ? (
+                {m.canToggle ? (
                   <button
                     type="button"
                     disabled={pending}
@@ -1330,12 +1339,13 @@ export function WorkOrderSheetShell({
         canWrite={canWrite}
         canApprove={canApprove}
         canResubmitQuote={canResubmitQuote}
+        canMoveQuote={canWrite}
         canPostCost={canWrite && !isPartner}
         isPartner={isPartner}
         sheetLayout
-        lucrareLabel={
-          hasLucrare2 ? (tilaTrack === 2 ? "Lucrare #2 · Deviz" : "Lucrare #1 · Deviz") : "Deviz"
-        }
+        hasLucrare2={hasLucrare2}
+        lucrareTrack={tilaTrack}
+        onLucrareTrackChange={setTilaTrack}
         estimatedRepairAt={wo.estimatedRepairAt}
         quoteLocked={false}
         workOrderStatus={wo.status}

@@ -45,9 +45,43 @@ function damagePipelineRank(status: string | null | undefined): number {
   return DAMAGE_PIPELINE_RANK[status] ?? -1;
 }
 
+export type MilestoneOpts = {
+  canMarkReady?: boolean;
+  /** Tab Tila / Lucrare activ. */
+  tilaTrack?: 1 | 2;
+};
+
+/** WO „înghețat” pentru vizualizarea Lucrare #1 după deschiderea #2. */
+function woForLucrare1History(wo: WorkOrderDetail): WorkOrderDetail {
+  const frozenReady = wo.lucrare1ReadyAt ?? wo.supplementRepairAt ?? wo.readyAt;
+  return {
+    ...wo,
+    readyAt: frozenReady,
+    supplementRepairAt: null,
+    supplementQuoteVersion: null,
+    quoteSummary: {
+      ...wo.quoteSummary,
+      status:
+        wo.quoteSummary.status === "submitted" || wo.quoteSummary.status === "approved"
+          ? "approved"
+          : wo.quoteSummary.status === "draft"
+            ? "approved"
+            : wo.quoteSummary.status,
+    },
+  };
+}
+
+function hasLucrare2Track(wo: WorkOrderDetail): boolean {
+  return Boolean(
+    wo.supplementRepairAt ||
+      (wo.supplementQuoteVersion != null && wo.supplementQuoteVersion >= 2) ||
+      wo.lucrare1ReadyAt,
+  );
+}
+
 function buildDamageWorkOrderMilestones(
   wo: WorkOrderDetail,
-  opts?: { canMarkReady?: boolean },
+  opts?: MilestoneOpts,
 ): WorkOrderMilestone[] {
   const qs = wo.quoteSummary;
   const pipeline = wo.damageInsurerPipelineStatus ?? null;
@@ -160,19 +194,16 @@ function buildDamageWorkOrderMilestones(
   ];
 }
 
-export function buildWorkOrderMilestones(
+function buildStandardMilestones(
   wo: WorkOrderDetail,
-  opts?: { canMarkReady?: boolean },
+  opts?: MilestoneOpts,
 ): WorkOrderMilestone[] {
-  if (wo.workflowType === "damage") {
-    return buildDamageWorkOrderMilestones(wo, opts);
-  }
-
   const qs = wo.quoteSummary;
   const submitted = qs.status === "submitted" || qs.status === "approved";
   const approved = qs.status === "approved";
   const invoiced = !!qs.invoicedAt;
   const done = wo.status === "done";
+  const supplementActive = !!wo.supplementRepairAt && !wo.readyAt;
   const repairActive =
     approved &&
     !wo.readyAt &&
@@ -216,15 +247,17 @@ export function buildWorkOrderMilestones(
     },
     {
       id: "repair_in_progress",
-      label: "În lucru",
-      done: approved && (!!wo.readyAt || wo.status === "done"),
+      label: supplementActive
+        ? `În lucru (Lucrare #2)`
+        : "În lucru",
+      done: approved && (!!wo.readyAt || wo.status === "done") && !supplementActive,
       active: repairActive,
-      date: fmt(wo.readyAt ?? wo.inServiceAt),
+      date: fmt(wo.supplementRepairAt ?? wo.readyAt ?? wo.inServiceAt),
     },
     {
       id: "work_ready",
-      label: "Lucrare gata",
-      done: !!wo.readyAt,
+      label: supplementActive ? "Lucrare gata (#2)" : "Lucrare gata",
+      done: !!wo.readyAt && !supplementActive,
       active: approved && !wo.readyAt,
       date: fmt(wo.readyAt),
       canToggle: opts?.canMarkReady && approved && !wo.readyAt,
@@ -251,4 +284,26 @@ export function buildWorkOrderMilestones(
       date: fmt(wo.completedAt),
     },
   ];
+}
+
+export function buildWorkOrderMilestones(
+  wo: WorkOrderDetail,
+  opts?: MilestoneOpts,
+): WorkOrderMilestone[] {
+  const track = opts?.tilaTrack ?? 1;
+  const l2 = hasLucrare2Track(wo);
+
+  if (track === 1 && l2) {
+    const frozen = woForLucrare1History(wo);
+    const base =
+      frozen.workflowType === "damage"
+        ? buildDamageWorkOrderMilestones(frozen, { canMarkReady: false })
+        : buildStandardMilestones(frozen, { canMarkReady: false });
+    return base.map((m) => ({ ...m, active: false, canToggle: false }));
+  }
+
+  if (wo.workflowType === "damage") {
+    return buildDamageWorkOrderMilestones(wo, opts);
+  }
+  return buildStandardMilestones(wo, opts);
 }

@@ -253,13 +253,18 @@ type Props = {
   canApprove?: boolean;
   /** Retrimite spre aprobare — partener sau tenant_admin (nu manager L1). */
   canResubmitQuote?: boolean;
+  /** Mută Deviz pe altă Lucrare — partener sau admin cu write. */
+  canMoveQuote?: boolean;
   /** Cost din factură — doar flotă (L* / L1). Partenerul încarcă factura, nu generează cost. */
   canPostCost?: boolean;
   /** Ascunde link-ul către /fleet/costs (portal partener). */
   isPartner?: boolean;
   sheetLayout?: boolean;
-  /** Etichetă tab principal: Deviz | Lucrare #1 | Lucrare #2 */
-  lucrareLabel?: string;
+  /** Există Lucrare #2 pe WO. */
+  hasLucrare2?: boolean;
+  /** Track Lucrare activ (sincron cu Tila). */
+  lucrareTrack?: 1 | 2;
+  onLucrareTrackChange?: (track: 1 | 2) => void;
   estimatedRepairAt?: string | null;
   /** @deprecated Nu mai bloca tot panelul pe summary — estimarea e pe WO, draft-urile pe versiune. */
   quoteLocked?: boolean;
@@ -281,14 +286,21 @@ type Props = {
   supplierDiscounts?: SupplierDiscountDefaults | null;
 };
 
+function quoteLucrareIndex(q: WorkOrderQuoteRecord): 1 | 2 {
+  return q.lucrareIndex === 2 ? 2 : 1;
+}
+
 export function WorkOrderQuotePanel({
   workOrderId,
   canWrite,
   canApprove = false,
   canResubmitQuote = false,
+  canMoveQuote = false,
   canPostCost = true,
   sheetLayout = false,
-  lucrareLabel,
+  hasLucrare2 = false,
+  lucrareTrack = 1,
+  onLucrareTrackChange,
   estimatedRepairAt = null,
   quoteLocked: _quoteLocked = false,
   workOrderStatus = "",
@@ -419,20 +431,40 @@ export function WorkOrderQuotePanel({
     [quotes, activeId],
   );
 
-  const draftQuote = quotes?.find((q) => q.status === "draft") ?? null;
+  const trackQuotes = useMemo(() => {
+    if (!quotes?.length) return [] as WorkOrderQuoteRecord[];
+    if (!hasLucrare2) return quotes;
+    return quotes.filter((q) => quoteLucrareIndex(q) === lucrareTrack);
+  }, [quotes, hasLucrare2, lucrareTrack]);
+
+  useEffect(() => {
+    if (!quotes?.length) return;
+    if (!hasLucrare2) return;
+    const onTrack = activeId ? quotes.find((q) => q.id === activeId && quoteLucrareIndex(q) === lucrareTrack) : null;
+    if (onTrack) return;
+    const draft = trackQuotes.find((q) => q.status === "draft");
+    const next = draft ?? trackQuotes[0] ?? null;
+    setActiveId(next?.id ?? null);
+    if (next) setTitle(next.title ?? "");
+    if (quotePane === "consol" && trackQuotes.filter((q) => q.status === "approved").length < 2) {
+      setQuotePane("lines");
+    }
+  }, [lucrareTrack, hasLucrare2, quotes, activeId, trackQuotes, quotePane]);
+
+  const draftQuote = trackQuotes.find((q) => q.status === "draft") ?? null;
   const isEditingDraft = activeQuote?.status === "draft" && editingDraftId === activeQuote.id;
   const isCreatingDraft = !activeQuote && canWrite;
   const hasLineDecisions = Object.values(lineDecisions).some(Boolean);
 
   const consolidatedLines = useMemo(() => {
-    if (!quotes?.length) return [];
+    if (!trackQuotes.length) return [];
     const rows: Array<{
       quoteId: string;
       quoteLabel: string;
       version: number;
       line: WorkOrderQuoteRecord["lines"][number];
     }> = [];
-    for (const q of [...quotes].sort((a, b) => a.version - b.version)) {
+    for (const q of [...trackQuotes].sort((a, b) => a.version - b.version)) {
       if (q.status !== "approved") continue;
       for (const line of q.lines) {
         if (line.approvalStatus === "rejected") continue;
@@ -445,7 +477,9 @@ export function WorkOrderQuotePanel({
       }
     }
     return rows;
-  }, [quotes]);
+  }, [trackQuotes]);
+
+  const showConsolidated = trackQuotes.filter((q) => q.status === "approved").length >= 2;
 
   const consolidatedTotals = useMemo(() => {
     let net = 0;
@@ -726,6 +760,48 @@ export function WorkOrderQuotePanel({
     }
   }
 
+  async function moveQuoteToLucrare(target: 1 | 2) {
+    if (!activeQuote || !canMoveQuote) return;
+    if (quoteLucrareIndex(activeQuote) === target) return;
+    if (
+      !window.confirm(
+        `Mută ${quoteDisplayName(activeQuote)} pe Lucrare #${target}?\n\nPozele rămân pe acest Deviz.`,
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setOk(null);
+    try {
+      const res = await fetch(
+        `${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/move-lucrare`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({ lucrareIndex: target }),
+        },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      await load(activeQuote.id);
+      onLucrareTrackChange?.(target);
+      setOk(`Deviz mutat pe Lucrare #${target}.`);
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function deleteDraft() {
     if (!activeQuote || activeQuote.status !== "draft") return;
     if (!window.confirm(`Ștergi ciorna „${quoteDisplayName(activeQuote)}”? Acțiunea e ireversibilă.`)) {
@@ -980,7 +1056,7 @@ export function WorkOrderQuotePanel({
       {sheetLayout ? (
         <div className="mb-4 flex flex-nowrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
         <span className="shrink-0 text-sm font-semibold text-zinc-200">
-          {lucrareLabel ?? "Deviz"}
+          {hasLucrare2 ? `Lucrare #${lucrareTrack}` : "Deviz"}
         </span>
           {activeQuote ? (
             <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
@@ -990,6 +1066,19 @@ export function WorkOrderQuotePanel({
           ) : (
             <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">Ciornă</span>
           )}
+          {canMoveQuote && hasLucrare2 && activeQuote ? (
+            <button
+              type="button"
+              disabled={pending}
+              title="Mută acest Deviz pe cealaltă Lucrare (pozele rămân pe Deviz)"
+              onClick={() =>
+                void moveQuoteToLucrare(quoteLucrareIndex(activeQuote) === 1 ? 2 : 1)
+              }
+              className={`${sheetBtnClass} border-zinc-600 bg-zinc-900 text-zinc-200 hover:bg-zinc-800`}
+            >
+              Mută pe Lucrare #{quoteLucrareIndex(activeQuote) === 1 ? 2 : 1}
+            </button>
+          ) : null}
           {canWrite && !draftQuote ? (
             <button
               type="button"
@@ -1212,26 +1301,48 @@ export function WorkOrderQuotePanel({
       ) : null}
 
       <div className="mt-3 flex gap-2 border-b border-zinc-800">
-        {[
-          { id: "quote" as const, label: "Deviz" },
-          { id: "warranty" as const, label: "Garanție" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => {
-              setActiveTab(tab.id);
-              if (tab.id === "quote") setQuotePane("lines");
-            }}
-            className={`border-b-2 px-3 py-2 text-sm ${
-              activeTab === tab.id
-                ? "border-violet-500 text-violet-200"
-                : "border-transparent text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {(hasLucrare2
+          ? [
+              { id: "l1" as const, label: "Lucrare #1" },
+              { id: "l2" as const, label: "Lucrare #2" },
+              { id: "warranty" as const, label: "Garanție" },
+            ]
+          : [
+              { id: "quote" as const, label: "Deviz" },
+              { id: "warranty" as const, label: "Garanție" },
+            ]
+        ).map((tab) => {
+          const selected =
+            tab.id === "warranty"
+              ? activeTab === "warranty"
+              : activeTab === "quote" &&
+                (tab.id === "quote" ||
+                  (tab.id === "l1" && lucrareTrack === 1) ||
+                  (tab.id === "l2" && lucrareTrack === 2));
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                if (tab.id === "warranty") {
+                  setActiveTab("warranty");
+                  return;
+                }
+                setActiveTab("quote");
+                setQuotePane("lines");
+                if (tab.id === "l1") onLucrareTrackChange?.(1);
+                if (tab.id === "l2") onLucrareTrackChange?.(2);
+              }}
+              className={`border-b-2 px-3 py-2 text-sm ${
+                selected
+                  ? "border-violet-500 text-violet-200"
+                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {ok ? <p className="mt-3 text-sm text-emerald-400">{ok}</p> : null}
@@ -1264,26 +1375,34 @@ export function WorkOrderQuotePanel({
         />
       ) : null}
 
-      {activeTab === "quote" && quotes.length > 0 ? (
+      {activeTab === "quote" && trackQuotes.length === 0 && !isCreatingDraft ? (
+        <p className="mt-4 text-sm text-zinc-500">
+          {hasLucrare2
+            ? `Niciun Deviz pe Lucrare #${lucrareTrack}. Folosiți „Deviz nou” sau mutați un Deviz de pe cealaltă Lucrare.`
+            : "Niciun Deviz pe această comandă."}
+        </p>
+      ) : null}
+
+      {activeTab === "quote" && trackQuotes.length > 0 ? (
         <div className="mt-4 border-b border-zinc-800">
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setQuotePane("consol");
-                setEditingDraftId(null);
-              }}
-              className={fleetSheetTabClass(quotePane === "consol")}
-              title="Toate liniile aprobate din toate versiunile"
-            >
-              Consolidat
-              {consolidatedLines.length > 0 ? (
+            {showConsolidated ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuotePane("consol");
+                  setEditingDraftId(null);
+                }}
+                className={fleetSheetTabClass(quotePane === "consol")}
+                title="Liniile aprobate din Devizele acestei Lucrări"
+              >
+                Consolidat
                 <span className="ml-1.5 text-[11px] font-normal opacity-80">
                   {consolidatedLines.length} lin.
                 </span>
-              ) : null}
-            </button>
-            {[...quotes]
+              </button>
+            ) : null}
+            {[...trackQuotes]
               .sort((a, b) => a.version - b.version)
               .flatMap((q) => {
                 const linesSelected = activeId === q.id && quotePane === "lines";
@@ -1335,7 +1454,7 @@ export function WorkOrderQuotePanel({
         </div>
       ) : null}
 
-      {activeTab === "quote" && quotePane === "consol" ? (
+      {activeTab === "quote" && quotePane === "consol" && showConsolidated ? (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-4 text-sm">
             <span>

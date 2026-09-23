@@ -152,6 +152,26 @@ export class WorkOrderQuotesController {
     return this.quotes.resubmit(tenantSlug, workOrderId, quoteId, body ?? {}, actorUserId, access);
   }
 
+  @Post(':quoteId/move-lucrare')
+  @Roles(...FLEET_WRITE_ROLES)
+  moveLucrare(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Param('quoteId') quoteId: string,
+    @Body() body: { lucrareIndex?: number },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.moveLucrareIndex(
+      tenantSlug,
+      workOrderId,
+      quoteId,
+      body?.lucrareIndex ?? 0,
+      actorUserId,
+      access,
+    );
+  }
+
   @Post(':quoteId/approve')
   @Roles(...FLEET_WRITE_ROLES)
   approve(

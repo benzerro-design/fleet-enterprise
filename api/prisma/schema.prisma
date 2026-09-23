@@ -1543,6 +1543,8 @@ model MaintenanceWorkOrder {
   /// Etapă reparație suplimentară (după omisiune + deviz aprobat v2+) — solicitată de partener.
   supplementRepairAt DateTime?
   supplementQuoteVersion Int?
+  /// Snapshot: `readyAt` al Lucrării #1 la deschiderea Lucrării #2 (Tila L1 înghețat).
+  lucrare1ReadyAt DateTime?
   serviceOrderType ServiceOrderType       @default(M)
   readyAt          DateTime?
   /// Dată estimativă finalizare reparație — obligatorie înainte de trimitere deviz spre aprobare (partener).
@@ -1710,6 +1712,8 @@ model WorkOrderQuote {
   tenantId         String
   workOrderId      String
   version          Int                  @default(1)
+  /// 1 = Lucrare #1, 2 = Lucrare #2 (track Tila / container Deviz).
+  lucrareIndex     Int                  @default(1)
   /// Denumire afișată (ex. „Revizie”, „Anvelope”). Gol = „Deviz {version}”.
   title            String?
   status           WorkOrderQuoteStatus @default(draft)
@@ -1743,6 +1747,7 @@ model WorkOrderQuote {
   @@index([tenantId])
   @@index([workOrderId])
   @@index([workOrderId, status])
+  @@index([workOrderId, lucrareIndex])
 }
 
 /// Linie deviz (piese, manoperă).

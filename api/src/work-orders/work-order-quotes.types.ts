@@ -55,6 +55,8 @@ export type WorkOrderQuoteRecord = {
   id: string;
   workOrderId: string;
   version: number;
+  /** 1 = Lucrare #1, 2 = Lucrare #2 */
+  lucrareIndex: number;
   /** Denumire afișată; null/gol = „Deviz {version}”. */
   title: string | null;
   status: WorkOrderQuoteStatus;
@@ -235,6 +237,7 @@ export function toQuoteRecord(quote: {
   id: string;
   workOrderId: string;
   version: number;
+  lucrareIndex?: number | null;
   title?: string | null;
   status: WorkOrderQuoteStatus;
   currency: string;
@@ -284,6 +287,7 @@ export function toQuoteRecord(quote: {
     id: quote.id,
     workOrderId: quote.workOrderId,
     version: quote.version,
+    lucrareIndex: quote.lucrareIndex === 2 ? 2 : 1,
     title: quote.title?.trim() || null,
     status: quote.status,
     currency: quote.currency,

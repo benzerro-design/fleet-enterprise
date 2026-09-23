@@ -586,6 +586,7 @@ export class WorkOrderQuotesService {
     });
     const version = (maxVersion._max.version ?? 0) + 1;
     const title = dto.title !== undefined ? dto.title?.trim() || null : null;
+    const lucrareIndex = wo.supplementRepairAt ? 2 : 1;
 
     const quote = await this.prisma.$transaction(async (tx) => {
       const created = await tx.workOrderQuote.create({
@@ -593,6 +594,7 @@ export class WorkOrderQuotesService {
           tenantId: tenant.id,
           workOrderId,
           version,
+          lucrareIndex,
           title,
           currency: dto.currency?.trim() || 'RON',
           totalNetCents,
@@ -992,6 +994,59 @@ export class WorkOrderQuotesService {
     };
   }
 
+  /**
+   * Mută un Deviz pe Lucrare #1 sau #2 (fără copiere). Pozele rămân pe quoteId.
+   */
+  async moveLucrareIndex(
+    tenantSlug: string,
+    workOrderId: string,
+    quoteId: string,
+    lucrareIndex: number,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderQuoteRecord> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+
+    if (lucrareIndex !== 1 && lucrareIndex !== 2) {
+      throw new BadRequestException('lucrareIndex trebuie să fie 1 sau 2');
+    }
+
+    const existing = await this.prisma.workOrderQuote.findFirst({
+      where: { id: quoteId, workOrderId, tenantId: tenant.id },
+      include: { workOrder: true, ...this.quoteInclude() },
+    });
+    if (!existing) throw new NotFoundException('Quote not found');
+
+    if (lucrareIndex === 2 && !existing.workOrder.supplementRepairAt && !existing.workOrder.supplementQuoteVersion) {
+      throw new BadRequestException(
+        'Lucrare #2 nu există încă pe această comandă — aprobați un Deviz supliment sau deschideți etapa suplimentară',
+      );
+    }
+
+    const prev = existing.lucrareIndex === 2 ? 2 : 1;
+    if (prev === lucrareIndex) return toQuoteRecord(existing);
+
+    const quote = await this.prisma.workOrderQuote.update({
+      where: { id: quoteId },
+      data: { lucrareIndex },
+      include: this.quoteInclude(),
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order_quote.move_lucrare',
+      entityType: 'work_order_quote',
+      entityId: quoteId,
+      meta: { workOrderId, from: prev, to: lucrareIndex, version: existing.version },
+    });
+
+    return toQuoteRecord(quote);
+  }
+
   async approve(
     tenantSlug: string,
     workOrderId: string,
@@ -1101,12 +1156,17 @@ export class WorkOrderQuotesService {
         await tx.maintenanceWorkOrder.update({
           where: { id: workOrderId },
           data: {
+            lucrare1ReadyAt: woRow.readyAt ?? at,
             readyAt: null,
             status: MaintenanceWorkOrderStatus.in_progress,
             supplementRepairAt: at,
             supplementQuoteVersion: existing.version,
             repairPathNote: prevNote ? `${prevNote}\n${noteLine}` : noteLine,
           },
+        });
+        await tx.workOrderQuote.update({
+          where: { id: quoteId },
+          data: { lucrareIndex: 2 },
         });
         const ticketId = sc.sourceTicketId;
         if (ticketId) {
@@ -1128,6 +1188,12 @@ export class WorkOrderQuotesService {
         }
       }
 
+      if (startLucrare2) {
+        return tx.workOrderQuote.findFirstOrThrow({
+          where: { id: quoteId },
+          include: this.quoteInclude(),
+        });
+      }
       return updated;
     });
 

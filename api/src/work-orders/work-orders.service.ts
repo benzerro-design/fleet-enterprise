@@ -182,6 +182,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   /** Etapă suplimentară după deviz aprobat v2+ (partener). */
   supplementRepairAt: string | null;
   supplementQuoteVersion: number | null;
+  /** readyAt Lucrare #1 la deschiderea Lucrării #2. */
+  lucrare1ReadyAt: string | null;
   /** Transformare din Acțiuni (mentenanță/cost/document) pe tichetul sursă. */
   ticketSettlement: WorkOrderTicketSettlement | null;
   /** Cost generat din devizul aprobat. */
@@ -836,6 +838,7 @@ export class WorkOrdersService {
       readyAt: row.readyAt?.toISOString() ?? null,
       supplementRepairAt: row.supplementRepairAt?.toISOString() ?? null,
       supplementQuoteVersion: row.supplementQuoteVersion ?? null,
+      lucrare1ReadyAt: row.lucrare1ReadyAt?.toISOString() ?? null,
       estimatedRepairAt: row.estimatedRepairAt?.toISOString() ?? null,
       ticketSettlement,
       hasQuoteCost,
@@ -1244,12 +1247,21 @@ export class WorkOrdersService {
       await tx.maintenanceWorkOrder.update({
         where: { id },
         data: {
+          lucrare1ReadyAt: wo.readyAt ?? at,
           readyAt: null,
           status: MaintenanceWorkOrderStatus.in_progress,
           supplementRepairAt: at,
           supplementQuoteVersion: topQuote.version,
           repairPathNote: prevNote ? `${prevNote}\n${noteLine}` : noteLine,
         },
+      });
+      await tx.workOrderQuote.updateMany({
+        where: {
+          workOrderId: id,
+          tenantId: tenant.id,
+          version: { gte: topQuote.version },
+        },
+        data: { lucrareIndex: 2 },
       });
       const ticketId = wo.serviceCase.sourceTicketId;
       if (ticketId) {

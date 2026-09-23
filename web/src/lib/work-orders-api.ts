@@ -122,6 +122,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   /** Etapă suplimentară după Deviz aprobat v2+. */
   supplementRepairAt?: string | null;
   supplementQuoteVersion?: number | null;
+  /** readyAt Lucrare #1 la deschiderea Lucrării #2 (istoric Tila). */
+  lucrare1ReadyAt?: string | null;
   ticketSettlement: WorkOrderTicketSettlement | null;
   hasQuoteCost: boolean;
   vehicle: WorkOrderVehicleSnapshot;
@@ -284,6 +286,8 @@ export type WorkOrderQuoteRecord = {
   id: string;
   workOrderId: string;
   version: number;
+  /** 1 = Lucrare #1, 2 = Lucrare #2 */
+  lucrareIndex?: number;
   /** Denumire afișată; null/gol = „Deviz {version}”. */
   title: string | null;
   status: WorkOrderQuoteStatus;
