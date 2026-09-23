@@ -265,6 +265,9 @@ type Props = {
   /** Track Lucrare activ (sincron cu Tila). */
   lucrareTrack?: 1 | 2;
   onLucrareTrackChange?: (track: 1 | 2) => void;
+  /** Flux 2: deschide L2 după Lucrare gata pe L1. */
+  canStartNewLucrare?: boolean;
+  onStartNewLucrare?: () => void;
   estimatedRepairAt?: string | null;
   /** @deprecated Nu mai bloca tot panelul pe summary — estimarea e pe WO, draft-urile pe versiune. */
   quoteLocked?: boolean;
@@ -301,6 +304,8 @@ export function WorkOrderQuotePanel({
   hasLucrare2 = false,
   lucrareTrack = 1,
   onLucrareTrackChange,
+  canStartNewLucrare = false,
+  onStartNewLucrare,
   estimatedRepairAt = null,
   quoteLocked: _quoteLocked = false,
   workOrderStatus = "",
@@ -342,6 +347,8 @@ export function WorkOrderQuotePanel({
   const [priceVerify, setPriceVerify] = useState<VerifyPartsPricesResult | null>(null);
   const [priceVerifyByKey, setPriceVerifyByKey] = useState<Record<string, PartsPriceVerifyLineResult>>({});
   const [estimatedDate, setEstimatedDate] = useState(() => toDateInput(estimatedRepairAt));
+  /** true când userul a apăsat Deviz nou (ciornă locală, încă nesalvată). */
+  const [creatingNew, setCreatingNew] = useState(false);
 
   useEffect(() => {
     setEstimatedDate(toDateInput(estimatedRepairAt));
@@ -440,6 +447,7 @@ export function WorkOrderQuotePanel({
   useEffect(() => {
     if (!quotes?.length) return;
     if (!hasLucrare2) return;
+    if (creatingNew) return;
     const onTrack = activeId ? quotes.find((q) => q.id === activeId && quoteLucrareIndex(q) === lucrareTrack) : null;
     if (onTrack) return;
     const draft = trackQuotes.find((q) => q.status === "draft");
@@ -449,11 +457,11 @@ export function WorkOrderQuotePanel({
     if (quotePane === "consol" && trackQuotes.filter((q) => q.status === "approved").length < 2) {
       setQuotePane("lines");
     }
-  }, [lucrareTrack, hasLucrare2, quotes, activeId, trackQuotes, quotePane]);
+  }, [lucrareTrack, hasLucrare2, quotes, activeId, trackQuotes, quotePane, creatingNew]);
 
   const draftQuote = trackQuotes.find((q) => q.status === "draft") ?? null;
   const isEditingDraft = activeQuote?.status === "draft" && editingDraftId === activeQuote.id;
-  const isCreatingDraft = !activeQuote && canWrite;
+  const isCreatingDraft = creatingNew || (!activeQuote && canWrite && trackQuotes.length === 0);
   const hasLineDecisions = Object.values(lineDecisions).some(Boolean);
 
   const consolidatedLines = useMemo(() => {
@@ -567,6 +575,7 @@ export function WorkOrderQuotePanel({
       }
       await load();
       setEditingDraftId(null);
+      setCreatingNew(false);
     } finally {
       setPending(false);
     }
@@ -760,12 +769,31 @@ export function WorkOrderQuotePanel({
     }
   }
 
-  async function moveQuoteToLucrare(target: 1 | 2) {
-    if (!activeQuote || !canMoveQuote) return;
-    if (quoteLucrareIndex(activeQuote) === target) return;
+  async function moveQuoteToLucrare(target?: 1 | 2) {
+    if (!activeQuote || !canMoveQuote || !hasLucrare2) return;
+    const current = quoteLucrareIndex(activeQuote);
+    let next = target;
+    if (next == null) {
+      const raw = window.prompt(
+        `Mută ${quoteDisplayName(activeQuote)} pe care Lucrare?\n\nScrie L1 sau L2 (pozele rămân pe Deviz).`,
+        current === 1 ? "L2" : "L1",
+      );
+      if (raw == null) return;
+      const n = raw.trim().toUpperCase().replace(/^LUCRARE\s*#?/, "").replace(/^L/, "");
+      if (n === "1") next = 1;
+      else if (n === "2") next = 2;
+      else {
+        setError("Destinație invalidă — folosiți L1 sau L2.");
+        return;
+      }
+    }
+    if (next === current) {
+      setOk(`Devizul e deja pe L${next}.`);
+      return;
+    }
     if (
       !window.confirm(
-        `Mută ${quoteDisplayName(activeQuote)} pe Lucrare #${target}?\n\nPozele rămân pe acest Deviz.`,
+        `Mută ${quoteDisplayName(activeQuote)} pe L${next}?\n\nPozele rămân pe acest Deviz.`,
       )
     ) {
       return;
@@ -779,7 +807,7 @@ export function WorkOrderQuotePanel({
         {
           method: "POST",
           headers: fleetJsonHeaders(),
-          body: JSON.stringify({ lucrareIndex: target }),
+          body: JSON.stringify({ lucrareIndex: next }),
         },
       );
       if (!res.ok) {
@@ -794,8 +822,8 @@ export function WorkOrderQuotePanel({
         return;
       }
       await load(activeQuote.id);
-      onLucrareTrackChange?.(target);
-      setOk(`Deviz mutat pe Lucrare #${target}.`);
+      onLucrareTrackChange?.(next);
+      setOk(`Deviz mutat pe L${next}.`);
       router.refresh();
     } finally {
       setPending(false);
@@ -903,12 +931,40 @@ export function WorkOrderQuotePanel({
   }
 
   function startNewDraft() {
+    const anyDraft = quotes?.find((q) => q.status === "draft");
+    if (anyDraft) {
+      const track = quoteLucrareIndex(anyDraft);
+      setCreatingNew(false);
+      if (hasLucrare2 && track !== lucrareTrack) {
+        onLucrareTrackChange?.(track);
+      }
+      setActiveId(anyDraft.id);
+      setEditingDraftId(anyDraft.id);
+      setLines(linesFromQuote(anyDraft));
+      setNotes(anyDraft.notes ?? "");
+      setTitle(anyDraft.title ?? "");
+      setQuotePane("lines");
+      setActiveTab("quote");
+      setError(null);
+      setOk(
+        hasLucrare2 && track !== lucrareTrack
+          ? `Există deja o ciornă pe L${track} — o deschidem pentru editare.`
+          : "Există deja o ciornă — o deschidem pentru editare.",
+      );
+      return;
+    }
+    setCreatingNew(true);
     setActiveId(null);
     setEditingDraftId(null);
     setLines([newLine(supplierDiscounts)]);
     setNotes("");
+    setTitle("");
     setPriceVerify(null);
     setPriceVerifyByKey({});
+    setQuotePane("lines");
+    setActiveTab("quote");
+    setError(null);
+    setOk(`Ciornă nouă pe ${hasLucrare2 ? `L${lucrareTrack}` : "comandă"} — completați liniile și salvați.`);
   }
 
   async function verifyPartsPrices() {
@@ -1054,94 +1110,110 @@ export function WorkOrderQuotePanel({
   return (
     <section className={sectionClass}>
       {sheetLayout ? (
-        <div className="mb-4 flex flex-nowrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-        <span className="shrink-0 text-sm font-semibold text-zinc-200">
-          {hasLucrare2 ? `Lucrare #${lucrareTrack}` : "Deviz"}
-        </span>
-          {activeQuote ? (
-            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
-              v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
-              {activeQuote.title ? ` · ${activeQuote.title}` : ""}
+        <div className="mb-4 space-y-2">
+          <div className="flex flex-nowrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              Lucrare
             </span>
-          ) : (
-            <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">Ciornă</span>
-          )}
-          {canMoveQuote && hasLucrare2 && activeQuote ? (
-            <button
-              type="button"
-              disabled={pending}
-              title="Mută acest Deviz pe cealaltă Lucrare (pozele rămân pe Deviz)"
-              onClick={() =>
-                void moveQuoteToLucrare(quoteLucrareIndex(activeQuote) === 1 ? 2 : 1)
-              }
-              className={`${sheetBtnClass} border-zinc-600 bg-zinc-900 text-zinc-200 hover:bg-zinc-800`}
-            >
-              Mută pe Lucrare #{quoteLucrareIndex(activeQuote) === 1 ? 2 : 1}
-            </button>
-          ) : null}
-          {canWrite && !draftQuote ? (
-            <button
-              type="button"
-              onClick={startNewDraft}
-              className={`${sheetBtnClass} border-emerald-600/50 bg-emerald-950/40 font-semibold text-emerald-100 hover:bg-emerald-950/60`}
-              title="Creează Deviz următor (v2, v3…) pe aceeași comandă"
-            >
-              Deviz nou
-            </button>
-          ) : null}
-          {canWrite && (isEditingDraft || quotes.length === 0 || isCreatingDraft) ? (
-            <>
-              <span className="h-5 w-px shrink-0 bg-zinc-700" />
+            <span className="shrink-0 text-sm font-semibold text-zinc-200">
+              {hasLucrare2 ? `L${lucrareTrack}` : "L1"}
+            </span>
+            {canStartNewLucrare && onStartNewLucrare ? (
               <button
                 type="button"
-                onClick={() => setLines([...lines, newLine(supplierDiscounts)])}
+                disabled={pending}
+                onClick={() => onStartNewLucrare()}
+                className={`${sheetBtnClass} border-amber-600/50 bg-amber-950/40 font-semibold text-amber-100 hover:bg-amber-950/60`}
+                title="Deschide L2 după Lucrare gata pe L1 — apoi adăugați Deviz pe L2"
+              >
+                Lucrare nouă
+              </button>
+            ) : null}
+            <span className="min-w-2 flex-1" />
+          </div>
+          <div className="flex flex-nowrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              Deviz
+            </span>
+            {activeQuote ? (
+              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
+                v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
+                {activeQuote.title ? ` · ${activeQuote.title}` : ""}
+              </span>
+            ) : isCreatingDraft ? (
+              <span className="shrink-0 rounded-full border border-emerald-700/50 px-2 py-0.5 text-xs text-emerald-200">
+                Ciornă nouă
+              </span>
+            ) : (
+              <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">
+                —
+              </span>
+            )}
+            {canWrite ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={startNewDraft}
+                className={`${sheetBtnClass} border-emerald-600/50 bg-emerald-950/40 font-semibold text-emerald-100 hover:bg-emerald-950/60`}
+                title="Creează Deviz pe Lucrarea curentă"
+              >
+                Deviz nou
+              </button>
+            ) : null}
+            {canWrite && (isEditingDraft || quotes.length === 0 || isCreatingDraft) ? (
+              <>
+                <span className="h-5 w-px shrink-0 bg-zinc-700" />
+                <button
+                  type="button"
+                  onClick={() => setLines([...lines, newLine(supplierDiscounts)])}
+                  className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
+                >
+                  + Linie
+                </button>
+                <button
+                  type="button"
+                  disabled={lines.length <= 1}
+                  onClick={() => setLines(lines.slice(0, -1))}
+                  className={`${sheetBtnClass} border-zinc-700 bg-zinc-900 text-zinc-200`}
+                >
+                  Șterge linie
+                </button>
+              </>
+            ) : null}
+            <span className="min-w-2 flex-1" />
+            {canWrite && allowQuotePdfImport ? (
+              <button
+                type="button"
+                disabled={pending}
+                title="Import PDF / Audatex → preview → ciornă"
+                onClick={() => setImportOpen(true)}
                 className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
               >
-                + Linie
+                Import PDF
               </button>
+            ) : null}
+            {canWrite && allowPartsPriceVerify ? (
               <button
                 type="button"
-                disabled={lines.length <= 1}
-                onClick={() => setLines(lines.slice(0, -1))}
-                className={`${sheetBtnClass} border-zinc-700 bg-zinc-900 text-zinc-200`}
+                disabled={pending}
+                title="Compară prețurile pieselor cu catalogul"
+                onClick={() => void verifyPartsPrices()}
+                className={`${sheetBtnClass} border-amber-500/50 bg-amber-950/40 font-semibold text-amber-100`}
               >
-                Șterge linie
+                Verifică preț
               </button>
-            </>
-          ) : null}
-          <span className="min-w-2 flex-1" />
-          {canWrite && allowQuotePdfImport ? (
-            <button
-              type="button"
-              disabled={pending}
-              title="Import PDF / Audatex → preview → ciornă"
-              onClick={() => setImportOpen(true)}
-              className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
-            >
-              Import deviz PDF
-            </button>
-          ) : null}
-          {canWrite && allowPartsPriceVerify ? (
-            <button
-              type="button"
-              disabled={pending}
-              title="Compară prețurile pieselor cu catalogul (stub până la API real)"
-              onClick={() => void verifyPartsPrices()}
-              className={`${sheetBtnClass} border-amber-500/50 bg-amber-950/40 font-semibold text-amber-100`}
-            >
-              Verifică preț
-            </button>
-          ) : null}
-          {activeQuote && activeQuote.status !== "draft" ? (
-            <a
-              href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${sheetBtnClass} border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800`}
-            >
-              Export PDF
-            </a>
-          ) : null}
+            ) : null}
+            {activeQuote && activeQuote.status !== "draft" ? (
+              <a
+                href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${sheetBtnClass} border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800`}
+              >
+                Export PDF
+              </a>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1303,8 +1375,8 @@ export function WorkOrderQuotePanel({
       <div className="mt-3 flex gap-2 border-b border-zinc-800">
         {(hasLucrare2
           ? [
-              { id: "l1" as const, label: "Lucrare #1" },
-              { id: "l2" as const, label: "Lucrare #2" },
+              { id: "l1" as const, label: "L1" },
+              { id: "l2" as const, label: "L2" },
               { id: "warranty" as const, label: "Garanție" },
             ]
           : [
@@ -1378,7 +1450,7 @@ export function WorkOrderQuotePanel({
       {activeTab === "quote" && trackQuotes.length === 0 && !isCreatingDraft ? (
         <p className="mt-4 text-sm text-zinc-500">
           {hasLucrare2
-            ? `Niciun Deviz pe Lucrare #${lucrareTrack}. Folosiți „Deviz nou” sau mutați un Deviz de pe cealaltă Lucrare.`
+            ? `Niciun Deviz pe L${lucrareTrack}. Folosiți „Deviz nou” sau „Mută Devizul…” de pe cealaltă Lucrare.`
             : "Niciun Deviz pe această comandă."}
         </p>
       ) : null}
@@ -1408,6 +1480,7 @@ export function WorkOrderQuotePanel({
                 const linesSelected = activeId === q.id && quotePane === "lines";
                 const photosSelected = activeId === q.id && quotePane === "photos";
                 const selectQuote = () => {
+                  setCreatingNew(false);
                   setActiveId(q.id);
                   setTitle(q.title ?? "");
                   if (q.status === "draft") {
@@ -1588,6 +1661,17 @@ export function WorkOrderQuotePanel({
               >
                 PDF deviz
               </a>
+            ) : null}
+            {canMoveQuote && hasLucrare2 ? (
+              <button
+                type="button"
+                disabled={pending}
+                title="Mută doar acest Deviz pe altă Lucrare"
+                onClick={() => void moveQuoteToLucrare()}
+                className="rounded-lg border border-zinc-600 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Mută Devizul…
+              </button>
             ) : null}
             {canWrite && activeQuote.status === "draft" ? (
               <>

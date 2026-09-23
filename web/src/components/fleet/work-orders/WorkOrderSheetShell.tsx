@@ -404,13 +404,12 @@ export function WorkOrderSheetShell({
     }
   }, [hasLucrare2, wo.supplementRepairAt, wo.readyAt]);
 
-  const canStartSupplement =
+  const canStartNewLucrare =
     canWrite &&
     !!wo.inServiceAt &&
     !(wo.outServiceAt && !wo.visit2InServiceAt) &&
-    (wo.quoteSummary.version ?? 0) >= 2 &&
-    wo.quoteSummary.status === "approved" &&
-    !(wo.supplementRepairAt && !wo.readyAt);
+    !!wo.readyAt &&
+    !hasLucrare2;
 
   const navActions: { label: string; href: string }[] = isPartner
     ? [
@@ -782,7 +781,7 @@ export function WorkOrderSheetShell({
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                Lucrare #1
+                L1
               </button>
               <button
                 type="button"
@@ -793,19 +792,17 @@ export function WorkOrderSheetShell({
                     : "text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                Lucrare #2
-                {wo.supplementQuoteVersion != null ? ` · Deviz v${wo.supplementQuoteVersion}` : ""}
+                L2
               </button>
             </div>
           ) : null}
           {tilaTrack === 2 && hasLucrare2 ? (
             <p className="mb-2 rounded border border-amber-800/40 bg-amber-950/25 px-2 py-1.5 text-[11px] text-amber-100">
-              Lucrare suplimentară — pașii de mai jos sunt pe Tila #2 (istoricul Lucrare #1 rămâne pe
-              tab-ul alăturat).
+              L2 activă — istoricul L1 rămâne pe tab-ul alăturat.
             </p>
           ) : wo.supplementRepairAt && !wo.readyAt && tilaTrack === 1 ? (
             <p className="mb-2 rounded border border-zinc-700/60 bg-zinc-900/50 px-2 py-1.5 text-[11px] text-zinc-400">
-              Lucrare #1 (istoric înghețat). Activă acum: Lucrare #2.
+              L1 (istoric înghețat). Activă acum: L2.
             </p>
           ) : null}
           <ul className="space-y-1">
@@ -842,21 +839,21 @@ export function WorkOrderSheetShell({
             );
             })}
           </ul>
-          {canStartSupplement ? (
+          {canStartNewLucrare ? (
             <button
               type="button"
               disabled={pending}
               onClick={() => void startSupplementRepair()}
               className="mt-2 w-full rounded border border-amber-700/50 px-2 py-1.5 text-[11px] text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
             >
-              Deschide Lucrare #2 (deviz v{wo.quoteSummary.version})
+              Lucrare nouă (L2)
             </button>
           ) : null}
           {isDamageWo ? (
             <p className="mt-2 text-[10px] leading-snug text-zinc-500">
               Daună: Verificare / Deviz urmează dosarul. Lucrare gata — bifează manual sau urcă poze
-              «auto reparat» pe Dosar. După Deviz aprobat v2+, partenerul poate deschide o etapă
-              suplimentară pe aceeași comandă.
+              «auto reparat» pe Dosar. După Lucrare gata pe L1: „Lucrare nouă” pentru L2, apoi Deviz pe
+              L2.
             </p>
           ) : null}
         </div>
@@ -1346,6 +1343,8 @@ export function WorkOrderSheetShell({
         hasLucrare2={hasLucrare2}
         lucrareTrack={tilaTrack}
         onLucrareTrackChange={setTilaTrack}
+        canStartNewLucrare={canStartNewLucrare}
+        onStartNewLucrare={() => void startSupplementRepair()}
         estimatedRepairAt={wo.estimatedRepairAt}
         quoteLocked={false}
         workOrderStatus={wo.status}

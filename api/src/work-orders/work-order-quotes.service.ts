@@ -1020,9 +1020,9 @@ export class WorkOrderQuotesService {
     });
     if (!existing) throw new NotFoundException('Quote not found');
 
-    if (lucrareIndex === 2 && !existing.workOrder.supplementRepairAt && !existing.workOrder.supplementQuoteVersion) {
+    if (lucrareIndex === 2 && !existing.workOrder.supplementRepairAt && !existing.workOrder.lucrare1ReadyAt) {
       throw new BadRequestException(
-        'Lucrare #2 nu există încă pe această comandă — aprobați un Deviz supliment sau deschideți etapa suplimentară',
+        'Lucrare #2 nu există încă pe această comandă — folosiți „Lucrare nouă” sau așteptați deschiderea automată la aprobare',
       );
     }
 
@@ -1186,14 +1186,33 @@ export class WorkOrderQuotesService {
             },
           });
         }
-      }
-
-      if (startLucrare2) {
         return tx.workOrderQuote.findFirstOrThrow({
           where: { id: quoteId },
           include: this.quoteInclude(),
         });
       }
+
+      /** Deviz pe L2 deja deschisă — leagă versiunea de track. */
+      if (woRow.supplementRepairAt && !woRow.readyAt) {
+        await tx.workOrderQuote.update({
+          where: { id: quoteId },
+          data: { lucrareIndex: 2 },
+        });
+        if (
+          woRow.supplementQuoteVersion == null ||
+          existing.version >= woRow.supplementQuoteVersion
+        ) {
+          await tx.maintenanceWorkOrder.update({
+            where: { id: workOrderId },
+            data: { supplementQuoteVersion: existing.version },
+          });
+        }
+        return tx.workOrderQuote.findFirstOrThrow({
+          where: { id: quoteId },
+          include: this.quoteInclude(),
+        });
+      }
+
       return updated;
     });
 

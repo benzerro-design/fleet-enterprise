@@ -1184,8 +1184,9 @@ export class WorkOrdersService {
   }
 
   /**
-   * Etapă reparație suplimentară (omisiune / avarie ascunsă) — pe același WO,
-   * după ce există un deviz aprobat v2+. Nu resetează Tila de la zero.
+   * Deschide Lucrare #2 (track supliment) pe același WO.
+   * Preferat: după „Lucrare gata” pe L1, înainte de Devizul pe L2.
+   * Hibrid: approve pe Deviz v2+ poate deschide tot aici dacă L2 lipsește.
    */
   async startSupplementRepair(
     tenantSlug: string,
@@ -1202,12 +1203,6 @@ export class WorkOrdersService {
       include: {
         vehicle: { select: { clientId: true } },
         serviceCase: { select: { sourceTicketId: true, workflowType: true } },
-        quotes: {
-          where: { status: WorkOrderQuoteStatus.approved },
-          orderBy: { version: 'desc' },
-          take: 5,
-          select: { version: true },
-        },
       },
     });
     if (!wo) throw new NotFoundException('Work order not found');
@@ -1220,7 +1215,7 @@ export class WorkOrdersService {
     }
     if (!wo.inServiceAt) {
       throw new BadRequestException(
-        'Mașina trebuie să fie In service pentru o etapă suplimentară pe aceeași comandă',
+        'Mașina trebuie să fie In service pentru o Lucrare nouă pe aceeași comandă',
       );
     }
     if (wo.outServiceAt && !wo.visit2InServiceAt) {
@@ -1228,18 +1223,17 @@ export class WorkOrdersService {
         'Mașina a ieșit din service — folosește reprogramare / vizita 2, nu etapă pe Tila curentă',
       );
     }
-    const topQuote = wo.quotes[0];
-    if (!topQuote || topQuote.version < 2) {
+    if (!wo.readyAt) {
       throw new BadRequestException(
-        'Este nevoie de un Deviz aprobat v2+ (supliment) înainte de etapa suplimentară',
+        'Lucrare #1 trebuie să fie gata înainte de „Lucrare nouă” (L2)',
       );
     }
-    if (wo.supplementRepairAt && !wo.readyAt) {
-      throw new BadRequestException('Există deja o etapă suplimentară activă');
+    if (wo.supplementRepairAt || wo.lucrare1ReadyAt) {
+      throw new BadRequestException('Lucrare #2 există deja pe această comandă');
     }
 
     const note = dto.note?.trim();
-    const noteLine = `Etapă suplimentară (deviz v${topQuote.version})${note ? `: ${note}` : ''}`;
+    const noteLine = `Lucrare #2 deschisă${note ? `: ${note}` : ''}`;
     const prevNote = wo.repairPathNote?.trim();
     const at = new Date();
 
@@ -1251,17 +1245,9 @@ export class WorkOrdersService {
           readyAt: null,
           status: MaintenanceWorkOrderStatus.in_progress,
           supplementRepairAt: at,
-          supplementQuoteVersion: topQuote.version,
+          supplementQuoteVersion: null,
           repairPathNote: prevNote ? `${prevNote}\n${noteLine}` : noteLine,
         },
-      });
-      await tx.workOrderQuote.updateMany({
-        where: {
-          workOrderId: id,
-          tenantId: tenant.id,
-          version: { gte: topQuote.version },
-        },
-        data: { lucrareIndex: 2 },
       });
       const ticketId = wo.serviceCase.sourceTicketId;
       if (ticketId) {
@@ -1273,8 +1259,7 @@ export class WorkOrdersService {
             body: `${noteLine} — ${at.toLocaleString('ro-RO')}.`,
             payload: {
               workOrderId: id,
-              supplementQuoteVersion: topQuote.version,
-              milestone: 'supplement_repair',
+              milestone: 'lucrare_2_open',
             },
             actorUserId: actorUserId ?? null,
           },
@@ -1288,10 +1273,10 @@ export class WorkOrdersService {
       action: 'work_order.start_supplement_repair',
       entityType: 'maintenance_work_order',
       entityId: id,
-      meta: { quoteVersion: topQuote.version },
+      meta: { lucrareIndex: 2 },
     });
 
-    return this.getById(tenantSlug, id);
+    return this.getById(tenantSlug, id, access);
   }
 
   private async recordExtraVisitTimes(
