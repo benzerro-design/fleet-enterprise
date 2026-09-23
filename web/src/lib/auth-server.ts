@@ -163,6 +163,16 @@ export function canApproveQuotes(auth: AuthMeResult): boolean {
   return roles.some((r) => r === "client_admin");
 }
 
+/**
+ * Retrimitere deviz spre aprobare — partener (autor) sau tenant_admin.
+ * Managerul client (L1) aprobă / respinge, nu reamintește trimiterea.
+ */
+export function canResubmitQuotes(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") return true;
+  return isPartnerPortalUser(auth);
+}
+
 /** Confirmare programare ca manager — nu șofer. */
 export function canConfirmAppointment(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;

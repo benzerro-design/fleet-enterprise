@@ -251,6 +251,8 @@ type Props = {
   workOrderId: string;
   canWrite: boolean;
   canApprove?: boolean;
+  /** Retrimite spre aprobare — partener sau tenant_admin (nu manager L1). */
+  canResubmitQuote?: boolean;
   /** Cost din factură — doar flotă (L* / L1). Partenerul încarcă factura, nu generează cost. */
   canPostCost?: boolean;
   /** Ascunde link-ul către /fleet/costs (portal partener). */
@@ -283,6 +285,7 @@ export function WorkOrderQuotePanel({
   workOrderId,
   canWrite,
   canApprove = false,
+  canResubmitQuote = false,
   canPostCost = true,
   sheetLayout = false,
   lucrareLabel,
@@ -676,9 +679,15 @@ export function WorkOrderQuotePanel({
   async function resubmitForApproval() {
     if (!activeQuote || activeQuote.status !== "submitted") return;
     const submittedId = activeQuote.id;
+    const iso = toIsoFromDateInput(estimatedDate);
+    if (!iso) {
+      setError("Alegeți noua dată estimativă de finalizare reparație înainte de retrimitere.");
+      return;
+    }
+    const estLabel = formatDateRo(iso);
     if (
       !window.confirm(
-        "Retrimiți acest deviz spre aprobare?\n\nEstimarea finalizării reparației se mută automat cu +2 zile, iar data trimiterii se actualizează.",
+        `Retrimiți acest deviz spre aprobare?\n\nNoua estimare finalizare: ${estLabel}\nData trimiterii se actualizează.`,
       )
     ) {
       return;
@@ -692,6 +701,7 @@ export function WorkOrderQuotePanel({
         {
           method: "POST",
           headers: fleetJsonHeaders(),
+          body: JSON.stringify({ estimatedRepairAt: iso }),
         },
       );
       if (!res.ok) {
@@ -708,12 +718,8 @@ export function WorkOrderQuotePanel({
       const data = (await res.json()) as { estimatedRepairAt?: string };
       await load(submittedId);
       setQuotePane("lines");
-      const estLabel = data.estimatedRepairAt ? formatDateRo(data.estimatedRepairAt) : null;
-      setOk(
-        estLabel
-          ? `Deviz retrimis — se așteaptă aprobarea. Estimare finalizare: ${estLabel} (+2 zile).`
-          : "Deviz retrimis — se așteaptă aprobarea.",
-      );
+      const nextLabel = data.estimatedRepairAt ? formatDateRo(data.estimatedRepairAt) : estLabel;
+      setOk(`Deviz retrimis — se așteaptă aprobarea. Estimare finalizare: ${nextLabel}.`);
       router.refresh();
     } finally {
       setPending(false);
@@ -1498,11 +1504,15 @@ export function WorkOrderQuotePanel({
                 </button>
               </>
             ) : null}
-            {canWrite && activeQuote.status === "submitted" ? (
+            {canResubmitQuote && activeQuote.status === "submitted" ? (
               <button
                 type="button"
-                disabled={pending}
-                title="Reamintește aprobarea: actualizează data trimiterii și mută estimarea finalizare cu +2 zile"
+                disabled={pending || !toIsoFromDateInput(estimatedDate)}
+                title={
+                  !toIsoFromDateInput(estimatedDate)
+                    ? "Alegeți noua dată estimativă de finalizare"
+                    : "Reamintește aprobarea: actualizează data trimiterii cu noua estimare aleasă"
+                }
                 onClick={() => void resubmitForApproval()}
                 className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1 text-xs font-medium text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
               >
@@ -1545,10 +1555,26 @@ export function WorkOrderQuotePanel({
                     })}. `
                   : ""}
                 Managerul / adminul flotă aprobă pe tichet sau pe această comandă.
-                {canWrite
-                  ? " Dacă nu răspunde, folosiți „Retrimite spre aprobare” (+2 zile pe estimarea finalizare)."
+                {canResubmitQuote
+                  ? " Dacă nu răspunde, alegeți o nouă estimare finalizare și folosiți „Retrimite spre aprobare”."
                   : ""}
               </p>
+              {canResubmitQuote ? (
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className={`${OPS_LABEL_CLASS} text-amber-100/90`}>
+                      Noua estimare finalizare <span className="text-amber-300">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={estimatedDate}
+                      disabled={pending}
+                      onChange={(e) => setEstimatedDate(e.target.value)}
+                      className={`${OPS_INPUT_CLASS} max-w-xs`}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
           {activeQuote.rejectionReason ? (

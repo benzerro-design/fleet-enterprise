@@ -3,7 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { WorkOrderSheetShell } from "@/components/fleet/work-orders/WorkOrderSheetShell";
-import { canApproveQuotes, canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import {
+  canApproveQuotes,
+  canResubmitQuotes,
+  canWriteFleetOps,
+  getAuthMeResult,
+} from "@/lib/auth-server";
 import { fleetServerFetch, apiServerFetch } from "@/lib/fleet-server";
 import { workOrderPageTitle } from "@/lib/work-order-display";
 import {
@@ -62,6 +67,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
   if (!wo) notFound();
   const canWrite = canWriteFleetOps(auth);
   const canApprove = canApproveQuotes(auth);
+  const canResubmit = canResubmitQuotes(auth);
   const hasInvoicedQuote = quotes.some((q) => q.status === "approved" && q.invoicedAt);
   const hasCostFromQuote = quotes.some((q) => q.status === "approved" && q.costEntryId);
 
@@ -76,6 +82,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
           wo={wo}
           canWrite={canWrite}
           canApprove={canApprove}
+          canResubmitQuote={canResubmit}
           hasInvoicedQuote={hasInvoicedQuote}
           hasCostFromQuote={hasCostFromQuote}
           workOrderSettings={workOrderSettings}

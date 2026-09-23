@@ -81,6 +81,7 @@ export default async function PartnerWorkOrderDetailPage({ params, searchParams 
           wo={wo}
           canWrite={canWrite}
           canApprove={false}
+          canResubmitQuote={canWrite}
           hasInvoicedQuote={hasInvoicedQuote}
           hasCostFromQuote={hasCostFromQuote}
           isPartner

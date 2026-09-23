@@ -1370,6 +1370,62 @@ function WorkOrderStepCard({
         ) : null}
       </div>
 
+      {pendingQuotes.length ? (
+        <div className="mt-2 space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
+            De aprobat
+          </p>
+          {pendingQuotes
+            .slice()
+            .sort((a, b) => a.version - b.version)
+            .map((pq) => (
+              <div
+                key={pq.id}
+                className="rounded-md border border-amber-500/40 bg-amber-950/20 p-2"
+              >
+                <p className="text-xs text-amber-50">
+                  Deviz{" "}
+                  <Link href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
+                    v{pq.version}
+                  </Link>
+                  {" · "}
+                  {quoteStatusLabel(pq.status)} ·{" "}
+                  {formatQuoteMoney(pq.totalGrossCents, pq.currency)}
+                </p>
+                {wo.estimatedRepairAt ? (
+                  <p className="mt-1 text-xs text-zinc-300">
+                    Estimare finalizare reparație: {formatDateRo(wo.estimatedRepairAt)}
+                  </p>
+                ) : null}
+                {canApproveQuote ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onQuoteAction(wo.id, pq.id, "approve")}
+                      className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      Aprobă Deviz v{pq.version}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onQuoteAction(wo.id, pq.id, "reject")}
+                      className="rounded-lg border border-red-500/50 px-2.5 py-1 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+                    >
+                      Respinge
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    Așteaptă aprobarea managerului / adminului.
+                  </p>
+                )}
+              </div>
+            ))}
+        </div>
+      ) : null}
+
       {approvedQuotes.length ? (
         <div className="mt-2 space-y-2">
           {approvedQuotes
@@ -1429,56 +1485,7 @@ function WorkOrderStepCard({
         </div>
       ) : null}
 
-      {pendingQuotes.length ? (
-        <div className="mt-2 space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
-            De aprobat
-          </p>
-          {pendingQuotes
-            .slice()
-            .sort((a, b) => a.version - b.version)
-            .map((pq) => (
-              <div
-                key={pq.id}
-                className="rounded-md border border-amber-500/40 bg-amber-950/20 p-2"
-              >
-                <p className="text-xs text-amber-50">
-                  Deviz v{pq.version} · {quoteStatusLabel(pq.status)} ·{" "}
-                  {formatQuoteMoney(pq.totalGrossCents, pq.currency)}
-                </p>
-                {wo.estimatedRepairAt ? (
-                  <p className="mt-1 text-xs text-zinc-300">
-                    Estimare finalizare reparație: {formatDateRo(wo.estimatedRepairAt)}
-                  </p>
-                ) : null}
-                {canApproveQuote ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => onQuoteAction(wo.id, pq.id, "approve")}
-                      className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
-                    >
-                      Aprobă Deviz v{pq.version}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => onQuoteAction(wo.id, pq.id, "reject")}
-                      className="rounded-lg border border-red-500/50 px-2.5 py-1 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50"
-                    >
-                      Respinge
-                    </button>
-                  </div>
-                ) : (
-                  <p className="mt-1 text-[11px] text-zinc-400">
-                    Așteaptă aprobarea managerului / adminului.
-                  </p>
-                )}
-              </div>
-            ))}
-        </div>
-      ) : !approvedQuotes.length ? (
+      {!pendingQuotes.length && !approvedQuotes.length ? (
         <p className="mt-2 text-xs text-zinc-500">Fără deviz — adaugă din pagina comenzii.</p>
       ) : null}
     </div>

@@ -46,6 +46,8 @@ type Props = {
   wo: WorkOrderDetail;
   canWrite: boolean;
   canApprove: boolean;
+  /** Retrimite spre aprobare — partener sau tenant_admin (nu manager L1). */
+  canResubmitQuote?: boolean;
   hasInvoicedQuote: boolean;
   hasCostFromQuote: boolean;
   isPartner?: boolean;
@@ -87,6 +89,7 @@ export function WorkOrderSheetShell({
   wo,
   canWrite,
   canApprove,
+  canResubmitQuote = false,
   hasInvoicedQuote,
   hasCostFromQuote,
   isPartner = false,
@@ -1326,6 +1329,7 @@ export function WorkOrderSheetShell({
         workOrderId={wo.id}
         canWrite={canWrite}
         canApprove={canApprove}
+        canResubmitQuote={canResubmitQuote}
         canPostCost={canWrite && !isPartner}
         isPartner={isPartner}
         sheetLayout

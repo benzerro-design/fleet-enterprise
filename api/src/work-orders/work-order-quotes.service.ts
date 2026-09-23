@@ -884,13 +884,14 @@ export class WorkOrderQuotesService {
   }
 
   /**
-   * Partener: reamintește aprobarea pe un deviz deja `submitted`.
-   * Reactualizează submittedAt și mută estimarea finalizare cu +2 zile calendaristice.
+   * Retrimitere spre aprobare pe un deviz deja `submitted`.
+   * Actualizează submittedAt și setează noua estimare finalizare (aleasă de user, nu +2 zile).
    */
   async resubmit(
     tenantSlug: string,
     workOrderId: string,
     quoteId: string,
+    dto: { estimatedRepairAt?: string | null } = {},
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord & { estimatedRepairAt: string }> {
@@ -910,15 +911,18 @@ export class WorkOrderQuotesService {
     if (existing.lines.length === 0) {
       throw new BadRequestException('Quote must have at least one line');
     }
-    const prevEstimate = existing.workOrder.estimatedRepairAt;
-    if (!prevEstimate) {
+
+    const rawEst = dto.estimatedRepairAt?.trim();
+    if (!rawEst) {
       throw new BadRequestException(
-        'Estimated repair completion date is required before resubmitting quote',
+        'Alegeți noua dată estimativă de finalizare reparație înainte de retrimitere',
       );
     }
-
-    const nextEstimate = new Date(prevEstimate);
-    nextEstimate.setUTCDate(nextEstimate.getUTCDate() + 2);
+    const nextEstimate = new Date(rawEst);
+    if (Number.isNaN(nextEstimate.getTime())) {
+      throw new BadRequestException('Dată estimare finalizare invalidă');
+    }
+    const prevEstimate = existing.workOrder.estimatedRepairAt;
     const now = new Date();
 
     const quote = await this.prisma.$transaction(async (tx) => {
@@ -949,16 +953,16 @@ export class WorkOrderQuotesService {
             tenantId: tenant.id,
             ticketId,
             kind: CrmTicketEventKind.workflow_advance,
-            body: `Deviz v${existing.version} retrimis spre aprobare — estimare finalizare mutată cu +2 zile (${nextEstimate.toLocaleDateString(
+            body: `Deviz v${existing.version} retrimis spre aprobare — estimare finalizare: ${nextEstimate.toLocaleDateString(
               'ro-RO',
               { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Bucharest' },
-            )}).`,
+            )}.`,
             payload: {
               workOrderId,
               quoteId,
               quoteVersion: existing.version,
               estimatedRepairAt: nextEstimate.toISOString(),
-              previousEstimatedRepairAt: prevEstimate.toISOString(),
+              previousEstimatedRepairAt: prevEstimate?.toISOString() ?? null,
               milestone: 'quote_resubmit',
             },
             actorUserId: actorUserId ?? null,
@@ -978,7 +982,7 @@ export class WorkOrderQuotesService {
       meta: {
         workOrderId,
         estimatedRepairAt: nextEstimate.toISOString(),
-        previousEstimatedRepairAt: prevEstimate.toISOString(),
+        previousEstimatedRepairAt: prevEstimate?.toISOString() ?? null,
       },
     });
 

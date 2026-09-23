@@ -145,10 +145,11 @@ export class WorkOrderQuotesController {
     @TenantId() tenantSlug: string,
     @Param('workOrderId') workOrderId: string,
     @Param('quoteId') quoteId: string,
+    @Body() body: { estimatedRepairAt?: string | null },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {
-    return this.quotes.resubmit(tenantSlug, workOrderId, quoteId, actorUserId, access);
+    return this.quotes.resubmit(tenantSlug, workOrderId, quoteId, body ?? {}, actorUserId, access);
   }
 
   @Post(':quoteId/approve')
