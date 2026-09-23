@@ -418,6 +418,10 @@ export type WorkOrderRecord = {
   pendingQuote?: QuoteSummary | null;
   /** Toate versiunile de deviz pe comandă (Deviz 1, 2, …). */
   quotes?: QuoteSummary[];
+  /** Toate devizele submitted (de aprobat) — Flux 1/2. */
+  pendingQuotes?: QuoteSummary[];
+  /** Toate devizele approved (factură/cost pe fiecare). */
+  approvedQuotes?: QuoteSummary[];
 };
 
 export type ServiceAppointmentStatus =

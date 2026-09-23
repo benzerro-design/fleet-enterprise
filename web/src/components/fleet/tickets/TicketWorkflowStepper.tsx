@@ -715,6 +715,7 @@ export function TicketWorkflowStepper({
                     router.refresh();
                   }}
                   repairPath={serviceCase.postApprovalPath}
+                  awaitingPostApproval={serviceCase.awaitingPostApproval}
                   workflowType={serviceCase.workflowType}
                   closed={closed}
                   onTransformMaintenance={transformToMaintenance}
@@ -1209,6 +1210,7 @@ function WorkOrderStepCard({
   onRecordServiceTime,
   onRefresh,
   repairPath,
+  awaitingPostApproval = false,
   workflowType,
   closed,
   onTransformMaintenance,
@@ -1227,6 +1229,7 @@ function WorkOrderStepCard({
   ) => void;
   onRefresh: () => void;
   repairPath?: "immediate" | "reschedule" | null;
+  awaitingPostApproval?: boolean;
   workflowType?: ServiceCaseRecord["workflowType"];
   closed?: boolean;
   onTransformMaintenance?: () => void | Promise<void>;
@@ -1237,7 +1240,41 @@ function WorkOrderStepCard({
   } | null;
 }) {
   const approved = wo.approvedQuote ?? (wo.latestQuote?.status === "approved" ? wo.latestQuote : null);
-  const pendingQuote = wo.pendingQuote ?? (wo.latestQuote?.status === "submitted" ? wo.latestQuote : null);
+  const pendingQuotes =
+    wo.pendingQuotes?.length
+      ? wo.pendingQuotes
+      : wo.quotes?.filter((q) => q.status === "submitted")?.length
+        ? wo.quotes.filter((q) => q.status === "submitted")
+        : wo.pendingQuote
+          ? [wo.pendingQuote]
+          : wo.latestQuote?.status === "submitted"
+            ? [wo.latestQuote]
+            : [];
+  const approvedQuotes =
+    wo.approvedQuotes?.length
+      ? wo.approvedQuotes
+      : wo.quotes?.filter((q) => q.status === "approved")?.length
+        ? wo.quotes.filter((q) => q.status === "approved")
+        : approved
+          ? [approved]
+          : [];
+
+  const nextStep = (() => {
+    if (pendingQuotes.length) {
+      const v = pendingQuotes.map((q) => `v${q.version}`).join(", ");
+      return canApproveQuote
+        ? `De aprobat: Deviz ${v}`
+        : `Se așteaptă aprobarea: Deviz ${v}`;
+    }
+    if (awaitingPostApproval) {
+      return "Alege: continuă reparația sau reprogramare";
+    }
+    const unbilled = approvedQuotes.find((q) => !q.invoicedAt);
+    if (unbilled && wo.readyAt) {
+      return `Înregistrează factura pe Deviz v${unbilled.version}`;
+    }
+    return null;
+  })();
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
@@ -1263,6 +1300,13 @@ function WorkOrderStepCard({
           Deschide comandă →
         </Link>
       </div>
+
+      {nextStep ? (
+        <div className="mt-2 rounded-md border border-sky-500/40 bg-sky-950/25 px-2.5 py-1.5 text-xs text-sky-100">
+          <span className="font-medium">Următorul pas · </span>
+          {nextStep}
+        </div>
+      ) : null}
 
       <div className="mt-2 rounded-md border border-violet-800/40 bg-violet-950/20 p-2">
         <p className="text-[10px] uppercase text-violet-300/80">In / Out service</p>
@@ -1326,33 +1370,43 @@ function WorkOrderStepCard({
         ) : null}
       </div>
 
-      {approved ? (
-        <>
-          <div className="mt-2 rounded-md border border-emerald-800/50 bg-emerald-950/20 p-2">
-            <p className="text-xs font-medium text-emerald-200">
-              Deviz{" "}
-              <Link href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
-                v{approved.version}
-              </Link>
-              {" aprobat · "}
-              {formatQuoteMoney(approved.totalGrossCents, approved.currency)}
-            </p>
-            {!approved.invoicedAt ? (
-              <p className="mt-1 text-[10px] text-emerald-300/70">După reparație: factură, cost, apoi închidere.</p>
-            ) : null}
-          </div>
-          <WorkOrderQuoteBillingActions
-            key={`${approved.id}-${approved.invoicedAt ?? ""}-${approved.costEntryId ?? ""}-${ticketSettlement?.entityId ?? ""}`}
-            workOrderId={wo.id}
-            workOrderStatus={wo.status}
-            quote={approved}
-            canWrite={canOperate}
-            compact
-            workflowType={workflowType}
-            vehicleOdometerKm={wo.odometerKmOut ?? wo.odometerKmIn ?? undefined}
-            ticketSettlement={ticketSettlement}
-            onUpdated={onRefresh}
-          />
+      {approvedQuotes.length ? (
+        <div className="mt-2 space-y-2">
+          {approvedQuotes
+            .slice()
+            .sort((a, b) => a.version - b.version)
+            .map((aq) => (
+              <div key={aq.id}>
+                <div className="rounded-md border border-emerald-800/50 bg-emerald-950/20 p-2">
+                  <p className="text-xs font-medium text-emerald-200">
+                    Deviz{" "}
+                    <Link href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
+                      v{aq.version}
+                    </Link>
+                    {" aprobat · "}
+                    {formatQuoteMoney(aq.totalGrossCents, aq.currency)}
+                    {aq.invoicedAt ? " · facturat" : ""}
+                  </p>
+                  {!aq.invoicedAt ? (
+                    <p className="mt-1 text-[10px] text-emerald-300/70">
+                      Factură și cost pe acest Deviz (nu pe altul).
+                    </p>
+                  ) : null}
+                </div>
+                <WorkOrderQuoteBillingActions
+                  key={`${aq.id}-${aq.invoicedAt ?? ""}-${aq.costEntryId ?? ""}-${ticketSettlement?.entityId ?? ""}`}
+                  workOrderId={wo.id}
+                  workOrderStatus={wo.status}
+                  quote={aq}
+                  canWrite={canOperate}
+                  compact
+                  workflowType={workflowType}
+                  vehicleOdometerKm={wo.odometerKmOut ?? wo.odometerKmIn ?? undefined}
+                  ticketSettlement={ticketSettlement}
+                  onUpdated={onRefresh}
+                />
+              </div>
+            ))}
           {canOperate &&
           !closed &&
           !ticketSettlement &&
@@ -1362,52 +1416,69 @@ function WorkOrderStepCard({
               type="button"
               disabled={pending}
               onClick={() => void onTransformMaintenance()}
-              className="mt-2 rounded-lg border border-violet-500/50 px-2.5 py-1 text-xs text-violet-200 hover:bg-violet-950/40 disabled:opacity-50"
+              className="rounded-lg border border-violet-500/50 px-2.5 py-1 text-xs text-violet-200 hover:bg-violet-950/40 disabled:opacity-50"
             >
               Transformă în mentenanță →
             </button>
           ) : ticketSettlement?.entityType === "maintenance" ? (
-            <p className="mt-2 text-[10px] text-violet-300/80">
+            <p className="text-[10px] text-violet-300/80">
               Deja transformată în mentenanță (
               {new Date(ticketSettlement.createdAt).toLocaleDateString("ro-RO")}).
             </p>
           ) : null}
-        </>
+        </div>
       ) : null}
 
-      {pendingQuote ? (
-        <div className="mt-2 rounded-md border border-zinc-800/80 bg-zinc-900/30 p-2">
-          <p className="text-xs text-zinc-400">
-            Deviz v{pendingQuote.version} · {quoteStatusLabel(pendingQuote.status)} ·{" "}
-            {formatQuoteMoney(pendingQuote.totalGrossCents, pendingQuote.currency)}
+      {pendingQuotes.length ? (
+        <div className="mt-2 space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
+            De aprobat
           </p>
-          {wo.estimatedRepairAt ? (
-            <p className="mt-1 text-xs text-zinc-300">
-              Estimare finalizare reparație: {formatDateRo(wo.estimatedRepairAt)}
-            </p>
-          ) : null}
-          {canApproveQuote ? (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => onQuoteAction(wo.id, pendingQuote.id, "approve")}
-                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+          {pendingQuotes
+            .slice()
+            .sort((a, b) => a.version - b.version)
+            .map((pq) => (
+              <div
+                key={pq.id}
+                className="rounded-md border border-amber-500/40 bg-amber-950/20 p-2"
               >
-                Aprobă deviz
-              </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => onQuoteAction(wo.id, pendingQuote.id, "reject")}
-                className="rounded-lg border border-red-500/50 px-2.5 py-1 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50"
-              >
-                Respinge
-              </button>
-            </div>
-          ) : null}
+                <p className="text-xs text-amber-50">
+                  Deviz v{pq.version} · {quoteStatusLabel(pq.status)} ·{" "}
+                  {formatQuoteMoney(pq.totalGrossCents, pq.currency)}
+                </p>
+                {wo.estimatedRepairAt ? (
+                  <p className="mt-1 text-xs text-zinc-300">
+                    Estimare finalizare reparație: {formatDateRo(wo.estimatedRepairAt)}
+                  </p>
+                ) : null}
+                {canApproveQuote ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onQuoteAction(wo.id, pq.id, "approve")}
+                      className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      Aprobă Deviz v{pq.version}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onQuoteAction(wo.id, pq.id, "reject")}
+                      className="rounded-lg border border-red-500/50 px-2.5 py-1 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+                    >
+                      Respinge
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[11px] text-zinc-400">
+                    Așteaptă aprobarea managerului / adminului.
+                  </p>
+                )}
+              </div>
+            ))}
         </div>
-      ) : !approved ? (
+      ) : !approvedQuotes.length ? (
         <p className="mt-2 text-xs text-zinc-500">Fără deviz — adaugă din pagina comenzii.</p>
       ) : null}
     </div>

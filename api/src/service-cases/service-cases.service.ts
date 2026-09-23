@@ -114,6 +114,9 @@ export type WorkOrderRecord = {
   latestQuote: QuoteSummary | null;
   approvedQuote: QuoteSummary | null;
   pendingQuote: QuoteSummary | null;
+  pendingQuotes?: QuoteSummary[];
+  approvedQuotes?: QuoteSummary[];
+  quotes?: QuoteSummary[];
 };
 
 export type QuoteSummary = {
@@ -4371,8 +4374,10 @@ export class ServiceCasesService {
       clientDriverCanNegotiateAppointment,
       workOrders: (row.workOrders ?? []).map((wo) => {
         const quotes = wo.quotes ?? [];
-        const approved = quotes.find((q) => q.status === WorkOrderQuoteStatus.approved);
-        const submitted = quotes.find((q) => q.status === WorkOrderQuoteStatus.submitted);
+        const approvedList = quotes.filter((q) => q.status === WorkOrderQuoteStatus.approved);
+        const submittedList = quotes.filter((q) => q.status === WorkOrderQuoteStatus.submitted);
+        const approved = approvedList[0];
+        const submitted = submittedList[0];
         const display = approved ?? submitted ?? quotes[0];
         const toSummary = (
           q: (typeof quotes)[number] | null | undefined,
@@ -4415,6 +4420,8 @@ export class ServiceCasesService {
           latestQuote: toSummary(display),
           approvedQuote: toSummary(approved ?? null),
           pendingQuote: toSummary(submitted ?? null),
+          pendingQuotes: submittedList.map((q) => toSummary(q)!).filter(Boolean),
+          approvedQuotes: approvedList.map((q) => toSummary(q)!).filter(Boolean),
           quotes: quotes.map((q) => toSummary(q)!).filter(Boolean),
         };
       }),

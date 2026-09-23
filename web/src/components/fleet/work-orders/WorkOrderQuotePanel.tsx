@@ -256,6 +256,8 @@ type Props = {
   /** Ascunde link-ul către /fleet/costs (portal partener). */
   isPartner?: boolean;
   sheetLayout?: boolean;
+  /** Etichetă tab principal: Deviz | Lucrare #1 | Lucrare #2 */
+  lucrareLabel?: string;
   estimatedRepairAt?: string | null;
   /** @deprecated Nu mai bloca tot panelul pe summary — estimarea e pe WO, draft-urile pe versiune. */
   quoteLocked?: boolean;
@@ -283,6 +285,7 @@ export function WorkOrderQuotePanel({
   canApprove = false,
   canPostCost = true,
   sheetLayout = false,
+  lucrareLabel,
   estimatedRepairAt = null,
   quoteLocked: _quoteLocked = false,
   workOrderStatus = "",
@@ -970,7 +973,9 @@ export function WorkOrderQuotePanel({
     <section className={sectionClass}>
       {sheetLayout ? (
         <div className="mb-4 flex flex-nowrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-          <span className="shrink-0 text-sm font-semibold text-zinc-200">Deviz</span>
+        <span className="shrink-0 text-sm font-semibold text-zinc-200">
+          {lucrareLabel ?? "Deviz"}
+        </span>
           {activeQuote ? (
             <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
               v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}

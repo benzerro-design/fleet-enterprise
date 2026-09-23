@@ -115,6 +115,7 @@ export function WorkOrderSheetShell({
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [sheetView, setSheetView] = useState<"comanda" | "dosar" | "mobilitate">("comanda");
   const [rezumatTab, setRezumatTab] = useState<string>("v1");
+  const [tilaTrack, setTilaTrack] = useState<1 | 2>(1);
   /** Dosar pe WO: același ServiceCase ca pe tichet (nu mapare parțială din WO). */
   const [dosarServiceCase, setDosarServiceCase] = useState<ServiceCaseRecord | null>(null);
   const requireKm = workOrderSettings.requireServiceKm;
@@ -384,9 +385,19 @@ export function WorkOrderSheetShell({
     }
   }
 
+  const hasLucrare2 = Boolean(
+    wo.supplementRepairAt ||
+      (wo.supplementQuoteVersion != null && wo.supplementQuoteVersion >= 2),
+  );
+
+  useEffect(() => {
+    if (hasLucrare2 && wo.supplementRepairAt && !wo.readyAt) {
+      setTilaTrack(2);
+    }
+  }, [hasLucrare2, wo.supplementRepairAt, wo.readyAt]);
+
   const canStartSupplement =
     canWrite &&
-    isDamageWo &&
     !!wo.inServiceAt &&
     !(wo.outServiceAt && !wo.visit2InServiceAt) &&
     (wo.quoteSummary.version ?? 0) >= 2 &&
@@ -752,26 +763,60 @@ export function WorkOrderSheetShell({
 
         <div className={`${panelClass()} bg-zinc-900/40`}>
           {panelTitle("Stare (Tila)")}
-          {wo.supplementRepairAt && !wo.readyAt ? (
+          {hasLucrare2 ? (
+            <div className="mb-2 flex flex-wrap gap-1 border-b border-zinc-800 pb-2">
+              <button
+                type="button"
+                onClick={() => setTilaTrack(1)}
+                className={fleetSheetTabClass(tilaTrack === 1)}
+              >
+                Lucrare #1
+              </button>
+              <button
+                type="button"
+                onClick={() => setTilaTrack(2)}
+                className={fleetSheetTabClass(tilaTrack === 2)}
+              >
+                Lucrare #2
+                {wo.supplementQuoteVersion != null ? ` · Deviz v${wo.supplementQuoteVersion}` : ""}
+              </button>
+            </div>
+          ) : null}
+          {tilaTrack === 2 && hasLucrare2 ? (
             <p className="mb-2 rounded border border-amber-800/40 bg-amber-950/25 px-2 py-1.5 text-[11px] text-amber-100">
-              Etapă suplimentară activă
-              {wo.supplementQuoteVersion != null
-                ? ` (deviz v${wo.supplementQuoteVersion})`
-                : ""}
-              — Tila continuă de la „Deviz aprobat / În lucru”.
+              Lucrare suplimentară — pașii de mai jos sunt pe Tila #2 (istoricul Lucrare #1 rămâne pe
+              tab-ul alăturat).
+            </p>
+          ) : wo.supplementRepairAt && !wo.readyAt && tilaTrack === 1 ? (
+            <p className="mb-2 rounded border border-zinc-700/60 bg-zinc-900/50 px-2 py-1.5 text-[11px] text-zinc-400">
+              Lucrare #1 (istoric). Activă acum: Lucrare #2.
             </p>
           ) : null}
           <ul className="space-y-1">
-            {milestones.map((m) => (
-              <li key={m.id} className={`flex items-center gap-2 text-[11px] ${m.done || m.active ? "" : "opacity-50"}`}>
+            {milestones.map((m) => {
+              const dimHistory =
+                tilaTrack === 1 && hasLucrare2 && wo.supplementRepairAt && !wo.readyAt;
+              return (
+              <li
+                key={m.id}
+                className={`flex items-center gap-2 text-[11px] ${
+                  dimHistory ? "opacity-60" : m.done || m.active ? "" : "opacity-50"
+                }`}
+              >
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-sm border ${
                     m.done ? "border-violet-500 bg-violet-600" : m.active ? "border-violet-400" : "border-zinc-600"
                   }`}
                 />
-                <span className={m.active ? "font-semibold text-zinc-100" : "text-zinc-300"}>{m.label}</span>
+                <span className={m.active && tilaTrack === 2 ? "font-semibold text-amber-100" : m.active ? "font-semibold text-zinc-100" : "text-zinc-300"}>
+                  {tilaTrack === 2 && m.id === "repair_in_progress"
+                    ? `În lucru (Lucrare #2)`
+                    : tilaTrack === 2 && m.id === "work_ready"
+                      ? "Lucrare gata (#2)"
+                      : m.label}
+                </span>
                 <span className="ml-auto text-[10px] text-zinc-500">{m.date ?? "—"}</span>
-                {m.canToggle ? (
+                {m.canToggle && tilaTrack === (hasLucrare2 && wo.supplementRepairAt && !wo.readyAt ? 2 : 1) ? (
                   <button
                     type="button"
                     disabled={pending}
@@ -782,7 +827,8 @@ export function WorkOrderSheetShell({
                   </button>
                 ) : null}
               </li>
-            ))}
+            );
+            })}
           </ul>
           {canStartSupplement ? (
             <button
@@ -791,7 +837,7 @@ export function WorkOrderSheetShell({
               onClick={() => void startSupplementRepair()}
               className="mt-2 w-full rounded border border-amber-700/50 px-2 py-1.5 text-[11px] text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
             >
-              Începe etapă suplimentară (deviz v{wo.quoteSummary.version})
+              Deschide Lucrare #2 (deviz v{wo.quoteSummary.version})
             </button>
           ) : null}
           {isDamageWo ? (
@@ -1283,6 +1329,9 @@ export function WorkOrderSheetShell({
         canPostCost={canWrite && !isPartner}
         isPartner={isPartner}
         sheetLayout
+        lucrareLabel={
+          hasLucrare2 ? (tilaTrack === 2 ? "Lucrare #2 · Deviz" : "Lucrare #1 · Deviz") : "Deviz"
+        }
         estimatedRepairAt={wo.estimatedRepairAt}
         quoteLocked={false}
         workOrderStatus={wo.status}

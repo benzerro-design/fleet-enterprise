@@ -1003,7 +1003,21 @@ export class WorkOrderQuotesService {
 
     const existing = await this.prisma.workOrderQuote.findFirst({
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
-      include: { workOrder: { include: { serviceCase: true } }, ...this.quoteInclude() },
+      include: {
+        workOrder: {
+          include: {
+            serviceCase: {
+              select: {
+                id: true,
+                sourceTicketId: true,
+                postApprovalPath: true,
+                awaitingPostApproval: true,
+              },
+            },
+          },
+        },
+        ...this.quoteInclude(),
+      },
     });
     if (!existing) throw new NotFoundException('Quote not found');
     if (existing.status !== WorkOrderQuoteStatus.submitted) {
@@ -1053,13 +1067,62 @@ export class WorkOrderQuotesService {
         include: this.quoteInclude(),
       });
 
+      const woRow = existing.workOrder;
+      const sc = woRow.serviceCase;
+      const outNeedsReschedule = !!woRow.outServiceAt && !woRow.visit2InServiceAt;
+      const firstPathDecision = !sc.postApprovalPath;
+      /** Flux 0/1: fork o dată. Flux 2 Out: fork din nou. Altfel nu redeschide programarea. */
+      const shouldAwaitPostApproval = firstPathDecision || outNeedsReschedule;
+
       await tx.serviceCase.update({
-        where: { id: existing.workOrder.serviceCaseId },
+        where: { id: woRow.serviceCaseId },
         data: {
-          awaitingPostApproval: true,
+          awaitingPostApproval: shouldAwaitPostApproval,
           currentStage: ServiceCaseStage.approval,
         },
       });
+
+      /** Lucrare #2: la aprobare Deviz v2+ cu Lucrare gata + încă In → track supliment (Tila 2). */
+      const startLucrare2 =
+        existing.version >= 2 &&
+        !!woRow.readyAt &&
+        !!woRow.inServiceAt &&
+        !outNeedsReschedule &&
+        !(woRow.supplementRepairAt && !woRow.readyAt);
+
+      if (startLucrare2) {
+        const at = new Date();
+        const noteLine = `Lucrare #2 (deviz v${existing.version})`;
+        const prevNote = woRow.repairPathNote?.trim();
+        await tx.maintenanceWorkOrder.update({
+          where: { id: workOrderId },
+          data: {
+            readyAt: null,
+            status: MaintenanceWorkOrderStatus.in_progress,
+            supplementRepairAt: at,
+            supplementQuoteVersion: existing.version,
+            repairPathNote: prevNote ? `${prevNote}\n${noteLine}` : noteLine,
+          },
+        });
+        const ticketId = sc.sourceTicketId;
+        if (ticketId) {
+          await tx.crmTicketEvent.create({
+            data: {
+              tenantId: tenant.id,
+              ticketId,
+              kind: CrmTicketEventKind.workflow_advance,
+              body: `${noteLine} — Tila Lucrare #2 deschisă (${at.toLocaleString('ro-RO')}).`,
+              payload: {
+                workOrderId,
+                quoteId,
+                quoteVersion: existing.version,
+                milestone: 'lucrare_2',
+              },
+              actorUserId: actorUserId ?? null,
+            },
+          });
+        }
+      }
 
       return updated;
     });
