@@ -283,6 +283,8 @@ export type WorkOrderQuoteRecord = {
   id: string;
   workOrderId: string;
   version: number;
+  /** Denumire afișată; null/gol = „Deviz {version}”. */
+  title: string | null;
   status: WorkOrderQuoteStatus;
   currency: string;
   totalNetCents: number;
@@ -378,6 +380,12 @@ export function quoteStatusLabel(status: WorkOrderQuoteStatus | string): string 
     rejected: "Respins",
   };
   return map[status] ?? status;
+}
+
+/** Denumire afișată pe tab / listă; fallback „Deviz {version}”. */
+export function quoteDisplayName(quote: { title?: string | null; version: number }): string {
+  const t = quote.title?.trim();
+  return t || `Deviz ${quote.version}`;
 }
 
 export function quoteLineTypeLabel(type: QuoteLineType | string): string {

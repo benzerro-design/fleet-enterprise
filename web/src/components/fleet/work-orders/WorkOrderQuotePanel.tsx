@@ -14,6 +14,7 @@ import {
   formatMoneyCents,
   formatLineDiscount,
   computeQuoteLineMoney,
+  quoteDisplayName,
   quoteLineTypeLabel,
   quoteLinesIncludedInTotals,
   quoteStatusLabel,
@@ -26,6 +27,7 @@ import {
   type WorkOrderQuoteRecord,
   type WorkOrderQuoteStatus,
 } from "@/lib/work-orders-api";
+import type { WorkOrderSettings } from "@/lib/work-order-settings";
 
 type SupplierDiscountDefaults = {
   partsDiscountPercent: number;
@@ -262,6 +264,8 @@ type Props = {
   allowQuotePdfImport?: boolean;
   allowPartsPriceVerify?: boolean;
   allowPartsOrderLaunch?: boolean;
+  /** Mod facturare din Setup WO. */
+  quoteInvoiceMode?: WorkOrderSettings["quoteInvoiceMode"];
   /** Lansare comenzi: admin client/tenant sau partener (nu dispatcher). */
   canLaunchPartsOrders?: boolean;
   ticketSettlement?: {
@@ -286,6 +290,7 @@ export function WorkOrderQuotePanel({
   allowQuotePdfImport = true,
   allowPartsPriceVerify = true,
   allowPartsOrderLaunch = false,
+  quoteInvoiceMode = "per_quote",
   canLaunchPartsOrders = false,
   ticketSettlement = null,
   isPartner = false,
@@ -295,11 +300,12 @@ export function WorkOrderQuotePanel({
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"quote" | "warranty">("quote");
-  /** Pe versiunea de deviz: linii sau pozele acelei versiuni. */
-  const [quotePane, setQuotePane] = useState<"lines" | "photos">("lines");
+  /** Pe versiunea de deviz: linii / poze; sau tab consolidat pe toate aprobările. */
+  const [quotePane, setQuotePane] = useState<"lines" | "photos" | "consol">("lines");
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [lines, setLines] = useState<EditableLine[]>(() => [newLine(supplierDiscounts)]);
   const [notes, setNotes] = useState("");
+  const [title, setTitle] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [invoiceGross, setInvoiceGross] = useState("");
@@ -370,6 +376,9 @@ export function WorkOrderQuotePanel({
       if (selected?.status === "draft") {
         setLines(linesFromQuote(selected));
         setNotes(selected.notes ?? "");
+        setTitle(selected.title ?? "");
+      } else if (selected) {
+        setTitle(selected.title ?? "");
       }
       if (selected?.costInvoiceNumber) setInvoiceNumber(selected.costInvoiceNumber);
       if (selected?.costInvoiceDate) {
@@ -396,6 +405,39 @@ export function WorkOrderQuotePanel({
   const isEditingDraft = activeQuote?.status === "draft" && editingDraftId === activeQuote.id;
   const isCreatingDraft = !activeQuote && canWrite;
   const hasLineDecisions = Object.values(lineDecisions).some(Boolean);
+
+  const consolidatedLines = useMemo(() => {
+    if (!quotes?.length) return [];
+    const rows: Array<{
+      quoteId: string;
+      quoteLabel: string;
+      version: number;
+      line: WorkOrderQuoteRecord["lines"][number];
+    }> = [];
+    for (const q of [...quotes].sort((a, b) => a.version - b.version)) {
+      if (q.status !== "approved") continue;
+      for (const line of q.lines) {
+        if (line.approvalStatus === "rejected") continue;
+        rows.push({
+          quoteId: q.id,
+          quoteLabel: quoteDisplayName(q),
+          version: q.version,
+          line,
+        });
+      }
+    }
+    return rows;
+  }, [quotes]);
+
+  const consolidatedTotals = useMemo(() => {
+    let net = 0;
+    let vat = 0;
+    for (const row of consolidatedLines) {
+      net += row.line.lineNetCents;
+      vat += row.line.lineVatCents;
+    }
+    return { net, vat, gross: net + vat };
+  }, [consolidatedLines]);
 
   const previewTotals = useMemo(() => {
     let net = 0;
@@ -432,7 +474,11 @@ export function WorkOrderQuotePanel({
     setPending(true);
     setError(null);
     try {
-      const payload = { lines: toPayload(lines), notes: notes || null };
+      const payload = {
+        lines: toPayload(lines),
+        notes: notes || null,
+        title: title.trim() || null,
+      };
       for (const line of payload.lines) {
         if (!line.description?.trim()) {
           setError("Completați descrierea pentru toate liniile.");
@@ -590,6 +636,62 @@ export function WorkOrderQuotePanel({
       }
       await load();
       setLineDecisions({});
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function deleteDraft() {
+    if (!activeQuote || activeQuote.status !== "draft") return;
+    if (!window.confirm(`Ștergi ciorna „${quoteDisplayName(activeQuote)}”? Acțiunea e ireversibilă.`)) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}`, {
+        method: "DELETE",
+        headers: fleetJsonHeaders(),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      setEditingDraftId(null);
+      await load();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function saveQuoteTitle(quoteId: string, nextTitle: string) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/quotes/${quoteId}`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ title: nextTitle.trim() || null }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      await load();
     } finally {
       setPending(false);
     }
@@ -796,6 +898,7 @@ export function WorkOrderQuotePanel({
           {activeQuote ? (
             <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
               v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
+              {activeQuote.title ? ` · ${activeQuote.title}` : ""}
             </span>
           ) : (
             <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">Ciornă</span>
@@ -1076,6 +1179,22 @@ export function WorkOrderQuotePanel({
       {activeTab === "quote" && quotes.length > 0 ? (
         <div className="mt-4 border-b border-zinc-800">
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setQuotePane("consol");
+                setEditingDraftId(null);
+              }}
+              className={fleetSheetTabClass(quotePane === "consol")}
+              title="Toate liniile aprobate din toate versiunile"
+            >
+              Consolidat
+              {consolidatedLines.length > 0 ? (
+                <span className="ml-1.5 text-[11px] font-normal opacity-80">
+                  {consolidatedLines.length} lin.
+                </span>
+              ) : null}
+            </button>
             {[...quotes]
               .sort((a, b) => a.version - b.version)
               .flatMap((q) => {
@@ -1083,6 +1202,7 @@ export function WorkOrderQuotePanel({
                 const photosSelected = activeId === q.id && quotePane === "photos";
                 const selectQuote = () => {
                   setActiveId(q.id);
+                  setTitle(q.title ?? "");
                   if (q.status === "draft") {
                     setLines(linesFromQuote(q));
                     setNotes(q.notes ?? "");
@@ -1104,7 +1224,7 @@ export function WorkOrderQuotePanel({
                     className={fleetSheetTabClass(linesSelected)}
                     title={`${q.lines.length} linii · ${formatMoneyCents(q.totalGrossCents, q.currency)}`}
                   >
-                    Deviz {q.version}
+                    {quoteDisplayName(q)}
                     <span className="ml-1.5 text-[11px] font-normal opacity-80">
                       {quoteStatusLabel(q.status)}
                     </span>
@@ -1117,7 +1237,7 @@ export function WorkOrderQuotePanel({
                       setQuotePane("photos");
                     }}
                     className={fleetSheetTabClass(photosSelected)}
-                    title={`Poze defect pentru deviz v${q.version}`}
+                    title={`Poze defect pentru ${quoteDisplayName(q)}`}
                   >
                     Poze {q.version}
                   </button>,
@@ -1127,10 +1247,73 @@ export function WorkOrderQuotePanel({
         </div>
       ) : null}
 
+      {activeTab === "quote" && quotePane === "consol" ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-4 text-sm">
+            <span>
+              Total net aprobat:{" "}
+              <strong>{formatMoneyCents(consolidatedTotals.net)}</strong>
+            </span>
+            <span>
+              TVA: <strong>{formatMoneyCents(consolidatedTotals.vat)}</strong>
+            </span>
+            <span>
+              Total: <strong>{formatMoneyCents(consolidatedTotals.gross)}</strong>
+            </span>
+          </div>
+          <p className="text-xs text-zinc-500">
+            {quoteInvoiceMode === "per_work_order"
+              ? "Setup: o factură pe comandă — înregistrați factura din liniile de mai jos (pe fiecare deviz aprobat până la fluxul consolidat dedicat)."
+              : "Setup: factură pe fiecare deviz — vedeți tab-urile individuale pentru înregistrare."}
+          </p>
+          {consolidatedLines.length === 0 ? (
+            <p className="text-sm text-zinc-500">Nicio linie aprobată încă.</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
+                  <th className="py-2 pr-2">Deviz</th>
+                  <th className="py-2 pr-2">Tip</th>
+                  <th className="py-2 pr-2">Descriere</th>
+                  <th className="py-2 pr-2">Cod</th>
+                  <th className="py-2 pr-2">Cant.</th>
+                  <th className="py-2 pr-2">Total net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {consolidatedLines.map((row) => (
+                  <tr key={`${row.quoteId}-${row.line.id}`} className="border-b border-zinc-800/60">
+                    <td className="py-2 pr-2 text-xs text-zinc-400">
+                      <button
+                        type="button"
+                        className="text-sky-400 hover:underline"
+                        onClick={() => {
+                          setActiveId(row.quoteId);
+                          setQuotePane("lines");
+                        }}
+                      >
+                        {row.quoteLabel}
+                      </button>
+                    </td>
+                    <td className="py-2 pr-2">{quoteLineTypeLabel(row.line.lineType)}</td>
+                    <td className="py-2 pr-2">{row.line.description}</td>
+                    <td className="py-2 pr-2 font-mono text-xs">{row.line.partNumber ?? "—"}</td>
+                    <td className="py-2 pr-2">{row.line.quantity}</td>
+                    <td className="py-2 pr-2 font-mono text-xs">
+                      {formatMoneyCents(row.line.lineNetCents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : null}
+
       {activeTab === "quote" && quotePane === "photos" && activeQuote ? (
         <div className="mt-4 space-y-2">
           <p className="text-xs text-zinc-500">
-            Defecte și atelier pentru devizul v{activeQuote.version}. Pozele de recepție stau pe
+            Defecte și atelier pentru {quoteDisplayName(activeQuote)}. Pozele de recepție stau pe
             Rezumat.
           </p>
           <WorkOrderPhotoGallery
@@ -1144,6 +1327,28 @@ export function WorkOrderQuotePanel({
 
       {activeTab === "quote" && quotePane === "lines" && activeQuote && !isEditingDraft ? (
         <div className="mt-4 space-y-3">
+          {canWrite ? (
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="min-w-[12rem] flex-1 space-y-1">
+                <span className={OPS_LABEL_CLASS}>Denumire</span>
+                <input
+                  type="text"
+                  value={title}
+                  disabled={pending}
+                  placeholder={`Deviz ${activeQuote.version}`}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={() => {
+                    const next = title.trim();
+                    const prev = (activeQuote.title ?? "").trim();
+                    if (next !== prev) void saveQuoteTitle(activeQuote.id, next);
+                  }}
+                  className={`${OPS_INPUT_CLASS} max-w-sm`}
+                />
+              </label>
+            </div>
+          ) : activeQuote.title ? (
+            <p className="text-sm text-zinc-300">{activeQuote.title}</p>
+          ) : null}
           <div className="flex flex-wrap gap-4 text-sm">
             {(() => {
               const totals = quoteSubtotalsFromLines(activeQuote.lines, lineDecisions);
@@ -1178,14 +1383,38 @@ export function WorkOrderQuotePanel({
               </a>
             ) : null}
             {canWrite && activeQuote.status === "draft" ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => setEditingDraftId(activeQuote.id)}
-                className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                Editează
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    setTitle(activeQuote.title ?? "");
+                    setLines(linesFromQuote(activeQuote));
+                    setNotes(activeQuote.notes ?? "");
+                    setEditingDraftId(activeQuote.id);
+                  }}
+                  className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  Editează
+                </button>
+                <button
+                  type="button"
+                  disabled={pending || !hasEstimatedRepair}
+                  title={!hasEstimatedRepair ? "Completați estimarea finalizării reparației" : undefined}
+                  onClick={() => void quoteAction("submit")}
+                  className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                >
+                  Trimite spre aprobare
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void deleteDraft()}
+                  className="rounded-lg border border-red-800/60 px-2.5 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                >
+                  Șterge ciorna
+                </button>
+              </>
             ) : null}
             {activeQuote.lines.some((line) => line.partsOrderStatus === "ordered") ? (
               <span className="rounded-full border border-amber-700/50 bg-amber-950/30 px-2 py-0.5 text-xs text-amber-200">
@@ -1214,6 +1443,26 @@ export function WorkOrderQuotePanel({
           {launchInfo ? <p className="text-sm text-amber-200/90">{launchInfo}</p> : null}
           {activeQuote.rejectionReason ? (
             <p className="text-sm text-red-300">Motiv respingere: {activeQuote.rejectionReason}</p>
+          ) : null}
+          {canWrite && activeQuote.status === "draft" && !quoteLocked ? (
+            <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
+              <label className={OPS_LABEL_CLASS}>
+                Estimare finalizare reparație <span className="text-amber-300">*</span>
+              </label>
+              <input
+                type="date"
+                value={estimatedDate}
+                disabled={pending}
+                onChange={(e) => setEstimatedDate(e.target.value)}
+                onBlur={() => {
+                  if (toIsoFromDateInput(estimatedDate)) void saveEstimatedRepair();
+                }}
+                className={`${OPS_INPUT_CLASS} max-w-xs`}
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Obligatorie înainte de „Trimite spre aprobare”.
+              </p>
+            </div>
           ) : null}
           <table className="w-full text-left text-sm">
             <thead>
@@ -1528,6 +1777,17 @@ export function WorkOrderQuotePanel({
       (isEditingDraft || quotes.length === 0 || isCreatingDraft) &&
       canWrite ? (
         <div className="mt-4 space-y-4">
+          <label className="block max-w-sm space-y-1">
+            <span className={OPS_LABEL_CLASS}>Denumire</span>
+            <input
+              type="text"
+              value={title}
+              disabled={pending}
+              placeholder="ex. Revizie, Anvelope…"
+              onChange={(e) => setTitle(e.target.value)}
+              className={OPS_INPUT_CLASS}
+            />
+          </label>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] text-left text-sm">
               <thead>
@@ -1763,15 +2023,25 @@ export function WorkOrderQuotePanel({
                 Salvează ciornă
               </button>
               {draftQuote ? (
-                <button
-                  type="button"
-                  disabled={pending || !hasEstimatedRepair}
-                  title={!hasEstimatedRepair ? "Completați estimarea finalizării reparației" : undefined}
-                  onClick={() => void quoteAction("submit")}
-                  className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
-                >
-                  Trimite spre aprobare
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={pending || !hasEstimatedRepair}
+                    title={!hasEstimatedRepair ? "Completați estimarea finalizării reparației" : undefined}
+                    onClick={() => void quoteAction("submit")}
+                    className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
+                  >
+                    Trimite spre aprobare
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void deleteDraft()}
+                    className="rounded-lg border border-red-800/60 px-3 py-1.5 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                  >
+                    Șterge ciorna
+                  </button>
+                </>
               ) : null}
             </div>
             <QuoteSubtotals

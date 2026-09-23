@@ -71,9 +71,12 @@ function formatMoney(cents: number): string {
 }
 
 export type UpsertQuoteInput = {
-  lines: QuoteLineInput[];
+  /** Lipsă = nu înlocui liniile (doar meta: title/notes/currency pe ciornă, sau doar title pe orice status). */
+  lines?: QuoteLineInput[];
   notes?: string | null;
   currency?: string;
+  /** Denumire afișată (ex. „Revizie”, „Anvelope”). */
+  title?: string | null;
 };
 
 export type PostCostInput = {
@@ -575,13 +578,14 @@ export class WorkOrderQuotesService {
 
     const settings = parseWorkOrderSettings(tenant.workOrderSettings);
     const supplierDefaults = await this.loadSupplierDiscountDefaults(wo.supplierId);
-    const lines = this.normalizeLines(dto.lines, settings, supplierDefaults);
+    const lines = this.normalizeLines(dto.lines ?? [], settings, supplierDefaults);
     const { totalNetCents, totalVatCents } = computeQuoteTotals(lines);
     const maxVersion = await this.prisma.workOrderQuote.aggregate({
       where: { workOrderId },
       _max: { version: true },
     });
     const version = (maxVersion._max.version ?? 0) + 1;
+    const title = dto.title !== undefined ? dto.title?.trim() || null : null;
 
     const quote = await this.prisma.$transaction(async (tx) => {
       const created = await tx.workOrderQuote.create({
@@ -589,6 +593,7 @@ export class WorkOrderQuotesService {
           tenantId: tenant.id,
           workOrderId,
           version,
+          title,
           currency: dto.currency?.trim() || 'RON',
           totalNetCents,
           totalVatCents,
@@ -655,13 +660,58 @@ export class WorkOrderQuotesService {
       where: { id: quoteId, workOrderId, tenantId: tenant.id },
     });
     if (!existing) throw new NotFoundException('Quote not found');
+
+    const hasLines = dto.lines !== undefined;
+    const titleOnly =
+      !hasLines &&
+      dto.title !== undefined &&
+      dto.notes === undefined &&
+      dto.currency === undefined;
+
     if (existing.status !== WorkOrderQuoteStatus.draft) {
-      throw new BadRequestException('Only draft quotes can be edited');
+      if (!titleOnly) {
+        throw new BadRequestException('Only draft quotes can be edited');
+      }
+      const quote = await this.prisma.workOrderQuote.update({
+        where: { id: quoteId },
+        data: { title: dto.title?.trim() || null },
+        include: this.quoteInclude(),
+      });
+      await this.audit.log({
+        tenantId: tenant.id,
+        actorUserId,
+        action: 'work_order_quote.rename',
+        entityType: 'work_order_quote',
+        entityId: quoteId,
+        meta: { workOrderId, title: quote.title },
+      });
+      return toQuoteRecord(quote);
+    }
+
+    if (!hasLines) {
+      const quote = await this.prisma.workOrderQuote.update({
+        where: { id: quoteId },
+        data: {
+          ...(dto.title !== undefined ? { title: dto.title?.trim() || null } : {}),
+          ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+          ...(dto.currency !== undefined ? { currency: dto.currency.trim() || existing.currency } : {}),
+        },
+        include: this.quoteInclude(),
+      });
+      await this.audit.log({
+        tenantId: tenant.id,
+        actorUserId,
+        action: 'work_order_quote.update',
+        entityType: 'work_order_quote',
+        entityId: quoteId,
+        meta: { workOrderId, metaOnly: true },
+      });
+      return toQuoteRecord(quote);
     }
 
     const settings = parseWorkOrderSettings(tenant.workOrderSettings);
     const supplierDefaults = await this.loadSupplierDiscountDefaults(wo.supplierId);
-    const lines = this.normalizeLines(dto.lines, settings, supplierDefaults);
+    const lines = this.normalizeLines(dto.lines ?? [], settings, supplierDefaults);
     const { totalNetCents, totalVatCents } = computeQuoteTotals(lines);
 
     const quote = await this.prisma.$transaction(async (tx) => {
@@ -669,6 +719,7 @@ export class WorkOrderQuotesService {
       return tx.workOrderQuote.update({
         where: { id: quoteId },
         data: {
+          ...(dto.title !== undefined ? { title: dto.title?.trim() || null } : {}),
           currency: dto.currency?.trim() || existing.currency,
           totalNetCents,
           totalVatCents,
@@ -705,6 +756,47 @@ export class WorkOrderQuotesService {
     });
 
     return toQuoteRecord(quote);
+  }
+
+  async deleteDraft(
+    tenantSlug: string,
+    workOrderId: string,
+    quoteId: string,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<{ ok: true }> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+
+    const existing = await this.prisma.workOrderQuote.findFirst({
+      where: { id: quoteId, workOrderId, tenantId: tenant.id },
+      include: { lines: { select: { id: true } } },
+    });
+    if (!existing) throw new NotFoundException('Quote not found');
+    if (existing.status !== WorkOrderQuoteStatus.draft) {
+      throw new BadRequestException('Only draft quotes can be deleted');
+    }
+    if (existing.costEntryId || existing.invoicedAt) {
+      throw new BadRequestException('Cannot delete a quote linked to cost/invoice');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.workOrderQuoteLine.deleteMany({ where: { quoteId } });
+      await tx.workOrderQuote.delete({ where: { id: quoteId } });
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order_quote.delete',
+      entityType: 'work_order_quote',
+      entityId: quoteId,
+      meta: { workOrderId, version: existing.version },
+    });
+
+    return { ok: true };
   }
 
   async submit(

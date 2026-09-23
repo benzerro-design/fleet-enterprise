@@ -55,6 +55,8 @@ export type WorkOrderQuoteRecord = {
   id: string;
   workOrderId: string;
   version: number;
+  /** Denumire afișată; null/gol = „Deviz {version}”. */
+  title: string | null;
   status: WorkOrderQuoteStatus;
   currency: string;
   totalNetCents: number;
@@ -233,6 +235,7 @@ export function toQuoteRecord(quote: {
   id: string;
   workOrderId: string;
   version: number;
+  title?: string | null;
   status: WorkOrderQuoteStatus;
   currency: string;
   totalNetCents: number;
@@ -281,6 +284,7 @@ export function toQuoteRecord(quote: {
     id: quote.id,
     workOrderId: quote.workOrderId,
     version: quote.version,
+    title: quote.title?.trim() || null,
     status: quote.status,
     currency: quote.currency,
     totalNetCents: money.totalNetCents,

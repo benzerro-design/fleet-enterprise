@@ -67,7 +67,10 @@ export async function buildQuotePdfBuffer(input: {
     if (displayNumber) doc.text(`Comandă ${displayNumber}`);
     doc.text(workOrderTitle);
     if (supplierName) doc.text(`Furnizor: ${supplierName}`);
-    doc.text(`Versiune ${quote.version}  ·  ${quote.status}  ·  ${new Date().toLocaleDateString('ro-RO')}`);
+    const quoteName = quote.title?.trim() || `Deviz ${quote.version}`;
+    doc.text(
+      `${quoteName}  ·  v${quote.version}  ·  ${quote.status}  ·  ${new Date().toLocaleDateString('ro-RO')}`,
+    );
     doc.moveDown(0.5);
     doc.moveTo(left, doc.y).lineTo(left + usable, doc.y).strokeColor('#cccccc').stroke();
     doc.moveDown(0.4);

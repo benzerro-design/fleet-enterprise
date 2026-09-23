@@ -9,6 +9,12 @@ export type WorkOrderSettings = {
   allowPartsPriceVerify: boolean;
   allowPartsOrderLaunch: boolean;
   partsPriceSuspectPercent: number;
+  /**
+   * Facturare pe comandă:
+   * - per_work_order = o factură din liniile aprobate consolidate
+   * - per_quote = factură separată pe fiecare deviz aprobat
+   */
+  quoteInvoiceMode: "per_work_order" | "per_quote";
 };
 
 export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
@@ -22,6 +28,7 @@ export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
   allowPartsPriceVerify: true,
   allowPartsOrderLaunch: false,
   partsPriceSuspectPercent: 25,
+  quoteInvoiceMode: "per_quote",
 };
 
 export const workOrderSettingsBrowserBase = "/api/tenant/work-order-settings";

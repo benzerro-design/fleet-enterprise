@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, StreamableFile, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, StreamableFile, UseGuards } from '@nestjs/common';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -113,6 +113,18 @@ export class WorkOrderQuotesController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.quotes.updateDraft(tenantSlug, workOrderId, quoteId, body, actorUserId, access);
+  }
+
+  @Delete(':quoteId')
+  @Roles(...FLEET_WRITE_ROLES)
+  deleteDraft(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Param('quoteId') quoteId: string,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.deleteDraft(tenantSlug, workOrderId, quoteId, actorUserId, access);
   }
 
   @Post(':quoteId/submit')

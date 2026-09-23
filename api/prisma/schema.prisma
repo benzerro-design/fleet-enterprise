@@ -1710,6 +1710,8 @@ model WorkOrderQuote {
   tenantId         String
   workOrderId      String
   version          Int                  @default(1)
+  /// Denumire afișată (ex. „Revizie”, „Anvelope”). Gol = „Deviz {version}”.
+  title            String?
   status           WorkOrderQuoteStatus @default(draft)
   currency         String               @default("RON")
   totalNetCents    Int                  @default(0)

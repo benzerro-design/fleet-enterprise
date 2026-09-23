@@ -19,6 +19,12 @@ export type WorkOrderSettings = {
   allowPartsOrderLaunch: boolean;
   /** Prag % peste cel mai ieftin catalog pentru flag „preț suspect” (verificare). */
   partsPriceSuspectPercent: number;
+  /**
+   * Facturare pe comandă:
+   * - per_work_order = o factură din liniile aprobate consolidate
+   * - per_quote = factură separată pe fiecare deviz aprobat
+   */
+  quoteInvoiceMode: 'per_work_order' | 'per_quote';
 };
 
 export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
@@ -32,6 +38,7 @@ export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
   allowPartsPriceVerify: true,
   allowPartsOrderLaunch: false,
   partsPriceSuspectPercent: 25,
+  quoteInvoiceMode: 'per_quote',
 };
 
 function parseNonNegativeInt(
@@ -88,6 +95,10 @@ export function parseWorkOrderSettings(raw: unknown): WorkOrderSettings {
       o.partsPriceSuspectPercent,
       DEFAULT_WORK_ORDER_SETTINGS.partsPriceSuspectPercent,
     ),
+    quoteInvoiceMode:
+      o.quoteInvoiceMode === 'per_work_order' || o.quoteInvoiceMode === 'per_quote'
+        ? o.quoteInvoiceMode
+        : DEFAULT_WORK_ORDER_SETTINGS.quoteInvoiceMode,
   };
 }
 
@@ -166,6 +177,12 @@ export function parseWorkOrderSettingsPatch(body: unknown): Partial<WorkOrderSet
       throw new Error('partsPriceSuspectPercent must be a non-negative number');
     }
     patch.partsPriceSuspectPercent = Math.round(o.partsPriceSuspectPercent);
+  }
+  if (o.quoteInvoiceMode !== undefined) {
+    if (o.quoteInvoiceMode !== 'per_work_order' && o.quoteInvoiceMode !== 'per_quote') {
+      throw new Error('quoteInvoiceMode must be per_work_order or per_quote');
+    }
+    patch.quoteInvoiceMode = o.quoteInvoiceMode;
   }
   if (Object.keys(patch).length === 0) throw new Error('No settings to update');
   return patch;

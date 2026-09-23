@@ -270,6 +270,47 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
               onBlur={(e) => patchNumber("partsPriceSuspectPercent", e.target.value)}
             />
           </label>
+
+          <div>
+            <h2 className="text-sm font-medium text-zinc-200">Facturare</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Cum se înregistrează factura pe comandă după aprobarea devizelor.
+            </p>
+          </div>
+
+          <fieldset className="space-y-3" disabled={pending}>
+            <legend className="sr-only">Mod facturare</legend>
+            <label className="flex items-start gap-3 text-sm text-zinc-300">
+              <input
+                type="radio"
+                className="mt-1"
+                name="quoteInvoiceMode"
+                checked={(settings.quoteInvoiceMode ?? "per_quote") === "per_quote"}
+                onChange={() => void patch({ quoteInvoiceMode: "per_quote" })}
+              />
+              <span>
+                <span className="font-medium text-zinc-100">Factură pe fiecare deviz</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">
+                  Înregistrați factura separat pe Deviz 1, Deviz 2… (implicit).
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-sm text-zinc-300">
+              <input
+                type="radio"
+                className="mt-1"
+                name="quoteInvoiceMode"
+                checked={(settings.quoteInvoiceMode ?? "per_quote") === "per_work_order"}
+                onChange={() => void patch({ quoteInvoiceMode: "per_work_order" })}
+              />
+              <span>
+                <span className="font-medium text-zinc-100">O factură pe comandă</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">
+                  Factură din liniile aprobate consolidate (tab Consolidat pe WO).
+                </span>
+              </span>
+            </label>
+          </fieldset>
         </div>
       ) : (
         <TypeSettingsPlaceholder code={tab} />
