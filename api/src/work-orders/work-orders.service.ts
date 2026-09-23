@@ -988,9 +988,33 @@ export class WorkOrdersService {
       }
     }
 
-    if (dto.estimatedRepairAt !== undefined) {
-      if (quoteLocked) {
-        throw new BadRequestException('Cannot change estimated repair date after quote is submitted');
+    if (dto.estimatedRepairAt !== undefined && quoteLocked) {
+      const nextRaw = dto.estimatedRepairAt;
+      const next =
+        nextRaw === null || nextRaw === ''
+          ? null
+          : (() => {
+              const parsed = new Date(nextRaw);
+              return Number.isNaN(parsed.getTime()) ? null : parsed;
+            })();
+      const prev = wo.estimatedRepairAt;
+      // Permite: (1) prima setare dacă lipsea, (2) același calendar day (noop pe Trimite Deviz 2+).
+      // Blochează doar schimbarea reală a zilei după ce există un deviz submitted/approved.
+      const sameCalendarDay =
+        prev != null &&
+        next != null &&
+        prev.getFullYear() === next.getFullYear() &&
+        prev.getMonth() === next.getMonth() &&
+        prev.getDate() === next.getDate();
+      if (prev != null && !sameCalendarDay) {
+        throw new BadRequestException(
+          'Cannot change estimated repair date after quote is submitted',
+        );
+      }
+      if (prev != null && sameCalendarDay) {
+        // Idempotent — nu mai actualizăm / nu mai scriem event.
+        dto = { ...dto };
+        delete dto.estimatedRepairAt;
       }
     }
 
@@ -1029,7 +1053,8 @@ export class WorkOrdersService {
       data.status = dto.status;
     }
     if (Object.keys(data).length === 0) {
-      throw new BadRequestException('No fields to update');
+      // PATCH only cu estimatedRepairAt identic (noop după quote lock) — OK.
+      return this.getById(tenantSlug, id, access);
     }
 
     const estimatedChanged =

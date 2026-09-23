@@ -337,7 +337,15 @@ export function WorkOrderQuotePanel({
       setError("Completați data estimativă de finalizare reparație.");
       return false;
     }
+    // Deja setată pe WO (ex. la Deviz 1) — nu mai PATCH; altfel API blochează după quote submitted.
     if (estimatedRepairAt && toDateInput(estimatedRepairAt) === estimatedDate) return true;
+    if (estimatedRepairAt) {
+      // Altă zi decât cea salvată: după Deviz 1 trimis/aprobat API refuză schimbarea.
+      setError(
+        "Estimarea e deja setată pe comandă (din Deviz 1). Nu o puteți schimba după ce un deviz a fost trimis — Trimite fără a modifica data.",
+      );
+      return false;
+    }
     setPending(true);
     setError(null);
     try {
@@ -607,8 +615,13 @@ export function WorkOrderQuotePanel({
     if (!activeQuote) return;
     const submittedId = activeQuote.id;
     if (action === "submit") {
-      const okEst = await saveEstimatedRepair();
-      if (!okEst) return;
+      // Submit cere estimatedRepairAt pe WO; dacă există deja (Deviz 1), nu o mai rescriem.
+      if (estimatedRepairAt) {
+        /* ok — quote submit API verifică câmpul pe WO */
+      } else {
+        const okEst = await saveEstimatedRepair();
+        if (!okEst) return;
+      }
     }
     setPending(true);
     setError(null);
@@ -1466,19 +1479,32 @@ export function WorkOrderQuotePanel({
               <label className={OPS_LABEL_CLASS}>
                 Estimare finalizare reparație <span className="text-amber-300">*</span>
               </label>
-              <input
-                type="date"
-                value={estimatedDate}
-                disabled={pending}
-                onChange={(e) => setEstimatedDate(e.target.value)}
-                onBlur={() => {
-                  if (toIsoFromDateInput(estimatedDate)) void saveEstimatedRepair();
-                }}
-                className={`${OPS_INPUT_CLASS} max-w-xs`}
-              />
-              <p className="mt-1 text-xs text-zinc-500">
-                Obligatorie înainte de „Trimite spre aprobare”.
-              </p>
+              {estimatedRepairAt ? (
+                <>
+                  <p className="text-sm text-zinc-200">
+                    <span className="font-medium">{formatDateRo(estimatedRepairAt)}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Deja setată pe comandă — Trimite Deviz 2+ fără a o modifica.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="date"
+                    value={estimatedDate}
+                    disabled={pending}
+                    onChange={(e) => setEstimatedDate(e.target.value)}
+                    onBlur={() => {
+                      if (toIsoFromDateInput(estimatedDate)) void saveEstimatedRepair();
+                    }}
+                    className={`${OPS_INPUT_CLASS} max-w-xs`}
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Obligatorie înainte de „Trimite spre aprobare”.
+                  </p>
+                </>
+              )}
             </div>
           ) : null}
           <table className="w-full text-left text-sm">
@@ -2009,19 +2035,34 @@ export function WorkOrderQuotePanel({
               <label className={OPS_LABEL_CLASS}>
                 Estimare finalizare reparație <span className="text-amber-300">*</span>
               </label>
-              <input
-                type="date"
-                value={estimatedDate}
-                disabled={pending}
-                onChange={(e) => setEstimatedDate(e.target.value)}
-                onBlur={() => {
-                  if (toIsoFromDateInput(estimatedDate)) void saveEstimatedRepair();
-                }}
-                className={`${OPS_INPUT_CLASS} max-w-xs`}
-              />
-              <p className="mt-1 text-xs text-zinc-500">
-                Completată de partener — obligatorie înainte de „Trimite spre aprobare”. Vizibilă și pe tichet.
-              </p>
+              {estimatedRepairAt ? (
+                <>
+                  <p className="text-sm text-zinc-200">
+                    <span className="font-medium">{formatDateRo(estimatedRepairAt)}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Deja setată pe comandă (nu se schimbă după primul deviz trimis). Poți trimite Deviz 2+
+                    cu această dată.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <input
+                    type="date"
+                    value={estimatedDate}
+                    disabled={pending}
+                    onChange={(e) => setEstimatedDate(e.target.value)}
+                    onBlur={() => {
+                      if (toIsoFromDateInput(estimatedDate)) void saveEstimatedRepair();
+                    }}
+                    className={`${OPS_INPUT_CLASS} max-w-xs`}
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Completată de partener — obligatorie înainte de „Trimite spre aprobare”. Vizibilă și pe
+                    tichet.
+                  </p>
+                </>
+              )}
             </div>
           ) : estimatedRepairAt ? (
             <p className="text-sm text-zinc-400">
