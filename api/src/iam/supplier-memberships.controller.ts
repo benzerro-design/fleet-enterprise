@@ -1,5 +1,14 @@
-import { Controller, Delete, Get, HttpCode, Param, UseGuards } from '@nestjs/common';
-import { MembershipRole } from '@prisma/client';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { MembershipRole, SupplierRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -16,6 +25,34 @@ export class SupplierMembershipsController {
   @Roles(MembershipRole.tenant_admin)
   list(@TenantId() tenantSlug: string) {
     return this.memberships.list(tenantSlug);
+  }
+
+  @Post()
+  @Roles(MembershipRole.tenant_admin)
+  @HttpCode(201)
+  create(
+    @TenantId() tenantSlug: string,
+    @Body()
+    body: {
+      email?: string;
+      displayName?: string | null;
+      password?: string;
+      supplierId?: string;
+      role?: SupplierRole;
+    },
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.memberships.create(
+      tenantSlug,
+      {
+        email: body.email ?? '',
+        displayName: body.displayName,
+        password: body.password ?? '',
+        supplierId: body.supplierId ?? '',
+        role: body.role ?? SupplierRole.supplier_staff,
+      },
+      actorUserId,
+    );
   }
 
   @Delete(':id')

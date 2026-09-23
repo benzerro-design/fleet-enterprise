@@ -10,6 +10,7 @@ export type ClientIamSettingsMe = {
   appointmentProposeFleetFirst: boolean;
   ticketListBulkSelect: boolean;
   appointmentProposalHistoryTabs: boolean;
+  allowClientAdminCreateUsers: boolean;
 };
 
 export type ClientMembershipMe = {

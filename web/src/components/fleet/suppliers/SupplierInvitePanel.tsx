@@ -71,9 +71,8 @@ export function SupplierInvitePanel({ supplierId, allowManagerRole = false }: Pr
   }
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
-      <h3 className="text-sm font-semibold text-zinc-200">Invită utilizator portal</h3>
-      <p className="mt-1 text-xs text-zinc-500">
+    <div>
+      <p className="text-xs text-zinc-500">
         Link unic valabil 7 zile. Destinatarul își setează parola. Nu se trimite email — copiază linkul.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">

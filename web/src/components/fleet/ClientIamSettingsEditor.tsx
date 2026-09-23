@@ -105,6 +105,22 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
             </span>
           </span>
         </label>
+        <label className="flex items-start gap-3 text-sm text-zinc-200">
+          <input
+            type="checkbox"
+            checked={draft.allowClientAdminCreateUsers}
+            disabled={!canWrite || pending}
+            onChange={(e) => setDraft((d) => ({ ...d, allowClientAdminCreateUsers: e.target.checked }))}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium">Creare useri de către manager</span>
+            <span className="block text-xs text-zinc-500">
+              L1 (administrator client) poate crea useri cu parolă pe acest client. Fără bifă = doar invitație
+              cu link (comportament actual).
+            </span>
+          </span>
+        </label>
       </section>
 
       <section className="space-y-3 border-t border-zinc-800 pt-5">

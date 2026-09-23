@@ -6,20 +6,21 @@ import {
   type ClientOption,
 } from "@/components/fleet/ClientMembershipsPanel";
 import { MembersAdminPanel } from "@/components/fleet/MembersAdminPanel";
+import { MembersAddZone } from "@/components/fleet/MembersAddZone";
 import { MembersInviteHub, type MembersHubTabId } from "@/components/fleet/MembersInviteHub";
 import {
   SupplierInvitesHubPanel,
   type SupplierInviteOption,
   type SupplierMembershipRow,
 } from "@/components/fleet/SupplierInvitesHubPanel";
-import { TenantInvitePanel } from "@/components/fleet/TenantInvitePanel";
-import { ClientInvitesLedger } from "@/components/fleet/ClientInvitesLedger";
+import { TenantCreateMemberForm } from "@/components/fleet/TenantCreateMemberForm";
+import { TenantInvitePanel, TenantPendingInvites } from "@/components/fleet/TenantInvitePanel";
 import type { ClientInviteRecord } from "@/lib/client-invites";
 import { getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
 
 type MembersResponse = {
-    members: Array<{
+  members: Array<{
     userId: string;
     email: string;
     displayName: string | null;
@@ -121,24 +122,26 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
   const tab = tabFromSearch(sp.tab);
   const currentUserEmail = auth.ok ? auth.me.email : undefined;
 
-  const [data, clientMemberships, clients, clientInvites, suppliers, supplierMemberships] = await Promise.all([
-    tab === "abonat" ? fetchMembers() : Promise.resolve(null),
-    tab === "client" ? fetchClientMemberships() : Promise.resolve([]),
-    tab === "client" ? fetchClients() : Promise.resolve([]),
-    tab === "client" ? fetchClientInvites() : Promise.resolve([]),
-    tab === "furnizor" ? fetchSuppliers() : Promise.resolve([]),
-    tab === "furnizor" ? fetchSupplierMemberships() : Promise.resolve([]),
-  ]);
+  const [data, clientMemberships, clients, clientInvites, suppliers, supplierMemberships] =
+    await Promise.all([
+      tab === "abonat" ? fetchMembers() : Promise.resolve(null),
+      tab === "client" ? fetchClientMemberships() : Promise.resolve([]),
+      tab === "client" ? fetchClients() : Promise.resolve([]),
+      tab === "client" ? fetchClientInvites() : Promise.resolve([]),
+      tab === "furnizor" ? fetchSuppliers() : Promise.resolve([]),
+      tab === "furnizor" ? fetchSupplierMemberships() : Promise.resolve([]),
+    ]);
 
   return (
     <FleetPageMain narrow="md">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Membri abonat & invitații</h1>
+          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">
+            Administrare
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Membri & invitații</h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-            Abonat (L*), client (L1/L0) și furnizor (R*). Invite cu link 7 zile — fără email SMTP; copiază
-            linkul din listă. Hartă ierarhie:{" "}
+            Adaugă (invită sau creează) → invitații pending → filtre → fiecare user. Hartă ierarhie:{" "}
             <Link href="/fleet/user-strategy" className="text-emerald-400 hover:underline">
               Strategie useri
             </Link>
@@ -150,7 +153,11 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
       <MembersInviteHub active={tab}>
         {tab === "abonat" ? (
           <section className="space-y-6">
-            <TenantInvitePanel />
+            <MembersAddZone
+              invitePanel={<TenantInvitePanel showPendingList={false} />}
+              createPanel={<TenantCreateMemberForm />}
+            />
+            <TenantPendingInvites />
             {!data ? (
               <p className="text-amber-400">Nu am putut încărca membrii. Verifică API-ul.</p>
             ) : (
@@ -159,18 +166,11 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
           </section>
         ) : null}
         {tab === "client" ? (
-          <div className="space-y-8">
-            <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-              <h2 className="text-sm font-medium text-zinc-200">Invitații generate de clienți</h2>
-              <p className="mt-1 text-xs text-zinc-500">
-                Toate invitațiile L1/L0 — cine a generat, status, fără să alegi clientul.
-              </p>
-              <div className="mt-4">
-                <ClientInvitesLedger items={clientInvites} showClient />
-              </div>
-            </section>
-            <ClientMembershipsPanel memberships={clientMemberships} clients={clients} />
-          </div>
+          <ClientMembershipsPanel
+            memberships={clientMemberships}
+            clients={clients}
+            invites={clientInvites}
+          />
         ) : null}
         {tab === "furnizor" ? (
           <SupplierInvitesHubPanel suppliers={suppliers} memberships={supplierMemberships} />

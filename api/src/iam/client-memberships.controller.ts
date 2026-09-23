@@ -30,7 +30,7 @@ export class ClientMembershipsController {
   }
 
   @Post()
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(MembershipRole.tenant_admin, MembershipRole.client_user)
   @HttpCode(201)
   create(
     @TenantId() tenantSlug: string,
@@ -44,6 +44,7 @@ export class ClientMembershipsController {
       driverId?: string | null;
     },
     @CurrentUserId() actorUserId?: string,
+    @CurrentAccess() access?: AccessContext,
   ) {
     return this.memberships.create(
       tenantSlug,
@@ -56,6 +57,7 @@ export class ClientMembershipsController {
         driverId: body.driverId,
       },
       actorUserId,
+      access,
     );
   }
 

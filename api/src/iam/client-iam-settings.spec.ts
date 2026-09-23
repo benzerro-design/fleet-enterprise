@@ -16,6 +16,7 @@ describe('parseClientIamSettings', () => {
       appointmentProposeFleetFirst: false,
       ticketListBulkSelect: false,
       appointmentProposalHistoryTabs: false,
+      allowClientAdminCreateUsers: false,
     });
   });
 
@@ -29,6 +30,7 @@ describe('parseClientIamSettings', () => {
         appointmentProposalHistoryTabs: true,
         appointmentProposeFleetFirst: true,
         driverCanNegotiateAppointment: true,
+        allowClientAdminCreateUsers: true,
       }),
     ).toEqual({
       allowClientOcr: true,
@@ -38,6 +40,7 @@ describe('parseClientIamSettings', () => {
       appointmentProposeFleetFirst: true,
       ticketListBulkSelect: true,
       appointmentProposalHistoryTabs: true,
+      allowClientAdminCreateUsers: true,
     });
   });
 
@@ -55,6 +58,7 @@ describe('parseClientIamSettings', () => {
       appointmentProposeFleetFirst: false,
       ticketListBulkSelect: false,
       appointmentProposalHistoryTabs: false,
+      allowClientAdminCreateUsers: false,
     });
   });
 

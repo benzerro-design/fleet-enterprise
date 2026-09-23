@@ -58,102 +58,115 @@ export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
   const currentPageItems = filteredAndSorted.slice(start, start + PAGE_SIZE);
 
   return (
-    <section className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Căutare membri</label>
-          <input
-            type="search"
-            name="member-search"
-            autoComplete="off"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(1);
-            }}
-            placeholder="email, nume, rol…"
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-          />
+    <div className="space-y-4">
+      <section className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
+        <h2 className="text-sm font-semibold text-zinc-100">Filtre</h2>
+        <p className="mt-0.5 text-xs text-zinc-500">Caută în email, nume sau rol.</p>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-medium text-zinc-500">Căutare</label>
+            <input
+              type="search"
+              name="member-search"
+              autoComplete="off"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+              placeholder="email, nume, rol…"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            />
+          </div>
+          <div className="min-w-[10rem]">
+            <label className="mb-1 block text-xs font-medium text-zinc-500">Stare</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as typeof statusFilter);
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            >
+              <option value="all">Toți</option>
+              <option value="active">Activi</option>
+              <option value="disabled">Dezactivați</option>
+            </select>
+          </div>
+          <div className="min-w-[14rem]">
+            <label className="mb-1 block text-xs font-medium text-zinc-500">Sortare</label>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value as typeof sortBy);
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            >
+              <option value="joined_desc">Cei mai noi mai întâi</option>
+              <option value="joined_asc">Cei mai vechi mai întâi</option>
+              <option value="email_asc">Email (A-Z)</option>
+              <option value="role">Rol</option>
+            </select>
+          </div>
         </div>
-        <div className="min-w-[10rem]">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Stare</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as typeof statusFilter);
-              setPage(1);
-            }}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+        <p className="mt-3 text-xs text-zinc-500">
+          {filteredAndSorted.length} rezultat(e) · pagina {safePage}/{totalPages}
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-zinc-100">
+          Membri abonat · {filteredAndSorted.length}
+        </h2>
+        {currentPageItems.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-zinc-700 px-4 py-6 text-sm text-zinc-400">
+            Nu există membri pentru filtrul curent.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {currentPageItems.map((m) => (
+              <li
+                key={m.userId}
+                className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+              >
+                <MemberRoleSelect
+                  userId={m.userId}
+                  email={m.email}
+                  displayName={m.displayName}
+                  joinedAt={m.joinedAt}
+                  currentRole={m.role}
+                  isCurrentUser={Boolean(currentUserEmail && m.email === currentUserEmail)}
+                />
+                <MemberAccountActions
+                  userId={m.userId}
+                  disabledAt={m.disabledAt}
+                  isSelf={Boolean(currentUserEmail && m.email === currentUserEmail)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex items-center justify-between pt-1 text-sm">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-zinc-300 disabled:opacity-40"
           >
-            <option value="all">Toți</option>
-            <option value="active">Activi</option>
-            <option value="disabled">Dezactivați</option>
-          </select>
-        </div>
-        <div className="min-w-[14rem]">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Sortare</label>
-          <select
-            value={sortBy}
-            onChange={(e) => {
-              setSortBy(e.target.value as typeof sortBy);
-              setPage(1);
-            }}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            ← Anterior
+          </button>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-zinc-300 disabled:opacity-40"
           >
-            <option value="joined_desc">Cei mai noi mai întâi</option>
-            <option value="joined_asc">Cei mai vechi mai întâi</option>
-            <option value="email_asc">Email (A-Z)</option>
-            <option value="role">Rol</option>
-          </select>
+            Următor →
+          </button>
         </div>
-      </div>
-
-      <p className="text-xs text-zinc-500">
-        {filteredAndSorted.length} rezultat(e) · pagina {safePage}/{totalPages}
-      </p>
-
-      {currentPageItems.length === 0 ? (
-        <p className="text-sm text-zinc-400">Nu există membri pentru filtrul curent.</p>
-      ) : (
-        <ul className="space-y-4">
-          {currentPageItems.map((m) => (
-            <li key={m.userId} className="border-b border-zinc-800 pb-4 last:border-0 last:pb-0">
-              <MemberRoleSelect
-                userId={m.userId}
-                email={m.email}
-                displayName={m.displayName}
-                joinedAt={m.joinedAt}
-                currentRole={m.role}
-                isCurrentUser={Boolean(currentUserEmail && m.email === currentUserEmail)}
-              />
-              <MemberAccountActions
-                userId={m.userId}
-                disabledAt={m.disabledAt}
-                isSelf={Boolean(currentUserEmail && m.email === currentUserEmail)}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="flex items-center justify-between pt-1 text-sm">
-        <button
-          type="button"
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={safePage <= 1}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-zinc-300 disabled:opacity-40"
-        >
-          ← Anterior
-        </button>
-        <button
-          type="button"
-          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          disabled={safePage >= totalPages}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-zinc-300 disabled:opacity-40"
-        >
-          Următor →
-        </button>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

@@ -31,6 +31,27 @@ export class TenantController {
     return this.tenant.listMembers(tenantSlug);
   }
 
+  @Post('members')
+  @Roles(MembershipRole.tenant_admin)
+  createMember(
+    @TenantId() tenantSlug: string,
+    @Body()
+    body: { email?: string; displayName?: string | null; password?: string; role?: string },
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.createMember(
+      tenantSlug,
+      {
+        email: body.email ?? '',
+        displayName: body.displayName,
+        password: body.password ?? '',
+        role: body.role,
+      },
+      actorUserId,
+    );
+  }
+
   @Patch('members/:userId')
   @Roles(MembershipRole.tenant_admin)
   async patchMember(

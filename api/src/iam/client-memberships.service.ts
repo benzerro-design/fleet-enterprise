@@ -9,6 +9,9 @@ import type { AccessContext } from './access-context.types';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../audit/audit.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
+import {
+  parseClientIamSettings,
+} from './client-iam-settings';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type CreateClientMembershipInput = {
@@ -108,6 +111,7 @@ export class ClientMembershipsService {
     tenantSlug: string,
     dto: CreateClientMembershipInput,
     actorUserId?: string,
+    access?: AccessContext,
   ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -116,6 +120,9 @@ export class ClientMembershipsService {
     if (!email) throw new BadRequestException('email is required');
 
     const client = await resolveClientInTenant(this.prisma, tenant.id, dto.clientId);
+    if (access) {
+      await this.assertCanCreateUsers(access, client.id, tenant.id);
+    }
     const role = parseClientRole(dto.role);
 
     if (role === ClientRole.driver) {
@@ -140,7 +147,7 @@ export class ClientMembershipsService {
     const user = await this.prisma.user.upsert({
       where: { email },
       create: { email, passwordHash, displayName },
-      update: { displayName },
+      update: { displayName, passwordHash },
     });
 
     await this.prisma.tenantMembership.upsert({
@@ -191,6 +198,36 @@ export class ClientMembershipsService {
       email: row.user.email,
       role: row.role,
     };
+  }
+
+  private async assertCanCreateUsers(
+    access: AccessContext,
+    clientId: string,
+    tenantId: string,
+  ): Promise<void> {
+    if (access.isTenantWide && access.membershipRole === MembershipRole.tenant_admin) return;
+    if (access.membershipRole !== MembershipRole.client_user) {
+      throw new ForbiddenException('Not allowed');
+    }
+    if (!access.allowedClientIds.includes(clientId)) {
+      throw new ForbiddenException('Client access denied');
+    }
+    const isAdmin = access.clientMemberships.some(
+      (m) => m.clientId === clientId && m.role === ClientRole.client_admin,
+    );
+    if (!isAdmin) {
+      throw new ForbiddenException('Only client admin can create users');
+    }
+    const client = await this.prisma.client.findFirst({
+      where: { id: clientId, tenantId },
+      select: { iamSettings: true },
+    });
+    const settings = parseClientIamSettings(client?.iamSettings);
+    if (!settings.allowClientAdminCreateUsers) {
+      throw new ForbiddenException(
+        'Crearea de useri nu e activată pentru acest client (Setup → Client → IAM)',
+      );
+    }
   }
 
   async remove(tenantSlug: string, id: string, actorUserId?: string) {

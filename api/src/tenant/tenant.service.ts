@@ -65,6 +65,81 @@ export class TenantService {
     };
   }
 
+  async createMember(
+    tenantSlug: string,
+    input: {
+      email: string;
+      displayName?: string | null;
+      password: string;
+      role?: string;
+    },
+    actorUserId?: string,
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const email = input.email?.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      throw new BadRequestException('email is required');
+    }
+    const password = input.password?.trim() ?? '';
+    if (password.length < 10) {
+      throw new BadRequestException('Parola trebuie să aibă minim 10 caractere');
+    }
+    const role =
+      input.role === MembershipRole.tenant_viewer
+        ? MembershipRole.tenant_viewer
+        : MembershipRole.tenant_admin;
+
+    const bcrypt = await import('bcrypt');
+    const passwordHash = await bcrypt.hash(password, 12);
+    const displayName = input.displayName?.trim() || email.split('@')[0];
+
+    const user = await this.prisma.user.upsert({
+      where: { email },
+      create: { email, passwordHash, displayName },
+      update: { passwordHash, displayName },
+    });
+
+    const existing = await this.prisma.tenantMembership.findUnique({
+      where: { userId_tenantId: { userId: user.id, tenantId: tenant.id } },
+    });
+    if (existing) {
+      if (
+        existing.role !== MembershipRole.tenant_admin &&
+        existing.role !== MembershipRole.tenant_viewer
+      ) {
+        throw new BadRequestException(
+          'Acest email are deja un rol pe client/furnizor — folosește un email dedicat pentru echipa abonatului.',
+        );
+      }
+      await this.prisma.tenantMembership.update({
+        where: { id: existing.id },
+        data: { role },
+      });
+    } else {
+      await this.prisma.tenantMembership.create({
+        data: { userId: user.id, tenantId: tenant.id, role },
+      });
+    }
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'tenant_member.create',
+      entityType: 'membership',
+      entityId: user.id,
+      meta: { email, role },
+    });
+
+    return {
+      userId: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role,
+    };
+  }
+
   async setMemberRole(
     tenantSlug: string,
     targetUserId: string,

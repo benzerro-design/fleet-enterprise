@@ -13,6 +13,7 @@ export type ClientMembershipContext = {
     appointmentProposeFleetFirst: boolean;
     ticketListBulkSelect: boolean;
     appointmentProposalHistoryTabs: boolean;
+    allowClientAdminCreateUsers: boolean;
   };
 };
 

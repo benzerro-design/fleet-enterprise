@@ -12,7 +12,12 @@ type Invite = {
   expiresAt: string;
 };
 
-export function TenantInvitePanel() {
+type Props = {
+  /** Dacă false, nu arată lista pending (mutată în zona Invitații). */
+  showPendingList?: boolean;
+};
+
+export function TenantInvitePanel({ showPendingList = true }: Props) {
   const [email, setEmail] = useState("");
   const [targetRole, setTargetRole] = useState("tenant_admin");
   const [pending, setPending] = useState(false);
@@ -59,10 +64,9 @@ export function TenantInvitePanel() {
   }
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
-      <h3 className="text-sm font-semibold text-zinc-200">Invită în echipa abonatului (L*)</h3>
-      <p className="mt-1 text-xs text-zinc-500">
-        Link unic 7 zile. Destinatarul își setează parola. Nu se trimite email — copiază linkul și trimite-l tu.
+    <div>
+      <p className="text-xs text-zinc-500">
+        Link unic 7 zile. Destinatarul își setează parola. Nu se trimite email — copiază linkul.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <input
@@ -99,7 +103,7 @@ export function TenantInvitePanel() {
           <InviteCopyLink url={lastInvite.inviteUrl} />
         </div>
       ) : null}
-      {items.length > 0 ? (
+      {showPendingList && items.length > 0 ? (
         <ul className="mt-3 space-y-2 text-xs text-zinc-400">
           {items.map((i) => (
             <li key={i.id} className="flex flex-wrap items-center justify-between gap-2">
@@ -113,5 +117,55 @@ export function TenantInvitePanel() {
         </ul>
       ) : null}
     </div>
+  );
+}
+
+/** Zona 2: invitații L* în așteptare. */
+export function TenantPendingInvites() {
+  const [items, setItems] = useState<Invite[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`${tenantBrowserBase}/invites`, { cache: "no-store" });
+        if (!res.ok) return;
+        setItems((await res.json()) as Invite[]);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  if (items.length === 0) {
+    return (
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
+        <h2 className="text-sm font-semibold text-zinc-200">Invitații în așteptare</h2>
+        <p className="mt-1 text-xs text-zinc-500">Nicio invitație L* deschisă.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
+      <h2 className="text-sm font-semibold text-zinc-200">Invitații în așteptare</h2>
+      <p className="mt-1 text-xs text-zinc-500">{items.length} link(uri) active</p>
+      <ul className="mt-3 space-y-2 text-xs text-zinc-400">
+        {items.map((i) => (
+          <li
+            key={i.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2"
+          >
+            <span>
+              <span className="text-zinc-200">{i.email}</span>
+              {" · "}
+              {i.targetRole === "tenant_admin" ? "Administrator" : "Cititor"}
+              {" · expiră "}
+              {new Date(i.expiresAt).toLocaleDateString("ro-RO")}
+            </span>
+            {i.inviteUrl ? <InviteCopyLink url={i.inviteUrl} compact /> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

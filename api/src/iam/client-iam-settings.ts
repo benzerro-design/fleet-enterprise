@@ -27,6 +27,8 @@ export type ClientIamSettings = {
   ticketListBulkSelect: boolean;
   /** Tab-uri Curente/Istoric propuneri pe PROGRAMĂRI (manager + furnizor pe client). Admin L* are oricum. */
   appointmentProposalHistoryTabs: boolean;
+  /** L1 (client_admin) poate crea useri direct (parolă) pe clientul lui. Default off. */
+  allowClientAdminCreateUsers: boolean;
 };
 
 export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
@@ -37,6 +39,7 @@ export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
   appointmentProposeFleetFirst: false,
   ticketListBulkSelect: false,
   appointmentProposalHistoryTabs: false,
+  allowClientAdminCreateUsers: false,
 };
 
 export function parseClientIamSettings(raw: unknown): ClientIamSettings {
@@ -54,6 +57,7 @@ export function parseClientIamSettings(raw: unknown): ClientIamSettings {
       driverCanNegotiateAppointment && o.appointmentProposeFleetFirst === true,
     ticketListBulkSelect: o.ticketListBulkSelect === true,
     appointmentProposalHistoryTabs: o.appointmentProposalHistoryTabs === true,
+    allowClientAdminCreateUsers: o.allowClientAdminCreateUsers === true,
   };
 }
 
@@ -100,6 +104,12 @@ export function parseClientIamSettingsPatch(body: unknown): Partial<ClientIamSet
       throw new Error('appointmentProposalHistoryTabs must be boolean');
     }
     patch.appointmentProposalHistoryTabs = o.appointmentProposalHistoryTabs;
+  }
+  if (o.allowClientAdminCreateUsers !== undefined) {
+    if (typeof o.allowClientAdminCreateUsers !== 'boolean') {
+      throw new Error('allowClientAdminCreateUsers must be boolean');
+    }
+    patch.allowClientAdminCreateUsers = o.allowClientAdminCreateUsers;
   }
   return patch;
 }

@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MembersAddZone } from "@/components/fleet/MembersAddZone";
+import { SupplierCreateMemberForm } from "@/components/fleet/SupplierCreateMemberForm";
 import { SupplierInvitePanel } from "@/components/fleet/suppliers/SupplierInvitePanel";
 import { MemberAccountActions } from "@/components/fleet/MemberAccountActions";
 import { tenantBrowserBase } from "@/lib/fleet-api";
@@ -87,7 +89,9 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
 
   if (suppliers.length === 0) {
     return (
-      <p className="text-sm text-zinc-500">Niciun furnizor activ — creează un furnizor înainte de invitații R*.</p>
+      <p className="text-sm text-zinc-500">
+        Niciun furnizor activ — creează un furnizor înainte de invitații R*.
+      </p>
     );
   }
 
@@ -96,11 +100,39 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
       {error ? <p className="text-sm text-amber-400">{error}</p> : null}
       {ok ? <p className="text-sm text-emerald-400">{ok}</p> : null}
 
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-        <h2 className="text-sm font-medium text-zinc-200">
-          Useri furnizor · {visible.length}
-          {visible.length !== memberships.length ? ` din ${memberships.length}` : ""}
-        </h2>
+      <MembersAddZone
+        invitePanel={
+          <div className="space-y-3">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs text-zinc-500">Furnizor pentru invitație</span>
+              <select
+                value={inviteSupplierId}
+                onChange={(e) => setInviteSupplierId(e.target.value)}
+                className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              >
+                <option value="">Alege furnizorul</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} — {s.legalName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {inviteSelected ? (
+              <SupplierInvitePanel supplierId={inviteSelected.id} allowManagerRole />
+            ) : (
+              <p className="text-xs text-zinc-500">Alege un furnizor ca să generezi o invitație.</p>
+            )}
+          </div>
+        }
+        createPanel={<SupplierCreateMemberForm suppliers={suppliers} />}
+      />
+
+      <section className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
+        <h2 className="text-sm font-semibold text-zinc-100">Filtre</h2>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          Caută în email, nume, cod furnizor sau denumire.
+        </p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="min-w-[10rem] flex-1 text-xs text-zinc-500">
             Căutare
@@ -110,6 +142,7 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
               autoComplete="off"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              placeholder="email, nume, furnizor…"
               className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm"
             />
           </label>
@@ -166,13 +199,22 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
             Reset
           </button>
         </div>
+        <p className="mt-3 text-xs text-zinc-500">
+          {visible.length} rezultat(e)
+          {visible.length !== memberships.length ? ` din ${memberships.length}` : ""}
+        </p>
+      </section>
 
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-zinc-100">Useri furnizor · {visible.length}</h2>
         {visible.length === 0 ? (
-          <p className="mt-3 text-sm text-zinc-500">Niciun user pentru filtrele curente.</p>
+          <p className="rounded-xl border border-dashed border-zinc-700 px-4 py-6 text-sm text-zinc-500">
+            Niciun user pentru filtrele curente.
+          </p>
         ) : (
-          <ul className="mt-4 space-y-4">
+          <ul className="space-y-3">
             {visible.map((m) => (
-              <li key={m.id} className="border-b border-zinc-800 pb-4 last:border-0">
+              <li key={m.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
                 <p className="font-medium text-zinc-200">{m.email}</p>
                 {m.displayName ? <p className="text-xs text-zinc-500">{m.displayName}</p> : null}
                 <p className="mt-1 text-xs text-zinc-400">
@@ -192,29 +234,6 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
           </ul>
         )}
       </section>
-
-      <div className="space-y-3">
-        <label className="block text-sm">
-          <span className="mb-1 block text-xs text-zinc-500">Furnizor pentru invitație</span>
-          <select
-            value={inviteSupplierId}
-            onChange={(e) => setInviteSupplierId(e.target.value)}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-          >
-            <option value="">Alege furnizorul</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.code} — {s.legalName}
-              </option>
-            ))}
-          </select>
-        </label>
-        {inviteSelected ? (
-          <SupplierInvitePanel supplierId={inviteSelected.id} allowManagerRole />
-        ) : (
-          <p className="text-xs text-zinc-500">Alege un furnizor ca să generezi o invitație.</p>
-        )}
-      </div>
     </div>
   );
 }

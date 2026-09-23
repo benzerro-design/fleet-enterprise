@@ -9,6 +9,8 @@ export type ClientIamSettings = {
   ticketListBulkSelect: boolean;
   /** Tab-uri Curente/Istoric pe PROGRAMĂRI. Admin L* are oricum. Șoferul niciodată. */
   appointmentProposalHistoryTabs: boolean;
+  /** L1 (client_admin) poate crea useri direct pe clientul lui. Default off. */
+  allowClientAdminCreateUsers: boolean;
 };
 
 export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
@@ -19,6 +21,7 @@ export const DEFAULT_CLIENT_IAM_SETTINGS: ClientIamSettings = {
   appointmentProposeFleetFirst: false,
   ticketListBulkSelect: false,
   appointmentProposalHistoryTabs: false,
+  allowClientAdminCreateUsers: false,
 };
 
 /** Normalizează răspunsul API (câmpuri lipsă = default). */
@@ -32,5 +35,6 @@ export function normalizeClientIamSettings(data: Partial<ClientIamSettings> | nu
     appointmentProposeFleetFirst: negotiate && data?.appointmentProposeFleetFirst === true,
     ticketListBulkSelect: data?.ticketListBulkSelect === true,
     appointmentProposalHistoryTabs: data?.appointmentProposalHistoryTabs === true,
+    allowClientAdminCreateUsers: data?.allowClientAdminCreateUsers === true,
   };
 }

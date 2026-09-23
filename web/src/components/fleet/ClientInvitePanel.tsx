@@ -97,13 +97,10 @@ export function ClientInvitePanel({ clientId, clientCode, hideHistory }: Props) 
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
-      <div>
-        <h3 className="text-sm font-semibold text-zinc-200">Invită în echipa clientului</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          Link 7 zile — utilizatorul își alege parola. Nu se trimite email — copiază linkul.
-        </p>
-      </div>
+    <div className="space-y-3">
+      <p className="text-xs text-zinc-500">
+        Link 7 zile — utilizatorul își alege parola. Nu se trimite email — copiază linkul.
+      </p>
       <div className="flex flex-wrap gap-2">
         <input
           type="text"
