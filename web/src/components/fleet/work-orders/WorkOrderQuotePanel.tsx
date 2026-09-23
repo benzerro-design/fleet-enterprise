@@ -299,6 +299,7 @@ export function WorkOrderQuotePanel({
   const [notes, setNotes] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
+  const [invoiceGross, setInvoiceGross] = useState("");
   const [invoiceAttachmentUrl, setInvoiceAttachmentUrl] = useState("");
   const [lineDecisions, setLineDecisions] = useState<Record<string, QuoteLineApprovalStatus | undefined>>({});
   const [pending, setPending] = useState(false);
@@ -523,6 +524,9 @@ export function WorkOrderQuotePanel({
             invoiceNumber: invoiceNumber.trim(),
             invoiceDate,
             invoiceAttachmentUrl: invoiceAttachmentUrl.trim() || null,
+            invoiceGrossCents: invoiceGross.trim()
+              ? Math.round(parseFloat(invoiceGross.replace(",", ".")) * 100)
+              : null,
           }),
         },
       );
@@ -1385,6 +1389,11 @@ export function WorkOrderQuotePanel({
                       </a>
                     </>
                   ) : null}
+                  {activeQuote.invoiceMismatch ? (
+                    <span className="mt-1 block text-amber-300">
+                      Suma facturii diferă de totalul devizului.
+                    </span>
+                  ) : null}
                 </p>
               ) : canWrite ? (
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -1394,6 +1403,15 @@ export function WorkOrderQuotePanel({
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value)}
                       className={OPS_INPUT_CLASS}
+                    />
+                  </div>
+                  <div>
+                    <label className={OPS_LABEL_CLASS}>Sumă factură (RON, brut)</label>
+                    <input
+                      value={invoiceGross}
+                      onChange={(e) => setInvoiceGross(e.target.value)}
+                      className={OPS_INPUT_CLASS}
+                      inputMode="decimal"
                     />
                   </div>
                   <div>

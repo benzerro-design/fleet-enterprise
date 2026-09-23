@@ -30,15 +30,19 @@ export async function buildQuotePdfBuffer(input: {
     const { quote, workOrderTitle, displayNumber, supplierName } = input;
     const money = displayQuoteMoneyTotals(quote);
 
-    doc.fontSize(18).text('Deviz service', { continued: false });
-    doc.moveDown(0.5);
-    doc.fontSize(10).fillColor('#444');
-    if (displayNumber) doc.text(`Comandă: ${displayNumber}`);
-    doc.text(`Lucrare: ${workOrderTitle}`);
+    doc.fontSize(18).font('Helvetica-Bold').text('DEVIZ DE REPARAȚIE', { continued: false });
+    doc.font('Helvetica').fontSize(10).fillColor('#333');
+    doc.moveDown(0.4);
+    doc.text('Fleet Enterprise');
+    doc.moveDown(0.6);
+    doc.fillColor('#000').fontSize(11);
+    if (displayNumber) doc.text(`Comandă ${displayNumber}`);
+    doc.text(workOrderTitle);
     if (supplierName) doc.text(`Furnizor: ${supplierName}`);
-    doc.text(`Deviz v${quote.version} · ${quote.status}`);
-    doc.text(`Data: ${new Date().toLocaleDateString('ro-RO')}`);
-    doc.moveDown();
+    doc.text(`Versiune ${quote.version}  ·  ${quote.status}  ·  ${new Date().toLocaleDateString('ro-RO')}`);
+    doc.moveDown(0.4);
+    doc.moveTo(48, doc.y).lineTo(547, doc.y).strokeColor('#cccccc').stroke();
+    doc.moveDown(0.6);
 
     doc.fillColor('#000').fontSize(11).text('Linii deviz', { underline: true });
     doc.moveDown(0.5);
@@ -57,11 +61,14 @@ export async function buildQuotePdfBuffer(input: {
     }
 
     doc.moveDown();
-    doc.fontSize(10);
+    doc.fontSize(10).fillColor('#000');
     doc.text(`Total net: ${formatMoney(money.totalNetCents, quote.currency)}`);
     doc.text(`TVA: ${formatMoney(money.totalVatCents, quote.currency)}`);
-    doc.fontSize(12).font('Helvetica-Bold').text(`Total: ${formatMoney(money.totalGrossCents, quote.currency)}`);
-    doc.font('Helvetica');
+    doc.moveDown(0.3);
+    doc.fontSize(13).font('Helvetica-Bold').text(`TOTAL DE PLATĂ: ${formatMoney(money.totalGrossCents, quote.currency)}`);
+    doc.font('Helvetica').fontSize(8).fillColor('#666');
+    doc.moveDown(0.8);
+    doc.text('Document generat din Fleet Enterprise. Nu ține loc de factură fiscală.');
 
     if (quote.notes?.trim()) {
       doc.moveDown();

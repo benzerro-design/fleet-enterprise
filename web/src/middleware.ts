@@ -33,6 +33,7 @@ const CLIENT_FLEET_PREFIXES = [
   "/fleet/scheduler",
   "/fleet/work-orders",
   "/fleet/suppliers",
+  "/fleet/audit",
   "/fleet/preferences",
 ];
 
@@ -45,6 +46,7 @@ const CLIENT_DRIVER_PREFIXES = [
   "/fleet/maintenance",
   "/fleet/costs",
   "/fleet/tickets",
+  "/fleet/audit",
   "/fleet/preferences",
 ];
 
@@ -61,7 +63,6 @@ const SHARED_FLEET_PREFIXES = ["/fleet/preferences"];
 
 const ADMIN_ONLY_PREFIXES = [
   "/fleet/members",
-  "/fleet/audit",
   "/fleet/user-strategy",
   "/fleet/setup",
   "/fleet/help",

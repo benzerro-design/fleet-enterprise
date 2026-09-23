@@ -214,7 +214,13 @@ export class WorkOrderQuotesController {
     @TenantId() tenantSlug: string,
     @Param('workOrderId') workOrderId: string,
     @Param('quoteId') quoteId: string,
-    @Body() body: { invoiceNumber: string; invoiceDate: string; invoiceAttachmentUrl?: string | null },
+    @Body()
+    body: {
+      invoiceNumber: string;
+      invoiceDate: string;
+      invoiceAttachmentUrl?: string | null;
+      invoiceGrossCents?: number | null;
+    },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {

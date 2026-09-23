@@ -49,11 +49,38 @@ export class AuditService {
     take: number;
     entityType?: string;
     action?: string;
+    q?: string;
+    from?: string;
+    to?: string;
+    actorUserId?: string;
   }) {
+    const fromRaw = params.from?.trim() ?? '';
+    const toRaw = params.to?.trim() ?? '';
+    const from = fromRaw ? new Date(fromRaw) : null;
+    const to = toRaw ? new Date(toRaw) : null;
+    if (to && /^\d{4}-\d{2}-\d{2}$/.test(toRaw) && !Number.isNaN(to.getTime())) {
+      to.setUTCHours(23, 59, 59, 999);
+    }
+    const q = params.q?.trim();
+    const createdAt: { gte?: Date; lte?: Date } = {};
+    if (from && !Number.isNaN(from.getTime())) createdAt.gte = from;
+    if (to && !Number.isNaN(to.getTime())) createdAt.lte = to;
     const where = {
       tenantId: params.tenantUuid,
       ...(params.entityType ? { entityType: params.entityType } : {}),
       ...(params.action?.trim() ? { action: params.action.trim() } : {}),
+      ...(params.actorUserId ? { actorUserId: params.actorUserId } : {}),
+      ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
+      ...(q
+        ? {
+            OR: [
+              { action: { contains: q, mode: 'insensitive' as const } },
+              { entityType: { contains: q, mode: 'insensitive' as const } },
+              { entityId: { contains: q, mode: 'insensitive' as const } },
+              { actor: { email: { contains: q, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
     };
 
     const [total, rows] = await Promise.all([

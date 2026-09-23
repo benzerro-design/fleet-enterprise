@@ -7,6 +7,8 @@ import { OpsModule } from '../ops/ops.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { WorkOrderMessagesController } from './work-order-messages.controller';
 import { WorkOrderMessagesService } from './work-order-messages.service';
+import { WorkOrderPhotosController } from './work-order-photos.controller';
+import { WorkOrderPhotosService } from './work-order-photos.service';
 import { WorkOrderQuotesController } from './work-order-quotes.controller';
 import { WorkOrderQuotesService } from './work-order-quotes.service';
 import { WorkOrderWarrantyController } from './work-order-warranty.controller';
@@ -21,12 +23,14 @@ import { WorkOrdersService } from './work-orders.service';
     WorkOrderQuotesController,
     WorkOrderWarrantyController,
     WorkOrderMessagesController,
+    WorkOrderPhotosController,
   ],
   providers: [
     WorkOrdersService,
     WorkOrderQuotesService,
     WorkOrderWarrantyService,
     WorkOrderMessagesService,
+    WorkOrderPhotosService,
   ],
   exports: [
     WorkOrdersService,

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { MemberRoleSelect } from "@/components/fleet/MemberRoleSelect";
+import { MemberAccountActions } from "@/components/fleet/MemberAccountActions";
 
 type Member = {
   userId: string;
@@ -104,6 +105,7 @@ export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
                 currentRole={m.role}
                 isCurrentUser={Boolean(currentUserEmail && m.email === currentUserEmail)}
               />
+              <MemberAccountActions userId={m.userId} />
             </li>
           ))}
         </ul>

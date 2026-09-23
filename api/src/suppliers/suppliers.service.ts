@@ -37,6 +37,8 @@ export type SupplierRecord = {
   notes: string | null;
   partsDiscountPercent: number;
   laborDiscountPercent: number;
+  integrationEnabled: boolean;
+  integrationKeyLast4: string | null;
   services: string[];
   workOrderCount: number;
   createdAt: string;
@@ -58,11 +60,27 @@ export type CreateSupplierInput = {
   services?: string[];
   partsDiscountPercent?: number | null;
   laborDiscountPercent?: number | null;
+  integrationEnabled?: boolean;
+  /** Scris o singură dată; se păstrează doar ultimele 4 caractere. */
+  integrationApiKey?: string | null;
   /** La creare: alocă imediat la acești clienți (UAT-011). */
   clientIds?: string[];
 };
 
 export type PatchSupplierInput = Partial<CreateSupplierInput>;
+
+function integrationTapAllowed(category: SupplierCategory): boolean {
+  return category === SupplierCategory.broker || category === SupplierCategory.insurer;
+}
+
+function integrationKeyLast4(raw: string | null | undefined): string | null {
+  const key = raw?.trim() ?? '';
+  if (!key) return null;
+  if (key.length < 8) {
+    throw new BadRequestException('Cheia API trebuie să aibă minim 8 caractere');
+  }
+  return key.slice(-4);
+}
 
 export type SupplierListParams = {
   page: number;
@@ -148,6 +166,8 @@ export class SuppliersService {
       notes: string | null;
       partsDiscountPercent?: number | null;
       laborDiscountPercent?: number | null;
+      integrationEnabled?: boolean;
+      integrationKeyLast4?: string | null;
       createdAt: Date;
       updatedAt: Date;
     },
@@ -169,6 +189,8 @@ export class SuppliersService {
       notes: row.notes,
       partsDiscountPercent: Number(row.partsDiscountPercent) || 0,
       laborDiscountPercent: Number(row.laborDiscountPercent) || 0,
+      integrationEnabled: row.integrationEnabled === true,
+      integrationKeyLast4: row.integrationKeyLast4 ?? null,
       services,
       workOrderCount,
       createdAt: row.createdAt.toISOString(),
@@ -391,6 +413,13 @@ export class SuppliersService {
           notes: dto.notes?.trim() || null,
           partsDiscountPercent: parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent'),
           laborDiscountPercent: parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent'),
+          ...(integrationTapAllowed(dto.category ?? SupplierCategory.other)
+            ? {
+                integrationEnabled:
+                  integrationKeyLast4(dto.integrationApiKey) != null || dto.integrationEnabled === true,
+                integrationKeyLast4: integrationKeyLast4(dto.integrationApiKey),
+              }
+            : { integrationEnabled: false, integrationKeyLast4: null }),
         },
       });
       if (dto.services?.length) {
@@ -455,6 +484,22 @@ export class SuppliersService {
     }
     if (dto.laborDiscountPercent !== undefined) {
       data.laborDiscountPercent = parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent');
+    }
+    const nextCategory = dto.category ?? before.category;
+    if (!integrationTapAllowed(nextCategory)) {
+      if (integrationTapAllowed(before.category)) {
+        data.integrationEnabled = false;
+        data.integrationKeyLast4 = null;
+      }
+    } else {
+      if (dto.integrationEnabled !== undefined) {
+        data.integrationEnabled = dto.integrationEnabled === true;
+      }
+      if (dto.integrationApiKey !== undefined) {
+        const last4 = integrationKeyLast4(dto.integrationApiKey);
+        data.integrationKeyLast4 = last4;
+        data.integrationEnabled = last4 != null;
+      }
     }
 
     const serviceCodes =

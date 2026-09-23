@@ -109,12 +109,91 @@ export class TenantService {
     });
   }
 
+  async setUserPassword(
+    tenantSlug: string,
+    targetUserId: string,
+    password: string,
+    actorUserId: string,
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const next = password?.trim() ?? '';
+    if (next.length < 10) {
+      throw new BadRequestException('Parola trebuie să aibă minim 10 caractere');
+    }
+    await this.assertUserInTenant(tenant.id, targetUserId);
+    const bcrypt = await import('bcrypt');
+    const passwordHash = await bcrypt.hash(next, 12);
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { passwordHash },
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'user.password_set',
+      entityType: 'user',
+      entityId: targetUserId,
+      meta: { byAdmin: true },
+    });
+  }
+
+  async setUserDisabled(
+    tenantSlug: string,
+    targetUserId: string,
+    disabled: boolean,
+    actorUserId: string,
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    if (targetUserId === actorUserId) {
+      throw new BadRequestException('Nu îți poți dezactiva propriul cont');
+    }
+    await this.assertUserInTenant(tenant.id, targetUserId);
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { disabledAt: disabled ? new Date() : null },
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: disabled ? 'user.disabled' : 'user.enabled',
+      entityType: 'user',
+      entityId: targetUserId,
+      meta: { disabled },
+    });
+  }
+
+  private async assertUserInTenant(tenantId: string, userId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        OR: [
+          { memberships: { some: { tenantId } } },
+          { clientMemberships: { some: { tenantId } } },
+          { supplierMemberships: { some: { tenantId } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found in tenant');
+  }
+
+  async membershipRole(tenantSlug: string, userId: string): Promise<MembershipRole | null> {
+    const row = await this.prisma.tenantMembership.findFirst({
+      where: { userId, tenant: { slug: tenantSlug } },
+      select: { role: true },
+    });
+    return row?.role ?? null;
+  }
+
   async listAuditLog(
     tenantSlug: string,
     page: number,
     pageSize: number,
     entityType?: string,
     action?: string,
+    opts?: { q?: string; from?: string; to?: string; onlyActorUserId?: string },
   ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
@@ -128,6 +207,10 @@ export class TenantService {
       take,
       entityType: entityType?.trim() || undefined,
       action: action?.trim() || undefined,
+      q: opts?.q,
+      from: opts?.from,
+      to: opts?.to,
+      actorUserId: opts?.onlyActorUserId,
     });
     return {
       ...r,

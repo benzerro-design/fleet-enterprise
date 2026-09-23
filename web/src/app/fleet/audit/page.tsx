@@ -41,6 +41,9 @@ type AuditSearch = {
   page?: string;
   entityType?: string;
   action?: string;
+  q?: string;
+  from?: string;
+  to?: string;
 };
 
 function buildAuditQuery(sp: AuditSearch): string {
@@ -50,6 +53,9 @@ function buildAuditQuery(sp: AuditSearch): string {
   q.set("pageSize", "50");
   if (sp.entityType?.trim()) q.set("entityType", sp.entityType.trim());
   if (sp.action?.trim()) q.set("action", sp.action.trim());
+  if (sp.q?.trim()) q.set("q", sp.q.trim());
+  if (sp.from?.trim()) q.set("from", sp.from.trim());
+  if (sp.to?.trim()) q.set("to", sp.to.trim());
   return q.toString();
 }
 
@@ -65,6 +71,9 @@ function auditPageHref(sp: AuditSearch, page: number): string {
   q.set("page", next.page ?? "1");
   if (next.entityType?.trim()) q.set("entityType", next.entityType.trim());
   if (next.action?.trim()) q.set("action", next.action.trim());
+  if (next.q?.trim()) q.set("q", next.q.trim());
+  if (next.from?.trim()) q.set("from", next.from.trim());
+  if (next.to?.trim()) q.set("to", next.to.trim());
   return `/fleet/audit?${q.toString()}`;
 }
 
@@ -87,8 +96,8 @@ export default async function FleetAuditPage({ searchParams }: Props) {
               <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Transparență</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Jurnal audit</h1>
               <p className="mt-2 text-sm text-zinc-400">
-                Filtrare după tip obiect și tip acțiune (server + paginare). Rezumat citibil; meta complet JSON,
-                expandabil.
+                Administratorul abonatului vede tot jurnalul. Ceilalți useri văd doar propriile acțiuni.
+                Căutare text și interval de date.
               </p>
             </div>
             <Link
@@ -136,6 +145,33 @@ export default async function FleetAuditPage({ searchParams }: Props) {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Căutare</label>
+              <input
+                name="q"
+                defaultValue={sp.q ?? ""}
+                placeholder="acțiune, obiect, email"
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">De la</label>
+              <input
+                type="date"
+                name="from"
+                defaultValue={sp.from ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-zinc-500">Până la</label>
+              <input
+                type="date"
+                name="to"
+                defaultValue={sp.to ?? ""}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
+              />
             </div>
             <button
               type="submit"

@@ -55,6 +55,9 @@ export class AuthService {
     if (!passwordOk) {
       throw new UnauthorizedException('Invalid credentials');
     }
+    if (user.disabledAt) {
+      throw new UnauthorizedException('Cont dezactivat. Contactează administratorul abonatului.');
+    }
 
     const memberships = user.memberships;
     if (memberships.length === 0) {

@@ -72,6 +72,8 @@ export type WorkOrderQuoteRecord = {
   invoicedAt: string | null;
   costInvoiceNumber: string | null;
   costInvoiceDate: string | null;
+  invoiceGrossCents: number | null;
+  invoiceMismatch: boolean;
   createdAt: string;
   updatedAt: string;
   lines: QuoteLineRecord[];
@@ -247,6 +249,8 @@ export function toQuoteRecord(quote: {
   invoiceNumber?: string | null;
   invoiceDate?: Date | null;
   invoiceAttachmentUrl?: string | null;
+  invoiceGrossCents?: number | null;
+  invoiceMismatch?: boolean;
   createdAt: Date;
   updatedAt: Date;
   costEntry?: {
@@ -297,6 +301,8 @@ export function toQuoteRecord(quote: {
     invoicedAt: quote.invoicedAt?.toISOString() ?? null,
     costInvoiceNumber: quote.invoiceNumber ?? quote.costEntry?.invoiceNumber ?? null,
     costInvoiceDate: quote.invoiceDate?.toISOString() ?? quote.costEntry?.invoiceDate?.toISOString() ?? null,
+    invoiceGrossCents: quote.invoiceGrossCents ?? null,
+    invoiceMismatch: quote.invoiceMismatch === true,
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
     lines: quote.lines.map(toQuoteLineRecord),

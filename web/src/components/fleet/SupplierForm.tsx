@@ -46,6 +46,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
     initial?.laborDiscountPercent != null ? String(initial.laborDiscountPercent) : "0",
   );
   const [services, setServices] = useState<string[]>(initial?.services ?? []);
+  const [integrationApiKey, setIntegrationApiKey] = useState("");
   const [clientIds, setClientIds] = useState<string[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [pending, setPending] = useState(false);
@@ -92,6 +93,9 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
       laborDiscountPercent: parseFloat(laborDiscountPercent.replace(",", ".")) || 0,
       services,
       ...(mode === "create" && clientIds.length ? { clientIds } : {}),
+      ...((category === "broker" || category === "insurer") && integrationApiKey.trim()
+        ? { integrationApiKey: integrationApiKey.trim(), integrationEnabled: true }
+        : {}),
     };
     try {
       const url =
@@ -202,6 +206,25 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
           </OpsFormField>
         </div>
       </OpsFormSection>
+      {category === "broker" || category === "insurer" ? (
+        <OpsFormSection number={4} title="Cheie API">
+          <p className="mb-3 text-xs text-zinc-500">
+            Pentru broker sau asigurător. Se păstrează doar ultimele 4 caractere, nu secretul complet.
+            {initial?.integrationKeyLast4
+              ? ` Cheie activă: ••••${initial.integrationKeyLast4}.`
+              : " Nicio cheie salvată."}
+          </p>
+          <OpsFormField label="Cheie nouă" hint="minim 8 caractere; lasă gol ca să păstrezi cheia existentă">
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={integrationApiKey}
+              onChange={(e) => setIntegrationApiKey(e.target.value)}
+              className={OPS_INPUT_CLASS}
+            />
+          </OpsFormField>
+        </OpsFormSection>
+      ) : null}
       <OpsFormSection number={4} title="Servicii prestate">
         {mode === "edit" && initial ? (
           <SupplierServicesEditor

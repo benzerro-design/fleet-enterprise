@@ -1332,7 +1332,12 @@ export class WorkOrderQuotesService {
     tenantSlug: string,
     workOrderId: string,
     quoteId: string,
-    dto: { invoiceNumber: string; invoiceDate: string; invoiceAttachmentUrl?: string | null },
+    dto: {
+      invoiceNumber: string;
+      invoiceDate: string;
+      invoiceAttachmentUrl?: string | null;
+      invoiceGrossCents?: number | null;
+    },
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<WorkOrderQuoteRecord> {
@@ -1361,6 +1366,16 @@ export class WorkOrderQuotesService {
       throw new BadRequestException('Invoice already recorded for this quote');
     }
 
+    const approvedGross =
+      (existing.approvedNetCents ?? existing.totalNetCents) +
+      (existing.approvedVatCents ?? existing.totalVatCents);
+    const invoiceGrossCents =
+      typeof dto.invoiceGrossCents === 'number' && Number.isInteger(dto.invoiceGrossCents)
+        ? dto.invoiceGrossCents
+        : null;
+    const invoiceMismatch =
+      invoiceGrossCents != null && invoiceGrossCents !== approvedGross;
+
     const quote = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.workOrderQuote.update({
         where: { id: quoteId },
@@ -1368,6 +1383,8 @@ export class WorkOrderQuotesService {
           invoiceNumber,
           invoiceDate,
           invoiceAttachmentUrl: dto.invoiceAttachmentUrl?.trim() || null,
+          invoiceGrossCents,
+          invoiceMismatch,
           invoicedAt: new Date(),
         },
         include: this.quoteInclude(),
@@ -1405,7 +1422,7 @@ export class WorkOrderQuotesService {
       action: 'work_order_quote.record_invoice',
       entityType: 'work_order_quote',
       entityId: quoteId,
-      meta: { workOrderId, invoiceNumber },
+      meta: { workOrderId, invoiceNumber, invoiceMismatch, invoiceGrossCents },
     });
 
     void this.partnerNotify.notifySupplierContact(

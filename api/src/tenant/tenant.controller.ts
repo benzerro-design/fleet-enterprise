@@ -45,18 +45,58 @@ export class TenantController {
     return { ok: true };
   }
 
+  @Post('members/:userId/password')
+  @Roles(MembershipRole.tenant_admin)
+  async setPassword(
+    @TenantId() tenantSlug: string,
+    @Param('userId') userId: string,
+    @Body() body: { password?: string },
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    await this.tenant.setUserPassword(tenantSlug, userId, body.password ?? '', actorUserId);
+    return { ok: true };
+  }
+
+  @Post('members/:userId/access')
+  @Roles(MembershipRole.tenant_admin)
+  async setAccess(
+    @TenantId() tenantSlug: string,
+    @Param('userId') userId: string,
+    @Body() body: { disabled?: boolean },
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    await this.tenant.setUserDisabled(tenantSlug, userId, body.disabled === true, actorUserId);
+    return { ok: true };
+  }
+
   @Get('audit-log')
-  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer)
-  auditLog(
+  @Roles(...FLEET_READ_ROLES)
+  async auditLog(
     @TenantId() tenantSlug: string,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
     @Query('entityType') entityType?: string,
     @Query('action') action?: string,
+    @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @CurrentUserId() actorUserId?: string,
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.tenant.listAuditLog(tenantSlug, page, pageSize, entityType, action);
+    const membership = actorUserId
+      ? await this.tenant.membershipRole(tenantSlug, actorUserId)
+      : null;
+    const onlyActorUserId =
+      membership === MembershipRole.tenant_admin ? undefined : actorUserId;
+    return this.tenant.listAuditLog(tenantSlug, page, pageSize, entityType, action, {
+      q,
+      from,
+      to,
+      onlyActorUserId,
+    });
   }
 
   @Get('iam-strategy')

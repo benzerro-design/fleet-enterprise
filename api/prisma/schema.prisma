@@ -60,6 +60,7 @@ model Tenant {
   workOrderWarranties    WorkOrderWarranty[]
   workOrderWarrantyLines WorkOrderWarrantyLine[]
   workOrderMessages      WorkOrderMessage[]
+  workOrderPhotos        WorkOrderPhoto[]
   mobilityAssignments    MobilityAssignment[]
   roadsideInterventions  RoadsideIntervention[]
   insurers               Insurer[]
@@ -293,6 +294,7 @@ model User {
   email            String             @unique
   passwordHash     String
   displayName      String?
+  disabledAt       DateTime?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   auditLogsAsActor AuditLog[]         @relation("AuditActor")
@@ -1174,6 +1176,9 @@ model Supplier {
   partsDiscountPercent Float    @default(0)
   /// Default pe linii noi de tip manoperă (0–100). UAT-034.
   laborDiscountPercent Float    @default(0)
+  /// Robinet integrare (broker / asigurător). Cheia completă nu se păstrează — doar ultimele 4 caractere.
+  integrationEnabled Boolean         @default(false)
+  integrationKeyLast4 String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1556,12 +1561,41 @@ model MaintenanceWorkOrder {
   mobilityAssignments MobilityAssignment[]
   roadsideInterventions RoadsideIntervention[]
   messages      WorkOrderMessage[]
+  photos        WorkOrderPhoto[]
 
   @@unique([tenantId, displayNumber])
   @@index([tenantId])
   @@index([serviceCaseId])
   @@index([vehicleId])
   @@index([supplierId])
+}
+
+enum WorkOrderPhotoKind {
+  condition
+  defect
+}
+
+enum WorkOrderPhotoPhase {
+  in
+  check
+  out
+  defect
+}
+
+model WorkOrderPhoto {
+  id              String              @id @default(cuid())
+  tenantId        String
+  workOrderId     String
+  kind            WorkOrderPhotoKind
+  phase           WorkOrderPhotoPhase
+  url             String
+  caption         String?
+  createdByUserId String?
+  createdAt       DateTime            @default(now())
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workOrder       MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId, kind])
 }
 
 enum ServiceAppointmentStatus {
@@ -1686,6 +1720,8 @@ model WorkOrderQuote {
   invoiceNumber    String?
   invoiceDate      DateTime?
   invoiceAttachmentUrl String?
+  invoiceGrossCents Int?
+  invoiceMismatch   Boolean  @default(false)
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)

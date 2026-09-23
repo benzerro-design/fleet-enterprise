@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
 import { WorkOrderMessageThread } from "@/components/fleet/work-orders/WorkOrderMessageThread";
+import { WorkOrderPhotoSection } from "@/components/fleet/work-orders/WorkOrderPhotoSection";
 import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
 import { schedulerHref } from "@/lib/scheduler-deep-link";
 import { formatDateRo } from "@/lib/datetime-local";
@@ -1153,6 +1154,8 @@ export function WorkOrderSheetShell({
           ) : null}
         </div>
       ) : null}
+
+      <WorkOrderPhotoSection workOrderId={wo.id} canWrite={canWrite} />
 
       <WorkOrderQuotePanel
         workOrderId={wo.id}

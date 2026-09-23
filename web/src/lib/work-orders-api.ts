@@ -301,6 +301,8 @@ export type WorkOrderQuoteRecord = {
   costInvoiceNumber: string | null;
   costInvoiceDate: string | null;
   invoiceAttachmentUrl: string | null;
+  invoiceGrossCents: number | null;
+  invoiceMismatch: boolean;
   createdAt: string;
   updatedAt: string;
   lines: QuoteLineRecord[];

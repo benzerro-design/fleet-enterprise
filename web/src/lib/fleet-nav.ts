@@ -386,10 +386,20 @@ function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup 
       if (items.length === 0) return null;
       return { ...group, items };
     }
+    if (group.id === "admin") {
+      const items = group.items.filter((e) => e.kind === "link" && e.href === "/fleet/audit");
+      if (items.length === 0) return null;
+      return { ...group, items };
+    }
     return null;
   }
 
-  if (ctx.clientFleetPortal && (group.id === "admin" || group.id === "setup")) return null;
+  if (ctx.clientFleetPortal && group.id === "setup") return null;
+  if (ctx.clientFleetPortal && group.id === "admin") {
+    const items = group.items.filter((e) => e.kind === "link" && e.href === "/fleet/audit");
+    if (items.length === 0) return null;
+    return { ...group, items };
+  }
 
   const items = group.items.map((e) => filterEntry(e, ctx)).filter((e): e is FleetNavEntry => e !== null);
   if (items.length === 0) return null;

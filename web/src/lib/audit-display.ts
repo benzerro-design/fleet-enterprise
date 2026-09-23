@@ -9,6 +9,9 @@ const ACTION_LABELS: Record<string, string> = {
   document_update: "Document actualizat",
   document_delete: "Document șters",
   membership_role_update: "Actualizare rol utilizator",
+  "user.password_set": "Parolă înlocuită de administrator",
+  "user.disabled": "Cont dezactivat",
+  "user.enabled": "Cont reactivat",
 };
 
 /** Câmpuri PATCH vehicul → denumiri citibile (aliniate cu formularul flotă). */
@@ -79,6 +82,8 @@ export function auditEntityLabel(entityType: string): string {
       return "Vehicul";
     case "membership":
       return "Membru abonat";
+    case "user":
+      return "Utilizator";
     case "trip":
       return "Cursă";
     case "maintenance_entry":
@@ -97,6 +102,9 @@ export const AUDIT_ACTION_VALUES = [
   "delete",
   "document_add",
   "membership_role_update",
+  "user.password_set",
+  "user.disabled",
+  "user.enabled",
 ] as const;
 
 /** Valori `entityType` cunoscute. */
@@ -106,6 +114,7 @@ export const AUDIT_ENTITY_TYPES = [
   "maintenance_entry",
   "cost_entry",
   "membership",
+  "user",
 ] as const;
 
 /** Nr. înmatriculare salvat în `meta` pentru acțiuni pe vehicul (dacă lipsește — date vechi). */

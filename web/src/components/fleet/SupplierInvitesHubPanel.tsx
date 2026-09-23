@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SupplierInvitePanel } from "@/components/fleet/suppliers/SupplierInvitePanel";
+import { MemberAccountActions } from "@/components/fleet/MemberAccountActions";
 import { tenantBrowserBase } from "@/lib/fleet-api";
 
 export type SupplierInviteOption = {
@@ -126,14 +127,17 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
                     din {new Date(m.createdAt).toLocaleDateString("ro-RO")}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => void removeMembership(m.id, m.email)}
-                  className="rounded-lg border border-red-900/60 px-3 py-1.5 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-40"
-                >
-                  Elimină acces
-                </button>
+                <div className="flex flex-col items-stretch gap-2">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void removeMembership(m.id, m.email)}
+                    className="rounded-lg border border-red-900/60 px-3 py-1.5 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-40"
+                  >
+                    Elimină acces
+                  </button>
+                  <MemberAccountActions userId={m.userId} />
+                </div>
               </li>
             ))}
           </ul>

@@ -42,6 +42,8 @@ export type SupplierRecord = {
   partsDiscountPercent: number;
   laborDiscountPercent: number;
   services: string[];
+  integrationEnabled: boolean;
+  integrationKeyLast4: string | null;
   workOrderCount: number;
   createdAt: string;
   updatedAt: string;
