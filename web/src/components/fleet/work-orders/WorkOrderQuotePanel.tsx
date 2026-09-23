@@ -257,6 +257,7 @@ type Props = {
   isPartner?: boolean;
   sheetLayout?: boolean;
   estimatedRepairAt?: string | null;
+  /** @deprecated Nu mai bloca tot panelul pe summary — estimarea e pe WO, draft-urile pe versiune. */
   quoteLocked?: boolean;
   workOrderStatus?: string;
   outServiceAt?: string | null;
@@ -283,7 +284,7 @@ export function WorkOrderQuotePanel({
   canPostCost = true,
   sheetLayout = false,
   estimatedRepairAt = null,
-  quoteLocked = false,
+  quoteLocked: _quoteLocked = false,
   workOrderStatus = "",
   outServiceAt = null,
   requirePartCode = true,
@@ -313,6 +314,7 @@ export function WorkOrderQuotePanel({
   const [lineDecisions, setLineDecisions] = useState<Record<string, QuoteLineApprovalStatus | undefined>>({});
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [launchOpen, setLaunchOpen] = useState(false);
   const [launchExpectedOn, setLaunchExpectedOn] = useState("");
@@ -330,7 +332,6 @@ export function WorkOrderQuotePanel({
   const hasEstimatedRepair = Boolean(estimatedRepairAt || toIsoFromDateInput(estimatedDate));
 
   const saveEstimatedRepair = useCallback(async (): Promise<boolean> => {
-    if (quoteLocked) return true;
     const iso = toIsoFromDateInput(estimatedDate);
     if (!iso) {
       setError("Completați data estimativă de finalizare reparație.");
@@ -357,9 +358,9 @@ export function WorkOrderQuotePanel({
     } finally {
       setPending(false);
     }
-  }, [estimatedDate, estimatedRepairAt, quoteLocked, workOrderId, router]);
+  }, [estimatedDate, estimatedRepairAt, workOrderId, router]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (preferId?: string | null) => {
     try {
       const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/quotes`);
       if (!res.ok) {
@@ -368,10 +369,13 @@ export function WorkOrderQuotePanel({
       }
       const data = (await res.json()) as WorkOrderQuoteRecord[];
       setQuotes(data);
+      const preferred = preferId ? data.find((q) => q.id === preferId) : null;
       const draft = data.find((q) => q.status === "draft");
-      const selected = draft ?? data[0] ?? null;
+      const selected = preferred ?? draft ?? data[0] ?? null;
       setActiveId(selected?.id ?? null);
-      setEditingDraftId((current) => (current && data.some((q) => q.id === current && q.status === "draft") ? current : null));
+      setEditingDraftId((current) =>
+        current && data.some((q) => q.id === current && q.status === "draft") ? current : null,
+      );
       setLineDecisions({});
       if (selected?.status === "draft") {
         setLines(linesFromQuote(selected));
@@ -601,12 +605,14 @@ export function WorkOrderQuotePanel({
     approveBody?: { lineDecisions?: { lineId: string; status: "approved" | "rejected" }[] },
   ) {
     if (!activeQuote) return;
+    const submittedId = activeQuote.id;
     if (action === "submit") {
-      const ok = await saveEstimatedRepair();
-      if (!ok) return;
+      const okEst = await saveEstimatedRepair();
+      if (!okEst) return;
     }
     setPending(true);
     setError(null);
+    setOk(null);
     try {
       let body: string | undefined;
       if (action === "reject") {
@@ -616,7 +622,7 @@ export function WorkOrderQuotePanel({
         body = JSON.stringify(approveBody);
       }
       const res = await fetch(
-        `${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/${action}`,
+        `${workOrdersBrowserBase}/${workOrderId}/quotes/${submittedId}/${action}`,
         {
           method: "POST",
           headers: fleetJsonHeaders(),
@@ -634,8 +640,18 @@ export function WorkOrderQuotePanel({
         setError(msg);
         return;
       }
-      await load();
+      setEditingDraftId(null);
+      await load(submittedId);
+      setQuotePane("lines");
+      if (action === "submit") {
+        setOk("Deviz trimis spre aprobare. Managerul / adminul poate aproba pe tichet sau pe acest WO.");
+      } else if (action === "approve") {
+        setOk("Deviz aprobat.");
+      } else {
+        setOk("Deviz respins.");
+      }
       setLineDecisions({});
+      router.refresh();
     } finally {
       setPending(false);
     }
@@ -1147,6 +1163,7 @@ export function WorkOrderQuotePanel({
         ))}
       </div>
 
+      {ok ? <p className="mt-3 text-sm text-emerald-400">{ok}</p> : null}
       {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
 
       {priceVerify ? (
@@ -1444,7 +1461,7 @@ export function WorkOrderQuotePanel({
           {activeQuote.rejectionReason ? (
             <p className="text-sm text-red-300">Motiv respingere: {activeQuote.rejectionReason}</p>
           ) : null}
-          {canWrite && activeQuote.status === "draft" && !quoteLocked ? (
+          {canWrite && activeQuote.status === "draft" ? (
             <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
               <label className={OPS_LABEL_CLASS}>
                 Estimare finalizare reparație <span className="text-amber-300">*</span>
@@ -1987,7 +2004,7 @@ export function WorkOrderQuotePanel({
               className={OPS_INPUT_CLASS}
             />
           </div>
-          {canWrite && draftQuote && !quoteLocked ? (
+          {canWrite && draftQuote ? (
             <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
               <label className={OPS_LABEL_CLASS}>
                 Estimare finalizare reparație <span className="text-amber-300">*</span>

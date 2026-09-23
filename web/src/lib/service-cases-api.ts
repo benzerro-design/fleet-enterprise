@@ -34,6 +34,7 @@ export type DamageInsurerPipelineStatus =
   | "notified"
   | "inspection_note"
   | "reinspection_requested"
+  | "air"
   | "quote_ready"
   | "payment_accepted";
 
@@ -257,6 +258,7 @@ export const DAMAGE_PIPELINE_STATUSES: {
   { value: "notified", label: "3. Avizat" },
   { value: "inspection_note", label: "4. Notă constatare" },
   { value: "reinspection_requested", label: "4b. Reconstatare" },
+  { value: "air", label: "4c. AIR — acord intrare în reparație" },
   { value: "quote_ready", label: "5. Deviz gata" },
   { value: "payment_accepted", label: "6. Accept plată" },
 ];
@@ -331,9 +333,25 @@ export function damageClaimStatusLabel(status: DamageClaimStatus | string | null
 
 export function damagePipelineStatusLabel(
   status: DamageInsurerPipelineStatus | string | null | undefined,
+  steps?: Array<{ code: string; label: string; enabled?: boolean }> | null,
 ): string {
   if (!status) return "—";
+  const fromSteps = steps?.find((s) => s.code === status)?.label?.trim();
+  if (fromSteps) return fromSteps;
   return DAMAGE_PIPELINE_STATUSES.find((s) => s.value === status)?.label ?? status;
+}
+
+/** Pași vizibili pe dosar: din Setup WO (enabled) sau catalog default. */
+export function resolveDamagePipelineStatuses(
+  steps?: Array<{ code: string; label: string; enabled: boolean }> | null,
+): { value: DamageInsurerPipelineStatus; label: string }[] {
+  if (!steps?.length) return DAMAGE_PIPELINE_STATUSES;
+  const byCode = new Map(steps.map((s) => [s.code, s]));
+  return DAMAGE_PIPELINE_STATUSES.flatMap((s) => {
+    const ov = byCode.get(s.value);
+    if (ov && ov.enabled === false) return [];
+    return [{ value: s.value, label: ov?.label?.trim() || s.label }];
+  });
 }
 
 export function vehicleMovableLabel(state: VehicleMovableState | string | null | undefined): string {

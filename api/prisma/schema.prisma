@@ -1890,6 +1890,8 @@ enum DamageInsurerPipelineStatus {
   notified
   inspection_note
   reinspection_requested
+  /// AIR — acord intrare în reparație (asigurător).
+  air
   quote_ready
   payment_accepted
 }

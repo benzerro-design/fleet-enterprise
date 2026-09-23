@@ -7,7 +7,6 @@ import {
   DAMAGE_KIND_TO_FLEET_DOC,
   DAMAGE_PHOTO_KINDS,
   DAMAGE_PHOTO_KINDS_INITIAL,
-  DAMAGE_PIPELINE_STATUSES,
   damageClaimStatusLabel,
   damagePayerLabel,
   damagePipelineStatusLabel,
@@ -18,6 +17,7 @@ import {
   isReinspectionRequest,
   mergeDamageDocuments,
   quoteStatusLabel,
+  resolveDamagePipelineStatuses,
   serviceCasesBrowserBase,
   vehicleMovableLabel,
   type DamageClaimStatus,
@@ -44,6 +44,12 @@ import Link from "next/link";
 import { documentsBrowserBase, fleetBrowserBase } from "@/lib/fleet-api";
 import { insurersBrowserBase, type InsurerRecord } from "@/lib/insurers-api";
 import { workOrdersBrowserBase } from "@/lib/work-orders-api";
+import {
+  DEFAULT_DAMAGE_PIPELINE_STEPS,
+  normalizeDamagePipelineSteps,
+  workOrderSettingsBrowserBase,
+  type DamagePipelineStepSetting,
+} from "@/lib/work-order-settings";
 
 type Props = {
   serviceCase: ServiceCaseRecord | null | undefined;
@@ -148,10 +154,32 @@ export function DamageClaimPanel({
   const [pending, setPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [importingKind, setImportingKind] = useState<string | null>(null);
+  const [pipelineSteps, setPipelineSteps] = useState<DamagePipelineStepSetting[]>(
+    DEFAULT_DAMAGE_PIPELINE_STEPS,
+  );
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [photoKind, setPhotoKind] = useState<DamagePhotoKind>("damage_detail");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(workOrderSettingsBrowserBase, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { damagePipelineSteps?: unknown };
+        if (!cancelled) {
+          setPipelineSteps(normalizeDamagePipelineSteps(data.damagePipelineSteps));
+        }
+      } catch {
+        /* keep defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!serviceCase || serviceCase.workflowType !== "damage") return;
@@ -327,6 +355,36 @@ export function DamageClaimPanel({
   const hasWo = fromWorkOrder || (serviceCase?.workOrders?.length ?? 0) > 0;
   const isClientPayer = payer === "client";
   const isInsurerPayer = payer === "insurer" || (!payer && !isClientPayer);
+
+  const visiblePipelineStatuses = useMemo(
+    () => resolveDamagePipelineStatuses(pipelineSteps),
+    [pipelineSteps],
+  );
+
+  const statusSummaryLine = useMemo(() => {
+    const bits = [
+      `Stare: ${vehicleMovableLabel(movable || serviceCase?.vehicleMovable)}`,
+      `plătitor ${damagePayerLabel(payer || serviceCase?.damagePayerType)}`,
+    ];
+    if (!isClientPayer) {
+      bits.push(
+        `pipeline ${damagePipelineStatusLabel(
+          pipeline || serviceCase?.damageInsurerPipelineStatus,
+          pipelineSteps,
+        )}`,
+      );
+    }
+    return bits.join(" · ");
+  }, [
+    movable,
+    serviceCase?.vehicleMovable,
+    serviceCase?.damagePayerType,
+    serviceCase?.damageInsurerPipelineStatus,
+    payer,
+    pipeline,
+    isClientPayer,
+    pipelineSteps,
+  ]);
 
   useEffect(() => {
     const woId = primaryWo?.id;
@@ -728,6 +786,9 @@ export function DamageClaimPanel({
           Deplasabilitate → plătitor → (dacă asigurător) checklist CASCO/RCA + pipeline până la Accept
           plată. Secțiunile se pot bloca după completare. Devizul de reparație rămâne pe WO.
         </p>
+        <p className="mt-2 rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-medium text-zinc-200">
+          {statusSummaryLine}
+        </p>
       </div>
 
       {movable === "immovable" ? (
@@ -759,6 +820,78 @@ export function DamageClaimPanel({
           Recepția vehiculului (In service) nu e blocată de pipeline.
         </div>
       )}
+
+      {/* Pipeline — sus pe dosar (Setup WO → Daună configurează pașii, inclusiv AIR) */}
+      {isInsurerPayer && !isClientPayer ? (
+        <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Pipeline asigurător
+            </h4>
+            <div className="flex items-center gap-2">
+              <SectionLockBadge locks={locks} section="pipeline" />
+              {canWrite ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void lockSection("pipeline", !sectionLocked("pipeline"))}
+                  className="text-[11px] text-zinc-400 underline hover:text-zinc-200 disabled:opacity-50"
+                >
+                  {sectionLocked("pipeline") ? "Deblochează" : "Blochează"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <ol className="flex flex-wrap gap-1.5">
+            {visiblePipelineStatuses.map((s) => {
+              const active = (pipeline || serviceCase.damageInsurerPipelineStatus) === s.value;
+              return (
+                <li
+                  key={s.value}
+                  className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                    active
+                      ? "border-emerald-500/60 bg-emerald-950/40 text-emerald-100"
+                      : "border-zinc-700 text-zinc-500"
+                  }`}
+                >
+                  {s.label}
+                </li>
+              );
+            })}
+          </ol>
+          <label className="block max-w-sm">
+            <span className={OPS_LABEL_CLASS}>Pas curent</span>
+            <select
+              className={OPS_INPUT_CLASS}
+              disabled={disabled || sectionLocked("pipeline")}
+              value={pipeline}
+              onChange={(e) => setPipeline(e.target.value as DamageInsurerPipelineStatus | "")}
+            >
+              <option value="">—</option>
+              {visiblePipelineStatuses.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {canWrite && !sectionLocked("pipeline") ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={pending || !pipeline}
+                onClick={() => void savePipeline()}
+                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Actualizează pipeline
+              </button>
+            </div>
+          ) : null}
+          <p className="text-[11px] text-zinc-500">
+            Accept plată se înregistrează prin PDF-ul din secțiunea de pe dosar (nu din dropdown).
+          </p>
+        </section>
+      ) : null}
 
       {/* Claim info */}
       <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
@@ -2599,86 +2732,6 @@ export function DamageClaimPanel({
           ) : null}
         </section>
       ) : null}
-
-      {/* Pipeline */}
-      {isInsurerPayer && !isClientPayer ? (
-        <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/30 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              Pipeline asigurător
-            </h4>
-            <div className="flex items-center gap-2">
-              <SectionLockBadge locks={locks} section="pipeline" />
-              {canWrite ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => void lockSection("pipeline", !sectionLocked("pipeline"))}
-                  className="text-[11px] text-zinc-400 underline hover:text-zinc-200 disabled:opacity-50"
-                >
-                  {sectionLocked("pipeline") ? "Deblochează" : "Blochează"}
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <ol className="flex flex-wrap gap-1.5">
-            {DAMAGE_PIPELINE_STATUSES.map((s) => {
-              const active = (pipeline || serviceCase.damageInsurerPipelineStatus) === s.value;
-              return (
-                <li
-                  key={s.value}
-                  className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                    active
-                      ? "border-emerald-500/60 bg-emerald-950/40 text-emerald-100"
-                      : "border-zinc-700 text-zinc-500"
-                  }`}
-                >
-                  {s.label}
-                </li>
-              );
-            })}
-          </ol>
-          <label className="block max-w-sm">
-            <span className={OPS_LABEL_CLASS}>Pas curent</span>
-            <select
-              className={OPS_INPUT_CLASS}
-              disabled={disabled || sectionLocked("pipeline")}
-              value={pipeline}
-              onChange={(e) => setPipeline(e.target.value as DamageInsurerPipelineStatus | "")}
-            >
-              <option value="">—</option>
-              {DAMAGE_PIPELINE_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {canWrite && !sectionLocked("pipeline") ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={pending || !pipeline}
-                onClick={() => void savePipeline()}
-                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                Actualizează pipeline
-              </button>
-            </div>
-          ) : null}
-          <p className="text-[11px] text-zinc-500">
-            Accept plată se înregistrează prin PDF-ul din rubrica de mai sus (nu din pipeline).
-          </p>
-        </section>
-      ) : null}
-
-      <p className="text-[11px] text-zinc-600">
-        Stare: {vehicleMovableLabel(movable || serviceCase.vehicleMovable)} · plătitor{" "}
-        {damagePayerLabel(payer || serviceCase.damagePayerType)}
-        {!isClientPayer
-          ? ` · pipeline ${damagePipelineStatusLabel(pipeline || serviceCase.damageInsurerPipelineStatus)}`
-          : ""}
-      </p>
 
       {error ? <p className="text-sm text-rose-400">{error}</p> : null}
       {ok ? <p className="text-sm text-emerald-400">{ok}</p> : null}

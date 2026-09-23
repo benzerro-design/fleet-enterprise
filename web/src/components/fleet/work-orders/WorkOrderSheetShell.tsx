@@ -1284,9 +1284,7 @@ export function WorkOrderSheetShell({
         isPartner={isPartner}
         sheetLayout
         estimatedRepairAt={wo.estimatedRepairAt}
-        quoteLocked={
-          wo.quoteSummary.status === "submitted" || wo.quoteSummary.status === "approved"
-        }
+        quoteLocked={false}
         workOrderStatus={wo.status}
         outServiceAt={wo.outServiceAt}
         requirePartCode={workOrderSettings.requirePartCode}

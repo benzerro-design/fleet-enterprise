@@ -443,6 +443,7 @@ const PIPELINE_ORDER: DamageInsurerPipelineStatus[] = [
   DamageInsurerPipelineStatus.notified,
   DamageInsurerPipelineStatus.inspection_note,
   DamageInsurerPipelineStatus.reinspection_requested,
+  DamageInsurerPipelineStatus.air,
   DamageInsurerPipelineStatus.quote_ready,
   DamageInsurerPipelineStatus.payment_accepted,
 ];
@@ -461,6 +462,7 @@ const PIPELINE_STATUSES = new Set([
   'notified',
   'inspection_note',
   'reinspection_requested',
+  'air',
   'quote_ready',
   'payment_accepted',
 ]);

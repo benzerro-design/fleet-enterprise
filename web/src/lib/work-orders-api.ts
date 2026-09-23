@@ -140,6 +140,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
     | "notified"
     | "inspection_note"
     | "reinspection_requested"
+    | "air"
     | "quote_ready"
     | "payment_accepted"
     | null;

@@ -35,8 +35,9 @@ const DAMAGE_PIPELINE_RANK: Record<string, number> = {
   notified: 2,
   inspection_note: 3,
   reinspection_requested: 3,
-  quote_ready: 4,
-  payment_accepted: 5,
+  air: 4,
+  quote_ready: 5,
+  payment_accepted: 6,
 };
 
 function damagePipelineRank(status: string | null | undefined): number {
@@ -55,7 +56,7 @@ function buildDamageWorkOrderMilestones(
   const avizareAt = mail.find((m) => m.kind === "avizare" && m.status !== "failed")?.at ?? null;
   const quoteMailAt = mail.find((m) => (m.kind === "quote" || !m.kind) && m.status !== "failed")
     ?.at;
-  const quoteSubmitted = qs.status === "submitted" || qs.status === "approved" || rank >= 4;
+  const quoteSubmitted = qs.status === "submitted" || qs.status === "approved" || rank >= 5;
   const quoteApproved =
     qs.status === "approved" ||
     pipeline === "payment_accepted" ||

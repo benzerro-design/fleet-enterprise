@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import {
+  DEFAULT_DAMAGE_PIPELINE_STEPS,
+  normalizeDamagePipelineSteps,
+  type DamagePipelineStepSetting,
   type WorkOrderSettings,
   workOrderSettingsBrowserBase,
 } from "@/lib/work-order-settings";
@@ -23,6 +26,9 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [damageStepsDraft, setDamageStepsDraft] = useState<DamagePipelineStepSetting[]>(() =>
+    normalizeDamagePipelineSteps(initial.damagePipelineSteps),
+  );
 
   async function patch(partial: Partial<WorkOrderSettings>) {
     setPending(true);
@@ -40,6 +46,9 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
       }
       const next = (await res.json()) as WorkOrderSettings;
       setSettings(next);
+      if (partial.damagePipelineSteps) {
+        setDamageStepsDraft(normalizeDamagePipelineSteps(next.damagePipelineSteps));
+      }
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
@@ -311,6 +320,74 @@ export function WorkOrderSettingsEditor({ initial }: Props) {
               </span>
             </label>
           </fieldset>
+        </div>
+      ) : tab === "D" ? (
+        <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
+          <div>
+            <h2 className="text-sm font-medium text-zinc-200">Pipeline asigurător (daună)</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Definește etichetele și ce pași apar pe dosarul daună (WO / tichet). AIR = acord intrare
+              în reparație. Accept plată rămâne legat de PDF-ul de pe dosar.
+            </p>
+          </div>
+          <ul className="space-y-3">
+            {damageStepsDraft.map((step, idx) => (
+              <li
+                key={step.code}
+                className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 sm:flex-row sm:items-center"
+              >
+                <label className="flex items-center gap-2 text-sm text-zinc-300 sm:w-28">
+                  <input
+                    type="checkbox"
+                    checked={step.enabled}
+                    disabled={pending}
+                    onChange={(e) => {
+                      const next = damageStepsDraft.map((s, i) =>
+                        i === idx ? { ...s, enabled: e.target.checked } : s,
+                      );
+                      setDamageStepsDraft(next);
+                    }}
+                  />
+                  Activ
+                </label>
+                <code className="text-[11px] text-zinc-500 sm:w-40">{step.code}</code>
+                <input
+                  type="text"
+                  value={step.label}
+                  disabled={pending}
+                  onChange={(e) => {
+                    const next = damageStepsDraft.map((s, i) =>
+                      i === idx ? { ...s, label: e.target.value } : s,
+                    );
+                    setDamageStepsDraft(next);
+                  }}
+                  className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+                />
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void patch({ damagePipelineSteps: damageStepsDraft })}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Salvează pipeline daună
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                const reset = DEFAULT_DAMAGE_PIPELINE_STEPS.map((s) => ({ ...s }));
+                setDamageStepsDraft(reset);
+                void patch({ damagePipelineSteps: reset });
+              }}
+              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+            >
+              Reset la default
+            </button>
+          </div>
         </div>
       ) : (
         <TypeSettingsPlaceholder code={tab} />
