@@ -657,13 +657,60 @@ export function WorkOrderQuotePanel({
       await load(submittedId);
       setQuotePane("lines");
       if (action === "submit") {
-        setOk("Deviz trimis spre aprobare. Managerul / adminul poate aproba pe tichet sau pe acest WO.");
+        setOk("Deviz trimis — se așteaptă aprobarea. Managerul / adminul poate aproba pe tichet sau pe acest WO.");
       } else if (action === "approve") {
         setOk("Deviz aprobat.");
       } else {
         setOk("Deviz respins.");
       }
       setLineDecisions({});
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function resubmitForApproval() {
+    if (!activeQuote || activeQuote.status !== "submitted") return;
+    const submittedId = activeQuote.id;
+    if (
+      !window.confirm(
+        "Retrimiți acest deviz spre aprobare?\n\nEstimarea finalizării reparației se mută automat cu +2 zile, iar data trimiterii se actualizează.",
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setOk(null);
+    try {
+      const res = await fetch(
+        `${workOrdersBrowserBase}/${workOrderId}/quotes/${submittedId}/resubmit`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+        },
+      );
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
+        return;
+      }
+      const data = (await res.json()) as { estimatedRepairAt?: string };
+      await load(submittedId);
+      setQuotePane("lines");
+      const estLabel = data.estimatedRepairAt ? formatDateRo(data.estimatedRepairAt) : null;
+      setOk(
+        estLabel
+          ? `Deviz retrimis — se așteaptă aprobarea. Estimare finalizare: ${estLabel} (+2 zile).`
+          : "Deviz retrimis — se așteaptă aprobarea.",
+      );
       router.refresh();
     } finally {
       setPending(false);
@@ -1446,6 +1493,17 @@ export function WorkOrderQuotePanel({
                 </button>
               </>
             ) : null}
+            {canWrite && activeQuote.status === "submitted" ? (
+              <button
+                type="button"
+                disabled={pending}
+                title="Reamintește aprobarea: actualizează data trimiterii și mută estimarea finalizare cu +2 zile"
+                onClick={() => void resubmitForApproval()}
+                className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1 text-xs font-medium text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
+              >
+                Retrimite spre aprobare
+              </button>
+            ) : null}
             {activeQuote.lines.some((line) => line.partsOrderStatus === "ordered") ? (
               <span className="rounded-full border border-amber-700/50 bg-amber-950/30 px-2 py-0.5 text-xs text-amber-200">
                 Comandă piese
@@ -1471,6 +1529,23 @@ export function WorkOrderQuotePanel({
             ) : null}
           </div>
           {launchInfo ? <p className="text-sm text-amber-200/90">{launchInfo}</p> : null}
+          {activeQuote.status === "submitted" ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-950/25 px-3 py-2 text-sm text-amber-50">
+              <p className="font-medium">Trimis — se așteaptă aprobarea devizului</p>
+              <p className="mt-0.5 text-xs text-amber-100/80">
+                {activeQuote.submittedAt
+                  ? `Trimis la ${new Date(activeQuote.submittedAt).toLocaleString("ro-RO", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}. `
+                  : ""}
+                Managerul / adminul flotă aprobă pe tichet sau pe această comandă.
+                {canWrite
+                  ? " Dacă nu răspunde, folosiți „Retrimite spre aprobare” (+2 zile pe estimarea finalizare)."
+                  : ""}
+              </p>
+            </div>
+          ) : null}
           {activeQuote.rejectionReason ? (
             <p className="text-sm text-red-300">Motiv respingere: {activeQuote.rejectionReason}</p>
           ) : null}

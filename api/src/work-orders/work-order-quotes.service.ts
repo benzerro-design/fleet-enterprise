@@ -849,6 +849,25 @@ export class WorkOrderQuotesService {
         actorUserId,
       );
 
+      const ticketId = existing.workOrder.serviceCase.sourceTicketId;
+      if (ticketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Deviz v${existing.version} trimis spre aprobare — se așteaptă decizia managerului / adminului.`,
+            payload: {
+              workOrderId,
+              quoteId,
+              quoteVersion: existing.version,
+              milestone: 'quote_submit',
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+
       return updated;
     });
 
@@ -862,6 +881,111 @@ export class WorkOrderQuotesService {
     });
 
     return toQuoteRecord(quote);
+  }
+
+  /**
+   * Partener: reamintește aprobarea pe un deviz deja `submitted`.
+   * Reactualizează submittedAt și mută estimarea finalizare cu +2 zile calendaristice.
+   */
+  async resubmit(
+    tenantSlug: string,
+    workOrderId: string,
+    quoteId: string,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderQuoteRecord & { estimatedRepairAt: string }> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+
+    const existing = await this.prisma.workOrderQuote.findFirst({
+      where: { id: quoteId, workOrderId, tenantId: tenant.id },
+      include: { workOrder: { include: { serviceCase: true } }, ...this.quoteInclude() },
+    });
+    if (!existing) throw new NotFoundException('Quote not found');
+    if (existing.status !== WorkOrderQuoteStatus.submitted) {
+      throw new BadRequestException('Only submitted quotes can be resubmitted for approval');
+    }
+    if (existing.lines.length === 0) {
+      throw new BadRequestException('Quote must have at least one line');
+    }
+    const prevEstimate = existing.workOrder.estimatedRepairAt;
+    if (!prevEstimate) {
+      throw new BadRequestException(
+        'Estimated repair completion date is required before resubmitting quote',
+      );
+    }
+
+    const nextEstimate = new Date(prevEstimate);
+    nextEstimate.setUTCDate(nextEstimate.getUTCDate() + 2);
+    const now = new Date();
+
+    const quote = await this.prisma.$transaction(async (tx) => {
+      await tx.maintenanceWorkOrder.update({
+        where: { id: workOrderId },
+        data: { estimatedRepairAt: nextEstimate },
+      });
+
+      const updated = await tx.workOrderQuote.update({
+        where: { id: quoteId },
+        data: { submittedAt: now },
+        include: this.quoteInclude(),
+      });
+
+      await this.ensureCaseStageAtLeast(
+        tx,
+        tenant.id,
+        existing.workOrder.serviceCaseId,
+        ServiceCaseStage.approval,
+        existing.workOrder.serviceCase.sourceTicketId,
+        actorUserId,
+      );
+
+      const ticketId = existing.workOrder.serviceCase.sourceTicketId;
+      if (ticketId) {
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: tenant.id,
+            ticketId,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Deviz v${existing.version} retrimis spre aprobare — estimare finalizare mutată cu +2 zile (${nextEstimate.toLocaleDateString(
+              'ro-RO',
+              { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Bucharest' },
+            )}).`,
+            payload: {
+              workOrderId,
+              quoteId,
+              quoteVersion: existing.version,
+              estimatedRepairAt: nextEstimate.toISOString(),
+              previousEstimatedRepairAt: prevEstimate.toISOString(),
+              milestone: 'quote_resubmit',
+            },
+            actorUserId: actorUserId ?? null,
+          },
+        });
+      }
+
+      return updated;
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'work_order_quote.resubmit',
+      entityType: 'work_order_quote',
+      entityId: quoteId,
+      meta: {
+        workOrderId,
+        estimatedRepairAt: nextEstimate.toISOString(),
+        previousEstimatedRepairAt: prevEstimate.toISOString(),
+      },
+    });
+
+    return {
+      ...toQuoteRecord(quote),
+      estimatedRepairAt: nextEstimate.toISOString(),
+    };
   }
 
   async approve(

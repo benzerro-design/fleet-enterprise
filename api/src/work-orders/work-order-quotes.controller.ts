@@ -139,6 +139,18 @@ export class WorkOrderQuotesController {
     return this.quotes.submit(tenantSlug, workOrderId, quoteId, actorUserId, access);
   }
 
+  @Post(':quoteId/resubmit')
+  @Roles(...FLEET_WRITE_ROLES)
+  resubmit(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @Param('quoteId') quoteId: string,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.quotes.resubmit(tenantSlug, workOrderId, quoteId, actorUserId, access);
+  }
+
   @Post(':quoteId/approve')
   @Roles(...FLEET_WRITE_ROLES)
   approve(

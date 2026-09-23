@@ -376,7 +376,7 @@ export function quoteLinesIncludedInTotals<
 export function quoteStatusLabel(status: WorkOrderQuoteStatus | string): string {
   const map: Record<string, string> = {
     draft: "Ciornă",
-    submitted: "Trimis spre aprobare",
+    submitted: "Trimis — așteaptă aprobare",
     approved: "Aprobat",
     rejected: "Respins",
   };
