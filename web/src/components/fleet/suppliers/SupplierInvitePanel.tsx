@@ -78,7 +78,10 @@ export function SupplierInvitePanel({ supplierId, allowManagerRole = false }: Pr
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <input
-          type="email"
+          type="text"
+          inputMode="email"
+          name="supplier-invite-email"
+          autoComplete="off"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="email@furnizor.ro"

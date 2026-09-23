@@ -19,11 +19,12 @@ import { getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
 
 type MembersResponse = {
-  members: Array<{
+    members: Array<{
     userId: string;
     email: string;
     displayName: string | null;
     role: string;
+    disabledAt?: string | null;
     joinedAt: string;
   }>;
 };
@@ -144,12 +145,6 @@ export default async function FleetMembersPage({ searchParams }: PageProps) {
             .
           </p>
         </div>
-        <Link
-          href="/fleet/vehicles"
-          className="inline-flex w-fit rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-        >
-          Înapoi la vehicule
-        </Link>
       </div>
 
       <MembersInviteHub active={tab}>

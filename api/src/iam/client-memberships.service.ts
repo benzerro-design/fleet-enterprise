@@ -36,7 +36,7 @@ export class ClientMembershipsService {
       orderBy: [{ client: { code: 'asc' } }, { user: { email: 'asc' } }],
       include: {
         client: { select: { code: true, legalName: true } },
-        user: { select: { email: true, displayName: true } },
+        user: { select: { email: true, displayName: true, disabledAt: true } },
         driver: { select: { fullName: true } },
       },
     });
@@ -54,7 +54,7 @@ export class ClientMembershipsService {
       orderBy: { user: { email: 'asc' } },
       include: {
         client: { select: { code: true, legalName: true } },
-        user: { select: { email: true, displayName: true } },
+        user: { select: { email: true, displayName: true, disabledAt: true } },
         driver: { select: { fullName: true } },
       },
     });
@@ -82,7 +82,7 @@ export class ClientMembershipsService {
     clientId: string;
     client: { code: string; legalName: string };
     userId: string;
-    user: { email: string; displayName: string | null };
+    user: { email: string; displayName: string | null; disabledAt: Date | null };
     role: ClientRole;
     driverId: string | null;
     driver: { fullName: string } | null;
@@ -96,6 +96,7 @@ export class ClientMembershipsService {
       userId: r.userId,
       email: r.user.email,
       displayName: r.user.displayName,
+      disabledAt: r.user.disabledAt?.toISOString() ?? null,
       role: r.role,
       driverId: r.driverId,
       driverFullName: r.driver?.fullName ?? null,
@@ -169,7 +170,7 @@ export class ClientMembershipsService {
       },
       include: {
         client: { select: { code: true, legalName: true } },
-        user: { select: { email: true, displayName: true } },
+        user: { select: { email: true, displayName: true, disabledAt: true } },
       },
     });
 

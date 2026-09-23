@@ -9,6 +9,7 @@ type Member = {
   email: string;
   displayName: string | null;
   role: string;
+  disabledAt?: string | null;
   joinedAt: string;
 };
 
@@ -60,6 +61,9 @@ export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
         <div className="flex-1">
           <label className="mb-1 block text-xs font-medium text-zinc-500">Căutare membri</label>
           <input
+            type="search"
+            name="member-search"
+            autoComplete="off"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -105,7 +109,11 @@ export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
                 currentRole={m.role}
                 isCurrentUser={Boolean(currentUserEmail && m.email === currentUserEmail)}
               />
-              <MemberAccountActions userId={m.userId} />
+              <MemberAccountActions
+                userId={m.userId}
+                disabledAt={m.disabledAt}
+                isSelf={Boolean(currentUserEmail && m.email === currentUserEmail)}
+              />
             </li>
           ))}
         </ul>

@@ -1,3 +1,4 @@
+import { existsSync } from 'fs';
 import PDFDocument from 'pdfkit';
 import { displayQuoteMoneyTotals, type WorkOrderQuoteRecord } from './work-order-quotes.types';
 
@@ -14,6 +15,15 @@ function discountNote(
   return '';
 }
 
+/** Helvetica (WinAnsi) nu are ă â î ș ț — de aici „REPARA!ª” în PDF. */
+function unicodeFont(kind: 'regular' | 'bold'): string | null {
+  const candidates =
+    kind === 'bold'
+      ? ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 'C:\\Windows\\Fonts\\arialbd.ttf']
+      : ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 'C:\\Windows\\Fonts\\arial.ttf'];
+  return candidates.find((p) => existsSync(p)) ?? null;
+}
+
 export async function buildQuotePdfBuffer(input: {
   workOrderTitle: string;
   displayNumber: string | null;
@@ -27,11 +37,18 @@ export async function buildQuotePdfBuffer(input: {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    const regular = unicodeFont('regular');
+    const bold = unicodeFont('bold');
+    if (regular) doc.registerFont('Ro', regular);
+    if (bold) doc.registerFont('Ro-Bold', bold);
+    const body = regular ? 'Ro' : 'Helvetica';
+    const strong = bold ? 'Ro-Bold' : 'Helvetica-Bold';
+
     const { quote, workOrderTitle, displayNumber, supplierName } = input;
     const money = displayQuoteMoneyTotals(quote);
 
-    doc.fontSize(18).font('Helvetica-Bold').text('DEVIZ DE REPARAȚIE', { continued: false });
-    doc.font('Helvetica').fontSize(10).fillColor('#333');
+    doc.fontSize(18).font(strong).text('DEVIZ DE REPARAȚIE', { continued: false });
+    doc.font(body).fontSize(10).fillColor('#333');
     doc.moveDown(0.4);
     doc.text('Fleet Enterprise');
     doc.moveDown(0.6);
@@ -44,13 +61,14 @@ export async function buildQuotePdfBuffer(input: {
     doc.moveTo(48, doc.y).lineTo(547, doc.y).strokeColor('#cccccc').stroke();
     doc.moveDown(0.6);
 
-    doc.fillColor('#000').fontSize(11).text('Linii deviz', { underline: true });
+    doc.fillColor('#000').font(body).fontSize(11).text('Linii deviz', { underline: true });
     doc.moveDown(0.5);
 
     for (const line of quote.lines) {
       const rejected = line.approvalStatus === 'rejected';
       const prefix = rejected ? '[RESPINS] ' : '';
       doc
+        .font(body)
         .fontSize(9)
         .fillColor(rejected ? '#888' : '#000')
         .text(
@@ -61,18 +79,21 @@ export async function buildQuotePdfBuffer(input: {
     }
 
     doc.moveDown();
-    doc.fontSize(10).fillColor('#000');
+    doc.font(body).fontSize(10).fillColor('#000');
     doc.text(`Total net: ${formatMoney(money.totalNetCents, quote.currency)}`);
     doc.text(`TVA: ${formatMoney(money.totalVatCents, quote.currency)}`);
     doc.moveDown(0.3);
-    doc.fontSize(13).font('Helvetica-Bold').text(`TOTAL DE PLATĂ: ${formatMoney(money.totalGrossCents, quote.currency)}`);
-    doc.font('Helvetica').fontSize(8).fillColor('#666');
+    doc
+      .font(strong)
+      .fontSize(13)
+      .text(`TOTAL DE PLATĂ: ${formatMoney(money.totalGrossCents, quote.currency)}`);
+    doc.font(body).fontSize(8).fillColor('#666');
     doc.moveDown(0.8);
     doc.text('Document generat din Fleet Enterprise. Nu ține loc de factură fiscală.');
 
     if (quote.notes?.trim()) {
       doc.moveDown();
-      doc.fontSize(9).fillColor('#444').text(`Note: ${quote.notes.trim()}`);
+      doc.font(body).fontSize(9).fillColor('#444').text(`Note: ${quote.notes.trim()}`);
     }
 
     doc.end();

@@ -93,7 +93,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
       laborDiscountPercent: parseFloat(laborDiscountPercent.replace(",", ".")) || 0,
       services,
       ...(mode === "create" && clientIds.length ? { clientIds } : {}),
-      ...((category === "broker" || category === "insurer") && integrationApiKey.trim()
+      ...(integrationApiKey.trim()
         ? { integrationApiKey: integrationApiKey.trim(), integrationEnabled: true }
         : {}),
     };
@@ -206,25 +206,23 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
           </OpsFormField>
         </div>
       </OpsFormSection>
-      {category === "broker" || category === "insurer" ? (
-        <OpsFormSection number={4} title="Cheie API">
-          <p className="mb-3 text-xs text-zinc-500">
-            Pentru broker sau asigurător. Se păstrează doar ultimele 4 caractere, nu secretul complet.
-            {initial?.integrationKeyLast4
-              ? ` Cheie activă: ••••${initial.integrationKeyLast4}.`
-              : " Nicio cheie salvată."}
-          </p>
-          <OpsFormField label="Cheie nouă" hint="minim 8 caractere; lasă gol ca să păstrezi cheia existentă">
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={integrationApiKey}
-              onChange={(e) => setIntegrationApiKey(e.target.value)}
-              className={OPS_INPUT_CLASS}
-            />
-          </OpsFormField>
-        </OpsFormSection>
-      ) : null}
+      <OpsFormSection number={4} title="Cheie API">
+        <p className="mb-3 text-xs text-zinc-500">
+          Pentru orice furnizor care are o aplicație proprie. Se păstrează doar ultimele 4 caractere, nu secretul complet.
+          {initial?.integrationKeyLast4
+            ? ` Cheie activă: ••••${initial.integrationKeyLast4}.`
+            : " Nicio cheie salvată."}
+        </p>
+        <OpsFormField label="Cheie nouă" hint="minim 8 caractere; lasă gol ca să păstrezi cheia existentă">
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={integrationApiKey}
+            onChange={(e) => setIntegrationApiKey(e.target.value)}
+            className={OPS_INPUT_CLASS}
+          />
+        </OpsFormField>
+      </OpsFormSection>
       <OpsFormSection number={4} title="Servicii prestate">
         {mode === "edit" && initial ? (
           <SupplierServicesEditor

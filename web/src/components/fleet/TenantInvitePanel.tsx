@@ -66,7 +66,10 @@ export function TenantInvitePanel() {
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <input
-          type="email"
+          type="text"
+          inputMode="email"
+          name="tenant-invite-email"
+          autoComplete="off"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="email@abonat.ro"

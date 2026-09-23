@@ -18,7 +18,7 @@ export class SupplierMembershipsService {
       orderBy: [{ supplier: { code: 'asc' } }, { user: { email: 'asc' } }],
       include: {
         supplier: { select: { code: true, legalName: true } },
-        user: { select: { email: true, displayName: true } },
+        user: { select: { email: true, displayName: true, disabledAt: true } },
       },
     });
 
@@ -30,6 +30,7 @@ export class SupplierMembershipsService {
       userId: r.userId,
       email: r.user.email,
       displayName: r.user.displayName,
+      disabledAt: r.user.disabledAt?.toISOString() ?? null,
       role: r.role,
       createdAt: r.createdAt.toISOString(),
     }));

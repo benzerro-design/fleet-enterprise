@@ -106,7 +106,10 @@ export function ClientInvitePanel({ clientId, clientCode, hideHistory }: Props) 
       </div>
       <div className="flex flex-wrap gap-2">
         <input
-          type="email"
+          type="text"
+          inputMode="email"
+          name="client-invite-email"
+          autoComplete="off"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="email@client.ro"

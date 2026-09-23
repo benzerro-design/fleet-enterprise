@@ -69,10 +69,6 @@ export type CreateSupplierInput = {
 
 export type PatchSupplierInput = Partial<CreateSupplierInput>;
 
-function integrationTapAllowed(category: SupplierCategory): boolean {
-  return category === SupplierCategory.broker || category === SupplierCategory.insurer;
-}
-
 function integrationKeyLast4(raw: string | null | undefined): string | null {
   const key = raw?.trim() ?? '';
   if (!key) return null;
@@ -413,13 +409,9 @@ export class SuppliersService {
           notes: dto.notes?.trim() || null,
           partsDiscountPercent: parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent'),
           laborDiscountPercent: parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent'),
-          ...(integrationTapAllowed(dto.category ?? SupplierCategory.other)
-            ? {
-                integrationEnabled:
-                  integrationKeyLast4(dto.integrationApiKey) != null || dto.integrationEnabled === true,
-                integrationKeyLast4: integrationKeyLast4(dto.integrationApiKey),
-              }
-            : { integrationEnabled: false, integrationKeyLast4: null }),
+          integrationEnabled:
+            integrationKeyLast4(dto.integrationApiKey) != null || dto.integrationEnabled === true,
+          integrationKeyLast4: integrationKeyLast4(dto.integrationApiKey),
         },
       });
       if (dto.services?.length) {
@@ -485,21 +477,13 @@ export class SuppliersService {
     if (dto.laborDiscountPercent !== undefined) {
       data.laborDiscountPercent = parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent');
     }
-    const nextCategory = dto.category ?? before.category;
-    if (!integrationTapAllowed(nextCategory)) {
-      if (integrationTapAllowed(before.category)) {
-        data.integrationEnabled = false;
-        data.integrationKeyLast4 = null;
-      }
-    } else {
-      if (dto.integrationEnabled !== undefined) {
-        data.integrationEnabled = dto.integrationEnabled === true;
-      }
-      if (dto.integrationApiKey !== undefined) {
-        const last4 = integrationKeyLast4(dto.integrationApiKey);
-        data.integrationKeyLast4 = last4;
-        data.integrationEnabled = last4 != null;
-      }
+    if (dto.integrationEnabled !== undefined) {
+      data.integrationEnabled = dto.integrationEnabled === true;
+    }
+    if (dto.integrationApiKey !== undefined) {
+      const last4 = integrationKeyLast4(dto.integrationApiKey);
+      data.integrationKeyLast4 = last4;
+      data.integrationEnabled = last4 != null;
     }
 
     const serviceCodes =

@@ -46,7 +46,7 @@ export class TenantService {
       include: {
         memberships: {
           where: { role: { in: [MembershipRole.tenant_admin, MembershipRole.tenant_viewer] } },
-          include: { user: { select: { id: true, email: true, displayName: true } } },
+          include: { user: { select: { id: true, email: true, displayName: true, disabledAt: true } } },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -59,6 +59,7 @@ export class TenantService {
         email: m.user.email,
         displayName: m.user.displayName,
         role: m.role,
+        disabledAt: m.user.disabledAt?.toISOString() ?? null,
         joinedAt: m.createdAt.toISOString(),
       })),
     };

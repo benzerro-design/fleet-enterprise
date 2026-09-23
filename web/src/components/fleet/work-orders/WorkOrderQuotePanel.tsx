@@ -1396,51 +1396,57 @@ export function WorkOrderQuotePanel({
                   ) : null}
                 </p>
               ) : canWrite ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className={OPS_LABEL_CLASS}>Nr. factură</label>
-                    <input
-                      value={invoiceNumber}
-                      onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className={OPS_INPUT_CLASS}
-                    />
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className={OPS_LABEL_CLASS}>Nr. factură</label>
+                      <input
+                        value={invoiceNumber}
+                        onChange={(e) => setInvoiceNumber(e.target.value)}
+                        className={OPS_INPUT_CLASS}
+                      />
+                    </div>
+                    <div>
+                      <label className={OPS_LABEL_CLASS}>Data</label>
+                      <input
+                        type="date"
+                        value={invoiceDate}
+                        onChange={(e) => setInvoiceDate(e.target.value)}
+                        className={OPS_INPUT_CLASS}
+                      />
+                    </div>
+                    <div>
+                      <label className={OPS_LABEL_CLASS}>Sumă brută (RON)</label>
+                      <input
+                        value={invoiceGross}
+                        onChange={(e) => setInvoiceGross(e.target.value)}
+                        className={OPS_INPUT_CLASS}
+                        inputMode="decimal"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className={OPS_LABEL_CLASS}>Sumă factură (RON, brut)</label>
-                    <input
-                      value={invoiceGross}
-                      onChange={(e) => setInvoiceGross(e.target.value)}
-                      className={OPS_INPUT_CLASS}
-                      inputMode="decimal"
-                    />
-                  </div>
-                  <div>
-                    <label className={OPS_LABEL_CLASS}>Data facturii</label>
-                    <input
-                      type="date"
-                      value={invoiceDate}
-                      onChange={(e) => setInvoiceDate(e.target.value)}
-                      className={OPS_INPUT_CLASS}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <InvoiceAttachmentField
-                      value={invoiceAttachmentUrl}
-                      onChange={setInvoiceAttachmentUrl}
-                      invoiceNumber={invoiceNumber}
-                      disabled={pending}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <button
-                      type="button"
-                      disabled={pending || !invoiceNumber.trim() || !invoiceDate}
-                      onClick={() => void recordInvoice()}
-                      className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-500 disabled:opacity-50"
-                    >
-                      Înregistrează factura
-                    </button>
-                  </div>
+                  <p className="text-xs text-zinc-500">
+                    Total deviz:{" "}
+                    {formatMoneyCents(
+                      activeQuote.approvedGrossCents ?? activeQuote.totalGrossCents,
+                      activeQuote.currency,
+                    )}
+                    . Dacă suma facturii e alta, devizul rămâne marcat.
+                  </p>
+                  <InvoiceAttachmentField
+                    value={invoiceAttachmentUrl}
+                    onChange={setInvoiceAttachmentUrl}
+                    invoiceNumber={invoiceNumber}
+                    disabled={pending}
+                  />
+                  <button
+                    type="button"
+                    disabled={pending || !invoiceNumber.trim() || !invoiceDate}
+                    onClick={() => void recordInvoice()}
+                    className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-500 disabled:opacity-50"
+                  >
+                    Înregistrează factura
+                  </button>
                 </div>
               ) : (
                 <p className="text-sm text-zinc-500">Factura nu a fost încă înregistrată.</p>

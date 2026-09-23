@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ClientSelect } from "@/components/fleet/ClientSelect";
-import { VehicleBrandBadge } from "@/components/fleet/VehicleBrandBadge";
 import { buildVehicleItpPayload, VehicleItpFields } from "@/components/fleet/VehicleItpFields";
 import {
   fleetBrowserBase,
@@ -118,9 +117,6 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
   if (!write) {
     return (
       <dl className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <VehicleBrandBadge brand={vehicle.brand} model={vehicle.model} />
-        </div>
         <Field
           label="Client"
           value={`${vehicle.clientId}${vehicle.clientLegalName ? ` — ${vehicle.clientLegalName}` : ""}`}

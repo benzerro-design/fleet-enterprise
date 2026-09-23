@@ -17,17 +17,11 @@ type Props = {
   canWrite: boolean;
 };
 
-const PHASES = [
-  { value: "in", label: "Recepție" },
-  { value: "check", label: "Verificare" },
-  { value: "out", label: "Predare" },
-] as const;
-
 export function WorkOrderPhotoSection({ workOrderId, canWrite }: Props) {
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [phase, setPhase] = useState<(typeof PHASES)[number]["value"]>("in");
   const [caption, setCaption] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/photos`, {
@@ -42,125 +36,163 @@ export function WorkOrderPhotoSection({ workOrderId, canWrite }: Props) {
     void load();
   }, [load]);
 
-  async function upload(file: File, kind: "condition" | "defect") {
+  async function upload(file: File, kind: "condition" | "defect", phase: Photo["phase"]) {
     setError(null);
-    const form = new FormData();
-    form.set("file", file);
-    const uploaded = await fetch("/api/uploads/work-order-photos", { method: "POST", body: form });
-    if (!uploaded.ok) {
-      setError("Upload eșuat");
-      return;
+    setPending(true);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const uploaded = await fetch("/api/uploads/work-order-photos", { method: "POST", body: form });
+      if (!uploaded.ok) {
+        setError("Upload eșuat");
+        return;
+      }
+      const saved = (await uploaded.json()) as { url?: string };
+      if (!saved.url) return;
+      const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/photos`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({
+          kind,
+          phase,
+          url: saved.url,
+          caption: kind === "defect" ? caption.trim() || null : null,
+        }),
+      });
+      if (!res.ok) {
+        setError("Nu am putut salva poza");
+        return;
+      }
+      if (kind === "defect") setCaption("");
+      await load();
+    } finally {
+      setPending(false);
     }
-    const saved = (await uploaded.json()) as { url?: string };
-    if (!saved.url) return;
-    const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/photos`, {
-      method: "POST",
-      headers: fleetJsonHeaders(),
-      body: JSON.stringify({
-        kind,
-        phase: kind === "defect" ? "defect" : phase,
-        url: saved.url,
-        caption: caption.trim() || null,
-      }),
-    });
-    if (!res.ok) {
-      setError("Nu am putut salva poza");
-      return;
-    }
-    setCaption("");
-    await load();
   }
 
-  const condition = photos.filter((p) => p.kind === "condition");
-  const defects = photos.filter((p) => p.kind === "defect");
+  const incoming = photos.filter((p) => p.kind === "condition" && p.phase === "in");
+  const outgoing = photos.filter((p) => p.kind === "condition" && p.phase === "out");
+  const repair = photos.filter((p) => p.kind === "defect" || p.phase === "check");
 
   return (
-    <section className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-      <div>
-        <h2 className="text-sm font-semibold text-zinc-100">Fotografii comandă</h2>
+    <div className="space-y-4">
+      <section className="rounded-xl border border-zinc-800 p-4">
+        <h2 className="text-sm font-semibold text-zinc-100">Recepție — intrare și ieșire din service</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Starea mașinii la recepție, verificare și predare. Defectele găsite stau lângă deviz.
+          Starea mașinii când intră și când pleacă. Nu țin loc de pozele de reparație.
         </p>
-      </div>
-      <Gallery title="Verificare service" items={condition} />
-      <Gallery title="Defecte" items={defects} />
-      {canWrite ? (
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="text-xs text-zinc-400">
-            Moment
-            <select
-              value={phase}
-              onChange={(e) => setPhase(e.target.value as typeof phase)}
-              className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm"
-            >
-              {PHASES.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="min-w-[10rem] flex-1 text-xs text-zinc-400">
-            Notă
-            <input
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="rounded-lg bg-zinc-800 px-3 py-2 text-xs text-zinc-100">
-            Poză stare
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void upload(file, "condition");
-              }}
-            />
-          </label>
-          <label className="rounded-lg bg-amber-800 px-3 py-2 text-xs text-amber-50">
-            Poză defect
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void upload(file, "defect");
-              }}
-            />
-          </label>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <PhotoColumn
+            title="Intrare"
+            items={incoming}
+            canWrite={canWrite}
+            pending={pending}
+            button="Adaugă poză la intrare"
+            onFile={(file) => void upload(file, "condition", "in")}
+          />
+          <PhotoColumn
+            title="Ieșire"
+            items={outgoing}
+            canWrite={canWrite}
+            pending={pending}
+            button="Adaugă poză la ieșire"
+            onFile={(file) => void upload(file, "condition", "out")}
+          />
         </div>
-      ) : null}
-      {error ? <p className="text-xs text-rose-300">{error}</p> : null}
-    </section>
+      </section>
+
+      <section className="rounded-xl border border-zinc-800 p-4">
+        <h2 className="text-sm font-semibold text-zinc-100">Reparație — defect, atelier, deviz</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Ce s-a găsit și ce se repară. Stau lângă deviz, ca să se vadă legătura dintre poză și lucrare.
+        </p>
+        <Gallery items={repair} empty="Nicio poză de reparație." />
+        {canWrite ? (
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="min-w-[12rem] flex-1 text-xs text-zinc-500">
+              Notă (defect sau lucrare)
+              <input
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="cursor-pointer rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-500">
+              {pending ? "Se încarcă…" : "Adaugă poză de reparație"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                disabled={pending}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void upload(file, "defect", "defect");
+                }}
+              />
+            </label>
+          </div>
+        ) : null}
+      </section>
+      {error ? <p className="text-xs text-rose-700">{error}</p> : null}
+    </div>
   );
 }
 
-function Gallery({ title, items }: { title: string; items: Photo[] }) {
+function PhotoColumn({
+  title,
+  items,
+  canWrite,
+  pending,
+  button,
+  onFile,
+}: {
+  title: string;
+  items: Photo[];
+  canWrite: boolean;
+  pending: boolean;
+  button: string;
+  onFile: (file: File) => void;
+}) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wide text-zinc-500">{title}</p>
-      {items.length === 0 ? (
-        <p className="mt-1 text-xs text-zinc-600">Nicio poză.</p>
-      ) : (
-        <ul className="mt-2 flex flex-wrap gap-2">
-          {items.map((p) => (
-            <li key={p.id} className="w-28">
-              <a href={p.url} target="_blank" rel="noreferrer">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.url} alt={p.caption ?? title} className="h-20 w-28 rounded-md object-cover" />
-              </a>
-              <p className="mt-1 text-[10px] text-zinc-500">
-                {p.phase}
-                {p.caption ? ` · ${p.caption}` : ""}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
+      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{title}</p>
+      <Gallery items={items} empty={`Nicio poză de ${title.toLowerCase()}.`} />
+      {canWrite ? (
+        <label className="mt-2 inline-flex cursor-pointer rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-500">
+          {pending ? "Se încarcă…" : button}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            disabled={pending}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) onFile(file);
+            }}
+          />
+        </label>
+      ) : null}
     </div>
+  );
+}
+
+function Gallery({ items, empty }: { items: Photo[]; empty: string }) {
+  if (items.length === 0) {
+    return <p className="mt-2 text-xs text-zinc-500">{empty}</p>;
+  }
+  return (
+    <ul className="mt-2 flex flex-wrap gap-2">
+      {items.map((p) => (
+        <li key={p.id} className="w-28">
+          <a href={p.url} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={p.url} alt={p.caption ?? "Poză comandă"} className="h-20 w-28 rounded-md object-cover" />
+          </a>
+          {p.caption ? <p className="mt-1 text-[10px] text-zinc-500">{p.caption}</p> : null}
+        </li>
+      ))}
+    </ul>
   );
 }

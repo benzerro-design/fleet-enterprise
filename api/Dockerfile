@@ -22,7 +22,7 @@ RUN npx prisma generate \
 
 # ---------- runner ----------
 FROM node:20-bookworm-slim AS runner
-RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl fonts-dejavu-core \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
