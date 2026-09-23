@@ -294,7 +294,9 @@ export function WorkOrderQuotePanel({
   const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"quote" | "warranty" | "photos">("quote");
+  const [activeTab, setActiveTab] = useState<"quote" | "warranty">("quote");
+  /** Pe versiunea de deviz: linii sau pozele acelei versiuni. */
+  const [quotePane, setQuotePane] = useState<"lines" | "photos">("lines");
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [lines, setLines] = useState<EditableLine[]>(() => [newLine(supplierDiscounts)]);
   const [notes, setNotes] = useState("");
@@ -1022,13 +1024,15 @@ export function WorkOrderQuotePanel({
       <div className="mt-3 flex gap-2 border-b border-zinc-800">
         {[
           { id: "quote" as const, label: "Deviz" },
-          { id: "photos" as const, label: "Poze" },
           { id: "warranty" as const, label: "Garanție" },
         ].map((tab) => (
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              if (tab.id === "quote") setQuotePane("lines");
+            }}
             className={`border-b-2 px-3 py-2 text-sm ${
               activeTab === tab.id
                 ? "border-violet-500 text-violet-200"
@@ -1060,40 +1064,6 @@ export function WorkOrderQuotePanel({
         </div>
       ) : null}
 
-      {activeTab === "photos" ? (
-        <div className="mt-4 space-y-3">
-          <p className="text-xs text-zinc-500">
-            Defecte și atelier pentru{" "}
-            {activeQuote ? `devizul v${activeQuote.version}` : "devizul ales"}. Nu sunt pozele de
-            recepție (alea stau pe Rezumat).
-          </p>
-          {quotes && quotes.length > 1 ? (
-            <div className="flex flex-wrap gap-1">
-              {quotes.map((q) => (
-                <button
-                  key={q.id}
-                  type="button"
-                  onClick={() => setActiveId(q.id)}
-                  className={`rounded px-2 py-1 text-xs ${
-                    activeQuote?.id === q.id
-                      ? "bg-violet-900/50 text-violet-100"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  Deviz {q.version}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <WorkOrderPhotoGallery
-            workOrderId={workOrderId}
-            canWrite={canWrite}
-            mode="quote"
-            quoteId={activeQuote?.id ?? null}
-          />
-        </div>
-      ) : null}
-
       {activeTab === "warranty" ? (
         <WorkOrderWarrantyPanel
           workOrderId={workOrderId}
@@ -1106,41 +1076,73 @@ export function WorkOrderQuotePanel({
       {activeTab === "quote" && quotes.length > 0 ? (
         <div className="mt-4 border-b border-zinc-800">
           <div className="flex flex-wrap gap-2">
-          {[...quotes]
-            .sort((a, b) => a.version - b.version)
-            .map((q) => {
-              const selected = activeId === q.id;
-              return (
-                <button
-                  key={q.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveId(q.id);
-                    if (q.status === "draft") {
-                      setLines(linesFromQuote(q));
-                      setNotes(q.notes ?? "");
-                    }
-                    if (q.costInvoiceNumber) setInvoiceNumber(q.costInvoiceNumber);
-                    if (q.costInvoiceDate) setInvoiceDate(q.costInvoiceDate.slice(0, 10));
-                    if (q.invoiceAttachmentUrl) setInvoiceAttachmentUrl(q.invoiceAttachmentUrl);
-                    setEditingDraftId(null);
-                    setLineDecisions({});
-                  }}
-                  className={fleetSheetTabClass(selected)}
-                  title={`${q.lines.length} linii · ${formatMoneyCents(q.totalGrossCents, q.currency)}`}
-                >
-                  Deviz {q.version}
-                  <span className="ml-1.5 text-[11px] font-normal opacity-80">
-                    {quoteStatusLabel(q.status)}
-                  </span>
-                </button>
-              );
-            })}
+            {[...quotes]
+              .sort((a, b) => a.version - b.version)
+              .flatMap((q) => {
+                const linesSelected = activeId === q.id && quotePane === "lines";
+                const photosSelected = activeId === q.id && quotePane === "photos";
+                const selectQuote = () => {
+                  setActiveId(q.id);
+                  if (q.status === "draft") {
+                    setLines(linesFromQuote(q));
+                    setNotes(q.notes ?? "");
+                  }
+                  if (q.costInvoiceNumber) setInvoiceNumber(q.costInvoiceNumber);
+                  if (q.costInvoiceDate) setInvoiceDate(q.costInvoiceDate.slice(0, 10));
+                  if (q.invoiceAttachmentUrl) setInvoiceAttachmentUrl(q.invoiceAttachmentUrl);
+                  setEditingDraftId(null);
+                  setLineDecisions({});
+                };
+                return [
+                  <button
+                    key={`${q.id}-lines`}
+                    type="button"
+                    onClick={() => {
+                      selectQuote();
+                      setQuotePane("lines");
+                    }}
+                    className={fleetSheetTabClass(linesSelected)}
+                    title={`${q.lines.length} linii · ${formatMoneyCents(q.totalGrossCents, q.currency)}`}
+                  >
+                    Deviz {q.version}
+                    <span className="ml-1.5 text-[11px] font-normal opacity-80">
+                      {quoteStatusLabel(q.status)}
+                    </span>
+                  </button>,
+                  <button
+                    key={`${q.id}-photos`}
+                    type="button"
+                    onClick={() => {
+                      selectQuote();
+                      setQuotePane("photos");
+                    }}
+                    className={fleetSheetTabClass(photosSelected)}
+                    title={`Poze defect pentru deviz v${q.version}`}
+                  >
+                    Poze {q.version}
+                  </button>,
+                ];
+              })}
           </div>
         </div>
       ) : null}
 
-      {activeTab === "quote" && activeQuote && !isEditingDraft ? (
+      {activeTab === "quote" && quotePane === "photos" && activeQuote ? (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs text-zinc-500">
+            Defecte și atelier pentru devizul v{activeQuote.version}. Pozele de recepție stau pe
+            Rezumat.
+          </p>
+          <WorkOrderPhotoGallery
+            workOrderId={workOrderId}
+            canWrite={canWrite}
+            mode="quote"
+            quoteId={activeQuote.id}
+          />
+        </div>
+      ) : null}
+
+      {activeTab === "quote" && quotePane === "lines" && activeQuote && !isEditingDraft ? (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-4 text-sm">
             {(() => {
@@ -1521,7 +1523,10 @@ export function WorkOrderQuotePanel({
         </div>
       ) : null}
 
-      {activeTab === "quote" && (isEditingDraft || quotes.length === 0 || isCreatingDraft) && canWrite ? (
+      {activeTab === "quote" &&
+      quotePane === "lines" &&
+      (isEditingDraft || quotes.length === 0 || isCreatingDraft) &&
+      canWrite ? (
         <div className="mt-4 space-y-4">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] text-left text-sm">
