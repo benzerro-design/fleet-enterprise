@@ -349,6 +349,8 @@ export function WorkOrderQuotePanel({
   const [estimatedDate, setEstimatedDate] = useState(() => toDateInput(estimatedRepairAt));
   /** true când userul a apăsat Deviz nou (ciornă locală, încă nesalvată). */
   const [creatingNew, setCreatingNew] = useState(false);
+  /** Panel inline „Mută Devizul” (fără window.prompt). */
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
 
   useEffect(() => {
     setEstimatedDate(toDateInput(estimatedRepairAt));
@@ -769,33 +771,12 @@ export function WorkOrderQuotePanel({
     }
   }
 
-  async function moveQuoteToLucrare(target?: 1 | 2) {
+  async function moveQuoteToLucrare(target: 1 | 2) {
     if (!activeQuote || !canMoveQuote || !hasLucrare2) return;
     const current = quoteLucrareIndex(activeQuote);
-    let next = target;
-    if (next == null) {
-      const raw = window.prompt(
-        `Mută ${quoteDisplayName(activeQuote)} pe care Lucrare?\n\nScrie L1 sau L2 (pozele rămân pe Deviz).`,
-        current === 1 ? "L2" : "L1",
-      );
-      if (raw == null) return;
-      const n = raw.trim().toUpperCase().replace(/^LUCRARE\s*#?/, "").replace(/^L/, "");
-      if (n === "1") next = 1;
-      else if (n === "2") next = 2;
-      else {
-        setError("Destinație invalidă — folosiți L1 sau L2.");
-        return;
-      }
-    }
-    if (next === current) {
-      setOk(`Devizul e deja pe L${next}.`);
-      return;
-    }
-    if (
-      !window.confirm(
-        `Mută ${quoteDisplayName(activeQuote)} pe L${next}?\n\nPozele rămân pe acest Deviz.`,
-      )
-    ) {
+    if (target === current) {
+      setOk(`Devizul e deja pe L${target}.`);
+      setMovePickerOpen(false);
       return;
     }
     setPending(true);
@@ -807,7 +788,7 @@ export function WorkOrderQuotePanel({
         {
           method: "POST",
           headers: fleetJsonHeaders(),
-          body: JSON.stringify({ lucrareIndex: next }),
+          body: JSON.stringify({ lucrareIndex: target }),
         },
       );
       if (!res.ok) {
@@ -821,9 +802,10 @@ export function WorkOrderQuotePanel({
         setError(msg);
         return;
       }
+      setMovePickerOpen(false);
       await load(activeQuote.id);
-      onLucrareTrackChange?.(next);
-      setOk(`Deviz mutat pe L${next}.`);
+      onLucrareTrackChange?.(target);
+      setOk(`Deviz mutat pe L${target}.`);
       router.refresh();
     } finally {
       setPending(false);
@@ -837,6 +819,7 @@ export function WorkOrderQuotePanel({
     }
     setPending(true);
     setError(null);
+    setOk(null);
     try {
       const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}`, {
         method: "DELETE",
@@ -845,16 +828,20 @@ export function WorkOrderQuotePanel({
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
         try {
-          const j = (await res.json()) as { message?: string };
-          if (j.message) msg = j.message;
+          const j = (await res.json()) as { message?: string | string[] };
+          if (Array.isArray(j.message)) msg = j.message.join(", ");
+          else if (j.message) msg = j.message;
         } catch {
           /* ignore */
         }
         setError(msg);
         return;
       }
+      setMovePickerOpen(false);
+      setCreatingNew(false);
       setEditingDraftId(null);
       await load();
+      setOk("Ciornă ștearsă.");
     } finally {
       setPending(false);
     }
@@ -1181,38 +1168,6 @@ export function WorkOrderQuotePanel({
               </>
             ) : null}
             <span className="min-w-2 flex-1" />
-            {canWrite && allowQuotePdfImport ? (
-              <button
-                type="button"
-                disabled={pending}
-                title="Import PDF / Audatex → preview → ciornă"
-                onClick={() => setImportOpen(true)}
-                className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
-              >
-                Import PDF
-              </button>
-            ) : null}
-            {canWrite && allowPartsPriceVerify ? (
-              <button
-                type="button"
-                disabled={pending}
-                title="Compară prețurile pieselor cu catalogul"
-                onClick={() => void verifyPartsPrices()}
-                className={`${sheetBtnClass} border-amber-500/50 bg-amber-950/40 font-semibold text-amber-100`}
-              >
-                Verifică preț
-              </button>
-            ) : null}
-            {activeQuote && activeQuote.status !== "draft" ? (
-              <a
-                href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${sheetBtnClass} border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800`}
-              >
-                Export PDF
-              </a>
-            ) : null}
           </div>
         </div>
       ) : (
@@ -1221,33 +1176,13 @@ export function WorkOrderQuotePanel({
             <h2 className="text-sm font-medium text-zinc-200">Deviz</h2>
             <p className="mt-1 text-xs text-zinc-500">Linii structurate, trimitere și aprobare</p>
           </div>
-          {canWrite && !draftQuote ? (
+          {canWrite ? (
             <button
               type="button"
               onClick={startNewDraft}
               className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
             >
               Deviz nou
-            </button>
-          ) : null}
-          {canWrite && allowQuotePdfImport ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setImportOpen(true)}
-              className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-1.5 text-xs font-semibold text-violet-100"
-            >
-              Import PDF
-            </button>
-          ) : null}
-          {canWrite && allowPartsPriceVerify ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => void verifyPartsPrices()}
-              className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-1.5 text-xs font-semibold text-amber-100"
-            >
-              Verifică preț
             </button>
           ) : null}
         </div>
@@ -1481,6 +1416,7 @@ export function WorkOrderQuotePanel({
                 const photosSelected = activeId === q.id && quotePane === "photos";
                 const selectQuote = () => {
                   setCreatingNew(false);
+                  setMovePickerOpen(false);
                   setActiveId(q.id);
                   setTitle(q.title ?? "");
                   if (q.status === "draft") {
@@ -1629,49 +1565,104 @@ export function WorkOrderQuotePanel({
           ) : activeQuote.title ? (
             <p className="text-sm text-zinc-300">{activeQuote.title}</p>
           ) : null}
-          <div className="flex flex-wrap gap-4 text-sm">
-            {(() => {
-              const totals = quoteSubtotalsFromLines(activeQuote.lines, lineDecisions);
-              return (
-                <>
-                  <span>
-                    Total net:{" "}
-                    <strong>
-                      {formatMoneyCents(totals.labor + totals.parts + totals.other, activeQuote.currency)}
-                    </strong>
-                  </span>
-                  <span>
-                    TVA: <strong>{formatMoneyCents(totals.vat, activeQuote.currency)}</strong>
-                  </span>
-                  <span>
-                    Total: <strong>{formatMoneyCents(totals.gross, activeQuote.currency)}</strong>
-                  </span>
-                  {totals.rejectedCount > 0 ? (
-                    <span className="text-xs text-zinc-500">fără {totals.rejectedCount} respinse</span>
-                  ) : null}
-                </>
-              );
-            })()}
+
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2">
+            {canWrite && allowQuotePdfImport ? (
+              <button
+                type="button"
+                disabled={pending}
+                title="Import PDF / Audatex → preview → ciornă"
+                onClick={() => setImportOpen(true)}
+                className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-2.5 py-1 text-xs font-semibold text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+              >
+                Import PDF
+              </button>
+            ) : null}
+            {canWrite && allowPartsPriceVerify ? (
+              <button
+                type="button"
+                disabled={pending}
+                title="Compară prețurile pieselor cu catalogul"
+                onClick={() => void verifyPartsPrices()}
+                className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
+              >
+                Verifică preț
+              </button>
+            ) : null}
             {activeQuote.status !== "draft" ? (
               <a
                 href={`${workOrdersBrowserBase}/${workOrderId}/quotes/${activeQuote.id}/pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sky-400 hover:underline"
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800"
               >
-                PDF deviz
+                Export PDF
               </a>
             ) : null}
+            <span className="min-w-2 flex-1" />
+            <span className="text-sm text-zinc-300">
+              {(() => {
+                const totals = quoteSubtotalsFromLines(activeQuote.lines, lineDecisions);
+                return (
+                  <>
+                    Total net:{" "}
+                    <strong>
+                      {formatMoneyCents(totals.labor + totals.parts + totals.other, activeQuote.currency)}
+                    </strong>
+                    {" · "}TVA: <strong>{formatMoneyCents(totals.vat, activeQuote.currency)}</strong>
+                    {" · "}Total:{" "}
+                    <strong>{formatMoneyCents(totals.gross, activeQuote.currency)}</strong>
+                  </>
+                );
+              })()}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
             {canMoveQuote && hasLucrare2 ? (
-              <button
-                type="button"
-                disabled={pending}
-                title="Mută doar acest Deviz pe altă Lucrare"
-                onClick={() => void moveQuoteToLucrare()}
-                className="rounded-lg border border-zinc-600 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                Mută Devizul…
-              </button>
+              movePickerOpen ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950/80 px-2.5 py-1.5">
+                  <span className="text-xs text-zinc-400">Mută pe:</span>
+                  {([1, 2] as const).map((n) => {
+                    const current = quoteLucrareIndex(activeQuote);
+                    const disabled = n === current || pending;
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => void moveQuoteToLucrare(n)}
+                        className={`rounded-lg px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${
+                          n === current
+                            ? "border border-zinc-700 text-zinc-500"
+                            : "border border-violet-500/50 bg-violet-950/40 text-violet-100 hover:bg-violet-950/60"
+                        }`}
+                      >
+                        L{n}
+                        {n === current ? " (acum)" : ""}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => setMovePickerOpen(false)}
+                    className="rounded-lg border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+                  >
+                    Anulează
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pending}
+                  title="Mută doar acest Deviz pe altă Lucrare"
+                  onClick={() => setMovePickerOpen(true)}
+                  className="rounded-lg border border-zinc-600 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  Mută Devizul
+                </button>
+              )
             ) : null}
             {canWrite && activeQuote.status === "draft" ? (
               <>
