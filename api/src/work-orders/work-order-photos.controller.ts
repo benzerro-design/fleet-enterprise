@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -20,8 +20,18 @@ export class WorkOrderPhotosController {
     @TenantId() tenantSlug: string,
     @Param('workOrderId') workOrderId: string,
     @CurrentAccess() access: AccessContext,
+    @Query('visitIndex') visitIndexStr?: string,
+    @Query('phase') phase?: string,
+    @Query('quoteId') quoteId?: string,
+    @Query('kind') kind?: string,
   ) {
-    return this.photos.list(tenantSlug, workOrderId, access);
+    const visitIndex = visitIndexStr != null ? parseInt(visitIndexStr, 10) : undefined;
+    return this.photos.list(tenantSlug, workOrderId, access, {
+      visitIndex: Number.isFinite(visitIndex) ? visitIndex : undefined,
+      phase,
+      quoteId,
+      kind,
+    });
   }
 
   @Post()
@@ -29,7 +39,15 @@ export class WorkOrderPhotosController {
   create(
     @TenantId() tenantSlug: string,
     @Param('workOrderId') workOrderId: string,
-    @Body() body: { kind?: string; phase?: string; url?: string; caption?: string | null },
+    @Body()
+    body: {
+      kind?: string;
+      phase?: string;
+      url?: string;
+      caption?: string | null;
+      visitIndex?: number;
+      quoteId?: string | null;
+    },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,
   ) {

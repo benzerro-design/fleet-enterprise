@@ -12,10 +12,12 @@ import { PrismaService } from '../prisma/prisma.service';
 export type WorkOrderPhotoRecord = {
   id: string;
   workOrderId: string;
+  visitIndex: number;
   kind: WorkOrderPhotoKind;
   phase: WorkOrderPhotoPhase;
   url: string;
   caption: string | null;
+  quoteId: string | null;
   createdAt: string;
 };
 
@@ -23,10 +25,26 @@ export type WorkOrderPhotoRecord = {
 export class WorkOrderPhotosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(tenantSlug: string, workOrderId: string, access?: AccessContext) {
+  async list(
+    tenantSlug: string,
+    workOrderId: string,
+    access?: AccessContext,
+    filters?: { visitIndex?: number; phase?: string; quoteId?: string; kind?: string },
+  ) {
     await this.assertCanRead(tenantSlug, workOrderId, access);
     const rows = await this.prisma.workOrderPhoto.findMany({
-      where: { workOrderId, tenant: { slug: tenantSlug } },
+      where: {
+        workOrderId,
+        tenant: { slug: tenantSlug },
+        ...(filters?.visitIndex != null ? { visitIndex: filters.visitIndex } : {}),
+        ...(filters?.phase ? { phase: filters.phase as WorkOrderPhotoPhase } : {}),
+        ...(filters?.quoteId ? { quoteId: filters.quoteId } : {}),
+        ...(filters?.kind === 'defect'
+          ? { kind: WorkOrderPhotoKind.defect }
+          : filters?.kind === 'condition'
+            ? { kind: WorkOrderPhotoKind.condition }
+            : {}),
+      },
       orderBy: { createdAt: 'asc' },
     });
     return rows.map((r) => this.toRecord(r));
@@ -35,7 +53,14 @@ export class WorkOrderPhotosService {
   async create(
     tenantSlug: string,
     workOrderId: string,
-    input: { kind?: string; phase?: string; url?: string; caption?: string | null },
+    input: {
+      kind?: string;
+      phase?: string;
+      url?: string;
+      caption?: string | null;
+      visitIndex?: number;
+      quoteId?: string | null;
+    },
     actorUserId: string,
     access?: AccessContext,
   ) {
@@ -46,16 +71,31 @@ export class WorkOrderPhotosService {
     if (!url.startsWith('/uploads/')) {
       throw new BadRequestException('url invalid');
     }
+    const visitIndex =
+      kind === WorkOrderPhotoKind.defect
+        ? 0
+        : Math.max(1, Math.min(10, Math.floor(Number(input.visitIndex) || 1)));
+    let quoteId: string | null = null;
+    if (kind === WorkOrderPhotoKind.defect && input.quoteId?.trim()) {
+      const quote = await this.prisma.workOrderQuote.findFirst({
+        where: { id: input.quoteId.trim(), workOrderId, tenant: { slug: tenantSlug } },
+        select: { id: true },
+      });
+      if (!quote) throw new BadRequestException('quoteId invalid for work order');
+      quoteId = quote.id;
+    }
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
     const row = await this.prisma.workOrderPhoto.create({
       data: {
         tenantId: tenant.id,
         workOrderId,
+        visitIndex,
         kind,
         phase,
         url,
         caption: input.caption?.trim() || null,
+        quoteId,
         createdByUserId: actorUserId,
       },
     });
@@ -65,19 +105,23 @@ export class WorkOrderPhotosService {
   private toRecord(row: {
     id: string;
     workOrderId: string;
+    visitIndex: number;
     kind: WorkOrderPhotoKind;
     phase: WorkOrderPhotoPhase;
     url: string;
     caption: string | null;
+    quoteId: string | null;
     createdAt: Date;
   }): WorkOrderPhotoRecord {
     return {
       id: row.id,
       workOrderId: row.workOrderId,
+      visitIndex: row.visitIndex,
       kind: row.kind,
       phase: row.phase,
       url: row.url,
       caption: row.caption,
+      quoteId: row.quoteId,
       createdAt: row.createdAt.toISOString(),
     };
   }

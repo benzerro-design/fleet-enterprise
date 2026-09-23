@@ -1,7 +1,7 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { SupplierInvitePanel } from "@/components/fleet/suppliers/SupplierInvitePanel";
 import { MemberAccountActions } from "@/components/fleet/MemberAccountActions";
 import { tenantBrowserBase } from "@/lib/fleet-api";
@@ -38,12 +38,29 @@ function roleLabel(role: string): string {
 
 export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
   const router = useRouter();
-  const [supplierId, setSupplierId] = useState("");
+  const [filterSupplierId, setFilterSupplierId] = useState("");
+  const [filterRole, setFilterRole] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "disabled">("all");
+  const [query, setQuery] = useState("");
+  const [inviteSupplierId, setInviteSupplierId] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  const selected = suppliers.find((s) => s.id === supplierId);
+  const inviteSelected = suppliers.find((s) => s.id === inviteSupplierId);
+
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return memberships.filter((m) => {
+      if (filterSupplierId && m.supplierId !== filterSupplierId) return false;
+      if (filterRole && m.role !== filterRole) return false;
+      if (filterStatus === "active" && m.disabledAt) return false;
+      if (filterStatus === "disabled" && !m.disabledAt) return false;
+      if (!needle) return true;
+      const hay = `${m.email} ${m.displayName ?? ""} ${m.supplierCode} ${m.supplierLegalName}`.toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [memberships, filterSupplierId, filterRole, filterStatus, query]);
 
   async function removeMembership(id: string, label: string) {
     const yes = window.confirm(`Elimini accesul furnizor pentru ${label}?`);
@@ -80,23 +97,86 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
       {ok ? <p className="text-sm text-emerald-400">{ok}</p> : null}
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-        <h2 className="text-sm font-medium text-zinc-200">Useri furnizor · {memberships.length}</h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          Lista arată toți userii R*, indiferent de furnizorul ales pentru invitație.
-        </p>
-        {memberships.length === 0 ? (
-          <p className="mt-3 text-sm text-zinc-500">Niciun user furnizor încă.</p>
+        <h2 className="text-sm font-medium text-zinc-200">
+          Useri furnizor · {visible.length}
+          {visible.length !== memberships.length ? ` din ${memberships.length}` : ""}
+        </h2>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+          <label className="min-w-[10rem] flex-1 text-xs text-zinc-500">
+            Căutare
+            <input
+              type="search"
+              name="supplier-member-search"
+              autoComplete="off"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="min-w-[9rem] text-xs text-zinc-500">
+            Furnizor
+            <select
+              value={filterSupplierId}
+              onChange={(e) => setFilterSupplierId(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm"
+            >
+              <option value="">Toți</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-[9rem] text-xs text-zinc-500">
+            Rol
+            <select
+              value={filterRole}
+              onChange={(e) => setFilterRole(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm"
+            >
+              <option value="">Toți</option>
+              <option value="supplier_manager">Manager (R*)</option>
+              <option value="supplier_staff">Operator (R1)</option>
+              <option value="supplier_accountant">Contabil (R0)</option>
+            </select>
+          </label>
+          <label className="min-w-[8rem] text-xs text-zinc-500">
+            Stare
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+              className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm"
+            >
+              <option value="all">Toți</option>
+              <option value="active">Activi</option>
+              <option value="disabled">Dezactivați</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterSupplierId("");
+              setFilterRole("");
+              setFilterStatus("all");
+              setQuery("");
+            }}
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
+          >
+            Reset
+          </button>
+        </div>
+
+        {visible.length === 0 ? (
+          <p className="mt-3 text-sm text-zinc-500">Niciun user pentru filtrele curente.</p>
         ) : (
           <ul className="mt-4 space-y-4">
-            {memberships.map((m) => (
+            {visible.map((m) => (
               <li key={m.id} className="border-b border-zinc-800 pb-4 last:border-0">
                 <p className="font-medium text-zinc-200">{m.email}</p>
                 {m.displayName ? <p className="text-xs text-zinc-500">{m.displayName}</p> : null}
                 <p className="mt-1 text-xs text-zinc-400">
                   {m.supplierCode} — {m.supplierLegalName} · {roleLabel(m.role)}
-                </p>
-                <p className="text-xs text-zinc-600">
-                  din {new Date(m.createdAt).toLocaleDateString("ro-RO")}
                 </p>
                 <MemberAccountActions userId={m.userId} disabledAt={m.disabledAt} />
                 <button
@@ -107,9 +187,6 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
                 >
                   Elimină accesul la acest furnizor
                 </button>
-                <p className="mt-1 text-[11px] text-zinc-500">
-                  Scoate userul doar de la furnizorul acesta. Contul rămâne și poate fi dezactivat separat, de mai sus.
-                </p>
               </li>
             ))}
           </ul>
@@ -120,8 +197,8 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
         <label className="block text-sm">
           <span className="mb-1 block text-xs text-zinc-500">Furnizor pentru invitație</span>
           <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
+            value={inviteSupplierId}
+            onChange={(e) => setInviteSupplierId(e.target.value)}
             className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
           >
             <option value="">Alege furnizorul</option>
@@ -132,8 +209,8 @@ export function SupplierInvitesHubPanel({ suppliers, memberships }: Props) {
             ))}
           </select>
         </label>
-        {selected ? (
-          <SupplierInvitePanel supplierId={selected.id} allowManagerRole />
+        {inviteSelected ? (
+          <SupplierInvitePanel supplierId={inviteSelected.id} allowManagerRole />
         ) : (
           <p className="text-xs text-zinc-500">Alege un furnizor ca să generezi o invitație.</p>
         )}

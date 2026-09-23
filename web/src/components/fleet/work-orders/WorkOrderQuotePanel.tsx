@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS, fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 import { InvoiceAttachmentField } from "@/components/fleet/work-orders/InvoiceAttachmentField";
 import { QuoteImportModal } from "@/components/fleet/work-orders/QuoteImportModal";
+import { WorkOrderPhotoGallery } from "@/components/fleet/work-orders/WorkOrderPhotoGallery";
 import { WorkOrderWarrantyPanel } from "@/components/fleet/work-orders/WorkOrderWarrantyPanel";
 import { formatDateRo, toDateInput, toIsoFromDateInput } from "@/lib/datetime-local";
 import {
@@ -293,7 +294,7 @@ export function WorkOrderQuotePanel({
   const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"quote" | "warranty">("quote");
+  const [activeTab, setActiveTab] = useState<"quote" | "warranty" | "photos">("quote");
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [lines, setLines] = useState<EditableLine[]>(() => [newLine(supplierDiscounts)]);
   const [notes, setNotes] = useState("");
@@ -1021,6 +1022,7 @@ export function WorkOrderQuotePanel({
       <div className="mt-3 flex gap-2 border-b border-zinc-800">
         {[
           { id: "quote" as const, label: "Deviz" },
+          { id: "photos" as const, label: "Poze" },
           { id: "warranty" as const, label: "Garanție" },
         ].map((tab) => (
           <button
@@ -1055,6 +1057,40 @@ export function WorkOrderQuotePanel({
               ? ` · ${priceVerify.providersUsed.map((p) => p.label).join(", ")}`
               : ""}
           </p>
+        </div>
+      ) : null}
+
+      {activeTab === "photos" ? (
+        <div className="mt-4 space-y-3">
+          <p className="text-xs text-zinc-500">
+            Defecte și atelier pentru{" "}
+            {activeQuote ? `devizul v${activeQuote.version}` : "devizul ales"}. Nu sunt pozele de
+            recepție (alea stau pe Rezumat).
+          </p>
+          {quotes && quotes.length > 1 ? (
+            <div className="flex flex-wrap gap-1">
+              {quotes.map((q) => (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => setActiveId(q.id)}
+                  className={`rounded px-2 py-1 text-xs ${
+                    activeQuote?.id === q.id
+                      ? "bg-violet-900/50 text-violet-100"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Deviz {q.version}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <WorkOrderPhotoGallery
+            workOrderId={workOrderId}
+            canWrite={canWrite}
+            mode="quote"
+            quoteId={activeQuote?.id ?? null}
+          />
         </div>
       ) : null}
 

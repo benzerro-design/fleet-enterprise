@@ -1586,16 +1586,23 @@ model WorkOrderPhoto {
   id              String              @id @default(cuid())
   tenantId        String
   workOrderId     String
+  /// 1 = prima vizită (verificare), 2 = vizită 2 (reparație), …
+  visitIndex      Int                 @default(1)
   kind            WorkOrderPhotoKind
   phase           WorkOrderPhotoPhase
   url             String
   caption         String?
+  /// Poze defect legate de o versiune de deviz (opțional).
+  quoteId         String?
   createdByUserId String?
   createdAt       DateTime            @default(now())
   tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workOrder       MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  quote           WorkOrderQuote?     @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 
   @@index([workOrderId, kind])
+  @@index([workOrderId, visitIndex, phase])
+  @@index([quoteId])
 }
 
 enum ServiceAppointmentStatus {
@@ -1728,6 +1735,7 @@ model WorkOrderQuote {
   workOrder        MaintenanceWorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   costEntry        CostEntry?           @relation(fields: [costEntryId], references: [id], onDelete: SetNull)
   lines            WorkOrderQuoteLine[]
+  photos           WorkOrderPhoto[]
 
   @@unique([workOrderId, version])
   @@index([tenantId])

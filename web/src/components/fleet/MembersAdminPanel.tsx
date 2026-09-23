@@ -22,6 +22,7 @@ const PAGE_SIZE = 10;
 
 export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "disabled">("all");
   const [sortBy, setSortBy] = useState<"joined_desc" | "joined_asc" | "email_asc" | "role">(
     "joined_desc",
   );
@@ -29,12 +30,13 @@ export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
 
   const filteredAndSorted = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered = needle
-      ? members.filter((m) => {
-          const hay = `${m.email} ${m.displayName ?? ""} ${m.role}`.toLowerCase();
-          return hay.includes(needle);
-        })
-      : members.slice();
+    const filtered = members.filter((m) => {
+      if (statusFilter === "active" && m.disabledAt) return false;
+      if (statusFilter === "disabled" && !m.disabledAt) return false;
+      if (!needle) return true;
+      const hay = `${m.email} ${m.displayName ?? ""} ${m.role}`.toLowerCase();
+      return hay.includes(needle);
+    });
 
     filtered.sort((a, b) => {
       if (sortBy === "email_asc") return a.email.localeCompare(b.email, "ro");
@@ -48,7 +50,7 @@ export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
       return sortBy === "joined_asc" ? da - db : db - da;
     });
     return filtered;
-  }, [members, query, sortBy]);
+  }, [members, query, sortBy, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -72,6 +74,21 @@ export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
             placeholder="email, nume, rol…"
             className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
           />
+        </div>
+        <div className="min-w-[10rem]">
+          <label className="mb-1 block text-xs font-medium text-zinc-500">Stare</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as typeof statusFilter);
+              setPage(1);
+            }}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+          >
+            <option value="all">Toți</option>
+            <option value="active">Activi</option>
+            <option value="disabled">Dezactivați</option>
+          </select>
         </div>
         <div className="min-w-[14rem]">
           <label className="mb-1 block text-xs font-medium text-zinc-500">Sortare</label>
