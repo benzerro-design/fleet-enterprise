@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { ticketsBrowserBase, type TicketNotificationRecord } from "@/lib/tickets-api";
+import {
+  fleetJsonHeaders,
+  ticketsBrowserBase,
+  type TicketNotificationRecord,
+} from "@/lib/tickets-api";
 
 export function TicketNotificationBell() {
   const [open, setOpen] = useState(false);
@@ -10,7 +14,10 @@ export function TicketNotificationBell() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${ticketsBrowserBase}/notifications?unread=1`, { cache: "no-store" });
+      const res = await fetch(`${ticketsBrowserBase}/notifications?unread=1`, {
+        cache: "no-store",
+        headers: fleetJsonHeaders(),
+      });
       if (!res.ok) return;
       const data = (await res.json()) as { items: TicketNotificationRecord[] };
       setItems(data.items ?? []);
@@ -26,9 +33,24 @@ export function TicketNotificationBell() {
   }, [load]);
 
   async function markAllRead() {
-    await fetch(`${ticketsBrowserBase}/notifications/read-all`, { method: "PATCH" });
+    await fetch(`${ticketsBrowserBase}/notifications/read-all`, {
+      method: "PATCH",
+      headers: fleetJsonHeaders(),
+    });
     setItems([]);
     setOpen(false);
+  }
+
+  async function markOneRead(notificationId: string) {
+    try {
+      await fetch(`${ticketsBrowserBase}/notifications/${notificationId}/read`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+      });
+    } catch {
+      /* ignore */
+    }
+    setItems((prev) => prev.filter((n) => n.id !== notificationId));
   }
 
   const unread = items.length;
@@ -68,7 +90,10 @@ export function TicketNotificationBell() {
                 <li key={n.id}>
                   <Link
                     href={`/fleet/tickets/${n.ticketId}`}
-                    onClick={() => setOpen(false)}
+                    onClick={() => {
+                      void markOneRead(n.id);
+                      setOpen(false);
+                    }}
                     className="block rounded-lg border border-zinc-800 bg-zinc-900/50 px-2 py-2 text-xs hover:bg-zinc-900"
                   >
                     <span className="font-mono text-emerald-400">#{n.ticketDisplayId}</span>

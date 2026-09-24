@@ -58,7 +58,13 @@ export function TicketConversation({ initial, canWrite, closed, currentUserId }:
         currentUserId={currentUserId}
       />
       <div className="mt-4">
-        <TicketComposer ticket={initial.ticket} canWrite={canWrite} closed={closed} />
+        <TicketComposer
+          ticket={initial.ticket}
+          canWrite={canWrite}
+          closed={closed}
+          routeTargets={initial.routeTargets}
+          currentUserId={currentUserId}
+        />
       </div>
     </div>
   );

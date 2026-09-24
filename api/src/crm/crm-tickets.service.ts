@@ -811,7 +811,14 @@ export class CrmTicketsService {
       forwardedFromDisplayId = this.displayId(source.id);
     }
 
-    const mentionUserIds = await this.normalizeMentionUserIds(tenant.id, dto.mentions);
+    const mentionUserIds = await this.resolveCommentMentions({
+      tenantId: tenant.id,
+      clientId: ticket.clientId,
+      ownerUserId: ticket.ownerUserId,
+      routingLevel: ticket.routingLevel,
+      body,
+      rawMentions: dto.mentions,
+    });
 
     const payload = this.buildCommentPayload({
       rawBody: body || undefined,
@@ -1932,7 +1939,7 @@ export class CrmTicketsService {
 
   private async normalizeMentionUserIds(tenantId: string, raw?: string[]): Promise<string[]> {
     if (!raw?.length) return [];
-    const ids = [...new Set(raw.map((id) => id.trim()).filter(Boolean))].slice(0, 10);
+    const ids = [...new Set(raw.map((id) => id.trim()).filter(Boolean))].slice(0, 20);
     if (ids.length === 0) return [];
     const users = await this.prisma.user.findMany({
       where: {
@@ -1942,6 +1949,29 @@ export class CrmTicketsService {
       select: { id: true },
     });
     return users.map((u) => u.id);
+  }
+
+  /** Expandă @owner / @coadă din body + IDs din DTO; validează membership. */
+  private async resolveCommentMentions(input: {
+    tenantId: string;
+    clientId: string;
+    ownerUserId: string | null;
+    routingLevel: CrmTicketRoutingLevel;
+    body: string;
+    rawMentions?: string[];
+  }): Promise<string[]> {
+    const collected = [...(input.rawMentions ?? [])];
+    if (/\b@owner\b/i.test(input.body) && input.ownerUserId) {
+      collected.push(input.ownerUserId);
+    }
+    if (/\b@coad[aă]\b/i.test(input.body) || /\b@queue\b/i.test(input.body)) {
+      const targets = await this.listRouteTargets(input.tenantId, input.clientId);
+      const level = input.routingLevel === CrmTicketRoutingLevel.L_STAR ? 'L_STAR' : 'L1';
+      for (const t of targets) {
+        if (t.level === level) collected.push(t.userId);
+      }
+    }
+    return this.normalizeMentionUserIds(input.tenantId, collected);
   }
 
   private async notifyMentions(input: {

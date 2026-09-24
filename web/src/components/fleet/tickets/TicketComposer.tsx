@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { uploadTicketAttachment } from "@/lib/ticket-attachment-upload";
 import { TICKET_REPLY_TEMPLATES } from "@/lib/ticket-messaging";
 import {
@@ -10,6 +9,7 @@ import {
   ticketsBrowserBase,
   type TicketCommentAttachment,
   type TicketRecord,
+  type TicketRouteTarget,
 } from "@/lib/tickets-api";
 
 type ReplyTarget = { eventId: string; preview: string };
@@ -18,9 +18,21 @@ type Props = {
   ticket: TicketRecord;
   canWrite: boolean;
   closed: boolean;
+  routeTargets?: TicketRouteTarget[];
+  currentUserId?: string;
 };
 
-export function TicketComposer({ ticket, canWrite, closed }: Props) {
+function queueLevelForTicket(level: TicketRecord["routingLevel"]): "L_STAR" | "L1" {
+  return level === "L_STAR" ? "L_STAR" : "L1";
+}
+
+export function TicketComposer({
+  ticket,
+  canWrite,
+  closed,
+  routeTargets = [],
+  currentUserId,
+}: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -30,6 +42,7 @@ export function TicketComposer({ ticket, canWrite, closed }: Props) {
   const [staged, setStaged] = useState<TicketCommentAttachment[]>([]);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [forwardFromId, setForwardFromId] = useState("");
+  const [mentionIds, setMentionIds] = useState<string[]>([]);
 
   useEffect(() => {
     function onReply(e: Event) {
@@ -40,16 +53,74 @@ export function TicketComposer({ ticket, canWrite, closed }: Props) {
     return () => window.removeEventListener("ticket-reply", onReply);
   }, []);
 
+  const queueLevel = queueLevelForTicket(ticket.routingLevel);
+  const queuePeople = useMemo(
+    () => routeTargets.filter((t) => t.level === queueLevel && t.userId !== currentUserId),
+    [routeTargets, queueLevel, currentUserId],
+  );
+  const peopleChips = useMemo(() => {
+    const seen = new Set<string>();
+    const out: TicketRouteTarget[] = [];
+    for (const t of routeTargets) {
+      if (t.userId === currentUserId || seen.has(t.userId)) continue;
+      if (ticket.ownerUserId && t.userId === ticket.ownerUserId) continue;
+      seen.add(t.userId);
+      out.push(t);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }, [routeTargets, currentUserId, ticket.ownerUserId]);
+
   if (!canWrite || closed) return null;
 
-  const mentionUserIds: string[] = [];
-  if (ticket.ownerUserId && body.includes("@owner")) {
-    mentionUserIds.push(ticket.ownerUserId);
+  function toggleMentionIds(ids: string[], token: string) {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return;
+    setMentionIds((prev) => {
+      const allIn = unique.every((id) => prev.includes(id));
+      const next = allIn ? prev.filter((id) => !unique.includes(id)) : [...new Set([...prev, ...unique])];
+      setBody((bodyPrev) => {
+        const has = bodyPrev.includes(token);
+        if (allIn) {
+          return bodyPrev.replaceAll(token, "").replace(/\s{2,}/g, " ").trim();
+        }
+        if (has) return bodyPrev;
+        return `${bodyPrev.trimEnd()} ${token} `.trimStart();
+      });
+      return next;
+    });
+  }
+
+  function insertOwnerMention() {
+    if (!ticket.ownerUserId) return;
+    toggleMentionIds([ticket.ownerUserId], "@owner");
+  }
+
+  function insertQueueMention() {
+    const ids = queuePeople.map((p) => p.userId);
+    toggleMentionIds(ids, "@coadă");
+  }
+
+  function insertPersonMention(person: TicketRouteTarget) {
+    const token = `@${person.displayName.replace(/\s+/g, "")}`;
+    toggleMentionIds([person.userId], token);
   }
 
   async function submit() {
     const text = body.trim();
     if (!text && staged.length === 0) return;
+
+    const fromTokens: string[] = [];
+    if (ticket.ownerUserId && (text.includes("@owner") || mentionIds.includes(ticket.ownerUserId))) {
+      fromTokens.push(ticket.ownerUserId);
+    }
+    if (/\b@coadă\b/i.test(text) || /\b@coada\b/i.test(text)) {
+      fromTokens.push(...queuePeople.map((p) => p.userId));
+    }
+    const mentions = [...new Set([...mentionIds, ...fromTokens])].filter(
+      (id) => id && id !== currentUserId,
+    );
+
     setPending(true);
     setError(null);
     try {
@@ -61,7 +132,7 @@ export function TicketComposer({ ticket, canWrite, closed }: Props) {
           attachments: staged.length > 0 ? staged : undefined,
           parentEventId: replyTo?.eventId,
           forwardedFromTicketId: forwardFromId.trim() || undefined,
-          mentions: mentionUserIds.length > 0 ? mentionUserIds : undefined,
+          mentions: mentions.length > 0 ? mentions : undefined,
         }),
       });
       if (!res.ok) {
@@ -80,6 +151,7 @@ export function TicketComposer({ ticket, canWrite, closed }: Props) {
       setStaged([]);
       setReplyTo(null);
       setForwardFromId("");
+      setMentionIds([]);
       router.refresh();
     } finally {
       setPending(false);
@@ -106,9 +178,9 @@ export function TicketComposer({ ticket, canWrite, closed }: Props) {
     }
   }
 
-  function insertMentionOwner() {
-    setBody((prev) => (prev.includes("@owner") ? prev : `${prev.trimEnd()} @owner `.trimStart()));
-  }
+  const ownerSelected = Boolean(ticket.ownerUserId && mentionIds.includes(ticket.ownerUserId));
+  const queueSelected =
+    queuePeople.length > 0 && queuePeople.every((p) => mentionIds.includes(p.userId));
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -141,18 +213,55 @@ export function TicketComposer({ ticket, canWrite, closed }: Props) {
         onChange={(e) => setBody(e.target.value)}
         rows={3}
         className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-        placeholder="Scrie un comentariu… (@owner pentru owner tichet)"
+        placeholder="Scrie un comentariu… Folosește chip-urile @ pentru mențiuni."
       />
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {ticket.ownerUserId ? (
           <button
             type="button"
-            onClick={insertMentionOwner}
-            className="rounded-lg border border-violet-800/50 px-2 py-1 text-[10px] text-violet-300 hover:bg-violet-950/30"
+            onClick={insertOwnerMention}
+            className={`rounded-lg border px-2 py-1 text-[10px] ${
+              ownerSelected
+                ? "border-violet-500 bg-violet-950/40 text-violet-200"
+                : "border-violet-800/50 text-violet-300 hover:bg-violet-950/30"
+            }`}
           >
             @owner
+            {ticket.ownerDisplayName ? ` (${ticket.ownerDisplayName})` : ""}
           </button>
         ) : null}
+        {queuePeople.length > 0 ? (
+          <button
+            type="button"
+            onClick={insertQueueMention}
+            className={`rounded-lg border px-2 py-1 text-[10px] ${
+              queueSelected
+                ? "border-amber-500 bg-amber-950/40 text-amber-200"
+                : "border-amber-800/50 text-amber-300 hover:bg-amber-950/30"
+            }`}
+            title={`Notifică ${queuePeople.length} pe coada ${queueLevel === "L_STAR" ? "L★" : "L1"}`}
+          >
+            @coadă ({queuePeople.length})
+          </button>
+        ) : null}
+        {peopleChips.map((p) => {
+          const selected = mentionIds.includes(p.userId);
+          return (
+            <button
+              key={p.userId}
+              type="button"
+              onClick={() => insertPersonMention(p)}
+              className={`rounded-lg border px-2 py-1 text-[10px] ${
+                selected
+                  ? "border-sky-500 bg-sky-950/40 text-sky-200"
+                  : "border-zinc-700 text-zinc-300 hover:bg-zinc-900"
+              }`}
+              title={p.email}
+            >
+              @{p.displayName}
+            </button>
+          );
+        })}
         <input
           value={forwardFromId}
           onChange={(e) => setForwardFromId(e.target.value)}
@@ -160,6 +269,11 @@ export function TicketComposer({ ticket, canWrite, closed }: Props) {
           className="min-w-[160px] flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[10px] text-zinc-400"
         />
       </div>
+      {mentionIds.length > 0 ? (
+        <p className="mt-1.5 text-[10px] text-zinc-500">
+          Mențiuni: {mentionIds.length} persoan{mentionIds.length === 1 ? "ă" : "e"} vor primi notificare.
+        </p>
+      ) : null}
       {staged.length > 0 ? (
         <ul className="mt-2 flex flex-wrap gap-2">
           {staged.map((a) => (
