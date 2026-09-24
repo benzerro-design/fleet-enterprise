@@ -105,7 +105,19 @@ export type TicketDetailPayload = {
   ticket: TicketRecord;
   events: TicketEventRecord[];
   links: TicketLinkRecord[];
+  attachments: TicketAttachmentRecord[];
   routeTargets: TicketRouteTarget[];
+};
+
+export type TicketAttachmentRecord = {
+  id: string;
+  url: string;
+  fileName: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  eventId: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
 };
 
 export type TicketStats = {
@@ -453,7 +465,7 @@ export class CrmTicketsService {
       throw new ForbiddenException('Ticket not accessible');
     }
 
-    const [events, links] = await Promise.all([
+    const [events, links, attachments] = await Promise.all([
       this.prisma.crmTicketEvent.findMany({
         where: { ticketId: id, tenantId: tenant.id },
         orderBy: { createdAt: 'asc' },
@@ -463,6 +475,7 @@ export class CrmTicketsService {
         where: { ticketId: id, tenantId: tenant.id },
         orderBy: { createdAt: 'asc' },
       }),
+      this.listAttachmentsSafe(tenant.id, id),
     ]);
 
     return {
@@ -474,6 +487,7 @@ export class CrmTicketsService {
         entityId: l.entityId,
         createdAt: l.createdAt.toISOString(),
       })),
+      attachments,
       routeTargets: await this.listRouteTargets(tenant.id, row.clientId),
     };
   }
@@ -822,6 +836,13 @@ export class CrmTicketsService {
       payload,
       parentEventId: dto.parentEventId?.trim() || undefined,
     });
+
+    if (attachments.length > 0) {
+      await this.persistAttachments(tenant.id, id, attachments, {
+        eventId: created.id,
+        actorUserId: actorUserId ?? null,
+      });
+    }
 
     if (mentionUserIds.length > 0 && actorUserId) {
       await this.notifyMentions({
@@ -1662,6 +1683,140 @@ export class CrmTicketsService {
       });
     }
     return out;
+  }
+
+  private mapAttachmentRecord(row: {
+    id: string;
+    url: string;
+    fileName: string;
+    mimeType: string | null;
+    sizeBytes: number | null;
+    eventId: string | null;
+    createdByUserId: string | null;
+    createdAt: Date;
+  }): TicketAttachmentRecord {
+    return {
+      id: row.id,
+      url: row.url,
+      fileName: row.fileName,
+      mimeType: row.mimeType,
+      sizeBytes: row.sizeBytes,
+      eventId: row.eventId,
+      createdByUserId: row.createdByUserId,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  /** Tabel nou — dacă migrarea nu e încă aplicată, nu spargem detaliul tichetului. */
+  private async listAttachmentsSafe(tenantId: string, ticketId: string): Promise<TicketAttachmentRecord[]> {
+    try {
+      const rows = await this.prisma.crmTicketAttachment.findMany({
+        where: { tenantId, ticketId },
+        orderBy: { createdAt: 'asc' },
+      });
+      return rows.map((r) => this.mapAttachmentRecord(r));
+    } catch {
+      return [];
+    }
+  }
+
+  private async persistAttachments(
+    tenantId: string,
+    ticketId: string,
+    attachments: TicketCommentAttachment[],
+    opts: { eventId?: string | null; actorUserId?: string | null },
+  ): Promise<void> {
+    if (!attachments.length) return;
+    try {
+      await this.prisma.crmTicketAttachment.createMany({
+        data: attachments.map((a) => ({
+          tenantId,
+          ticketId,
+          eventId: opts.eventId ?? null,
+          url: a.url,
+          fileName: a.name,
+          mimeType: a.mimeType ?? null,
+          createdByUserId: opts.actorUserId ?? null,
+        })),
+      });
+    } catch (e) {
+      this.logger.warn(
+        `CrmTicketAttachment persist failed (migrate?): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
+  async listAttachments(
+    tenantSlug: string,
+    ticketId: string,
+    access?: AccessContext,
+  ): Promise<TicketAttachmentRecord[]> {
+    const tenant = await this.ensureTenant(tenantSlug);
+    const ticket = await this.ensureTicket(tenant.id, ticketId);
+    if (access && !canReadTicket(access, ticket)) {
+      throw new ForbiddenException('Ticket not accessible');
+    }
+    return this.listAttachmentsSafe(tenant.id, ticketId);
+  }
+
+  async addAttachment(
+    tenantSlug: string,
+    ticketId: string,
+    body: { url: string; fileName: string; mimeType?: string; sizeBytes?: number },
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<TicketAttachmentRecord> {
+    const tenant = await this.ensureTenant(tenantSlug);
+    const ticket = await this.ensureTicket(tenant.id, ticketId);
+    if (access && !canPerformTicketAction(access, 'comment', ticket)) {
+      throw new ForbiddenException('Cannot attach files to ticket');
+    }
+    const url = body.url?.trim();
+    const fileName = body.fileName?.trim();
+    if (!url || !fileName) throw new BadRequestException('url and fileName required');
+    if (!url.startsWith('/uploads/tickets/') && !url.includes('/uploads/tickets/')) {
+      throw new BadRequestException('Attachment must be under /uploads/tickets/');
+    }
+    try {
+      const row = await this.prisma.crmTicketAttachment.create({
+        data: {
+          tenantId: tenant.id,
+          ticketId,
+          url,
+          fileName,
+          mimeType: body.mimeType?.trim() || null,
+          sizeBytes: body.sizeBytes ?? null,
+          createdByUserId: actorUserId ?? null,
+        },
+      });
+      await this.prisma.crmTicket.update({
+        where: { id: ticketId },
+        data: { updatedAt: new Date() },
+      });
+      return this.mapAttachmentRecord(row);
+    } catch (e) {
+      throw new BadRequestException(
+        `Cannot save attachment — run migrate (CrmTicketAttachment). ${e instanceof Error ? e.message : ''}`,
+      );
+    }
+  }
+
+  async deleteAttachment(
+    tenantSlug: string,
+    ticketId: string,
+    attachmentId: string,
+    access?: AccessContext,
+  ): Promise<void> {
+    const tenant = await this.ensureTenant(tenantSlug);
+    const ticket = await this.ensureTicket(tenant.id, ticketId);
+    if (access && !canPerformTicketAction(access, 'comment', ticket)) {
+      throw new ForbiddenException('Cannot delete ticket attachment');
+    }
+    const row = await this.prisma.crmTicketAttachment.findFirst({
+      where: { id: attachmentId, ticketId, tenantId: tenant.id },
+    });
+    if (!row) throw new NotFoundException('Attachment not found');
+    await this.prisma.crmTicketAttachment.delete({ where: { id: attachmentId } });
   }
 
   private async syncTicketOdometer(

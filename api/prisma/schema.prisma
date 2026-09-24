@@ -44,6 +44,7 @@ model Tenant {
   crmTicketEvents    CrmTicketEvent[]
   crmTicketLinks     CrmTicketLink[]
   crmTicketNotifications CrmTicketNotification[]
+  crmTicketAttachments   CrmTicketAttachment[]
   clientMemberships  ClientMembership[]
   supplierMemberships SupplierMembership[]
   supplierInvites     SupplierInvite[]
@@ -308,6 +309,7 @@ model User {
   crmTicketsOwned          CrmTicket[]               @relation("TicketOwner")
   crmTicketEvents          CrmTicketEvent[]          @relation("TicketEventActor")
   crmTicketNotifications   CrmTicketNotification[]
+  crmTicketAttachments     CrmTicketAttachment[]   @relation("TicketAttachmentBy")
   clientMemberships        ClientMembership[]
   supplierMemberships      SupplierMembership[]
   supplierInvitesCreated   SupplierInvite[]          @relation("SupplierInviteCreator")
@@ -1046,6 +1048,7 @@ model CrmTicket {
   events           CrmTicketEvent[]
   links            CrmTicketLink[]
   notifications    CrmTicketNotification[]
+  attachments      CrmTicketAttachment[]
   serviceCase      ServiceCase?
   mobilityAssignments MobilityAssignment[]
   roadsideInterventions RoadsideIntervention[]
@@ -1079,10 +1082,34 @@ model CrmTicketEvent {
   actor              User?                  @relation("TicketEventActor", fields: [actorUserId], references: [id])
   parent             CrmTicketEvent?        @relation("TicketEventReplies", fields: [parentEventId], references: [id], onDelete: SetNull)
   replies            CrmTicketEvent[]       @relation("TicketEventReplies")
+  attachments        CrmTicketAttachment[]
 
   @@index([tenantId])
   @@index([ticketId, createdAt])
   @@index([parentEventId])
+}
+
+/// Atașament pe tichet (GCS /uploads/tickets/…) — CRM-012.
+model CrmTicketAttachment {
+  id              String    @id @default(cuid())
+  tenantId        String
+  ticketId        String
+  /// Comentariul din care a venit (opțional — upload direct pe tichet).
+  eventId         String?
+  url             String
+  fileName        String
+  mimeType        String?
+  sizeBytes       Int?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket          CrmTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  event           CrmTicketEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  createdBy       User?     @relation("TicketAttachmentBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([ticketId, createdAt])
+  @@index([eventId])
 }
 
 enum CrmTicketNotificationKind {

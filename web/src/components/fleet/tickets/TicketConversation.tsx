@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { TicketAttachmentGallery } from "@/components/fleet/tickets/TicketAttachmentGallery";
+import { TicketAttachmentsPanel } from "@/components/fleet/tickets/TicketAttachmentsPanel";
 import { TicketComposer } from "@/components/fleet/tickets/TicketComposer";
 import { TicketThread } from "@/components/fleet/tickets/TicketThread";
+import { ticketEventAttachments, type TicketDetailPayload } from "@/lib/tickets-api";
 import { TICKET_POLL_INTERVAL_MS } from "@/lib/ticket-messaging";
-import type { TicketDetailPayload } from "@/lib/tickets-api";
 
 type Props = {
   initial: TicketDetailPayload;
@@ -28,6 +28,8 @@ export function TicketConversation({ initial, canWrite, closed, currentUserId }:
     return () => window.clearInterval(id);
   }, [live, router]);
 
+  const legacyFromEvents = initial.events.flatMap((ev) => ticketEventAttachments(ev));
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -42,7 +44,13 @@ export function TicketConversation({ initial, canWrite, closed, currentUserId }:
           {live ? "Pauză" : "Reia"}
         </button>
       </div>
-      <TicketAttachmentGallery events={initial.events} />
+      <TicketAttachmentsPanel
+        ticketId={initial.ticket.id}
+        attachments={initial.attachments ?? []}
+        legacyFromEvents={legacyFromEvents}
+        canWrite={canWrite}
+        closed={closed}
+      />
       <TicketThread
         events={initial.events}
         ticketId={initial.ticket.id}

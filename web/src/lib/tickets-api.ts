@@ -122,7 +122,19 @@ export type TicketDetailPayload = {
   ticket: TicketRecord;
   events: TicketEventRecord[];
   links: TicketLinkRecord[];
+  attachments?: TicketAttachmentRecord[];
   routeTargets?: TicketRouteTarget[];
+};
+
+export type TicketAttachmentRecord = {
+  id: string;
+  url: string;
+  fileName: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  eventId: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
 };
 
 export type TicketStats = {

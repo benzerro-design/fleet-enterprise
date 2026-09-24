@@ -215,6 +215,41 @@ export class CrmTicketsController {
     return this.tickets.getDetail(tenantSlug, id, access);
   }
 
+  @Get(':id/attachments')
+  @Roles(...CRM_READ)
+  listAttachments(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tickets.listAttachments(tenantSlug, id, access);
+  }
+
+  @Post(':id/attachments')
+  @Roles(...CRM_WRITE)
+  @HttpCode(201)
+  addAttachment(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: { url: string; fileName: string; mimeType?: string; sizeBytes?: number },
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tickets.addAttachment(tenantSlug, id, body, actorUserId, access);
+  }
+
+  @Delete(':id/attachments/:attachmentId')
+  @Roles(...CRM_WRITE)
+  @HttpCode(204)
+  async deleteAttachment(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    await this.tickets.deleteAttachment(tenantSlug, id, attachmentId, access);
+  }
+
   @Post()
   @Roles(...CRM_WRITE)
   @HttpCode(201)
