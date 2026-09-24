@@ -30,6 +30,7 @@ import {
   DamageClaimPanel,
   serviceCaseFromWorkOrderDamage,
 } from "@/components/fleet/tickets/DamageClaimPanel";
+import { PartnerSourceTicketPanel } from "@/components/fleet/partner/PartnerSourceTicketPanel";
 import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
 import {
   isDamageInsurerReady,
@@ -679,9 +680,18 @@ export function WorkOrderSheetShell({
             {wo.sourceTicketId ? (
               <div>
                 Referință{" "}
-                <Link href={`/fleet/tickets/${wo.sourceTicketId}`} className="text-emerald-400 hover:underline">
-                  #{wo.ticketDisplayId}
-                </Link>
+                {isPartner ? (
+                  <span className="font-mono text-emerald-300">#{wo.ticketDisplayId}</span>
+                ) : (
+                  <Link href={`/fleet/tickets/${wo.sourceTicketId}`} className="text-emerald-400 hover:underline">
+                    #{wo.ticketDisplayId}
+                  </Link>
+                )}
+              </div>
+            ) : null}
+            {isPartner && wo.sourceTicketId ? (
+              <div className="pt-1">
+                <PartnerSourceTicketPanel workOrderId={wo.id} compact />
               </div>
             ) : null}
             <div>Programare: {fmtDate(wo.plannedAt ?? wo.linkedAppointmentScheduledAt)}</div>

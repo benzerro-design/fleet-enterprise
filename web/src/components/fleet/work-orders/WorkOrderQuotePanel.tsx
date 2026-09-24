@@ -1310,8 +1310,8 @@ export function WorkOrderQuotePanel({
       <div className="mt-3 flex gap-2 border-b border-zinc-800">
         {(hasLucrare2
           ? [
-              { id: "l1" as const, label: "L1" },
-              { id: "l2" as const, label: "L2" },
+              { id: "l1" as const, label: "Lucrare 1" },
+              { id: "l2" as const, label: "Lucrare 2" },
               { id: "warranty" as const, label: "Garanție" },
             ]
           : [

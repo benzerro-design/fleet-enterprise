@@ -404,7 +404,7 @@ export function VehicleDetailSections({
 
         <AccordionSection
           sectionId="mobility"
-          title="Rulaj vs Consum"
+          title="Rulaj & alimentări"
           summary={summaries.mobility}
           open={open.mobility}
           onToggle={() => toggle("mobility")}
@@ -424,6 +424,10 @@ export function VehicleDetailSections({
             </>
           }
         >
+          <p className="mb-3 text-[11px] leading-snug text-zinc-500">
+            Snapshot rapid: km, curse recente, alimentări. Analiza L/100km pe perioadă e pe tab-ul{" "}
+            <span className="text-zinc-300">Consum</span>.
+          </p>
           {!mobility.ok ? (
             <p className="text-sm text-amber-400">Nu am putut încărca datele de rulaj și consum.</p>
           ) : (

@@ -939,6 +939,124 @@ export class WorkOrdersService {
     };
   }
 
+  /**
+   * PARTNER-006 — preview tichet sursă pentru portal (read-only).
+   * Story mascat: doar comentarii + status; fără routing/transform/ops interne; fără email actor.
+   */
+  async getSourceTicketPreview(tenantSlug: string, workOrderId: string, access: AccessContext) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
+      where: { id: workOrderId, tenantId: tenant.id },
+      select: {
+        id: true,
+        supplierId: true,
+        vehicle: {
+          select: {
+            clientId: true,
+            registrationNumber: true,
+            brand: true,
+            model: true,
+            vin: true,
+          },
+        },
+        serviceCase: {
+          select: {
+            sourceTicketId: true,
+            sourceTicket: {
+              select: {
+                id: true,
+                subject: true,
+                description: true,
+                status: true,
+                ticketType: true,
+                createdAt: true,
+                driver: { select: { fullName: true, phone: true } },
+                events: {
+                  orderBy: { createdAt: 'asc' },
+                  take: 80,
+                  select: {
+                    id: true,
+                    kind: true,
+                    body: true,
+                    payload: true,
+                    createdAt: true,
+                    actorRoutingLevel: true,
+                    actorDisplayName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!wo) throw new NotFoundException('Work order not found');
+    this.assertWorkOrderRead(access, wo);
+
+    const ticket = wo.serviceCase.sourceTicket;
+    if (!ticket) {
+      return { ticket: null as null, story: [] as Array<unknown> };
+    }
+
+    const story = ticket.events
+      .filter(
+        (e) =>
+          e.kind === CrmTicketEventKind.comment || e.kind === CrmTicketEventKind.status,
+      )
+      .map((e) => {
+        const level = e.actorRoutingLevel;
+        let actorLabel = 'Flotă';
+        if (level === 'L0') {
+          actorLabel = e.actorDisplayName?.trim() || 'Șofer';
+        } else if (level === 'L1' || level === 'L1N') {
+          actorLabel = e.actorDisplayName?.trim() || 'Manager client';
+        }
+
+        let text = e.body?.trim() || null;
+        if (e.kind === CrmTicketEventKind.comment && e.payload && typeof e.payload === 'object') {
+          const p = e.payload as Record<string, unknown>;
+          if (typeof p.rawBody === 'string' && p.rawBody.trim()) text = p.rawBody.trim();
+          else if (typeof p.text === 'string' && p.text.trim()) text = p.text.trim();
+          else if (typeof p.body === 'string' && p.body.trim()) text = p.body.trim();
+        }
+        if (e.kind === CrmTicketEventKind.status && !text) {
+          text = 'Status actualizat';
+        }
+
+        return {
+          id: e.id,
+          kind: e.kind === CrmTicketEventKind.status ? ('status' as const) : ('comment' as const),
+          text,
+          actorLabel,
+          createdAt: e.createdAt.toISOString(),
+        };
+      })
+      .filter((e) => e.text);
+
+    return {
+      ticket: {
+        id: ticket.id,
+        displayId: ticketDisplayId(ticket.id),
+        subject: ticket.subject,
+        description: ticket.description,
+        status: ticket.status,
+        ticketType: ticket.ticketType,
+        createdAt: ticket.createdAt.toISOString(),
+        driverName: ticket.driver?.fullName ?? null,
+        driverPhone: ticket.driver?.phone ?? null,
+        vehicle: {
+          registrationNumber: wo.vehicle.registrationNumber,
+          brand: wo.vehicle.brand,
+          model: wo.vehicle.model,
+          vin: wo.vehicle.vin,
+        },
+      },
+      story,
+    };
+  }
+
   async patch(
     tenantSlug: string,
     id: string,

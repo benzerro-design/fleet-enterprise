@@ -202,34 +202,52 @@ export function WorkOrderQuoteBillingActions({
       {error ? <p className="text-xs text-red-400">{error}</p> : null}
 
       {quote.invoicedAt ? (
-        <p className="text-xs text-emerald-300">
-          Factură:{" "}
-          {quote.costEntryId ? (
-            <Link href={`/fleet/costs/${quote.costEntryId}`} className="text-sky-300 hover:underline">
-              {quote.invoiceNumber ?? "—"}
-            </Link>
-          ) : (
-            <Link href={`/fleet/work-orders/${workOrderId}`} className="text-sky-300 hover:underline">
-              {quote.invoiceNumber ?? "—"}
-            </Link>
-          )}
-          {quote.invoiceDate
-            ? ` · ${new Date(quote.invoiceDate).toLocaleDateString("ro-RO")}`
-            : ""}
-          {quote.invoiceAttachmentUrl ? (
-            <>
-              {" · "}
+        <div
+          className={`rounded-lg border border-emerald-700/50 bg-emerald-950/30 ${compact ? "p-2.5" : "p-3"}`}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400/90">
+            Factură înregistrată
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+            <span className="font-medium text-emerald-100">
+              {quote.invoiceNumber?.trim() || "Fără număr"}
+            </span>
+            {quote.invoiceDate ? (
+              <span className="text-xs text-zinc-400">
+                {new Date(quote.invoiceDate).toLocaleDateString("ro-RO")}
+              </span>
+            ) : null}
+            {quote.invoiceAttachmentUrl ? (
               <a
                 href={quote.invoiceAttachmentUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-violet-300 hover:underline"
+                className="rounded border border-violet-500/40 bg-violet-950/40 px-2 py-0.5 text-xs font-medium text-violet-200 hover:bg-violet-900/40"
               >
-                PDF factură
+                PDF factură →
               </a>
-            </>
-          ) : null}
-        </p>
+            ) : (
+              <span className="text-[10px] text-zinc-500">Fără PDF</span>
+            )}
+          </div>
+          <p className="mt-1.5 text-[11px] text-zinc-500">
+            {quote.costEntryId ? (
+              <>
+                Cost:{" "}
+                <Link href={`/fleet/costs/${quote.costEntryId}`} className="text-sky-300 hover:underline">
+                  deschide înregistrarea
+                </Link>
+              </>
+            ) : (
+              <>
+                Detalii pe{" "}
+                <Link href={`/fleet/work-orders/${workOrderId}`} className="text-sky-300 hover:underline">
+                  comandă
+                </Link>
+              </>
+            )}
+          </p>
+        </div>
       ) : canWrite ? (
         <div className="grid gap-2 sm:grid-cols-2">
           <div>

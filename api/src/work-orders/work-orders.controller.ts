@@ -147,6 +147,17 @@ export class WorkOrdersController {
     return this.workOrders.getById(tenantSlug, id, access);
   }
 
+  /** PARTNER-006 — tichet sursă read-only (story mascat). */
+  @Get(':id/source-ticket')
+  @Roles(...FLEET_READ_ROLES)
+  sourceTicket(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.workOrders.getSourceTicketPreview(tenantSlug, id, access);
+  }
+
   @Patch(':id')
   @Roles(...FLEET_WRITE_ROLES)
   patch(
