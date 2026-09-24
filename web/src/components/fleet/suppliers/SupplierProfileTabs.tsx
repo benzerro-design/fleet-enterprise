@@ -4,6 +4,9 @@ import { useState } from "react";
 import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
 import { SupplierClientAllocationsEditor } from "@/components/fleet/suppliers/SupplierClientAllocationsEditor";
 import { SupplierDocumentsPanel } from "@/components/fleet/suppliers/SupplierDocumentsPanel";
+import { SupplierProgramEditor } from "@/components/fleet/suppliers/SupplierProgramEditor";
+import { SupplierTarifeEditor } from "@/components/fleet/suppliers/SupplierTarifeEditor";
+import { SupplierTeamPanel } from "@/components/fleet/suppliers/SupplierTeamPanel";
 import type { SupplierMembershipMe } from "@/lib/auth-server";
 import type { SupplierRecord } from "@/lib/suppliers-api";
 import type { SupplierServiceCatalogEntry } from "@/lib/supplier-service-catalog";
@@ -28,6 +31,10 @@ type Props = {
   supplierMembership?: SupplierMembershipMe;
   canWriteServices?: boolean;
   canAllocateClients?: boolean;
+  /** Partner R* / admin — poate invita în tab Echipă */
+  canInviteTeam?: boolean;
+  /** L* poate invita și R* */
+  allowManagerInvite?: boolean;
   assignedByLabel?: string;
   contextLabel?: string;
 };
@@ -39,6 +46,8 @@ export function SupplierProfileTabs({
   supplierMembership,
   canWriteServices = false,
   canAllocateClients = false,
+  canInviteTeam = false,
+  allowManagerInvite = false,
   assignedByLabel = "Flotă",
   contextLabel,
 }: Props) {
@@ -46,6 +55,8 @@ export function SupplierProfileTabs({
   const tabs = canAllocateClients
     ? SUPPLIER_PROFILE_TABS
     : SUPPLIER_PROFILE_TABS.filter((t) => t.id !== "clienti");
+
+  const canEditProfileFields = Boolean(canWriteServices || canAllocateClients);
 
   return (
     <>
@@ -165,35 +176,32 @@ export function SupplierProfileTabs({
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
-        {tab === "tarife" ? (
-          <dl className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <dt className="text-xs text-zinc-500">Discount piese</dt>
-              <dd className="mt-1 text-sm text-zinc-200">
-                {supplier ? `${supplier.partsDiscountPercent ?? 0}%` : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">Discount manoperă</dt>
-              <dd className="mt-1 text-sm text-zinc-200">
-                {supplier ? `${supplier.laborDiscountPercent ?? 0}%` : "—"}
-              </dd>
-            </div>
-            <p className="sm:col-span-2 text-xs text-zinc-500">
-              Default pe linii noi de deviz (piese / manoperă). Se poate modifica per linie pe comandă.
-              Valorile se editează din fișa furnizorului (admin flotă).
-            </p>
-          </dl>
+        {tab === "tarife" && supplier ? (
+          <SupplierTarifeEditor supplier={supplier} canWrite={canEditProfileFields} />
         ) : null}
 
-        {tab !== "identitate" &&
-        tab !== "documente" &&
-        tab !== "tip" &&
-        tab !== "clienti" &&
-        tab !== "tarife" ? (
-          <p className="text-sm text-zinc-500">
-            Conținut tab „{SUPPLIER_PROFILE_TABS.find((t) => t.id === tab)?.label}” — urmează în faza P2 profil furnizor.
-          </p>
+        {tab === "tarife" && !supplier ? (
+          <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
+        ) : null}
+
+        {tab === "program" && supplier ? (
+          <SupplierProgramEditor supplier={supplier} canWrite={canEditProfileFields} />
+        ) : null}
+
+        {tab === "program" && !supplier ? (
+          <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
+        ) : null}
+
+        {tab === "echipa" && supplier ? (
+          <SupplierTeamPanel
+            supplierId={supplier.id}
+            canInvite={canInviteTeam}
+            allowManagerRole={allowManagerInvite}
+          />
+        ) : null}
+
+        {tab === "echipa" && !supplier ? (
+          <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
       </div>
     </>

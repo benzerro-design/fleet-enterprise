@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { SupplierInvitePanel } from "@/components/fleet/suppliers/SupplierInvitePanel";
 import { SupplierProfileTabs } from "@/components/fleet/suppliers/SupplierProfileTabs";
 import { canManageFleet, canReadSuppliers, getAuthMeResult, getDefaultFleetHome } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -68,15 +67,11 @@ export default async function SupplierDetailPage({ params }: PageProps) {
           serviceCatalog={serviceCatalog}
           canWriteServices={write}
           canAllocateClients={write}
+          canInviteTeam={write}
+          allowManagerInvite={write}
           assignedByLabel="Flotă"
         />
       </div>
-
-      {write ? (
-        <div className="mt-6">
-          <SupplierInvitePanel supplierId={supplier.id} allowManagerRole />
-        </div>
-      ) : null}
     </FleetPageMain>
   );
 }

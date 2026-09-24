@@ -121,6 +121,13 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
       },
       {
         kind: "link",
+        label: "Alocare șoferi",
+        href: "/fleet/drivers/board",
+        phase: "live",
+        activePrefixes: ["/fleet/drivers/board"],
+      },
+      {
+        kind: "link",
         label: "Tichete CRM",
         href: "/fleet/tickets",
         phase: "live",

@@ -25,6 +25,7 @@ import {
 import { workOrderDisplayLabel } from "@/lib/work-order-display";
 import { MobilityWoBanner } from "@/components/fleet/MobilityWoBanner";
 import { MobilityAssignmentForm } from "@/components/fleet/MobilityAssignmentForm";
+import { PartnerVehicleHistoryPanel } from "@/components/fleet/partner/PartnerVehicleHistoryPanel";
 import { WorkOrderMobilitySummary } from "@/components/fleet/work-orders/WorkOrderMobilitySummary";
 import {
   DamageClaimPanel,
@@ -118,6 +119,9 @@ export function WorkOrderSheetShell({
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [sheetView, setSheetView] = useState<"comanda" | "dosar" | "mobilitate">("comanda");
+  const [detailTab, setDetailTab] = useState<
+    "overview" | "deviz" | "programari" | "factura" | "istoric"
+  >("overview");
   const [rezumatTab, setRezumatTab] = useState<string>("v1");
   const [tilaTrack, setTilaTrack] = useState<1 | 2>(1);
   /** Dosar pe WO: același ServiceCase ca pe tichet (nu mapare parțială din WO). */
@@ -687,7 +691,29 @@ export function WorkOrderSheetShell({
 
       {error ? <p className="border-b border-red-900/40 bg-red-950/20 px-4 py-2 text-sm text-red-400">{error}</p> : null}
 
-      <div className="grid border-b border-zinc-800 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="flex flex-wrap gap-1 border-b border-zinc-800 px-3 py-2">
+        {(
+          [
+            { id: "overview" as const, label: "Overview" },
+            { id: "deviz" as const, label: "Deviz" },
+            { id: "programari" as const, label: "Programări" },
+            { id: "factura" as const, label: "Factură" },
+            { id: "istoric" as const, label: "Istoric" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setDetailTab(t.id)}
+            className={fleetSheetTabClass(detailTab === t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {detailTab === "overview" || detailTab === "programari" ? (
+      <div className={`grid border-b border-zinc-800 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 ${detailTab === "programari" ? "xl:grid-cols-2" : ""}`}>
         <div className={panelClass()}>
           {panelTitle("Tranzacție")}
           <div className="space-y-1 text-xs text-zinc-300">
@@ -730,9 +756,18 @@ export function WorkOrderSheetShell({
               )}
             </div>
             <div className="pt-1 font-semibold text-zinc-100">Total: {totalDisplay}</div>
+            {detailTab === "programari" ? (
+              <p className="pt-2">
+                <Link href={schedulerLink} className="text-sky-300 hover:underline">
+                  Deschide programator →
+                </Link>
+              </p>
+            ) : null}
           </div>
         </div>
 
+        {detailTab === "overview" ? (
+        <>
         <div className={panelClass()}>
           {panelTitle("Vehicul + Client")}
           <dl className="space-y-1 text-xs">
@@ -777,6 +812,12 @@ export function WorkOrderSheetShell({
             />
             <Row label="Grupă / contract" value={wo.client.billingNotes ?? "—"} />
           </dl>
+          {isPartner && wo.vehicleId ? (
+            <PartnerVehicleHistoryPanel
+              vehicleId={wo.vehicleId}
+              currentWorkOrderId={wo.id}
+            />
+          ) : null}
           <p className="mt-2 text-[10px] text-zinc-600">Read-only — date master flotă</p>
         </div>
 
@@ -1288,9 +1329,13 @@ export function WorkOrderSheetShell({
             ) : null}
           </div>
         </div>
+        </>
+        ) : null}
       </div>
+      ) : null}
 
-      {wo.awaitingPostApproval || wo.postApprovalPath ? (
+      {(detailTab === "overview" || detailTab === "programari") &&
+      (wo.awaitingPostApproval || wo.postApprovalPath) ? (
         <div className="border-b border-zinc-800 bg-zinc-950/60 px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
             Decizie după aprobare deviz
@@ -1385,6 +1430,7 @@ export function WorkOrderSheetShell({
         </div>
       ) : null}
 
+      {detailTab === "deviz" || detailTab === "factura" ? (
       <WorkOrderQuotePanel
         workOrderId={wo.id}
         canWrite={canWrite}
@@ -1419,11 +1465,26 @@ export function WorkOrderSheetShell({
             : null
         }
       />
+      ) : null}
 
+      {detailTab === "factura" ? (
+        <p className="border-t border-zinc-800 px-4 py-2 text-xs text-zinc-500">
+          Înregistrarea facturii și costului se face pe devizul aprobat (secțiunea Factură din panoul de mai sus).
+        </p>
+      ) : null}
+
+      {detailTab === "istoric" || detailTab === "overview" ? (
       <div className="border-t border-zinc-800 p-4">
+        {detailTab === "istoric" ? (
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Mesaje & jurnal comandă
+          </p>
+        ) : null}
         <WorkOrderMessageThread workOrderId={wo.id} canWrite={canWrite || canApprove} isPartner={isPartner} />
       </div>
+      ) : null}
 
+      {detailTab === "overview" ? (
       <div className="border-t border-zinc-800 px-4 py-3">
         <WorkOrderCompleteButton
           workOrderId={wo.id}
@@ -1437,6 +1498,7 @@ export function WorkOrderSheetShell({
           isPartner={isPartner}
         />
       </div>
+      ) : null}
         </>
       ) : null}
     </div>

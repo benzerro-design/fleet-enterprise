@@ -485,8 +485,34 @@ export class SuppliersService {
     }
   }
 
-  async patch(tenantSlug: string, id: string, dto: PatchSupplierInput, actorUserId?: string) {
+  async patch(
+    tenantSlug: string,
+    id: string,
+    dto: PatchSupplierInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ) {
     const before = await this.findRow(tenantSlug, id);
+    if (access && isPartnerUser(access)) {
+      assertPartnerSupplierId(access, id);
+      assertPartnerWrite(access);
+      const disallowed =
+        dto.code !== undefined ||
+        dto.legalName !== undefined ||
+        dto.taxId !== undefined ||
+        dto.category !== undefined ||
+        dto.status !== undefined ||
+        dto.contactEmail !== undefined ||
+        dto.integrationEnabled !== undefined ||
+        dto.integrationApiKey !== undefined ||
+        dto.services !== undefined;
+      if (disallowed) {
+        throw new ForbiddenException(
+          'Partenerul poate edita doar tarife, adresă, telefon atelier și program (notes)',
+        );
+      }
+    }
+
     const data: Prisma.SupplierUpdateInput = {};
     if (dto.code !== undefined) data.code = normalizeCode(dto.code);
     if (dto.legalName !== undefined) {
@@ -586,6 +612,31 @@ export class SuppliersService {
       ].join(','),
     );
     return `\uFEFF${header}\n${lines.join('\n')}\n`;
+  }
+
+  async listMemberships(tenantSlug: string, supplierId: string, access: AccessContext) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await assertSupplierReadById(this.prisma, tenantSlug, supplierId, access);
+    if (isPartnerUser(access)) {
+      assertPartnerSupplierId(access, supplierId);
+    }
+    const rows = await this.prisma.supplierMembership.findMany({
+      where: { tenantId: tenant.id, supplierId },
+      orderBy: [{ role: 'asc' }, { user: { email: 'asc' } }],
+      include: {
+        user: { select: { email: true, displayName: true, disabledAt: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      supplierId: r.supplierId,
+      userId: r.userId,
+      email: r.user.email,
+      displayName: r.user.displayName,
+      disabledAt: r.user.disabledAt?.toISOString() ?? null,
+      role: r.role,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   async listDocuments(tenantSlug: string, supplierId: string, access: AccessContext) {

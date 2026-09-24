@@ -1,7 +1,6 @@
 "use client";
 
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { SupplierInvitePanel } from "@/components/fleet/suppliers/SupplierInvitePanel";
 import { SupplierProfileTabs } from "@/components/fleet/suppliers/SupplierProfileTabs";
 import type { SupplierMembershipMe } from "@/lib/auth-server";
 import type { SupplierRecord } from "@/lib/suppliers-api";
@@ -42,15 +41,10 @@ export function PartnerProfileClient({
           tenantSlug={tenantSlug}
           supplierMembership={supplierMembership}
           canWriteServices={canWriteServices}
+          canInviteTeam={canInvite}
           assignedByLabel="Partener / flotă"
         />
       </div>
-
-      {canInvite && supplier ? (
-        <div className="mt-6">
-          <SupplierInvitePanel supplierId={supplier.id} />
-        </div>
-      ) : null}
     </FleetPageMain>
   );
 }

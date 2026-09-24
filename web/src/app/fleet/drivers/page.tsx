@@ -80,12 +80,20 @@ export default async function FleetDriversPage({ searchParams }: PageProps) {
               </p>
             </div>
             {write ? (
-              <Link
-                href="/fleet/drivers/new"
-                className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
-              >
-                Șofer nou
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/fleet/drivers/board"
+                  className="inline-flex items-center justify-center rounded-lg border border-emerald-700/50 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-950/40"
+                >
+                  Board alocare
+                </Link>
+                <Link
+                  href="/fleet/drivers/new"
+                  className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                >
+                  Șofer nou
+                </Link>
+              </div>
             ) : null}
           </div>
         }

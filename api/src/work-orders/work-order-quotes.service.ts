@@ -7,7 +7,10 @@ import {
 import {
   CrmTicketEventKind,
   CrmTicketLinkEntityType,
+  CrmTicketNotificationKind,
   MaintenanceWorkOrderStatus,
+  MembershipRole,
+  MobilityAssignmentStatus,
   Prisma,
   QuotePartsOrderStatus,
   ServiceCaseStage,
@@ -933,6 +936,24 @@ export class WorkOrderQuotesService {
         data: { estimatedRepairAt: nextEstimate },
       });
 
+      // Resetează deciziile pe linii — managerul trebuie să reaprobe după retrimitere.
+      await tx.workOrderQuoteLine.updateMany({
+        where: { quoteId, tenantId: tenant.id },
+        data: { approvalStatus: WorkOrderQuoteLineApproval.pending },
+      });
+
+      // Sync estimare pe alocări mobilitate active/rezervate.
+      await tx.mobilityAssignment.updateMany({
+        where: {
+          workOrderId,
+          tenantId: tenant.id,
+          status: {
+            in: [MobilityAssignmentStatus.reserved, MobilityAssignmentStatus.active],
+          },
+        },
+        data: { expectedReturnAt: nextEstimate },
+      });
+
       const updated = await tx.workOrderQuote.update({
         where: { id: quoteId },
         data: { submittedAt: now },
@@ -950,7 +971,7 @@ export class WorkOrderQuotesService {
 
       const ticketId = existing.workOrder.serviceCase.sourceTicketId;
       if (ticketId) {
-        await tx.crmTicketEvent.create({
+        const event = await tx.crmTicketEvent.create({
           data: {
             tenantId: tenant.id,
             ticketId,
@@ -969,6 +990,38 @@ export class WorkOrderQuotesService {
             },
             actorUserId: actorUserId ?? null,
           },
+        });
+
+        // Notifică owner tichet + L* (manageri flotă) — inbox CRM.
+        const ticket = await tx.crmTicket.findFirst({
+          where: { id: ticketId, tenantId: tenant.id },
+          select: { ownerUserId: true, subject: true },
+        });
+        const adminMemberships = await tx.tenantMembership.findMany({
+          where: { tenantId: tenant.id, role: MembershipRole.tenant_admin },
+          select: { userId: true },
+        });
+        const notifyUserIds = new Set<string>();
+        if (ticket?.ownerUserId) notifyUserIds.add(ticket.ownerUserId);
+        for (const m of adminMemberships) notifyUserIds.add(m.userId);
+        if (actorUserId) notifyUserIds.delete(actorUserId);
+        if (notifyUserIds.size > 0) {
+          await tx.crmTicketNotification.createMany({
+            data: [...notifyUserIds].map((userId) => ({
+              tenantId: tenant.id,
+              userId,
+              ticketId,
+              eventId: event.id,
+              kind: CrmTicketNotificationKind.mention,
+              body: `Deviz v${existing.version} retrimis spre aprobare — ${existing.workOrder.title}`,
+            })),
+          });
+        }
+
+        // Bump ticket updatedAt pentru sortare inbox.
+        await tx.crmTicket.update({
+          where: { id: ticketId },
+          data: { updatedAt: now },
         });
       }
 

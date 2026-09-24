@@ -9,6 +9,7 @@ import {
   fleetThClass,
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
+import { FleetAvatar } from "@/components/fleet/tickets/TicketListGlyphs";
 import { WorkOrderColumnPicker } from "@/components/fleet/work-orders/WorkOrderColumnPicker";
 import { WorkOrderGlyphLegendPanel } from "@/components/fleet/work-orders/WorkOrderGlyphLegendPanel";
 import { WorkOrderGridViewsPanel } from "@/components/fleet/work-orders/WorkOrderGridViewsPanel";
@@ -17,7 +18,6 @@ import {
   TicketActionGlyph,
   TicketVehicleGlyph,
   WorkOrderEstimatedGlyph,
-  WorkOrderPartnerGlyph,
   WorkOrderQuoteGlyph,
   WorkOrderStageGlyph,
   WorkOrderStatusGlyph,
@@ -142,16 +142,15 @@ export function WorkOrderDataGrid({
         );
       case "client":
         return (
-          <span className="text-zinc-300" title={row.clientLegalName}>
-            {row.clientCode}
+          <span className="inline-flex max-w-[8rem] items-center gap-1.5" title={row.clientLegalName}>
+            <FleetAvatar name={row.clientLegalName || row.clientCode} size={18} />
+            <span className="truncate text-zinc-300">{row.clientCode}</span>
           </span>
         );
       case "partner":
         return row.supplierLegalName ? (
-          <span className="inline-flex max-w-[7rem] items-center gap-1 truncate">
-            <FleetGlyphTooltip label={row.supplierLegalName}>
-              <WorkOrderPartnerGlyph />
-            </FleetGlyphTooltip>
+          <span className="inline-flex max-w-[7rem] items-center gap-1 truncate" title={row.supplierLegalName}>
+            <FleetAvatar name={row.supplierLegalName} size={18} />
             <span className="truncate">{row.supplierLegalName}</span>
           </span>
         ) : (

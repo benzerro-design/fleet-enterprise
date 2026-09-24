@@ -313,7 +313,17 @@ export default async function WorkOrdersPage({ searchParams }: PageProps) {
       >
         {stats ? (
           <div className="mb-6">
-            <WorkOrderKpiStrip stats={stats} />
+            <WorkOrderKpiStrip
+              stats={stats}
+              links={{
+                open: withParams({ inbox: "open", page: "1", status: undefined }),
+                pendingApproval: withParams({ inbox: "pending_approval", page: "1", status: undefined }),
+                inProgress: withParams({ inbox: "in_service", page: "1", status: undefined }),
+                waitingParts: withParams({ inbox: "all", status: "waiting_parts", page: "1" }),
+                readyUninvoiced: withParams({ inbox: "ready", page: "1", status: undefined }),
+                done: withParams({ inbox: "all", status: "done", page: "1" }),
+              }}
+            />
           </div>
         ) : null}
 

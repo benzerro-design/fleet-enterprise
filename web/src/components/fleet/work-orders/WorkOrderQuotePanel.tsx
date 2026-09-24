@@ -181,11 +181,18 @@ function QuoteSubtotals({
   rejectedCount?: number;
   currency?: string;
 }) {
+  const net = labor + parts + other;
   return (
     <div className="ml-auto w-full max-w-xs space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-sm">
+      <p className="pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+        Subtotaluri (inclusiv TVA pe linie)
+      </p>
       <SubtotalRow label="Subtotal manoperă" cents={labor} currency={currency} />
       <SubtotalRow label="Subtotal piese" cents={parts} currency={currency} />
       <SubtotalRow label="Subtotal altele" cents={other} currency={currency} />
+      <div className="border-t border-zinc-800 pt-1">
+        <SubtotalRow label="Total net" cents={net} currency={currency} />
+      </div>
       <SubtotalRow label="TVA" cents={vat} currency={currency} />
       <SubtotalRow label="Total brut" cents={gross} currency={currency} bold />
       {rejectedCount > 0 ? (
@@ -193,6 +200,47 @@ function QuoteSubtotals({
           Fără {rejectedCount} {rejectedCount === 1 ? "linie respinsă" : "linii respinse"}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function QuoteStatusStepper({ status }: { status: WorkOrderQuoteStatus }) {
+  const steps: { id: WorkOrderQuoteStatus | "sent"; label: string }[] = [
+    { id: "draft", label: "Ciornă" },
+    { id: "submitted", label: "Trimis" },
+    { id: "approved", label: "Aprobat" },
+  ];
+  const order: Record<string, number> = {
+    draft: 0,
+    submitted: 1,
+    approved: 2,
+    rejected: 1,
+  };
+  const current = order[status] ?? 0;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+      {steps.map((s, i) => {
+        const done = current > i || (status === "approved" && i <= 2);
+        const active = status === s.id || (status === "rejected" && s.id === "submitted");
+        return (
+          <span key={s.id} className="inline-flex items-center gap-1.5">
+            {i > 0 ? <span className="text-zinc-700">→</span> : null}
+            <span
+              className={`rounded border px-1.5 py-0.5 ${
+                status === "rejected" && s.id === "submitted"
+                  ? "border-red-500/50 bg-red-950/30 text-red-200"
+                  : active
+                    ? "border-sky-500/50 bg-sky-950/40 text-sky-100"
+                    : done
+                      ? "border-emerald-800/40 text-emerald-300/80"
+                      : "border-zinc-800 text-zinc-600"
+              }`}
+            >
+              {status === "rejected" && s.id === "submitted" ? "Respins" : s.label}
+            </span>
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -763,6 +811,7 @@ export function WorkOrderQuotePanel({
       const data = (await res.json()) as { estimatedRepairAt?: string };
       await load(submittedId);
       setQuotePane("lines");
+      setLineDecisions({});
       const nextLabel = data.estimatedRepairAt ? formatDateRo(data.estimatedRepairAt) : estLabel;
       setOk(`Deviz retrimis — se așteaptă aprobarea. Estimare finalizare: ${nextLabel}.`);
       router.refresh();
@@ -1123,10 +1172,13 @@ export function WorkOrderQuotePanel({
               Deviz
             </span>
             {activeQuote ? (
-              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
-                v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
-                {activeQuote.title ? ` · ${activeQuote.title}` : ""}
-              </span>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
+                  v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
+                  {activeQuote.title ? ` · ${activeQuote.title}` : ""}
+                </span>
+                <QuoteStatusStepper status={activeQuote.status} />
+              </div>
             ) : isCreatingDraft ? (
               <span className="shrink-0 rounded-full border border-emerald-700/50 px-2 py-0.5 text-xs text-emerald-200">
                 Ciornă nouă

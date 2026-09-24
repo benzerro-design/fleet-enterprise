@@ -250,6 +250,16 @@ export class SuppliersController {
     );
   }
 
+  @Get(':id/memberships')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  listMemberships(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.suppliers.listMemberships(tenantSlug, id, access);
+  }
+
   @Get(':id')
   @Roles(...FLEET_READ_ROLES)
   get(
@@ -272,14 +282,15 @@ export class SuppliersController {
   }
 
   @Patch(':id')
-  @Roles(MembershipRole.tenant_admin)
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
   patch(
     @TenantId() tenantSlug: string,
     @Param('id') id: string,
     @Body() body: PatchSupplierInput,
     @CurrentUserId() actorUserId?: string,
+    @CurrentAccess() access?: AccessContext,
   ) {
-    return this.suppliers.patch(tenantSlug, id, body, actorUserId);
+    return this.suppliers.patch(tenantSlug, id, body, actorUserId, access);
   }
 
   @Put(':id/services')
