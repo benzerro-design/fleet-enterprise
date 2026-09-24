@@ -32,18 +32,6 @@ export function TicketConversation({ initial, canWrite, closed, currentUserId }:
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[10px] text-zinc-500">
-          {live ? "Actualizare automată la 15s" : "Actualizare automată oprită"}
-        </p>
-        <button
-          type="button"
-          onClick={() => setLive((v) => !v)}
-          className="text-[10px] text-zinc-400 hover:text-zinc-200"
-        >
-          {live ? "Pauză" : "Reia"}
-        </button>
-      </div>
       <TicketAttachmentsPanel
         ticketId={initial.ticket.id}
         attachments={initial.attachments ?? []}
@@ -51,6 +39,17 @@ export function TicketConversation({ initial, canWrite, closed, currentUserId }:
         canWrite={canWrite}
         closed={closed}
       />
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Conversație</p>
+        <button
+          type="button"
+          onClick={() => setLive((v) => !v)}
+          className="text-[10px] text-zinc-500 hover:text-zinc-300"
+          title={live ? "Oprește reîncărcarea automată" : "Reia reîncărcarea automată"}
+        >
+          {live ? "Live · Pauză" : "Live oprit · Reia"}
+        </button>
+      </div>
       <TicketThread
         events={initial.events}
         ticketId={initial.ticket.id}
