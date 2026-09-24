@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { Storage } from "@google-cloud/storage";
 
-export type UploadKind = "documents" | "tickets" | "invoices" | "workorders";
+export type UploadKind = "documents" | "tickets" | "invoices" | "workorders" | "suppliers";
 
 const storageSingleton: { current: Storage | null } = { current: null };
 
@@ -119,5 +119,11 @@ function guessContentType(name: string): string {
 }
 
 export function isUploadKind(raw: string): raw is UploadKind {
-  return raw === "documents" || raw === "tickets" || raw === "invoices" || raw === "workorders";
+  return (
+    raw === "documents" ||
+    raw === "tickets" ||
+    raw === "invoices" ||
+    raw === "workorders" ||
+    raw === "suppliers"
+  );
 }

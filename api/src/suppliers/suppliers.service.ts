@@ -1,10 +1,18 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SupplierCategory, SupplierStatus, MaintenanceWorkOrderStatus } from '@prisma/client';
+import {
+  MembershipRole,
+  Prisma,
+  SupplierCategory,
+  SupplierDocumentKind,
+  SupplierStatus,
+  MaintenanceWorkOrderStatus,
+} from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -19,8 +27,32 @@ import {
   assertSupplierReadById,
   supplierListScope,
 } from './supplier-access';
+import {
+  getSupplierDocumentCompliance,
+  mapSupplierDocumentRow,
+} from './supplier-document-compliance';
 
 const MAX_PAGE_SIZE = 200;
+
+function parseDocumentKind(raw?: string): SupplierDocumentKind {
+  const v = (raw ?? 'other').trim() as SupplierDocumentKind;
+  const allowed = Object.values(SupplierDocumentKind) as string[];
+  if (!allowed.includes(v)) {
+    throw new BadRequestException('Invalid document kind');
+  }
+  return v;
+}
+
+function parseExpiresOn(raw?: string | null): Date | null {
+  if (raw == null || raw === '') return null;
+  const s = String(raw).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    throw new BadRequestException('expiresOn must be YYYY-MM-DD');
+  }
+  const d = new Date(`${s}T00:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) throw new BadRequestException('Invalid expiresOn');
+  return d;
+}
 
 export type SupplierRecord = {
   id: string;
@@ -554,6 +586,130 @@ export class SuppliersService {
       ].join(','),
     );
     return `\uFEFF${header}\n${lines.join('\n')}\n`;
+  }
+
+  async listDocuments(tenantSlug: string, supplierId: string, access: AccessContext) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await assertSupplierReadById(this.prisma, tenantSlug, supplierId, access);
+    const rows = await this.prisma.supplierDocument.findMany({
+      where: { tenantId: tenant.id, supplierId },
+      orderBy: [{ required: 'desc' }, { expiresOn: 'asc' }, { createdAt: 'desc' }],
+    });
+    const compliance = await getSupplierDocumentCompliance(this.prisma, tenant.id, supplierId);
+    return {
+      items: rows.map(mapSupplierDocumentRow),
+      compliance,
+    };
+  }
+
+  async createDocument(
+    tenantSlug: string,
+    supplierId: string,
+    dto: {
+      kind?: string;
+      title: string;
+      fileUrl: string;
+      fileName: string;
+      mimeType?: string | null;
+      expiresOn?: string | null;
+      required?: boolean;
+    },
+    actorUserId: string | undefined,
+    access: AccessContext,
+  ) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await this.assertDocumentWrite(access, supplierId);
+    await assertSupplierReadById(this.prisma, tenantSlug, supplierId, access);
+    const kind = parseDocumentKind(dto.kind);
+    const title = dto.title?.trim();
+    if (!title) throw new BadRequestException('title required');
+    const fileUrl = dto.fileUrl?.trim();
+    if (!fileUrl || (!fileUrl.startsWith('/uploads/suppliers/') && !fileUrl.includes('/uploads/suppliers/'))) {
+      throw new BadRequestException('fileUrl must be under /uploads/suppliers/');
+    }
+    const fileName = dto.fileName?.trim();
+    if (!fileName) throw new BadRequestException('fileName required');
+    const expiresOn = parseExpiresOn(dto.expiresOn);
+    const row = await this.prisma.supplierDocument.create({
+      data: {
+        tenantId: tenant.id,
+        supplierId,
+        kind,
+        title,
+        fileUrl,
+        fileName,
+        mimeType: dto.mimeType?.trim() || null,
+        expiresOn,
+        required: Boolean(dto.required),
+        uploadedByUserId: actorUserId ?? null,
+      },
+    });
+    return mapSupplierDocumentRow(row);
+  }
+
+  async patchDocument(
+    tenantSlug: string,
+    supplierId: string,
+    documentId: string,
+    dto: {
+      kind?: string;
+      title?: string;
+      expiresOn?: string | null;
+      required?: boolean;
+    },
+    access: AccessContext,
+  ) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await this.assertDocumentWrite(access, supplierId);
+    const existing = await this.prisma.supplierDocument.findFirst({
+      where: { id: documentId, tenantId: tenant.id, supplierId },
+    });
+    if (!existing) throw new NotFoundException('Document not found');
+    const data: Prisma.SupplierDocumentUpdateInput = {};
+    if (dto.kind !== undefined) data.kind = parseDocumentKind(dto.kind);
+    if (dto.title !== undefined) {
+      const title = dto.title.trim();
+      if (!title) throw new BadRequestException('title required');
+      data.title = title;
+    }
+    if (dto.expiresOn !== undefined) data.expiresOn = parseExpiresOn(dto.expiresOn);
+    if (dto.required !== undefined) data.required = Boolean(dto.required);
+    const row = await this.prisma.supplierDocument.update({
+      where: { id: documentId },
+      data,
+    });
+    return mapSupplierDocumentRow(row);
+  }
+
+  async deleteDocument(
+    tenantSlug: string,
+    supplierId: string,
+    documentId: string,
+    access: AccessContext,
+  ) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await this.assertDocumentWrite(access, supplierId);
+    const existing = await this.prisma.supplierDocument.findFirst({
+      where: { id: documentId, tenantId: tenant.id, supplierId },
+    });
+    if (!existing) throw new NotFoundException('Document not found');
+    await this.prisma.supplierDocument.delete({ where: { id: documentId } });
+  }
+
+  private assertDocumentWrite(access: AccessContext, supplierId: string) {
+    if (access.membershipRole === MembershipRole.tenant_admin) return;
+    if (isPartnerUser(access)) {
+      assertPartnerWrite(access);
+      assertPartnerSupplierId(access, supplierId);
+      return;
+    }
+    throw new ForbiddenException('Only tenant admin or partner can manage supplier documents');
+  }
+
+  private async ensureTenant(tenantSlug: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return tenant;
   }
 
   private async findRow(tenantSlug: string, id: string) {

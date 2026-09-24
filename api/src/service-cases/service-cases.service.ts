@@ -54,6 +54,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { nextWorkOrderDisplayNumber } from '../work-orders/work-order-display-number';
 import { nextRoadsideDisplayNumber } from '../roadside/roadside-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
+import { assertSupplierDocumentsAllowOrders } from '../suppliers/supplier-document-compliance';
 import { assertDamageReadyForRepair } from '../work-orders/damage-repair-gates';
 import {
   blocksSilentScheduledAtEdit,
@@ -2824,6 +2825,7 @@ export class ServiceCasesService {
       if (isPartnerUser(access)) {
         assertPartnerWrite(access);
         assertPartnerSupplierId(access, existing.supplierId);
+        await assertSupplierDocumentsAllowOrders(this.prisma, tenant.id, existing.supplierId);
       } else if (access.membershipRole === MembershipRole.tenant_admin) {
         assertServiceCaseWrite(access, existing.serviceCase.clientId);
       } else {

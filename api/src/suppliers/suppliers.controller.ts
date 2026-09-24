@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Header,
@@ -150,6 +151,85 @@ export class SuppliersController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.clients.listClientAllocationsForSupplier(tenantSlug, id, access);
+  }
+
+  @Get(':id/documents')
+  @Roles(...FLEET_READ_ROLES)
+  listDocuments(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.suppliers.listDocuments(tenantSlug, id, access);
+  }
+
+  @Post(':id/documents')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  @HttpCode(201)
+  createDocument(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      kind?: string;
+      title?: string;
+      fileUrl?: string;
+      fileName?: string;
+      mimeType?: string | null;
+      expiresOn?: string | null;
+      required?: boolean;
+    },
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    if (!body?.title?.trim() || !body?.fileUrl?.trim() || !body?.fileName?.trim()) {
+      throw new BadRequestException('title, fileUrl and fileName required');
+    }
+    return this.suppliers.createDocument(
+      tenantSlug,
+      id,
+      {
+        kind: body.kind,
+        title: body.title,
+        fileUrl: body.fileUrl,
+        fileName: body.fileName,
+        mimeType: body.mimeType,
+        expiresOn: body.expiresOn,
+        required: body.required,
+      },
+      actorUserId,
+      access,
+    );
+  }
+
+  @Patch(':id/documents/:documentId')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  patchDocument(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @Body()
+    body: {
+      kind?: string;
+      title?: string;
+      expiresOn?: string | null;
+      required?: boolean;
+    },
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.suppliers.patchDocument(tenantSlug, id, documentId, body ?? {}, access);
+  }
+
+  @Delete(':id/documents/:documentId')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  @HttpCode(204)
+  async deleteDocument(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    await this.suppliers.deleteDocument(tenantSlug, id, documentId, access);
   }
 
   @Put(':id/client-allocations')

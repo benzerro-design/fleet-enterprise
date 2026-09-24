@@ -49,6 +49,37 @@ export type SupplierRecord = {
   updatedAt: string;
 };
 
+export type SupplierDocumentKind =
+  | "onrc"
+  | "cui_fiscal"
+  | "rar_auth"
+  | "itp_auth"
+  | "rc_professional"
+  | "other";
+
+export type SupplierDocumentRecord = {
+  id: string;
+  supplierId: string;
+  kind: SupplierDocumentKind;
+  title: string;
+  fileUrl: string;
+  fileName: string;
+  mimeType: string | null;
+  expiresOn: string | null;
+  required: boolean;
+  expiryStatus: "valid" | "expiring_soon" | "expired" | "none";
+  daysLeft: number | null;
+  uploadedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SupplierDocumentCompliance = {
+  ok: boolean;
+  expiredRequired: Array<{ id: string; title: string; expiresOn: string }>;
+  expiringSoon: Array<{ id: string; title: string; expiresOn: string; daysLeft: number }>;
+};
+
 export type SupplierListPayload = {
   items: SupplierRecord[];
   total: number;

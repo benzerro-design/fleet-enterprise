@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
 import { SupplierClientAllocationsEditor } from "@/components/fleet/suppliers/SupplierClientAllocationsEditor";
+import { SupplierDocumentsPanel } from "@/components/fleet/suppliers/SupplierDocumentsPanel";
 import type { SupplierMembershipMe } from "@/lib/auth-server";
 import type { SupplierRecord } from "@/lib/suppliers-api";
 import type { SupplierServiceCatalogEntry } from "@/lib/supplier-service-catalog";
@@ -153,13 +154,15 @@ export function SupplierProfileTabs({
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
-        {tab === "documente" ? (
-          <div className="space-y-3 text-sm text-zinc-400">
-            <p className="rounded-lg border border-amber-800/40 bg-amber-950/20 px-3 py-2 text-amber-200">
-              Autorizație ITP — expiră curând (indicator în header portal).
-            </p>
-            <p>Upload și gestionare documente — modul P2 (în curând).</p>
-          </div>
+        {tab === "documente" && supplier ? (
+          <SupplierDocumentsPanel
+            supplierId={supplier.id}
+            canWrite={Boolean(canWriteServices || supplierMembership)}
+          />
+        ) : null}
+
+        {tab === "documente" && !supplier ? (
+          <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
         {tab === "tarife" ? (
