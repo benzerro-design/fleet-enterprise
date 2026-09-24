@@ -521,9 +521,27 @@ export function WorkOrderSheetShell({
             <>
               <div className="text-sm font-medium text-zinc-200">{wo.title}</div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
-                <span>{wo.registrationNumber}</span>
+                {!isPartner && wo.vehicleId ? (
+                  <Link
+                    href={`/fleet/vehicles/${wo.vehicleId}`}
+                    className="text-sky-300 hover:underline"
+                  >
+                    {wo.registrationNumber}
+                  </Link>
+                ) : (
+                  <span>{wo.registrationNumber}</span>
+                )}
                 <span>·</span>
-                <span>{wo.supplierLegalName ?? "—"}</span>
+                {!isPartner && wo.supplierId ? (
+                  <Link
+                    href={`/fleet/suppliers/${wo.supplierId}`}
+                    className="text-sky-300 hover:underline"
+                  >
+                    {wo.supplierLegalName ?? "—"}
+                  </Link>
+                ) : (
+                  <span>{wo.supplierLegalName ?? "—"}</span>
+                )}
                 <span>·</span>
                 <span>
                   Total deviz <span className="font-mono text-zinc-200">{totalDisplay}</span>
@@ -718,7 +736,11 @@ export function WorkOrderSheetShell({
         <div className={panelClass()}>
           {panelTitle("Vehicul + Client")}
           <dl className="space-y-1 text-xs">
-            <Row label="Nr. înmatriculare" value={wo.vehicle.registrationNumber} />
+            <Row
+              label="Nr. înmatriculare"
+              value={wo.vehicle.registrationNumber}
+              href={!isPartner ? `/fleet/vehicles/${wo.vehicleId}` : null}
+            />
             <Row
               label="Marcă / model"
               value={[wo.vehicle.brand, wo.vehicle.model].filter(Boolean).join(" ") || "—"}
@@ -742,7 +764,11 @@ export function WorkOrderSheetShell({
             ) : null}
             <Row label="ITP expiră" value={fmtItp(wo.vehicle.itpExpiresOn)} />
             <div className="my-2 border-t border-zinc-800" />
-            <Row label="Denumire" value={wo.client.legalName} />
+            <Row
+              label="Denumire"
+              value={wo.client.legalName}
+              href={!isPartner ? `/fleet/clients/${wo.clientId}` : null}
+            />
             <Row label="CUI" value={wo.client.taxId ?? "—"} />
             <Row label="Adresă" value={wo.client.addressLine ?? "—"} />
             <Row
@@ -759,7 +785,18 @@ export function WorkOrderSheetShell({
           {wo.supplier ? (
             <div className="space-y-2 text-xs text-zinc-300">
               <div>
-                <div className="font-medium text-zinc-100">{wo.supplier.legalName}</div>
+                <div className="font-medium text-zinc-100">
+                  {!isPartner && wo.supplierId ? (
+                    <Link
+                      href={`/fleet/suppliers/${wo.supplierId}`}
+                      className="text-sky-300 hover:underline"
+                    >
+                      {wo.supplier.legalName}
+                    </Link>
+                  ) : (
+                    wo.supplier.legalName
+                  )}
+                </div>
                 {wo.supplier.taxId ? <div className="text-zinc-500">{wo.supplier.taxId}</div> : null}
                 <div className="text-zinc-500">
                   {[wo.supplier.addressLine, wo.supplier.city].filter(Boolean).join(", ") || "—"}
@@ -902,7 +939,14 @@ export function WorkOrderSheetShell({
             ) : null}
             {wo.driverName ? (
               <div>
-                Șofer: {wo.driverName}
+                Șofer:{" "}
+                {!isPartner && wo.driverId ? (
+                  <Link href={`/fleet/drivers/${wo.driverId}`} className="text-sky-300 hover:underline">
+                    {wo.driverName}
+                  </Link>
+                ) : (
+                  wo.driverName
+                )}
                 {wo.driverPhone ? ` · ${wo.driverPhone}` : ""}
               </div>
             ) : null}
@@ -1399,11 +1443,29 @@ export function WorkOrderSheetShell({
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Row({
+  label,
+  value,
+  mono,
+  href,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  href?: string | null;
+}) {
   return (
     <div className="grid grid-cols-[88px_1fr] gap-2">
       <dt className="text-zinc-500">{label}</dt>
-      <dd className={`text-zinc-200 ${mono ? "font-mono" : ""}`}>{value}</dd>
+      <dd className={`${mono ? "font-mono" : ""} ${href ? "" : "text-zinc-200"}`}>
+        {href ? (
+          <Link href={href} className="text-sky-300 hover:underline">
+            {value}
+          </Link>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   );
 }

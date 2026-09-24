@@ -132,6 +132,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   ticketSubject: string | null;
   driverName: string | null;
   driverPhone: string | null;
+  driverId?: string | null;
   vehicleMovable?: "movable" | "immovable" | null;
   /** YYYY-MM-DD */
   damageEventOn?: string | null;

@@ -194,6 +194,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   ticketSubject: string | null;
   driverName: string | null;
   driverPhone: string | null;
+  driverId: string | null;
   vehicleMovable: VehicleMovableState | null;
   /** YYYY-MM-DD */
   damageEventOn: string | null;
@@ -762,7 +763,7 @@ export class WorkOrdersService {
             sourceTicket: {
               select: {
                 subject: true,
-                driver: { select: { fullName: true, phone: true } },
+                driver: { select: { id: true, fullName: true, phone: true } },
               },
             },
           },
@@ -873,6 +874,7 @@ export class WorkOrdersService {
       ticketSubject: row.serviceCase.sourceTicket?.subject ?? null,
       driverName: row.serviceCase.sourceTicket?.driver?.fullName ?? null,
       driverPhone: row.serviceCase.sourceTicket?.driver?.phone ?? null,
+      driverId: row.serviceCase.sourceTicket?.driver?.id ?? null,
       vehicleMovable: row.serviceCase.vehicleMovable ?? null,
       damageEventOn: row.serviceCase.damageEventOn
         ? row.serviceCase.damageEventOn.toISOString().slice(0, 10)
