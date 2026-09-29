@@ -1085,7 +1085,7 @@ model CrmTicket {
   firstResponseDueAt DateTime?
   /// SLA CRM-010: termen rezolvare.
   resolveDueAt       DateTime?
-  /// Când a fost înregistrat primul răspuns operațional (comentariu L*/L1).
+  /// Când a fost înregistrat primul răspuns operațional (comentariu L1 / L-star).
   firstRespondedAt   DateTime?
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
