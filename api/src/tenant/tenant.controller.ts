@@ -161,6 +161,23 @@ export class TenantController {
     return this.tenant.setWorkOrderSettings(tenantSlug, body, actorUserId);
   }
 
+  @Get('sla-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getSlaSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getSlaSettings(tenantSlug);
+  }
+
+  @Patch('sla-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchSlaSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setSlaSettings(tenantSlug, body, actorUserId);
+  }
+
   @Get('mail-settings')
   @Roles(...FLEET_READ_ROLES)
   getMailSettings(@TenantId() tenantSlug: string) {

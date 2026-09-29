@@ -59,6 +59,7 @@ export type SupplierRecord = {
   code: string;
   legalName: string;
   taxId: string | null;
+  iban: string | null;
   category: SupplierCategory;
   status: SupplierStatus;
   contactEmail: string | null;
@@ -81,6 +82,7 @@ export type CreateSupplierInput = {
   code: string;
   legalName: string;
   taxId?: string | null;
+  iban?: string | null;
   category?: SupplierCategory;
   status?: SupplierStatus;
   contactEmail?: string | null;
@@ -184,6 +186,7 @@ export class SuppliersService {
       code: string;
       legalName: string;
       taxId: string | null;
+      iban?: string | null;
       category: SupplierCategory;
       status: SupplierStatus;
       contactEmail: string | null;
@@ -207,6 +210,7 @@ export class SuppliersService {
       code: row.code,
       legalName: row.legalName,
       taxId: row.taxId,
+      iban: row.iban ?? null,
       category: row.category,
       status: row.status,
       contactEmail: row.contactEmail,
@@ -431,6 +435,7 @@ export class SuppliersService {
           code,
           legalName,
           taxId: dto.taxId?.trim() || null,
+          iban: dto.iban?.trim() || null,
           category: dto.category ?? SupplierCategory.other,
           status: dto.status ?? SupplierStatus.active,
           contactEmail: dto.contactEmail?.trim() || null,
@@ -521,6 +526,7 @@ export class SuppliersService {
       data.legalName = n;
     }
     if (dto.taxId !== undefined) data.taxId = dto.taxId?.trim() || null;
+    if (dto.iban !== undefined) data.iban = dto.iban?.trim() || null;
     if (dto.category !== undefined) data.category = dto.category;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.contactEmail !== undefined) data.contactEmail = dto.contactEmail?.trim() || null;

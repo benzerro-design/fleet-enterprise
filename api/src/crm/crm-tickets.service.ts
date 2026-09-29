@@ -28,6 +28,12 @@ import {
   routingLevelLabel,
   ticketListScope,
 } from '../iam/client-access';
+import {
+  computeSlaDeadlines,
+  parseSlaSettings,
+  suggestedPriorityForTicketType,
+  ticketSlaStatus,
+} from '../tenant/sla-settings';
 import { PartnerMailService } from '../partner/partner-mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from '../ops/ops-csv';
@@ -69,6 +75,10 @@ export type TicketRecord = {
   eventOdometerKm: number | null;
   vehicleMovable: VehicleMovableState | null;
   resolvedAt: string | null;
+  firstResponseDueAt: string | null;
+  resolveDueAt: string | null;
+  firstRespondedAt: string | null;
+  slaStatus: 'ok' | 'first_response_overdue' | 'resolve_overdue' | 'disabled' | 'resolved';
   createdAt: string;
   updatedAt: string;
 };
@@ -573,6 +583,13 @@ export class CrmTicketsService {
       eventOdometerKm = Math.round(dto.eventOdometerKm);
     }
 
+    const sla = parseSlaSettings(tenant.slaSettings);
+    let priority = dto.priority ?? CrmTicketPriority.normal;
+    if (dto.priority === undefined && sla.autoPrioritizeFromType) {
+      priority = suggestedPriorityForTicketType(ticketType);
+    }
+    const deadlines = computeSlaDeadlines(sla, priority);
+
     const row = await this.prisma.crmTicket.create({
       data: {
         tenantId: tenant.id,
@@ -581,7 +598,7 @@ export class CrmTicketsService {
         serviceTypeId,
         subject,
         description: dto.description?.trim() || null,
-        priority: dto.priority ?? CrmTicketPriority.normal,
+        priority,
         routingLevel,
         assignedQueue,
         vehicleId,
@@ -589,6 +606,8 @@ export class CrmTicketsService {
         reminderActionId,
         eventOdometerKm,
         vehicleMovable,
+        firstResponseDueAt: deadlines.firstResponseDueAt,
+        resolveDueAt: deadlines.resolveDueAt,
         createdByUserId: actorUserId ?? null,
         ownerUserId: actorUserId ?? null,
         status: CrmTicketStatus.open,
@@ -657,7 +676,15 @@ export class CrmTicketsService {
       data.subject = s;
     }
     if (dto.description !== undefined) data.description = dto.description?.trim() || null;
-    if (dto.priority !== undefined) data.priority = dto.priority;
+    if (dto.priority !== undefined) {
+      data.priority = dto.priority;
+      if (!existing.resolvedAt) {
+        const sla = parseSlaSettings(tenant.slaSettings);
+        const deadlines = computeSlaDeadlines(sla, dto.priority, existing.createdAt);
+        data.firstResponseDueAt = deadlines.firstResponseDueAt;
+        data.resolveDueAt = deadlines.resolveDueAt;
+      }
+    }
     if (dto.ticketType !== undefined) data.ticketType = dto.ticketType;
     if (dto.serviceTypeId !== undefined) {
       if (dto.serviceTypeId === null) {
@@ -866,7 +893,16 @@ export class CrmTicketsService {
 
     await this.prisma.crmTicket.update({
       where: { id },
-      data: { updatedAt: new Date() },
+      data: {
+        updatedAt: new Date(),
+        ...(ticket.firstRespondedAt
+          ? {}
+          : actor &&
+              (actor.routingLevel === CrmTicketRoutingLevel.L1 ||
+                actor.routingLevel === CrmTicketRoutingLevel.L_STAR)
+            ? { firstRespondedAt: new Date() }
+            : {}),
+      },
     });
 
     return this.getDetail(tenantSlug, id, access);
@@ -1616,6 +1652,18 @@ export class CrmTicketsService {
   }
 
   private toRecord(row: TicketRow): TicketRecord {
+    const slaStatus =
+      !row.firstResponseDueAt && !row.resolveDueAt
+        ? ('disabled' as const)
+        : ticketSlaStatus({
+            enabled: true,
+            status: row.status,
+            resolvedAt: row.resolvedAt,
+            firstResponseDueAt: row.firstResponseDueAt,
+            resolveDueAt: row.resolveDueAt,
+            firstRespondedAt: row.firstRespondedAt,
+          });
+
     return {
       id: row.id,
       displayId: this.displayId(row.id),
@@ -1646,6 +1694,10 @@ export class CrmTicketsService {
       eventOdometerKm: row.eventOdometerKm,
       vehicleMovable: row.vehicleMovable ?? null,
       resolvedAt: row.resolvedAt?.toISOString() ?? null,
+      firstResponseDueAt: row.firstResponseDueAt?.toISOString() ?? null,
+      resolveDueAt: row.resolveDueAt?.toISOString() ?? null,
+      firstRespondedAt: row.firstRespondedAt?.toISOString() ?? null,
+      slaStatus,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

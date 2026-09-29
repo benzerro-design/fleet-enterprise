@@ -31,6 +31,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
   const [code, setCode] = useState(initial?.code ?? "");
   const [legalName, setLegalName] = useState(initial?.legalName ?? "");
   const [taxId, setTaxId] = useState(initial?.taxId ?? "");
+  const [iban, setIban] = useState(initial?.iban ?? "");
   const [category, setCategory] = useState<SupplierCategory>(initial?.category ?? "service_auto");
   const [status, setStatus] = useState<SupplierStatus>(initial?.status ?? "active");
   const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? "");
@@ -81,6 +82,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
       code: code.trim(),
       legalName: legalName.trim(),
       taxId: taxId.trim() || null,
+      iban: iban.trim() || null,
       category,
       status,
       contactEmail: contactEmail.trim() || null,
@@ -142,6 +144,9 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
           </OpsFormField>
           <OpsFormField label="CUI">
             <input value={taxId} onChange={(e) => setTaxId(e.target.value)} className={OPS_INPUT_CLASS} />
+          </OpsFormField>
+          <OpsFormField label="IBAN">
+            <input value={iban} onChange={(e) => setIban(e.target.value)} className={OPS_INPUT_CLASS} />
           </OpsFormField>
           <OpsFormField label="Categorie">
             <select value={category} onChange={(e) => setCategory(e.target.value as SupplierCategory)} className={OPS_INPUT_CLASS}>

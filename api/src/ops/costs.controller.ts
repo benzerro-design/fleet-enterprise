@@ -115,6 +115,7 @@ function parseCostBrowseQuery(q: Record<string, string | undefined>): CostBrowse
   const category = q['category']?.trim();
   const provider = q['provider']?.trim();
   const searchQ = q['q']?.trim();
+  const tripId = q['tripId']?.trim();
   const incurredFrom = q['incurredFrom']?.trim();
   const incurredTo = q['incurredTo']?.trim();
   return {
@@ -123,6 +124,7 @@ function parseCostBrowseQuery(q: Record<string, string | undefined>): CostBrowse
     ...(category ? { category } : {}),
     ...(provider ? { provider } : {}),
     ...(searchQ ? { q: searchQ } : {}),
+    ...(tripId ? { tripId } : {}),
     ...(incurredFrom ? { incurredFrom } : {}),
     ...(incurredTo ? { incurredTo } : {}),
   };

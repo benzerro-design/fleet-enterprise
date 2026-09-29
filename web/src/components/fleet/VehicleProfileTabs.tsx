@@ -10,6 +10,7 @@ import { VehicleMaintenancePlanTab } from "@/components/fleet/VehicleMaintenance
 import { VehicleOdometerTab } from "@/components/fleet/VehicleOdometerTab";
 import { VehiclePhotosTab } from "@/components/fleet/VehiclePhotosTab";
 import { VehicleEquipmentTab } from "@/components/fleet/VehicleEquipmentTab";
+import { VehicleWheelsTab } from "@/components/fleet/VehicleWheelsTab";
 import { VehicleDsrTab } from "@/components/fleet/VehicleDsrTab";
 import { VehicleInsuranceTab } from "@/components/fleet/VehicleInsuranceTab";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
@@ -29,6 +30,7 @@ import type {
   VehicleEquipmentPayload,
   VehiclePhotosPayload,
   VehicleProfileTab,
+  VehicleWheelsPayload,
 } from "@/lib/vehicle-profile-types";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
 
@@ -38,6 +40,7 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "acquisition", label: "Date achiziție" },
   { id: "photos", label: "Fotografii" },
   { id: "equipment", label: "Echipări" },
+  { id: "wheels", label: "Roti" },
   { id: "odometer", label: "Odometru" },
   { id: "maintenance_plan", label: "Plan Mentenanță" },
   { id: "dsr", label: "DSR" },
@@ -57,6 +60,7 @@ type Props = {
   acquisition: VehicleAcquisitionPayload;
   photos: VehiclePhotosPayload;
   equipment: VehicleEquipmentPayload;
+  wheels: VehicleWheelsPayload;
   odometer: OdometerReadingsPayload;
   maintenancePlan: MaintenancePlanPayload;
   maintenanceList: MaintenanceListPayload | null;
@@ -81,6 +85,7 @@ export function VehicleProfileTabs({
   acquisition,
   photos,
   equipment,
+  wheels,
   odometer,
   maintenancePlan,
   maintenanceList,
@@ -107,6 +112,7 @@ export function VehicleProfileTabs({
       t === "acquisition" ||
       t === "photos" ||
       t === "equipment" ||
+      t === "wheels" ||
       t === "odometer" ||
       t === "basic" ||
       t === "maintenance_plan" ||
@@ -167,6 +173,9 @@ export function VehicleProfileTabs({
         ) : null}
         {active === "equipment" ? (
           <VehicleEquipmentTab vehicleId={vehicle.id} write={write} initial={equipment} />
+        ) : null}
+        {active === "wheels" ? (
+          <VehicleWheelsTab vehicleId={vehicle.id} write={write} initial={wheels} />
         ) : null}
         {active === "odometer" ? (
           <VehicleOdometerTab vehicleId={vehicle.id} write={odometerWrite ?? write} initial={odometer} />

@@ -31,6 +31,7 @@ export type SupplierRecord = {
   code: string;
   legalName: string;
   taxId: string | null;
+  iban?: string | null;
   category: SupplierCategory;
   status: SupplierStatus;
   contactEmail: string | null;

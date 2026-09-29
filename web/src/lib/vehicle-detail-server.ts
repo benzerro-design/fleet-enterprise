@@ -9,6 +9,7 @@ import type {
 } from "@/lib/vehicle-profile-types";
 import type { MaintenancePlanPayload } from "@/lib/maintenance-plan-types";
 import type { VehicleEquipmentPayload } from "@/lib/vehicle-equipment-types";
+import type { VehicleWheelsPayload } from "@/lib/vehicle-wheels-types";
 import type { VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
 
@@ -227,6 +228,16 @@ async function getVehicleEquipment(id: string): Promise<VehicleEquipmentPayload 
   }
 }
 
+async function getVehicleWheels(id: string): Promise<VehicleWheelsPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/wheels`);
+    if (!res?.ok) return null;
+    return (await res.json()) as VehicleWheelsPayload;
+  } catch {
+    return null;
+  }
+}
+
 export type VehicleDetailData = {
   vehicle: VehicleRecord;
   maintenanceList: MaintenanceListPayload | null;
@@ -236,6 +247,7 @@ export type VehicleDetailData = {
   acquisitionPayload: VehicleAcquisitionPayload;
   photosPayload: VehiclePhotosPayload;
   equipmentPayload: VehicleEquipmentPayload;
+  wheelsPayload: VehicleWheelsPayload;
   odometerPayload: OdometerReadingsPayload;
   mobilityPayload: VehicleMobilityPayload | null;
   maintenancePlanPayload: MaintenancePlanPayload;
@@ -266,8 +278,20 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
   const vehicle = await getVehicle(id);
   if (!vehicle) return null;
 
-  const [maintenanceList, costsList, documentsList, civ, acquisition, photos, equipment, odometer, mobility, maintenancePlan, driverAssignments] =
-    await Promise.all([
+  const [
+    maintenanceList,
+    costsList,
+    documentsList,
+    civ,
+    acquisition,
+    photos,
+    equipment,
+    wheels,
+    odometer,
+    mobility,
+    maintenancePlan,
+    driverAssignments,
+  ] = await Promise.all([
     getMaintenanceForVehicle(vehicle.registrationNumber),
     getCostsForVehicle(vehicle.registrationNumber),
     getDocumentsForVehicle(vehicle.registrationNumber),
@@ -275,6 +299,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     getVehicleAcquisition(id),
     getVehiclePhotos(id),
     getVehicleEquipment(id),
+    getVehicleWheels(id),
     getOdometerReadings(id),
     getVehicleMobility(id),
     getMaintenancePlan(id),
@@ -290,6 +315,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     acquisitionPayload: acquisition ?? EMPTY_ACQUISITION,
     photosPayload: photos ?? { items: [] },
     equipmentPayload: equipment ?? { items: [] },
+    wheelsPayload: wheels ?? { items: [] },
     odometerPayload: odometer ?? { items: [], vehicleOdometerKm: vehicle.odometerKm },
     mobilityPayload: mobility,
     maintenancePlanPayload: maintenancePlan ?? {

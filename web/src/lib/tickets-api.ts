@@ -58,6 +58,10 @@ export type TicketRecord = {
   ownerEmail: string | null;
   ownerDisplayName?: string | null;
   resolvedAt: string | null;
+  firstResponseDueAt?: string | null;
+  resolveDueAt?: string | null;
+  firstRespondedAt?: string | null;
+  slaStatus?: "ok" | "first_response_overdue" | "resolve_overdue" | "disabled" | "resolved";
   eventOdometerKm: number | null;
   /** Obligatoriu la tip daună: deplasabilă | nedeplasabilă. */
   vehicleMovable?: "movable" | "immovable" | null;
@@ -172,6 +176,19 @@ export function ticketPriorityLabel(priority: TicketPriority): string {
       return "Ridicată";
     case "urgent":
       return "Urgentă";
+  }
+}
+
+export function ticketSlaStatusLabel(
+  status: TicketRecord["slaStatus"] | undefined,
+): string | null {
+  switch (status) {
+    case "first_response_overdue":
+      return "SLA răspuns depășit";
+    case "resolve_overdue":
+      return "SLA rezolvare depășit";
+    default:
+      return null;
   }
 }
 

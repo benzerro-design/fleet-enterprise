@@ -5,6 +5,7 @@ import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { canWriteTrips, getAuthMeResult } from "@/lib/auth-server";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { formatRonFromCents } from "@/lib/money";
 import { tripPurposeLabel, tripRoadTypeLabel } from "@/lib/trip-ops";
 
 type TripRow = {
@@ -28,15 +29,34 @@ type TripRow = {
   driverName?: string | null;
 };
 
+type LinkedCost = {
+  id: string;
+  category: string;
+  amountCents: number;
+  incurredOn: string;
+  fuelLiters: number | null;
+};
+
 async function getTrip(id: string): Promise<TripRow | null> {
   const res = await fleetServerFetch(`/trips/${id}`);
   if (!res || res.status === 404 || !res.ok) return null;
   return (await res.json()) as TripRow;
 }
 
+async function getLinkedCosts(tripId: string): Promise<LinkedCost[]> {
+  const res = await fleetServerFetch(`/costs?pageSize=50&tripId=${encodeURIComponent(tripId)}`);
+  if (!res?.ok) return [];
+  const data = (await res.json()) as { items?: LinkedCost[] };
+  return data.items ?? [];
+}
+
 export default async function TripDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [trip, auth] = await Promise.all([getTrip(id), getAuthMeResult()]);
+  const [trip, auth, linkedCosts] = await Promise.all([
+    getTrip(id),
+    getAuthMeResult(),
+    getLinkedCosts(id),
+  ]);
   if (!trip) notFound();
   const write = canWriteTrips(auth);
 
@@ -89,7 +109,27 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
           </div>
           <div><dt className="text-xs uppercase text-zinc-500">Vehicle ID</dt><dd className="mt-1 font-mono text-xs text-zinc-400">{trip.vehicleId}</dd></div>
         </dl>
+
+        <section className="mt-8">
+          <h2 className="text-sm font-medium uppercase tracking-widest text-zinc-500">
+            Costuri legate (alimentări)
+          </h2>
+          {linkedCosts.length === 0 ? (
+            <p className="mt-3 text-sm text-zinc-500">Niciun cost cu această cursă.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-zinc-800 rounded-xl border border-zinc-800">
+              {linkedCosts.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                  <Link href={`/fleet/costs/${c.id}`} className="text-emerald-400 hover:underline">
+                    {c.category}
+                    {c.fuelLiters != null ? ` · ${c.fuelLiters} L` : ""}
+                  </Link>
+                  <span className="font-mono text-zinc-300">{formatRonFromCents(c.amountCents)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
     </FleetPageMain>
   );
 }
-

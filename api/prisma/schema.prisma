@@ -20,6 +20,8 @@ model Tenant {
   mailSettings       Json?
   /// Integrări tenant (Setup → Integrări): Audatex import, catalog piese, etc.
   integrationsSettings Json?
+  /// SLA runtime (Setup → Clienți → SLA): ore răspuns/rezolvare pe prioritate + auto-prioritate. CRM-010.
+  slaSettings        Json?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   auditLogs          AuditLog[]
@@ -30,6 +32,7 @@ model Tenant {
   tripSheetDocuments TripSheetDocument[]
   vehicles           Vehicle[]
   vehicleEquipment   VehicleEquipment[]
+  vehicleWheelFitments VehicleWheelFitment[]
   clients            Client[]
   clientContacts     ClientContact[]
   clientDocuments    ClientDocument[]
@@ -540,6 +543,7 @@ model Vehicle {
   maintenancePlanItems MaintenancePlanItem[]
   photos             VehiclePhoto[]
   equipment          VehicleEquipment[]
+  wheelFitments      VehicleWheelFitment[]
   driverAssignments  DriverVehicleAssignment[]
   crmTickets         CrmTicket[]
   serviceCases       ServiceCase[]
@@ -623,6 +627,46 @@ enum VehicleEquipmentKind {
   liftgate
   crane
   other
+}
+
+/// Poziții anvelope / jante pe vehicul (FLEET-019). Inventar depozit = FLEET-007 (parcat).
+enum VehicleWheelPosition {
+  fl
+  fr
+  rl
+  rr
+  spare
+}
+
+enum VehicleTireSeason {
+  summer
+  winter
+  all_season
+  unknown
+}
+
+model VehicleWheelFitment {
+  id         String              @id @default(cuid())
+  tenantId   String
+  vehicleId  String
+  position   VehicleWheelPosition
+  /// Ex. 205/55 R16 91V
+  size       String?
+  brand      String?
+  season     VehicleTireSeason   @default(unknown)
+  /// DOT / săptămână-an fabricație
+  dot        String?
+  treadMm    Float?
+  rimSize    String?
+  notes      String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([vehicleId, position])
+  @@index([tenantId])
+  @@index([vehicleId])
 }
 
 enum TripPurpose {
@@ -1037,6 +1081,12 @@ model CrmTicket {
   createdByUserId  String?
   ownerUserId      String?
   resolvedAt       DateTime?
+  /// SLA CRM-010: termen prim răspuns (din prioritate + slaSettings).
+  firstResponseDueAt DateTime?
+  /// SLA CRM-010: termen rezolvare.
+  resolveDueAt       DateTime?
+  /// Când a fost înregistrat primul răspuns operațional (comentariu L*/L1).
+  firstRespondedAt   DateTime?
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
   tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1057,6 +1107,8 @@ model CrmTicket {
 
   @@index([tenantId])
   @@index([clientId])
+  @@index([tenantId, firstResponseDueAt])
+  @@index([tenantId, resolveDueAt])
   @@index([tenantId, status])
   @@index([vehicleId])
   @@index([reminderActionId])
@@ -1193,6 +1245,8 @@ model Supplier {
   code         String
   legalName    String
   taxId        String?
+  /// IBAN / cont bancar (PARTNER-002 onboarding).
+  iban         String?
   category     SupplierCategory @default(other)
   status       SupplierStatus   @default(active)
   contactEmail String?

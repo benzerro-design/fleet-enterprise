@@ -48,6 +48,7 @@ export function VehicleDetailLayout({
     acquisitionPayload,
     photosPayload,
     equipmentPayload,
+    wheelsPayload,
     odometerPayload,
     mobilityPayload,
     maintenancePlanPayload,
@@ -82,6 +83,7 @@ export function VehicleDetailLayout({
               acquisition={acquisitionPayload}
               photos={photosPayload}
               equipment={equipmentPayload}
+              wheels={wheelsPayload}
               odometer={odometerPayload}
               maintenancePlan={maintenancePlanPayload}
               maintenanceList={maintenanceList}

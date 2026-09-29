@@ -22,6 +22,8 @@ type CostRow = {
   invoiceAttachmentUrl: string | null;
   incurredOn: string;
   notes: string | null;
+  tripId?: string | null;
+  tripReference?: string | null;
 };
 
 async function getEntry(id: string): Promise<CostRow | null> {
@@ -63,6 +65,18 @@ export default async function CostDetailPage({ params }: { params: Promise<{ id:
           <div><dt className="text-xs uppercase text-zinc-500">Data</dt><dd className="mt-1">{new Date(row.incurredOn).toLocaleString("ro-RO")}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Furnizor</dt><dd className="mt-1">{row.provider ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Km</dt><dd className="mt-1 font-mono">{row.odometerKm ?? "—"}</dd></div>
+          <div>
+            <dt className="text-xs uppercase text-zinc-500">Cursă legată</dt>
+            <dd className="mt-1">
+              {row.tripId ? (
+                <Link href={`/fleet/trips/${row.tripId}`} className="font-mono text-emerald-400 hover:underline">
+                  {row.tripReference ?? row.tripId}
+                </Link>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
           <div><dt className="text-xs uppercase text-zinc-500">Număr factură</dt><dd className="mt-1 font-mono">{row.invoiceNumber ?? "—"}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Data facturii</dt><dd className="mt-1">{row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString("ro-RO") : "—"}</dd></div>
           <div className="sm:col-span-2"><dt className="text-xs uppercase text-zinc-500">Atașare factură</dt><dd className="mt-1">{row.invoiceAttachmentUrl ? <a className="text-emerald-400 hover:underline" href={row.invoiceAttachmentUrl} target="_blank" rel="noreferrer">Deschide document</a> : "—"}</dd></div>

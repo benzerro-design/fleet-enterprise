@@ -31,6 +31,11 @@ import {
   parseWorkOrderSettingsPatch,
   type WorkOrderSettings,
 } from './work-order-settings';
+import {
+  parseSlaSettings,
+  parseSlaSettingsPatch,
+  type TenantSlaSettings,
+} from './sla-settings';
 
 @Injectable()
 export class TenantService {
@@ -378,6 +383,57 @@ export class TenantService {
       tenantId: tenant.id,
       actorUserId,
       action: 'work_order_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: next,
+    });
+
+    return next;
+  }
+
+  async getSlaSettings(tenantSlug: string): Promise<TenantSlaSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { slaSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseSlaSettings(tenant.slaSettings);
+  }
+
+  async setSlaSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<TenantSlaSettings> {
+    let patch: Partial<TenantSlaSettings>;
+    try {
+      patch = parseSlaSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid SLA settings');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, slaSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const current = parseSlaSettings(tenant.slaSettings);
+    const next: TenantSlaSettings = {
+      ...current,
+      ...patch,
+      priorities: patch.priorities ?? current.priorities,
+    };
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { slaSettings: next as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'sla_settings_update',
       entityType: 'tenant',
       entityId: tenant.id,
       meta: next,

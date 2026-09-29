@@ -69,6 +69,7 @@ export type CostBrowseFilters = {
   category?: string;
   provider?: string;
   q?: string;
+  tripId?: string;
   incurredFrom?: string;
   incurredTo?: string;
 };
@@ -120,6 +121,9 @@ async function costWhere(
   }
   if (f.provider?.trim()) {
     parts.push({ provider: { equals: f.provider.trim(), mode: 'insensitive' } });
+  }
+  if (f.tripId?.trim()) {
+    parts.push({ tripId: f.tripId.trim() });
   }
   if (f.q?.trim()) {
     const q = f.q.trim();
@@ -233,6 +237,7 @@ function toCostRow(row: {
   vehicleDocumentId?: string | null;
   vehicle: { registrationNumber: string; client: { code: string } };
   tenant: { slug: string };
+  trip?: { id: string; reference: string | null } | null;
 }) {
   return {
     id: row.id,
@@ -247,6 +252,7 @@ function toCostRow(row: {
     fuelLiters: row.fuelLiters,
     fuelProductType: row.fuelProductType,
     tripId: row.tripId,
+    tripReference: row.trip?.reference ?? null,
     odometerKm: row.odometerKm,
     invoiceNumber: row.invoiceNumber,
     invoiceDate: row.invoiceDate ? row.invoiceDate.toISOString() : null,
@@ -261,6 +267,12 @@ function toCostRow(row: {
     linkedDocumentId: row.vehicleDocumentId ?? null,
   };
 }
+
+const costRowInclude = {
+  vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
+  tenant: { select: { slug: true } },
+  trip: { select: { id: true, reference: true } },
+} as const;
 
 @Injectable()
 export class CostsService {
@@ -286,6 +298,7 @@ export class CostsService {
       category: params.category,
       provider: params.provider,
       q: params.q,
+      tripId: params.tripId,
       incurredFrom: params.incurredFrom,
       incurredTo: params.incurredTo,
     }, access);
@@ -294,10 +307,7 @@ export class CostsService {
       this.prisma.costEntry.count({ where }),
       this.prisma.costEntry.findMany({
         where,
-        include: {
-          vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
-          tenant: { select: { slug: true } },
-        },
+        include: costRowInclude,
         orderBy: { incurredOn: 'desc' },
         skip,
         take: pageSize,
@@ -351,10 +361,7 @@ export class CostsService {
   async getById(tenantSlug: string, id: string) {
     const row = await this.prisma.costEntry.findFirst({
       where: { id, tenant: { slug: tenantSlug } },
-      include: {
-        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
-        tenant: { select: { slug: true } },
-      },
+      include: costRowInclude,
     });
     if (!row) throw new NotFoundException('Cost entry not found');
     return toCostRow(row);
@@ -424,10 +431,7 @@ export class CostsService {
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
         reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
       },
-      include: {
-        vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
-        tenant: { select: { slug: true } },
-      },
+      include: costRowInclude,
     });
 
     await this.audit.log({

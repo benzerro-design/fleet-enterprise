@@ -192,12 +192,28 @@ export function TicketDataGrid({
           </FleetGlyphTooltip>
         );
       case "priority":
-        return canPatch ? (
-          <TicketInlinePatchCell ticket={row} field="priority" />
-        ) : (
-          <FleetGlyphTooltip label={ticketPriorityLabel(row.priority)}>
-            <TicketPriorityGlyph priority={row.priority} />
-          </FleetGlyphTooltip>
+        return (
+          <div className="flex items-center gap-1.5">
+            {canPatch ? (
+              <TicketInlinePatchCell ticket={row} field="priority" />
+            ) : (
+              <FleetGlyphTooltip label={ticketPriorityLabel(row.priority)}>
+                <TicketPriorityGlyph priority={row.priority} />
+              </FleetGlyphTooltip>
+            )}
+            {row.slaStatus === "first_response_overdue" || row.slaStatus === "resolve_overdue" ? (
+              <span
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200 bg-amber-950/60 ring-1 ring-amber-800/60"
+                title={
+                  row.slaStatus === "first_response_overdue"
+                    ? "Prim răspuns depășit"
+                    : "Rezolvare depășită"
+                }
+              >
+                SLA
+              </span>
+            ) : null}
+          </div>
         );
       case "type":
         return (

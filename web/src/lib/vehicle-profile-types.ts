@@ -89,6 +89,7 @@ export type VehicleProfileTab =
   | "acquisition"
   | "photos"
   | "equipment"
+  | "wheels"
   | "odometer"
   | "maintenance_plan"
   | "dsr"
@@ -98,3 +99,4 @@ export type VehicleProfileTab =
 
 export type MaintenancePlanPayload = import("@/lib/maintenance-plan-types").MaintenancePlanPayload;
 export type VehicleEquipmentPayload = import("@/lib/vehicle-equipment-types").VehicleEquipmentPayload;
+export type VehicleWheelsPayload = import("@/lib/vehicle-wheels-types").VehicleWheelsPayload;

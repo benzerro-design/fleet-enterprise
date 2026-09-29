@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { TenantServiceTypesEditor } from "@/components/fleet/setup/TenantServiceTypesEditor";
 import { TicketFormsSettingsEditor } from "@/components/fleet/setup/TicketFormsSettingsEditor";
+import { SlaSettingsEditor } from "@/components/fleet/setup/SlaSettingsEditor";
 import type { TenantServiceType } from "@/lib/tenant-service-types/types";
 
 type ClientTab = "tip-servicii" | "sla" | "forms" | "notifications";
 
 const TABS: { id: ClientTab; label: string; live: boolean }[] = [
   { id: "tip-servicii", label: "Tip & Servicii", live: true },
-  { id: "sla", label: "SLA & priorități", live: false },
+  { id: "sla", label: "SLA & priorități", live: true },
   { id: "forms", label: "Politici tichet", live: true },
   { id: "notifications", label: "Notificări client", live: false },
 ];
@@ -26,7 +27,9 @@ export function SetupClientsPageClient({ initialItems }: Props) {
   const intro =
     activeTab === "forms"
       ? "Politici pe client: programare service și ce vede managerul pe lista de tichete."
-      : "Catalog tenant de tipuri service — etichete și descrieri pentru portal client. Furnizorii bifează din acest catalog ce prestează.";
+      : activeTab === "sla"
+        ? "Timer-e SLA pe prioritate: prim răspuns și rezolvare; auto-prioritate din tipul tichetului."
+        : "Catalog tenant de tipuri service — etichete și descrieri pentru portal client. Furnizorii bifează din acest catalog ce prestează.";
 
   return (
     <>
@@ -66,6 +69,7 @@ export function SetupClientsPageClient({ initialItems }: Props) {
 
       {activeTab === "tip-servicii" ? <TenantServiceTypesEditor initialItems={initialItems} /> : null}
       {activeTab === "forms" ? <TicketFormsSettingsEditor /> : null}
+      {activeTab === "sla" ? <SlaSettingsEditor /> : null}
     </>
   );
 }

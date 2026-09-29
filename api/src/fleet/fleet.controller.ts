@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   StreamableFile,
   UseGuards,
@@ -40,6 +41,10 @@ import { DashboardService } from './dashboard.service';
 import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
 import { VehicleEquipmentService } from './vehicle-equipment.service';
+import {
+  assertUpsertWheelDto,
+  VehicleWheelsService,
+} from './vehicle-wheels.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TenantId } from './tenant-id.decorator';
 import { DriversService } from '../drivers/drivers.service';
@@ -54,6 +59,7 @@ export class FleetController {
     private readonly fleet: FleetService,
     private readonly maintenancePlan: MaintenancePlanService,
     private readonly equipment: VehicleEquipmentService,
+    private readonly wheels: VehicleWheelsService,
     private readonly dashboard: DashboardService,
     private readonly formBrief: VehicleFormBriefService,
     private readonly drivers: DriversService,
@@ -476,6 +482,44 @@ export class FleetController {
     @CurrentUserId() actorUserId?: string,
   ) {
     return this.equipment.delete(tenantId, vehicleId, itemId, actorUserId, access);
+  }
+
+  @Get('vehicles/:vehicleId/wheels')
+  @Roles(...FLEET_READ_ROLES)
+  listVehicleWheels(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.wheels.list(tenantId, vehicleId, access);
+  }
+
+  @Put('vehicles/:vehicleId/wheels')
+  @Roles(...FLEET_WRITE_ROLES)
+  upsertVehicleWheel(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.wheels.upsert(tenantId, vehicleId, assertUpsertWheelDto(body), access);
+  }
+
+  @Delete('vehicles/:vehicleId/wheels/:position')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(204)
+  clearVehicleWheel(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('position') position: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.wheels.clearPosition(
+      tenantId,
+      vehicleId,
+      position as import('@prisma/client').VehicleWheelPosition,
+      access,
+    );
   }
 
   @Delete('vehicles/:vehicleId')
