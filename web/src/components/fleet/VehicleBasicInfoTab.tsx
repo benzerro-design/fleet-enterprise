@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ClientSelect } from "@/components/fleet/ClientSelect";
 import { buildVehicleItpPayload, VehicleItpFields } from "@/components/fleet/VehicleItpFields";
+import { VehicleVisual } from "@/components/fleet/VehicleVisual";
 import {
   fleetBrowserBase,
   fleetJsonHeaders,
@@ -116,6 +117,25 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
 
   if (!write) {
     return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+          <VehicleVisual
+            brand={vehicle.brand}
+            model={vehicle.model}
+            type={vehicle.type}
+            size="lg"
+            showLabel
+          />
+          <div className="min-w-0">
+            <p className="font-mono text-lg text-zinc-100">{vehicle.registrationNumber}</p>
+            <p className="text-sm text-zinc-400">
+              {[vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "Marcă / model nesetat"}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Vizual pe tip caroserie (marcă+model) — fără monogramă. Poza din galerie apare în header.
+            </p>
+          </div>
+        </div>
       <dl className="grid gap-4 sm:grid-cols-2">
         <Field
           label="Client"
@@ -150,6 +170,7 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
         ) : null}
         <Metadata vehicle={vehicle} />
       </dl>
+      </div>
     );
   }
 

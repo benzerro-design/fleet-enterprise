@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { VehicleSwitcher } from "@/components/fleet/VehicleSwitcher";
+import { VehicleVisual } from "@/components/fleet/VehicleVisual";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
 import type { VehicleRecord } from "@/lib/fleet-api";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
@@ -13,6 +14,8 @@ type Props = {
   editable: boolean;
   canWrite: boolean;
   driverAssignments?: DriverAssignmentRecord[];
+  /** Prima poză exterior din galerie (PLAT-009). */
+  heroPhotoUrl?: string | null;
 };
 
 function modelLabel(vehicle: VehicleRecord): string {
@@ -20,7 +23,9 @@ function modelLabel(vehicle: VehicleRecord): string {
   return parts.length ? parts.join(" ") : "—";
 }
 
-function VehicleSwitcherSlot(props: Omit<Props, "editable" | "canWrite"> & { mode: "view" | "edit" }) {
+function VehicleSwitcherSlot(
+  props: Omit<Props, "editable" | "canWrite" | "heroPhotoUrl"> & { mode: "view" | "edit" },
+) {
   const { vehicle, vehicles, mode } = props;
   return (
     <VehicleSwitcher
@@ -35,54 +40,74 @@ function VehicleSwitcherSlot(props: Omit<Props, "editable" | "canWrite"> & { mod
   );
 }
 
-export function VehicleDetailHeader({ vehicle, vehicles, editable, canWrite, driverAssignments = [] }: Props) {
+export function VehicleDetailHeader({
+  vehicle,
+  vehicles,
+  editable,
+  canWrite,
+  driverAssignments = [],
+  heroPhotoUrl = null,
+}: Props) {
   const mode = editable ? "edit" : "view";
   const activeDriver = driverAssignments.find((a) => !a.unassignedAt) ?? null;
 
   return (
     <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Fleet core</p>
-        <Suspense
-          fallback={
-            <h1 className="mt-2 font-mono text-3xl font-semibold tracking-tight">{vehicle.registrationNumber}</h1>
-          }
-        >
-          <VehicleSwitcherSlot vehicle={vehicle} vehicles={vehicles} mode={mode} />
-        </Suspense>
-        <p className="mt-2 text-sm text-zinc-400">
-          Client <span className="font-mono text-zinc-300">{vehicle.clientId}</span>
-          {vehicle.clientLegalName ? (
-            <>
-              {" "}
-              <span className="text-zinc-500">({vehicle.clientLegalName})</span>
-            </>
-          ) : null}
-          <span className="mx-2 text-zinc-600">·</span>
-          tenant <span className="font-mono text-zinc-300">{vehicle.tenantId}</span>
-          <span className="mx-2 text-zinc-600">·</span>
-          <span className="font-mono text-sky-300">{vehicle.odometerKm.toLocaleString("ro-RO")} km</span>
-          {activeDriver ? (
-            <>
-              <span className="mx-2 text-zinc-600">·</span>
-              <span>
-                Șofer{" "}
-                <Link
-                  href={`/fleet/drivers/${activeDriver.driverId}`}
-                  className="text-emerald-400 hover:underline"
-                >
-                  {activeDriver.driverFullName ?? "—"}
-                </Link>
-              </span>
-            </>
-          ) : null}
-          {editable ? (
-            <>
-              <span className="mx-2 text-zinc-600">·</span>
-              <span className="text-emerald-400/90">Mod editare</span>
-            </>
-          ) : null}
-        </p>
+      <div className="flex min-w-0 flex-1 items-start gap-4">
+        <VehicleVisual
+          brand={vehicle.brand}
+          model={vehicle.model}
+          type={vehicle.type}
+          photoUrl={heroPhotoUrl}
+          size="xl"
+          showLabel
+          className="mt-1 hidden sm:flex"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Fleet core</p>
+          <Suspense
+            fallback={
+              <h1 className="mt-2 font-mono text-3xl font-semibold tracking-tight">
+                {vehicle.registrationNumber}
+              </h1>
+            }
+          >
+            <VehicleSwitcherSlot vehicle={vehicle} vehicles={vehicles} mode={mode} />
+          </Suspense>
+          <p className="mt-2 text-sm text-zinc-400">
+            Client <span className="font-mono text-zinc-300">{vehicle.clientId}</span>
+            {vehicle.clientLegalName ? (
+              <>
+                {" "}
+                <span className="text-zinc-500">({vehicle.clientLegalName})</span>
+              </>
+            ) : null}
+            <span className="mx-2 text-zinc-600">·</span>
+            tenant <span className="font-mono text-zinc-300">{vehicle.tenantId}</span>
+            <span className="mx-2 text-zinc-600">·</span>
+            <span className="font-mono text-sky-300">{vehicle.odometerKm.toLocaleString("ro-RO")} km</span>
+            {activeDriver ? (
+              <>
+                <span className="mx-2 text-zinc-600">·</span>
+                <span>
+                  Șofer{" "}
+                  <Link
+                    href={`/fleet/drivers/${activeDriver.driverId}`}
+                    className="text-emerald-400 hover:underline"
+                  >
+                    {activeDriver.driverFullName ?? "—"}
+                  </Link>
+                </span>
+              </>
+            ) : null}
+            {editable ? (
+              <>
+                <span className="mx-2 text-zinc-600">·</span>
+                <span className="text-emerald-400/90">Mod editare</span>
+              </>
+            ) : null}
+          </p>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <Link

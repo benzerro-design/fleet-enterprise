@@ -12,6 +12,7 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
 import { DriverHomeView, type DriverHomeTrip } from "@/components/fleet/DriverHomeView";
+import { VehicleVisual } from "@/components/fleet/VehicleVisual";
 import {
   canWriteFleetOps,
   driverIdFromAuth,
@@ -244,17 +245,24 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
             <div className="space-y-3 md:hidden">
               {vehicles.map((v) => (
                 <article key={v.id} className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-                  <p className="font-mono text-sm font-medium text-zinc-100">{v.registrationNumber}</p>
-                  <p className="mt-1 text-xs text-zinc-400">
-                    {v.clientId}
-                    {v.type ? ` · ${v.type}` : ""}
-                    {v.status ? ` · ${v.status}` : ""}
-                  </p>
-                  <p className="mt-2 font-mono text-xs text-zinc-300">
-                    {v.odometerKm.toLocaleString("ro-RO")} km
-                    {" · ITP "}
-                    {v.itpExpiresOn ? new Date(v.itpExpiresOn).toLocaleDateString("ro-RO") : "—"}
-                  </p>
+                  <div className="flex items-start gap-3">
+                    <VehicleVisual brand={v.brand} model={v.model} type={v.type} size="md" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-sm font-medium text-zinc-100">{v.registrationNumber}</p>
+                      <p className="mt-0.5 truncate text-xs text-zinc-400">
+                        {[v.brand, v.model].filter(Boolean).join(" ") || v.type}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {v.clientId}
+                        {v.status ? ` · ${v.status}` : ""}
+                      </p>
+                      <p className="mt-2 font-mono text-xs text-zinc-300">
+                        {v.odometerKm.toLocaleString("ro-RO")} km
+                        {" · ITP "}
+                        {v.itpExpiresOn ? new Date(v.itpExpiresOn).toLocaleDateString("ro-RO") : "—"}
+                      </p>
+                    </div>
+                  </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link
                       href={`/fleet/vehicles/${v.id}`}
@@ -282,6 +290,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                 <table className={fleetTableClass}>
                   <thead className={`${fleetTheadClass} tracking-wide`}>
                     <tr>
+                      <th className={fleetThClass}>Vehicul</th>
                       <th className={fleetThClass}>Nr. înmatriculare</th>
                       <th className={fleetThClass}>Client</th>
                       <th className={fleetThClass}>Tip</th>
@@ -295,7 +304,17 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                   <tbody className="divide-y divide-zinc-800">
                     {vehicles.map((v) => (
                       <tr key={v.id} className="bg-zinc-900/30">
-                        <td className={`${fleetTdClass} font-mono text-zinc-200`}>{v.registrationNumber}</td>
+                        <td className={fleetTdClass}>
+                          <VehicleVisual brand={v.brand} model={v.model} type={v.type} size="sm" />
+                        </td>
+                        <td className={`${fleetTdClass} font-mono text-zinc-200`}>
+                          <div>{v.registrationNumber}</div>
+                          {[v.brand, v.model].filter(Boolean).length ? (
+                            <div className="mt-0.5 text-xs font-sans text-zinc-500">
+                              {[v.brand, v.model].filter(Boolean).join(" ")}
+                            </div>
+                          ) : null}
+                        </td>
                         <td className={`${fleetTdClass} text-zinc-300`}>{v.clientId}</td>
                         <td className={`${fleetTdClass} text-zinc-300`}>{v.type}</td>
                         <td className={`${fleetTdClass} text-zinc-300`}>{v.status}</td>

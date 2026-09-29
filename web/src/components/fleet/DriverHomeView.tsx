@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { ReminderActionStatusBadge } from "@/components/fleet/ReminderActionStatusBadge";
+import { VehicleVisual } from "@/components/fleet/VehicleVisual";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { FUEL_COST_CATEGORY } from "@/lib/fuel-ops";
 import type { VehicleRecord } from "@/lib/fleet-api";
@@ -122,11 +123,14 @@ export function DriverHomeView({
               return (
                 <li key={v.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-mono text-lg text-zinc-100">{v.registrationNumber}</p>
-                      <p className="mt-1 truncate text-sm text-zinc-400">
-                        {[v.brand, v.model].filter(Boolean).join(" ") || v.type}
-                      </p>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <VehicleVisual brand={v.brand} model={v.model} type={v.type} size="md" />
+                      <div className="min-w-0">
+                        <p className="font-mono text-lg text-zinc-100">{v.registrationNumber}</p>
+                        <p className="mt-1 truncate text-sm text-zinc-400">
+                          {[v.brand, v.model].filter(Boolean).join(" ") || v.type}
+                        </p>
+                      </div>
                     </div>
                     <Link
                       href={`/fleet/vehicles/${v.id}`}

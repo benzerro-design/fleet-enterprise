@@ -68,6 +68,11 @@ export function VehicleDetailLayout({
           editable={editable}
           canWrite={canWrite}
           driverAssignments={driverAssignments}
+          heroPhotoUrl={
+            photosPayload.items.find((p) => p.kind === "exterior" && p.fileUrl)?.fileUrl ??
+            photosPayload.items.find((p) => p.fileUrl)?.fileUrl ??
+            null
+          }
         />
 
         <Suspense fallback={<p className="mb-10 text-sm text-zinc-500">Se încarcă profilul…</p>}>
