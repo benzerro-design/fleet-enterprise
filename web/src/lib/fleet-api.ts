@@ -42,6 +42,8 @@ export type VehicleRecord = {
   vin: string | null;
   status: string;
   odometerKm: number;
+  /** Prima poză din galerie (preferă exterior). */
+  heroPhotoUrl?: string | null;
   itpExpiresOn: string | null;
   itpStationName: string | null;
   itpReminderOffsetsDays?: number[] | null;

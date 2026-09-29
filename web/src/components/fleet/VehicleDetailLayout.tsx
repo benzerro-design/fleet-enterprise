@@ -69,6 +69,7 @@ export function VehicleDetailLayout({
           canWrite={canWrite}
           driverAssignments={driverAssignments}
           heroPhotoUrl={
+            photosPayload.items.find((p) => p.isHero && p.fileUrl)?.fileUrl ??
             photosPayload.items.find((p) => p.kind === "exterior" && p.fileUrl)?.fileUrl ??
             photosPayload.items.find((p) => p.fileUrl)?.fileUrl ??
             null

@@ -180,12 +180,24 @@ export default async function FleetDriversPage({ searchParams }: PageProps) {
                   {list.items.map((row) => (
                     <tr key={row.id} className="text-zinc-200">
                       <td className={fleetTdClass}>
-                        <Link href={`/fleet/drivers/${row.id}`} className="font-medium text-emerald-300/90 hover:underline">
-                          {row.fullName}
-                        </Link>
-                        {row.employeeCode ? (
-                          <span className="ml-2 font-mono text-xs text-zinc-500">{row.employeeCode}</span>
-                        ) : null}
+                        <div className="flex items-center gap-2">
+                          {row.photoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={row.photoUrl}
+                              alt=""
+                              className="h-8 w-8 rounded-full border border-zinc-700 object-cover"
+                            />
+                          ) : null}
+                          <div>
+                            <Link href={`/fleet/drivers/${row.id}`} className="font-medium text-emerald-300/90 hover:underline">
+                              {row.fullName}
+                            </Link>
+                            {row.employeeCode ? (
+                              <span className="ml-2 font-mono text-xs text-zinc-500">{row.employeeCode}</span>
+                            ) : null}
+                          </div>
+                        </div>
                       </td>
                       <td className={fleetTdClass}>
                         <Link

@@ -72,7 +72,16 @@ export function DriverFormBrief({ mode, driver, clientCode }: Props) {
 
       {driver ? (
         <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
-          <FleetAvatar name={driver.fullName} size={40} />
+          {driver.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={driver.photoUrl}
+              alt={driver.fullName}
+              className="h-10 w-10 rounded-full border border-zinc-700 object-cover"
+            />
+          ) : (
+            <FleetAvatar name={driver.fullName} size={40} />
+          )}
           <div>
             <p className="font-medium text-zinc-100">{driver.fullName}</p>
             <p className="text-xs text-zinc-500">{driver.clientCode}</p>

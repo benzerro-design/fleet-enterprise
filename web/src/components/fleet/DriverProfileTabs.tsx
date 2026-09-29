@@ -114,21 +114,46 @@ export function DriverProfileTabs({
         />
       ) : (
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-          <h2 className="text-sm font-medium text-zinc-300">Date contact & permis</h2>
-          {activeVehicles.length > 0 ? (
-            <p className="mt-2 text-sm text-zinc-400">
-              Vehicule active:{" "}
-              <span className="font-mono text-emerald-300">{activeVehicles.join(", ")}</span>
-              {" · "}
-              <button
-                type="button"
-                onClick={() => setTab("vehicles")}
-                className="text-emerald-400 hover:underline"
-              >
-                Vezi istoric alocări
-              </button>
-            </p>
-          ) : null}
+          <div className="flex items-start gap-4">
+            {driver.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={driver.photoUrl}
+                alt={driver.fullName}
+                className="h-20 w-20 shrink-0 rounded-full border border-zinc-700 object-cover"
+              />
+            ) : (
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-dashed border-zinc-700 text-[10px] text-zinc-500">
+                Fără poză
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-medium text-zinc-300">Date contact & permis</h2>
+              {canWrite ? (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Poza se încarcă din{" "}
+                  <Link href={`/fleet/drivers/${driver.id}/edit`} className="text-emerald-400 hover:underline">
+                    Editare șofer
+                  </Link>
+                  .
+                </p>
+              ) : null}
+              {activeVehicles.length > 0 ? (
+                <p className="mt-2 text-sm text-zinc-400">
+                  Vehicule active:{" "}
+                  <span className="font-mono text-emerald-300">{activeVehicles.join(", ")}</span>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={() => setTab("vehicles")}
+                    className="text-emerald-400 hover:underline"
+                  >
+                    Vezi istoric alocări
+                  </button>
+                </p>
+              ) : null}
+            </div>
+          </div>
           <dl className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
               <dt className="text-xs text-zinc-500">Telefon</dt>

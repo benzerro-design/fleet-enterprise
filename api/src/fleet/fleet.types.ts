@@ -50,6 +50,8 @@ export type VehicleRecord = {
   civMentions: string | null;
   civProfile: Record<string, string | number | null>;
   civImportedFromDocumentId: string | null;
+  /** Prima poză din galerie (preferă exterior) — PLAT-009. */
+  heroPhotoUrl: string | null;
   documents: VehicleDocument[];
   createdAt: string;
   updatedAt: string;

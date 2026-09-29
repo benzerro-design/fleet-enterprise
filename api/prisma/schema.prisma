@@ -230,6 +230,8 @@ model Driver {
   employeeCode       String?
   phone              String?
   email              String?
+  /** Poză profil șofer (URL upload). */
+  photoUrl           String?
   licenseNumber      String?
   licenseCategories  String?
   licenseExpiresOn   DateTime?
@@ -575,6 +577,8 @@ model VehiclePhoto {
   /** Grupare pe sesiune (ex. „2026-09 — inspecție lunară”). */
   sessionLabel     String?
   kind             VehiclePhotoKind?
+  /** Poză folosită ca icon/header pe vehicul (PLAT-009). Maxim una pe vehicul. */
+  isHero           Boolean           @default(false)
   sortOrder        Int               @default(0)
   createdAt        DateTime          @default(now())
   uploadedByUserId String?
@@ -584,6 +588,7 @@ model VehiclePhoto {
   @@index([vehicleId])
   @@index([vehicleId, sortOrder])
   @@index([vehicleId, sessionLabel])
+  @@index([vehicleId, isHero])
 }
 
 enum FuelCardStatus {

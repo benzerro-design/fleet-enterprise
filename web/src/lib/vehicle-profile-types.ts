@@ -74,6 +74,7 @@ export type VehiclePhotoRow = {
   caption: string | null;
   sessionLabel: string | null;
   kind: VehiclePhotoKind | null;
+  isHero: boolean;
   sortOrder: number;
   createdAt: string;
   uploadedByEmail: string | null;

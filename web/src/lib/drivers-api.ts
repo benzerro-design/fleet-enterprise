@@ -13,6 +13,7 @@ export type DriverRecord = {
   employeeCode: string | null;
   phone: string | null;
   email: string | null;
+  photoUrl: string | null;
   licenseNumber: string | null;
   licenseCategories: string | null;
   licenseExpiresOn: string | null;
@@ -52,6 +53,8 @@ export type DriverAssignmentRecord = {
   id: string;
   driverId: string;
   driverFullName?: string | null;
+  /** Poză profil șofer — afișată lângă „Șofer …” pe header vehicul. */
+  driverPhotoUrl?: string | null;
   vehicleId: string;
   registrationNumber: string;
   assignedAt: string;

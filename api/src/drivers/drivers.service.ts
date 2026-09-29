@@ -27,6 +27,7 @@ export type DriverRecord = {
   employeeCode: string | null;
   phone: string | null;
   email: string | null;
+  photoUrl: string | null;
   licenseNumber: string | null;
   licenseCategories: string | null;
   licenseExpiresOn: string | null;
@@ -43,6 +44,7 @@ export type DriverAssignmentRecord = {
   id: string;
   driverId: string;
   driverFullName?: string | null;
+  driverPhotoUrl?: string | null;
   vehicleId: string;
   registrationNumber: string;
   assignedAt: string;
@@ -63,6 +65,7 @@ export type CreateDriverInput = {
   employeeCode?: string | null;
   phone?: string | null;
   email?: string | null;
+  photoUrl?: string | null;
   licenseNumber?: string | null;
   licenseCategories?: string | null;
   licenseExpiresOn?: string | null;
@@ -271,7 +274,7 @@ export class DriversService {
       where: { vehicleId },
       include: {
         vehicle: { select: { registrationNumber: true } },
-        driver: { select: { fullName: true } },
+        driver: { select: { fullName: true, photoUrl: true } },
         assignedBy: { select: { email: true } },
       },
       orderBy: [{ assignedAt: 'desc' }],
@@ -300,6 +303,7 @@ export class DriversService {
         employeeCode: input.employeeCode?.trim() || null,
         phone: input.phone?.trim() || null,
         email: input.email?.trim() || null,
+        photoUrl: input.photoUrl?.trim() || null,
         licenseNumber: input.licenseNumber?.trim() || null,
         licenseCategories: input.licenseCategories?.trim() || null,
         licenseExpiresOn: parseOptionalDate(input.licenseExpiresOn),
@@ -363,6 +367,7 @@ export class DriversService {
           : {}),
         ...(input.phone !== undefined ? { phone: input.phone?.trim() || null } : {}),
         ...(input.email !== undefined ? { email: input.email?.trim() || null } : {}),
+        ...(input.photoUrl !== undefined ? { photoUrl: input.photoUrl?.trim() || null } : {}),
         ...(input.licenseNumber !== undefined
           ? { licenseNumber: input.licenseNumber?.trim() || null }
           : {}),
@@ -463,6 +468,7 @@ export class DriversService {
       where: { driverId, vehicleId: vehicle.id, unassignedAt: null },
       include: {
         vehicle: { select: { registrationNumber: true } },
+        driver: { select: { fullName: true, photoUrl: true } },
         assignedBy: { select: { email: true } },
       },
       orderBy: { assignedAt: 'desc' },
@@ -597,6 +603,7 @@ export class DriversService {
     employeeCode: string | null;
     phone: string | null;
     email: string | null;
+    photoUrl: string | null;
     licenseNumber: string | null;
     licenseCategories: string | null;
     licenseExpiresOn: Date | null;
@@ -618,6 +625,7 @@ export class DriversService {
       employeeCode: row.employeeCode,
       phone: row.phone,
       email: row.email,
+      photoUrl: row.photoUrl ?? null,
       licenseNumber: row.licenseNumber,
       licenseCategories: row.licenseCategories,
       licenseExpiresOn: row.licenseExpiresOn ? row.licenseExpiresOn.toISOString() : null,
@@ -640,13 +648,14 @@ export class DriversService {
     assignedByUserId: string | null;
     notes: string | null;
     vehicle: { registrationNumber: string };
-    driver?: { fullName: string } | null;
+    driver?: { fullName: string; photoUrl?: string | null } | null;
     assignedBy: { email: string } | null;
   }): DriverAssignmentRecord {
     return {
       id: row.id,
       driverId: row.driverId,
       driverFullName: row.driver?.fullName ?? null,
+      driverPhotoUrl: row.driver?.photoUrl ?? null,
       vehicleId: row.vehicleId,
       registrationNumber: row.vehicle.registrationNumber,
       assignedAt: row.assignedAt.toISOString(),

@@ -26,6 +26,7 @@ export type VehiclePhotoRecord = {
   caption: string | null;
   sessionLabel: string | null;
   kind: 'exterior' | 'interior' | 'damage' | 'document' | 'other' | null;
+  isHero: boolean;
   sortOrder: number;
   createdAt: string;
   uploadedByEmail: string | null;

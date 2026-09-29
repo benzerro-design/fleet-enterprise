@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { VehicleSwitcher } from "@/components/fleet/VehicleSwitcher";
 import { VehicleVisual } from "@/components/fleet/VehicleVisual";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
@@ -14,7 +14,7 @@ type Props = {
   editable: boolean;
   canWrite: boolean;
   driverAssignments?: DriverAssignmentRecord[];
-  /** Prima poză exterior din galerie (PLAT-009). */
+  /** Poză hero din galerie (isHero → exterior → orice). */
   heroPhotoUrl?: string | null;
 };
 
@@ -40,6 +40,29 @@ function VehicleSwitcherSlot(
   );
 }
 
+function DriverAvatar({
+  photoUrl,
+  name,
+}: {
+  photoUrl: string | null | undefined;
+  name: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const src = photoUrl?.trim() || null;
+  if (!src || failed) return null;
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name}
+      title={name}
+      onError={() => setFailed(true)}
+      className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-zinc-600"
+    />
+  );
+}
+
 export function VehicleDetailHeader({
   vehicle,
   vehicles,
@@ -50,19 +73,20 @@ export function VehicleDetailHeader({
 }: Props) {
   const mode = editable ? "edit" : "view";
   const activeDriver = driverAssignments.find((a) => !a.unassignedAt) ?? null;
+  const photo = heroPhotoUrl ?? vehicle.heroPhotoUrl ?? null;
+  const driverName = activeDriver?.driverFullName?.trim() || "—";
 
   return (
     <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="flex min-w-0 flex-1 items-start gap-4">
-        <VehicleVisual
-          brand={vehicle.brand}
-          model={vehicle.model}
-          type={vehicle.type}
-          photoUrl={heroPhotoUrl}
-          size="xl"
-          showLabel
-          className="mt-1 hidden sm:flex"
-        />
+        {photo ? (
+          <VehicleVisual
+            photoUrl={photo}
+            alt={[vehicle.brand, vehicle.model, vehicle.registrationNumber].filter(Boolean).join(" ")}
+            size="xl"
+            className="mt-1 hidden sm:block"
+          />
+        ) : null}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Fleet core</p>
           <Suspense
@@ -74,29 +98,36 @@ export function VehicleDetailHeader({
           >
             <VehicleSwitcherSlot vehicle={vehicle} vehicles={vehicles} mode={mode} />
           </Suspense>
-          <p className="mt-2 text-sm text-zinc-400">
-            Client <span className="font-mono text-zinc-300">{vehicle.clientId}</span>
-            {vehicle.clientLegalName ? (
-              <>
-                {" "}
-                <span className="text-zinc-500">({vehicle.clientLegalName})</span>
-              </>
-            ) : null}
+          <p className="mt-2 flex flex-wrap items-center gap-x-0 gap-y-1 text-sm text-zinc-400">
+            <span>
+              Client <span className="font-mono text-zinc-300">{vehicle.clientId}</span>
+              {vehicle.clientLegalName ? (
+                <>
+                  {" "}
+                  <span className="text-zinc-500">({vehicle.clientLegalName})</span>
+                </>
+              ) : null}
+            </span>
             <span className="mx-2 text-zinc-600">·</span>
-            tenant <span className="font-mono text-zinc-300">{vehicle.tenantId}</span>
+            <span>
+              tenant <span className="font-mono text-zinc-300">{vehicle.tenantId}</span>
+            </span>
             <span className="mx-2 text-zinc-600">·</span>
             <span className="font-mono text-sky-300">{vehicle.odometerKm.toLocaleString("ro-RO")} km</span>
             {activeDriver ? (
               <>
                 <span className="mx-2 text-zinc-600">·</span>
-                <span>
-                  Șofer{" "}
-                  <Link
-                    href={`/fleet/drivers/${activeDriver.driverId}`}
-                    className="text-emerald-400 hover:underline"
-                  >
-                    {activeDriver.driverFullName ?? "—"}
-                  </Link>
+                <span className="inline-flex items-center gap-1.5">
+                  <DriverAvatar photoUrl={activeDriver.driverPhotoUrl} name={driverName} />
+                  <span>
+                    Șofer{" "}
+                    <Link
+                      href={`/fleet/drivers/${activeDriver.driverId}`}
+                      className="text-emerald-400 hover:underline"
+                    >
+                      {driverName}
+                    </Link>
+                  </span>
                 </span>
               </>
             ) : null}

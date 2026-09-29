@@ -19,7 +19,7 @@ import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
 import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
-import type { CreateVehiclePhotoDto, PatchVehicleAcquisitionDto } from './dto/patch-vehicle-acquisition.dto';
+import type { CreateVehiclePhotoDto, PatchVehicleAcquisitionDto, PatchVehiclePhotoDto } from './dto/patch-vehicle-acquisition.dto';
 import type { VehicleDocument, VehicleRecord, VehicleStatus } from './fleet.types';
 import type { CivImportSource, OdometerReadingRecord, VehicleCivPayload } from './vehicle-civ.types';
 import type {
@@ -74,7 +74,11 @@ const vehicleInclude = {
   tenant: { select: { slug: true } },
   createdBy: { select: { email: true } },
   updatedBy: { select: { email: true } },
-} as const;
+  photos: {
+    select: { fileUrl: true, kind: true, sortOrder: true, isHero: true },
+    orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+  },
+} satisfies Prisma.VehicleInclude;
 
 type VehicleRow = Prisma.VehicleGetPayload<{ include: typeof vehicleInclude }>;
 
@@ -1000,11 +1004,19 @@ export class FleetService {
         caption: dto.caption?.trim() || null,
         sessionLabel: dto.sessionLabel?.trim() || null,
         kind: dto.kind ?? null,
+        isHero: dto.isHero === true,
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
         uploadedByUserId: actorUserId ?? null,
       },
       include: { uploadedBy: { select: { email: true } } },
     });
+
+    if (dto.isHero === true) {
+      await this.prisma.vehiclePhoto.updateMany({
+        where: { vehicleId, id: { not: photo.id } },
+        data: { isHero: false },
+      });
+    }
 
     await this.audit.logVehicle({
       tenantUuid: existing.tenantId,
@@ -1015,6 +1027,57 @@ export class FleetService {
     });
 
     return this.toPhotoRecord(photo);
+  }
+
+  async patchVehiclePhoto(
+    tenantSlug: string,
+    vehicleId: string,
+    photoId: string,
+    dto: PatchVehiclePhotoDto,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<VehiclePhotoRecord> {
+    await assertDriverMediaWrite(this.prisma, tenantSlug, vehicleId, access);
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, tenantId: true, registrationNumber: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found');
+
+    const photo = await this.prisma.vehiclePhoto.findFirst({
+      where: { id: photoId, vehicleId },
+    });
+    if (!photo) throw new NotFoundException('Photo not found');
+
+    if (dto.isHero === true) {
+      await this.prisma.vehiclePhoto.updateMany({
+        where: { vehicleId, id: { not: photoId } },
+        data: { isHero: false },
+      });
+    }
+
+    const updated = await this.prisma.vehiclePhoto.update({
+      where: { id: photoId },
+      data: {
+        ...(dto.caption !== undefined ? { caption: dto.caption?.trim() || null } : {}),
+        ...(dto.sessionLabel !== undefined
+          ? { sessionLabel: dto.sessionLabel?.trim() || null }
+          : {}),
+        ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
+        ...(dto.isHero !== undefined ? { isHero: dto.isHero } : {}),
+      },
+      include: { uploadedBy: { select: { email: true } } },
+    });
+
+    await this.audit.logVehicle({
+      tenantUuid: existing.tenantId,
+      actorUserId: actorUserId ?? undefined,
+      action: 'vehicle_photo_patch',
+      vehicleId,
+      meta: { registrationNumber: existing.registrationNumber, photoId },
+    });
+
+    return this.toPhotoRecord(updated);
   }
 
   async deleteVehiclePhoto(
@@ -1516,6 +1579,10 @@ export class FleetService {
   }
 
   private toRecord(row: VehicleRow): VehicleRecord {
+    const photos = row.photos ?? [];
+    const hero = photos.find((p) => p.isHero && p.fileUrl);
+    const exterior = photos.find((p) => p.kind === 'exterior' && p.fileUrl);
+    const anyPhoto = photos.find((p) => p.fileUrl);
     return {
       id: row.id,
       tenantId: row.tenant.slug,
@@ -1544,6 +1611,7 @@ export class FleetService {
       civMentions: row.civMentions,
       civProfile: normalizeCivProfile(row.civProfile),
       civImportedFromDocumentId: row.civImportedFromDocumentId,
+      heroPhotoUrl: hero?.fileUrl ?? exterior?.fileUrl ?? anyPhoto?.fileUrl ?? null,
       documents: row.documents.map((d) => this.toDocument(d)),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -1598,6 +1666,7 @@ export class FleetService {
     caption: string | null;
     sessionLabel: string | null;
     kind: 'exterior' | 'interior' | 'damage' | 'document' | 'other' | null;
+    isHero: boolean;
     sortOrder: number;
     createdAt: Date;
     uploadedBy: { email: string } | null;
@@ -1610,6 +1679,7 @@ export class FleetService {
       caption: row.caption,
       sessionLabel: row.sessionLabel,
       kind: row.kind,
+      isHero: row.isHero,
       sortOrder: row.sortOrder,
       createdAt: row.createdAt.toISOString(),
       uploadedByEmail: row.uploadedBy?.email ?? null,

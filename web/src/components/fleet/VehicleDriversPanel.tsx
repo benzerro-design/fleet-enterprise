@@ -124,17 +124,27 @@ export function VehicleDriversPanel({
         <h2 className="text-sm font-medium text-zinc-300">Șofer curent</h2>
         {active ? (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <Link
-                href={`/fleet/drivers/${active.driverId}`}
-                className="text-lg font-medium text-emerald-400 hover:underline"
-              >
-                {active.driverFullName ?? "Șofer"}
-              </Link>
-              <p className="mt-1 text-xs text-zinc-500">
-                Alocat din {formatDateTime(active.assignedAt)}
-                {active.assignedByEmail ? ` · de ${active.assignedByEmail}` : ""}
-              </p>
+            <div className="flex items-center gap-3">
+              {active.driverPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={active.driverPhotoUrl}
+                  alt={active.driverFullName ?? "Șofer"}
+                  className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-zinc-700"
+                />
+              ) : null}
+              <div>
+                <Link
+                  href={`/fleet/drivers/${active.driverId}`}
+                  className="text-lg font-medium text-emerald-400 hover:underline"
+                >
+                  {active.driverFullName ?? "Șofer"}
+                </Link>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Alocat din {formatDateTime(active.assignedAt)}
+                  {active.assignedByEmail ? ` · de ${active.assignedByEmail}` : ""}
+                </p>
+              </div>
             </div>
             {canWrite ? (
               <button

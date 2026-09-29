@@ -300,6 +300,26 @@ export class FleetController {
     return this.fleet.addVehiclePhoto(tenantId, vehicleId, dto, actorUserId, access);
   }
 
+  @Patch('vehicles/:vehicleId/photos/:photoId')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchVehiclePhoto(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('photoId') photoId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.fleet.patchVehiclePhoto(
+      tenantId,
+      vehicleId,
+      photoId,
+      assertPatchVehiclePhotoDto(body),
+      actorUserId,
+      access,
+    );
+  }
+
   @Delete('vehicles/:vehicleId/photos/:photoId')
   @Roles(MembershipRole.tenant_admin)
   @HttpCode(204)
@@ -933,6 +953,37 @@ function assertCreateVehiclePhotoDto(body: unknown): CreateVehiclePhotoDto {
   if ('kind' in body) {
     if (body.kind === null) dto.kind = null;
     else dto.kind = asVehiclePhotoKind(body.kind);
+  }
+  if ('isHero' in body) {
+    dto.isHero = body.isHero === true;
+  }
+  return dto;
+}
+
+function assertPatchVehiclePhotoDto(body: unknown): import('./dto/patch-vehicle-acquisition.dto').PatchVehiclePhotoDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const dto: import('./dto/patch-vehicle-acquisition.dto').PatchVehiclePhotoDto = {};
+  if ('caption' in body) {
+    dto.caption = body.caption === null ? null : optionalString(body.caption) ?? null;
+  }
+  if ('sessionLabel' in body) {
+    dto.sessionLabel = body.sessionLabel === null ? null : optionalString(body.sessionLabel) ?? null;
+  }
+  if ('kind' in body) {
+    if (body.kind === null) dto.kind = null;
+    else dto.kind = asVehiclePhotoKind(body.kind);
+  }
+  if ('isHero' in body) {
+    if (typeof body.isHero !== 'boolean') throw new BadRequestException('isHero must be boolean');
+    dto.isHero = body.isHero;
+  }
+  if (
+    dto.caption === undefined &&
+    dto.sessionLabel === undefined &&
+    dto.kind === undefined &&
+    dto.isHero === undefined
+  ) {
+    throw new BadRequestException('No fields to update');
   }
   return dto;
 }

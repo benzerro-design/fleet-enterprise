@@ -124,7 +124,9 @@ export function DriverHomeView({
                 <li key={v.id} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <VehicleVisual brand={v.brand} model={v.model} type={v.type} size="md" />
+                      {v.heroPhotoUrl ? (
+                        <VehicleVisual photoUrl={v.heroPhotoUrl} alt={v.registrationNumber} size="md" />
+                      ) : null}
                       <div className="min-w-0">
                         <p className="font-mono text-lg text-zinc-100">{v.registrationNumber}</p>
                         <p className="mt-1 truncate text-sm text-zinc-400">

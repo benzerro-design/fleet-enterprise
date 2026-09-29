@@ -244,16 +244,29 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
           <>
             <div className="space-y-3 md:hidden">
               {vehicles.map((v) => (
-                <article key={v.id} className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <article key={v.id} className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40">
+                  {v.heroPhotoUrl ? (
+                    <div className="relative aspect-[16/10] w-full bg-zinc-950">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={v.heroPhotoUrl}
+                        alt={[v.brand, v.model, v.registrationNumber].filter(Boolean).join(" ")}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="p-4">
                   <div className="flex items-start gap-3">
-                    <VehicleVisual brand={v.brand} model={v.model} type={v.type} size="md" />
                     <div className="min-w-0 flex-1">
                       <p className="font-mono text-sm font-medium text-zinc-100">{v.registrationNumber}</p>
-                      <p className="mt-0.5 truncate text-xs text-zinc-400">
-                        {[v.brand, v.model].filter(Boolean).join(" ") || v.type}
-                      </p>
+                      {(v.brand || v.model) ? (
+                        <p className="mt-0.5 text-xs text-zinc-400">
+                          {[v.brand, v.model].filter(Boolean).join(" ")}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-xs text-zinc-500">
                         {v.clientId}
+                        {v.type ? ` · ${v.type}` : ""}
                         {v.status ? ` · ${v.status}` : ""}
                       </p>
                       <p className="mt-2 font-mono text-xs text-zinc-300">
@@ -282,6 +295,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                       </>
                     ) : null}
                   </div>
+                  </div>
                 </article>
               ))}
             </div>
@@ -290,7 +304,6 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                 <table className={fleetTableClass}>
                   <thead className={`${fleetTheadClass} tracking-wide`}>
                     <tr>
-                      <th className={fleetThClass}>Vehicul</th>
                       <th className={fleetThClass}>Nr. înmatriculare</th>
                       <th className={fleetThClass}>Client</th>
                       <th className={fleetThClass}>Tip</th>
@@ -304,16 +317,17 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                   <tbody className="divide-y divide-zinc-800">
                     {vehicles.map((v) => (
                       <tr key={v.id} className="bg-zinc-900/30">
-                        <td className={fleetTdClass}>
-                          <VehicleVisual brand={v.brand} model={v.model} type={v.type} size="sm" />
-                        </td>
                         <td className={`${fleetTdClass} font-mono text-zinc-200`}>
-                          <div>{v.registrationNumber}</div>
-                          {[v.brand, v.model].filter(Boolean).length ? (
-                            <div className="mt-0.5 text-xs font-sans text-zinc-500">
-                              {[v.brand, v.model].filter(Boolean).join(" ")}
-                            </div>
-                          ) : null}
+                          <div className="flex items-center gap-2">
+                            {v.heroPhotoUrl ? (
+                              <VehicleVisual
+                                photoUrl={v.heroPhotoUrl}
+                                alt={v.registrationNumber}
+                                size="sm"
+                              />
+                            ) : null}
+                            <span>{v.registrationNumber}</span>
+                          </div>
                         </td>
                         <td className={`${fleetTdClass} text-zinc-300`}>{v.clientId}</td>
                         <td className={`${fleetTdClass} text-zinc-300`}>{v.type}</td>

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { ClientSelect } from "@/components/fleet/ClientSelect";
 import { DriverFormLayout } from "@/components/fleet/DriverFormLayout";
+import { uploadDocumentFile } from "@/lib/document-upload";
 import {
   driversBrowserBase,
   fleetJsonHeaders,
@@ -34,6 +35,8 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
   );
   const [status, setStatus] = useState<DriverStatus>(initial?.status ?? "active");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [photoUrl, setPhotoUrl] = useState(initial?.photoUrl ?? "");
+  const [photoPending, setPhotoPending] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +62,7 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
       licenseExpiresOn: licenseExpiresOn.trim() || null,
       status,
       notes: notes.trim() || null,
+      photoUrl: photoUrl.trim() || null,
     };
     try {
       const url =
@@ -98,6 +102,7 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
           fullName: fullName || initial.fullName,
           clientCode: clientId || initial.clientCode,
           licenseExpiresOn: licenseExpiresOn || initial.licenseExpiresOn,
+          photoUrl: photoUrl || initial.photoUrl,
         }
       : fullName.trim() && clientId.trim()
         ? {
@@ -109,6 +114,7 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
             employeeCode: null,
             phone: null,
             email: null,
+            photoUrl: photoUrl.trim() || null,
             licenseNumber: null,
             licenseCategories: null,
             licenseExpiresOn: licenseExpiresOn || null,
@@ -149,6 +155,60 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
           required
           className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
         />
+      </div>
+      <div>
+        <label className="text-sm text-zinc-400">Poză profil</label>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          {photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={photoUrl}
+              alt={fullName || "Șofer"}
+              className="h-16 w-16 rounded-full border border-zinc-700 object-cover"
+            />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-zinc-700 text-xs text-zinc-500">
+              Fără poză
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <label className="cursor-pointer rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900">
+              {photoPending ? "Se încarcă…" : "Încarcă poză"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={photoPending}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  void (async () => {
+                    setPhotoPending(true);
+                    setError(null);
+                    try {
+                      const up = await uploadDocumentFile(file, fullName.trim() || "driver-photo");
+                      setPhotoUrl(up.url);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Upload eșuat");
+                    } finally {
+                      setPhotoPending(false);
+                    }
+                  })();
+                }}
+              />
+            </label>
+            {photoUrl ? (
+              <button
+                type="button"
+                onClick={() => setPhotoUrl("")}
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900"
+              >
+                Șterge poza
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
       <div>
         <label className="text-sm text-zinc-400">Cod angajat (opțional)</label>

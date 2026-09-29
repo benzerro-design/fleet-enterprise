@@ -26,4 +26,12 @@ export type CreateVehiclePhotoDto = {
   caption?: string | null;
   sessionLabel?: string | null;
   kind?: VehiclePhotoKind | null;
+  isHero?: boolean;
+};
+
+export type PatchVehiclePhotoDto = {
+  caption?: string | null;
+  sessionLabel?: string | null;
+  kind?: VehiclePhotoKind | null;
+  isHero?: boolean;
 };
