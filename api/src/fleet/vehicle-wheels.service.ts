@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { VehicleTireSeason, VehicleWheelPosition } from '@prisma/client';
+import type { VehicleRimMaterial, VehicleTireSeason, VehicleWheelPosition } from '@prisma/client';
 import type { AccessContext } from '../iam/access-context.types';
 import { assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,10 +10,15 @@ export type VehicleWheelFitmentRecord = {
   position: VehicleWheelPosition;
   size: string | null;
   brand: string | null;
+  model: string | null;
   season: VehicleTireSeason;
+  speedIndex: string | null;
+  commercialC: boolean;
   dot: string | null;
   treadMm: number | null;
   rimSize: string | null;
+  rimMaterial: VehicleRimMaterial | null;
+  lugNutCount: number | null;
   notes: string | null;
   updatedAt: string;
 };
@@ -24,6 +29,7 @@ export type VehicleWheelsPayload = {
 
 const POSITIONS: VehicleWheelPosition[] = ['fl', 'fr', 'rl', 'rr', 'spare'];
 const SEASONS: VehicleTireSeason[] = ['summer', 'winter', 'all_season', 'unknown'];
+const RIM_MATERIALS: VehicleRimMaterial[] = ['steel', 'alloy', 'diamond_cut'];
 
 function toRecord(row: {
   id: string;
@@ -31,10 +37,15 @@ function toRecord(row: {
   position: VehicleWheelPosition;
   size: string | null;
   brand: string | null;
+  model: string | null;
   season: VehicleTireSeason;
+  speedIndex: string | null;
+  commercialC: boolean;
   dot: string | null;
   treadMm: number | null;
   rimSize: string | null;
+  rimMaterial: VehicleRimMaterial | null;
+  lugNutCount: number | null;
   notes: string | null;
   updatedAt: Date;
 }): VehicleWheelFitmentRecord {
@@ -44,10 +55,15 @@ function toRecord(row: {
     position: row.position,
     size: row.size,
     brand: row.brand,
+    model: row.model,
     season: row.season,
+    speedIndex: row.speedIndex,
+    commercialC: row.commercialC,
     dot: row.dot,
     treadMm: row.treadMm,
     rimSize: row.rimSize,
+    rimMaterial: row.rimMaterial,
+    lugNutCount: row.lugNutCount,
     notes: row.notes,
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -57,10 +73,15 @@ export type UpsertWheelDto = {
   position: VehicleWheelPosition;
   size?: string | null;
   brand?: string | null;
+  model?: string | null;
   season?: VehicleTireSeason;
+  speedIndex?: string | null;
+  commercialC?: boolean;
   dot?: string | null;
   treadMm?: number | null;
   rimSize?: string | null;
+  rimMaterial?: VehicleRimMaterial | null;
+  lugNutCount?: number | null;
   notes?: string | null;
 };
 
@@ -101,6 +122,13 @@ export class VehicleWheelsService {
     if (!SEASONS.includes(season)) {
       throw new BadRequestException('Invalid tire season');
     }
+    if (
+      dto.rimMaterial !== undefined &&
+      dto.rimMaterial !== null &&
+      !RIM_MATERIALS.includes(dto.rimMaterial)
+    ) {
+      throw new BadRequestException('Invalid rim material');
+    }
 
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
@@ -119,13 +147,29 @@ export class VehicleWheelsService {
               throw new BadRequestException('treadMm must be a non-negative number');
             })();
 
+    const lugNutCount =
+      dto.lugNutCount === undefined || dto.lugNutCount === null
+        ? dto.lugNutCount === null
+          ? null
+          : undefined
+        : Number.isInteger(dto.lugNutCount) && dto.lugNutCount > 0 && dto.lugNutCount <= 20
+          ? dto.lugNutCount
+          : (() => {
+              throw new BadRequestException('lugNutCount must be an integer 1–20');
+            })();
+
     const data = {
       size: dto.size === undefined ? undefined : dto.size?.trim() || null,
       brand: dto.brand === undefined ? undefined : dto.brand?.trim() || null,
+      model: dto.model === undefined ? undefined : dto.model?.trim() || null,
       season,
+      speedIndex: dto.speedIndex === undefined ? undefined : dto.speedIndex?.trim().toUpperCase() || null,
+      commercialC: dto.commercialC === undefined ? undefined : Boolean(dto.commercialC),
       dot: dto.dot === undefined ? undefined : dto.dot?.trim() || null,
       treadMm: treadMm === undefined ? undefined : treadMm,
       rimSize: dto.rimSize === undefined ? undefined : dto.rimSize?.trim() || null,
+      rimMaterial: dto.rimMaterial === undefined ? undefined : dto.rimMaterial,
+      lugNutCount: lugNutCount === undefined ? undefined : lugNutCount,
       notes: dto.notes === undefined ? undefined : dto.notes?.trim() || null,
     };
 
@@ -137,19 +181,29 @@ export class VehicleWheelsService {
         position: dto.position,
         size: data.size ?? null,
         brand: data.brand ?? null,
+        model: data.model ?? null,
         season,
+        speedIndex: data.speedIndex ?? null,
+        commercialC: data.commercialC ?? false,
         dot: data.dot ?? null,
         treadMm: treadMm === undefined ? null : treadMm,
         rimSize: data.rimSize ?? null,
+        rimMaterial: data.rimMaterial ?? null,
+        lugNutCount: lugNutCount === undefined ? null : lugNutCount,
         notes: data.notes ?? null,
       },
       update: {
         ...(data.size !== undefined ? { size: data.size } : {}),
         ...(data.brand !== undefined ? { brand: data.brand } : {}),
+        ...(data.model !== undefined ? { model: data.model } : {}),
         season,
+        ...(data.speedIndex !== undefined ? { speedIndex: data.speedIndex } : {}),
+        ...(data.commercialC !== undefined ? { commercialC: data.commercialC } : {}),
         ...(data.dot !== undefined ? { dot: data.dot } : {}),
         ...(treadMm !== undefined ? { treadMm } : {}),
         ...(data.rimSize !== undefined ? { rimSize: data.rimSize } : {}),
+        ...(data.rimMaterial !== undefined ? { rimMaterial: data.rimMaterial } : {}),
+        ...(lugNutCount !== undefined ? { lugNutCount } : {}),
         ...(data.notes !== undefined ? { notes: data.notes } : {}),
       },
     });
@@ -190,11 +244,28 @@ export function assertUpsertWheelDto(body: unknown): UpsertWheelDto {
         : (() => {
             throw new BadRequestException('Invalid season');
           })();
+  const rimMaterial =
+    o.rimMaterial === undefined
+      ? undefined
+      : o.rimMaterial === null
+        ? null
+        : typeof o.rimMaterial === 'string' && RIM_MATERIALS.includes(o.rimMaterial as VehicleRimMaterial)
+          ? (o.rimMaterial as VehicleRimMaterial)
+          : (() => {
+              throw new BadRequestException('Invalid rimMaterial (steel|alloy|diamond_cut)');
+            })();
   return {
     position: position as VehicleWheelPosition,
     size: o.size === undefined ? undefined : o.size === null ? null : String(o.size),
     brand: o.brand === undefined ? undefined : o.brand === null ? null : String(o.brand),
+    model: o.model === undefined ? undefined : o.model === null ? null : String(o.model),
     season,
+    speedIndex:
+      o.speedIndex === undefined ? undefined : o.speedIndex === null ? null : String(o.speedIndex),
+    commercialC:
+      o.commercialC === undefined
+        ? undefined
+        : o.commercialC === true || o.commercialC === 'true' || o.commercialC === 1,
     dot: o.dot === undefined ? undefined : o.dot === null ? null : String(o.dot),
     treadMm:
       o.treadMm === undefined
@@ -205,6 +276,15 @@ export function assertUpsertWheelDto(body: unknown): UpsertWheelDto {
             ? o.treadMm
             : Number(o.treadMm),
     rimSize: o.rimSize === undefined ? undefined : o.rimSize === null ? null : String(o.rimSize),
+    rimMaterial,
+    lugNutCount:
+      o.lugNutCount === undefined
+        ? undefined
+        : o.lugNutCount === null
+          ? null
+          : typeof o.lugNutCount === 'number'
+            ? o.lugNutCount
+            : Number(o.lugNutCount),
     notes: o.notes === undefined ? undefined : o.notes === null ? null : String(o.notes),
   };
 }

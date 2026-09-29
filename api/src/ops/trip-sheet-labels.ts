@@ -20,7 +20,7 @@ export function tripRoadTypeLabel(r: TripRoadType | null | undefined): string {
     case 'extra_urban':
       return 'Extraurban';
     case 'highway':
-      return 'Autostrada';
+      return 'Autostradă';
     case 'mixed':
       return 'Mixt';
     default:

@@ -645,24 +645,41 @@ enum VehicleTireSeason {
   unknown
 }
 
+/// Tip jantă (FLEET-019).
+enum VehicleRimMaterial {
+  steel
+  alloy
+  diamond_cut
+}
+
 model VehicleWheelFitment {
-  id         String              @id @default(cuid())
-  tenantId   String
-  vehicleId  String
-  position   VehicleWheelPosition
-  /// Ex. 205/55 R16 91V
-  size       String?
-  brand      String?
-  season     VehicleTireSeason   @default(unknown)
+  id           String              @id @default(cuid())
+  tenantId     String
+  vehicleId    String
+  position     VehicleWheelPosition
+  /// Ex. 205/55 R16
+  size         String?
+  brand        String?
+  /// Model anvelopă (pe lângă brand)
+  model        String?
+  season       VehicleTireSeason   @default(unknown)
+  /// Indice viteză: H, V, W…
+  speedIndex   String?
+  /// Anvelopă comercială „C”
+  commercialC  Boolean             @default(false)
   /// DOT / săptămână-an fabricație
-  dot        String?
-  treadMm    Float?
-  rimSize    String?
-  notes      String?
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
-  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  vehicle    Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  dot          String?
+  treadMm      Float?
+  rimSize      String?
+  /// Tabla / aliaj / diamond cut
+  rimMaterial  VehicleRimMaterial?
+  /// Număr prezoane
+  lugNutCount  Int?
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@unique([vehicleId, position])
   @@index([tenantId])
