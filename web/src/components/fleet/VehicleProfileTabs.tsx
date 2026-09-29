@@ -175,7 +175,15 @@ export function VehicleProfileTabs({
           <VehicleEquipmentTab vehicleId={vehicle.id} write={write} initial={equipment} />
         ) : null}
         {active === "wheels" ? (
-          <VehicleWheelsTab vehicleId={vehicle.id} write={write} initial={wheels} />
+          <VehicleWheelsTab
+            vehicleId={vehicle.id}
+            write={write}
+            initial={wheels}
+            tyresFront={
+              civ.civProfile?.tyresFront != null ? String(civ.civProfile.tyresFront) : null
+            }
+            tyresRear={civ.civProfile?.tyresRear != null ? String(civ.civProfile.tyresRear) : null}
+          />
         ) : null}
         {active === "odometer" ? (
           <VehicleOdometerTab vehicleId={vehicle.id} write={odometerWrite ?? write} initial={odometer} />

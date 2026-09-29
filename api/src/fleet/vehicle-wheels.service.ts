@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { VehicleRimMaterial, VehicleTireSeason, VehicleWheelPosition } from '@prisma/client';
+import type {
+  VehicleRimMaterial,
+  VehicleTireSeason,
+  VehicleWheelLayout,
+  VehicleWheelPosition,
+} from '@prisma/client';
 import type { AccessContext } from '../iam/access-context.types';
 import { assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +18,7 @@ export type VehicleWheelFitmentRecord = {
   model: string | null;
   season: VehicleTireSeason;
   speedIndex: string | null;
+  loadIndex: string | null;
   commercialC: boolean;
   dot: string | null;
   treadMm: number | null;
@@ -24,12 +30,47 @@ export type VehicleWheelFitmentRecord = {
 };
 
 export type VehicleWheelsPayload = {
+  wheelLayout: VehicleWheelLayout;
   items: VehicleWheelFitmentRecord[];
 };
 
-const POSITIONS: VehicleWheelPosition[] = ['fl', 'fr', 'rl', 'rr', 'spare'];
+const ALL_POSITIONS: VehicleWheelPosition[] = [
+  'fl',
+  'fr',
+  'rl',
+  'rr',
+  'spare',
+  'rlo',
+  'rli',
+  'rro',
+  'rri',
+];
+
+const LAYOUT_POSITIONS: Record<VehicleWheelLayout, VehicleWheelPosition[]> = {
+  four: ['fl', 'fr', 'rl', 'rr', 'spare'],
+  six_dual_rear: ['fl', 'fr', 'rlo', 'rli', 'rro', 'rri', 'spare'],
+};
+
+const POSITION_ORDER: VehicleWheelPosition[] = [
+  'fl',
+  'fr',
+  'rl',
+  'rr',
+  'rlo',
+  'rli',
+  'rro',
+  'rri',
+  'spare',
+];
+
 const SEASONS: VehicleTireSeason[] = ['summer', 'winter', 'all_season', 'unknown'];
 const RIM_MATERIALS: VehicleRimMaterial[] = ['steel', 'alloy', 'diamond_cut'];
+const LAYOUTS: VehicleWheelLayout[] = ['four', 'six_dual_rear'];
+
+function sortItems(items: VehicleWheelFitmentRecord[]): VehicleWheelFitmentRecord[] {
+  const rank = new Map(POSITION_ORDER.map((p, i) => [p, i]));
+  return [...items].sort((a, b) => (rank.get(a.position) ?? 99) - (rank.get(b.position) ?? 99));
+}
 
 function toRecord(row: {
   id: string;
@@ -40,6 +81,7 @@ function toRecord(row: {
   model: string | null;
   season: VehicleTireSeason;
   speedIndex: string | null;
+  loadIndex: string | null;
   commercialC: boolean;
   dot: string | null;
   treadMm: number | null;
@@ -58,6 +100,7 @@ function toRecord(row: {
     model: row.model,
     season: row.season,
     speedIndex: row.speedIndex,
+    loadIndex: row.loadIndex,
     commercialC: row.commercialC,
     dot: row.dot,
     treadMm: row.treadMm,
@@ -76,6 +119,7 @@ export type UpsertWheelDto = {
   model?: string | null;
   season?: VehicleTireSeason;
   speedIndex?: string | null;
+  loadIndex?: string | null;
   commercialC?: boolean;
   dot?: string | null;
   treadMm?: number | null;
@@ -97,15 +141,92 @@ export class VehicleWheelsService {
     await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      select: { id: true },
+      select: { id: true, wheelLayout: true },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
     const rows = await this.prisma.vehicleWheelFitment.findMany({
       where: { vehicleId },
-      orderBy: { position: 'asc' },
     });
-    return { items: rows.map(toRecord) };
+    return {
+      wheelLayout: vehicle.wheelLayout,
+      items: sortItems(rows.map(toRecord)),
+    };
+  }
+
+  async setLayout(
+    tenantSlug: string,
+    vehicleId: string,
+    layout: VehicleWheelLayout,
+    access?: AccessContext,
+  ): Promise<VehicleWheelsPayload> {
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    if (!LAYOUTS.includes(layout)) {
+      throw new BadRequestException('Invalid wheelLayout');
+    }
+
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, tenantId: true, wheelLayout: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    const prev = vehicle.wheelLayout;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.vehicle.update({
+        where: { id: vehicleId },
+        data: { wheelLayout: layout },
+      });
+
+      // 4 → 6: copiază rl pe rlo+rli, rr pe rro+rri (PO: opțiunea A)
+      if (prev === 'four' && layout === 'six_dual_rear') {
+        const singles = await tx.vehicleWheelFitment.findMany({
+          where: { vehicleId, position: { in: ['rl', 'rr'] } },
+        });
+        for (const row of singles) {
+          const targets: VehicleWheelPosition[] =
+            row.position === 'rl' ? ['rlo', 'rli'] : ['rro', 'rri'];
+          for (const position of targets) {
+            await tx.vehicleWheelFitment.upsert({
+              where: { vehicleId_position: { vehicleId, position } },
+              create: {
+                tenantId: vehicle.tenantId,
+                vehicleId,
+                position,
+                size: row.size,
+                brand: row.brand,
+                model: row.model,
+                season: row.season,
+                speedIndex: row.speedIndex,
+                loadIndex: row.loadIndex,
+                commercialC: row.commercialC,
+                rimSize: row.rimSize,
+                rimMaterial: row.rimMaterial,
+                lugNutCount: row.lugNutCount,
+                // DOT / uzură / note rămân pe poziția veche; duale fără identitate
+                dot: null,
+                treadMm: null,
+                notes: null,
+              },
+              update: {
+                size: row.size,
+                brand: row.brand,
+                model: row.model,
+                season: row.season,
+                speedIndex: row.speedIndex,
+                loadIndex: row.loadIndex,
+                commercialC: row.commercialC,
+                rimSize: row.rimSize,
+                rimMaterial: row.rimMaterial,
+                lugNutCount: row.lugNutCount,
+              },
+            });
+          }
+        }
+      }
+    });
+
+    return this.list(tenantSlug, vehicleId, access);
   }
 
   async upsert(
@@ -115,7 +236,7 @@ export class VehicleWheelsService {
     access?: AccessContext,
   ): Promise<VehicleWheelFitmentRecord> {
     await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
-    if (!POSITIONS.includes(dto.position)) {
+    if (!ALL_POSITIONS.includes(dto.position)) {
       throw new BadRequestException('Invalid wheel position');
     }
     const season = dto.season ?? 'unknown';
@@ -132,9 +253,16 @@ export class VehicleWheelsService {
 
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      select: { id: true, tenantId: true },
+      select: { id: true, tenantId: true, wheelLayout: true },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    const allowed = LAYOUT_POSITIONS[vehicle.wheelLayout];
+    if (!allowed.includes(dto.position)) {
+      throw new BadRequestException(
+        `Position ${dto.position} not allowed for layout ${vehicle.wheelLayout}`,
+      );
+    }
 
     const treadMm =
       dto.treadMm === undefined || dto.treadMm === null
@@ -163,7 +291,9 @@ export class VehicleWheelsService {
       brand: dto.brand === undefined ? undefined : dto.brand?.trim() || null,
       model: dto.model === undefined ? undefined : dto.model?.trim() || null,
       season,
-      speedIndex: dto.speedIndex === undefined ? undefined : dto.speedIndex?.trim().toUpperCase() || null,
+      speedIndex:
+        dto.speedIndex === undefined ? undefined : dto.speedIndex?.trim().toUpperCase() || null,
+      loadIndex: dto.loadIndex === undefined ? undefined : dto.loadIndex?.trim() || null,
       commercialC: dto.commercialC === undefined ? undefined : Boolean(dto.commercialC),
       dot: dto.dot === undefined ? undefined : dto.dot?.trim() || null,
       treadMm: treadMm === undefined ? undefined : treadMm,
@@ -184,6 +314,7 @@ export class VehicleWheelsService {
         model: data.model ?? null,
         season,
         speedIndex: data.speedIndex ?? null,
+        loadIndex: data.loadIndex ?? null,
         commercialC: data.commercialC ?? false,
         dot: data.dot ?? null,
         treadMm: treadMm === undefined ? null : treadMm,
@@ -196,8 +327,9 @@ export class VehicleWheelsService {
         ...(data.size !== undefined ? { size: data.size } : {}),
         ...(data.brand !== undefined ? { brand: data.brand } : {}),
         ...(data.model !== undefined ? { model: data.model } : {}),
-        season,
+        ...(dto.season !== undefined ? { season } : {}),
         ...(data.speedIndex !== undefined ? { speedIndex: data.speedIndex } : {}),
+        ...(data.loadIndex !== undefined ? { loadIndex: data.loadIndex } : {}),
         ...(data.commercialC !== undefined ? { commercialC: data.commercialC } : {}),
         ...(data.dot !== undefined ? { dot: data.dot } : {}),
         ...(treadMm !== undefined ? { treadMm } : {}),
@@ -211,6 +343,18 @@ export class VehicleWheelsService {
     return toRecord(row);
   }
 
+  async upsertMany(
+    tenantSlug: string,
+    vehicleId: string,
+    items: UpsertWheelDto[],
+    access?: AccessContext,
+  ): Promise<VehicleWheelsPayload> {
+    for (const dto of items) {
+      await this.upsert(tenantSlug, vehicleId, dto, access);
+    }
+    return this.list(tenantSlug, vehicleId, access);
+  }
+
   async clearPosition(
     tenantSlug: string,
     vehicleId: string,
@@ -218,7 +362,7 @@ export class VehicleWheelsService {
     access?: AccessContext,
   ): Promise<void> {
     await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
-    if (!POSITIONS.includes(position)) {
+    if (!ALL_POSITIONS.includes(position)) {
       throw new BadRequestException('Invalid wheel position');
     }
     await this.prisma.vehicleWheelFitment.deleteMany({
@@ -233,8 +377,8 @@ export function assertUpsertWheelDto(body: unknown): UpsertWheelDto {
   }
   const o = body as Record<string, unknown>;
   const position = o.position;
-  if (typeof position !== 'string' || !POSITIONS.includes(position as VehicleWheelPosition)) {
-    throw new BadRequestException('position required (fl|fr|rl|rr|spare)');
+  if (typeof position !== 'string' || !ALL_POSITIONS.includes(position as VehicleWheelPosition)) {
+    throw new BadRequestException('position required (fl|fr|rl|rr|spare|rlo|rli|rro|rri)');
   }
   const season =
     o.season === undefined
@@ -249,7 +393,8 @@ export function assertUpsertWheelDto(body: unknown): UpsertWheelDto {
       ? undefined
       : o.rimMaterial === null
         ? null
-        : typeof o.rimMaterial === 'string' && RIM_MATERIALS.includes(o.rimMaterial as VehicleRimMaterial)
+        : typeof o.rimMaterial === 'string' &&
+            RIM_MATERIALS.includes(o.rimMaterial as VehicleRimMaterial)
           ? (o.rimMaterial as VehicleRimMaterial)
           : (() => {
               throw new BadRequestException('Invalid rimMaterial (steel|alloy|diamond_cut)');
@@ -262,6 +407,8 @@ export function assertUpsertWheelDto(body: unknown): UpsertWheelDto {
     season,
     speedIndex:
       o.speedIndex === undefined ? undefined : o.speedIndex === null ? null : String(o.speedIndex),
+    loadIndex:
+      o.loadIndex === undefined ? undefined : o.loadIndex === null ? null : String(o.loadIndex),
     commercialC:
       o.commercialC === undefined
         ? undefined
@@ -288,3 +435,30 @@ export function assertUpsertWheelDto(body: unknown): UpsertWheelDto {
     notes: o.notes === undefined ? undefined : o.notes === null ? null : String(o.notes),
   };
 }
+
+export function assertWheelLayout(body: unknown): VehicleWheelLayout {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestException('Body must be an object');
+  }
+  const layout = (body as Record<string, unknown>).wheelLayout;
+  if (typeof layout !== 'string' || !LAYOUTS.includes(layout as VehicleWheelLayout)) {
+    throw new BadRequestException('wheelLayout required (four|six_dual_rear)');
+  }
+  return layout as VehicleWheelLayout;
+}
+
+export function assertUpsertWheelBulkDto(body: unknown): UpsertWheelDto[] {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestException('Body must be an object');
+  }
+  const items = (body as Record<string, unknown>).items;
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new BadRequestException('items required (non-empty array)');
+  }
+  if (items.length > 12) {
+    throw new BadRequestException('Too many items');
+  }
+  return items.map(assertUpsertWheelDto);
+}
+
+export { LAYOUT_POSITIONS };

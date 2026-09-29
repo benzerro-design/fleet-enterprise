@@ -544,6 +544,8 @@ model Vehicle {
   photos             VehiclePhoto[]
   equipment          VehicleEquipment[]
   wheelFitments      VehicleWheelFitment[]
+  /** Layout roți: 4 / 6 dual spate (8 ulterior). */
+  wheelLayout        VehicleWheelLayout @default(four)
   driverAssignments  DriverVehicleAssignment[]
   crmTickets         CrmTicket[]
   serviceCases       ServiceCase[]
@@ -636,6 +638,16 @@ enum VehicleWheelPosition {
   rl
   rr
   spare
+  /// Spate dual: stânga exterior / interior, dreapta exterior / interior
+  rlo
+  rli
+  rro
+  rri
+}
+
+enum VehicleWheelLayout {
+  four
+  six_dual_rear
 }
 
 enum VehicleTireSeason {
@@ -665,6 +677,8 @@ model VehicleWheelFitment {
   season       VehicleTireSeason   @default(unknown)
   /// Indice viteză: H, V, W…
   speedIndex   String?
+  /// Indice sarcină: 91, 110…
+  loadIndex    String?
   /// Anvelopă comercială „C”
   commercialC  Boolean             @default(false)
   /// DOT / săptămână-an fabricație

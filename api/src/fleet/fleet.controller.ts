@@ -42,7 +42,9 @@ import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
 import { VehicleEquipmentService } from './vehicle-equipment.service';
 import {
+  assertUpsertWheelBulkDto,
   assertUpsertWheelDto,
+  assertWheelLayout,
   VehicleWheelsService,
 } from './vehicle-wheels.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
@@ -492,6 +494,28 @@ export class FleetController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.wheels.list(tenantId, vehicleId, access);
+  }
+
+  @Put('vehicles/:vehicleId/wheels/layout')
+  @Roles(...FLEET_WRITE_ROLES)
+  setVehicleWheelLayout(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.wheels.setLayout(tenantId, vehicleId, assertWheelLayout(body), access);
+  }
+
+  @Put('vehicles/:vehicleId/wheels/bulk')
+  @Roles(...FLEET_WRITE_ROLES)
+  upsertVehicleWheelsBulk(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.wheels.upsertMany(tenantId, vehicleId, assertUpsertWheelBulkDto(body), access);
   }
 
   @Put('vehicles/:vehicleId/wheels')
