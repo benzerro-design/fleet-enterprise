@@ -132,6 +132,7 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
   return (
     <FleetPageMain fill>
       <FleetListPageLayout
+        densityToolbar={false}
         header={
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>

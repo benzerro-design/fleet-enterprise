@@ -88,6 +88,8 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
   return (
     <FleetPageMain fill>
       <FleetListPageLayout
+        densityToolbar={false}
+        listSurface={false}
         header={
           <div className="flex flex-col gap-4">
             <div>

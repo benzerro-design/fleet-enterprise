@@ -5,13 +5,25 @@
   --foreground: #fafafa;
   --fleet-pad-y: 1rem;
   --fleet-pad-x: 1.5rem;
+  --fleet-gap: 1.5rem;
+  /* PLAT-007: chrome (sidebar/top) vs canvas (conținut) vs surface (carduri). */
+  --fleet-chrome: #09090b;
+  --fleet-canvas: #0c0c0e;
+  --fleet-surface: rgb(24 24 27 / 0.72);
+  --fleet-surface-solid: #18181b;
+  --fleet-surface-border: #27272a;
   color-scheme: dark;
 }
 
 /* Light: remap Tailwind zinc scale so existing utilities flip without rewriting pages. */
 [data-theme="light"] {
-  --background: #fafafa;
+  --background: #f4f4f5;
   --foreground: #18181b;
+  --fleet-chrome: #ffffff;
+  --fleet-canvas: #f4f4f5;
+  --fleet-surface: #ffffff;
+  --fleet-surface-solid: #ffffff;
+  --fleet-surface-border: #e4e4e7;
   color-scheme: light;
   --color-zinc-50: #09090b;
   --color-zinc-100: #18181b;
@@ -22,18 +34,41 @@
   --color-zinc-600: #a1a1aa;
   --color-zinc-700: #d4d4d8;
   --color-zinc-800: #e4e4e7;
-  --color-zinc-900: #f4f4f5;
-  --color-zinc-950: #fafafa;
+  --color-zinc-900: #ffffff;
+  --color-zinc-950: #f4f4f5;
 }
 
 [data-density="compact"] {
   --fleet-pad-y: 0.5rem;
   --fleet-pad-x: 0.75rem;
+  --fleet-gap: 0.75rem;
 }
 
 [data-density="comfortable"] {
   --fleet-pad-y: 1rem;
   --fleet-pad-x: 1.5rem;
+  --fleet-gap: 1.5rem;
+}
+
+/* PLAT-007 BO surfaces — spirit PrestaShop, nu clone. */
+.fleet-chrome {
+  background-color: var(--fleet-chrome);
+}
+
+.fleet-canvas {
+  background-color: var(--fleet-canvas);
+}
+
+.fleet-surface {
+  background-color: var(--fleet-surface);
+  border: 1px solid var(--fleet-surface-border);
+  border-radius: 0.75rem;
+}
+
+.fleet-surface-solid {
+  background-color: var(--fleet-surface-solid);
+  border: 1px solid var(--fleet-surface-border);
+  border-radius: 0.75rem;
 }
 
 [data-reduce-motion="1"] *,

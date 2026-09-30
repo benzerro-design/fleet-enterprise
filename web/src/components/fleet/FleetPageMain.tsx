@@ -15,7 +15,7 @@ type FleetPageMainProps = {
 export function FleetPageMain({ children, className, narrow, fill }: FleetPageMainProps) {
   const narrowClass = narrow === "sm" ? "max-w-3xl" : narrow === "md" ? "max-w-4xl" : "";
   const mainClass = [
-    "flex w-full flex-col gap-6",
+    "flex w-full flex-col text-zinc-100",
     narrowClass,
     // Un singur scroll pe paginile de detaliu; pe fill (liste) scroll-ul e în layout-ul copil.
     fill ? "min-h-0 flex-1" : `min-h-0 flex-1 ${fleetScrollPaneClass}`,
@@ -24,8 +24,10 @@ export function FleetPageMain({ children, className, narrow, fill }: FleetPageMa
     .filter(Boolean)
     .join(" ");
   return (
-    <div className="flex min-h-0 flex-1 flex-col text-zinc-100">
-      <main className={mainClass}>{children}</main>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <main className={mainClass} style={{ gap: "var(--fleet-gap)" }}>
+        {children}
+      </main>
     </div>
   );
 }

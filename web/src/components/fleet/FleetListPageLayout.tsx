@@ -1,4 +1,7 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
 
 type FleetListPageLayoutProps = {
@@ -10,21 +13,51 @@ type FleetListPageLayoutProps = {
   toolbar?: ReactNode;
   /** Listă, paginare — scroll pe întreaga zonă; antetul tabelului rămâne sticky aici. */
   children: ReactNode;
+  /**
+   * PLAT-007 / FLEET-028: toolbar densitate (Detaliat / Simplu) pe lista din children.
+   * False pe portal partener (shell partener neschimbat) sau embed-uri.
+   */
+  densityToolbar?: boolean;
+  /** Card surface în jurul listei (false când children e deja un panou full — ex. programator). */
+  listSurface?: boolean;
 };
 
 /**
  * Layout listă operațională: filtre vizibile permanent (sticky), conținutul de dedesubt scroll-ează.
+ * PLAT-007: sticky pe canvas; densitate listă centralizată pe tot produsul (Fleet shell).
  */
-export function FleetListPageLayout({ header, filters, toolbar, children }: FleetListPageLayoutProps) {
+export function FleetListPageLayout({
+  header,
+  filters,
+  toolbar,
+  children,
+  densityToolbar = true,
+  listSurface = true,
+}: FleetListPageLayoutProps) {
+  const listBody = (
+    <FleetListDisplayScope hideToolbar={!densityToolbar}>{children}</FleetListDisplayScope>
+  );
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col" style={{ gap: "var(--fleet-gap)" }}>
       {header ? <div className="shrink-0 space-y-3">{header}</div> : null}
       {filters ? (
-        <div className="sticky top-0 z-20 shrink-0 bg-zinc-950/90 backdrop-blur-sm">{filters}</div>
+        <div className="fleet-canvas sticky top-0 z-20 shrink-0 backdrop-blur-sm">{filters}</div>
       ) : null}
       {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
       <div className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col`}>
-        <div className="flex flex-col gap-4 pb-1">{children}</div>
+        {listSurface ? (
+          <div
+            className="fleet-surface-solid flex min-h-0 flex-1 flex-col p-3 sm:p-4"
+            style={{ gap: "calc(var(--fleet-gap) * 0.75)" }}
+          >
+            {listBody}
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col" style={{ gap: "calc(var(--fleet-gap) * 0.75)" }}>
+            {listBody}
+          </div>
+        )}
       </div>
     </div>
   );

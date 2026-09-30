@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DeleteReminderButton } from "@/components/fleet/DeleteReminderButton";
-import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { REMINDER_STATUS_TABS, RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolbar";
 import { ReminderActionStatusBadge } from "@/components/fleet/ReminderActionStatusBadge";
 import { formatOffsetDaysLabel } from "@/lib/document-reminders";
@@ -156,7 +155,6 @@ export function RemindersListView({
       ) : null}
 
       {!loading && !error && data && data.items.length > 0 ? (
-        <FleetListDisplayScope hideToolbar={compact}>
         <div className="fleet-list-card-stack space-y-3">
           {data.items.map((row) => (
             <article
@@ -300,7 +298,6 @@ export function RemindersListView({
             <p className="text-xs text-zinc-600">{data.total} acțiuni în total pentru filtrul curent</p>
           ) : null}
         </div>
-        </FleetListDisplayScope>
       ) : null}
 
       {!compact && write ? (

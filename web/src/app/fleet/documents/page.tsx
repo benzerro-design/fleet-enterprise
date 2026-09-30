@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
-import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
@@ -232,7 +231,6 @@ export default async function DocumentsPage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există documente pentru filtrele curente.</p>
         ) : (
           <>
-            <FleetListDisplayScope>
             <div className="fleet-list-card-stack space-y-3">
               {data.items.map((row) => {
                 const expiry = documentExpiryStatus(row.expiresOn);
@@ -330,7 +328,6 @@ export default async function DocumentsPage({ searchParams }: Props) {
                 );
               })}
             </div>
-            </FleetListDisplayScope>
             <div className="flex justify-between text-sm text-zinc-400">
               <span>
                 Pagina {page} / {totalPages} · {data.total} documente

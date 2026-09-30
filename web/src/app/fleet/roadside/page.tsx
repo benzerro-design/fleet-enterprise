@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
-import { FleetListDisplayScope } from "@/components/fleet/FleetListDisplayScope";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { filterFormKey } from "@/lib/filter-form-key";
@@ -124,7 +123,6 @@ export default async function FleetRoadsidePage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există intervenții pentru filtrele curente.</p>
         ) : (
           <>
-            <FleetListDisplayScope>
               <div className="fleet-list-card-stack space-y-3">
                 {data.items.map((row) => (
                   <article key={row.id} className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
@@ -195,7 +193,6 @@ export default async function FleetRoadsidePage({ searchParams }: Props) {
                   </article>
                 ))}
               </div>
-            </FleetListDisplayScope>
             {totalPages > 1 ? (
               <nav className="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm" aria-label="Paginare">
                 {page > 1 ? (

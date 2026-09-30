@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FleetCommandPalette, type FleetCommandItem } from "@/components/fleet/FleetCommandPalette";
+import { FleetHelpRail } from "@/components/fleet/FleetHelpRail";
 import { FleetSidebarNav } from "@/components/fleet/FleetSidebarNav";
 import { FleetTopBar } from "@/components/fleet/FleetTopBar";
 import { FLEET_MOBILE_TABS, type FleetMobileTab, type FleetNavGroup } from "@/lib/fleet-nav";
+import { readHelpRailOpen, writeHelpRailOpen } from "@/lib/fleet-help-rail";
 import { LogoutButton } from "@/app/fleet/logout-button";
 
 type FleetShellProps = {
@@ -49,6 +51,13 @@ function commandItemsFromGroups(groups: (FleetNavGroup | null | undefined)[]): F
     group: "Cont",
     keywords: "aspect tema densitate",
   });
+  out.push({
+    id: "/fleet/help",
+    label: "Help",
+    href: "/fleet/help",
+    group: "Cont",
+    keywords: "ajutor documentatie ghid",
+  });
   return out;
 }
 
@@ -66,14 +75,32 @@ export function FleetShell({
   mobileTabs = FLEET_MOBILE_TABS,
 }: FleetShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [helpRailOpen, setHelpRailOpen] = useState(false);
+  const [helpRailHydrated, setHelpRailHydrated] = useState(false);
   const pathname = usePathname() ?? "";
   const commandItems = useMemo(
     () => commandItemsFromGroups([...groups, setup, admin, bot]),
     [groups, setup, admin, bot],
   );
   const allowedHrefs = useMemo(() => commandItems.map((i) => i.href), [commandItems]);
+  const hrefLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const item of commandItems) map[item.href] = item.label;
+    return map;
+  }, [commandItems]);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const toggleHelpRail = useCallback(() => setHelpRailOpen((v) => !v), []);
+
+  useEffect(() => {
+    setHelpRailOpen(readHelpRailOpen());
+    setHelpRailHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!helpRailHydrated) return;
+    writeHelpRailOpen(helpRailOpen);
+  }, [helpRailOpen, helpRailHydrated]);
 
   useEffect(() => {
     closeMenu();
@@ -93,10 +120,10 @@ export function FleetShell({
   }, [menuOpen, closeMenu]);
 
   return (
-    <div data-fleet-shell className="flex h-dvh max-h-dvh overflow-hidden bg-zinc-950 print:h-auto print:max-h-none print:overflow-visible">
+    <div data-fleet-shell className="fleet-chrome flex h-dvh max-h-dvh overflow-hidden print:h-auto print:max-h-none print:overflow-visible">
       <FleetCommandPalette items={commandItems} />
-      {/* Desktop sidebar */}
-      <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 print:hidden lg:flex">
+      {/* Desktop sidebar — chrome BO */}
+      <aside className="fleet-chrome hidden h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 print:hidden lg:flex">
         <div className="shrink-0 border-b border-zinc-800 px-4 py-4">
           <Link href={homeHref} className="block">
             <p className="text-sm font-semibold text-zinc-100">Fleet Enterprise</p>
@@ -124,13 +151,19 @@ export function FleetShell({
         </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="fleet-canvas flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {authBanner}
 
-        <FleetTopBar userEmail={userEmail} allowedHrefs={allowedHrefs} />
+        <FleetTopBar
+          userEmail={userEmail}
+          allowedHrefs={allowedHrefs}
+          hrefLabels={hrefLabels}
+          helpRailOpen={helpRailOpen}
+          onToggleHelpRail={toggleHelpRail}
+        />
 
         {/* Mobile top bar — fix deasupra zonei scrollabile */}
-        <header className="z-30 flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950 px-4 py-3 print:hidden lg:hidden">
+        <header className="fleet-chrome z-30 flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3 print:hidden lg:hidden">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
@@ -149,15 +182,26 @@ export function FleetShell({
           <LogoutButton />
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] print:overflow-visible print:pb-0 lg:pb-0">
-          <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 sm:px-6 lg:px-8" style={{ paddingTop: "var(--fleet-pad-y)", paddingBottom: "var(--fleet-pad-y)" }}>
-            {children}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] print:overflow-visible print:pb-0 lg:pb-0">
+            <div
+              className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 sm:px-6 lg:px-8"
+              style={{
+                paddingTop: "var(--fleet-pad-y)",
+                paddingBottom: "var(--fleet-pad-y)",
+                paddingLeft: "max(1rem, var(--fleet-pad-x))",
+                paddingRight: "max(1rem, var(--fleet-pad-x))",
+              }}
+            >
+              {children}
+            </div>
           </div>
+          <FleetHelpRail open={helpRailOpen} onClose={() => setHelpRailOpen(false)} />
         </div>
 
         {/* Mobile bottom bar */}
         <nav
-          className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur print:hidden lg:hidden"
+          className="fleet-chrome fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-zinc-800/95 backdrop-blur print:hidden lg:hidden"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
           aria-label="Navigare rapidă"
         >
@@ -203,7 +247,7 @@ export function FleetShell({
           />
           <div
             id="fleet-mobile-drawer"
-            className="absolute bottom-0 left-0 top-0 flex w-[min(100%,320px)] min-h-0 flex-col border-r border-zinc-800 bg-zinc-950 shadow-xl"
+            className="fleet-chrome absolute bottom-0 left-0 top-0 flex w-[min(100%,320px)] min-h-0 flex-col border-r border-zinc-800 shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
               <div>

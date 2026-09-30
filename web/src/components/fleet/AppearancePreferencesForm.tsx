@@ -9,14 +9,14 @@ import type {
 import { OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 
 const THEME_OPTIONS: { value: AppearanceTheme; label: string; hint: string }[] = [
-  { value: "dark", label: "Întunecat", hint: "Implicit — zinc pe fundal închis" },
-  { value: "light", label: "Luminos", hint: "Fundal deschis — liste și formulare" },
+  { value: "dark", label: "Întunecat", hint: "Implicit — chrome + canvas zinc" },
+  { value: "light", label: "Luminos", hint: "BO: canvas gri, carduri albe (PLAT-007)" },
   { value: "system", label: "Sistem", hint: "Urmează OS-ul" },
 ];
 
 const DENSITY_OPTIONS: { value: AppearanceDensity; label: string; hint: string }[] = [
   { value: "comfortable", label: "Comfortabil", hint: "Mai mult spațiu — formulare, lectură" },
-  { value: "compact", label: "Compact", hint: "Liste dense — ca Shopify admin" },
+  { value: "compact", label: "Compact", hint: "Padding redus pe shell + liste (PLAT-007)" },
 ];
 
 const DATE_OPTIONS: { value: AppearanceDateFormat; label: string; example: string }[] = [

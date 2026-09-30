@@ -100,6 +100,8 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
   return (
     <FleetPageMain fill>
       <FleetListPageLayout
+        densityToolbar={false}
+        listSurface={false}
         header={
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>
