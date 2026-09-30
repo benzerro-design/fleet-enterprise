@@ -27,6 +27,7 @@ export type InterCarsConnectorPublic = {
 
 export type TenantIntegrationsSettings = {
   audatexImportEnabled: boolean;
+  serviceImportEnabled: boolean;
   partsCatalogEnabled: boolean;
   partsCatalogProviders: PartsCatalogProviderSetting[];
   partsOrderLaunchEnabled: boolean;
@@ -35,6 +36,7 @@ export type TenantIntegrationsSettings = {
 
 export const DEFAULT_TENANT_INTEGRATIONS_SETTINGS: TenantIntegrationsSettings = {
   audatexImportEnabled: true,
+  serviceImportEnabled: false,
   partsCatalogEnabled: false,
   partsCatalogProviders: [
     { id: "intercars", label: "Inter Cars", enabled: false },

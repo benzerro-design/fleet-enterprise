@@ -2,6 +2,7 @@ import {
   QuotePartsOrderStatus,
   WorkOrderQuoteLineApproval,
   WorkOrderQuoteLineType,
+  WorkOrderQuoteParseStatus,
   WorkOrderQuoteStatus,
 } from '@prisma/client';
 
@@ -78,6 +79,8 @@ export type WorkOrderQuoteRecord = {
   costInvoiceDate: string | null;
   invoiceGrossCents: number | null;
   invoiceMismatch: boolean;
+  sourcePdfUrl: string | null;
+  parseStatus: WorkOrderQuoteParseStatus | null;
   createdAt: string;
   updatedAt: string;
   lines: QuoteLineRecord[];
@@ -257,6 +260,8 @@ export function toQuoteRecord(quote: {
   invoiceAttachmentUrl?: string | null;
   invoiceGrossCents?: number | null;
   invoiceMismatch?: boolean;
+  sourcePdfUrl?: string | null;
+  parseStatus?: WorkOrderQuoteParseStatus | null;
   createdAt: Date;
   updatedAt: Date;
   costEntry?: {
@@ -311,6 +316,8 @@ export function toQuoteRecord(quote: {
     costInvoiceDate: quote.invoiceDate?.toISOString() ?? quote.costEntry?.invoiceDate?.toISOString() ?? null,
     invoiceGrossCents: quote.invoiceGrossCents ?? null,
     invoiceMismatch: quote.invoiceMismatch === true,
+    sourcePdfUrl: quote.sourcePdfUrl?.trim() || null,
+    parseStatus: quote.parseStatus ?? null,
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
     lines: quote.lines.map(toQuoteLineRecord),

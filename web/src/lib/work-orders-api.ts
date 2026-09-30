@@ -283,6 +283,8 @@ export type QuoteLineRecord = {
 
 export type WorkOrderQuoteStatus = "draft" | "submitted" | "approved" | "rejected";
 
+export type WorkOrderQuoteParseStatus = "pending" | "review" | "applied" | "failed";
+
 export type WorkOrderQuoteRecord = {
   id: string;
   workOrderId: string;
@@ -311,6 +313,8 @@ export type WorkOrderQuoteRecord = {
   invoiceAttachmentUrl: string | null;
   invoiceGrossCents: number | null;
   invoiceMismatch: boolean;
+  sourcePdfUrl: string | null;
+  parseStatus: WorkOrderQuoteParseStatus | null;
   createdAt: string;
   updatedAt: string;
   lines: QuoteLineRecord[];
@@ -384,6 +388,16 @@ export function quoteStatusLabel(status: WorkOrderQuoteStatus | string): string 
     submitted: "Trimis — așteaptă aprobare",
     approved: "Aprobat",
     rejected: "Respins",
+  };
+  return map[status] ?? status;
+}
+
+export function quoteParseStatusLabel(status: WorkOrderQuoteParseStatus | string): string {
+  const map: Record<string, string> = {
+    pending: "Parse pending",
+    review: "De revizuit",
+    applied: "Import aplicat",
+    failed: "Parse eșuat",
   };
   return map[status] ?? status;
 }

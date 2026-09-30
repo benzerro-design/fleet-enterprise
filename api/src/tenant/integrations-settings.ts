@@ -40,6 +40,8 @@ export type InterCarsConnectorSettings = {
 
 export type TenantIntegrationsSettings = {
   audatexImportEnabled: boolean;
+  /** Import deviz din sistem extern (POST /integrations/service/quotes). */
+  serviceImportEnabled: boolean;
   partsCatalogEnabled: boolean;
   partsCatalogProviders: PartsCatalogProviderSetting[];
   partsOrderLaunchEnabled: boolean;
@@ -64,6 +66,7 @@ export const DEFAULT_INTER_CARS_SETTINGS: InterCarsConnectorSettings = {
 
 export const DEFAULT_TENANT_INTEGRATIONS_SETTINGS: TenantIntegrationsSettings = {
   audatexImportEnabled: true,
+  serviceImportEnabled: false,
   partsCatalogEnabled: false,
   partsCatalogProviders: [
     { id: 'intercars', label: 'Inter Cars', enabled: false },
@@ -168,6 +171,7 @@ export function toIntegrationsSettingsPublic(
 ): TenantIntegrationsSettingsPublic {
   return {
     audatexImportEnabled: settings.audatexImportEnabled,
+    serviceImportEnabled: settings.serviceImportEnabled,
     partsCatalogEnabled: settings.partsCatalogEnabled,
     partsCatalogProviders: settings.partsCatalogProviders.map((p) => ({ ...p })),
     partsOrderLaunchEnabled: settings.partsOrderLaunchEnabled,
@@ -191,6 +195,10 @@ export function parseTenantIntegrationsSettings(raw: unknown): TenantIntegration
       typeof o.audatexImportEnabled === 'boolean'
         ? o.audatexImportEnabled
         : DEFAULT_TENANT_INTEGRATIONS_SETTINGS.audatexImportEnabled,
+    serviceImportEnabled:
+      typeof o.serviceImportEnabled === 'boolean'
+        ? o.serviceImportEnabled
+        : DEFAULT_TENANT_INTEGRATIONS_SETTINGS.serviceImportEnabled,
     partsCatalogEnabled:
       typeof o.partsCatalogEnabled === 'boolean'
         ? o.partsCatalogEnabled
@@ -217,6 +225,12 @@ export function parseTenantIntegrationsSettingsPatch(
       throw new Error('audatexImportEnabled must be boolean');
     }
     patch.audatexImportEnabled = o.audatexImportEnabled;
+  }
+  if (o.serviceImportEnabled !== undefined) {
+    if (typeof o.serviceImportEnabled !== 'boolean') {
+      throw new Error('serviceImportEnabled must be boolean');
+    }
+    patch.serviceImportEnabled = o.serviceImportEnabled;
   }
   if (o.partsCatalogEnabled !== undefined) {
     if (typeof o.partsCatalogEnabled !== 'boolean') {

@@ -2,6 +2,11 @@ import Link from "next/link";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import {
+  SupplierColumnPickerPanel,
+  SupplierColumnToolbarButton,
+  SupplierGridColumnProvider,
+} from "@/components/fleet/suppliers/SupplierGridColumnProvider";
 import { SupplierDataGrid } from "@/components/fleet/suppliers/SupplierDataGrid";
 import { SupplierKpiStrip } from "@/components/fleet/suppliers/SupplierKpiStrip";
 import { canManageFleet, canReadSuppliers, getAuthMeResult, getDefaultFleetHome } from "@/lib/auth-server";
@@ -89,6 +94,7 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
 
   return (
     <FleetPageMain fill>
+      <SupplierGridColumnProvider>
       <FleetListPageLayout
         header={
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -185,7 +191,7 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
           </form>
         }
         toolbar={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {quickFilters.map((f) => (
               <Link
                 key={f.href}
@@ -195,6 +201,7 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
                 {f.label}
               </Link>
             ))}
+            <SupplierColumnToolbarButton />
           </div>
         }
       >
@@ -210,6 +217,7 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
           <p className="text-zinc-500">Niciun furnizor găsit.</p>
         ) : (
           <>
+            <SupplierColumnPickerPanel />
             <SupplierDataGrid items={list.items} canWrite={write} />
             {list.total > list.pageSize ? (
               <div className="mt-4 flex gap-2 text-sm">
@@ -228,6 +236,7 @@ export default async function FleetSuppliersPage({ searchParams }: PageProps) {
           </>
         )}
       </FleetListPageLayout>
+      </SupplierGridColumnProvider>
     </FleetPageMain>
   );
 }

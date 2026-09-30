@@ -112,6 +112,37 @@ function NavGroupItems({
   );
 }
 
+function SidebarSectionLabel({ label }: { label: string }) {
+  return (
+    <p className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 first:pt-0 lg:pt-4">
+      {label}
+    </p>
+  );
+}
+
+function renderNavGroups(
+  navGroups: FleetNavGroup[],
+  variant: "desktop" | "drawer",
+  pathname: string,
+  onNavigate?: () => void,
+) {
+  return navGroups.map((group) =>
+    variant === "drawer" ? (
+      <NavGroupBlock
+        key={group.id}
+        group={group}
+        pathname={pathname}
+        onNavigate={onNavigate}
+        defaultOpen={group.sidebarSection === "configurare"}
+      />
+    ) : (
+      <div key={group.id} className="mb-3">
+        <NavGroupItems group={group} pathname={pathname} onNavigate={onNavigate} />
+      </div>
+    ),
+  );
+}
+
 type FleetSidebarNavProps = {
   groups: FleetNavGroup[];
   setup?: FleetNavGroup | null;
@@ -124,45 +155,18 @@ type FleetSidebarNavProps = {
 
 export function FleetSidebarNav({ groups, setup, admin, bot, onNavigate, variant = "desktop" }: FleetSidebarNavProps) {
   const pathname = usePathname() ?? "";
+  const configGroups = [setup, bot, admin].filter((g): g is FleetNavGroup => g != null);
 
   return (
     <nav className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col px-2 py-3`} aria-label="Navigare flotă">
       <div className="flex-1 space-y-1">
-        {groups.map((group) =>
-          variant === "drawer" ? (
-            <NavGroupBlock key={group.id} group={group} pathname={pathname} onNavigate={onNavigate} />
-          ) : (
-            <div key={group.id} className="mb-3">
-              <NavGroupItems group={group} pathname={pathname} onNavigate={onNavigate} />
-            </div>
-          ),
-        )}
+        <SidebarSectionLabel label="Operare" />
+        {renderNavGroups(groups, variant, pathname, onNavigate)}
       </div>
-      {setup ? (
-        <div className="mt-2 border-t border-zinc-800 pt-2">
-          {variant === "drawer" ? (
-            <NavGroupBlock group={setup} pathname={pathname} onNavigate={onNavigate} defaultOpen />
-          ) : (
-            <NavGroupItems group={setup} pathname={pathname} onNavigate={onNavigate} />
-          )}
-        </div>
-      ) : null}
-      {bot ? (
-        <div className="mt-2 border-t border-zinc-800 pt-2">
-          {variant === "drawer" ? (
-            <NavGroupBlock group={bot} pathname={pathname} onNavigate={onNavigate} defaultOpen />
-          ) : (
-            <NavGroupItems group={bot} pathname={pathname} onNavigate={onNavigate} />
-          )}
-        </div>
-      ) : null}
-      {admin ? (
-        <div className="mt-2 border-t border-zinc-800 pt-2">
-          {variant === "drawer" ? (
-            <NavGroupBlock group={admin} pathname={pathname} onNavigate={onNavigate} defaultOpen />
-          ) : (
-            <NavGroupItems group={admin} pathname={pathname} onNavigate={onNavigate} />
-          )}
+      {configGroups.length ? (
+        <div className="mt-2 border-t border-zinc-800 pt-1">
+          <SidebarSectionLabel label="Configurare" />
+          {renderNavGroups(configGroups, variant, pathname, onNavigate)}
         </div>
       ) : null}
     </nav>

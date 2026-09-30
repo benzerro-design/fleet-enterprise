@@ -15,6 +15,7 @@ import {
   QuotePartsOrderStatus,
   ServiceCaseStage,
   WorkOrderQuoteLineApproval,
+  WorkOrderQuoteParseStatus,
   WorkOrderQuoteStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
@@ -80,6 +81,8 @@ export type UpsertQuoteInput = {
   currency?: string;
   /** Denumire afișată (ex. „Revizie”, „Anvelope”). */
   title?: string | null;
+  sourcePdfUrl?: string | null;
+  parseStatus?: WorkOrderQuoteParseStatus | null;
 };
 
 export type PostCostInput = {
@@ -133,6 +136,16 @@ export type QuoteImportApplyInput = {
   notes?: string | null;
   currency?: string;
   replaceExistingDraft?: boolean;
+  sourcePdfUrl?: string | null;
+};
+
+export type ServiceQuoteImportInput = {
+  workOrderId: string;
+  externalQuoteId: string;
+  sourcePdfUrl?: string | null;
+  lines?: QuoteImportPreviewLine[];
+  invoiceNumber?: string | null;
+  invoiceGrossCents?: number | null;
 };
 
 export type VerifyPartsPricesInput = {
@@ -280,6 +293,21 @@ export class WorkOrderQuotesService {
     return tenant;
   }
 
+  private async assertServiceImportEnabled(tenantSlug: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { integrationsSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const integ = parseTenantIntegrationsSettings(tenant.integrationsSettings);
+    if (!integ.serviceImportEnabled) {
+      throw new BadRequestException(
+        'Import deviz service dezactivat (Setup → Integrări → Import deviz service API).',
+      );
+    }
+    return tenant;
+  }
+
   private async loadImportFileBytes(
     rawUrl: string,
   ): Promise<{ buf: Buffer; contentType: string }> {
@@ -350,8 +378,13 @@ export class WorkOrderQuotesService {
     dto: QuoteImportApplyInput,
     actorUserId?: string,
     access?: AccessContext,
+    importGate: 'audatex' | 'service' = 'audatex',
   ): Promise<WorkOrderQuoteRecord> {
-    await this.assertQuoteImportEnabled(tenantSlug);
+    if (importGate === 'service') {
+      await this.assertServiceImportEnabled(tenantSlug);
+    } else {
+      await this.assertQuoteImportEnabled(tenantSlug);
+    }
     await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
 
     const rawLines = Array.isArray(dto.lines) ? dto.lines : [];
@@ -385,6 +418,14 @@ export class WorkOrderQuotesService {
       (dto.notes?.trim() || '') ||
       `Import PDF / Audatex (${new Date().toISOString().slice(0, 10)})`;
 
+    const sourcePdfUrl =
+      typeof dto.sourcePdfUrl === 'string' && dto.sourcePdfUrl.trim()
+        ? dto.sourcePdfUrl.trim()
+        : null;
+    const pdfMeta = sourcePdfUrl
+      ? { sourcePdfUrl, parseStatus: WorkOrderQuoteParseStatus.applied }
+      : {};
+
     const existingDraft = await this.prisma.workOrderQuote.findFirst({
       where: { workOrderId, status: WorkOrderQuoteStatus.draft },
       select: { id: true },
@@ -398,7 +439,7 @@ export class WorkOrderQuotesService {
         tenantSlug,
         workOrderId,
         existingDraft.id,
-        { lines, notes, currency: dto.currency },
+        { lines, notes, currency: dto.currency, ...pdfMeta },
         actorUserId,
         access,
       );
@@ -407,7 +448,7 @@ export class WorkOrderQuotesService {
     const created = await this.createDraft(
       tenantSlug,
       workOrderId,
-      { lines, notes, currency: dto.currency },
+      { lines, notes, currency: dto.currency, ...pdfMeta },
       actorUserId,
       access,
     );
@@ -428,6 +469,109 @@ export class WorkOrderQuotesService {
     }
 
     return created;
+  }
+
+  async importServiceExternalQuote(
+    tenantSlug: string,
+    dto: ServiceQuoteImportInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<WorkOrderQuoteRecord> {
+    const extId = dto.externalQuoteId?.trim();
+    if (!extId) {
+      throw new BadRequestException('externalQuoteId is required');
+    }
+    const workOrderId = dto.workOrderId?.trim();
+    if (!workOrderId) {
+      throw new BadRequestException('workOrderId is required');
+    }
+
+    const existing = await this.prisma.workOrderQuote.findUnique({
+      where: { externalQuoteId: extId },
+      include: this.quoteInclude(),
+    });
+    if (existing) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { slug: tenantSlug },
+        select: { id: true },
+      });
+      if (tenant) {
+        await this.audit.log({
+          tenantId: tenant.id,
+          actorUserId,
+          action: 'integration.service_quote.import',
+          entityType: 'work_order_quote',
+          entityId: existing.id,
+          meta: {
+            workOrderId: existing.workOrderId,
+            externalQuoteId: extId,
+            idempotent: true,
+          },
+        });
+      }
+      return toQuoteRecord(existing);
+    }
+
+    const rawLines = Array.isArray(dto.lines) ? dto.lines : [];
+    if (!rawLines.length) {
+      throw new BadRequestException('Trimite cel puțin o linie (lines)');
+    }
+
+    const notes = `Import service extern (${extId})`;
+    const imported = await this.importApply(
+      tenantSlug,
+      workOrderId,
+      {
+        lines: rawLines,
+        notes,
+        replaceExistingDraft: true,
+        sourcePdfUrl: dto.sourcePdfUrl ?? null,
+      },
+      actorUserId,
+      access,
+      'service',
+    );
+
+    const invoiceNumber =
+      typeof dto.invoiceNumber === 'string' && dto.invoiceNumber.trim()
+        ? dto.invoiceNumber.trim()
+        : null;
+    const invoiceGross =
+      dto.invoiceGrossCents != null && Number.isFinite(Number(dto.invoiceGrossCents))
+        ? Math.round(Number(dto.invoiceGrossCents))
+        : null;
+
+    const updated = await this.prisma.workOrderQuote.update({
+      where: { id: imported.id },
+      data: {
+        externalQuoteId: extId,
+        ...(invoiceNumber ? { invoiceNumber } : {}),
+        ...(invoiceGross != null ? { invoiceGrossCents: invoiceGross } : {}),
+      },
+      include: this.quoteInclude(),
+    });
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true },
+    });
+    if (tenant) {
+      await this.audit.log({
+        tenantId: tenant.id,
+        actorUserId,
+        action: 'integration.service_quote.import',
+        entityType: 'work_order_quote',
+        entityId: updated.id,
+        meta: {
+          workOrderId,
+          externalQuoteId: extId,
+          lineCount: rawLines.length,
+          idempotent: false,
+        },
+      });
+    }
+
+    return toQuoteRecord(updated);
   }
 
   private async assertPartsPriceVerifyEnabled(tenantSlug: string) {
@@ -603,6 +747,10 @@ export class WorkOrderQuotesService {
           totalNetCents,
           totalVatCents,
           notes: dto.notes?.trim() || null,
+          ...(dto.sourcePdfUrl !== undefined
+            ? { sourcePdfUrl: dto.sourcePdfUrl?.trim() || null }
+            : {}),
+          ...(dto.parseStatus !== undefined ? { parseStatus: dto.parseStatus } : {}),
           lines: {
             create: lines.map((line, idx) => ({
               tenantId: tenant.id,
@@ -700,6 +848,10 @@ export class WorkOrderQuotesService {
           ...(dto.title !== undefined ? { title: dto.title?.trim() || null } : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
           ...(dto.currency !== undefined ? { currency: dto.currency.trim() || existing.currency } : {}),
+          ...(dto.sourcePdfUrl !== undefined
+            ? { sourcePdfUrl: dto.sourcePdfUrl?.trim() || null }
+            : {}),
+          ...(dto.parseStatus !== undefined ? { parseStatus: dto.parseStatus } : {}),
         },
         include: this.quoteInclude(),
       });
@@ -729,6 +881,10 @@ export class WorkOrderQuotesService {
           totalNetCents,
           totalVatCents,
           notes: dto.notes !== undefined ? dto.notes?.trim() || null : existing.notes,
+          ...(dto.sourcePdfUrl !== undefined
+            ? { sourcePdfUrl: dto.sourcePdfUrl?.trim() || null }
+            : {}),
+          ...(dto.parseStatus !== undefined ? { parseStatus: dto.parseStatus } : {}),
           lines: {
             create: lines.map((line, idx) => ({
               tenantId: tenant.id,

@@ -17,11 +17,12 @@ import { InsurersModule } from './insurers/insurers.module';
 import { WorkOrdersModule } from './work-orders/work-orders.module';
 import { MobilityModule } from './mobility/mobility.module';
 import { RoadsideModule } from './roadside/roadside.module';
+import { ServiceImportModule } from './integrations/service/service-import.module';
 import { TenantModule } from './tenant/tenant.module';
 import { PartnerModule } from './partner/partner.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, IamModule, BotModule, ClientsModule, CrmModule, DriversModule, FleetModule, OpsModule, ServiceCasesModule, SuppliersModule, InsurersModule, WorkOrdersModule, AppointmentsModule, MobilityModule, RoadsideModule, TenantModule, PartnerModule],
+  imports: [PrismaModule, AuthModule, IamModule, BotModule, ClientsModule, CrmModule, DriversModule, FleetModule, OpsModule, ServiceCasesModule, SuppliersModule, InsurersModule, WorkOrdersModule, AppointmentsModule, MobilityModule, RoadsideModule, TenantModule, PartnerModule, ServiceImportModule],
   controllers: [AppController],
   providers: [AppService],
 })

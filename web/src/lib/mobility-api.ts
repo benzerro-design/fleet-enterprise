@@ -44,6 +44,8 @@ export type MobilityAssignmentRecord = {
   returnedAt: string | null;
   deliveryMode: MobilityDeliveryMode | null;
   handoverUserLabel: string | null;
+  handoverProtocolUrl: string | null;
+  handoverProtocolFileName: string | null;
   waivedReason: string | null;
   notes: string | null;
   createdAt: string;

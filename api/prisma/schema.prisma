@@ -1836,6 +1836,13 @@ enum WorkOrderQuoteStatus {
   rejected
 }
 
+enum WorkOrderQuoteParseStatus {
+  pending
+  review
+  applied
+  failed
+}
+
 enum WorkOrderQuoteLineType {
   labor
   parts
@@ -1890,6 +1897,11 @@ model WorkOrderQuote {
   invoiceAttachmentUrl String?
   invoiceGrossCents Int?
   invoiceMismatch   Boolean  @default(false)
+  /// PDF sursă (import deviz Audatex / generic).
+  sourcePdfUrl     String?
+  /// Idempotency key for external service quote import (INT-004).
+  externalQuoteId  String?              @unique
+  parseStatus      WorkOrderQuoteParseStatus?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2013,6 +2025,8 @@ model MobilityAssignment {
   returnedAt                DateTime?
   deliveryMode              MobilityDeliveryMode?
   handoverUserLabel         String?
+  handoverProtocolUrl       String?
+  handoverProtocolFileName  String?
   waivedReason              String?
   notes                     String?
   createdAt                 DateTime                 @default(now())

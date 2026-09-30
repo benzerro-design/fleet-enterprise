@@ -157,6 +157,22 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
           </span>
         </label>
 
+        <label className="flex items-start gap-3 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={settings.serviceImportEnabled}
+            disabled={pending}
+            onChange={(e) => void patch({ serviceImportEnabled: e.target.checked })}
+          />
+          <span>
+            <span className="font-medium text-zinc-100">Import deviz service (API)</span>
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              POST autentificat către /integrations/service/quotes — idempotency prin externalQuoteId.
+            </span>
+          </span>
+        </label>
+
         <div className="border-t border-zinc-800 pt-5">
           <h2 className="text-sm font-medium text-zinc-200">Catalog piese</h2>
           <p className="mt-1 text-xs text-zinc-500">

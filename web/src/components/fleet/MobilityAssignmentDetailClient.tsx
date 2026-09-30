@@ -129,6 +129,21 @@ export function MobilityAssignmentDetailClient({
           <dt className="text-xs uppercase text-zinc-500">Predare (OUT)</dt>
           <dd className="mt-1 text-zinc-100">{fmt(row.handoverAt)}</dd>
         </div>
+        {row.handoverProtocolUrl ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4 sm:col-span-2">
+            <dt className="text-xs uppercase text-zinc-500">PV predare-primire</dt>
+            <dd className="mt-1">
+              <a
+                href={row.handoverProtocolUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sky-300 hover:underline"
+              >
+                {row.handoverProtocolFileName?.trim() || "Deschide PDF"}
+              </a>
+            </dd>
+          </div>
+        ) : null}
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
           <dt className="text-xs uppercase text-zinc-500">Returnare (IN)</dt>
           <dd className="mt-1 text-zinc-100">{fmt(row.returnedAt)}</dd>

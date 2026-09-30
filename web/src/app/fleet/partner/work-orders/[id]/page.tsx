@@ -58,13 +58,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function PartnerWorkOrderDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
-  const listHref = appendPartnerSupplierQuery("/fleet/partner/work-orders", parsePartnerSupplierQuery(sp));
+  const partnerSupplierQuery = parsePartnerSupplierQuery(sp);
+  const listHref = appendPartnerSupplierQuery("/fleet/partner/work-orders", partnerSupplierQuery);
   const [wo, auth, workOrderSettings] = await Promise.all([
     load(id),
     getAuthMeResult(),
     loadSettings(),
   ]);
   if (!wo) notFound();
+  const partnerSupplierId =
+    partnerSupplierQuery.supplierId ??
+    partnerSupplierQuery.suppliers?.[0] ??
+    (auth.ok ? auth.me.access?.supplierMemberships?.[0]?.supplierId : undefined);
   const canWrite = canWritePartnerOps(auth);
   const quotes = await loadQuotes(id);
   const hasInvoicedQuote = quotes.some((q) => q.status === "approved" && q.invoicedAt);
@@ -85,6 +90,7 @@ export default async function PartnerWorkOrderDetailPage({ params, searchParams 
           hasInvoicedQuote={hasInvoicedQuote}
           hasCostFromQuote={hasCostFromQuote}
           isPartner
+          partnerSupplierId={partnerSupplierId}
           workOrderSettings={workOrderSettings}
         />
       </div>

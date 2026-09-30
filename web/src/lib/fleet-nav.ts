@@ -25,11 +25,16 @@ export type FleetNavSoon = {
 
 export type FleetNavEntry = FleetNavLink | FleetNavSoon;
 
+/** PrestaShop BO–style sidebar mega-section (PLAT-007). */
+export type FleetNavSidebarSection = "operare" | "configurare";
+
 export type FleetNavGroup = {
   id: string;
   label: string;
   items: FleetNavEntry[];
   footer?: boolean;
+  /** Which BO section renders this group (default operare for primary nav). */
+  sidebarSection?: FleetNavSidebarSection;
 };
 
 export type FleetNavContext = {
@@ -98,6 +103,13 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
         href: "/fleet/costs",
         phase: "live",
         activePrefixes: ["/fleet/costs"],
+      },
+      {
+        kind: "link",
+        label: "Asistență rutieră",
+        href: "/fleet/roadside",
+        phase: "live",
+        activePrefixes: ["/fleet/roadside"],
       },
     ],
   },
@@ -206,7 +218,6 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
         phase: "live",
         activePrefixes: ["/fleet/mobility/replacement-cars"],
       },
-      { kind: "soon", label: "Asistență rutieră", phase: "phase2" },
       { kind: "soon", label: "Flotă pool", phase: "phase2" },
     ],
   },
@@ -216,6 +227,7 @@ export const FLEET_NAV_BOT_GROUP: FleetNavGroup = {
   id: "bot",
   label: "BOT",
   footer: true,
+  sidebarSection: "configurare",
   items: [
     {
       kind: "link",
@@ -240,6 +252,7 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
   id: "setup",
   label: "Setup",
   footer: true,
+  sidebarSection: "configurare",
   items: [
     {
       kind: "link",
@@ -282,6 +295,7 @@ export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
   id: "admin",
   label: "Administrare",
   footer: true,
+  sidebarSection: "configurare",
   items: [
     {
       kind: "link",

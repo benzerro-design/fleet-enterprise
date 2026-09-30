@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,17 @@ import {
   SupplierCategory,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import type { AccessContext } from '../iam/access-context.types';
+import {
+  assertClientAccess,
+  assertClientFleetWrite,
+  isTenantWideAccess,
+} from '../iam/client-access';
+import {
+  assertPartnerSupplierId,
+  assertPartnerWrite,
+  isPartnerUser,
+} from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { nextMobilityDisplayNumber } from './mobility-display-number';
 import {
@@ -43,6 +55,8 @@ export type MobilityAssignmentRecord = {
   returnedAt: string | null;
   deliveryMode: MobilityDeliveryMode | null;
   handoverUserLabel: string | null;
+  handoverProtocolUrl: string | null;
+  handoverProtocolFileName: string | null;
   waivedReason: string | null;
   notes: string | null;
   createdAt: string;
@@ -71,6 +85,8 @@ export type CreateMobilityAssignmentInput = {
   handoverAt?: string | null;
   expectedReturnAt?: string | null;
   handoverUserLabel?: string | null;
+  handoverProtocolUrl?: string | null;
+  handoverProtocolFileName?: string | null;
   notes?: string | null;
   status?: 'reserved' | 'active' | 'waived';
   waivedReason?: string | null;
@@ -84,6 +100,8 @@ export type PatchMobilityAssignmentInput = {
   expectedReturnAt?: string | null;
   returnedAt?: string | null;
   handoverUserLabel?: string | null;
+  handoverProtocolUrl?: string | null;
+  handoverProtocolFileName?: string | null;
   notes?: string | null;
   status?: MobilityAssignmentStatus;
   waivedReason?: string | null;
@@ -136,6 +154,8 @@ export class MobilityService {
       returnedAt: row.returnedAt?.toISOString() ?? null,
       deliveryMode: row.deliveryMode,
       handoverUserLabel: row.handoverUserLabel,
+      handoverProtocolUrl: row.handoverProtocolUrl,
+      handoverProtocolFileName: row.handoverProtocolFileName,
       waivedReason: row.waivedReason,
       notes: row.notes,
       createdAt: row.createdAt.toISOString(),
@@ -150,6 +170,48 @@ export class MobilityService {
       supplier: { select: { legalName: true } },
       workOrder: { select: { displayNumber: true } },
     } as const;
+  }
+
+  private async assertWorkOrderMobilityAccess(
+    tenantSlug: string,
+    workOrderId: string,
+    access: AccessContext | undefined,
+    mode: 'read' | 'write',
+  ) {
+    const wo = await this.prisma.maintenanceWorkOrder.findFirst({
+      where: { id: workOrderId, tenant: { slug: tenantSlug } },
+      include: { vehicle: { select: { clientId: true } } },
+    });
+    if (!wo) throw new NotFoundException('Work order not found');
+    if (access) {
+      if (mode === 'read') {
+        if (isPartnerUser(access)) {
+          assertPartnerSupplierId(access, wo.supplierId);
+        } else if (!isTenantWideAccess(access)) {
+          assertClientAccess(access, wo.vehicle.clientId);
+        }
+      } else if (isPartnerUser(access)) {
+        assertPartnerSupplierId(access, wo.supplierId);
+        assertPartnerWrite(access);
+      } else {
+        assertClientFleetWrite(access, wo.vehicle.clientId);
+      }
+    }
+    return wo;
+  }
+
+  private async assertAssignmentAccess(
+    tenantSlug: string,
+    assignmentId: string,
+    access: AccessContext | undefined,
+    mode: 'read' | 'write',
+  ) {
+    const row = await this.prisma.mobilityAssignment.findFirst({
+      where: { id: assignmentId, tenant: { slug: tenantSlug } },
+      select: { workOrderId: true },
+    });
+    if (!row) throw new NotFoundException('Assignment not found');
+    return this.assertWorkOrderMobilityAccess(tenantSlug, row.workOrderId, access, mode);
   }
 
   private listWhere(tenantId: string, params: MobilityListParams): Prisma.MobilityAssignmentWhereInput {
@@ -170,7 +232,10 @@ export class MobilityService {
     return { AND: parts };
   }
 
-  async listPaged(tenantSlug: string, params: MobilityListParams) {
+  async listPaged(tenantSlug: string, params: MobilityListParams, access?: AccessContext) {
+    if (params.workOrderId?.trim() && access) {
+      await this.assertWorkOrderMobilityAccess(tenantSlug, params.workOrderId.trim(), access, 'read');
+    }
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -199,7 +264,12 @@ export class MobilityService {
     };
   }
 
-  async getById(tenantSlug: string, id: string): Promise<MobilityAssignmentRecord> {
+  async getById(
+    tenantSlug: string,
+    id: string,
+    access?: AccessContext,
+  ): Promise<MobilityAssignmentRecord> {
+    await this.assertAssignmentAccess(tenantSlug, id, access, 'read');
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Assignment not found');
     const row = await this.prisma.mobilityAssignment.findFirst({
@@ -210,7 +280,12 @@ export class MobilityService {
     return this.toRecord(row);
   }
 
-  async getEligibility(tenantSlug: string, workOrderId: string): Promise<MobilityEligibilityRecord> {
+  async getEligibility(
+    tenantSlug: string,
+    workOrderId: string,
+    access?: AccessContext,
+  ): Promise<MobilityEligibilityRecord> {
+    await this.assertWorkOrderMobilityAccess(tenantSlug, workOrderId, access, 'read');
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Work order not found');
 
@@ -330,9 +405,12 @@ export class MobilityService {
     tenantSlug: string,
     input: CreateMobilityAssignmentInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<MobilityAssignmentRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.assertWorkOrderMobilityAccess(tenantSlug, input.workOrderId, access, 'write');
 
     const wo = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id: input.workOrderId, tenantId: tenant.id },
@@ -342,6 +420,12 @@ export class MobilityService {
       },
     });
     if (!wo) throw new NotFoundException('Work order not found');
+
+    if (access && isPartnerUser(access) && input.supplierId?.trim()) {
+      if (!access.allowedSupplierIds.includes(input.supplierId.trim())) {
+        throw new ForbiddenException('Supplier access denied');
+      }
+    }
 
     const hours = computeImmobilizationHours(
       wo.inServiceAt,
@@ -426,6 +510,8 @@ export class MobilityService {
           expectedReturnAt: input.expectedReturnAt ? new Date(input.expectedReturnAt) : null,
           deliveryMode: input.deliveryMode ?? null,
           handoverUserLabel: input.handoverUserLabel?.trim() || null,
+          handoverProtocolUrl: input.handoverProtocolUrl?.trim() || null,
+          handoverProtocolFileName: input.handoverProtocolFileName?.trim() || null,
           waivedReason: input.waivedReason?.trim() || null,
           notes: input.notes?.trim() || null,
         },
@@ -465,14 +551,23 @@ export class MobilityService {
     id: string,
     input: PatchMobilityAssignmentInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<MobilityAssignmentRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Assignment not found');
+
+    await this.assertAssignmentAccess(tenantSlug, id, access, 'write');
 
     const existing = await this.prisma.mobilityAssignment.findFirst({
       where: { id, tenantId: tenant.id },
     });
     if (!existing) throw new NotFoundException('Assignment not found');
+
+    if (access && isPartnerUser(access) && input.supplierId !== undefined && input.supplierId) {
+      if (!access.allowedSupplierIds.includes(input.supplierId.trim())) {
+        throw new ForbiddenException('Supplier access denied');
+      }
+    }
 
     const data: Prisma.MobilityAssignmentUncheckedUpdateInput = {};
     if (input.supplierId !== undefined) data.supplierId = input.supplierId;
@@ -491,6 +586,12 @@ export class MobilityService {
     }
     if (input.handoverUserLabel !== undefined) {
       data.handoverUserLabel = input.handoverUserLabel?.trim() || null;
+    }
+    if (input.handoverProtocolUrl !== undefined) {
+      data.handoverProtocolUrl = input.handoverProtocolUrl?.trim() || null;
+    }
+    if (input.handoverProtocolFileName !== undefined) {
+      data.handoverProtocolFileName = input.handoverProtocolFileName?.trim() || null;
     }
     if (input.notes !== undefined) data.notes = input.notes?.trim() || null;
     if (input.waivedReason !== undefined) data.waivedReason = input.waivedReason?.trim() || null;

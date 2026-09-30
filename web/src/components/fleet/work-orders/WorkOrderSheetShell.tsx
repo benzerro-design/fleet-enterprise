@@ -53,6 +53,8 @@ type Props = {
   hasInvoicedQuote: boolean;
   hasCostFromQuote: boolean;
   isPartner?: boolean;
+  /** Furnizor partener (prefill rent pe predare mobilitate). */
+  partnerSupplierId?: string | null;
   workOrderSettings?: WorkOrderSettings;
 };
 
@@ -95,8 +97,10 @@ export function WorkOrderSheetShell({
   hasInvoicedQuote,
   hasCostFromQuote,
   isPartner = false,
+  partnerSupplierId,
   workOrderSettings = DEFAULT_WORK_ORDER_SETTINGS,
 }: Props) {
+  const mobilityPrefillSupplierId = partnerSupplierId?.trim() || (isPartner ? wo.supplierId : null);
   const router = useRouter();
   const [serviceType, setServiceType] = useState<ServiceOrderType>(wo.serviceOrderType);
   const [pending, setPending] = useState(false);
@@ -616,11 +620,13 @@ export function WorkOrderSheetShell({
 
       {sheetView === "mobilitate" ? (
         <div className="border-b border-zinc-800 px-4 py-4 space-y-6">
-          <WorkOrderMobilitySummary workOrderId={wo.id} />
+          <WorkOrderMobilitySummary workOrderId={wo.id} canWrite={canWrite} partnerMode={isPartner} />
           {canWrite ? (
             <MobilityAssignmentForm
               workOrderId={wo.id}
               embedded
+              partnerMode={isPartner}
+              prefillSupplierId={mobilityPrefillSupplierId}
               prefill={{
                 coveredVehicleReg: wo.registrationNumber,
                 workOrderDisplayNumber: workOrderDisplayLabel(wo),
@@ -644,7 +650,7 @@ export function WorkOrderSheetShell({
         damageRequired={isDamageWo}
         onAllocate={() => setSheetView("mobilitate")}
       />
-      <WorkOrderMobilitySummary workOrderId={wo.id} />
+      <WorkOrderMobilitySummary workOrderId={wo.id} canWrite={canWrite} partnerMode={isPartner} />
 
       {isDamageWo ? (
         <div className="border-b border-zinc-800 px-4 py-2">

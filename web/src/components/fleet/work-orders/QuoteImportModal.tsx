@@ -176,7 +176,11 @@ export function QuoteImportModal({ workOrderId, open, onClose, onApplied }: Prop
       const res = await fetch(`${workOrdersBrowserBase}/${workOrderId}/quotes/import-apply`, {
         method: "POST",
         headers: fleetJsonHeaders(),
-        body: JSON.stringify({ lines: payloadLines, replaceExistingDraft: true }),
+        body: JSON.stringify({
+          lines: payloadLines,
+          replaceExistingDraft: true,
+          sourcePdfUrl: fileUrl || null,
+        }),
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { message?: string };

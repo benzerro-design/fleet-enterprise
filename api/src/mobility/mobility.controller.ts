@@ -16,6 +16,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantId } from '../fleet/tenant-id.decorator';
+import { CurrentAccess } from '../iam/current-access.decorator';
+import type { AccessContext } from '../iam/access-context.types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import type {
   CreateMobilityAssignmentInput,
@@ -58,6 +60,7 @@ export class MobilityController {
   @Roles(...FLEET_READ_ROLES)
   list(
     @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
     @Query('page') pageStr?: string,
     @Query('pageSize') pageSizeStr?: string,
     @Query('q') q?: string,
@@ -66,25 +69,37 @@ export class MobilityController {
   ) {
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const pageSize = Math.min(Math.max(1, parseInt(pageSizeStr ?? '50', 10) || 50), 200);
-    return this.mobility.listPaged(tenantSlug, {
-      page,
-      pageSize,
-      q: q?.trim(),
-      status: parseStatus(status),
-      workOrderId: workOrderId?.trim(),
-    });
+    return this.mobility.listPaged(
+      tenantSlug,
+      {
+        page,
+        pageSize,
+        q: q?.trim(),
+        status: parseStatus(status),
+        workOrderId: workOrderId?.trim(),
+      },
+      access,
+    );
   }
 
   @Get('eligibility/:workOrderId')
   @Roles(...FLEET_READ_ROLES)
-  eligibility(@TenantId() tenantSlug: string, @Param('workOrderId') workOrderId: string) {
-    return this.mobility.getEligibility(tenantSlug, workOrderId);
+  eligibility(
+    @TenantId() tenantSlug: string,
+    @Param('workOrderId') workOrderId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.mobility.getEligibility(tenantSlug, workOrderId, access);
   }
 
   @Get('assignments/:id')
   @Roles(...FLEET_READ_ROLES)
-  get(@TenantId() tenantSlug: string, @Param('id') id: string) {
-    return this.mobility.getById(tenantSlug, id);
+  get(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.mobility.getById(tenantSlug, id, access);
   }
 
   @Post('assignments')
@@ -94,8 +109,9 @@ export class MobilityController {
     @TenantId() tenantSlug: string,
     @Body() body: CreateMobilityAssignmentInput,
     @CurrentUserId() actorUserId?: string,
+    @CurrentAccess() access?: AccessContext,
   ) {
-    return this.mobility.create(tenantSlug, body, actorUserId);
+    return this.mobility.create(tenantSlug, body, actorUserId, access);
   }
 
   @Patch('assignments/:id')
@@ -105,10 +121,11 @@ export class MobilityController {
     @Param('id') id: string,
     @Body() body: PatchMobilityAssignmentInput,
     @CurrentUserId() actorUserId?: string,
+    @CurrentAccess() access?: AccessContext,
   ) {
     if (body.deliveryMode !== undefined && body.deliveryMode !== null) {
       parseDeliveryMode(body.deliveryMode);
     }
-    return this.mobility.patch(tenantSlug, id, body, actorUserId);
+    return this.mobility.patch(tenantSlug, id, body, actorUserId, access);
   }
 }

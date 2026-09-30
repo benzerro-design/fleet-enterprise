@@ -17,6 +17,7 @@ import {
   quoteDisplayName,
   quoteLineTypeLabel,
   quoteLinesIncludedInTotals,
+  quoteParseStatusLabel,
   quoteStatusLabel,
   workOrdersBrowserBase,
   type QuoteLineApprovalStatus,
@@ -24,6 +25,7 @@ import {
   type QuotePartsOrderStatus,
   type PartsPriceVerifyLineResult,
   type VerifyPartsPricesResult,
+  type WorkOrderQuoteParseStatus,
   type WorkOrderQuoteRecord,
   type WorkOrderQuoteStatus,
 } from "@/lib/work-orders-api";
@@ -292,6 +294,21 @@ function statusBadgeClass(status: WorkOrderQuoteStatus): string {
       return "border-red-500/50 text-red-200";
     default:
       return "border-zinc-600 text-zinc-300";
+  }
+}
+
+function parseStatusBadgeClass(status: WorkOrderQuoteParseStatus | null | undefined): string {
+  switch (status) {
+    case "applied":
+      return "border-emerald-600/50 bg-emerald-950/30 text-emerald-100";
+    case "review":
+      return "border-amber-600/50 bg-amber-950/30 text-amber-100";
+    case "failed":
+      return "border-red-600/50 bg-red-950/30 text-red-100";
+    case "pending":
+      return "border-zinc-600 bg-zinc-900 text-zinc-300";
+    default:
+      return "border-zinc-600 bg-zinc-900 text-zinc-300";
   }
 }
 
@@ -1178,6 +1195,25 @@ export function WorkOrderQuotePanel({
                   {activeQuote.title ? ` · ${activeQuote.title}` : ""}
                 </span>
                 <QuoteStatusStepper status={activeQuote.status} />
+                {activeQuote.sourcePdfUrl ? (
+                  <>
+                    {activeQuote.parseStatus ? (
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${parseStatusBadgeClass(activeQuote.parseStatus)}`}
+                      >
+                        {quoteParseStatusLabel(activeQuote.parseStatus)}
+                      </span>
+                    ) : null}
+                    <a
+                      href={activeQuote.sourcePdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 text-[10px] text-sky-400 underline-offset-2 hover:underline"
+                    >
+                      PDF sursă
+                    </a>
+                  </>
+                ) : null}
               </div>
             ) : isCreatingDraft ? (
               <span className="shrink-0 rounded-full border border-emerald-700/50 px-2 py-0.5 text-xs text-emerald-200">

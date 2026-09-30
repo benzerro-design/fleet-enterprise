@@ -18,6 +18,7 @@ import {
   type MobilityDeliveryMode,
   type MobilityEligibilityRecord,
 } from "@/lib/mobility-api";
+import { uploadDocumentFile } from "@/lib/document-upload";
 
 type Props = {
   workOrderId?: string;
@@ -27,6 +28,9 @@ type Props = {
   };
   /** Rămâne pe fișa WO după salvare (MOB-007). */
   embedded?: boolean;
+  /** Portal partener — etichete predare + prefill furnizor. */
+  partnerMode?: boolean;
+  prefillSupplierId?: string | null;
   onSaved?: () => void;
 };
 
@@ -34,6 +38,8 @@ export function MobilityAssignmentForm({
   workOrderId: initialWoId,
   prefill,
   embedded = false,
+  partnerMode = false,
+  prefillSupplierId,
   onSaved,
 }: Props) {
   const router = useRouter();
@@ -50,6 +56,7 @@ export function MobilityAssignmentForm({
   const [handoverUserLabel, setHandoverUserLabel] = useState("");
   const [expectedReturnAt, setExpectedReturnAt] = useState("");
   const [notes, setNotes] = useState("");
+  const [protocolFile, setProtocolFile] = useState<File | null>(null);
   const [waive, setWaive] = useState(false);
   const [waivedReason, setWaivedReason] = useState("");
   const [pending, setPending] = useState(false);
@@ -78,6 +85,12 @@ export function MobilityAssignmentForm({
     };
   }, [workOrderId]);
 
+  useEffect(() => {
+    if (prefillSupplierId?.trim()) {
+      setSupplierId(prefillSupplierId.trim());
+    }
+  }, [prefillSupplierId]);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!workOrderId) {
@@ -87,6 +100,13 @@ export function MobilityAssignmentForm({
     setPending(true);
     setError(null);
     try {
+      let handoverProtocolUrl: string | null = null;
+      let handoverProtocolFileName: string | null = null;
+      if (!waive && protocolFile) {
+        const up = await uploadDocumentFile(protocolFile, "PV predare-primire mașină schimb");
+        handoverProtocolUrl = up.url;
+        handoverProtocolFileName = up.name;
+      }
       const body = waive
         ? {
             workOrderId,
@@ -101,6 +121,8 @@ export function MobilityAssignmentForm({
             deliveryMode,
             handoverUserLabel: handoverUserLabel.trim(),
             expectedReturnAt: expectedReturnAt ? new Date(expectedReturnAt).toISOString() : null,
+            handoverProtocolUrl,
+            handoverProtocolFileName,
             notes: notes.trim() || null,
             status: "active" as const,
             handoverAt: new Date().toISOString(),
@@ -215,7 +237,10 @@ export function MobilityAssignmentForm({
         </OpsFormSection>
       ) : (
         <>
-          <OpsFormSection number={base + 2} title="Mașină la schimb">
+          <OpsFormSection
+            number={base + 2}
+            title={partnerMode ? "Predare mașină la schimb" : "Mașină la schimb"}
+          >
             <OpsFormField label="Nr. înmatriculare mașină schimb" required>
               <input
                 value={replacementRegistration}
@@ -241,14 +266,32 @@ export function MobilityAssignmentForm({
                 ))}
               </select>
             </OpsFormField>
-            <OpsFormField label="Utilizator (cine primește mașina)" required>
+            <OpsFormField
+              label={partnerMode ? "Confirmă predare — utilizator / semnatar" : "Utilizator (cine primește mașina)"}
+              required
+            >
               <input
                 value={handoverUserLabel}
                 onChange={(e) => setHandoverUserLabel(e.target.value)}
                 className={OPS_INPUT_CLASS}
-                placeholder="Nume șofer / contact client"
+                placeholder={
+                  partnerMode ? "Nume persoană care primește mașina la schimb" : "Nume șofer / contact client"
+                }
                 required
               />
+            </OpsFormField>
+            <OpsFormField label="PV predare-primire (PDF, opțional)">
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                className={`${OPS_INPUT_CLASS} file:mr-3 file:rounded file:border-0 file:bg-zinc-700 file:px-2 file:py-1 file:text-xs file:text-zinc-200`}
+                onChange={(e) => setProtocolFile(e.target.files?.[0] ?? null)}
+              />
+              {protocolFile ? (
+                <p className="mt-1 text-xs text-zinc-500">{protocolFile.name}</p>
+              ) : (
+                <p className="mt-1 text-xs text-zinc-600">Proces verbal semnat — se atașează la alocare.</p>
+              )}
             </OpsFormField>
             <OpsFormField label="Estimare returnare">
               <input
@@ -276,7 +319,13 @@ export function MobilityAssignmentForm({
       <OpsFormStickyActions
         pending={pending}
         pendingLabel="Se salvează…"
-        submitLabel={waive ? "Înregistrează renunțare" : "Activează mașina la schimb"}
+        submitLabel={
+          waive
+            ? "Înregistrează renunțare"
+            : partnerMode
+              ? "Confirmă predarea mașinii"
+              : "Activează mașina la schimb"
+        }
         cancelHref="/fleet/mobility/replacement-cars"
         disabled={!waive && (hasActive || (!eligible && !!eligibility))}
       />
