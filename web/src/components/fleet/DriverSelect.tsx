@@ -13,6 +13,11 @@ type Props = {
   selectedLabel?: string;
   /** Când e deja un label în jur (OpsFormField / TicketForm). */
   hideLabel?: boolean;
+  /**
+   * Alocare flotă 1:1 — doar șoferi fără vehicul activ.
+   * (Nu folosi pe curse/tichete, unde șoferul e context operațional.)
+   */
+  onlyUnassigned?: boolean;
 };
 
 export function DriverSelect({
@@ -23,6 +28,7 @@ export function DriverSelect({
   required,
   selectedLabel,
   hideLabel,
+  onlyUnassigned = false,
 }: Props) {
   const [options, setOptions] = useState<DriverRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,7 +52,12 @@ export function DriverSelect({
           return;
         }
         const data = (await res.json()) as { items: DriverRecord[] };
-        if (!cancelled) setOptions(data.items);
+        if (!cancelled) {
+          const items = onlyUnassigned
+            ? data.items.filter((d) => d.activeVehicleIds.length === 0)
+            : data.items;
+          setOptions(items);
+        }
       } catch {
         if (!cancelled) setError("Eroare la încărcarea șoferilor.");
       } finally {
@@ -56,7 +67,7 @@ export function DriverSelect({
     return () => {
       cancelled = true;
     };
-  }, [clientCode]);
+  }, [clientCode, onlyUnassigned]);
 
   const selectedMissing = Boolean(value) && !options.some((d) => d.id === value);
 
@@ -79,7 +90,9 @@ export function DriverSelect({
             ? "Selectează vehicul mai întâi"
             : loading
               ? "Se încarcă…"
-              : "Fără șofer / nealocat"}
+              : onlyUnassigned
+                ? "Șofer liber…"
+                : "Fără șofer / nealocat"}
         </option>
         {selectedMissing ? (
           <option value={value}>{selectedLabel?.trim() || "Șofer alocat"}</option>
@@ -94,7 +107,9 @@ export function DriverSelect({
       {error ? <p className="text-xs text-amber-400">{error}</p> : null}
       {!loading && clientCode && options.length === 0 && !selectedMissing ? (
         <p className="text-xs text-zinc-500">
-          Niciun șofer activ pentru acest client.{" "}
+          {onlyUnassigned
+            ? "Niciun șofer liber pentru acest client (dealocă întâi sau adaugă unul nou). "
+            : "Niciun șofer activ pentru acest client. "}
           <a href="/fleet/drivers/new" className="text-emerald-400 hover:underline">
             Adaugă șofer
           </a>

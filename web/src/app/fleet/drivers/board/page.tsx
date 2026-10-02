@@ -59,8 +59,9 @@ export default async function DriverAllocationBoardPage() {
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Alocare șoferi</h1>
               <p className="mt-3 max-w-2xl text-zinc-400">
-                Vedere flotă: cine e pe ce vehicul. Un vehicul = un șofer activ; alocarea nouă închide
-                automat alocarea anterioară pe același vehicul.
+                Vedere flotă: cine e pe ce vehicul. Regula e 1:1 — un vehicul = un șofer activ și un
+                șofer = un vehicul activ. În listă apar doar șoferii liberi; pentru realocare, dealocă
+                întâi de pe mașina curentă.
               </p>
             </div>
             <Link

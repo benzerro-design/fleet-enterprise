@@ -447,8 +447,14 @@ export class DriversService {
     const now = assignedAt;
 
     await this.prisma.$transaction(async (tx) => {
+      // 1 vehicul = 1 șofer activ: închide alocarea anterioară pe mașina țintă.
       await tx.driverVehicleAssignment.updateMany({
         where: { vehicleId: vehicle.id, unassignedAt: null },
+        data: { unassignedAt: now },
+      });
+      // 1 șofer = 1 vehicul activ: închide alocările acestui șofer pe alte mașini.
+      await tx.driverVehicleAssignment.updateMany({
+        where: { driverId: driver.id, unassignedAt: null },
         data: { unassignedAt: now },
       });
 

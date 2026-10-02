@@ -145,7 +145,8 @@ export function DriverAssignmentsPanel({
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
       <h2 className="text-sm font-medium text-zinc-300">Alocări vehicule</h2>
       <p className="mt-1 text-xs text-zinc-500">
-        Un șofer poate folosi mai multe vehicule. Alocarea pe un vehicul închide automat alocarea anterioară pe același vehicul.
+        Regula e 1:1 — un șofer = un vehicul activ. Alocarea pe un vehicul nou închide alocarea
+        anterioară pe acel vehicul și orice altă alocare activă a acestui șofer.
       </p>
 
       {canWrite ? (

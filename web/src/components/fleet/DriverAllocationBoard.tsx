@@ -184,9 +184,19 @@ export function DriverAllocationBoard({ vehicles, drivers, canWrite }: Props) {
               rows.map((v) => {
                 const driver = driverByVehicle.get(v.id);
                 // VehicleRecord.clientId = cod client; DriverRecord.clientId = UUID — folosim clientCode.
+                // Exclusivitate 1:1 — doar șoferi activi fără alocare pe alt vehicul.
                 const clientDrivers = drivers.filter(
-                  (d) => d.clientCode === v.clientId && d.status === "active",
+                  (d) =>
+                    d.clientCode === v.clientId &&
+                    d.status === "active" &&
+                    d.activeVehicleIds.length === 0,
                 );
+                const assignedElsewhere = drivers.filter(
+                  (d) =>
+                    d.clientCode === v.clientId &&
+                    d.status === "active" &&
+                    d.activeVehicleIds.length > 0,
+                ).length;
                 return (
                   <tr key={v.id} className="hover:bg-zinc-900/40">
                     <td className="px-3 py-2">
@@ -229,7 +239,9 @@ export function DriverAllocationBoard({ vehicles, drivers, canWrite }: Props) {
                           ) : null}
                           {clientDrivers.length === 0 ? (
                             <span className="text-[11px] text-zinc-500">
-                              Niciun șofer activ pe client.{" "}
+                              {assignedElsewhere > 0
+                                ? "Niciun șofer liber — dealocă întâi de pe altă mașină sau "
+                                : "Niciun șofer activ pe client. "}
                               <Link
                                 href={`/fleet/drivers/new?client=${encodeURIComponent(v.clientId)}`}
                                 className="text-emerald-400 hover:underline"
@@ -246,7 +258,7 @@ export function DriverAllocationBoard({ vehicles, drivers, canWrite }: Props) {
                                   setAssignDraft((prev) => ({ ...prev, [v.id]: e.target.value }))
                                 }
                               >
-                                <option value="">Șofer…</option>
+                                <option value="">Șofer liber…</option>
                                 {clientDrivers.map((d) => (
                                   <option key={d.id} value={d.id}>
                                     {d.fullName}

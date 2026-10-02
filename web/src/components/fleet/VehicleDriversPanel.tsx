@@ -166,11 +166,18 @@ export function VehicleDriversPanel({
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
           <h2 className="text-sm font-medium text-zinc-300">Alocă / schimbă șofer</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Alocarea unui șofer nou închide automat alocarea anterioară pe acest vehicul.
+            Regula e 1:1 — un vehicul = un șofer liber. Alocarea închide șoferul anterior pe acest
+            vehicul și orice altă alocare activă a șoferului ales. În listă apar doar șoferii fără
+            mașină.
           </p>
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <div className="min-w-[14rem] flex-1">
-              <DriverSelect clientCode={clientCode} value={driverId} onChange={setDriverId} />
+              <DriverSelect
+                clientCode={clientCode}
+                value={driverId}
+                onChange={setDriverId}
+                onlyUnassigned
+              />
             </div>
             <div className="min-w-[12rem] flex-1">
               <label className="text-xs text-zinc-500">Note (opțional)</label>
