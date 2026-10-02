@@ -181,6 +181,29 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
         );
       case "client":
         return <span className="block truncate text-zinc-300" title={v.clientId}>{v.clientId}</span>;
+      case "utilizator": {
+        const name = v.assignedDriverName?.trim();
+        const id = v.assignedDriverId;
+        if (!name && !id) {
+          return <span className="text-zinc-600">—</span>;
+        }
+        if (id) {
+          return (
+            <Link
+              href={`/fleet/drivers/${id}`}
+              className="block truncate text-zinc-200 hover:text-emerald-300 hover:underline"
+              title={name ?? id}
+            >
+              {name || "Utilizator"}
+            </Link>
+          );
+        }
+        return (
+          <span className="block truncate text-zinc-300" title={name}>
+            {name}
+          </span>
+        );
+      }
       case "type":
         return (
           <span className="text-zinc-300" title={VEHICLE_TYPES.find((t) => t.value === v.type)?.label}>
@@ -256,6 +279,21 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
                     <p className="font-mono text-sm font-semibold text-zinc-100">{v.registrationNumber}</p>
                     {title ? <p className="mt-0.5 text-xs text-zinc-400">{title}</p> : null}
                     <p className="mt-1 truncate text-xs text-zinc-500">{v.clientId}</p>
+                    {v.assignedDriverName ? (
+                      <p className="mt-0.5 truncate text-xs text-zinc-400">
+                        Utilizator:{" "}
+                        {v.assignedDriverId ? (
+                          <Link
+                            href={`/fleet/drivers/${v.assignedDriverId}`}
+                            className="text-zinc-300 hover:text-emerald-300 hover:underline"
+                          >
+                            {v.assignedDriverName}
+                          </Link>
+                        ) : (
+                          v.assignedDriverName
+                        )}
+                      </p>
+                    ) : null}
                   </div>
                   <span
                     className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium ${statusClass(v.status)}`}

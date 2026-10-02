@@ -4,6 +4,7 @@ export type VehicleGridColumnKey =
   | "model"
   | "vin"
   | "client"
+  | "utilizator"
   | "type"
   | "status"
   | "odometer"
@@ -22,22 +23,24 @@ export type VehicleGridColumnDef = {
 /**
  * Layout dens: nr. + marcă/model în aceeași celulă; tip/VIN opționale;
  * Vezi+Edit+Șterge într-o singură coloană Acțiuni.
+ * „Utilizator” = șoferul alocat activ pe vehicul.
  */
 export const VEHICLE_GRID_COLUMNS: VehicleGridColumnDef[] = [
-  { key: "registration", label: "Vehicul", defaultVisible: true, canHide: false, width: "22%" },
-  { key: "brand", label: "Marcă", defaultVisible: false, canHide: true, width: "9%" },
-  { key: "model", label: "Model", defaultVisible: false, canHide: true, width: "9%" },
-  { key: "vin", label: "VIN", defaultVisible: false, canHide: true, width: "14%" },
-  { key: "client", label: "Client", defaultVisible: true, canHide: true, width: "16%" },
-  { key: "type", label: "Tip", defaultVisible: false, canHide: true, width: "12%" },
-  { key: "status", label: "Status", defaultVisible: true, canHide: true, width: "11%" },
-  { key: "odometer", label: "Km", defaultVisible: true, canHide: true, width: "9%" },
-  { key: "itp", label: "ITP", defaultVisible: true, canHide: true, width: "10%" },
+  { key: "registration", label: "Vehicul", defaultVisible: true, canHide: false, width: "20%" },
+  { key: "brand", label: "Marcă", defaultVisible: false, canHide: true, width: "8%" },
+  { key: "model", label: "Model", defaultVisible: false, canHide: true, width: "8%" },
+  { key: "vin", label: "VIN", defaultVisible: false, canHide: true, width: "12%" },
+  { key: "client", label: "Client", defaultVisible: true, canHide: true, width: "13%" },
+  { key: "utilizator", label: "Utilizator", defaultVisible: true, canHide: true, width: "14%" },
+  { key: "type", label: "Tip", defaultVisible: false, canHide: true, width: "10%" },
+  { key: "status", label: "Status", defaultVisible: true, canHide: true, width: "10%" },
+  { key: "odometer", label: "Km", defaultVisible: true, canHide: true, width: "8%" },
+  { key: "itp", label: "ITP", defaultVisible: true, canHide: true, width: "9%" },
   { key: "actions", label: "Acțiuni", defaultVisible: true, canHide: false, width: "7.5rem" },
 ];
 
-/** v2 — layout nou (fără coloană Detaliu separată; tip ascuns implicit). */
-export const VEHICLE_GRID_STORAGE_KEY = "fleet-vehicle-grid-columns-v2";
+/** v3 — coloană Utilizator (șofer alocat). */
+export const VEHICLE_GRID_STORAGE_KEY = "fleet-vehicle-grid-columns-v3";
 
 export type VehicleGridLayout = {
   order: VehicleGridColumnKey[];

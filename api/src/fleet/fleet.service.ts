@@ -84,6 +84,16 @@ const vehicleInclude = {
     select: { fileUrl: true, kind: true, sortOrder: true, isHero: true },
     orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
   },
+  /** Alocare activă (șofer / utilizator curent pe vehicul). */
+  driverAssignments: {
+    where: { unassignedAt: null },
+    take: 1,
+    orderBy: { assignedAt: 'desc' as const },
+    select: {
+      driverId: true,
+      driver: { select: { id: true, fullName: true } },
+    },
+  },
 } satisfies Prisma.VehicleInclude;
 
 type VehicleRow = Prisma.VehicleGetPayload<{ include: typeof vehicleInclude }>;
@@ -1718,6 +1728,7 @@ export class FleetService {
     const hero = photos.find((p) => p.isHero && p.fileUrl);
     const exterior = photos.find((p) => p.kind === 'exterior' && p.fileUrl);
     const anyPhoto = photos.find((p) => p.fileUrl);
+    const activeAssignment = row.driverAssignments?.[0] ?? null;
     return {
       id: row.id,
       tenantId: row.tenant.slug,
@@ -1747,6 +1758,8 @@ export class FleetService {
       civProfile: normalizeCivProfile(row.civProfile),
       civImportedFromDocumentId: row.civImportedFromDocumentId,
       heroPhotoUrl: hero?.fileUrl ?? exterior?.fileUrl ?? anyPhoto?.fileUrl ?? null,
+      assignedDriverId: activeAssignment?.driverId ?? activeAssignment?.driver?.id ?? null,
+      assignedDriverName: activeAssignment?.driver?.fullName?.trim() || null,
       documents: row.documents.map((d) => this.toDocument(d)),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),

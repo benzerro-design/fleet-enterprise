@@ -53,6 +53,9 @@ export type VehicleRecord = {
   civImportedFromDocumentId: string | null;
   /** Prima poză din galerie (preferă exterior) — PLAT-009. */
   heroPhotoUrl: string | null;
+  /** Șofer alocat activ — afișat în UI ca „Utilizator”. */
+  assignedDriverId: string | null;
+  assignedDriverName: string | null;
   documents: VehicleDocument[];
   createdAt: string;
   updatedAt: string;

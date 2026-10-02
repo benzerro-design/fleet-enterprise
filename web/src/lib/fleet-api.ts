@@ -44,6 +44,9 @@ export type VehicleRecord = {
   odometerKm: number;
   /** Prima poză din galerie (preferă exterior). */
   heroPhotoUrl?: string | null;
+  /** Șofer alocat activ — afișat în listă ca „Utilizator”. */
+  assignedDriverId?: string | null;
+  assignedDriverName?: string | null;
   itpExpiresOn: string | null;
   itpStationName: string | null;
   itpReminderOffsetsDays?: number[] | null;
