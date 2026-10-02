@@ -183,8 +183,9 @@ export function DriverAllocationBoard({ vehicles, drivers, canWrite }: Props) {
             ) : (
               rows.map((v) => {
                 const driver = driverByVehicle.get(v.id);
+                // VehicleRecord.clientId = cod client; DriverRecord.clientId = UUID — folosim clientCode.
                 const clientDrivers = drivers.filter(
-                  (d) => d.clientId === v.clientId && d.status === "active",
+                  (d) => d.clientCode === v.clientId && d.status === "active",
                 );
                 return (
                   <tr key={v.id} className="hover:bg-zinc-900/40">
@@ -226,28 +227,42 @@ export function DriverAllocationBoard({ vehicles, drivers, canWrite }: Props) {
                               Dealocă
                             </button>
                           ) : null}
-                          <select
-                            className="max-w-[10rem] rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200"
-                            value={assignDraft[v.id] ?? ""}
-                            onChange={(e) =>
-                              setAssignDraft((prev) => ({ ...prev, [v.id]: e.target.value }))
-                            }
-                          >
-                            <option value="">Șofer…</option>
-                            {clientDrivers.map((d) => (
-                              <option key={d.id} value={d.id}>
-                                {d.fullName}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            disabled={pendingId === v.id || !assignDraft[v.id]}
-                            onClick={() => void assign(v.id, assignDraft[v.id]!)}
-                            className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                          >
-                            Alocă
-                          </button>
+                          {clientDrivers.length === 0 ? (
+                            <span className="text-[11px] text-zinc-500">
+                              Niciun șofer activ pe client.{" "}
+                              <Link
+                                href={`/fleet/drivers/new?client=${encodeURIComponent(v.clientId)}`}
+                                className="text-emerald-400 hover:underline"
+                              >
+                                Adaugă
+                              </Link>
+                            </span>
+                          ) : (
+                            <>
+                              <select
+                                className="max-w-[10rem] rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200"
+                                value={assignDraft[v.id] ?? ""}
+                                onChange={(e) =>
+                                  setAssignDraft((prev) => ({ ...prev, [v.id]: e.target.value }))
+                                }
+                              >
+                                <option value="">Șofer…</option>
+                                {clientDrivers.map((d) => (
+                                  <option key={d.id} value={d.id}>
+                                    {d.fullName}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                disabled={pendingId === v.id || !assignDraft[v.id]}
+                                onClick={() => void assign(v.id, assignDraft[v.id]!)}
+                                className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                              >
+                                Alocă
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     ) : null}
