@@ -238,11 +238,12 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
   const alignRight = (key: VehicleGridColumnKey) =>
     key === "actions" || key === "odometer" || key === "itp";
 
-  const rowLineClass = layout.rowLines ? "border-b border-zinc-800/80" : "border-b border-transparent";
-  const colLineClass = layout.colLines ? "border-r border-zinc-800/70 last:border-r-0" : "";
-  const thBase = layout.rowLines
-    ? "bg-zinc-950 px-3 py-2 text-left border-b border-zinc-800"
-    : "bg-zinc-950 px-3 py-2 text-left border-b border-zinc-800/40";
+  // Border pe td/th — pe <tr> border-ul e ignorat de browsere la border-collapse/separate.
+  const rowLineCell = layout.rowLines ? "border-b border-zinc-700/70" : "";
+  const colLineCell = layout.colLines ? "border-r border-zinc-700/70 last:border-r-0" : "";
+  const thBase = `bg-zinc-950 px-3 py-2 text-left ${
+    layout.rowLines ? "border-b border-zinc-700" : "border-b border-zinc-800/50"
+  }`;
 
   return (
     <div className="space-y-3">
@@ -350,7 +351,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
                 {columns.map((col) => (
                   <th
                     key={col.key}
-                    className={`${thBase} ${colLineClass} ${alignRight(col.key) ? "text-right" : ""}`}
+                    className={`${thBase} ${colLineCell} ${alignRight(col.key) ? "text-right" : ""}`}
                   >
                     {col.key === "actions" ? (
                       <span className="sr-only">{col.label}</span>
@@ -363,14 +364,11 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
             </thead>
             <tbody>
               {vehicles.map((v) => (
-                <tr
-                  key={v.id}
-                  className={`${rowLineClass} bg-transparent transition-colors hover:bg-zinc-900/50`}
-                >
+                <tr key={v.id} className="bg-transparent transition-colors hover:bg-zinc-900/50">
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={`${fleetTdClass} align-middle ${colLineClass} ${
+                      className={`${fleetTdClass} align-middle ${rowLineCell} ${colLineCell} ${
                         alignRight(col.key) ? "text-right" : ""
                       } ${col.key === "registration" ? "py-2.5" : ""}`}
                     >
