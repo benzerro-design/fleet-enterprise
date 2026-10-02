@@ -7,8 +7,6 @@ import {
   FleetDataTable,
   fleetTableClass,
   fleetTdClass,
-  fleetThClass,
-  fleetThRightClass,
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
 import { VehicleColumnPicker } from "@/components/fleet/VehicleColumnPicker";
@@ -240,9 +238,35 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
   const alignRight = (key: VehicleGridColumnKey) =>
     key === "actions" || key === "odometer" || key === "itp";
 
+  const rowLineClass = layout.rowLines ? "border-b border-zinc-800/80" : "border-b border-transparent";
+  const colLineClass = layout.colLines ? "border-r border-zinc-800/70 last:border-r-0" : "";
+  const thBase = layout.rowLines
+    ? "bg-zinc-950 px-3 py-2 text-left border-b border-zinc-800"
+    : "bg-zinc-950 px-3 py-2 text-left border-b border-zinc-800/40";
+
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-400">
+          <label className="inline-flex cursor-pointer items-center gap-2 hover:text-zinc-200">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/40"
+              checked={layout.rowLines}
+              onChange={(e) => persist({ ...layout, rowLines: e.target.checked })}
+            />
+            Linii orizontale
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2 hover:text-zinc-200">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/40"
+              checked={layout.colLines}
+              onChange={(e) => persist({ ...layout, colLines: e.target.checked })}
+            />
+            Linii verticale
+          </label>
+        </div>
         <button
           type="button"
           onClick={() => setShowColumns((v) => !v)}
@@ -326,7 +350,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
                 {columns.map((col) => (
                   <th
                     key={col.key}
-                    className={alignRight(col.key) ? fleetThRightClass : fleetThClass}
+                    className={`${thBase} ${colLineClass} ${alignRight(col.key) ? "text-right" : ""}`}
                   >
                     {col.key === "actions" ? (
                       <span className="sr-only">{col.label}</span>
@@ -341,14 +365,14 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
               {vehicles.map((v) => (
                 <tr
                   key={v.id}
-                  className="border-b border-zinc-800/70 bg-transparent transition-colors hover:bg-zinc-900/50"
+                  className={`${rowLineClass} bg-transparent transition-colors hover:bg-zinc-900/50`}
                 >
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={`${fleetTdClass} align-middle ${alignRight(col.key) ? "text-right" : ""} ${
-                        col.key === "registration" ? "py-2.5" : ""
-                      }`}
+                      className={`${fleetTdClass} align-middle ${colLineClass} ${
+                        alignRight(col.key) ? "text-right" : ""
+                      } ${col.key === "registration" ? "py-2.5" : ""}`}
                     >
                       {renderCell(col.key, v)}
                     </td>

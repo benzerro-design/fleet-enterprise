@@ -57,6 +57,37 @@ export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
       <p className="mb-2 text-[11px] text-zinc-500">
         Arată / ascunde și reordonare (↑ ↓). Preferința rămâne pe acest browser.
       </p>
+      <div className="mb-3 flex flex-wrap gap-x-4 gap-y-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+        <span className="w-full text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+          Delimitare
+        </span>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/40"
+            checked={layout.rowLines}
+            onChange={(e) => {
+              const next = { ...layout, rowLines: e.target.checked };
+              onChange(next);
+              writeVehicleGridLayout(next);
+            }}
+          />
+          Linii orizontale
+        </label>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-950 text-emerald-500 focus:ring-emerald-500/40"
+            checked={layout.colLines}
+            onChange={(e) => {
+              const next = { ...layout, colLines: e.target.checked };
+              onChange(next);
+              writeVehicleGridLayout(next);
+            }}
+          />
+          Linii verticale
+        </label>
+      </div>
       <ul className="max-h-72 space-y-1 overflow-y-auto">
         {layout.order.map((key) => {
           const def = VEHICLE_GRID_COLUMNS.find((c) => c.key === key);

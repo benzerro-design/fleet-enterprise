@@ -39,18 +39,22 @@ export const VEHICLE_GRID_COLUMNS: VehicleGridColumnDef[] = [
   { key: "actions", label: "Acțiuni", defaultVisible: true, canHide: false, width: "7.5rem" },
 ];
 
-/** v3 — coloană Utilizator (șofer alocat). */
+/** v3 — coloană Utilizator (șofer alocat). Linii grid = câmpuri opționale pe același obiect. */
 export const VEHICLE_GRID_STORAGE_KEY = "fleet-vehicle-grid-columns-v3";
 
 export type VehicleGridLayout = {
   order: VehicleGridColumnKey[];
   hidden: VehicleGridColumnKey[];
+  /** Linie fină orizontală între rânduri. */
+  rowLines: boolean;
+  /** Linie fină verticală între coloane. */
+  colLines: boolean;
 };
 
 export function defaultVehicleGridLayout(): VehicleGridLayout {
   const order = VEHICLE_GRID_COLUMNS.map((c) => c.key);
   const hidden = VEHICLE_GRID_COLUMNS.filter((c) => !c.defaultVisible).map((c) => c.key);
-  return { order, hidden };
+  return { order, hidden, rowLines: true, colLines: false };
 }
 
 export function visibleVehicleColumns(layout: VehicleGridLayout): VehicleGridColumnDef[] {
@@ -67,7 +71,7 @@ export function readVehicleGridLayout(): VehicleGridLayout {
   try {
     const raw = localStorage.getItem(VEHICLE_GRID_STORAGE_KEY);
     if (!raw) return defaultVehicleGridLayout();
-    const parsed = JSON.parse(raw) as VehicleGridLayout;
+    const parsed = JSON.parse(raw) as Partial<VehicleGridLayout>;
     const validKeys = new Set(VEHICLE_GRID_COLUMNS.map((c) => c.key));
     const order = (parsed.order ?? []).filter((k) => validKeys.has(k as VehicleGridColumnKey));
     const hidden = (parsed.hidden ?? []).filter((k) => validKeys.has(k as VehicleGridColumnKey));
@@ -77,6 +81,9 @@ export function readVehicleGridLayout(): VehicleGridLayout {
     return {
       order: order as VehicleGridColumnKey[],
       hidden: hidden as VehicleGridColumnKey[],
+      // Migrează layout-uri v3 vechi fără câmpuri noi — fără reset coloane.
+      rowLines: parsed.rowLines !== false,
+      colLines: parsed.colLines === true,
     };
   } catch {
     return defaultVehicleGridLayout();
