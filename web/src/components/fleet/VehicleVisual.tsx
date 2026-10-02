@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 
-type Size = "sm" | "md" | "lg" | "xl";
+type Size = "xs" | "sm" | "md" | "lg" | "xl";
 
 /** Dimensiuni full-bleed — fără padding interior. */
 const SIZE_BOX: Record<Size, { w: number; h: number }> = {
+  xs: { w: 24, h: 24 },
   sm: { w: 44, h: 44 },
   md: { w: 64, h: 48 },
   lg: { w: 120, h: 80 },
@@ -35,7 +36,7 @@ export function VehicleVisual({
   if (!src || failed) return null;
 
   const box = SIZE_BOX[size];
-  const radius = rounded === "full" ? "rounded-full" : "rounded-lg";
+  const radius = rounded === "full" ? "rounded-full" : size === "xs" ? "rounded" : "rounded-lg";
 
   return (
     <div

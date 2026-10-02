@@ -1,0 +1,115 @@
+"use client";
+
+import {
+  defaultVehicleGridLayout,
+  VEHICLE_GRID_COLUMNS,
+  type VehicleGridColumnKey,
+  type VehicleGridLayout,
+  writeVehicleGridLayout,
+} from "@/lib/vehicle-grid-columns";
+
+type Props = {
+  layout: VehicleGridLayout;
+  onChange: (layout: VehicleGridLayout) => void;
+  onClose: () => void;
+};
+
+export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
+  const hidden = new Set(layout.hidden);
+
+  function toggle(key: VehicleGridColumnKey) {
+    const def = VEHICLE_GRID_COLUMNS.find((c) => c.key === key);
+    if (!def?.canHide) return;
+    const nextHidden = new Set(layout.hidden);
+    if (nextHidden.has(key)) nextHidden.delete(key);
+    else nextHidden.add(key);
+    const next = { ...layout, hidden: [...nextHidden] };
+    onChange(next);
+    writeVehicleGridLayout(next);
+  }
+
+  function move(key: VehicleGridColumnKey, dir: -1 | 1) {
+    const order = [...layout.order];
+    const i = order.indexOf(key);
+    if (i < 0) return;
+    const j = i + dir;
+    if (j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    const next = { ...layout, order };
+    onChange(next);
+    writeVehicleGridLayout(next);
+  }
+
+  function reset() {
+    const next = defaultVehicleGridLayout();
+    onChange(next);
+    writeVehicleGridLayout(next);
+  }
+
+  return (
+    <div className="rounded-xl border border-zinc-700 bg-zinc-950 p-4 shadow-xl">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-medium text-zinc-100">Coloane listă vehicule</h3>
+        <button type="button" onClick={onClose} className="text-xs text-zinc-500 hover:text-zinc-300">
+          Închide
+        </button>
+      </div>
+      <p className="mb-2 text-[11px] text-zinc-500">
+        Arată / ascunde și reordonare (↑ ↓). Preferința rămâne pe acest browser.
+      </p>
+      <ul className="max-h-72 space-y-1 overflow-y-auto">
+        {layout.order.map((key) => {
+          const def = VEHICLE_GRID_COLUMNS.find((c) => c.key === key);
+          if (!def) return null;
+          const isHidden = hidden.has(key);
+          return (
+            <li
+              key={key}
+              className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-2 py-1.5 text-xs"
+            >
+              <span className="min-w-[7rem] font-medium text-zinc-300">{def.label}</span>
+              <div className="ml-auto flex gap-1">
+                <button
+                  type="button"
+                  className="rounded border border-zinc-700 px-1.5 py-0.5 hover:bg-zinc-800"
+                  onClick={() => move(key, -1)}
+                  aria-label={`Mută ${def.label} în sus`}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-zinc-700 px-1.5 py-0.5 hover:bg-zinc-800"
+                  onClick={() => move(key, 1)}
+                  aria-label={`Mută ${def.label} în jos`}
+                >
+                  ↓
+                </button>
+                {def.canHide ? (
+                  <button
+                    type="button"
+                    className={`rounded border px-1.5 py-0.5 ${
+                      isHidden ? "border-emerald-800 text-emerald-300" : "border-zinc-700 text-zinc-400"
+                    } hover:bg-zinc-800`}
+                    onClick={() => toggle(key)}
+                  >
+                    {isHidden ? "Arată" : "Ascunde"}
+                  </button>
+                ) : (
+                  <span className="px-1.5 py-0.5 text-[10px] text-zinc-600">obligatoriu</span>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <button
+        type="button"
+        onClick={reset}
+        className="mt-3 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800"
+      >
+        Reset layout
+      </button>
+    </div>
+  );
+}

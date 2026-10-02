@@ -1,18 +1,9 @@
 import Link from "next/link";
-import {
-  FleetDataTable,
-  fleetTableClass,
-  fleetTdClass,
-  fleetThClass,
-  fleetThRightClass,
-  fleetTheadClass,
-} from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
 import { DriverHomeView, type DriverHomeTrip } from "@/components/fleet/DriverHomeView";
-import { VehicleVisual } from "@/components/fleet/VehicleVisual";
+import { VehiclesDataGrid } from "@/components/fleet/VehiclesDataGrid";
 import {
   canWriteFleetOps,
   driverIdFromAuth,
@@ -242,153 +233,33 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
           </p>
         ) : (
           <>
-            <div className="space-y-3 md:hidden">
-              {vehicles.map((v) => (
-                <article key={v.id} className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40">
-                  {v.heroPhotoUrl ? (
-                    <div className="relative aspect-[16/10] w-full bg-zinc-950">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={v.heroPhotoUrl}
-                        alt={[v.brand, v.model, v.registrationNumber].filter(Boolean).join(" ")}
-                        className="absolute inset-0 h-full w-full object-cover"
-                      />
-                    </div>
-                  ) : null}
-                  <div className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-mono text-sm font-medium text-zinc-100">{v.registrationNumber}</p>
-                      {(v.brand || v.model) ? (
-                        <p className="mt-0.5 text-xs text-zinc-400">
-                          {[v.brand, v.model].filter(Boolean).join(" ")}
-                        </p>
-                      ) : null}
-                      <p className="mt-1 text-xs text-zinc-500">
-                        {v.clientId}
-                        {v.type ? ` · ${v.type}` : ""}
-                        {v.status ? ` · ${v.status}` : ""}
-                      </p>
-                      <p className="mt-2 font-mono text-xs text-zinc-300">
-                        {v.odometerKm.toLocaleString("ro-RO")} km
-                        {" · ITP "}
-                        {v.itpExpiresOn ? new Date(v.itpExpiresOn).toLocaleDateString("ro-RO") : "—"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Link
-                      href={`/fleet/vehicles/${v.id}`}
-                      className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-zinc-800"
-                    >
-                      Vezi
-                    </Link>
-                    {write ? (
-                      <>
-                        <Link
-                          href={`/fleet/vehicles/${v.id}/edit`}
-                          className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-                        >
-                          Editare
-                        </Link>
-                        <DeleteVehicleButton vehicleId={v.id} registrationNumber={v.registrationNumber} />
-                      </>
-                    ) : null}
-                  </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-            <div className="hidden md:block">
-            <FleetDataTable>
-                <table className={fleetTableClass}>
-                  <thead className={`${fleetTheadClass} tracking-wide`}>
-                    <tr>
-                      <th className={fleetThClass}>Nr. înmatriculare</th>
-                      <th className={fleetThClass}>Client</th>
-                      <th className={fleetThClass}>Tip</th>
-                      <th className={fleetThClass}>Status</th>
-                      <th className={fleetThClass}>Km</th>
-                      <th className={fleetThClass}>ITP expiră</th>
-                      <th className={fleetThRightClass}>Detaliu</th>
-                      {write ? <th className={fleetThRightClass}>Acțiuni</th> : null}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800">
-                    {vehicles.map((v) => (
-                      <tr key={v.id} className="bg-transparent">
-                        <td className={`${fleetTdClass} font-mono text-zinc-200`}>
-                          <div className="flex items-center gap-2">
-                            {v.heroPhotoUrl ? (
-                              <VehicleVisual
-                                photoUrl={v.heroPhotoUrl}
-                                alt={v.registrationNumber}
-                                size="sm"
-                              />
-                            ) : null}
-                            <span>{v.registrationNumber}</span>
-                          </div>
-                        </td>
-                        <td className={`${fleetTdClass} text-zinc-300`}>{v.clientId}</td>
-                        <td className={`${fleetTdClass} text-zinc-300`}>{v.type}</td>
-                        <td className={`${fleetTdClass} text-zinc-300`}>{v.status}</td>
-                        <td className={`${fleetTdClass} font-mono text-zinc-300`}>{v.odometerKm}</td>
-                        <td className={`${fleetTdClass} font-mono text-zinc-300`}>
-                          {v.itpExpiresOn ? new Date(v.itpExpiresOn).toLocaleDateString("ro-RO") : "—"}
-                        </td>
-                        <td className={`${fleetTdClass} text-right`}>
-                          <Link
-                            href={`/fleet/vehicles/${v.id}`}
-                            className="text-emerald-400 underline hover:text-emerald-300"
-                          >
-                            Vezi
-                          </Link>
-                        </td>
-                        {write ? (
-                          <td className={fleetTdClass}>
-                            <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
-                              <Link
-                                href={`/fleet/vehicles/${v.id}/edit`}
-                                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-                              >
-                                Editare
-                              </Link>
-                              <DeleteVehicleButton vehicleId={v.id} registrationNumber={v.registrationNumber} />
-                            </div>
-                          </td>
-                        ) : null}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </FleetDataTable>
-            </div>
+            <VehiclesDataGrid vehicles={vehicles} canWrite={write} />
 
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
-                <p>
-                  Pagina {page} din {totalPages} · {total} vehicule
-                </p>
-                <div className="flex gap-2">
-                  {page > 1 ? (
-                    <Link
-                      href={withPage(page - 1)}
-                      className="rounded-lg border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900"
-                    >
-                      ← Anterior
-                    </Link>
-                  ) : null}
-                  {page < totalPages ? (
-                    <Link
-                      href={withPage(page + 1)}
-                      className="rounded-lg border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900"
-                    >
-                      Următor →
-                    </Link>
-                  ) : null}
-                </div>
+              <p>
+                Pagina {page} din {totalPages} · {total} vehicule
+              </p>
+              <div className="flex gap-2">
+                {page > 1 ? (
+                  <Link
+                    href={withPage(page - 1)}
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900"
+                  >
+                    ← Anterior
+                  </Link>
+                ) : null}
+                {page < totalPages ? (
+                  <Link
+                    href={withPage(page + 1)}
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900"
+                  >
+                    Următor →
+                  </Link>
+                ) : null}
               </div>
-            </>
-          )}
+            </div>
+          </>
+        )}
       </FleetListPageLayout>
     </FleetPageMain>
   );
