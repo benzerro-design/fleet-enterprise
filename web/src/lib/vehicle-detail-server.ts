@@ -44,6 +44,8 @@ export type CostListPayload = {
     invoiceNumber: string | null;
     invoiceDate: string | null;
     incurredOn: string;
+    vehicleEquipmentId?: string | null;
+    vehicleEquipmentLabel?: string | null;
   }>;
   total: number;
 };

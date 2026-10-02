@@ -10,6 +10,7 @@ import {
   fleetThRightClass,
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
+import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import {
   matchesDateRange,
   matchesText,
@@ -31,6 +32,8 @@ export type VehicleCostRow = {
   invoiceNumber: string | null;
   invoiceDate: string | null;
   incurredOn: string;
+  vehicleEquipmentId?: string | null;
+  vehicleEquipmentLabel?: string | null;
 };
 
 type Props = {
@@ -141,6 +144,7 @@ export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
             <thead className={fleetTheadClass}>
               <tr>
                 <th className={fleetThClass}>Categorie</th>
+                <th className={fleetThClass}>Atribuit</th>
                 <th className={fleetThClass}>Data</th>
                 <th className={fleetThClass}>Furnizor</th>
                 <th className={fleetThClass}>Km</th>
@@ -154,6 +158,9 @@ export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
               {filtered.map((row) => (
                 <tr key={row.id} className="bg-zinc-900/30">
                   <td className={`${fleetTdClass} text-zinc-200`}>{row.category}</td>
+                  <td className={fleetTdClass}>
+                    <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
+                  </td>
                   <td className={`${fleetTdClass} text-zinc-300`}>
                     {new Date(row.incurredOn).toLocaleDateString("ro-RO")}
                   </td>

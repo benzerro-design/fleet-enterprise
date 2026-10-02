@@ -29,6 +29,7 @@ import {
 import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
 import { OpsOdometerSyncNotice } from "@/components/fleet/OpsOdometerSyncNotice";
 import { OpsOdometerTimelineConfirm } from "@/components/fleet/OpsOdometerTimelineConfirm";
+import { OpsVehicleEquipmentField } from "@/components/fleet/OpsVehicleEquipmentField";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
 import { useOdometerTimelineConfirm } from "@/lib/use-odometer-timeline-confirm";
@@ -59,6 +60,8 @@ type CostRecord = {
   reminderOffsetsKm?: number[] | null;
   reminderMenuSyncEnabled?: boolean;
   linkedDocumentId?: string | null;
+  vehicleEquipmentId?: string | null;
+  vehicleEquipmentLabel?: string | null;
 };
 
 type VehicleOption = {
@@ -83,7 +86,13 @@ type TripOption = {
 type DriverPortalOpts = { driverPortal?: boolean };
 
 type Props =
-  | ({ mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string; defaultCategory?: string } & DriverPortalOpts)
+  | ({
+      mode: "create";
+      vehicles: VehicleOption[];
+      defaultVehicleId?: string;
+      defaultCategory?: string;
+      defaultEquipmentId?: string;
+    } & DriverPortalOpts)
   | ({ mode: "edit"; entryId: string; initial: CostRecord; vehicles: VehicleOption[] } & DriverPortalOpts);
 
 function toDateInput(iso: string): string {
@@ -139,6 +148,7 @@ export function CostForm(props: Props) {
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
         reminderOffsetsKm: [] as number[],
+        vehicleEquipmentId: props.defaultEquipmentId ?? "",
       };
     }
     const r = props.initial;
@@ -161,6 +171,7 @@ export function CostForm(props: Props) {
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
       reminderOffsetsKm: r.reminderOffsetsKm?.length ? [...r.reminderOffsetsKm] : [],
+      vehicleEquipmentId: r.vehicleEquipmentId ?? "",
     };
   }, [props]);
 
@@ -189,6 +200,7 @@ export function CostForm(props: Props) {
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
   const [reminderOffsetsKm, setReminderOffsetsKm] = useState<number[]>(initial.reminderOffsetsKm);
+  const [vehicleEquipmentId, setVehicleEquipmentId] = useState(initial.vehicleEquipmentId);
   const [constraintMode, setConstraintMode] = useState<ReminderConstraintMode>(() =>
     inferReminderConstraintMode({ dueDate: initial.nextDueOn, dueOdometerKm: initial.dueOdometerKm }),
   );
@@ -353,6 +365,7 @@ export function CostForm(props: Props) {
       dueOdometerKm: kmDue,
       reminderOffsetsKm: kmOffsets,
       syncReminderAction: configured ? syncReminderAction : false,
+      vehicleEquipmentId: vehicleEquipmentId.trim() || null,
       ...(alsoCreateDocument && !isEdit && !driverPortal
         ? {
             linkedDocument: {
@@ -540,6 +553,16 @@ export function CostForm(props: Props) {
           </div>
         </OpsFormPrimaryBand>
 
+        <OpsFormSection number={2} title="Atribuire">
+          <OpsVehicleEquipmentField
+            vehicleId={boundVehicleId}
+            value={vehicleEquipmentId}
+            onChange={setVehicleEquipmentId}
+            disabled={pending}
+            subject="cost"
+          />
+        </OpsFormSection>
+
         <OpsFormSection number={3} title="Detalii operaționale">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {isFuel ? (
@@ -720,6 +743,13 @@ export function CostForm(props: Props) {
           locked={isEdit || vehicleLocked}
         />
       ) : null}
+      <OpsVehicleEquipmentField
+        vehicleId={boundVehicleId}
+        value={vehicleEquipmentId}
+        onChange={setVehicleEquipmentId}
+        disabled={pending}
+        subject="cost"
+      />
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Categorie</label>
         {categorySelect}

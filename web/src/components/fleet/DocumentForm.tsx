@@ -505,6 +505,7 @@ export function DocumentForm(props: Props) {
               value={vehicleEquipmentId}
               onChange={setVehicleEquipmentId}
               disabled={pending}
+              subject="document"
             />
           </div>
         </OpsFormPrimaryBand>
@@ -584,6 +585,7 @@ export function DocumentForm(props: Props) {
         value={vehicleEquipmentId}
         onChange={setVehicleEquipmentId}
         disabled={pending}
+        subject="document"
       />
 
       <div className="space-y-2">

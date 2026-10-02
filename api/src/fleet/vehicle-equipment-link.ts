@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
- * FLEET-027: FK opțional document/mentenanță → echipare pe același vehicul.
+ * FLEET-027: FK opțional document/mentenanță/cost → echipare pe același vehicul.
  * `undefined` = nu schimba; `null` / `""` = scoate legătura.
  */
 export async function resolveVehicleEquipmentIdForVehicle(

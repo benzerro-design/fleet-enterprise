@@ -3,6 +3,7 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteMaintenanceButton } from "@/components/fleet/DeleteMaintenanceButton";
+import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { maintenanceBrowserBase } from "@/lib/fleet-api";
 import { maintenanceCostAllocationLabel } from "@/lib/maintenance-cost-allocation";
@@ -36,6 +37,8 @@ type MaintenanceRow = {
   odometerKm: number | null;
   notes: string | null;
   costCents: number | null;
+  vehicleEquipmentId?: string | null;
+  vehicleEquipmentLabel?: string | null;
 };
 
 type Payload = { items: MaintenanceRow[]; total: number; page: number; pageSize: number };
@@ -211,7 +214,10 @@ export default async function MaintenancePage({ searchParams }: Props) {
                 <article key={row.id} className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <h2 className="text-base font-semibold text-zinc-100">{row.title}</h2>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-base font-semibold text-zinc-100">{row.title}</h2>
+                        <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
+                      </div>
                       <p className="mt-1 text-xs text-zinc-400">{maintenanceCostAllocationLabel(row.costAllocationCode)}</p>
                       <p className="mt-1 text-xs text-zinc-500" data-fleet-list-extra>
                         Furnizor: {row.provider ?? "—"}

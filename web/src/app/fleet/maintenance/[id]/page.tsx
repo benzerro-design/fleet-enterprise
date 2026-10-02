@@ -2,6 +2,7 @@
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteMaintenanceButton } from "@/components/fleet/DeleteMaintenanceButton";
+import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { isDamageClaimAllocation, maintenanceCostAllocationLabel } from "@/lib/maintenance-cost-allocation";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -27,6 +28,8 @@ type MaintenanceRow = {
   potentialCostCents?: number | null;
   damageClaimFileNumber?: string | null;
   insurerName?: string | null;
+  vehicleEquipmentId?: string | null;
+  vehicleEquipmentLabel?: string | null;
 };
 
 async function getEntry(id: string): Promise<MaintenanceRow | null> {
@@ -61,6 +64,12 @@ export default async function MaintenanceDetailPage({ params }: { params: Promis
         </div>
         <dl className="grid gap-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:grid-cols-2">
           <div><dt className="text-xs uppercase text-zinc-500">Număr auto</dt><dd className="mt-1 font-mono">{row.registrationNumber}</dd></div>
+          <div>
+            <dt className="text-xs uppercase text-zinc-500">Atribuit la</dt>
+            <dd className="mt-1">
+              <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
+            </dd>
+          </div>
           <div><dt className="text-xs uppercase text-zinc-500">Client</dt><dd className="mt-1">{row.clientId}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Tenant</dt><dd className="mt-1 font-mono">{row.tenantSlug}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Alocare costuri</dt><dd className="mt-1 text-zinc-200">{maintenanceCostAllocationLabel(row.costAllocationCode)}</dd></div>

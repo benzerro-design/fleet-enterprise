@@ -2,6 +2,7 @@
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
+import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import { canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { isDriverWritableCostCategory } from "@/lib/cost-categories";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -24,6 +25,8 @@ type CostRow = {
   notes: string | null;
   tripId?: string | null;
   tripReference?: string | null;
+  vehicleEquipmentId?: string | null;
+  vehicleEquipmentLabel?: string | null;
 };
 
 async function getEntry(id: string): Promise<CostRow | null> {
@@ -60,6 +63,12 @@ export default async function CostDetailPage({ params }: { params: Promise<{ id:
         </div>
         <dl className="grid gap-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:grid-cols-2">
           <div><dt className="text-xs uppercase text-zinc-500">Număr auto</dt><dd className="mt-1 font-mono">{row.registrationNumber}</dd></div>
+          <div>
+            <dt className="text-xs uppercase text-zinc-500">Atribuit la</dt>
+            <dd className="mt-1">
+              <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
+            </dd>
+          </div>
           <div><dt className="text-xs uppercase text-zinc-500">Client</dt><dd className="mt-1">{row.clientId}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Tenant</dt><dd className="mt-1 font-mono">{row.tenantSlug}</dd></div>
           <div><dt className="text-xs uppercase text-zinc-500">Data</dt><dd className="mt-1">{new Date(row.incurredOn).toLocaleString("ro-RO")}</dd></div>

@@ -166,6 +166,9 @@ function assertCreateCostDto(body: unknown): CreateCostInput {
     syncReminderAction:
       'syncReminderAction' in body ? optionalBoolean(body.syncReminderAction) : undefined,
     linkedDocument: parseLinkedDocument(body.linkedDocument),
+    supplierId: 'supplierId' in body ? optionalNullableString(body.supplierId) : undefined,
+    vehicleEquipmentId:
+      'vehicleEquipmentId' in body ? optionalNullableString(body.vehicleEquipmentId) : undefined,
   };
 }
 
@@ -224,6 +227,12 @@ function assertPatchCostDto(body: unknown): PatchCostInput {
   }
   if ('syncReminderAction' in body) {
     dto.syncReminderAction = optionalBoolean(body.syncReminderAction);
+  }
+  if ('supplierId' in body) {
+    dto.supplierId = optionalNullableString(body.supplierId);
+  }
+  if ('vehicleEquipmentId' in body) {
+    dto.vehicleEquipmentId = optionalNullableString(body.vehicleEquipmentId);
   }
 
   if (Object.keys(dto).length === 0) {

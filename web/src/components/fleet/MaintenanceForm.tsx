@@ -423,6 +423,7 @@ export function MaintenanceForm(props: Props) {
               value={vehicleEquipmentId}
               onChange={setVehicleEquipmentId}
               disabled={pending}
+              subject="intervenție"
             />
           </div>
           {isDauna ? (
@@ -567,6 +568,7 @@ export function MaintenanceForm(props: Props) {
         value={vehicleEquipmentId}
         onChange={setVehicleEquipmentId}
         disabled={pending}
+        subject="intervenție"
       />
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Titlu</label>

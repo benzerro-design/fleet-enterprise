@@ -10,6 +10,7 @@ import {
   fleetThRightClass,
   fleetTheadClass,
 } from "@/components/fleet/fleet-data-table";
+import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import {
   matchesDateRange,
   matchesText,
@@ -30,6 +31,8 @@ export type VehicleMaintenanceRow = {
   performedAt: string | null;
   odometerKm: number | null;
   costCents: number | null;
+  vehicleEquipmentId?: string | null;
+  vehicleEquipmentLabel?: string | null;
 };
 
 type Props = {
@@ -147,6 +150,7 @@ export function VehicleMaintenancePanel({ items, totalInDb, regQs }: Props) {
             <thead className={fleetTheadClass}>
               <tr>
                 <th className={fleetThClass}>Titlu</th>
+                <th className={fleetThClass}>Atribuit</th>
                 <th className={fleetThClass}>Alocare</th>
                 <th className={fleetThClass}>Furnizor</th>
                 <th className={fleetThClass}>Data</th>
@@ -160,6 +164,9 @@ export function VehicleMaintenancePanel({ items, totalInDb, regQs }: Props) {
               {filtered.map((row) => (
                 <tr key={row.id} className="bg-zinc-900/30">
                   <td className={`${fleetTdClass} text-zinc-200`}>{row.title}</td>
+                  <td className={fleetTdClass}>
+                    <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
+                  </td>
                   <td className={`max-w-[9rem] truncate ${fleetTdClass} text-xs text-zinc-400`}>
                     {maintenanceCostAllocationLabel(row.costAllocationCode)}
                   </td>

@@ -26,6 +26,7 @@ import {
 } from './reminder-sync';
 import { defaultDocumentTypeForCost } from './document-cost-link';
 import { isDocumentTypeCode } from './document-types';
+import { resolveVehicleEquipmentIdForVehicle } from '../fleet/vehicle-equipment-link';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -58,6 +59,8 @@ export type CreateCostInput = {
     fileUrl?: string | null;
     fileName?: string | null;
   } | null;
+  /** FLEET-027: cost pe echipare (null = autovehicul). */
+  vehicleEquipmentId?: string | null;
 };
 
 export type PatchCostInput = Partial<CreateCostInput>;
@@ -235,6 +238,8 @@ function toCostRow(row: {
   reminderOffsetsKm: unknown;
   reminderMenuSyncEnabled: boolean;
   vehicleDocumentId?: string | null;
+  vehicleEquipmentId?: string | null;
+  vehicleEquipment?: { id: string; label: string } | null;
   vehicle: { registrationNumber: string; client: { code: string } };
   tenant: { slug: string };
   trip?: { id: string; reference: string | null } | null;
@@ -265,6 +270,8 @@ function toCostRow(row: {
     reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
     reminderMenuSyncEnabled: row.reminderMenuSyncEnabled,
     linkedDocumentId: row.vehicleDocumentId ?? null,
+    vehicleEquipmentId: row.vehicleEquipmentId ?? row.vehicleEquipment?.id ?? null,
+    vehicleEquipmentLabel: row.vehicleEquipment?.label ?? null,
   };
 }
 
@@ -272,6 +279,7 @@ const costRowInclude = {
   vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
   tenant: { select: { slug: true } },
   trip: { select: { id: true, reference: true } },
+  vehicleEquipment: { select: { id: true, label: true } },
 } as const;
 
 @Injectable()
@@ -406,6 +414,12 @@ export class CostsService {
       dto.provider,
     );
 
+    const vehicleEquipmentId = await resolveVehicleEquipmentIdForVehicle(
+      this.prisma,
+      dto.vehicleId,
+      dto.vehicleEquipmentId,
+    );
+
     const row = await this.prisma.costEntry.create({
       data: {
         tenantId: tenant.id,
@@ -430,6 +444,7 @@ export class CostsService {
         dueOdometerKm: dto.dueOdometerKm ?? null,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
         reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
+        vehicleEquipmentId: vehicleEquipmentId ?? null,
       },
       include: costRowInclude,
     });
@@ -587,6 +602,12 @@ export class CostsService {
       );
     }
 
+    const vehicleEquipmentId = await resolveVehicleEquipmentIdForVehicle(
+      this.prisma,
+      before.vehicleId,
+      dto.vehicleEquipmentId,
+    );
+
     const data: Prisma.CostEntryUncheckedUpdateManyInput = {
       category: dto.category !== undefined ? dto.category.trim() : undefined,
       provider: providerPatch !== undefined ? providerPatch : dto.provider,
@@ -612,6 +633,7 @@ export class CostsService {
       dueOdometerKm: dto.dueOdometerKm,
       reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
       reminderMenuSyncEnabled: reminderMenuSyncEnabledPatchValue(dto.syncReminderAction),
+      ...(vehicleEquipmentId !== undefined ? { vehicleEquipmentId } : {}),
     };
 
     const r = await this.prisma.costEntry.updateMany({

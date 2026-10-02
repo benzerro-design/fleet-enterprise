@@ -11,6 +11,7 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
+import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import { canWriteCosts, getAuthMeResult } from "@/lib/auth-server";
 import { costsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
@@ -44,6 +45,8 @@ type CostRow = {
   incurredOn: string;
   notes: string | null;
   linkedDocumentId?: string | null;
+  vehicleEquipmentId?: string | null;
+  vehicleEquipmentLabel?: string | null;
 };
 
 type Payload = { items: CostRow[]; total: number; page: number; pageSize: number };
@@ -231,6 +234,7 @@ export default async function CostsPage({ searchParams }: Props) {
                 <thead className={fleetTheadClass}>
                   <tr>
                     <th className={fleetThClass}>Categorie</th>
+                    <th className={fleetThClass}>Atribuit</th>
                     <th className={fleetThClass}>Nr. auto</th>
                     <th className={fleetThClass}>Client</th>
                     <th className={fleetThClass}>Furnizor</th>
@@ -248,6 +252,9 @@ export default async function CostsPage({ searchParams }: Props) {
                   {data.items.map((row) => (
                     <tr key={row.id} className="bg-zinc-900/30">
                       <td className={fleetTdClass}>{row.category}</td>
+                      <td className={fleetTdClass}>
+                        <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
+                      </td>
                       <td className={`${fleetTdClass} font-mono`}>{row.registrationNumber}</td>
                       <td className={fleetTdClass}>{row.clientId}</td>
                       <td className={fleetTdClass}>{row.provider ?? "—"}</td>
