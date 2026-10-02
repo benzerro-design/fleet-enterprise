@@ -201,7 +201,7 @@ export function FleetShell({
 
         {/* Mobile bottom bar */}
         <nav
-          className="fleet-chrome fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-zinc-800/95 backdrop-blur print:hidden lg:hidden"
+          className="fleet-chrome fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-zinc-800/95 print:hidden lg:hidden"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
           aria-label="Navigare rapidă"
         >

@@ -343,7 +343,7 @@ export function TicketDataGrid({
       </div>
 
       {enableBulk && selected.size > 0 ? (
-        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-100 backdrop-blur">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-100">
           <span className="font-medium">{selected.size} selectate</span>
           <button
             type="button"

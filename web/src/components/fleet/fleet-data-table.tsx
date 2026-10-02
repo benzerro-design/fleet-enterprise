@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
 
-/** ~15–20% mai compact decât px-4 py-3; folosit pe toate listele tabel. */
-export const fleetThClass =
-  "sticky top-0 z-10 bg-zinc-950 px-3 py-2 text-left shadow-[inset_0_-1px_0_0_rgb(39_39_42)]";
+/**
+ * Antet tabel — fără position:sticky.
+ * Sticky + overflow + border-radius pe stack creează frameuri „fantomă” în Chrome.
+ */
+export const fleetThClass = "bg-zinc-950 px-3 py-2 text-left border-b border-zinc-800";
 export const fleetThRightClass = `${fleetThClass} text-right`;
 export const fleetTdClass = "px-3 py-2";
 export const fleetTableClass =
@@ -13,15 +15,13 @@ export const fleetTheadClass = "text-xs uppercase text-zinc-500";
 type FleetDataTableProps = {
   children: ReactNode;
   className?: string;
-  /** Panouri în secțiuni cu overflow:hidden — scroll intern + sticky în cutie. */
+  /** Panouri în secțiuni — scroll intern (fără sticky th). */
   contained?: boolean;
 };
 
 /**
  * Scroll orizontal pe tabele late.
- * Fără border/radius pe lista principală — `FleetListPageLayout` (`listSurface`) e singurul frame,
- * ca să nu apară „frame în frame”.
- * `contained`: border propriu pentru panouri embed (profil vehicul etc.).
+ * Fără border/radius pe lista principală — surface-ul din layout e singurul frame.
  */
 export function FleetDataTable({ children, className = "", contained = false }: FleetDataTableProps) {
   if (contained) {
@@ -34,5 +34,5 @@ export function FleetDataTable({ children, className = "", contained = false }: 
     );
   }
 
-  return <div className={`overflow-x-auto ${className}`.trim()}>{children}</div>;
+  return <div className={`min-w-0 overflow-x-auto ${className}`.trim()}>{children}</div>;
 }
