@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DriverAllocationBoard } from "@/components/fleet/DriverAllocationBoard";
+import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import type { DriverListPayload } from "@/lib/drivers-api";
@@ -48,24 +49,31 @@ export default async function DriverAllocationBoardPage() {
 
   return (
     <FleetPageMain fill>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Clienți & CRM</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Alocare șoferi</h1>
-          <p className="mt-3 max-w-2xl text-zinc-400">
-            Vedere flotă: cine e pe ce vehicul. Un vehicul = un șofer activ; alocarea nouă închide
-            automat alocarea anterioară pe același vehicul.
-          </p>
-        </div>
-        <Link
-          href="/fleet/drivers"
-          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-        >
-          ← Lista șoferi
-        </Link>
-      </div>
-
-      <DriverAllocationBoard vehicles={vehicles} drivers={drivers} canWrite={write} />
+      <FleetListPageLayout
+        densityToolbar={false}
+        header={
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">
+                Clienți & CRM
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Alocare șoferi</h1>
+              <p className="mt-3 max-w-2xl text-zinc-400">
+                Vedere flotă: cine e pe ce vehicul. Un vehicul = un șofer activ; alocarea nouă închide
+                automat alocarea anterioară pe același vehicul.
+              </p>
+            </div>
+            <Link
+              href="/fleet/drivers"
+              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+            >
+              ← Lista șoferi
+            </Link>
+          </div>
+        }
+      >
+        <DriverAllocationBoard vehicles={vehicles} drivers={drivers} canWrite={write} />
+      </FleetListPageLayout>
     </FleetPageMain>
   );
 }
