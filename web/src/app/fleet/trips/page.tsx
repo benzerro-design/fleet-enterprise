@@ -590,7 +590,7 @@ export default async function TripsPage({ searchParams }: Props) {
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
                   {data.items.map((row) => (
-                    <tr key={row.id} className="bg-zinc-900/30">
+                    <tr key={row.id} className="bg-transparent">
                       <td className={`${fleetTdClass} font-mono`}>{row.reference ?? "—"}</td>
                       <td className={`${fleetTdClass} font-mono`}>{row.registrationNumber}</td>
                       <td className={fleetTdClass}>{row.clientId}</td>

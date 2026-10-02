@@ -230,7 +230,7 @@ export default async function FleetAuditPage({ searchParams }: Props) {
                               ? "Deschide costul"
                               : null;
                     return (
-                      <tr key={row.id} className="bg-zinc-900/30 align-top">
+                      <tr key={row.id} className="bg-transparent align-top">
                         <td className={`whitespace-nowrap ${fleetTdClass} text-xs text-zinc-400`}>
                           {new Date(row.createdAt).toLocaleString("ro-RO")}
                         </td>

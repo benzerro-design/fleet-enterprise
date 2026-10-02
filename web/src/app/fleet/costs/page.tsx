@@ -250,7 +250,7 @@ export default async function CostsPage({ searchParams }: Props) {
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
                   {data.items.map((row) => (
-                    <tr key={row.id} className="bg-zinc-900/30">
+                    <tr key={row.id} className="bg-transparent">
                       <td className={fleetTdClass}>{row.category}</td>
                       <td className={fleetTdClass}>
                         <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />

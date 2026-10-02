@@ -23,8 +23,8 @@ type FleetListPageLayoutProps = {
 };
 
 /**
- * Layout listă operațională: filtre vizibile permanent (sticky), conținutul de dedesubt scroll-ează.
- * PLAT-007: sticky pe canvas; densitate listă centralizată pe tot produsul (Fleet shell).
+ * Layout listă operațională: header + filtre fixe; lista scroll-ează dedesubt.
+ * PLAT-007: un singur surface pe listă (fără sticky/blur pe filtre — evita frameuri intercalate).
  */
 export function FleetListPageLayout({
   header,
@@ -41,9 +41,7 @@ export function FleetListPageLayout({
   return (
     <div className="flex min-h-0 flex-1 flex-col" style={{ gap: "var(--fleet-gap)" }}>
       {header ? <div className="shrink-0 space-y-3">{header}</div> : null}
-      {filters ? (
-        <div className="fleet-canvas sticky top-0 z-20 shrink-0 backdrop-blur-sm">{filters}</div>
-      ) : null}
+      {filters ? <div className="shrink-0">{filters}</div> : null}
       {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
       <div className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col`}>
         {listSurface ? (

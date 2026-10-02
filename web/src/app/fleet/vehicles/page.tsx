@@ -316,7 +316,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                   </thead>
                   <tbody className="divide-y divide-zinc-800">
                     {vehicles.map((v) => (
-                      <tr key={v.id} className="bg-zinc-900/30">
+                      <tr key={v.id} className="bg-transparent">
                         <td className={`${fleetTdClass} font-mono text-zinc-200`}>
                           <div className="flex items-center gap-2">
                             {v.heroPhotoUrl ? (
