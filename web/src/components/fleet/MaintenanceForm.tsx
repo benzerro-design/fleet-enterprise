@@ -30,6 +30,7 @@ import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
 import { OpsOdometerSyncNotice } from "@/components/fleet/OpsOdometerSyncNotice";
 import { OpsOdometerTimelineConfirm } from "@/components/fleet/OpsOdometerTimelineConfirm";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
+import { OpsVehicleEquipmentField } from "@/components/fleet/OpsVehicleEquipmentField";
 import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
 import { useOdometerTimelineConfirm } from "@/lib/use-odometer-timeline-confirm";
 import type { VehicleOdometerSyncPayload } from "@/lib/vehicle-odometer-sync";
@@ -58,6 +59,7 @@ type MaintenanceRecord = {
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
   reminderMenuSyncEnabled?: boolean;
+  vehicleEquipmentId?: string | null;
 };
 
 type VehicleOption = {
@@ -68,7 +70,12 @@ type VehicleOption = {
 };
 
 type Props =
-  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string }
+  | {
+      mode: "create";
+      vehicles: VehicleOption[];
+      defaultVehicleId?: string;
+      defaultEquipmentId?: string;
+    }
   | { mode: "edit"; entryId: string; initial: MaintenanceRecord; vehicles: VehicleOption[] };
 
 function toDateInputOrEmpty(iso: string | null): string {
@@ -120,6 +127,7 @@ export function MaintenanceForm(props: Props) {
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
         reminderOffsetsKm: [] as number[],
+        vehicleEquipmentId: props.defaultEquipmentId ?? "",
       };
     }
     const r = props.initial;
@@ -138,10 +146,13 @@ export function MaintenanceForm(props: Props) {
       costCents: r.costCents != null ? formatRonFromCents(r.costCents) : "",
       warrantyRepair: r.warrantyRepair ?? false,
       potentialCostCents: r.potentialCostCents != null ? formatRonFromCents(r.potentialCostCents) : "",
+      damageClaimFileNumber: r.damageClaimFileNumber ?? "",
+      insurerName: r.insurerName ?? "",
       nextDueOn: toDateInputOrEmpty(r.nextDueOn ?? null),
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
       reminderOffsetsKm: r.reminderOffsetsKm?.length ? [...r.reminderOffsetsKm] : [],
+      vehicleEquipmentId: r.vehicleEquipmentId ?? "",
     };
   }, [props]);
 
@@ -170,6 +181,7 @@ export function MaintenanceForm(props: Props) {
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
   const [reminderOffsetsKm, setReminderOffsetsKm] = useState<number[]>(initial.reminderOffsetsKm);
+  const [vehicleEquipmentId, setVehicleEquipmentId] = useState(initial.vehicleEquipmentId);
   const [constraintMode, setConstraintMode] = useState<ReminderConstraintMode>(() =>
     inferReminderConstraintMode({ dueDate: initial.nextDueOn, dueOdometerKm: initial.dueOdometerKm }),
   );
@@ -293,6 +305,7 @@ export function MaintenanceForm(props: Props) {
       dueOdometerKm: kmDue,
       reminderOffsetsKm: kmOffsets,
       syncReminderAction: configured ? syncReminderAction : false,
+      vehicleEquipmentId: vehicleEquipmentId.trim() || null,
     };
 
     const activeVehicleId = isEdit ? initial.vehicleId : boundVehicleId;
@@ -403,6 +416,14 @@ export function MaintenanceForm(props: Props) {
             <OpsFormField label="Data efectuării">
               <input type="date" value={performedAt} onChange={(e) => setPerformedAt(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
+          </div>
+          <div className="mt-3">
+            <OpsVehicleEquipmentField
+              vehicleId={boundVehicleId}
+              value={vehicleEquipmentId}
+              onChange={setVehicleEquipmentId}
+              disabled={pending}
+            />
           </div>
           {isDauna ? (
             <div className="mt-3 grid grid-cols-1 gap-3 rounded-lg border border-rose-900/30 bg-rose-950/10 p-3 sm:grid-cols-2">
@@ -541,6 +562,12 @@ export function MaintenanceForm(props: Props) {
           locked={isEdit || vehicleLocked}
         />
       ) : null}
+      <OpsVehicleEquipmentField
+        vehicleId={boundVehicleId}
+        value={vehicleEquipmentId}
+        onChange={setVehicleEquipmentId}
+        disabled={pending}
+      />
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Titlu</label>
         <input required value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />

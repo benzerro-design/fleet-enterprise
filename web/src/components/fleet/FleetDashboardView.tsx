@@ -174,6 +174,12 @@ export function FleetDashboardView({ data, canWriteTickets }: Props) {
                           ? "în 1 zi"
                           : `în ${row.daysUntilExpiry} zile`}
                     </p>
+                    <Link
+                      href={`/fleet/tickets/new?vehicleId=${encodeURIComponent(row.vehicleId)}&subject=${encodeURIComponent("ITP")}`}
+                      className="mt-1 inline-block text-xs text-sky-400 hover:text-sky-300"
+                    >
+                      Programează ITP
+                    </Link>
                   </div>
                 </li>
               ))}

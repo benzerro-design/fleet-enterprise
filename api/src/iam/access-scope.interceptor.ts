@@ -25,6 +25,7 @@ export class AccessScopeInterceptor implements NestInterceptor {
         email: 'e2e@local',
         displayName: 'E2E',
         membershipRole: MembershipRole.tenant_admin,
+        tenantFunctionalProfile: null,
         isTenantWide: true,
         clientMemberships: [],
         supplierMemberships: [],

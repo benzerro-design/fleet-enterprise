@@ -29,6 +29,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
+import { assertSupplierSlotCapacity } from './appointment-supplier-capacity.utils';
 import { effectiveDriverCanNegotiate, effectiveRequireDriverAck, parseClientIamSettings } from '../iam/client-iam-settings';
 import {
   fleetCounterFromAccess,
@@ -314,6 +315,11 @@ export class AppointmentsService {
     }
     if (params.status) {
       parts.push({ status: params.status });
+    }
+    if (params.workflowType?.trim()) {
+      parts.push({
+        serviceCase: { workflowType: params.workflowType.trim() as ServiceCaseWorkflowType },
+      });
     }
 
     return { AND: parts };
@@ -609,6 +615,15 @@ export class AppointmentsService {
       supplierId = dto.supplierId;
     }
 
+    if (supplierId) {
+      await assertSupplierSlotCapacity(this.prisma, {
+        tenantId: tenant.id,
+        supplierId,
+        scheduledAt,
+        durationMin,
+      });
+    }
+
     if (partner && !dto.serviceCaseId && !dto.sourceTicketId) {
       throw new BadRequestException(
         'Partenerul programează din dosarul WO existent (deschide calendarul din comandă).',
@@ -656,12 +671,24 @@ export class AppointmentsService {
           throw new ForbiddenException('Nu poți programa pe un dosar al altui furnizor');
         }
       } else if (!serviceCase) {
+        let workflowType: ServiceCaseWorkflowType = ServiceCaseWorkflowType.repair;
+        if (dto.workflowType === 'itp' || dto.workflowType === ServiceCaseWorkflowType.itp) {
+          workflowType = ServiceCaseWorkflowType.itp;
+        } else if (dto.sourceTicketId) {
+          const ticket = await tx.crmTicket.findFirst({
+            where: { id: dto.sourceTicketId, tenantId: tenant.id },
+            select: { ticketType: true },
+          });
+          if (ticket?.ticketType === 'itp') {
+            workflowType = ServiceCaseWorkflowType.itp;
+          }
+        }
         serviceCase = await tx.serviceCase.create({
           data: {
             tenantId: tenant.id,
             clientId: vehicle.clientId,
             vehicleId: vehicle.id,
-            workflowType: ServiceCaseWorkflowType.repair,
+            workflowType,
             sourceType: dto.sourceTicketId ? ServiceCaseSourceType.ticket : ServiceCaseSourceType.direct,
             sourceTicketId: dto.sourceTicketId ?? null,
             currentStage: ServiceCaseStage.intake,
@@ -848,6 +875,30 @@ export class AppointmentsService {
         dto.requireDriverAckOverride === true || dto.requireDriverAckOverride === false
           ? dto.requireDriverAckOverride
           : null;
+    }
+
+    const nextSupplierId =
+      dto.supplierId !== undefined ? dto.supplierId : existing.supplierId;
+    const nextScheduledAt =
+      dto.scheduledAt !== undefined
+        ? new Date(dto.scheduledAt)
+        : existing.scheduledAt;
+    const nextDuration =
+      dto.durationMin !== undefined ? dto.durationMin : existing.durationMin;
+    if (
+      nextSupplierId &&
+      nextScheduledAt &&
+      (dto.scheduledAt !== undefined ||
+        dto.durationMin !== undefined ||
+        dto.supplierId !== undefined)
+    ) {
+      await assertSupplierSlotCapacity(this.prisma, {
+        tenantId: tenant.id,
+        supplierId: nextSupplierId,
+        scheduledAt: nextScheduledAt,
+        durationMin: nextDuration,
+        excludeAppointmentId: id,
+      });
     }
 
     const row = await this.prisma.$transaction(async (tx) => {

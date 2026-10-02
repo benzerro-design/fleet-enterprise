@@ -50,6 +50,7 @@ export function VehicleDetailLayout({
     equipmentPayload,
     wheelsPayload,
     odometerPayload,
+    fuelLevelPayload,
     mobilityPayload,
     maintenancePlanPayload,
     driverAssignments,
@@ -91,6 +92,7 @@ export function VehicleDetailLayout({
               equipment={equipmentPayload}
               wheels={wheelsPayload}
               odometer={odometerPayload}
+              fuelLevel={fuelLevelPayload}
               maintenancePlan={maintenancePlanPayload}
               maintenanceList={maintenanceList}
               documentsList={documentsList}

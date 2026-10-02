@@ -6,7 +6,11 @@ import { DocumentForm } from "@/components/fleet/DocumentForm";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
-export default async function NewDocumentPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
+export default async function NewDocumentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vehicleId?: string; equipmentId?: string }>;
+}) {
   const sp = await searchParams;
   const auth = await getAuthMeResult();
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
@@ -29,7 +33,12 @@ export default async function NewDocumentPage({ searchParams }: { searchParams: 
         </Link>
       </div>
       <OpsFormLayout module="documents" formTitle="Document nou" vehicles={vehicles} defaultVehicleId={sp.vehicleId}>
-        <DocumentForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} />
+        <DocumentForm
+          mode="create"
+          vehicles={vehicles}
+          defaultVehicleId={sp.vehicleId}
+          defaultEquipmentId={sp.equipmentId}
+        />
       </OpsFormLayout>
     </FleetPageMain>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { fleetBrowserBase, fleetJsonHeaders } from "@/lib/fleet-api";
@@ -121,7 +122,8 @@ export function VehicleEquipmentTab({ vehicleId, write, initial }: Props) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-zinc-400">
-        Inventar echipări montate (cârlig, frig, lift, etc.). Istoricul lucrărilor e pe tab-ul DSR.
+        Inventar echipări montate (cârlig, frig, lift, etc.). Documente și mentenanțe se pot lega de
+        fiecare echipare; istoricul agregat e pe tab-ul DSR.
       </p>
 
       {error ? (
@@ -223,36 +225,59 @@ export function VehicleEquipmentTab({ vehicleId, write, initial }: Props) {
                   {item.mountedOn ? ` · montat ${isoDateOnly(item.mountedOn)}` : ""}
                   {item.removedOn ? ` · demontat ${isoDateOnly(item.removedOn)}` : ""}
                 </p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {(item.documentCount ?? 0) > 0 || (item.maintenanceCount ?? 0) > 0 ? (
+                    <>
+                      {item.documentCount ?? 0} doc · {item.maintenanceCount ?? 0} mentenanțe
+                    </>
+                  ) : (
+                    "Niciun document / mentenanță legată"
+                  )}
+                </p>
                 {item.notes ? <p className="mt-1 text-xs text-zinc-400">{item.notes}</p> : null}
               </div>
-              {write ? (
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {item.isActive ? (
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Link
+                  href={`/fleet/documents/new?vehicleId=${encodeURIComponent(vehicleId)}&equipmentId=${encodeURIComponent(item.id)}`}
+                  className="text-sky-400 hover:text-sky-300"
+                >
+                  + Document
+                </Link>
+                <Link
+                  href={`/fleet/maintenance/new?vehicleId=${encodeURIComponent(vehicleId)}&equipmentId=${encodeURIComponent(item.id)}`}
+                  className="text-sky-400 hover:text-sky-300"
+                >
+                  + Mentenanță
+                </Link>
+                {write ? (
+                  <>
+                    {item.isActive ? (
+                      <button
+                        type="button"
+                        onClick={() => void setActive(item, false)}
+                        className="text-amber-400 hover:text-amber-300"
+                      >
+                        Demontează
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void setActive(item, true)}
+                        className="text-emerald-400 hover:text-emerald-300"
+                      >
+                        Reactivează
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => void setActive(item, false)}
-                      className="text-amber-400 hover:text-amber-300"
+                      onClick={() => void onDelete(item.id)}
+                      className="text-rose-400 hover:text-rose-300"
                     >
-                      Demontează
+                      Șterge
                     </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void setActive(item, true)}
-                      className="text-emerald-400 hover:text-emerald-300"
-                    >
-                      Reactivează
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void onDelete(item.id)}
-                    className="text-rose-400 hover:text-rose-300"
-                  >
-                    Șterge
-                  </button>
-                </div>
-              ) : null}
+                  </>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

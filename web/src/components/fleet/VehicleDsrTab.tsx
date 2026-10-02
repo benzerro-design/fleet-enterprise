@@ -151,11 +151,28 @@ export function VehicleDsrTab({ vehicle, maintenance, equipment, printHref }: Pr
                   {item.label}
                   <span className="ml-2 text-zinc-500">{vehicleEquipmentKindLabel(item.kind)}</span>
                 </span>
-                <span className="text-xs text-zinc-500">
-                  {item.isActive ? "Activă" : "Demontată"}
-                  {item.serialNumber ? ` · ${item.serialNumber}` : ""}
-                  {item.mountedOn ? ` · montat ${formatDateRo(item.mountedOn)}` : ""}
-                  {item.removedOn ? ` · scos ${formatDateRo(item.removedOn)}` : ""}
+                <span className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                  <span>
+                    {item.isActive ? "Activă" : "Demontată"}
+                    {item.serialNumber ? ` · ${item.serialNumber}` : ""}
+                    {item.mountedOn ? ` · montat ${formatDateRo(item.mountedOn)}` : ""}
+                    {item.removedOn ? ` · scos ${formatDateRo(item.removedOn)}` : ""}
+                  </span>
+                  <span className="text-zinc-400">
+                    {item.documentCount ?? 0} doc · {item.maintenanceCount ?? 0} ment
+                  </span>
+                  <Link
+                    href={`/fleet/documents/new?vehicleId=${encodeURIComponent(vehicle.id)}&equipmentId=${encodeURIComponent(item.id)}`}
+                    className="text-sky-400 hover:text-sky-300 print:hidden"
+                  >
+                    + Doc
+                  </Link>
+                  <Link
+                    href={`/fleet/maintenance/new?vehicleId=${encodeURIComponent(vehicle.id)}&equipmentId=${encodeURIComponent(item.id)}`}
+                    className="text-sky-400 hover:text-sky-300 print:hidden"
+                  >
+                    + Ment
+                  </Link>
                 </span>
               </li>
             ))}
@@ -189,6 +206,7 @@ function DsrRow({ entry }: { entry: DsrJournalEntry }) {
         </Link>
         <p className="text-[11px] text-zinc-500">
           {kindLabel}
+          {entry.equipmentLabel ? ` · ${entry.equipmentLabel}` : ""}
           {entry.provider ? ` · ${entry.provider}` : ""}
           {status && status !== "—" ? ` · ${status}` : ""}
         </p>

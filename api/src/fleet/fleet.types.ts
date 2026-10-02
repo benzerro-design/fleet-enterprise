@@ -19,6 +19,7 @@ export type VehicleDocument = {
   expiresOn: string | null;
   fileUrl: string | null;
   createdAt: string;
+  vehicleEquipmentId?: string | null;
 };
 
 export type VehicleRecord = {

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { OPS_INPUT_CLASS } from "@/components/fleet/ops-form-primitives";
+import { supplierSupportsQuoteDiscountDefaults } from "@/lib/supplier-discount-eligibility";
 import { fleetJsonHeaders, suppliersBrowserBase, type SupplierRecord } from "@/lib/suppliers-api";
 
 type Props = {
@@ -12,11 +13,24 @@ type Props = {
 
 export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
   const router = useRouter();
+  const eligible = supplierSupportsQuoteDiscountDefaults(supplier.category);
   const [parts, setParts] = useState(String(supplier.partsDiscountPercent ?? 0));
   const [labor, setLabor] = useState(String(supplier.laborDiscountPercent ?? 0));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  if (!eligible) {
+    return (
+      <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-6">
+        <p className="text-sm text-zinc-300">Discount piese / manoperă</p>
+        <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+          Nu se aplică pentru această categorie de furnizor (doar Service auto și Anvelope). Carburant,
+          rent, asistență rutieră, broker, asigurător etc. nu primesc discount default pe deviz.
+        </p>
+      </div>
+    );
+  }
 
   if (!canWrite) {
     return (

@@ -18,6 +18,7 @@ export function SupplierProgramEditor({ supplier, canWrite }: Props) {
   const [county, setCounty] = useState(supplier.county ?? "");
   const [contactPhone, setContactPhone] = useState(supplier.contactPhone ?? "");
   const [notes, setNotes] = useState(supplier.notes ?? "");
+  const [slotCapacity, setSlotCapacity] = useState(String(supplier.slotCapacity ?? 1));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -43,6 +44,10 @@ export function SupplierProgramEditor({ supplier, canWrite }: Props) {
           <dt className="text-xs text-zinc-500">Program / note</dt>
           <dd className="mt-1 whitespace-pre-wrap text-zinc-300">{supplier.notes?.trim() || "—"}</dd>
         </div>
+        <div>
+          <dt className="text-xs text-zinc-500">Capacitate slot (concomitente)</dt>
+          <dd className="mt-1 text-zinc-200">{supplier.slotCapacity ?? 1}</dd>
+        </div>
       </dl>
     );
   }
@@ -61,6 +66,7 @@ export function SupplierProgramEditor({ supplier, canWrite }: Props) {
           county: county.trim() || null,
           contactPhone: contactPhone.trim() || null,
           notes: notes.trim() || null,
+          slotCapacity: Math.max(1, Math.min(50, Math.round(Number(slotCapacity.replace(",", ".")) || 1))),
         }),
       });
       if (!res.ok) {
@@ -112,6 +118,20 @@ export function SupplierProgramEditor({ supplier, canWrite }: Props) {
             placeholder={"ex. L–V 08:00–17:00\nSâmbătă 08:00–13:00"}
             className={`${OPS_INPUT_CLASS} mt-1`}
           />
+        </label>
+        <label className="text-xs text-zinc-500">
+          Capacitate concomitentă (sloturi)
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={slotCapacity}
+            onChange={(e) => setSlotCapacity(e.target.value)}
+            className={`${OPS_INPUT_CLASS} mt-1`}
+          />
+          <span className="mt-1 block text-[11px] text-zinc-600">
+            Câte programări se pot overlap pe același interval (implicit 1).
+          </span>
         </label>
       </div>
       {error ? <p className="text-sm text-red-400">{error}</p> : null}

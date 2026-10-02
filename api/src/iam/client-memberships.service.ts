@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ClientRole, MembershipRole } from '@prisma/client';
+import { ClientRole, FunctionalProfile, MembershipRole } from '@prisma/client';
 import type { AccessContext } from './access-context.types';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../audit/audit.service';
@@ -21,6 +21,7 @@ export type CreateClientMembershipInput = {
   clientId: string;
   role: ClientRole;
   driverId?: string | null;
+  functionalProfile?: FunctionalProfile | null;
 };
 
 @Injectable()
@@ -87,6 +88,7 @@ export class ClientMembershipsService {
     userId: string;
     user: { email: string; displayName: string | null; disabledAt: Date | null };
     role: ClientRole;
+    functionalProfile: FunctionalProfile | null;
     driverId: string | null;
     driver: { fullName: string } | null;
     createdAt: Date;
@@ -101,6 +103,7 @@ export class ClientMembershipsService {
       displayName: r.user.displayName,
       disabledAt: r.user.disabledAt?.toISOString() ?? null,
       role: r.role,
+      functionalProfile: r.functionalProfile ?? null,
       driverId: r.driverId,
       driverFullName: r.driver?.fullName ?? null,
       createdAt: r.createdAt.toISOString(),
@@ -170,10 +173,14 @@ export class ClientMembershipsService {
         userId: user.id,
         role,
         driverId: role === ClientRole.driver ? dto.driverId!.trim() : null,
+        functionalProfile: dto.functionalProfile ?? null,
       },
       update: {
         role,
         driverId: role === ClientRole.driver ? dto.driverId!.trim() : null,
+        ...(dto.functionalProfile !== undefined
+          ? { functionalProfile: dto.functionalProfile }
+          : {}),
       },
       include: {
         client: { select: { code: true, legalName: true } },
@@ -228,6 +235,35 @@ export class ClientMembershipsService {
         'Crearea de useri nu e activată pentru acest client (Setup → Client → IAM)',
       );
     }
+  }
+
+  async setFunctionalProfile(
+    tenantSlug: string,
+    id: string,
+    functionalProfile: FunctionalProfile | null,
+    actorUserId?: string,
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const existing = await this.prisma.clientMembership.findFirst({
+      where: { id, tenantId: tenant.id },
+    });
+    if (!existing) throw new NotFoundException('Client membership not found');
+
+    await this.prisma.clientMembership.update({
+      where: { id },
+      data: { functionalProfile },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'client_membership.functional_profile',
+      entityType: 'client_membership',
+      entityId: id,
+      meta: { userId: existing.userId, clientId: existing.clientId, functionalProfile },
+    });
   }
 
   async remove(tenantSlug: string, id: string, actorUserId?: string) {

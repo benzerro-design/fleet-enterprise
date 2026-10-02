@@ -59,6 +59,7 @@ export class AppointmentsController {
     @Query('vehicleId') vehicleId?: string,
     @Query('clientId') clientId?: string,
     @Query('status') status?: string,
+    @Query('workflowType') workflowType?: string,
   ) {
     if (!from?.trim() || !to?.trim()) {
       throw new BadRequestException('from and to are required');
@@ -75,6 +76,7 @@ export class AppointmentsController {
         vehicleId: vehicleId?.trim(),
         clientId: clientId?.trim(),
         status: parseStatus(status),
+        workflowType: workflowType?.trim() || undefined,
       },
       access,
     );

@@ -8,6 +8,7 @@ import {
   appointmentFleetCanRepropose,
   appointmentNegotiateOpts,
   appointmentProcessLabel,
+  appointmentProtocolBlocksSilentSlotEdit,
   appointmentUsesDashedOutline,
   workflowTypeLabel,
 } from "@/lib/appointments-api";
@@ -218,7 +219,9 @@ export function SchedulerWeekView({
       if (partnerMode) {
         return a.status === "pending_supplier" || a.status === "needs_repropose";
       }
-      return true;
+      // Flotă: drag doar dacă drop-ul are cale API (repropose sau PATCH silențios).
+      if (appointmentFleetCanRepropose(a, appointmentNegotiateOpts(a))) return true;
+      return !appointmentProtocolBlocksSilentSlotEdit(a);
     },
     [canWrite, onReschedule, partnerMode],
   );

@@ -15,6 +15,7 @@ import {
   OpsFormVehicleField,
 } from "@/components/fleet/ops-form-primitives";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
+import { OpsVehicleEquipmentField } from "@/components/fleet/OpsVehicleEquipmentField";
 import {
   DOCUMENT_TYPE_OPTIONS,
   documentTypeLabel,
@@ -44,6 +45,7 @@ type DocumentRecord = {
   reminderOffsetsKm?: number[] | null;
   reminderMenuSyncEnabled?: boolean;
   linkedCostEntryId?: string | null;
+  vehicleEquipmentId?: string | null;
 };
 
 type VehicleOption = {
@@ -54,7 +56,12 @@ type VehicleOption = {
 };
 
 type Props =
-  | { mode: "create"; vehicles: VehicleOption[]; defaultVehicleId?: string }
+  | {
+      mode: "create";
+      vehicles: VehicleOption[];
+      defaultVehicleId?: string;
+      defaultEquipmentId?: string;
+    }
   | { mode: "edit"; documentId: string; initial: DocumentRecord; vehicles: VehicleOption[] };
 
 function toDateInputOrEmpty(iso: string | null): string {
@@ -92,6 +99,7 @@ export function DocumentForm(props: Props) {
         reminderOffsetsDays: [] as number[],
         dueOdometerKm: null as number | null,
         reminderOffsetsKm: [] as number[],
+        vehicleEquipmentId: props.defaultEquipmentId ?? "",
       };
     }
     const r = props.initial;
@@ -107,6 +115,7 @@ export function DocumentForm(props: Props) {
       reminderOffsetsDays: r.reminderOffsetsDays?.length ? [...r.reminderOffsetsDays] : [],
       dueOdometerKm: r.dueOdometerKm ?? null,
       reminderOffsetsKm: r.reminderOffsetsKm?.length ? [...r.reminderOffsetsKm] : [],
+      vehicleEquipmentId: r.vehicleEquipmentId ?? "",
     };
   }, [props]);
 
@@ -131,6 +140,7 @@ export function DocumentForm(props: Props) {
   const [reminderOffsetsDays, setReminderOffsetsDays] = useState<number[]>(initial.reminderOffsetsDays);
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
   const [reminderOffsetsKm, setReminderOffsetsKm] = useState<number[]>(initial.reminderOffsetsKm);
+  const [vehicleEquipmentId, setVehicleEquipmentId] = useState(initial.vehicleEquipmentId);
   const [constraintMode, setConstraintMode] = useState<ReminderConstraintMode>(() =>
     inferReminderConstraintMode({ dueDate: initial.expiresOn, dueOdometerKm: initial.dueOdometerKm }),
   );
@@ -261,6 +271,7 @@ export function DocumentForm(props: Props) {
           dueOdometerKm: kmDue,
           reminderOffsetsKm: kmOffsets,
           syncReminderAction: false,
+          vehicleEquipmentId: vehicleEquipmentId.trim() || null,
         });
         if (created.reminderSyncFailed) {
           router.push("/fleet/documents?reminderSync=failed");
@@ -291,6 +302,7 @@ export function DocumentForm(props: Props) {
         dueOdometerKm: kmDue,
         reminderOffsetsKm: kmOffsets,
         syncReminderAction: configured ? syncReminderAction : false,
+        vehicleEquipmentId: vehicleEquipmentId.trim() || null,
         ...(alsoCreateCost && !isEdit
           ? {
               linkedCost: {
@@ -487,6 +499,14 @@ export function DocumentForm(props: Props) {
               <input type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
           </div>
+          <div className="mt-3">
+            <OpsVehicleEquipmentField
+              vehicleId={boundVehicleId}
+              value={vehicleEquipmentId}
+              onChange={setVehicleEquipmentId}
+              disabled={pending}
+            />
+          </div>
         </OpsFormPrimaryBand>
         <OpsFormSection number={4} title={showCivDualUpload ? "Scan CIV (față + verso)" : "Fișier document"}>
           {showCivDualUpload ? (
@@ -558,6 +578,13 @@ export function DocumentForm(props: Props) {
           locked={isEdit || vehicleLocked}
         />
       ) : null}
+
+      <OpsVehicleEquipmentField
+        vehicleId={boundVehicleId}
+        value={vehicleEquipmentId}
+        onChange={setVehicleEquipmentId}
+        disabled={pending}
+      />
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">Tip document</label>

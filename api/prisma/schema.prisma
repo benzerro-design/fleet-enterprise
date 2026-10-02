@@ -309,6 +309,7 @@ model User {
   vehiclesCreated  Vehicle[]          @relation("VehicleCreatedBy")
   vehiclesUpdated  Vehicle[]          @relation("VehicleUpdatedBy")
   odometerReadings OdometerReading[]  @relation("OdometerReadingBy")
+  fuelLevelReadings FuelLevelReading[] @relation("FuelLevelReadingBy")
   vehiclePhotosUploaded VehiclePhoto[] @relation("VehiclePhotoUploadedBy")
   driverAssignmentsCreated DriverVehicleAssignment[] @relation("DriverAssignmentBy")
   crmTicketsCreated        CrmTicket[]               @relation("TicketCreatedBy")
@@ -405,6 +406,8 @@ model TenantMembership {
   userId    String
   tenantId  String
   role      MembershipRole @default(tenant_admin)
+  /** IAM-003: profil F/T/G pe L* (null = full / comportament vechi). */
+  functionalProfile FunctionalProfile?
   createdAt DateTime       @default(now())
   tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -412,6 +415,14 @@ model TenantMembership {
   @@unique([userId, tenantId])
   @@index([tenantId])
   @@index([userId])
+}
+
+/// IAM-003 — job profile pe flotă (L* / L1). Nu pe axa R.
+enum FunctionalProfile {
+  F
+  T
+  G
+  full
 }
 
 /// Rol în organizația clientului (contractuală) — nu confunda cu MembershipRole tenant.
@@ -429,6 +440,8 @@ model ClientMembership {
   clientId  String
   userId    String
   role      ClientRole
+  /** IAM-003: profil F/T/G pe L1 (null = derivat din ClientRole). */
+  functionalProfile FunctionalProfile?
   /// Legătură la entitatea Driver când role = driver.
   driverId  String?
   createdAt DateTime   @default(now())
@@ -542,6 +555,7 @@ model Vehicle {
   reminderActions    ReminderAction[]
   itpProfileReminder ReminderAction?    @relation("VehicleItpProfileReminder")
   odometerReadings   OdometerReading[]
+  fuelLevelReadings  FuelLevelReading[]
   maintenancePlanItems MaintenancePlanItem[]
   photos             VehiclePhoto[]
   equipment          VehicleEquipment[]
@@ -605,7 +619,7 @@ enum VehiclePhotoKind {
   other
 }
 
-/// Echipări montate pe vehicul (FLEET-016) — lifecycle docs/reparații în faze ulterioare.
+/// Echipări montate pe vehicul (FLEET-016) — docs/reparații per echipare = FLEET-027.
 model VehicleEquipment {
   id           String               @id @default(cuid())
   tenantId     String
@@ -622,6 +636,8 @@ model VehicleEquipment {
   updatedAt    DateTime             @updatedAt
   tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle      Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  documents    VehicleDocument[]
+  maintenanceEntries MaintenanceEntry[]
 
   @@index([tenantId])
   @@index([vehicleId])
@@ -808,9 +824,12 @@ model MaintenanceEntry {
   reminderOffsetsKm    Json?
   /** Dacă false, acțiunea nu apare în meniul Remindere până la reactivare din sursă. */
   reminderMenuSyncEnabled Boolean @default(true)
+  /** FLEET-027: legătură opțională la o echipare montată. */
+  vehicleEquipmentId   String?
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   supplier             Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  vehicleEquipment     VehicleEquipment? @relation(fields: [vehicleEquipmentId], references: [id], onDelete: SetNull)
   sourceCostEntryId    String?   @unique
   sourceCostEntry      CostEntry? @relation(fields: [sourceCostEntryId], references: [id], onDelete: SetNull)
   reminderAction       ReminderAction?
@@ -818,6 +837,7 @@ model MaintenanceEntry {
   @@index([tenantId])
   @@index([vehicleId])
   @@index([supplierId])
+  @@index([vehicleEquipmentId])
 }
 
 /// Costuri alocate vehiculului (MVP).
@@ -898,13 +918,17 @@ model VehicleDocument {
   reminderOffsetsKm   Json?
   /** Dacă false, acțiunea nu apare în meniul Remindere până la reactivare din sursă. */
   reminderMenuSyncEnabled Boolean @default(true)
+  /** FLEET-027: document legat de o echipare (manual, garanție, certificat…). */
+  vehicleEquipmentId  String?
   createdAt           DateTime  @default(now())
   vehicle             Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleEquipment    VehicleEquipment? @relation(fields: [vehicleEquipmentId], references: [id], onDelete: SetNull)
   reminderAction      ReminderAction?
   costEntry           CostEntry?
 
   @@index([vehicleId])
   @@index([expiresOn])
+  @@index([vehicleEquipmentId])
 }
 
 enum ReminderSourceType {
@@ -975,6 +999,29 @@ model OdometerReading {
   recordedByUserId String?
   vehicle     Vehicle               @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   recordedBy  User?                 @relation("OdometerReadingBy", fields: [recordedByUserId], references: [id])
+
+  @@index([vehicleId, recordedAt])
+}
+
+/// FLEET-003 — nivel rezervor (manual / import / telemetrie).
+enum FuelLevelReadingSource {
+  manual
+  import
+  telematics
+}
+
+model FuelLevelReading {
+  id               String                 @id @default(cuid())
+  vehicleId        String
+  recordedAt       DateTime               @default(now())
+  liters           Float?
+  percent          Float?
+  source           FuelLevelReadingSource @default(manual)
+  sourceRef        String?
+  notes            String?
+  recordedByUserId String?
+  vehicle          Vehicle                @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  recordedBy       User?                  @relation("FuelLevelReadingBy", fields: [recordedByUserId], references: [id])
 
   @@index([vehicleId, recordedAt])
 }
@@ -1291,6 +1338,8 @@ model Supplier {
   city         String?
   county       String?
   notes        String?
+  /// SCHED-004: câte programări pot overlap pe același interval (implicit 1).
+  slotCapacity Int              @default(1)
   /// Default pe linii noi de tip piese (0–100). UAT-034.
   partsDiscountPercent Float    @default(0)
   /// Default pe linii noi de tip manoperă (0–100). UAT-034.

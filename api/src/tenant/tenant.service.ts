@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { MembershipRole, Prisma, SupplierServiceKind } from '@prisma/client';
+import { MembershipRole, Prisma, SupplierServiceKind, type FunctionalProfile } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { cloneDefaultIamStrategyNodes } from './iam-strategy-default';
@@ -64,6 +64,7 @@ export class TenantService {
         email: m.user.email,
         displayName: m.user.displayName,
         role: m.role,
+        functionalProfile: m.functionalProfile ?? null,
         disabledAt: m.user.disabledAt?.toISOString() ?? null,
         joinedAt: m.createdAt.toISOString(),
       })),
@@ -148,8 +149,10 @@ export class TenantService {
   async setMemberRole(
     tenantSlug: string,
     targetUserId: string,
-    role: MembershipRole,
+    role: MembershipRole | undefined,
     actorUserId: string,
+    functionalProfile?: FunctionalProfile | null,
+    profileProvided = false,
   ) {
     if (targetUserId === actorUserId) {
       throw new BadRequestException('Nu poți modifica propriul rol din acest endpoint (MVP).');
@@ -169,13 +172,20 @@ export class TenantService {
         'Rolul acestui user se schimbă din tab-ul Client sau Furnizor, nu din echipa abonatului.',
       );
     }
-    if (role !== MembershipRole.tenant_admin && role !== MembershipRole.tenant_viewer) {
+    if (role != null && role !== MembershipRole.tenant_admin && role !== MembershipRole.tenant_viewer) {
       throw new BadRequestException('role must be tenant_admin or tenant_viewer');
     }
+    if (role == null && !profileProvided) {
+      throw new BadRequestException('role or functionalProfile is required');
+    }
+
+    const data: { role?: MembershipRole; functionalProfile?: FunctionalProfile | null } = {};
+    if (role != null) data.role = role;
+    if (profileProvided) data.functionalProfile = functionalProfile ?? null;
 
     await this.prisma.tenantMembership.update({
       where: { id: mem.id },
-      data: { role },
+      data,
     });
 
     await this.prisma.auditLog.create({
@@ -185,7 +195,11 @@ export class TenantService {
         action: 'membership_role_update',
         entityType: 'membership',
         entityId: mem.id,
-        meta: { targetUserId, newRole: role } as Prisma.InputJsonValue,
+        meta: {
+          targetUserId,
+          newRole: role ?? mem.role,
+          ...(profileProvided ? { functionalProfile: functionalProfile ?? null } : {}),
+        } as Prisma.InputJsonValue,
       },
     });
   }

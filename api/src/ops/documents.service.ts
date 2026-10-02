@@ -25,6 +25,7 @@ import {
   shouldRunReminderMenuSync,
 } from './reminder-sync';
 import { defaultCostCategoryForDocument } from './document-cost-link';
+import { resolveVehicleEquipmentIdForVehicle } from '../fleet/vehicle-equipment-link';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -49,6 +50,8 @@ export type CreateDocumentInput = {
     provider?: string | null;
     incurredOn?: string;
   } | null;
+  /** FLEET-027: legătură opțională la echipare pe același vehicul. */
+  vehicleEquipmentId?: string | null;
 };
 
 export type PatchDocumentInput = Partial<CreateDocumentInput>;
@@ -182,9 +185,11 @@ function toDocRow(row: {
   dueOdometerKm: number | null;
   reminderOffsetsKm: unknown;
   reminderMenuSyncEnabled: boolean;
+  vehicleEquipmentId?: string | null;
   createdAt: Date;
   vehicle: { registrationNumber: string; client: { code: string }; tenant: { slug: string } };
   costEntry?: { id: string } | null;
+  vehicleEquipment?: { id: string; label: string } | null;
 }) {
   const reminderOffsetsDays = normalizeReminderOffsets(row.reminderOffsetsDays);
   const reminder = computeReminderSummary(row.expiresOn, reminderOffsetsDays);
@@ -208,6 +213,8 @@ function toDocRow(row: {
     reminder,
     createdAt: row.createdAt.toISOString(),
     linkedCostEntryId: row.costEntry?.id ?? null,
+    vehicleEquipmentId: row.vehicleEquipmentId ?? row.vehicleEquipment?.id ?? null,
+    vehicleEquipmentLabel: row.vehicleEquipment?.label ?? null,
   };
 }
 
@@ -251,6 +258,7 @@ export class DocumentsService {
             },
           },
           costEntry: { select: { id: true } },
+          vehicleEquipment: { select: { id: true, label: true } },
         },
         orderBy: [{ expiresOn: 'asc' }, { createdAt: 'desc' }],
         skip,
@@ -318,6 +326,7 @@ export class DocumentsService {
           },
         },
         costEntry: { select: { id: true } },
+        vehicleEquipment: { select: { id: true, label: true } },
       },
     });
     if (!row) throw new NotFoundException('Document not found');
@@ -329,6 +338,12 @@ export class DocumentsService {
     if (!tenant) throw new NotFoundException('Tenant not found');
     await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     const vehicle = await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
+
+    const vehicleEquipmentId = await resolveVehicleEquipmentIdForVehicle(
+      this.prisma,
+      dto.vehicleId,
+      dto.vehicleEquipmentId,
+    );
 
     const reminderOffsets =
       dto.reminderOffsetsDays === undefined
@@ -352,6 +367,7 @@ export class DocumentsService {
         dueOdometerKm: dto.dueOdometerKm ?? null,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
         reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
+        vehicleEquipmentId: vehicleEquipmentId ?? null,
       },
       include: {
         vehicle: {
@@ -362,6 +378,7 @@ export class DocumentsService {
           },
         },
         costEntry: { select: { id: true } },
+        vehicleEquipment: { select: { id: true, label: true } },
       },
     });
 
@@ -427,6 +444,12 @@ export class DocumentsService {
 
     rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
 
+    const vehicleEquipmentId = await resolveVehicleEquipmentIdForVehicle(
+      this.prisma,
+      before.vehicleId,
+      dto.vehicleEquipmentId,
+    );
+
     const row = await this.prisma.vehicleDocument.update({
       where: { id },
       data: {
@@ -446,6 +469,7 @@ export class DocumentsService {
         dueOdometerKm: dto.dueOdometerKm,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
         reminderMenuSyncEnabled: reminderMenuSyncEnabledPatchValue(dto.syncReminderAction),
+        vehicleEquipmentId,
       },
       include: {
         vehicle: {
@@ -456,6 +480,7 @@ export class DocumentsService {
           },
         },
         costEntry: { select: { id: true } },
+        vehicleEquipment: { select: { id: true, label: true } },
       },
     });
 

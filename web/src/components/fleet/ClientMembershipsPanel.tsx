@@ -26,6 +26,7 @@ export type ClientMembershipRow = {
   displayName: string | null;
   disabledAt?: string | null;
   role: string;
+  functionalProfile?: string | null;
   driverId: string | null;
   driverFullName: string | null;
   createdAt: string;
@@ -36,6 +37,14 @@ const CLIENT_ROLES = [
   { value: "client_dispatcher", label: "Dispecer client (L1)" },
   { value: "client_viewer", label: "Doar citire client" },
   { value: "driver", label: "Șofer (L0)" },
+] as const;
+
+const PROFILE_OPTIONS = [
+  { value: "", label: "Fără F/T/G (legacy)" },
+  { value: "F", label: "F — financiar" },
+  { value: "T", label: "T — tehnic" },
+  { value: "G", label: "G — gestiune" },
+  { value: "full", label: "Full" },
 ] as const;
 
 function roleLabel(role: string): string {
@@ -89,6 +98,30 @@ export function ClientMembershipsPanel({ memberships, clients, invites = [] }: P
         return;
       }
       setOk("Acces eliminat.");
+      router.refresh();
+    } catch {
+      setError("Rețea sau server indisponibil.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function saveProfile(id: string, email: string, value: string) {
+    setPending(true);
+    setError(null);
+    setOk(null);
+    try {
+      const res = await fetch(`${tenantBrowserBase}/client-memberships/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ functionalProfile: value === "" ? null : value }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        setError(j.message ?? `HTTP ${res.status}`);
+        return;
+      }
+      setOk(`Profil F/T/G actualizat pentru ${email}.`);
       router.refresh();
     } catch {
       setError("Rețea sau server indisponibil.");
@@ -237,6 +270,23 @@ export function ClientMembershipsPanel({ memberships, clients, invites = [] }: P
                   {m.clientCode} — {m.clientLegalName} · {roleLabel(m.role)}
                   {m.driverFullName ? ` · șofer: ${m.driverFullName}` : ""}
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <label className="text-xs text-zinc-500">
+                    Profil F/T/G
+                    <select
+                      defaultValue={m.functionalProfile ?? ""}
+                      disabled={pending}
+                      onChange={(e) => void saveProfile(m.id, m.email, e.target.value)}
+                      className="ml-2 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+                    >
+                      {PROFILE_OPTIONS.map((o) => (
+                        <option key={o.value || "legacy"} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 <MemberAccountActions userId={m.userId} disabledAt={m.disabledAt} />
                 <button
                   type="button"

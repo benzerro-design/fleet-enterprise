@@ -163,6 +163,7 @@ export function SchedulerShell({
   const [serviceTypeCode, setServiceTypeCode] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<SchedulerViewMode>(initialViewMode);
   const [inboxFilter, setInboxFilter] = useState<SchedulerInboxFilter>(initialInbox);
   const [createPrefillAt, setCreatePrefillAt] = useState<string | undefined>();
@@ -293,6 +294,11 @@ export function SchedulerShell({
           supplierFilter,
           suppliersTotal: suppliers.length,
         });
+        if (extraSearch) {
+          const extra = new URLSearchParams(extraSearch);
+          const workflow = extra.get("workflow")?.trim();
+          if (workflow) params.set("workflowType", workflow);
+        }
         const statsParams = extraSearch ? `?${extraSearch}` : "";
         const inboxStatuses = inboxStatusesForFilter(inboxFilter);
         const inboxFetches =
@@ -390,9 +396,22 @@ export function SchedulerShell({
     async (id: string, scheduledAt: Date) => {
       const row = findAppointment(id);
       if (!row) return;
+      setActionError(null);
 
       if (warnIfSameAppointmentSlot(row.scheduledAt, scheduledAt)) {
         return;
+      }
+
+      async function readErr(res: Response): Promise<string> {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = (await res.json()) as { message?: string | string[] };
+          if (typeof j.message === "string") msg = j.message;
+          else if (Array.isArray(j.message)) msg = j.message.join(", ");
+        } catch {
+          /* ignore */
+        }
+        return msg;
       }
 
       if (
@@ -407,7 +426,10 @@ export function SchedulerShell({
             body: JSON.stringify({ scheduledAt: scheduledAt.toISOString() }),
           },
         );
-        if (!res.ok) return;
+        if (!res.ok) {
+          setActionError(await readErr(res));
+          return;
+        }
         await load(true);
         return;
       }
@@ -418,12 +440,18 @@ export function SchedulerShell({
           headers: fleetJsonHeaders(),
           body: JSON.stringify({ scheduledAt: scheduledAt.toISOString() }),
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          setActionError(await readErr(res));
+          return;
+        }
         await load(true);
         return;
       }
 
       if (appointmentProtocolBlocksSilentSlotEdit(row)) {
+        setActionError(
+          "Slotul e pe protocol — folosiți repropunere / validare furnizor, nu mutare silențioasă.",
+        );
         return;
       }
 
@@ -432,7 +460,10 @@ export function SchedulerShell({
         headers: fleetJsonHeaders(),
         body: JSON.stringify({ scheduledAt: scheduledAt.toISOString() }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setActionError(await readErr(res));
+        return;
+      }
       await load(true);
     },
     [findAppointment, load, partnerMode],
@@ -757,6 +788,18 @@ export function SchedulerShell({
           partnerMode={partnerMode}
         />
       </div>
+      {actionError ? (
+        <p className="border-b border-amber-900/40 bg-amber-950/30 px-3 py-2 text-sm text-amber-200 lg:px-4">
+          {actionError}
+          <button
+            type="button"
+            className="ml-3 text-xs underline hover:text-amber-100"
+            onClick={() => setActionError(null)}
+          >
+            Închide
+          </button>
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-3 py-3 lg:px-4">
         <div className="flex items-center gap-2">

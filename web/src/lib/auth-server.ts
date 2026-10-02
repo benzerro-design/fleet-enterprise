@@ -18,6 +18,8 @@ export type ClientMembershipMe = {
   clientCode: string;
   role: "client_admin" | "client_dispatcher" | "client_viewer" | "driver";
   driverId?: string | null;
+  /** IAM-003 — null = legacy (fără F/T/G). */
+  functionalProfile?: "F" | "T" | "G" | "full" | null;
   iamSettings?: ClientIamSettingsMe;
 };
 
@@ -40,6 +42,8 @@ export type AuthMe = {
   access?: {
     isTenantWide: boolean;
     assignedVehicleIds?: string[];
+    /** IAM-003 pe L* */
+    tenantFunctionalProfile?: "F" | "T" | "G" | "full" | null;
     clientMemberships: ClientMembershipMe[];
     supplierMemberships: SupplierMembershipMe[];
   };

@@ -39,8 +39,10 @@ export class AuthController {
               clientCode: m.clientCode,
               role: m.role,
               driverId: m.driverId,
+              functionalProfile: m.functionalProfile,
               iamSettings: m.iamSettings,
             })),
+            tenantFunctionalProfile: access.tenantFunctionalProfile,
             supplierMemberships: access.supplierMemberships.map((m) => ({
               supplierId: m.supplierId,
               supplierCode: m.supplierCode,

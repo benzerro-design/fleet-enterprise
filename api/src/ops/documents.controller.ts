@@ -210,6 +210,12 @@ function assertCreateDocumentDto(body: unknown): CreateDocumentInput {
     reminderOffsetsKm: parseReminderOffsetsKmField(body, 'reminderOffsetsKm'),
     syncReminderAction,
     linkedCost: parseLinkedCost(body.linkedCost),
+    vehicleEquipmentId:
+      'vehicleEquipmentId' in body
+        ? body.vehicleEquipmentId === null
+          ? null
+          : optionalString(body.vehicleEquipmentId)
+        : undefined,
   };
 }
 
@@ -251,6 +257,10 @@ function assertPatchDocumentDto(body: unknown): PatchDocumentInput {
   }
   if ('syncReminderAction' in body) {
     dto.syncReminderAction = optionalBoolean(body.syncReminderAction);
+  }
+  if ('vehicleEquipmentId' in body) {
+    dto.vehicleEquipmentId =
+      body.vehicleEquipmentId === null ? null : optionalString(body.vehicleEquipmentId);
   }
 
   if (Object.keys(dto).length === 0) {

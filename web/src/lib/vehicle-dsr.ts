@@ -15,6 +15,7 @@ export type DsrJournalEntry = {
   amountCents: number | null;
   status: string | null;
   href: string;
+  equipmentLabel?: string | null;
 };
 
 export function maintenanceToDsrEntries(
@@ -31,6 +32,7 @@ export function maintenanceToDsrEntries(
     amountCents: row.costCents,
     status: row.costAllocationCode,
     href: `/fleet/maintenance/${row.id}`,
+    equipmentLabel: row.vehicleEquipmentLabel ?? null,
   }));
 }
 

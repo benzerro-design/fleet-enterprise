@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -17,6 +19,7 @@ import { TenantId } from '../fleet/tenant-id.decorator';
 import { CurrentAccess } from './current-access.decorator';
 import type { AccessContext } from './access-context.types';
 import { ClientMembershipsService } from './client-memberships.service';
+import { parseFunctionalProfile } from './functional-profile';
 
 @Controller('tenant/client-memberships')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -42,6 +45,7 @@ export class ClientMembershipsController {
       clientId?: string;
       role?: ClientRole;
       driverId?: string | null;
+      functionalProfile?: string | null;
     },
     @CurrentUserId() actorUserId?: string,
     @CurrentAccess() access?: AccessContext,
@@ -55,10 +59,31 @@ export class ClientMembershipsController {
         clientId: body.clientId ?? '',
         role: body.role ?? ClientRole.client_viewer,
         driverId: body.driverId,
+        functionalProfile: parseOptionalProfile(body.functionalProfile),
       },
       actorUserId,
       access,
     );
+  }
+
+  @Patch(':id')
+  @Roles(MembershipRole.tenant_admin)
+  async patch(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: { functionalProfile?: string | null },
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!Object.prototype.hasOwnProperty.call(body, 'functionalProfile')) {
+      throw new BadRequestException('functionalProfile is required');
+    }
+    await this.memberships.setFunctionalProfile(
+      tenantSlug,
+      id,
+      parseOptionalProfile(body.functionalProfile),
+      actorUserId,
+    );
+    return { ok: true };
   }
 
   @Delete(':id')
@@ -87,4 +112,13 @@ export class ClientTeamMembershipsController {
   ) {
     return this.memberships.listForClient(tenantSlug, clientId, access);
   }
+}
+
+function parseOptionalProfile(raw: string | null | undefined) {
+  if (raw == null || raw === '' || raw === 'legacy') return null;
+  const p = parseFunctionalProfile(raw);
+  if (p == null && raw != null && raw !== '') {
+    throw new BadRequestException('functionalProfile must be F, T, G, full, or null');
+  }
+  return p;
 }

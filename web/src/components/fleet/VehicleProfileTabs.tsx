@@ -13,6 +13,7 @@ import { VehicleEquipmentTab } from "@/components/fleet/VehicleEquipmentTab";
 import { VehicleWheelsTab } from "@/components/fleet/VehicleWheelsTab";
 import { VehicleDsrTab } from "@/components/fleet/VehicleDsrTab";
 import { VehicleInsuranceTab } from "@/components/fleet/VehicleInsuranceTab";
+import { VehicleFuelLevelPanel } from "@/components/fleet/VehicleFuelLevelPanel";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { FuelTypeFilter } from "@/components/fleet/FuelTypeFilter";
 import type { VehicleRecord } from "@/lib/fleet-api";
@@ -25,6 +26,7 @@ import {
 import type {
   MaintenancePlanPayload,
   OdometerReadingsPayload,
+  FuelLevelReadingsPayload,
   VehicleAcquisitionPayload,
   VehicleCivPayload,
   VehicleEquipmentPayload,
@@ -62,6 +64,7 @@ type Props = {
   equipment: VehicleEquipmentPayload;
   wheels: VehicleWheelsPayload;
   odometer: OdometerReadingsPayload;
+  fuelLevel: FuelLevelReadingsPayload;
   maintenancePlan: MaintenancePlanPayload;
   maintenanceList: MaintenanceListPayload | null;
   documentsList: DocumentListPayload | null;
@@ -87,6 +90,7 @@ export function VehicleProfileTabs({
   equipment,
   wheels,
   odometer,
+  fuelLevel,
   maintenancePlan,
   maintenanceList,
   documentsList,
@@ -228,6 +232,11 @@ export function VehicleProfileTabs({
               alimentări recente rămâne pe Overview → accordion{" "}
               <span className="text-zinc-300">Rulaj & alimentări</span>.
             </p>
+            <VehicleFuelLevelPanel
+              vehicleId={vehicle.id}
+              write={odometerWrite ?? write}
+              initial={fuelLevel}
+            />
             {(vehicle.fuelCardNumber || vehicle.fuelCardProvider) && (
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-300">
                 <span className="text-xs uppercase tracking-wide text-zinc-500">Card combustibil</span>

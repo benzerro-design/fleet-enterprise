@@ -26,6 +26,7 @@ export type QuoteLineInput = {
 };
 
 export type SupplierQuoteDiscountDefaults = {
+  category?: string | null;
   partsDiscountPercent?: number | null;
   laborDiscountPercent?: number | null;
 };

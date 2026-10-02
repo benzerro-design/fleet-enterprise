@@ -20,9 +20,12 @@ import {
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { CivOcrService } from '../fleet/civ-ocr.service';
+import { syncItpCertDocument, syncVehicleItpFromOps } from '../ops/itp-sync';
 import {
   assertApproveServiceQuote,
   assertClientFleetWrite,
+  assertEditServiceQuote,
+  assertPostCostServiceQuote,
   canApproveServiceQuote,
   isTenantWideAccess,
 } from '../iam/client-access';
@@ -35,6 +38,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PartnerNotificationService } from '../partner/partner-notification.service';
 import { providerLabelForSupplier } from '../suppliers/supplier-resolve';
+import { effectiveSupplierDiscountDefaults } from '../suppliers/supplier-discount-eligibility';
 import { RemindersService } from '../ops/reminders.service';
 import {
   reminderMenuSyncEnabledForCreate,
@@ -208,7 +212,7 @@ export class WorkOrderQuotesService {
     tenantSlug: string,
     workOrderId: string,
     access?: AccessContext,
-    mode: 'read' | 'write' | 'approve' | 'parts_launch' = 'write',
+    mode: 'read' | 'write' | 'approve' | 'parts_launch' | 'post_cost' = 'write',
   ) {
     const wo = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id: workOrderId, tenant: { slug: tenantSlug } },
@@ -229,6 +233,13 @@ export class WorkOrderQuotesService {
           throw new ForbiddenException('Partners cannot approve quotes');
         }
         assertApproveServiceQuote(access, wo.vehicle.clientId);
+      } else if (mode === 'post_cost') {
+        if (isPartnerUser(access)) {
+          throw new ForbiddenException(
+            'Partenerul înregistrează factura; costul îl generează flota (L*/L1).',
+          );
+        }
+        assertPostCostServiceQuote(access, wo.vehicle.clientId);
       } else if (mode === 'parts_launch') {
         // Lansare comenzi: partener (atelier) cu write SAU admin client / tenant_admin.
         if (isPartnerUser(access)) {
@@ -245,7 +256,7 @@ export class WorkOrderQuotesService {
         assertPartnerSupplierId(access, wo.supplierId);
         assertPartnerWrite(access);
       } else {
-        assertClientFleetWrite(access, wo.vehicle.clientId);
+        assertEditServiceQuote(access, wo.vehicle.clientId);
       }
     }
     return wo;
@@ -1751,7 +1762,7 @@ export class WorkOrderQuotesService {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    await this.assertWoAccess(tenantSlug, workOrderId, access, 'write');
+    await this.assertWoAccess(tenantSlug, workOrderId, access, 'post_cost');
     if (access && isPartnerUser(access)) {
       throw new ForbiddenException(
         'Partenerul înregistrează factura; costul îl generează flota (L*/L1).',
@@ -1898,6 +1909,20 @@ export class WorkOrderQuotesService {
           });
         } catch (err) {
           console.error('syncFromCost after postCost failed', err);
+        }
+      }
+      // FLEET-009: ITP post-cost → actualizează profil vehicul (ca la cost ops).
+      if (costRow?.nextDueOn && costRow.category.trim().toUpperCase() === 'ITP') {
+        try {
+          await syncVehicleItpFromOps(
+            this.prisma,
+            costRow.vehicleId,
+            costRow.nextDueOn,
+            costRow.provider,
+          );
+          await syncItpCertDocument(this.prisma, costRow.vehicleId, costRow.nextDueOn);
+        } catch (err) {
+          console.error('syncVehicleItpFromOps after postCost failed', err);
         }
       }
     }
@@ -2047,10 +2072,25 @@ export class WorkOrderQuotesService {
     supplierId: string | null,
   ): Promise<SupplierQuoteDiscountDefaults | null> {
     if (!supplierId) return null;
-    return this.prisma.supplier.findFirst({
+    const row = await this.prisma.supplier.findFirst({
       where: { id: supplierId },
-      select: { partsDiscountPercent: true, laborDiscountPercent: true },
+      select: {
+        category: true,
+        partsDiscountPercent: true,
+        laborDiscountPercent: true,
+      },
     });
+    if (!row) return null;
+    const eff = effectiveSupplierDiscountDefaults(
+      row.category,
+      row.partsDiscountPercent,
+      row.laborDiscountPercent,
+    );
+    return {
+      category: row.category,
+      partsDiscountPercent: eff.partsDiscountPercent,
+      laborDiscountPercent: eff.laborDiscountPercent,
+    };
   }
 
   private parseDiscountPercent(raw: unknown, lineNo: number): number {

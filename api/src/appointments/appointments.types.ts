@@ -64,6 +64,8 @@ export type CalendarListParams = {
   vehicleId?: string;
   clientId?: string;
   status?: ServiceAppointmentStatus;
+  /** FLEET-009: filtru tip dosar (ex. itp). */
+  workflowType?: string;
 };
 
 export type AppointmentStats = {
@@ -88,6 +90,8 @@ export type CreateCalendarAppointmentInput = {
   serviceCaseId?: string;
   sourceTicketId?: string;
   recurrenceRule?: ServiceAppointmentRecurrence;
+  /** FLEET-009: tip dosar când se creează ServiceCase ad-hoc (ex. itp). */
+  workflowType?: string;
   /** Dacă true, programare directă de furnizor (fără pending_supplier). */
   createdBySupplier?: boolean;
   requireDriverAckOverride?: boolean | null;

@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import { ForbiddenException } from '@nestjs/common';
 import type { AccessContext, ClientMembershipContext } from './access-context.types';
+import { accessAllowsCapability } from './functional-profile';
 
 export function isTenantWideAccess(ctx: AccessContext): boolean {
   if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
@@ -246,47 +247,110 @@ export function assertClientAccess(ctx: AccessContext, clientId: string): void {
 /** Scriere operațională (vehicule, curse, costuri…) — nu creare organizație client. */
 export function canWriteClientFleet(ctx: AccessContext): boolean {
   if (isTenantWideAccess(ctx)) {
-    return ctx.membershipRole === MembershipRole.tenant_admin;
+    if (ctx.membershipRole !== MembershipRole.tenant_admin) return false;
+    return accessAllowsCapability(ctx, 'fleet.write');
   }
-  return ctx.clientMemberships.some(
-    (m) => m.role === ClientRole.client_admin || m.role === ClientRole.client_dispatcher,
-  );
+  if (
+    !ctx.clientMemberships.some(
+      (m) => m.role === ClientRole.client_admin || m.role === ClientRole.client_dispatcher,
+    )
+  ) {
+    return false;
+  }
+  return accessAllowsCapability(ctx, 'fleet.write');
 }
 
 export function assertClientFleetWrite(ctx: AccessContext, clientId: string): void {
-  if (ctx.membershipRole === MembershipRole.tenant_admin) return;
+  if (ctx.membershipRole === MembershipRole.tenant_admin) {
+    if (!accessAllowsCapability(ctx, 'fleet.write', clientId)) {
+      throw new ForbiddenException('Insufficient permissions for fleet write (profil F/T/G)');
+    }
+    return;
+  }
   if (!canWriteClientFleet(ctx)) {
     throw new ForbiddenException('Insufficient permissions for fleet write');
   }
   assertClientAccess(ctx, clientId);
+  if (!accessAllowsCapability(ctx, 'fleet.write', clientId)) {
+    throw new ForbiddenException('Insufficient permissions for fleet write (profil F/T/G)');
+  }
 }
 
 /** Dosar lucrare / programator / devize — manager client sau tenant_admin. */
 export function canOperateServiceCase(ctx: AccessContext, clientId: string): boolean {
-  if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
+  if (ctx.membershipRole === MembershipRole.tenant_admin) {
+    return accessAllowsCapability(ctx, 'scheduler.write', clientId);
+  }
   if (!canWriteClientFleet(ctx)) return false;
-  return !!membershipForClient(ctx, clientId);
+  return !!membershipForClient(ctx, clientId) && accessAllowsCapability(ctx, 'scheduler.write', clientId);
 }
 
 export function assertServiceCaseWrite(ctx: AccessContext, clientId: string): void {
-  if (ctx.membershipRole === MembershipRole.tenant_admin) return;
+  if (ctx.membershipRole === MembershipRole.tenant_admin) {
+    if (!accessAllowsCapability(ctx, 'scheduler.write', clientId)) {
+      throw new ForbiddenException('Cannot operate service case (profil F/T/G)');
+    }
+    return;
+  }
   if (!canOperateServiceCase(ctx, clientId)) {
     throw new ForbiddenException('Cannot operate service case');
   }
   assertClientAccess(ctx, clientId);
 }
 
-/** Aprobare deviz — manager client (client_admin) sau tenant_admin. */
-export function canApproveServiceQuote(ctx: AccessContext, clientId: string): boolean {
-  if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
+/** Editare / submit deviz — T, F, full (sau legacy). */
+export function canEditServiceQuote(ctx: AccessContext, clientId: string): boolean {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) {
+    return accessAllowsCapability(ctx, 'quote.edit', clientId);
+  }
+  if (!canWriteClientFleet(ctx)) return false;
   const m = membershipForClient(ctx, clientId);
-  return !!m && m.role === ClientRole.client_admin;
+  if (!m) return false;
+  return accessAllowsCapability(ctx, 'quote.edit', clientId);
+}
+
+export function assertEditServiceQuote(ctx: AccessContext, clientId: string): void {
+  if (!canEditServiceQuote(ctx, clientId)) {
+    throw new ForbiddenException('Cannot edit quote (profil F/T/G)');
+  }
+  assertClientAccess(ctx, clientId);
+}
+
+/** Aprobare deviz — manager client (client_admin) sau tenant_admin, + profil F/full. */
+export function canApproveServiceQuote(ctx: AccessContext, clientId: string): boolean {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) {
+    return accessAllowsCapability(ctx, 'quote.approve', clientId);
+  }
+  const m = membershipForClient(ctx, clientId);
+  if (!m || m.role !== ClientRole.client_admin) return false;
+  return accessAllowsCapability(ctx, 'quote.approve', clientId);
 }
 
 export function assertApproveServiceQuote(ctx: AccessContext, clientId: string): void {
-  if (ctx.membershipRole === MembershipRole.tenant_admin) return;
+  if (ctx.membershipRole === MembershipRole.tenant_admin) {
+    if (!accessAllowsCapability(ctx, 'quote.approve', clientId)) {
+      throw new ForbiddenException('Cannot approve quote (profil F/T/G)');
+    }
+    return;
+  }
   if (!canApproveServiceQuote(ctx, clientId)) {
     throw new ForbiddenException('Cannot approve quote');
+  }
+  assertClientAccess(ctx, clientId);
+}
+
+/** Post-cost — F/full (+ legacy write). */
+export function canPostCostServiceQuote(ctx: AccessContext, clientId: string): boolean {
+  if (ctx.membershipRole === MembershipRole.tenant_admin) {
+    return accessAllowsCapability(ctx, 'quote.postCost', clientId);
+  }
+  if (!canWriteClientFleet(ctx)) return false;
+  return !!membershipForClient(ctx, clientId) && accessAllowsCapability(ctx, 'quote.postCost', clientId);
+}
+
+export function assertPostCostServiceQuote(ctx: AccessContext, clientId: string): void {
+  if (!canPostCostServiceQuote(ctx, clientId)) {
+    throw new ForbiddenException('Cannot post cost (profil F/T/G)');
   }
   assertClientAccess(ctx, clientId);
 }

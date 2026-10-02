@@ -6,6 +6,7 @@ import type {
   VehicleAcquisitionPayload,
   VehicleCivPayload,
   VehiclePhotosPayload,
+  FuelLevelReadingsPayload,
 } from "@/lib/vehicle-profile-types";
 import type { MaintenancePlanPayload } from "@/lib/maintenance-plan-types";
 import type { VehicleEquipmentPayload } from "@/lib/vehicle-equipment-types";
@@ -26,6 +27,8 @@ export type MaintenanceListPayload = {
     performedAt: string | null;
     odometerKm: number | null;
     costCents: number | null;
+    vehicleEquipmentId?: string | null;
+    vehicleEquipmentLabel?: string | null;
   }>;
   total: number;
 };
@@ -121,6 +124,16 @@ async function getOdometerReadings(id: string): Promise<OdometerReadingsPayload 
     const res = await fleetServerFetch(`/fleet/vehicles/${id}/odometer-readings`);
     if (!res?.ok) return null;
     return (await res.json()) as OdometerReadingsPayload;
+  } catch {
+    return null;
+  }
+}
+
+async function getFuelLevelReadings(id: string): Promise<FuelLevelReadingsPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/fuel-level-readings`);
+    if (!res?.ok) return null;
+    return (await res.json()) as FuelLevelReadingsPayload;
   } catch {
     return null;
   }
@@ -249,6 +262,7 @@ export type VehicleDetailData = {
   equipmentPayload: VehicleEquipmentPayload;
   wheelsPayload: VehicleWheelsPayload;
   odometerPayload: OdometerReadingsPayload;
+  fuelLevelPayload: FuelLevelReadingsPayload;
   mobilityPayload: VehicleMobilityPayload | null;
   maintenancePlanPayload: MaintenancePlanPayload;
   driverAssignments: DriverAssignmentRecord[];
@@ -288,6 +302,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     equipment,
     wheels,
     odometer,
+    fuelLevel,
     mobility,
     maintenancePlan,
     driverAssignments,
@@ -301,6 +316,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     getVehicleEquipment(id),
     getVehicleWheels(id),
     getOdometerReadings(id),
+    getFuelLevelReadings(id),
     getVehicleMobility(id),
     getMaintenancePlan(id),
     getDriverAssignments(id),
@@ -317,6 +333,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     equipmentPayload: equipment ?? { items: [] },
     wheelsPayload: wheels ?? { wheelLayout: "four", items: [] },
     odometerPayload: odometer ?? { items: [], vehicleOdometerKm: vehicle.odometerKm },
+    fuelLevelPayload: fuelLevel ?? { items: [] },
     mobilityPayload: mobility,
     maintenancePlanPayload: maintenancePlan ?? {
       ...EMPTY_MAINTENANCE_PLAN,

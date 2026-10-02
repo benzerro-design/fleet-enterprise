@@ -40,6 +40,7 @@ export type SupplierRecord = {
   city: string | null;
   county: string | null;
   notes: string | null;
+  slotCapacity?: number;
   partsDiscountPercent: number;
   laborDiscountPercent: number;
   services: string[];

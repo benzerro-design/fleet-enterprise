@@ -25,6 +25,8 @@ export function schedulerHref(opts?: {
   reschedule?: boolean;
   /** Prefill furnizor la „Solicită programare”. */
   supplier?: string;
+  /** FLEET-009: filtru tip dosar pe calendar (ex. itp). */
+  workflow?: string;
   /** După reprogramare / repropunere, UI poate întoarce userul la tichet. */
   returnToTicket?: boolean;
   extraSearch?: string;
@@ -54,6 +56,9 @@ export function schedulerHref(opts?: {
   }
   if (opts?.case?.trim()) {
     params.set("case", opts.case.trim());
+  }
+  if (opts?.workflow?.trim()) {
+    params.set("workflow", opts.workflow.trim());
   }
   const pick = schedulerDeepLinkPickMode({
     create: opts?.create,

@@ -23,6 +23,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvCell } from '../ops/ops-csv';
 import { parseSupplierServiceCodes, supplierServiceCatalog } from './supplier-services';
+import { supplierSupportsQuoteDiscountDefaults } from './supplier-discount-eligibility';
 import {
   assertSupplierReadById,
   supplierListScope,
@@ -68,6 +69,8 @@ export type SupplierRecord = {
   city: string | null;
   county: string | null;
   notes: string | null;
+  /** SCHED-004 */
+  slotCapacity: number;
   partsDiscountPercent: number;
   laborDiscountPercent: number;
   integrationEnabled: boolean;
@@ -91,6 +94,7 @@ export type CreateSupplierInput = {
   city?: string | null;
   county?: string | null;
   notes?: string | null;
+  slotCapacity?: number | null;
   services?: string[];
   partsDiscountPercent?: number | null;
   laborDiscountPercent?: number | null;
@@ -195,6 +199,7 @@ export class SuppliersService {
       city: string | null;
       county: string | null;
       notes: string | null;
+      slotCapacity?: number | null;
       partsDiscountPercent?: number | null;
       laborDiscountPercent?: number | null;
       integrationEnabled?: boolean;
@@ -219,6 +224,7 @@ export class SuppliersService {
       city: row.city,
       county: row.county,
       notes: row.notes,
+      slotCapacity: Math.max(1, Math.round(Number(row.slotCapacity) || 1)),
       partsDiscountPercent: Number(row.partsDiscountPercent) || 0,
       laborDiscountPercent: Number(row.laborDiscountPercent) || 0,
       integrationEnabled: row.integrationEnabled === true,
@@ -444,8 +450,20 @@ export class SuppliersService {
           city: dto.city?.trim() || null,
           county: dto.county?.trim() || null,
           notes: dto.notes?.trim() || null,
-          partsDiscountPercent: parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent'),
-          laborDiscountPercent: parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent'),
+          slotCapacity:
+            dto.slotCapacity == null
+              ? 1
+              : Math.max(1, Math.min(50, Math.round(Number(dto.slotCapacity)))),
+          partsDiscountPercent: supplierSupportsQuoteDiscountDefaults(
+            dto.category ?? SupplierCategory.other,
+          )
+            ? parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent')
+            : 0,
+          laborDiscountPercent: supplierSupportsQuoteDiscountDefaults(
+            dto.category ?? SupplierCategory.other,
+          )
+            ? parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent')
+            : 0,
           integrationEnabled:
             integrationKeyLast4(dto.integrationApiKey) != null || dto.integrationEnabled === true,
           integrationKeyLast4: integrationKeyLast4(dto.integrationApiKey),
@@ -535,11 +553,32 @@ export class SuppliersService {
     if (dto.city !== undefined) data.city = dto.city?.trim() || null;
     if (dto.county !== undefined) data.county = dto.county?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
-    if (dto.partsDiscountPercent !== undefined) {
-      data.partsDiscountPercent = parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent');
+    if (dto.slotCapacity !== undefined && dto.slotCapacity !== null) {
+      const n = Math.round(Number(dto.slotCapacity));
+      if (!Number.isFinite(n) || n < 1 || n > 50) {
+        throw new BadRequestException('slotCapacity must be between 1 and 50');
+      }
+      data.slotCapacity = n;
     }
-    if (dto.laborDiscountPercent !== undefined) {
-      data.laborDiscountPercent = parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent');
+
+    const nextCategory = dto.category !== undefined ? dto.category : before.category;
+    const discountsEligible = supplierSupportsQuoteDiscountDefaults(nextCategory);
+    if (!discountsEligible) {
+      data.partsDiscountPercent = 0;
+      data.laborDiscountPercent = 0;
+    } else {
+      if (dto.partsDiscountPercent !== undefined) {
+        data.partsDiscountPercent = parseDiscountPercent(
+          dto.partsDiscountPercent,
+          'partsDiscountPercent',
+        );
+      }
+      if (dto.laborDiscountPercent !== undefined) {
+        data.laborDiscountPercent = parseDiscountPercent(
+          dto.laborDiscountPercent,
+          'laborDiscountPercent',
+        );
+      }
     }
     if (dto.integrationEnabled !== undefined) {
       data.integrationEnabled = dto.integrationEnabled === true;

@@ -6,7 +6,11 @@ import { MaintenanceForm } from "@/components/fleet/MaintenanceForm";
 import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
-export default async function NewMaintenancePage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
+export default async function NewMaintenancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vehicleId?: string; equipmentId?: string }>;
+}) {
   const sp = await searchParams;
   const auth = await getAuthMeResult();
   if (!auth.ok && auth.kind === "backend_error" && auth.status === 401) {
@@ -29,7 +33,12 @@ export default async function NewMaintenancePage({ searchParams }: { searchParam
         </Link>
       </div>
       <OpsFormLayout module="maintenance" formTitle="Intervenție nouă" vehicles={vehicles} defaultVehicleId={sp.vehicleId}>
-        <MaintenanceForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} />
+        <MaintenanceForm
+          mode="create"
+          vehicles={vehicles}
+          defaultVehicleId={sp.vehicleId}
+          defaultEquipmentId={sp.equipmentId}
+        />
       </OpsFormLayout>
     </FleetPageMain>
   );

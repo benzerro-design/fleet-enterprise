@@ -24,6 +24,9 @@ export type VehicleEquipmentRecord = {
   notes: string | null;
   isActive: boolean;
   sortOrder: number;
+  /** FLEET-027 — docs / mentenanțe legate de echipare */
+  documentCount?: number;
+  maintenanceCount?: number;
   createdAt: string;
   updatedAt: string;
 };

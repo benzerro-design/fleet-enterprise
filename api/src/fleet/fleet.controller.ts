@@ -25,6 +25,7 @@ import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
 import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
+import type { RecordFuelLevelDto } from './dto/fuel-level-reading.dto';
 import type { CreateVehiclePhotoDto, PatchVehicleAcquisitionDto } from './dto/patch-vehicle-acquisition.dto';
 import type {
   CreateMaintenancePlanItemDto,
@@ -372,6 +373,32 @@ export class FleetController {
   ) {
     const dto = assertRecordOdometerDto(body);
     return this.fleet.recordOdometerReading(tenantId, vehicleId, dto, actorUserId, access);
+  }
+
+  @Get('vehicles/:vehicleId/fuel-level-readings')
+  @Roles(...FLEET_READ_ROLES)
+  listFuelLevelReadings(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('limit') limitStr?: string,
+  ) {
+    const limit = Math.min(Math.max(1, parseInt(limitStr ?? '50', 10) || 50), 100);
+    return this.fleet.listFuelLevelReadings(tenantId, vehicleId, limit, access);
+  }
+
+  @Post('vehicles/:vehicleId/fuel-level-readings')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(201)
+  recordFuelLevelReading(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    const dto = assertRecordFuelLevelDto(body);
+    return this.fleet.recordFuelLevelReading(tenantId, vehicleId, dto, actorUserId, access);
   }
 
   @Get('vehicles/:vehicleId/maintenance-plan')
@@ -732,8 +759,14 @@ function assertCreateVehicleDocumentDto(body: unknown): CreateVehicleDocumentDto
       : undefined;
   const fileUrl =
     'fileUrl' in body ? (body.fileUrl === null ? null : optionalString(body.fileUrl)) : undefined;
+  const vehicleEquipmentId =
+    'vehicleEquipmentId' in body
+      ? body.vehicleEquipmentId === null
+        ? null
+        : optionalString(body.vehicleEquipmentId)
+      : undefined;
 
-  return { documentTypeCode, title, expiresOn, fileUrl };
+  return { documentTypeCode, title, expiresOn, fileUrl, vehicleEquipmentId };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -1016,6 +1049,50 @@ function assertRecordOdometerDto(body: unknown): RecordOdometerDto {
       throw new BadRequestException('source must be manual, tracking, or import');
     }
     dto.source = s;
+  }
+  return dto;
+}
+
+function assertRecordFuelLevelDto(body: unknown): RecordFuelLevelDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const dto: RecordFuelLevelDto = {};
+  if ('liters' in body) {
+    if (body.liters === null) dto.liters = null;
+    else {
+      if (typeof body.liters !== 'number' || !Number.isFinite(body.liters) || body.liters < 0) {
+        throw new BadRequestException('Field "liters" must be a non-negative number or null');
+      }
+      dto.liters = body.liters;
+    }
+  }
+  if ('percent' in body) {
+    if (body.percent === null) dto.percent = null;
+    else {
+      if (typeof body.percent !== 'number' || !Number.isFinite(body.percent)) {
+        throw new BadRequestException('Field "percent" must be a number or null');
+      }
+      dto.percent = body.percent;
+    }
+  }
+  if ('recordedAt' in body) {
+    dto.recordedAt =
+      body.recordedAt === null ? null : optionalIsoDateString(body.recordedAt) ?? null;
+  }
+  if ('notes' in body) {
+    dto.notes = body.notes === null ? null : optionalString(body.notes) ?? null;
+  }
+  if ('sourceRef' in body) {
+    dto.sourceRef = body.sourceRef === null ? null : optionalString(body.sourceRef) ?? null;
+  }
+  if ('source' in body) {
+    const s = body.source;
+    if (s !== 'manual' && s !== 'import' && s !== 'telematics') {
+      throw new BadRequestException('source must be manual, import, or telematics');
+    }
+    dto.source = s;
+  }
+  if (dto.liters == null && dto.percent == null && !('liters' in body) && !('percent' in body)) {
+    throw new BadRequestException('Provide liters and/or percent');
   }
   return dto;
 }

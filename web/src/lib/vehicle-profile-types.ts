@@ -44,6 +44,22 @@ export type OdometerReadingsPayload = {
   reconciled?: boolean;
 };
 
+export type FuelLevelReadingRow = {
+  id: string;
+  vehicleId: string;
+  liters: number | null;
+  percent: number | null;
+  source: "manual" | "import" | "telematics" | string;
+  sourceRef: string | null;
+  notes: string | null;
+  recordedAt: string;
+  recordedByEmail: string | null;
+};
+
+export type FuelLevelReadingsPayload = {
+  items: FuelLevelReadingRow[];
+};
+
 export type AcquisitionType = "cash" | "financial_leasing" | "operational_leasing";
 
 export type VehicleAcquisitionPayload = {

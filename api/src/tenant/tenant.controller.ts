@@ -57,12 +57,23 @@ export class TenantController {
   async patchMember(
     @TenantId() tenantSlug: string,
     @Param('userId') userId: string,
-    @Body() body: { role?: string },
+    @Body() body: { role?: string; functionalProfile?: string | null },
     @CurrentUserId() actorUserId?: string,
   ) {
     if (!actorUserId) throw new BadRequestException('Missing actor');
-    const role = parseMembershipRole(body.role);
-    await this.tenant.setMemberRole(tenantSlug, userId, role, actorUserId);
+    const profileProvided = Object.prototype.hasOwnProperty.call(body, 'functionalProfile');
+    const role = body.role != null && body.role !== '' ? parseMembershipRole(body.role) : undefined;
+    const functionalProfile = profileProvided
+      ? parseOptionalFunctionalProfile(body.functionalProfile)
+      : undefined;
+    await this.tenant.setMemberRole(
+      tenantSlug,
+      userId,
+      role,
+      actorUserId,
+      functionalProfile,
+      profileProvided,
+    );
     return { ok: true };
   }
 
@@ -274,4 +285,13 @@ function parseMembershipRole(raw: string | undefined): MembershipRole {
     throw new BadRequestException('role must be tenant_admin or tenant_viewer');
   }
   return raw;
+}
+
+/** IAM-003 — null / "" / "legacy" = fără restricție F/T/G. */
+function parseOptionalFunctionalProfile(
+  raw: string | null | undefined,
+): import('@prisma/client').FunctionalProfile | null {
+  if (raw == null || raw === '' || raw === 'legacy') return null;
+  if (raw === 'F' || raw === 'T' || raw === 'G' || raw === 'full') return raw;
+  throw new BadRequestException('functionalProfile must be F, T, G, full, or null');
 }

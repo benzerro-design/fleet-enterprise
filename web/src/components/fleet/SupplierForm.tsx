@@ -17,6 +17,7 @@ import {
   type SupplierRecord,
   type SupplierStatus,
 } from "@/lib/suppliers-api";
+import { supplierSupportsQuoteDiscountDefaults } from "@/lib/supplier-discount-eligibility";
 import { clientsBrowserBase, type ClientListPayload, type ClientRecord } from "@/lib/clients-api";
 import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
 
@@ -78,6 +79,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
     e.preventDefault();
     setPending(true);
     setError(null);
+    const eligible = supplierSupportsQuoteDiscountDefaults(category);
     const body = {
       code: code.trim(),
       legalName: legalName.trim(),
@@ -91,8 +93,12 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
       city: city.trim() || null,
       county: county.trim() || null,
       notes: notes.trim() || null,
-      partsDiscountPercent: parseFloat(partsDiscountPercent.replace(",", ".")) || 0,
-      laborDiscountPercent: parseFloat(laborDiscountPercent.replace(",", ".")) || 0,
+      partsDiscountPercent: eligible
+        ? parseFloat(partsDiscountPercent.replace(",", ".")) || 0
+        : 0,
+      laborDiscountPercent: eligible
+        ? parseFloat(laborDiscountPercent.replace(",", ".")) || 0
+        : 0,
       services,
       ...(mode === "create" && clientIds.length ? { clientIds } : {}),
       ...(integrationApiKey.trim()
@@ -185,6 +191,7 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
           </OpsFormField>
         </div>
       </OpsFormSection>
+      {supplierSupportsQuoteDiscountDefaults(category) ? (
       <OpsFormSection number={3} title="Discount default pe deviz">
         <p className="mb-3 text-xs text-zinc-500">
           Se aplică pe linii noi (și la import PDF dacă linia nu are discount). Poți schimba per linie pe
@@ -211,6 +218,13 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
           </OpsFormField>
         </div>
       </OpsFormSection>
+      ) : (
+        <OpsFormSection number={3} title="Discount default pe deviz">
+          <p className="text-xs text-zinc-500">
+            Nu se aplică pentru această categorie — doar Service auto și Anvelope.
+          </p>
+        </OpsFormSection>
+      )}
       <OpsFormSection number={4} title="Cheie API">
         <p className="mb-3 text-xs text-zinc-500">
           Pentru orice furnizor care are o aplicație proprie. Se păstrează doar ultimele 4 caractere, nu secretul complet.

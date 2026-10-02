@@ -11,6 +11,9 @@ export type VehicleEquipmentRecord = {
   notes: string | null;
   isActive: boolean;
   sortOrder: number;
+  /** FLEET-027 */
+  documentCount: number;
+  maintenanceCount: number;
   createdAt: string;
   updatedAt: string;
 };

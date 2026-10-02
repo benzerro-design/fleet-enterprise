@@ -72,6 +72,7 @@ import {
   SILENT_SLOT_EDIT_BLOCKED_MESSAGE,
   type FleetCounterProposedBy,
 } from '../appointments/appointment-status.utils';
+import { assertSupplierSlotCapacity } from '../appointments/appointment-supplier-capacity.utils';
 import {
   effectiveAppointmentProposeFleetFirst,
   effectiveDriverCanNegotiate,
@@ -2432,6 +2433,15 @@ export class ServiceCasesService {
       throw new BadRequestException('Furnizorul trebuie să propună o dată.');
     }
 
+    if (supplierId && scheduledAt) {
+      await assertSupplierSlotCapacity(this.prisma, {
+        tenantId: tenant.id,
+        supplierId,
+        scheduledAt,
+        durationMin,
+      });
+    }
+
     const initialStatus =
       dto.status ??
       resolveInitialAppointmentStatus(supplierId, dto.createdBySupplier);
@@ -2856,6 +2866,16 @@ export class ServiceCasesService {
         throw new BadRequestException('durationMin must be between 15 and 1440');
       }
       durationMin = dto.durationMin;
+    }
+
+    if (existing.supplierId) {
+      await assertSupplierSlotCapacity(this.prisma, {
+        tenantId: tenant.id,
+        supplierId: existing.supplierId,
+        scheduledAt,
+        durationMin,
+        excludeAppointmentId: appointmentId,
+      });
     }
 
     const negotiate = effectiveDriverCanNegotiate(existing.serviceCase.client?.iamSettings);
@@ -3396,6 +3416,16 @@ export class ServiceCasesService {
         throw new BadRequestException('durationMin must be between 15 and 1440');
       }
       durationMin = dto.durationMin;
+    }
+
+    if (existing.supplierId) {
+      await assertSupplierSlotCapacity(this.prisma, {
+        tenantId: tenant.id,
+        supplierId: existing.supplierId,
+        scheduledAt,
+        durationMin,
+        excludeAppointmentId: appointmentId,
+      });
     }
 
     const proposalNote = dto.note?.trim() || null;

@@ -63,6 +63,7 @@ export class AccessContextService {
       clientCode: r.client.code,
       role: r.role,
       driverId: r.driverId,
+      functionalProfile: r.functionalProfile ?? null,
       iamSettings: iamByClient.get(r.clientId) ?? { ...DEFAULT_CLIENT_IAM_SETTINGS },
     }));
 
@@ -106,6 +107,7 @@ export class AccessContextService {
       email: membership.user.email,
       displayName: membership.user.displayName?.trim() || membership.user.email,
       membershipRole: membership.role,
+      tenantFunctionalProfile: membership.functionalProfile ?? null,
       isTenantWide,
       clientMemberships,
       allowedClientIds: clientMemberships.map((m) => m.clientId),

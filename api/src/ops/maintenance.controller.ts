@@ -151,6 +151,7 @@ function assertCreateMaintenanceDto(body: unknown): CreateMaintenanceInput {
     vehicleId,
     title,
     provider: optionalNullableString(body.provider),
+    supplierId: optionalNullableString(body.supplierId),
     costAllocationCode: trimmedAlloc,
     invoiceNumber: optionalNullableString(body.invoiceNumber),
     invoiceDate:
@@ -184,6 +185,7 @@ function assertCreateMaintenanceDto(body: unknown): CreateMaintenanceInput {
     reminderOffsetsKm: parseReminderOffsetsKmField(body, 'reminderOffsetsKm'),
     syncReminderAction:
       'syncReminderAction' in body ? optionalBoolean(body.syncReminderAction) : undefined,
+    vehicleEquipmentId: optionalNullableString(body.vehicleEquipmentId),
   };
 }
 
@@ -194,6 +196,10 @@ function assertPatchMaintenanceDto(body: unknown): PatchMaintenanceInput {
   if ('vehicleId' in body) dto.vehicleId = asNonEmptyString(body.vehicleId, 'vehicleId');
   if ('title' in body) dto.title = asNonEmptyString(body.title, 'title');
   if ('provider' in body) dto.provider = optionalNullableString(body.provider);
+  if ('supplierId' in body) dto.supplierId = optionalNullableString(body.supplierId);
+  if ('vehicleEquipmentId' in body) {
+    dto.vehicleEquipmentId = optionalNullableString(body.vehicleEquipmentId);
+  }
   if ('performedAt' in body) {
     dto.performedAt =
       body.performedAt === null ? null : optionalIsoDateString(body.performedAt);

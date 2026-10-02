@@ -25,6 +25,7 @@ function toRecord(row: {
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
+  _count?: { documents: number; maintenanceEntries: number };
 }): VehicleEquipmentRecord {
   return {
     id: row.id,
@@ -37,6 +38,8 @@ function toRecord(row: {
     notes: row.notes,
     isActive: row.isActive,
     sortOrder: row.sortOrder,
+    documentCount: row._count?.documents ?? 0,
+    maintenanceCount: row._count?.maintenanceEntries ?? 0,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -69,6 +72,9 @@ export class VehicleEquipmentService {
     const rows = await this.prisma.vehicleEquipment.findMany({
       where: { vehicleId },
       orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+      include: {
+        _count: { select: { documents: true, maintenanceEntries: true } },
+      },
     });
     return { items: rows.map(toRecord) };
   }

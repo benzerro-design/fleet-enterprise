@@ -61,6 +61,7 @@ type PageProps = {
     reg?: string;
     case?: string;
     supplier?: string;
+    workflow?: string;
   }>;
 };
 
@@ -68,6 +69,8 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const initialViewMode = parseSchedulerViewParam(sp.view);
   const initialInbox = parseSchedulerInboxParam(sp.inbox);
+  const workflowFilter = sp.workflow?.trim() || "";
+  const extraSearch = workflowFilter ? `workflow=${encodeURIComponent(workflowFilter)}` : undefined;
 
   const [auth, stats, suppliers, serviceTypes, vehicles] = await Promise.all([
     getAuthMeResult(),
@@ -98,6 +101,28 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               <p className="mt-3 max-w-2xl text-zinc-400">
                 Programări service — listă + calendar, validare furnizor, confirmare manager, legături tichet și WO.
               </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <a
+                  href="/fleet/scheduler"
+                  className={`rounded-lg border px-3 py-1.5 ${
+                    !workflowFilter
+                      ? "border-sky-700 bg-sky-950/40 text-sky-200"
+                      : "border-zinc-700 text-zinc-400 hover:bg-zinc-900"
+                  }`}
+                >
+                  Toate
+                </a>
+                <a
+                  href="/fleet/scheduler?workflow=itp"
+                  className={`rounded-lg border px-3 py-1.5 ${
+                    workflowFilter === "itp"
+                      ? "border-sky-700 bg-sky-950/40 text-sky-200"
+                      : "border-zinc-700 text-zinc-400 hover:bg-zinc-900"
+                  }`}
+                >
+                  Doar ITP
+                </a>
+              </div>
             </div>
           </div>
         }
@@ -123,6 +148,7 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               initialCreate={parseSchedulerFlagParam(sp.create)}
               initialReschedule={parseSchedulerFlagParam(sp.reschedule)}
               returnToTicket={parseSchedulerFlagParam(sp.return) && !!sp.ticket?.trim()}
+              extraSearch={extraSearch}
             />
           </Suspense>
         </div>

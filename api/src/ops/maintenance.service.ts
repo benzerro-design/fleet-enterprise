@@ -21,6 +21,7 @@ import {
   reminderMenuSyncEnabledPatchValue,
   shouldRunReminderMenuSync,
 } from './reminder-sync';
+import { resolveVehicleEquipmentIdForVehicle } from '../fleet/vehicle-equipment-link';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -47,6 +48,8 @@ export type CreateMaintenanceInput = {
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
   syncReminderAction?: boolean;
+  /** FLEET-027: legătură opțională la echipare pe același vehicul. */
+  vehicleEquipmentId?: string | null;
 };
 
 export type PatchMaintenanceInput = Partial<CreateMaintenanceInput>;
@@ -224,8 +227,10 @@ function toMaintRow(row: {
   dueOdometerKm: number | null;
   reminderOffsetsKm: unknown;
   reminderMenuSyncEnabled: boolean;
+  vehicleEquipmentId?: string | null;
   vehicle: { registrationNumber: string; client: { code: string } };
   tenant: { slug: string };
+  vehicleEquipment?: { id: string; label: string } | null;
 }) {
   return {
     id: row.id,
@@ -253,6 +258,8 @@ function toMaintRow(row: {
     dueOdometerKm: row.dueOdometerKm,
     reminderOffsetsKm: normalizeReminderOffsetsKm(row.reminderOffsetsKm),
     reminderMenuSyncEnabled: row.reminderMenuSyncEnabled,
+    vehicleEquipmentId: row.vehicleEquipmentId ?? row.vehicleEquipment?.id ?? null,
+    vehicleEquipmentLabel: row.vehicleEquipment?.label ?? null,
   };
 }
 
@@ -290,6 +297,7 @@ export class MaintenanceService {
         include: {
           vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
           tenant: { select: { slug: true } },
+          vehicleEquipment: { select: { id: true, label: true } },
         },
         orderBy: { id: 'desc' },
         skip,
@@ -352,6 +360,7 @@ export class MaintenanceService {
       include: {
         vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
         tenant: { select: { slug: true } },
+        vehicleEquipment: { select: { id: true, label: true } },
       },
     });
     if (!row) throw new NotFoundException('Maintenance entry not found');
@@ -363,6 +372,12 @@ export class MaintenanceService {
     if (!tenant) throw new NotFoundException('Tenant not found');
     await assertVehicleOpsWrite(this.prisma, tenantSlug, dto.vehicleId, access);
     await assertVehicleInTenant(this.prisma, tenantSlug, dto.vehicleId);
+
+    const vehicleEquipmentId = await resolveVehicleEquipmentIdForVehicle(
+      this.prisma,
+      dto.vehicleId,
+      dto.vehicleEquipmentId,
+    );
 
     const provider = await providerLabelForSupplier(
       this.prisma,
@@ -399,10 +414,12 @@ export class MaintenanceService {
         dueOdometerKm: dto.dueOdometerKm ?? null,
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
         reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
+        vehicleEquipmentId: vehicleEquipmentId ?? null,
       },
       include: {
         vehicle: { select: { registrationNumber: true, client: { select: { code: true } } } },
         tenant: { select: { slug: true } },
+        vehicleEquipment: { select: { id: true, label: true } },
       },
     });
 
@@ -462,6 +479,12 @@ export class MaintenanceService {
     if (!before) throw new NotFoundException('Maintenance entry not found');
 
     rejectOpsEntryVehicleIdChange(dto.vehicleId, before.vehicleId);
+
+    const vehicleEquipmentId = await resolveVehicleEquipmentIdForVehicle(
+      this.prisma,
+      before.vehicleId,
+      dto.vehicleEquipmentId,
+    );
 
     const effectiveAlloc = dto.costAllocationCode ?? before.costAllocationCode;
     const isDauna = effectiveAlloc === 'dauna';
@@ -529,6 +552,7 @@ export class MaintenanceService {
       dueOdometerKm: dto.dueOdometerKm,
       reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
       reminderMenuSyncEnabled: reminderMenuSyncEnabledPatchValue(dto.syncReminderAction),
+      vehicleEquipmentId,
     };
 
     const r = await this.prisma.maintenanceEntry.updateMany({

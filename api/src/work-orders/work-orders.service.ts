@@ -26,6 +26,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { assertClientAccess, assertClientFleetWrite, isTenantWideAccess } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
+import { effectiveSupplierDiscountDefaults } from '../suppliers/supplier-discount-eligibility';
 import {
   assertPartnerSupplierId,
   assertPartnerWrite,
@@ -716,6 +717,7 @@ export class WorkOrdersService {
             contactEmail: true,
             partsDiscountPercent: true,
             laborDiscountPercent: true,
+            category: true,
           },
         },
         serviceCase: {
@@ -860,16 +862,24 @@ export class WorkOrdersService {
         billingNotes: row.vehicle.client.billingNotes,
       },
       supplier: row.supplier
-        ? {
-            legalName: row.supplier.legalName,
-            taxId: row.supplier.taxId,
-            addressLine: row.supplier.addressLine,
-            city: row.supplier.city,
-            contactPhone: row.supplier.contactPhone,
-            contactEmail: row.supplier.contactEmail,
-            partsDiscountPercent: Number(row.supplier.partsDiscountPercent) || 0,
-            laborDiscountPercent: Number(row.supplier.laborDiscountPercent) || 0,
-          }
+        ? (() => {
+            const eff = effectiveSupplierDiscountDefaults(
+              row.supplier.category,
+              row.supplier.partsDiscountPercent,
+              row.supplier.laborDiscountPercent,
+            );
+            return {
+              legalName: row.supplier.legalName,
+              taxId: row.supplier.taxId,
+              addressLine: row.supplier.addressLine,
+              city: row.supplier.city,
+              contactPhone: row.supplier.contactPhone,
+              contactEmail: row.supplier.contactEmail,
+              category: row.supplier.category,
+              partsDiscountPercent: eff.partsDiscountPercent,
+              laborDiscountPercent: eff.laborDiscountPercent,
+            };
+          })()
         : null,
       ticketSubject: row.serviceCase.sourceTicket?.subject ?? null,
       driverName: row.serviceCase.sourceTicket?.driver?.fullName ?? null,

@@ -9,6 +9,7 @@ type Member = {
   email: string;
   displayName: string | null;
   role: string;
+  functionalProfile?: string | null;
   disabledAt?: string | null;
   joinedAt: string;
 };
@@ -136,6 +137,7 @@ export function MembersAdminPanel({ members = [], currentUserEmail }: Props) {
                   displayName={m.displayName}
                   joinedAt={m.joinedAt}
                   currentRole={m.role}
+                  currentProfile={m.functionalProfile ?? null}
                   isCurrentUser={Boolean(currentUserEmail && m.email === currentUserEmail)}
                 />
                 <MemberAccountActions

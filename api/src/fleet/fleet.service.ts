@@ -16,6 +16,12 @@ import {
   reminderMenuSyncEnabledPatchValue,
 } from '../ops/reminder-sync';
 import type { CreateVehicleDocumentDto } from './dto/create-vehicle-document.dto';
+import { resolveVehicleEquipmentIdForVehicle } from './vehicle-equipment-link';
+import type {
+  FuelLevelReadingRecord,
+  FuelLevelReadingsPayload,
+  RecordFuelLevelDto,
+} from './dto/fuel-level-reading.dto';
 import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
 import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
@@ -1328,6 +1334,128 @@ export class FleetService {
     };
   }
 
+  async listFuelLevelReadings(
+    tenantSlug: string,
+    vehicleId: string,
+    limit = 50,
+    access?: AccessContext,
+  ): Promise<FuelLevelReadingsPayload> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    const take = Math.min(Math.max(1, limit), 100);
+    const rows = await this.prisma.fuelLevelReading.findMany({
+      where: { vehicleId },
+      orderBy: { recordedAt: 'desc' },
+      take,
+      include: { recordedBy: { select: { email: true } } },
+    });
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        vehicleId: r.vehicleId,
+        liters: r.liters,
+        percent: r.percent,
+        source: r.source as FuelLevelReadingRecord['source'],
+        sourceRef: r.sourceRef,
+        notes: r.notes,
+        recordedAt: r.recordedAt.toISOString(),
+        recordedByEmail: r.recordedBy?.email ?? null,
+      })),
+    };
+  }
+
+  async recordFuelLevelReading(
+    tenantSlug: string,
+    vehicleId: string,
+    dto: RecordFuelLevelDto,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<{ reading: FuelLevelReadingRecord }> {
+    await assertDriverMediaWrite(this.prisma, tenantSlug, vehicleId, access);
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, tenantId: true, registrationNumber: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found');
+
+    const liters =
+      dto.liters === undefined || dto.liters === null
+        ? null
+        : Number.isFinite(dto.liters) && dto.liters >= 0
+          ? dto.liters
+          : null;
+    const percent =
+      dto.percent === undefined || dto.percent === null
+        ? null
+        : Number.isFinite(dto.percent) && dto.percent >= 0 && dto.percent <= 100
+          ? dto.percent
+          : null;
+
+    if (liters == null && percent == null) {
+      throw new BadRequestException('Provide liters and/or percent (0–100)');
+    }
+    if (dto.percent != null && percent == null) {
+      throw new BadRequestException('percent must be between 0 and 100');
+    }
+    if (dto.liters != null && liters == null) {
+      throw new BadRequestException('liters must be a non-negative number');
+    }
+
+    const recordedAt =
+      dto.recordedAt && !Number.isNaN(new Date(dto.recordedAt).getTime())
+        ? new Date(dto.recordedAt)
+        : new Date();
+    const source = dto.source ?? 'manual';
+
+    const reading = await this.prisma.fuelLevelReading.create({
+      data: {
+        vehicleId,
+        liters,
+        percent,
+        source,
+        sourceRef: dto.sourceRef?.trim() || null,
+        notes: dto.notes?.trim() || null,
+        recordedAt,
+        recordedByUserId: actorUserId ?? null,
+      },
+      include: { recordedBy: { select: { email: true } } },
+    });
+
+    await this.audit.logVehicle({
+      tenantUuid: existing.tenantId,
+      actorUserId: actorUserId ?? undefined,
+      action: 'fuel_level_reading_create',
+      vehicleId,
+      meta: {
+        registrationNumber: existing.registrationNumber,
+        liters,
+        percent,
+        source,
+        readingId: reading.id,
+      },
+    });
+
+    return {
+      reading: {
+        id: reading.id,
+        vehicleId: reading.vehicleId,
+        liters: reading.liters,
+        percent: reading.percent,
+        source: reading.source as FuelLevelReadingRecord['source'],
+        sourceRef: reading.sourceRef,
+        notes: reading.notes,
+        recordedAt: reading.recordedAt.toISOString(),
+        recordedByEmail: reading.recordedBy?.email ?? null,
+      },
+    };
+  }
+
   async addVehicleDocument(
     tenantSlug: string,
     vehicleId: string,
@@ -1342,6 +1470,12 @@ export class FleetService {
     });
     if (!existing) throw new NotFoundException('Vehicle not found');
 
+    const vehicleEquipmentId = await resolveVehicleEquipmentIdForVehicle(
+      this.prisma,
+      vehicleId,
+      dto.vehicleEquipmentId,
+    );
+
     const doc = await this.prisma.vehicleDocument.create({
       data: {
         vehicleId,
@@ -1350,6 +1484,7 @@ export class FleetService {
         expiresOn:
           dto.expiresOn === undefined ? null : dto.expiresOn ? new Date(dto.expiresOn) : null,
         fileUrl: dto.fileUrl === undefined ? null : dto.fileUrl,
+        vehicleEquipmentId: vehicleEquipmentId ?? null,
       },
     });
 
@@ -1693,6 +1828,7 @@ export class FleetService {
     expiresOn: Date | null;
     fileUrl: string | null;
     createdAt: Date;
+    vehicleEquipmentId?: string | null;
   }): VehicleDocument {
     return {
       id: d.id,
@@ -1701,6 +1837,7 @@ export class FleetService {
       expiresOn: d.expiresOn ? d.expiresOn.toISOString() : null,
       fileUrl: d.fileUrl,
       createdAt: d.createdAt.toISOString(),
+      vehicleEquipmentId: d.vehicleEquipmentId ?? null,
     };
   }
 }
