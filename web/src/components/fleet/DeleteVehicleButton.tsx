@@ -71,7 +71,7 @@ export function DeleteVehicleButton({ vehicleId, registrationNumber, variant = "
           disabled={pending}
           title={pending ? "Șterg…" : "Șterge"}
           aria-label={`Șterge ${registrationNumber}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-900/60 bg-red-950/40 text-red-200 hover:bg-red-950/70 disabled:opacity-50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-900/50 bg-red-950/30 text-red-300 transition-colors hover:bg-red-950/60 disabled:opacity-50"
         >
           <IconTrash className="h-3.5 w-3.5" />
         </button>
