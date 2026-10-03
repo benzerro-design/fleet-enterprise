@@ -5,7 +5,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import type {
   CreateVehicleEquipmentDto,
   PatchVehicleEquipmentDto,
-  VehicleEquipmentKind,
 } from './dto/vehicle-equipment.dto';
 import type {
   VehicleEquipmentPayload,
@@ -15,7 +14,7 @@ import type {
 function toRecord(row: {
   id: string;
   vehicleId: string;
-  kind: VehicleEquipmentKind;
+  kind: string;
   label: string;
   serialNumber: string | null;
   mountedOn: Date | null;

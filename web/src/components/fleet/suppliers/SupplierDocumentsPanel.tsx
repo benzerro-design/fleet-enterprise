@@ -9,15 +9,17 @@ import {
   type SupplierDocumentKind,
   type SupplierDocumentRecord,
 } from "@/lib/suppliers-api";
+import {
+  DEFAULT_ONBOARDING_DOC_KINDS,
+  supplierSettingsBrowserBase,
+} from "@/lib/supplier-settings";
 
-const KINDS: Array<{ value: SupplierDocumentKind; label: string }> = [
-  { value: "onrc", label: "Certificat ONRC" },
-  { value: "cui_fiscal", label: "CUI / Certificat fiscal" },
-  { value: "rar_auth", label: "Autorizație RAR service" },
-  { value: "itp_auth", label: "Autorizație ITP" },
-  { value: "rc_professional", label: "Poliță RC profesională" },
-  { value: "other", label: "Alt document" },
-];
+const FALLBACK_KINDS: Array<{ value: SupplierDocumentKind; label: string; requiredByDefault: boolean }> =
+  DEFAULT_ONBOARDING_DOC_KINDS.filter((k) => k.enabled).map((k) => ({
+    value: k.code,
+    label: k.label,
+    requiredByDefault: k.requiredByDefault,
+  }));
 
 function statusLabel(status: SupplierDocumentRecord["expiryStatus"]): string {
   switch (status) {
@@ -54,6 +56,7 @@ export function SupplierDocumentsPanel({ supplierId, canWrite }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<SupplierDocumentRecord[]>([]);
   const [compliance, setCompliance] = useState<SupplierDocumentCompliance | null>(null);
+  const [kinds, setKinds] = useState(FALLBACK_KINDS);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<SupplierDocumentKind>("itp_auth");
@@ -63,17 +66,42 @@ export function SupplierDocumentsPanel({ supplierId, canWrite }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${suppliersBrowserBase}/${supplierId}/documents`, {
-        cache: "no-store",
-        headers: fleetJsonHeaders(),
-      });
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        items: SupplierDocumentRecord[];
-        compliance: SupplierDocumentCompliance;
-      };
-      setItems(data.items ?? []);
-      setCompliance(data.compliance ?? null);
+      const [docsRes, settingsRes] = await Promise.all([
+        fetch(`${suppliersBrowserBase}/${supplierId}/documents`, {
+          cache: "no-store",
+          headers: fleetJsonHeaders(),
+        }),
+        fetch(supplierSettingsBrowserBase, { cache: "no-store", headers: fleetJsonHeaders() }),
+      ]);
+      if (docsRes.ok) {
+        const data = (await docsRes.json()) as {
+          items: SupplierDocumentRecord[];
+          compliance: SupplierDocumentCompliance;
+        };
+        setItems(data.items ?? []);
+        setCompliance(data.compliance ?? null);
+      }
+      if (settingsRes.ok) {
+        const s = (await settingsRes.json()) as {
+          onboardingDocKinds?: Array<{
+            code: string;
+            label: string;
+            enabled: boolean;
+            requiredByDefault: boolean;
+          }>;
+        };
+        const next = (s.onboardingDocKinds ?? [])
+          .filter((k) => k.enabled)
+          .map((k) => ({
+            value: k.code,
+            label: k.label,
+            requiredByDefault: k.requiredByDefault,
+          }));
+        if (next.length) {
+          setKinds(next);
+          setKind((prev) => (next.some((k) => k.value === prev) ? prev : next[0].value));
+        }
+      }
     } catch {
       /* ignore */
     }
@@ -84,7 +112,7 @@ export function SupplierDocumentsPanel({ supplierId, canWrite }: Props) {
   }, [load]);
 
   useEffect(() => {
-    const label = KINDS.find((k) => k.value === kind)?.label ?? "Document";
+    const label = kinds.find((k) => k.value === kind)?.label ?? "Document";
     setTitle((prev) => (prev.trim() ? prev : label));
   }, [kind]);
 
@@ -99,7 +127,7 @@ export function SupplierDocumentsPanel({ supplierId, canWrite }: Props) {
         headers: fleetJsonHeaders(),
         body: JSON.stringify({
           kind,
-          title: title.trim() || KINDS.find((k) => k.value === kind)?.label || "Document",
+          title: title.trim() || kinds.find((k) => k.value === kind)?.label || "Document",
           fileUrl: uploaded.url,
           fileName: uploaded.name,
           mimeType: uploaded.mimeType,
@@ -167,9 +195,18 @@ export function SupplierDocumentsPanel({ supplierId, canWrite }: Props) {
     <div className="space-y-4">
       {compliance && !compliance.ok ? (
         <p className="rounded-lg border border-rose-800/50 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
-          Documente obligatorii expirate:{" "}
-          {compliance.expiredRequired.map((d) => d.title).join(", ")}. Acceptul de comenzi e blocat
-          până la reînnoire (admin flotă poate forța).
+          Compliance documente:{" "}
+          {[
+            compliance.expiredRequired.length
+              ? `expirate — ${compliance.expiredRequired.map((d) => d.title).join(", ")}`
+              : null,
+            compliance.missingRequiredKinds?.length
+              ? `lipsă — ${compliance.missingRequiredKinds.map((d) => d.label).join(", ")}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join("; ")}
+          . Acceptul de comenzi e blocat până la remediere.
         </p>
       ) : null}
       {compliance && compliance.expiringSoon.length > 0 ? (
@@ -190,10 +227,15 @@ export function SupplierDocumentsPanel({ supplierId, canWrite }: Props) {
             Tip
             <select
               value={kind}
-              onChange={(e) => setKind(e.target.value as SupplierDocumentKind)}
+              onChange={(e) => {
+                const v = e.target.value as SupplierDocumentKind;
+                setKind(v);
+                const meta = kinds.find((k) => k.value === v);
+                if (meta) setRequired(meta.requiredByDefault);
+              }}
               className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-200"
             >
-              {KINDS.map((k) => (
+              {kinds.map((k) => (
                 <option key={k.value} value={k.value}>
                   {k.label}
                 </option>
@@ -266,7 +308,7 @@ export function SupplierDocumentsPanel({ supplierId, canWrite }: Props) {
                   <td className="py-2 pr-2">
                     <p className="font-medium text-zinc-100">{d.title}</p>
                     <p className="text-[10px] text-zinc-500">
-                      {KINDS.find((k) => k.value === d.kind)?.label ?? d.kind}
+                      {kinds.find((k) => k.value === d.kind)?.label ?? d.kind}
                       {d.required ? " · obligatoriu" : ""}
                     </p>
                   </td>

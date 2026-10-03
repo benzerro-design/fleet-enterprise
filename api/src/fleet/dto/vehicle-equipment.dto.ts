@@ -1,19 +1,21 @@
-export type VehicleEquipmentKind =
-  | 'tow_hitch'
-  | 'fridge_unit'
-  | 'liftgate'
-  | 'crane'
-  | 'other';
+export type VehicleEquipmentKind = string;
 
 export type CreateVehicleEquipmentDto = {
-  kind?: VehicleEquipmentKind;
   label: string;
+  kind?: VehicleEquipmentKind;
   serialNumber?: string | null;
   mountedOn?: string | null;
   notes?: string | null;
   isActive?: boolean;
 };
 
-export type PatchVehicleEquipmentDto = Partial<CreateVehicleEquipmentDto> & {
+export type PatchVehicleEquipmentDto = {
+  label?: string;
+  kind?: VehicleEquipmentKind;
+  serialNumber?: string | null;
+  mountedOn?: string | null;
   removedOn?: string | null;
+  notes?: string | null;
+  isActive?: boolean;
+  sortOrder?: number;
 };

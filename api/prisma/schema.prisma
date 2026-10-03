@@ -24,6 +24,12 @@ model Tenant {
   slaSettings        Json?
   /// Notificări client (Setup → Tipuri & servicii → Notificări): email × eveniment × rol. SETUP-006.
   clientNotificationSettings Json?
+  /// Setup → Furnizori: checklist onboarding, categorii, compliance WO.
+  supplierSettings   Json?
+  /// Setup → Flotă & vehicule: remindere, tipuri document, echipamente.
+  fleetSettings      Json?
+  /// Setup → Importuri: entități, șabloane, drepturi bulk.
+  importSettings     Json?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   auditLogs          AuditLog[]
@@ -626,7 +632,8 @@ model VehicleEquipment {
   id           String               @id @default(cuid())
   tenantId     String
   vehicleId    String
-  kind         VehicleEquipmentKind @default(other)
+  /// Cod tip echipare (Setup Flotă + defaults sistem).
+  kind         String               @default("other")
   label        String
   serialNumber String?
   mountedOn    DateTime?
@@ -645,14 +652,6 @@ model VehicleEquipment {
   @@index([tenantId])
   @@index([vehicleId])
   @@index([vehicleId, isActive])
-}
-
-enum VehicleEquipmentKind {
-  tow_hitch
-  fridge_unit
-  liftgate
-  crane
-  other
 }
 
 /// Poziții anvelope / jante pe vehicul (FLEET-019). Inventar depozit = FLEET-007 (parcat).
@@ -1300,19 +1299,6 @@ enum SupplierStatus {
   blocked
 }
 
-enum SupplierCategory {
-  service_auto
-  itp
-  fuel
-  tires
-  insurer
-  broker
-  dealer
-  roadside_assistance
-  rent
-  other
-}
-
 /// Servicii operaționale pe care le poate presta un furnizor (multi-select per Supplier).
 enum SupplierServiceKind {
   mechanics
@@ -1337,7 +1323,8 @@ model Supplier {
   taxId        String?
   /// IBAN / cont bancar (PARTNER-002 onboarding).
   iban         String?
-  category     SupplierCategory @default(other)
+  /// Cod categorie (Setup Furnizori + defaults sistem). String pentru categorii custom.
+  category     String           @default("other")
   status       SupplierStatus   @default(active)
   contactEmail String?
   contactPhone String?
@@ -1377,20 +1364,12 @@ model Supplier {
 }
 
 /// Document firmă furnizor (ONRC, autorizații) — PARTNER-003.
-enum SupplierDocumentKind {
-  onrc
-  cui_fiscal
-  rar_auth
-  itp_auth
-  rc_professional
-  other
-}
-
+/// kind = cod din Setup Furnizori (string, inclusiv custom).
 model SupplierDocument {
   id              String               @id @default(cuid())
   tenantId        String
   supplierId      String
-  kind            SupplierDocumentKind @default(other)
+  kind            String               @default("other")
   title           String
   fileUrl         String
   fileName        String

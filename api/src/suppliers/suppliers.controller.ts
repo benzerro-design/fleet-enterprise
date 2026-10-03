@@ -14,7 +14,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { MembershipRole, SupplierCategory, SupplierStatus } from '@prisma/client';
+import { MembershipRole, SupplierStatus } from '@prisma/client';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -35,24 +35,13 @@ function parseStatus(raw?: string): SupplierStatus | undefined {
   throw new BadRequestException('Invalid status');
 }
 
-function parseCategory(raw?: string): SupplierCategory | undefined {
+function parseCategory(raw?: string): string | undefined {
   if (!raw?.trim()) return undefined;
-  const v = raw.trim() as SupplierCategory;
-  if (
-    v === 'service_auto' ||
-    v === 'itp' ||
-    v === 'fuel' ||
-    v === 'tires' ||
-    v === 'insurer' ||
-    v === 'broker' ||
-    v === 'dealer' ||
-    v === 'roadside_assistance' ||
-    v === 'rent' ||
-    v === 'other'
-  ) {
-    return v;
+  const v = raw.trim().toLowerCase().replace(/\s+/g, '_');
+  if (!/^[a-z][a-z0-9_]{0,47}$/.test(v)) {
+    throw new BadRequestException('Invalid category');
   }
-  throw new BadRequestException('Invalid category');
+  return v;
 }
 
 function parseServiceTypeCode(raw?: string, legacyKind?: string): string | undefined {

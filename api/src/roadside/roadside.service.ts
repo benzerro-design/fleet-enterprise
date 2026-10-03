@@ -8,7 +8,6 @@ import {
   Prisma,
   RoadsideInterventionKind,
   RoadsideInterventionStatus,
-  SupplierCategory,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -327,7 +326,7 @@ export class RoadsideService {
         where: {
           id: input.supplierId,
           tenantId: tenant.id,
-          category: SupplierCategory.roadside_assistance,
+          category: 'roadside_assistance',
         },
       });
       if (!supplier) {
@@ -407,7 +406,7 @@ export class RoadsideService {
         where: {
           id: input.supplierId,
           tenantId: tenant.id,
-          category: SupplierCategory.roadside_assistance,
+          category: 'roadside_assistance',
         },
       });
       if (!supplier) {

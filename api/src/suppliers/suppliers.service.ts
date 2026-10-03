@@ -8,8 +8,6 @@ import {
 import {
   MembershipRole,
   Prisma,
-  SupplierCategory,
-  SupplierDocumentKind,
   SupplierStatus,
   MaintenanceWorkOrderStatus,
 } from '@prisma/client';
@@ -32,13 +30,13 @@ import {
   getSupplierDocumentCompliance,
   mapSupplierDocumentRow,
 } from './supplier-document-compliance';
+import { parseSupplierSettings } from '../tenant/supplier-settings';
 
 const MAX_PAGE_SIZE = 200;
 
-function parseDocumentKind(raw?: string): SupplierDocumentKind {
-  const v = (raw ?? 'other').trim() as SupplierDocumentKind;
-  const allowed = Object.values(SupplierDocumentKind) as string[];
-  if (!allowed.includes(v)) {
+function parseDocumentKind(raw?: string): string {
+  const v = (raw ?? 'other').trim().toLowerCase().replace(/\s+/g, '_');
+  if (!/^[a-z][a-z0-9_]{0,47}$/.test(v)) {
     throw new BadRequestException('Invalid document kind');
   }
   return v;
@@ -61,7 +59,7 @@ export type SupplierRecord = {
   legalName: string;
   taxId: string | null;
   iban: string | null;
-  category: SupplierCategory;
+  category: string;
   status: SupplierStatus;
   contactEmail: string | null;
   contactPhone: string | null;
@@ -86,7 +84,7 @@ export type CreateSupplierInput = {
   legalName: string;
   taxId?: string | null;
   iban?: string | null;
-  category?: SupplierCategory;
+  category?: string;
   status?: SupplierStatus;
   contactEmail?: string | null;
   contactPhone?: string | null;
@@ -121,7 +119,7 @@ export type SupplierListParams = {
   pageSize: number;
   q?: string;
   status?: SupplierStatus;
-  category?: SupplierCategory;
+  category?: string;
   serviceTypeCode?: string;
 };
 
@@ -191,7 +189,7 @@ export class SuppliersService {
       legalName: string;
       taxId: string | null;
       iban?: string | null;
-      category: SupplierCategory;
+      category: string;
       status: SupplierStatus;
       contactEmail: string | null;
       contactPhone: string | null;
@@ -435,6 +433,7 @@ export class SuppliersService {
     }
 
     try {
+      const supplierSettings = parseSupplierSettings(tenant.supplierSettings);
       const row = await this.prisma.supplier.create({
         data: {
           tenantId: tenant.id,
@@ -442,7 +441,7 @@ export class SuppliersService {
           legalName,
           taxId: dto.taxId?.trim() || null,
           iban: dto.iban?.trim() || null,
-          category: dto.category ?? SupplierCategory.other,
+          category: dto.category ?? 'other',
           status: dto.status ?? SupplierStatus.active,
           contactEmail: dto.contactEmail?.trim() || null,
           contactPhone: dto.contactPhone?.trim() || null,
@@ -452,15 +451,15 @@ export class SuppliersService {
           notes: dto.notes?.trim() || null,
           slotCapacity:
             dto.slotCapacity == null
-              ? 1
+              ? supplierSettings.defaultSlotCapacity
               : Math.max(1, Math.min(50, Math.round(Number(dto.slotCapacity)))),
           partsDiscountPercent: supplierSupportsQuoteDiscountDefaults(
-            dto.category ?? SupplierCategory.other,
+            dto.category ?? 'other',
           )
             ? parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent')
             : 0,
           laborDiscountPercent: supplierSupportsQuoteDiscountDefaults(
-            dto.category ?? SupplierCategory.other,
+            dto.category ?? 'other',
           )
             ? parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent')
             : 0,

@@ -10,13 +10,16 @@ import {
 } from "@/components/fleet/ops-form-primitives";
 import {
   fleetJsonHeaders,
-  SUPPLIER_CATEGORIES,
   supplierCategoryLabel,
   suppliersBrowserBase,
   type SupplierCategory,
   type SupplierRecord,
   type SupplierStatus,
 } from "@/lib/suppliers-api";
+import {
+  DEFAULT_SUPPLIER_CATEGORIES,
+  supplierSettingsBrowserBase,
+} from "@/lib/supplier-settings";
 import { supplierSupportsQuoteDiscountDefaults } from "@/lib/supplier-discount-eligibility";
 import { clientsBrowserBase, type ClientListPayload, type ClientRecord } from "@/lib/clients-api";
 import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEditor";
@@ -34,6 +37,13 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
   const [taxId, setTaxId] = useState(initial?.taxId ?? "");
   const [iban, setIban] = useState(initial?.iban ?? "");
   const [category, setCategory] = useState<SupplierCategory>(initial?.category ?? "service_auto");
+  const [categoryOptions, setCategoryOptions] = useState<Array<{ code: string; label: string }>>(
+    () =>
+      DEFAULT_SUPPLIER_CATEGORIES.filter((c) => c.enabled).map((c) => ({
+        code: c.code,
+        label: c.label,
+      })),
+  );
   const [status, setStatus] = useState<SupplierStatus>(initial?.status ?? "active");
   const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? "");
   const [contactPhone, setContactPhone] = useState(initial?.contactPhone ?? "");
@@ -53,6 +63,38 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(supplierSettingsBrowserBase, {
+          headers: fleetJsonHeaders(),
+          cache: "no-store",
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          categories?: Array<{ code: string; label: string; enabled: boolean }>;
+          defaultSlotCapacity?: number;
+        };
+        const opts = (data.categories ?? [])
+          .filter((c) => c.enabled)
+          .map((c) => ({ code: c.code, label: c.label }));
+        if (opts.length && !cancelled) {
+          setCategoryOptions(opts);
+          if (!opts.some((o) => o.code === category)) {
+            setCategory(opts[0].code);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once; category seed only
+  }, []);
 
   useEffect(() => {
     if (mode !== "create") return;
@@ -156,11 +198,14 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
           </OpsFormField>
           <OpsFormField label="Categorie">
             <select value={category} onChange={(e) => setCategory(e.target.value as SupplierCategory)} className={OPS_INPUT_CLASS}>
-              {SUPPLIER_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {supplierCategoryLabel(c)}
+              {categoryOptions.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label || supplierCategoryLabel(c.code)}
                 </option>
               ))}
+              {!categoryOptions.some((c) => c.code === category) && category ? (
+                <option value={category}>{supplierCategoryLabel(category)}</option>
+              ) : null}
             </select>
           </OpsFormField>
           <OpsFormField label="Status">

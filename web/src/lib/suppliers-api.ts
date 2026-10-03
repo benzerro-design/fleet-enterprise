@@ -14,17 +14,7 @@ export const suppliersBrowserBase = "/api/suppliers";
 export { fleetJsonHeaders };
 
 export type SupplierStatus = "active" | "inactive" | "blocked";
-export type SupplierCategory =
-  | "service_auto"
-  | "itp"
-  | "fuel"
-  | "tires"
-  | "insurer"
-  | "broker"
-  | "dealer"
-  | "roadside_assistance"
-  | "rent"
-  | "other";
+export type SupplierCategory = string;
 
 export type SupplierRecord = {
   id: string;
@@ -51,13 +41,7 @@ export type SupplierRecord = {
   updatedAt: string;
 };
 
-export type SupplierDocumentKind =
-  | "onrc"
-  | "cui_fiscal"
-  | "rar_auth"
-  | "itp_auth"
-  | "rc_professional"
-  | "other";
+export type SupplierDocumentKind = string;
 
 export type SupplierDocumentRecord = {
   id: string;
@@ -80,6 +64,7 @@ export type SupplierDocumentCompliance = {
   ok: boolean;
   expiredRequired: Array<{ id: string; title: string; expiresOn: string }>;
   expiringSoon: Array<{ id: string; title: string; expiresOn: string; daysLeft: number }>;
+  missingRequiredKinds?: Array<{ code: string; label: string }>;
 };
 
 export type SupplierListPayload = {

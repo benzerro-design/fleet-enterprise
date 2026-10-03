@@ -172,6 +172,57 @@ export class TenantController {
     return this.tenant.setWorkOrderSettings(tenantSlug, body, actorUserId);
   }
 
+  @Get('supplier-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getSupplierSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getSupplierSettings(tenantSlug);
+  }
+
+  @Patch('supplier-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchSupplierSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setSupplierSettings(tenantSlug, body, actorUserId);
+  }
+
+  @Get('fleet-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getFleetSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getFleetSettings(tenantSlug);
+  }
+
+  @Patch('fleet-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchFleetSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setFleetSettings(tenantSlug, body, actorUserId);
+  }
+
+  @Get('import-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getImportSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getImportSettings(tenantSlug);
+  }
+
+  @Patch('import-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchImportSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setImportSettings(tenantSlug, body, actorUserId);
+  }
+
   @Get('sla-settings')
   @Roles(...FLEET_READ_ROLES)
   getSlaSettings(@TenantId() tenantSlug: string) {

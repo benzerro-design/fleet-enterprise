@@ -9,7 +9,6 @@ import {
   MobilityAssignmentStatus,
   MobilityDeliveryMode,
   Prisma,
-  SupplierCategory,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import type { AccessContext } from '../iam/access-context.types';
@@ -459,7 +458,7 @@ export class MobilityService {
 
     if (input.supplierId) {
       const supplier = await this.prisma.supplier.findFirst({
-        where: { id: input.supplierId, tenantId: tenant.id, category: SupplierCategory.rent },
+        where: { id: input.supplierId, tenantId: tenant.id, category: 'rent' },
       });
       if (!supplier) {
         throw new BadRequestException('supplierId must be an active Rent supplier');

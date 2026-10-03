@@ -1,10 +1,8 @@
-import type { SupplierCategory } from "@prisma/client";
-
 /**
  * SUPP-041 — discount piese/manoperă doar pe profil atelier / anvelope.
  * (Nu există încă enum dedicat „piese”; dealer rămâne în afară până la PM.)
  */
-const ELIGIBLE: ReadonlySet<string> = new Set(["service_auto", "tires"]);
+const ELIGIBLE: ReadonlySet<string> = new Set(['service_auto', 'tires']);
 
 export function supplierSupportsQuoteDiscountDefaults(
   category: string | null | undefined,
@@ -27,4 +25,4 @@ export function effectiveSupplierDiscountDefaults(
   };
 }
 
-export type { SupplierCategory };
+export type SupplierCategory = string;

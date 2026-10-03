@@ -35,7 +35,6 @@ import type {
 import type {
   CreateVehicleEquipmentDto,
   PatchVehicleEquipmentDto,
-  VehicleEquipmentKind,
 } from './dto/vehicle-equipment.dto';
 import type { VehicleStatus } from './fleet.types';
 import { DashboardService } from './dashboard.service';
@@ -1252,19 +1251,13 @@ function parseReminderOffsetsKmField(
   return nums;
 }
 
-const EQUIPMENT_KINDS = new Set<VehicleEquipmentKind>([
-  'tow_hitch',
-  'fridge_unit',
-  'liftgate',
-  'crane',
-  'other',
-]);
-
-function asVehicleEquipmentKind(v: unknown): VehicleEquipmentKind {
-  if (typeof v === 'string' && EQUIPMENT_KINDS.has(v as VehicleEquipmentKind)) {
-    return v as VehicleEquipmentKind;
+function asVehicleEquipmentKind(v: unknown): string {
+  if (typeof v !== 'string') throw new BadRequestException('Invalid equipment kind');
+  const code = v.trim().toLowerCase().replace(/\s+/g, '_');
+  if (!/^[a-z][a-z0-9_]{0,47}$/.test(code)) {
+    throw new BadRequestException('Invalid equipment kind');
   }
-  throw new BadRequestException('Invalid equipment kind');
+  return code;
 }
 
 function assertCreateVehicleEquipmentDto(body: unknown): CreateVehicleEquipmentDto {

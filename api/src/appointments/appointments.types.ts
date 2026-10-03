@@ -1,4 +1,4 @@
-import { ServiceAppointmentRecurrence, ServiceAppointmentStatus, ServiceAppointmentProposedBy, SupplierCategory } from '@prisma/client';
+import { ServiceAppointmentRecurrence, ServiceAppointmentStatus, ServiceAppointmentProposedBy } from '@prisma/client';
 
 export type CalendarWorkOrderSummary = {
   id: string;
@@ -45,7 +45,7 @@ export type CalendarAppointmentRecord = {
   supplierId: string | null;
   supplierCode: string | null;
   supplierLegalName: string | null;
-  supplierCategory: SupplierCategory | null;
+  supplierCategory: string | null;
   serviceCaseId: string;
   workflowType: string;
   sourceTicketId: string | null;

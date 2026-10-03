@@ -297,9 +297,30 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
       adminOnly: true,
       activePrefixes: ["/fleet/setup/integrations"],
     },
-    { kind: "soon", label: "Furnizori", phase: "phase2" },
-    { kind: "soon", label: "Flotă & vehicule", phase: "phase2" },
-    { kind: "soon", label: "Importuri", phase: "phase2" },
+    {
+      kind: "link",
+      label: "Furnizori",
+      href: "/fleet/setup/suppliers",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/setup/suppliers"],
+    },
+    {
+      kind: "link",
+      label: "Flotă & vehicule",
+      href: "/fleet/setup/fleet",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/setup/fleet"],
+    },
+    {
+      kind: "link",
+      label: "Importuri",
+      href: "/fleet/setup/imports",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/setup/imports"],
+    },
   ],
 };
 

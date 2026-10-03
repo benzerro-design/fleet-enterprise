@@ -42,6 +42,21 @@ import {
   parseClientNotificationSettingsPatch,
   type TenantClientNotificationSettings,
 } from './client-notification-settings';
+import {
+  parseSupplierSettings,
+  parseSupplierSettingsPatch,
+  type SupplierSettings,
+} from './supplier-settings';
+import {
+  parseFleetSettings,
+  parseFleetSettingsPatch,
+  type FleetSettings,
+} from './fleet-settings';
+import {
+  parseImportSettings,
+  parseImportSettingsPatch,
+  type ImportSettings,
+} from './import-settings';
 
 @Injectable()
 export class TenantService {
@@ -369,6 +384,129 @@ export class TenantService {
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
     return parseWorkOrderSettings(tenant.workOrderSettings);
+  }
+
+  async getSupplierSettings(tenantSlug: string): Promise<SupplierSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { supplierSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseSupplierSettings(tenant.supplierSettings);
+  }
+
+  async setSupplierSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<SupplierSettings> {
+    let patch: Partial<SupplierSettings>;
+    try {
+      patch = parseSupplierSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid settings');
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, supplierSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const next: SupplierSettings = { ...parseSupplierSettings(tenant.supplierSettings), ...patch };
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { supplierSettings: next as Prisma.InputJsonValue },
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'supplier_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: next,
+    });
+    return next;
+  }
+
+  async getFleetSettings(tenantSlug: string): Promise<FleetSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { fleetSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseFleetSettings(tenant.fleetSettings);
+  }
+
+  async setFleetSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<FleetSettings> {
+    let patch: Partial<FleetSettings>;
+    try {
+      patch = parseFleetSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid settings');
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, fleetSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const next: FleetSettings = { ...parseFleetSettings(tenant.fleetSettings), ...patch };
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { fleetSettings: next as Prisma.InputJsonValue },
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'fleet_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: next,
+    });
+    return next;
+  }
+
+  async getImportSettings(tenantSlug: string): Promise<ImportSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { importSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseImportSettings(tenant.importSettings);
+  }
+
+  async setImportSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<ImportSettings> {
+    let patch: Partial<ImportSettings>;
+    try {
+      patch = parseImportSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid settings');
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, importSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const next: ImportSettings = { ...parseImportSettings(tenant.importSettings), ...patch };
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { importSettings: next as Prisma.InputJsonValue },
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'import_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: next,
+    });
+    return next;
   }
 
   async setWorkOrderSettings(
