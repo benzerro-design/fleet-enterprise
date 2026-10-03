@@ -189,6 +189,23 @@ export class TenantController {
     return this.tenant.setSlaSettings(tenantSlug, body, actorUserId);
   }
 
+  @Get('client-notification-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getClientNotificationSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getClientNotificationSettings(tenantSlug);
+  }
+
+  @Patch('client-notification-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchClientNotificationSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setClientNotificationSettings(tenantSlug, body, actorUserId);
+  }
+
   @Get('mail-settings')
   @Roles(...FLEET_READ_ROLES)
   getMailSettings(@TenantId() tenantSlug: string) {

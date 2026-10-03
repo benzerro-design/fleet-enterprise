@@ -22,7 +22,7 @@ export const SETUP_PILLARS: SetupPillar[] = [
     id: "clients",
     href: "/fleet/setup/clients",
     label: "Tipuri & servicii",
-    blurb: "Catalog tipuri service și șabloane SLA / priorități pe abonat.",
+    blurb: "Catalog tipuri, SLA / priorități și notificări email pe abonat.",
     status: "live",
     activePrefixes: ["/fleet/setup/clients"],
   },

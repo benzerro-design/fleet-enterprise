@@ -55,7 +55,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       {
         heading: "Piloni disponibili",
         body: [
-          "Tipuri & servicii — catalogul de tipuri service + SLA & priorități (termene pe prioritate, tip → prioritate).",
+          "Tipuri & servicii — catalog tipuri, SLA & priorități, notificări client (email × eveniment × rol).",
           "Comenzi (WO) — recepție, garanții, facturare, pipeline daună.",
           "Email — expeditor, semnătură, CC outbound.",
           "Integrări — import devize, catalog piese, conectori.",

@@ -36,6 +36,11 @@ import {
   parseSlaSettingsPatch,
   type TenantSlaSettings,
 } from './sla-settings';
+import {
+  parseClientNotificationSettings,
+  parseClientNotificationSettingsPatch,
+  type TenantClientNotificationSettings,
+} from './client-notification-settings';
 
 @Injectable()
 export class TenantService {
@@ -449,6 +454,63 @@ export class TenantService {
       tenantId: tenant.id,
       actorUserId,
       action: 'sla_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: next,
+    });
+
+    return next;
+  }
+
+  async getClientNotificationSettings(
+    tenantSlug: string,
+  ): Promise<TenantClientNotificationSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { clientNotificationSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseClientNotificationSettings(tenant.clientNotificationSettings);
+  }
+
+  async setClientNotificationSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<TenantClientNotificationSettings> {
+    let patch: Partial<TenantClientNotificationSettings>;
+    try {
+      patch = parseClientNotificationSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid notification settings',
+      );
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, clientNotificationSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const current = parseClientNotificationSettings(tenant.clientNotificationSettings);
+    const next: TenantClientNotificationSettings = {
+      emailEnabled: patch.emailEnabled ?? current.emailEnabled,
+      events: {
+        ...current.events,
+        ...(patch.events ?? {}),
+      },
+    };
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { clientNotificationSettings: next as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'client_notification_settings_update',
       entityType: 'tenant',
       entityId: tenant.id,
       meta: next,
