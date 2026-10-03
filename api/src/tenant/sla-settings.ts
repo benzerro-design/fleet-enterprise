@@ -5,11 +5,36 @@ export type SlaPriorityHours = {
   resolveHours: number;
 };
 
+export type SlaPriorityKey = 'urgent' | 'high' | 'normal' | 'low';
+
+export const TICKET_TYPES_FOR_SLA: CrmTicketType[] = [
+  'damage',
+  'technical',
+  'maintenance',
+  'itp',
+  'transport',
+  'document',
+  'other',
+];
+
+/** Mapare tip → prioritate implicită (auto-prioritizare). */
+export const DEFAULT_PRIORITY_BY_TYPE: Record<CrmTicketType, CrmTicketPriority> = {
+  damage: 'urgent',
+  technical: 'high',
+  maintenance: 'normal',
+  itp: 'normal',
+  transport: 'normal',
+  document: 'low',
+  other: 'normal',
+};
+
 export type TenantSlaSettings = {
   enabled: boolean;
-  priorities: Record<'urgent' | 'high' | 'normal' | 'low', SlaPriorityHours>;
+  priorities: Record<SlaPriorityKey, SlaPriorityHours>;
   /** Dacă true și prioritatea lipsește la create, o derivează din tipul tichetului. */
   autoPrioritizeFromType: boolean;
+  /** Mapare tip tichet → prioritate (folosită când autoPrioritizeFromType e activ). */
+  priorityByType: Record<CrmTicketType, CrmTicketPriority>;
 };
 
 export const DEFAULT_SLA_SETTINGS: TenantSlaSettings = {
@@ -21,9 +46,10 @@ export const DEFAULT_SLA_SETTINGS: TenantSlaSettings = {
     normal: { firstResponseHours: 8, resolveHours: 72 },
     low: { firstResponseHours: 24, resolveHours: 120 },
   },
+  priorityByType: { ...DEFAULT_PRIORITY_BY_TYPE },
 };
 
-const PRIORITY_KEYS = ['urgent', 'high', 'normal', 'low'] as const;
+const PRIORITY_KEYS: SlaPriorityKey[] = ['urgent', 'high', 'normal', 'low'];
 
 function parseHours(raw: unknown, fallback: number): number {
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return fallback;
@@ -42,6 +68,20 @@ function parsePriorityBlock(
   };
 }
 
+function isPriority(raw: unknown): raw is CrmTicketPriority {
+  return raw === 'urgent' || raw === 'high' || raw === 'normal' || raw === 'low';
+}
+
+function parsePriorityByType(raw: unknown): Record<CrmTicketType, CrmTicketPriority> {
+  const out: Record<CrmTicketType, CrmTicketPriority> = { ...DEFAULT_PRIORITY_BY_TYPE };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  const o = raw as Record<string, unknown>;
+  for (const type of TICKET_TYPES_FOR_SLA) {
+    if (isPriority(o[type])) out[type] = o[type];
+  }
+  return out;
+}
+
 export function parseSlaSettings(raw: unknown): TenantSlaSettings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {
@@ -53,6 +93,7 @@ export function parseSlaSettings(raw: unknown): TenantSlaSettings {
         normal: { ...DEFAULT_SLA_SETTINGS.priorities.normal },
         low: { ...DEFAULT_SLA_SETTINGS.priorities.low },
       },
+      priorityByType: { ...DEFAULT_PRIORITY_BY_TYPE },
     };
   }
   const o = raw as Record<string, unknown>;
@@ -72,6 +113,7 @@ export function parseSlaSettings(raw: unknown): TenantSlaSettings {
       normal: parsePriorityBlock(priRaw.normal, DEFAULT_SLA_SETTINGS.priorities.normal),
       low: parsePriorityBlock(priRaw.low, DEFAULT_SLA_SETTINGS.priorities.low),
     },
+    priorityByType: parsePriorityByType(o.priorityByType),
   };
 }
 
@@ -107,25 +149,21 @@ export function parseSlaSettingsPatch(body: unknown): Partial<TenantSlaSettings>
     }
     patch.priorities = next;
   }
+  if ('priorityByType' in o) {
+    if (!o.priorityByType || typeof o.priorityByType !== 'object' || Array.isArray(o.priorityByType)) {
+      throw new Error('priorityByType must be an object');
+    }
+    patch.priorityByType = parsePriorityByType(o.priorityByType);
+  }
   return patch;
 }
 
-/** Mapare tip → prioritate implicită (auto-prioritizare). */
-export function suggestedPriorityForTicketType(type: CrmTicketType): CrmTicketPriority {
-  switch (type) {
-    case 'damage':
-      return 'urgent';
-    case 'technical':
-      return 'high';
-    case 'maintenance':
-    case 'itp':
-    case 'transport':
-      return 'normal';
-    case 'document':
-      return 'low';
-    default:
-      return 'normal';
-  }
+export function suggestedPriorityForTicketType(
+  type: CrmTicketType,
+  settings?: Pick<TenantSlaSettings, 'priorityByType'> | null,
+): CrmTicketPriority {
+  const map = settings?.priorityByType ?? DEFAULT_PRIORITY_BY_TYPE;
+  return map[type] ?? 'normal';
 }
 
 export function computeSlaDeadlines(

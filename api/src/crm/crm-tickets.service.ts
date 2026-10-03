@@ -586,7 +586,7 @@ export class CrmTicketsService {
     const sla = parseSlaSettings(tenant.slaSettings);
     let priority = dto.priority ?? CrmTicketPriority.normal;
     if (dto.priority === undefined && sla.autoPrioritizeFromType) {
-      priority = suggestedPriorityForTicketType(ticketType);
+      priority = suggestedPriorityForTicketType(ticketType, sla);
     }
     const deadlines = computeSlaDeadlines(sla, priority);
 

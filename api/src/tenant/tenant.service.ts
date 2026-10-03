@@ -437,6 +437,7 @@ export class TenantService {
       ...current,
       ...patch,
       priorities: patch.priorities ?? current.priorities,
+      priorityByType: patch.priorityByType ?? current.priorityByType,
     };
 
     await this.prisma.tenant.update({

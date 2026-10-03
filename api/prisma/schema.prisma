@@ -20,7 +20,7 @@ model Tenant {
   mailSettings       Json?
   /// Integrări tenant (Setup → Integrări): Audatex import, catalog piese, etc.
   integrationsSettings Json?
-  /// SLA runtime (Setup → Clienți → SLA): ore răspuns/rezolvare pe prioritate + auto-prioritate. CRM-010.
+  /// SLA runtime (Setup → Tipuri & servicii → SLA): ore pe prioritate, auto-prioritate, tip→prioritate. CRM-010 / SETUP-004.
   slaSettings        Json?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
