@@ -94,3 +94,29 @@ export function writeVehicleGridLayout(layout: VehicleGridLayout): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(VEHICLE_GRID_STORAGE_KEY, JSON.stringify(layout));
 }
+
+/** Layout din Setup Flotă → defaultVehicleColumnKeys (vizibile = lista; restul hidden). */
+export function layoutFromTenantColumnKeys(keys: string[] | null | undefined): VehicleGridLayout {
+  const valid = new Set(VEHICLE_GRID_COLUMNS.map((c) => c.key));
+  const forced = VEHICLE_GRID_COLUMNS.filter((c) => !c.canHide).map((c) => c.key);
+  const preferred = (keys ?? [])
+    .filter((k): k is VehicleGridColumnKey => valid.has(k as VehicleGridColumnKey));
+  const visible = [...new Set<VehicleGridColumnKey>([...forced, ...preferred])];
+  const order = [
+    ...visible,
+    ...VEHICLE_GRID_COLUMNS.map((c) => c.key).filter((k) => !visible.includes(k)),
+  ];
+  const hidden = order.filter((k) => !visible.includes(k));
+  return { order, hidden, rowLines: true, colLines: false };
+}
+
+/** Seed o singură dată dacă localStorage e gol și tenantul are default. */
+export function seedVehicleGridFromTenant(keys: string[] | null | undefined): VehicleGridLayout {
+  if (typeof window === "undefined") return defaultVehicleGridLayout();
+  const existing = localStorage.getItem(VEHICLE_GRID_STORAGE_KEY);
+  if (existing) return readVehicleGridLayout();
+  if (!keys?.length) return defaultVehicleGridLayout();
+  const layout = layoutFromTenantColumnKeys(keys);
+  writeVehicleGridLayout(layout);
+  return layout;
+}

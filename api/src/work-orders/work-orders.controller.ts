@@ -168,6 +168,7 @@ export class WorkOrdersController {
       serviceOrderType?: 'M' | 'E' | 'D' | 'TV';
       estimatedRepairAt?: string | null;
       status?: MaintenanceWorkOrderStatus;
+      workshopStatusCode?: string | null;
     },
     @CurrentUserId() actorUserId: string,
     @CurrentAccess() access: AccessContext,

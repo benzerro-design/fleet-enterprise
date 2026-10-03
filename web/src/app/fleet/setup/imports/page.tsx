@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { SetupShell } from "@/components/fleet/setup/SetupShell";
+import { ImportCsvRunner } from "@/components/fleet/setup/ImportCsvRunner";
 import { ImportSettingsEditor } from "@/components/fleet/setup/ImportSettingsEditor";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -25,9 +26,12 @@ export default async function SetupImportsPage() {
     <FleetPageMain className="min-h-0">
       <SetupShell
         title="Importuri"
-        description="Entități importabile, șabloane CSV/XLSX și cine poate importa în masă. Conectorii API rămân în Integrări."
+        description="Entități importabile, șabloane CSV, motor upload/dry-run/scriere și istoric job-uri. Conectorii API rămân în Integrări."
       >
-        <ImportSettingsEditor initial={settings} />
+        <div className="space-y-8">
+          <ImportCsvRunner settings={settings} />
+          <ImportSettingsEditor initial={settings} />
+        </div>
       </SetupShell>
     </FleetPageMain>
   );

@@ -18,6 +18,7 @@ import {
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { formatRoDateTime } from '../common/datetime-ro';
+import { ClientNotificationMailService } from '../crm/client-notification-mail.service';
 import { assertClientFleetWrite } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
 import {
@@ -82,6 +83,7 @@ export class AppointmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly clientNotify: ClientNotificationMailService,
   ) {}
 
   private calendarInclude() {
@@ -804,6 +806,14 @@ export class AppointmentsService {
       meta: { vehicleId: dto.vehicleId },
     });
 
+    void this.clientNotify.notify({
+      tenantId: tenant.id,
+      clientId: vehicle.clientId,
+      event: 'appointment_proposed',
+      subject: `[Programare] Propunere ${vehicle.registrationNumber}`,
+      body: `Programare propusă pentru ${vehicle.registrationNumber}: ${formatRoDateTime(scheduledAt)}.`,
+    });
+
     return this.toCalendarRecord(row);
   }
 
@@ -937,6 +947,26 @@ export class AppointmentsService {
       entityId: id,
       meta: {},
     });
+
+    if (dto.status !== undefined && dto.status !== existing.status) {
+      const event =
+        dto.status === ServiceAppointmentStatus.confirmed
+          ? 'appointment_confirmed'
+          : dto.status === ServiceAppointmentStatus.needs_repropose
+            ? 'appointment_reproposed'
+            : null;
+      if (event) {
+        void this.clientNotify.notify({
+          tenantId: tenant.id,
+          clientId: existing.vehicle.clientId,
+          event,
+          subject: `[Programare] ${event === 'appointment_confirmed' ? 'Confirmată' : 'Repropusă'} ${row.vehicle.registrationNumber}`,
+          body: `Programare ${event === 'appointment_confirmed' ? 'confirmată' : 'repropusă'} pentru ${row.vehicle.registrationNumber}${
+            row.scheduledAt ? `: ${formatRoDateTime(row.scheduledAt)}` : ''
+          }.`,
+        });
+      }
+    }
 
     return this.toCalendarRecord(row);
   }

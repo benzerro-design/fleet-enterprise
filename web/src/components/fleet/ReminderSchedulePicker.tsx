@@ -10,25 +10,43 @@ import {
   type ReminderPresetId,
 } from "@/lib/document-reminders";
 
+export type ReminderPresetOption = {
+  id: string;
+  label: string;
+  description: string;
+  offsets: number[];
+};
+
 type Props = {
   expiresOn: string;
   offsets: number[];
   onChange: (offsets: number[]) => void;
   disabled?: boolean;
+  /** Din Setup Flotă; fallback = REMINDER_PRESETS din cod. */
+  presets?: ReminderPresetOption[];
 };
 
-export function ReminderSchedulePicker({ expiresOn, offsets, onChange, disabled }: Props) {
-  const [preset, setPreset] = useState<ReminderPresetId>(() => detectPresetFromOffsets(offsets));
+export function ReminderSchedulePicker({
+  expiresOn,
+  offsets,
+  onChange,
+  disabled,
+  presets: presetsProp,
+}: Props) {
+  const presets = (presetsProp?.length ? presetsProp : REMINDER_PRESETS).filter(
+    (p) => p.offsets?.length,
+  );
+  const [preset, setPreset] = useState<string>(() => detectPresetFromOffsets(offsets));
 
   const summary = useMemo(
     () => computeReminderSummary(expiresOn ? new Date(expiresOn).toISOString() : null, offsets),
     [expiresOn, offsets],
   );
 
-  function applyPreset(id: ReminderPresetId) {
+  function applyPreset(id: string) {
     setPreset(id);
     if (id === "custom") return;
-    const p = REMINDER_PRESETS.find((x) => x.id === id);
+    const p = presets.find((x) => x.id === id);
     if (p) onChange([...p.offsets]);
   }
 
@@ -59,7 +77,7 @@ export function ReminderSchedulePicker({ expiresOn, offsets, onChange, disabled 
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {REMINDER_PRESETS.map((p) => {
+        {presets.map((p) => {
           const active = preset === p.id;
           return (
             <button

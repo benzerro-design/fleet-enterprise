@@ -41,6 +41,7 @@ import {
 import { appointmentStatusLabel } from "@/lib/appointments-api";
 import {
   DEFAULT_WORK_ORDER_SETTINGS,
+  type ServiceTypeSettingsKey,
   type WorkOrderSettings,
 } from "@/lib/work-order-settings";
 
@@ -110,6 +111,9 @@ export function WorkOrderSheetShell({
   const mobilityPrefillSupplierId = partnerSupplierId?.trim() || (isPartner ? wo.supplierId : null);
   const router = useRouter();
   const [serviceType, setServiceType] = useState<ServiceOrderType>(wo.serviceOrderType);
+  const [workshopStatusCode, setWorkshopStatusCode] = useState<string>(
+    wo.workshopStatusCode ?? "",
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kmIn, setKmIn] = useState(wo.odometerKmIn != null ? String(wo.odometerKmIn) : "");
@@ -135,7 +139,21 @@ export function WorkOrderSheetShell({
   /** Dosar pe WO: același ServiceCase ca pe tichet (nu mapare parțială din WO). */
   const [dosarServiceCase, setDosarServiceCase] = useState<ServiceCaseRecord | null>(null);
   const requireKm = workOrderSettings.requireServiceKm;
+  const typeSettingsKey =
+    serviceType === "M" || serviceType === "E" || serviceType === "TV"
+      ? (serviceType as ServiceTypeSettingsKey)
+      : null;
+  const typeSettings = typeSettingsKey
+    ? workOrderSettings.serviceTypeSettings[typeSettingsKey]
+    : null;
+  const workshopStatuses = (typeSettings?.workshopStatuses ?? []).filter((s) => s.enabled);
+  const requirePhotosIn = typeSettings?.requirePhotosIn ?? false;
+  const requirePhotosOut = typeSettings?.requirePhotosOut ?? false;
   const isDamageWo = wo.workflowType === "damage";
+
+  useEffect(() => {
+    setWorkshopStatusCode(wo.workshopStatusCode ?? "");
+  }, [wo.workshopStatusCode, wo.id]);
 
   useEffect(() => {
     if (!isDamageWo || sheetView !== "dosar") return;
@@ -241,7 +259,34 @@ export function WorkOrderSheetShell({
     [wo.id, router],
   );
 
+  async function countVisitPhotos(visitIndex: number, phase: "in" | "out"): Promise<number> {
+    try {
+      const q = new URLSearchParams({
+        kind: "condition",
+        visitIndex: String(visitIndex),
+        phase,
+      });
+      const res = await fetch(`${workOrdersBrowserBase}/${wo.id}/photos?${q}`, {
+        headers: fleetJsonHeaders(),
+      });
+      if (!res.ok) return 0;
+      const data = (await res.json()) as unknown[];
+      return Array.isArray(data) ? data.length : 0;
+    } catch {
+      return 0;
+    }
+  }
+
   async function markIn() {
+    const visitIndex = useVisit2 ? 2 : 1;
+    if (requirePhotosIn) {
+      const n = await countVisitPhotos(visitIndex, "in");
+      if (n < 1) {
+        setError("Poze la In service sunt obligatorii pentru acest tip — încarcă pe tab-ul Poze In.");
+        setRezumatTab(useVisit2 ? "v2-in" : "v1-in");
+        return;
+      }
+    }
     const body: Record<string, string | number> = { inServiceAt: new Date().toISOString() };
     const kmVal = useVisit2 ? kmIn2 : kmIn;
     if (kmVal.trim()) {
@@ -259,6 +304,15 @@ export function WorkOrderSheetShell({
   }
 
   async function markOut() {
+    const visitIndex = useVisit2 ? 2 : 1;
+    if (requirePhotosOut) {
+      const n = await countVisitPhotos(visitIndex, "out");
+      if (n < 1) {
+        setError("Poze la Out service sunt obligatorii pentru acest tip — încarcă pe tab-ul Poze Out.");
+        setRezumatTab(useVisit2 ? "v2-out" : "v1-out");
+        return;
+      }
+    }
     const body: Record<string, string | number> = { outServiceAt: new Date().toISOString() };
     const kmVal = useVisit2 ? kmOut2 : kmOut;
     if (kmVal.trim()) {
@@ -276,6 +330,14 @@ export function WorkOrderSheetShell({
   }
 
   async function markExtraIn(n: number) {
+    if (requirePhotosIn) {
+      const count = await countVisitPhotos(n, "in");
+      if (count < 1) {
+        setError(`Poze In obligatorii pentru vizita ${n}.`);
+        setRezumatTab(`vx-${n}-in`);
+        return;
+      }
+    }
     const body: Record<string, string | number> = {
       visitIndex: n,
       inServiceAt: new Date().toISOString(),
@@ -296,6 +358,14 @@ export function WorkOrderSheetShell({
   }
 
   async function markExtraOut(n: number) {
+    if (requirePhotosOut) {
+      const count = await countVisitPhotos(n, "out");
+      if (count < 1) {
+        setError(`Poze Out obligatorii pentru vizita ${n}.`);
+        setRezumatTab(`vx-${n}-out`);
+        return;
+      }
+    }
     const body: Record<string, string | number> = {
       visitIndex: n,
       outServiceAt: new Date().toISOString(),
@@ -356,6 +426,29 @@ export function WorkOrderSheetShell({
         throw new Error(j.message ?? `HTTP ${res.status}`);
       }
       setServiceType(code);
+      setWorkshopStatusCode("");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function changeWorkshopStatus(code: string) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`${workOrdersBrowserBase}/${wo.id}`, {
+        method: "PATCH",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({ workshopStatusCode: code || null }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      setWorkshopStatusCode(code);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
@@ -578,6 +671,33 @@ export function WorkOrderSheetShell({
                 ))}
                 <span className="text-zinc-300">{serviceOrderTypeLabel(serviceType)}</span>
               </span>
+              {workshopStatuses.length > 0 ? (
+                <label className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                  <span>Atelier:</span>
+                  <select
+                    value={workshopStatusCode}
+                    disabled={!canWrite || pending}
+                    onChange={(e) => void changeWorkshopStatus(e.target.value)}
+                    className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-zinc-200 disabled:opacity-50"
+                  >
+                    <option value="">—</option>
+                    {workshopStatuses.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {(requirePhotosIn || requirePhotosOut) && !outServiceDone ? (
+                <p className="mt-1 text-[11px] text-amber-200/80">
+                  {requirePhotosIn && requirePhotosOut
+                    ? "Poze In și Out obligatorii pe tip — API blochează marcarea fără ele."
+                    : requirePhotosIn
+                      ? "Poze In obligatorii pe tip — încarcă înainte de In service."
+                      : "Poze Out obligatorii pe tip — încarcă înainte de Out service."}
+                </p>
+              ) : null}
             </>
           ) : sheetView === "mobilitate" ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">

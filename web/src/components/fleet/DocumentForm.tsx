@@ -21,6 +21,7 @@ import {
   documentTypeLabel,
   isCivDocumentTypeCode,
 } from "@/lib/document-types";
+import { useFleetSettings } from "@/lib/use-fleet-settings";
 import {
   hasConfiguredOpsReminder,
   inferReminderConstraintMode,
@@ -165,15 +166,23 @@ export function DocumentForm(props: Props) {
   const showCivDualUpload = isCivCreate || isCivEdit;
   const isCivSideEdit = isEdit && (documentTypeCode === "civ_fata" || documentTypeCode === "civ_verso");
 
+  const fleetSettings = useFleetSettings();
+  const catalogTypes = useMemo(() => {
+    const fromSetup = fleetSettings.documentTypes
+      .filter((d) => d.enabled)
+      .map((d) => ({ value: d.code, label: d.label }));
+    return fromSetup.length ? fromSetup : [...DOCUMENT_TYPE_OPTIONS];
+  }, [fleetSettings.documentTypes]);
+
   const typeOptions = useMemo(() => {
     if (isEdit && (documentTypeCode === "civ_fata" || documentTypeCode === "civ_verso")) {
       return [
-        ...DOCUMENT_TYPE_OPTIONS.filter((o) => o.value !== "civ"),
+        ...catalogTypes.filter((o) => o.value !== "civ"),
         { value: documentTypeCode, label: documentTypeLabel(documentTypeCode) },
       ];
     }
-    return [...DOCUMENT_TYPE_OPTIONS];
-  }, [isEdit, documentTypeCode]);
+    return catalogTypes;
+  }, [isEdit, documentTypeCode, catalogTypes]);
 
   async function onPickFile(file: File | null, slot: "single" | "front" | "verso") {
     if (!file) return;

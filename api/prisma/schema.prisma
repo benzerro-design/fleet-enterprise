@@ -79,6 +79,7 @@ model Tenant {
   insurers               Insurer[]
   clientSupplierAllocations ClientSupplierAllocation[]
   userInvites               UserInvite[]
+  importJobs                ImportJob[]
 }
 
 enum ClientStatus {
@@ -334,6 +335,7 @@ model User {
   userInvitesAccepted      UserInvite[]              @relation("UserInviteAccepter")
   workOrderMessages        WorkOrderMessage[]
   botPopulationSessions    BotPopulationSession[]    @relation("BotSessionActor")
+  importJobs               ImportJob[]               @relation("ImportJobActor")
 }
 
 enum BotSessionStatus {
@@ -1739,6 +1741,8 @@ model MaintenanceWorkOrder {
   readyAt          DateTime?
   /// Dată estimativă finalizare reparație — obligatorie înainte de trimitere deviz spre aprobare (partener).
   estimatedRepairAt DateTime?
+  /// Status atelier pe tip (ex. TV din Setup WO → workshopStatuses).
+  workshopStatusCode String?
   notes         String?
   /// Vizite atelier 3+ (vizitele 1–2 rămân pe coloanele IN/OUT existente).
   extraVisits   Json     @default("[]")
@@ -2172,4 +2176,35 @@ model RoadsideIntervention {
   @@index([sourceTicketId])
   @@index([workOrderId])
   @@index([tenantId, status])
+}
+
+enum ImportJobStatus {
+  dry_run
+  completed
+  failed
+}
+
+/// Istoric import CSV (Setup → Importuri).
+model ImportJob {
+  id          String          @id @default(cuid())
+  tenantId    String
+  actorUserId String?
+  entity      String
+  templateId  String?
+  status      ImportJobStatus @default(dry_run)
+  fileName    String?
+  dryRun      Boolean         @default(true)
+  totalRows   Int             @default(0)
+  successRows Int             @default(0)
+  errorRows   Int             @default(0)
+  errorReport Json?
+  summary     Json?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime        @default(now())
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor       User?           @relation("ImportJobActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entity, status])
 }

@@ -109,6 +109,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   linkedAppointmentStatus: string | null;
   awaitingPostApproval: boolean;
   postApprovalPath: "immediate" | "reschedule" | null;
+  workshopStatusCode?: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
   visit2InServiceAt: string | null;

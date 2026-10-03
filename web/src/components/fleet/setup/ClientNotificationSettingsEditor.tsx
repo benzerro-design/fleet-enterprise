@@ -179,8 +179,8 @@ export function ClientNotificationSettingsEditor() {
           </table>
         </div>
         <p className="text-xs text-zinc-600">
-          Trimiterea efectivă pe email pentru aceste evenimente se leagă pe măsură ce apare
-          pipeline-ul de mail CRM; setările se salvează acum și vor fi consumate de runtime.
+          Runtime-ul trimite email pe evenimente CRM/programări când SMTP e configurat (Setup →
+          Email) și când master switch + evenimentul sunt active.
         </p>
       </section>
 

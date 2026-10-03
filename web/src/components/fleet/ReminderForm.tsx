@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { ReminderKmPicker } from "@/components/fleet/ReminderKmPicker";
 import { ReminderSchedulePicker } from "@/components/fleet/ReminderSchedulePicker";
 import { DEFAULT_REMINDER_OFFSETS } from "@/lib/document-reminders";
+import { useFleetSettings } from "@/lib/use-fleet-settings";
 import {
   CUSTOM_REMINDER_PRESETS,
   REMINDER_SOURCE_TYPES,
@@ -114,6 +115,19 @@ export function ReminderForm(props: Props) {
   const [ctx, setCtx] = useState<VehicleContext | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fleetSettings = useFleetSettings();
+  const reminderPresets = useMemo(
+    () =>
+      fleetSettings.reminderPresets
+        .filter((p) => p.enabled)
+        .map((p) => ({
+          id: p.id,
+          label: p.label,
+          description: p.description,
+          offsets: p.offsets,
+        })),
+    [fleetSettings.reminderPresets],
+  );
 
   const loadContext = useCallback(async (vid: string) => {
     if (!vid) {
@@ -325,7 +339,13 @@ export function ReminderForm(props: Props) {
             />
           </OpsFormField>
           {dueOn ? (
-            <ReminderSchedulePicker expiresOn={dueOn} offsets={reminderOffsetsDays} onChange={setReminderOffsetsDays} disabled={pending} />
+            <ReminderSchedulePicker
+              expiresOn={dueOn}
+              offsets={reminderOffsetsDays}
+              onChange={setReminderOffsetsDays}
+              disabled={pending}
+              presets={reminderPresets}
+            />
           ) : null}
           <ReminderKmPicker
             dueOdometerKm={dueOdometerKm}
@@ -548,6 +568,7 @@ export function ReminderForm(props: Props) {
           offsets={reminderOffsetsDays}
           onChange={setReminderOffsetsDays}
           disabled={isDocumentLinked || pending}
+          presets={reminderPresets}
         />
       ) : null}
 

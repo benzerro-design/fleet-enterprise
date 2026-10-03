@@ -20,9 +20,10 @@ import { RoadsideModule } from './roadside/roadside.module';
 import { ServiceImportModule } from './integrations/service/service-import.module';
 import { TenantModule } from './tenant/tenant.module';
 import { PartnerModule } from './partner/partner.module';
+import { ImportsModule } from './imports/imports.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, IamModule, BotModule, ClientsModule, CrmModule, DriversModule, FleetModule, OpsModule, ServiceCasesModule, SuppliersModule, InsurersModule, WorkOrdersModule, AppointmentsModule, MobilityModule, RoadsideModule, TenantModule, PartnerModule, ServiceImportModule],
+  imports: [PrismaModule, AuthModule, IamModule, BotModule, ClientsModule, CrmModule, DriversModule, FleetModule, OpsModule, ServiceCasesModule, SuppliersModule, InsurersModule, WorkOrdersModule, AppointmentsModule, MobilityModule, RoadsideModule, TenantModule, PartnerModule, ServiceImportModule, ImportsModule],
   controllers: [AppController],
   providers: [AppService],
 })

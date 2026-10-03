@@ -178,6 +178,8 @@ export type WorkOrderDetail = WorkOrderListRow & {
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;
   linkedAppointmentStatus: string | null;
+  /** Status atelier pe tip (ex. TV: demontare / vopsitorie). */
+  workshopStatusCode: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
   visit2InServiceAt: string | null;
@@ -899,6 +901,8 @@ export class WorkOrdersService {
       linkedAppointmentId: linked?.id ?? null,
       linkedAppointmentScheduledAt: linked?.scheduledAt?.toISOString() ?? null,
       linkedAppointmentStatus: linked?.status ?? null,
+      workshopStatusCode:
+        (row as { workshopStatusCode?: string | null }).workshopStatusCode ?? null,
       inServiceAt: row.inServiceAt?.toISOString() ?? null,
       outServiceAt: row.outServiceAt?.toISOString() ?? null,
       visit2InServiceAt: row.visit2InServiceAt?.toISOString() ?? null,
@@ -1149,6 +1153,7 @@ export class WorkOrdersService {
       serviceOrderType?: ServiceOrderType;
       estimatedRepairAt?: string | null;
       status?: MaintenanceWorkOrderStatus;
+      workshopStatusCode?: string | null;
     },
     actorUserId?: string,
     access?: AccessContext,
@@ -1257,6 +1262,27 @@ export class WorkOrdersService {
         throw new BadRequestException('Invalid status');
       }
       data.status = dto.status;
+    }
+    if (dto.workshopStatusCode !== undefined) {
+      const nextType = (dto.serviceOrderType ?? wo.serviceOrderType) as ServiceTypeSettingsKey | 'D';
+      if (nextType !== 'M' && nextType !== 'E' && nextType !== 'TV') {
+        throw new BadRequestException('Status atelier doar pentru tipuri M / E / TV');
+      }
+      const woSettings = parseWorkOrderSettings(
+        (tenant as { workOrderSettings?: unknown }).workOrderSettings,
+      );
+      const allowed = woSettings.serviceTypeSettings[nextType].workshopStatuses.filter(
+        (s) => s.enabled,
+      );
+      if (dto.workshopStatusCode === null || dto.workshopStatusCode === '') {
+        data.workshopStatusCode = null;
+      } else {
+        const code = dto.workshopStatusCode.trim();
+        if (!allowed.some((s) => s.code === code)) {
+          throw new BadRequestException('Status atelier invalid pentru tipul de comandă');
+        }
+        data.workshopStatusCode = code;
+      }
     }
     if (Object.keys(data).length === 0) {
       // PATCH only cu estimatedRepairAt identic (noop după quote lock) — OK.

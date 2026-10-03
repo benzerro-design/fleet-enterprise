@@ -35,6 +35,7 @@ import {
   ticketSlaStatus,
 } from '../tenant/sla-settings';
 import { PartnerMailService } from '../partner/partner-mail.service';
+import { ClientNotificationMailService } from './client-notification-mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from '../ops/ops-csv';
 import {
@@ -248,6 +249,7 @@ export class CrmTicketsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly mail: PartnerMailService,
+    private readonly clientNotify: ClientNotificationMailService,
   ) {}
 
   displayId(id: string): string {
@@ -645,6 +647,15 @@ export class CrmTicketsService {
       meta: { subject, clientId: client.code },
     });
 
+    void this.clientNotify.notify({
+      tenantId: tenant.id,
+      clientId: client.id,
+      event: 'ticket_created',
+      subject: `[CRM] Tichet nou ${this.displayId(row.id)} — ${subject}`,
+      body: `S-a creat tichetul ${this.displayId(row.id)}: ${subject}.`,
+      driverId,
+    });
+
     const fresh = await this.prisma.crmTicket.findFirstOrThrow({
       where: { id: row.id },
       include: this.ticketInclude(),
@@ -717,7 +728,8 @@ export class CrmTicketsService {
       );
     }
 
-    if (dto.status !== undefined && dto.status !== existing.status) {
+    const statusChanged = dto.status !== undefined && dto.status !== existing.status;
+    if (statusChanged) {
       data.status = dto.status;
       if (dto.status === CrmTicketStatus.resolved || dto.status === CrmTicketStatus.cancelled) {
         data.resolvedAt = new Date();
@@ -759,6 +771,19 @@ export class CrmTicketsService {
           data: { vehicleMovable: row.vehicleMovable },
         });
       }
+    }
+
+    if (statusChanged && dto.status) {
+      const event =
+        dto.status === CrmTicketStatus.resolved ? 'ticket_resolved' : 'ticket_status_changed';
+      void this.clientNotify.notify({
+        tenantId: tenant.id,
+        clientId: row.clientId,
+        event,
+        subject: `[CRM] ${this.displayId(id)} — status ${dto.status}`,
+        body: `Tichetul ${this.displayId(id)} a trecut din ${existing.status} în ${dto.status}.`,
+        driverId: row.driverId,
+      });
     }
 
     return this.toRecord(row);
@@ -903,6 +928,15 @@ export class CrmTicketsService {
             ? { firstRespondedAt: new Date() }
             : {}),
       },
+    });
+
+    void this.clientNotify.notify({
+      tenantId: tenant.id,
+      clientId: ticket.clientId,
+      event: 'ticket_comment',
+      subject: `[CRM] Comentariu pe ${this.displayId(id)}`,
+      body: displayBody.slice(0, 500),
+      driverId: ticket.driverId,
     });
 
     return this.getDetail(tenantSlug, id, access);
@@ -1272,6 +1306,15 @@ export class CrmTicketsService {
       entityType: 'crm_ticket',
       entityId: id,
       meta: {},
+    });
+
+    void this.clientNotify.notify({
+      tenantId: tenant.id,
+      clientId: ticket.clientId,
+      event: 'ticket_resolved',
+      subject: `[CRM] Rezolvat ${this.displayId(id)} — ${ticket.subject}`,
+      body: resolveBody.slice(0, 500),
+      driverId: ticket.driverId,
     });
 
     return this.toRecord(row);

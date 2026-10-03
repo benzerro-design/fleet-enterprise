@@ -11,6 +11,7 @@ import {
   type VehicleEquipmentPayload,
   type VehicleEquipmentRecord,
 } from "@/lib/vehicle-equipment-types";
+import { useFleetSettings } from "@/lib/use-fleet-settings";
 
 type Props = {
   vehicleId: string;
@@ -25,6 +26,13 @@ function isoDateOnly(iso: string | null): string {
 
 export function VehicleEquipmentTab({ vehicleId, write, initial }: Props) {
   const router = useRouter();
+  const fleetSettings = useFleetSettings();
+  const kindOptions =
+    fleetSettings.equipmentKinds.filter((k) => k.enabled).length > 0
+      ? fleetSettings.equipmentKinds
+          .filter((k) => k.enabled)
+          .map((k) => ({ value: k.code, label: k.label }))
+      : VEHICLE_EQUIPMENT_KINDS;
   const [items, setItems] = useState(initial.items);
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<VehicleEquipmentKind>("other");
@@ -158,7 +166,7 @@ export function VehicleEquipmentTab({ vehicleId, write, initial }: Props) {
                 disabled={pending}
                 className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               >
-                {VEHICLE_EQUIPMENT_KINDS.map((k) => (
+                {kindOptions.map((k) => (
                   <option key={k.value} value={k.value}>
                     {k.label}
                   </option>

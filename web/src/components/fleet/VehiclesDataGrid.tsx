@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DeleteVehicleButton } from "@/components/fleet/DeleteVehicleButton";
 import {
   FleetDataTable,
@@ -16,8 +16,10 @@ import {
   VEHICLE_TYPES,
   type VehicleRecord,
 } from "@/lib/fleet-api";
+import { useFleetSettings } from "@/lib/use-fleet-settings";
 import {
   readVehicleGridLayout,
+  seedVehicleGridFromTenant,
   type VehicleGridColumnKey,
   type VehicleGridLayout,
   visibleVehicleColumns,
@@ -97,9 +99,15 @@ type Props = {
 };
 
 export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
+  const fleetSettings = useFleetSettings();
   const [layout, setLayout] = useState<VehicleGridLayout>(() => readVehicleGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const columns = useMemo(() => visibleVehicleColumns(layout), [layout]);
+
+  useEffect(() => {
+    const seeded = seedVehicleGridFromTenant(fleetSettings.defaultVehicleColumnKeys);
+    setLayout(seeded);
+  }, [fleetSettings.defaultVehicleColumnKeys]);
 
   function persist(next: VehicleGridLayout) {
     setLayout(next);
