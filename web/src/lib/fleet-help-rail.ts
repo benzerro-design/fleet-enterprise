@@ -5,12 +5,13 @@ import { getHelpArticle, type HelpArticle } from "@/lib/help-articles";
  * Conținutul rămâne HELP-001; rail-ul doar alege ce e relevant pe ecran.
  */
 const ROUTE_HELP: Array<{ prefixes: string[]; slug: string }> = [
-  { prefixes: ["/fleet/scheduler", "/fleet/setup/clients"], slug: "programari-politici" },
+  { prefixes: ["/fleet/scheduler"], slug: "programari-politici" },
   { prefixes: ["/fleet/tickets", "/fleet/audit"], slug: "programari-proxy-lstar" },
   { prefixes: ["/fleet/members", "/fleet/user-strategy"], slug: "membri-invite" },
   { prefixes: ["/fleet/work-orders"], slug: "repropunere-acelasi-slot" },
   { prefixes: ["/fleet/help"], slug: "help-vs-proceduri" },
-  { prefixes: ["/fleet/setup"], slug: "programari-politici" },
+  { prefixes: ["/fleet/setup"], slug: "setup-tenant" },
+  { prefixes: ["/fleet/clients"], slug: "programari-politici" },
   { prefixes: ["/fleet"], slug: "ierarhie-l-r" },
 ];
 

@@ -2,78 +2,57 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { SetupShell } from "@/components/fleet/setup/SetupShell";
 import { TenantServiceTypesEditor } from "@/components/fleet/setup/TenantServiceTypesEditor";
-import { TicketFormsSettingsEditor } from "@/components/fleet/setup/TicketFormsSettingsEditor";
 import type { TenantServiceType } from "@/lib/tenant-service-types/types";
-
-type ClientTab = "tip-servicii" | "sla" | "forms" | "notifications";
-
-/** PO 29 sep: zero UI Setup nou până SETUP-012 — SLA retractat din Setup (CRM-010 runtime rămâne pe defaults). */
-const TABS: { id: ClientTab; label: string; live: boolean; blockedHint?: string }[] = [
-  { id: "tip-servicii", label: "Tip & Servicii", live: true },
-  {
-    id: "sla",
-    label: "SLA & priorități",
-    live: false,
-    blockedHint: "Blocat până SETUP-012 (EOW) — nu mai adăugăm config pe Setup.",
-  },
-  { id: "forms", label: "Politici tichet", live: true },
-  { id: "notifications", label: "Notificări client", live: false, blockedHint: "Planificat P2" },
-];
 
 type Props = {
   initialItems: TenantServiceType[];
 };
 
+/**
+ * SETUP-012: pilon Tipuri & servicii = catalog tenant.
+ * Politici pe client (fost „Politici tichet”) → doar pe fișa Clientului.
+ */
 export function SetupClientsPageClient({ initialItems }: Props) {
   const searchParams = useSearchParams();
-  const tab = (searchParams.get("tab") as ClientTab | null) ?? "tip-servicii";
-  const requested = TABS.find((t) => t.id === tab);
-  const activeTab =
-    requested?.live ? requested.id : tab === "sla" || tab === "notifications" ? "tip-servicii" : "tip-servicii";
-  const intro =
-    activeTab === "forms"
-      ? "Politici pe client: programare service și ce vede managerul pe lista de tichete."
-      : "Catalog tenant de tipuri service — etichete și descrieri pentru portal client. Furnizorii bifează din acest catalog ce prestează.";
+  const legacyTab = searchParams.get("tab");
+  const cameFromPolicies = legacyTab === "forms";
 
   return (
-    <>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Setup · Clienți</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Configurare experiență client</h1>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-400">{intro}</p>
+    <SetupShell
+      title="Tipuri & servicii"
+      description="Catalog tenant — etichete și descrieri pentru portalul client. Furnizorii bifează din acest catalog ce prestează."
+    >
+      {cameFromPolicies ? (
+        <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-sm leading-relaxed text-zinc-400">
+          Politicile pe client (programări, listă tichete, drepturi L1) nu se mai editează din Setup. Deschide{" "}
+          <Link href="/fleet/clients" className="font-medium text-zinc-200 underline-offset-2 hover:underline">
+            fișa clientului → Drepturi & politici L1
+          </Link>
+          .
         </div>
+      ) : null}
+
+      <div className="mb-6 flex flex-wrap gap-2 border-b border-zinc-800/80 pb-3">
+        <span className="rounded-lg bg-[var(--fleet-surface-solid)] px-3 py-1.5 text-sm font-medium text-zinc-100 ring-1 ring-[var(--fleet-surface-border)]">
+          Catalog tipuri
+        </span>
+        <span
+          className="cursor-not-allowed rounded-lg px-3 py-1.5 text-sm text-zinc-600"
+          title="Șabloane SLA pe tenant — după organizarea Setup"
+        >
+          SLA & priorități · curând
+        </span>
+        <span
+          className="cursor-not-allowed rounded-lg px-3 py-1.5 text-sm text-zinc-600"
+          title="Planificat"
+        >
+          Notificări · curând
+        </span>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-2 border-b border-zinc-800 pb-3">
-        {TABS.map((tb) =>
-          tb.live ? (
-            <Link
-              key={tb.id}
-              href={`/fleet/setup/clients?tab=${tb.id}`}
-              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                activeTab === tb.id
-                  ? "bg-emerald-600/20 font-medium text-emerald-300 ring-1 ring-emerald-700/50"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-              }`}
-            >
-              {tb.label}
-            </Link>
-          ) : (
-            <span
-              key={tb.id}
-              className="cursor-not-allowed rounded-lg px-3 py-1.5 text-sm text-zinc-600"
-              title={tb.blockedHint ?? "Indisponibil"}
-            >
-              {tb.label} · blocat
-            </span>
-          ),
-        )}
-      </div>
-
-      {activeTab === "tip-servicii" ? <TenantServiceTypesEditor initialItems={initialItems} /> : null}
-      {activeTab === "forms" ? <TicketFormsSettingsEditor /> : null}
-    </>
+      <TenantServiceTypesEditor initialItems={initialItems} />
+    </SetupShell>
   );
 }

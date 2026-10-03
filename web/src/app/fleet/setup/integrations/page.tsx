@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { SetupShell } from "@/components/fleet/setup/SetupShell";
 import { IntegrationsSettingsEditor } from "@/components/fleet/setup/IntegrationsSettingsEditor";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -37,16 +38,13 @@ export default async function SetupIntegrationsPage() {
   const settings = await loadSettings();
 
   return (
-    <FleetPageMain>
-      <div className="mb-6">
-        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Setup · Integrări</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Integrări externe</h1>
-        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Import Audatex/PDF, catalog piese și lansare comenzi — pe tenant. Credențialele API vin pe măsură ce
-          conectăm furnizorii.
-        </p>
-      </div>
-      <IntegrationsSettingsEditor initial={settings} />
+    <FleetPageMain className="min-h-0">
+      <SetupShell
+        title="Integrări"
+        description="Import Audatex/PDF, catalog piese și lansare comenzi — pe tenant. Credențialele API se adaugă pe măsură ce conectăm furnizorii."
+      >
+        <IntegrationsSettingsEditor initial={settings} />
+      </SetupShell>
     </FleetPageMain>
   );
 }

@@ -40,6 +40,35 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
+    slug: "setup-tenant",
+    title: "Setup — setări pe abonat",
+    summary: "Ce configurezi în Setup versus pe fișa unui Client.",
+    sections: [
+      {
+        heading: "Regula de organizare",
+        body: [
+          "Setup = reguli și cataloage pentru tot abonatul (Tipuri & servicii, Comenzi WO, Email, Integrări).",
+          "Fișa Clientului = override-uri și drepturi pe o organizație (Drepturi & politici L1, corespondență, prețuri, furnizori alocați).",
+          "Dacă trebuie să alegi „care client?” înainte de Salvare, locul corect nu e în Setup.",
+        ],
+      },
+      {
+        heading: "Piloni disponibili",
+        body: [
+          "Tipuri & servicii — catalogul de tipuri service.",
+          "Comenzi (WO) — recepție, garanții, facturare, pipeline daună.",
+          "Email — expeditor, semnătură, CC outbound.",
+          "Integrări — import devize, catalog piese, conectori.",
+          "Furnizori, Flotă & vehicule, Importuri — în pregătire.",
+        ],
+      },
+    ],
+    relatedHrefs: [
+      { label: "Setup", href: "/fleet/setup" },
+      { label: "Clienți", href: "/fleet/clients" },
+    ],
+  },
+  {
     slug: "programari-politici",
     title: "Programări: politici pe client",
     summary: "Negociere manager∥șofer, Mode A/B, acord șofer, istoric propuneri.",
@@ -47,7 +76,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
       {
         heading: "Unde se setează",
         body: [
-          "Configurare client → Politici (sau pe fișa Client → drepturi / politici programări).",
+          "Doar pe fișa Clientului → tab „Drepturi & politici L1”. Doar adminul abonatului (L*) salvează.",
+          "Nu se mai editează din Setup — Setup e pentru cataloage și defaults pe tot abonatul.",
           "Setările sunt per Client, nu globale pe tenant.",
         ],
       },
@@ -70,8 +100,9 @@ export const HELP_ARTICLES: HelpArticle[] = [
       },
     ],
     relatedHrefs: [
-      { label: "Setup clienți", href: "/fleet/setup/clients" },
+      { label: "Clienți", href: "/fleet/clients" },
       { label: "Programator", href: "/fleet/scheduler" },
+      { label: "Setup", href: "/fleet/setup" },
     ],
   },
   {

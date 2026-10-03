@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { SetupShell } from "@/components/fleet/setup/SetupShell";
 import { MailSettingsEditor } from "@/components/fleet/setup/MailSettingsEditor";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -27,15 +28,13 @@ export default async function SetupMailPage() {
   const settings = await loadSettings();
 
   return (
-    <FleetPageMain>
-      <div className="mb-6">
-        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Setup · Email</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Setări email outbound</h1>
-        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          From afișat, Reply-To, semnătură și CC pentru trimiterile de daună către asigurător.
-        </p>
-      </div>
-      <MailSettingsEditor initial={settings} />
+    <FleetPageMain className="min-h-0">
+      <SetupShell
+        title="Email"
+        description="From afișat, Reply-To, semnătură și CC pentru trimiterile outbound (inclusiv daune către asigurător)."
+      >
+        <MailSettingsEditor initial={settings} />
+      </SetupShell>
     </FleetPageMain>
   );
 }

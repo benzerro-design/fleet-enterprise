@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { SetupShell } from "@/components/fleet/setup/SetupShell";
 import { WorkOrderSettingsEditor } from "@/components/fleet/setup/WorkOrderSettingsEditor";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
@@ -27,15 +28,13 @@ export default async function SetupWorkOrdersPage() {
   const settings = await loadSettings();
 
   return (
-    <FleetPageMain>
-      <div className="mb-6">
-        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Setup · WO</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Setări comenzi service</h1>
-        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Reguli pentru recepție vehicul (km in / km out) pe comenzile de lucru.
-        </p>
-      </div>
-      <WorkOrderSettingsEditor initial={settings} />
+    <FleetPageMain className="min-h-0">
+      <SetupShell
+        title="Comenzi (WO)"
+        description="Reguli de recepție, garanții implicite, facturare pe deviz și pașii pe dosarul de daună — pentru tot abonatul."
+      >
+        <WorkOrderSettingsEditor initial={settings} />
+      </SetupShell>
     </FleetPageMain>
   );
 }

@@ -69,8 +69,8 @@ export function ClientIamSettingsEditor({ clientId, canWrite }: Props) {
   return (
     <div className="max-w-xl space-y-6">
       <p className="text-sm text-zinc-400">
-        Drepturi pe client — doar adminul abonatului (L*) le schimbă. Managerul L1 le moștenește.
-        Șoferul nu primește niciodată selecție multiplă pe listă.
+        Unica sursă pentru drepturi L1 și politici de programare pe acest client. Doar adminul
+        abonatului (L*) salvează — nu se mai editează din Setup.
       </p>
 
       <section className="space-y-3">

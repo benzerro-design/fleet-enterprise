@@ -12,6 +12,8 @@ export type FleetNavLink = {
   phase: "live";
   /** Highlight when pathname starts with any of these (defaults to [href]). */
   activePrefixes?: string[];
+  /** Dacă true, doar egalitate pe activePrefixes / href (ex. /fleet/setup fără subpagini). */
+  exactActive?: boolean;
   adminOnly?: boolean;
   requireAuth?: boolean;
 };
@@ -256,7 +258,16 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
   items: [
     {
       kind: "link",
-      label: "Configurare client",
+      label: "Prezentare",
+      href: "/fleet/setup",
+      phase: "live",
+      adminOnly: true,
+      exactActive: true,
+      activePrefixes: ["/fleet/setup"],
+    },
+    {
+      kind: "link",
+      label: "Tipuri & servicii",
       href: "/fleet/setup/clients",
       phase: "live",
       adminOnly: true,
@@ -264,7 +275,7 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
     },
     {
       kind: "link",
-      label: "WO",
+      label: "Comenzi (WO)",
       href: "/fleet/setup/work-orders",
       phase: "live",
       adminOnly: true,
@@ -288,6 +299,7 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
     },
     { kind: "soon", label: "Furnizori", phase: "phase2" },
     { kind: "soon", label: "Flotă & vehicule", phase: "phase2" },
+    { kind: "soon", label: "Importuri", phase: "phase2" },
   ],
 };
 
@@ -442,6 +454,9 @@ export function getFleetNavForUser(ctx: FleetNavContext): {
 
 export function navEntryIsActive(pathname: string, entry: FleetNavLink): boolean {
   const prefixes = entry.activePrefixes ?? [entry.href];
+  if (entry.exactActive) {
+    return prefixes.some((p) => pathname === p || pathname === `${p}/`);
+  }
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 

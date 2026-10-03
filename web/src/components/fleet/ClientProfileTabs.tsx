@@ -30,7 +30,7 @@ const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "subscription", label: "Abonament" },
   { id: "mail", label: "Corespondență" },
   { id: "pricing", label: "Prețuri" },
-  { id: "iam", label: "Drepturi L1" },
+  { id: "iam", label: "Drepturi & politici L1" },
   { id: "suppliers", label: "Furnizori" },
 ];
 
