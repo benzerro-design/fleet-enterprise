@@ -1,12 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
 import {
-  DamageInsurerPipelineStatus,
   DamagePayerType,
   RoadsideInterventionStatus,
   ServiceCaseWorkflowType,
   VehicleMovableState,
 } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+import { isDamagePipelineFinal } from '../tenant/work-order-settings';
 
 type PrismaLike = Pick<PrismaService, 'mobilityAssignment' | 'roadsideIntervention'>;
 
@@ -14,7 +14,7 @@ export type DamageGateCase = {
   id: string;
   workflowType: ServiceCaseWorkflowType;
   damagePayerType: DamagePayerType | null;
-  damageInsurerPipelineStatus: DamageInsurerPipelineStatus | null;
+  damageInsurerPipelineStatus: string | null;
   damageInsurerAgreedAt: Date | null;
   vehicleMovable?: VehicleMovableState | null;
 };
@@ -31,8 +31,7 @@ export async function assertDamageReadyForRepair(
   const isClientPayer = payer === DamagePayerType.client;
   if (!isClientPayer) {
     const insurerReady =
-      sc.damageInsurerPipelineStatus === DamageInsurerPipelineStatus.payment_accepted ||
-      !!sc.damageInsurerAgreedAt;
+      isDamagePipelineFinal(sc.damageInsurerPipelineStatus) || !!sc.damageInsurerAgreedAt;
     if (!insurerReady) {
       throw new BadRequestException(
         'Pentru flux daună (plătitor asigurător) este necesar Accept plată (sau acordul asigurătorului) înainte de intrarea în reparație (status În lucru).',

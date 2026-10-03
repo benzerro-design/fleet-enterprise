@@ -419,6 +419,13 @@ function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup 
       if (items.length === 0) return null;
       return { ...group, items };
     }
+    if (group.id === "suppliers") {
+      const items = group.items.filter(
+        (e) => e.kind === "link" && e.href === "/fleet/work-orders",
+      );
+      if (items.length === 0) return null;
+      return { ...group, label: "Comenzi", items };
+    }
     if (group.id === "admin") {
       const items = group.items.filter((e) => e.kind === "link" && e.href === "/fleet/audit");
       if (items.length === 0) return null;

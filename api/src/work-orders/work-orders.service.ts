@@ -5,12 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  ClientRole,
   CrmTicketEventKind,
   CrmTicketLinkEntityType,
   CrmTicketStatus,
   DamageClaimStatus,
   DamageInsuranceType,
-  DamageInsurerPipelineStatus,
   DamagePayerType,
   MaintenanceWorkOrderStatus,
   Prisma,
@@ -24,7 +24,12 @@ import {
   WorkOrderWarrantyStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
-import { assertClientAccess, assertClientFleetWrite, isTenantWideAccess } from '../iam/client-access';
+import {
+  assertClientAccess,
+  assertClientFleetWrite,
+  isDriverOnlyClientUser,
+  isTenantWideAccess,
+} from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
 import { effectiveSupplierDiscountDefaults } from '../suppliers/supplier-discount-eligibility';
 import {
@@ -33,7 +38,11 @@ import {
   isPartnerUser,
 } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
-import { parseWorkOrderSettings } from '../tenant/work-order-settings';
+import {
+  parseWorkOrderSettings,
+  type ServiceTypeSettingsKey,
+  type WorkOrderSettings,
+} from '../tenant/work-order-settings';
 import { ensureWorkOrderDisplayNumber } from './work-order-display-number';
 import {
   assertDamageReadyForRepair,
@@ -200,7 +209,7 @@ export type WorkOrderDetail = WorkOrderListRow & {
   /** YYYY-MM-DD */
   damageEventOn: string | null;
   damagePayerType: DamagePayerType | null;
-  damageInsurerPipelineStatus: DamageInsurerPipelineStatus | null;
+  damageInsurerPipelineStatus: string | null;
   damageInsuranceType: DamageInsuranceType | null;
   damageClaimNumber: string | null;
   damageInsurerName: string | null;
@@ -331,9 +340,73 @@ export class WorkOrdersService {
     assertClientFleetWrite(access, wo.vehicle.clientId);
   }
 
+  /** Șofer pe vehiculul alocat (sau pe tichetul legat) — pentru Service Out când e permis. */
+  private driverCanAccessWorkOrder(
+    access: AccessContext,
+    wo: {
+      vehicleId: string;
+      vehicle: { clientId: string };
+      serviceCase?: { sourceTicket?: { driverId?: string | null } | null };
+    },
+  ): boolean {
+    if (!isDriverOnlyClientUser(access)) return false;
+    assertClientAccess(access, wo.vehicle.clientId);
+    const assigned = access.assignedVehicleIds ?? [];
+    if (assigned.includes(wo.vehicleId)) return true;
+    const ticketDriverId = wo.serviceCase?.sourceTicket?.driverId ?? null;
+    if (
+      ticketDriverId &&
+      access.clientMemberships.some(
+        (m) => m.role === ClientRole.driver && m.driverId === ticketDriverId,
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private assertDriverServiceOutWrite(
+    access: AccessContext,
+    wo: {
+      vehicleId: string;
+      vehicle: { clientId: string };
+      serviceCase?: { sourceTicket?: { driverId?: string | null } | null };
+    },
+    settings: WorkOrderSettings,
+    dto: {
+      inServiceAt?: string | null;
+      outServiceAt?: string | null;
+      odometerKmIn?: number | null;
+      odometerKmOut?: number | null;
+      visitIndex?: number | null;
+    },
+  ): void {
+    if (!settings.allowDriverServiceOut) {
+      throw new ForbiddenException('Șoferul nu poate marca Service Out (dezactivat în Setup)');
+    }
+    if (!this.driverCanAccessWorkOrder(access, wo)) {
+      throw new ForbiddenException('Șoferul nu are acces la această comandă');
+    }
+    // Doar Out (+ km out). Nu In, nu clear.
+    if (dto.inServiceAt !== undefined || dto.odometerKmIn !== undefined) {
+      throw new ForbiddenException('Șoferul poate marca doar Service Out');
+    }
+    if (dto.outServiceAt === undefined && dto.odometerKmOut === undefined) {
+      throw new ForbiddenException('Șoferul poate marca doar Service Out');
+    }
+    if (dto.outServiceAt === null || dto.outServiceAt === '') {
+      throw new ForbiddenException('Șoferul nu poate anula Service Out');
+    }
+  }
+
   /** Listă / KPI: client_user vede doar WO-urile clienților săi (ca Programator). */
   private workOrderClientScope(access?: AccessContext): Prisma.MaintenanceWorkOrderWhereInput {
     if (!access || isTenantWideAccess(access) || isPartnerUser(access)) return {};
+    if (isDriverOnlyClientUser(access)) {
+      const ids = access.assignedVehicleIds ?? [];
+      if (ids.length === 0) return { vehicleId: { in: [] } };
+      return { vehicleId: { in: ids } };
+    }
     if (access.allowedClientIds.length === 0) {
       return { vehicle: { clientId: { in: [] } } };
     }
@@ -1564,6 +1637,7 @@ export class WorkOrdersService {
             damagePayerType: true,
             damageInsurerPipelineStatus: true,
             damageInsurerAgreedAt: true,
+            sourceTicket: { select: { driverId: true } },
           },
         },
       },
@@ -1571,7 +1645,20 @@ export class WorkOrdersService {
     if (!wo) throw new NotFoundException('Work order not found');
     if (access) {
       try {
-        this.assertWorkOrderWrite(access, wo);
+        if (isDriverOnlyClientUser(access)) {
+          this.assertDriverServiceOutWrite(
+            access,
+            {
+              vehicleId: wo.vehicleId,
+              vehicle: wo.vehicle,
+              serviceCase: wo.serviceCase,
+            },
+            settings,
+            dto,
+          );
+        } else {
+          this.assertWorkOrderWrite(access, wo);
+        }
       } catch (e) {
         if (e instanceof ForbiddenException) throw e;
         throw new ForbiddenException(
@@ -1724,6 +1811,38 @@ export class WorkOrdersService {
       }
       if (markingOut && (nextKmOut == null || nextKmOut < 0)) {
         throw new BadRequestException('Km ieșire este obligatoriu (setare WO)');
+      }
+    }
+
+    const typeKey = wo.serviceOrderType as ServiceTypeSettingsKey | 'D';
+    if (typeKey === 'M' || typeKey === 'E' || typeKey === 'TV') {
+      const typeCfg = settings.serviceTypeSettings[typeKey];
+      const visitIndex = useVisit2 ? 2 : 1;
+      if (markingIn && typeCfg.requirePhotosIn) {
+        const n = await this.prisma.workOrderPhoto.count({
+          where: {
+            workOrderId: wo.id,
+            tenantId: tenant.id,
+            visitIndex,
+            phase: 'in',
+          },
+        });
+        if (n < 1) {
+          throw new BadRequestException('Poze la In service sunt obligatorii pentru acest tip de comandă');
+        }
+      }
+      if (markingOut && typeCfg.requirePhotosOut) {
+        const n = await this.prisma.workOrderPhoto.count({
+          where: {
+            workOrderId: wo.id,
+            tenantId: tenant.id,
+            visitIndex,
+            phase: 'out',
+          },
+        });
+        if (n < 1) {
+          throw new BadRequestException('Poze la Out service sunt obligatorii pentru acest tip de comandă');
+        }
       }
     }
 

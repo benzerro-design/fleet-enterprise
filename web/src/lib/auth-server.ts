@@ -246,6 +246,14 @@ export function canDriverWriteVehicleMedia(auth: AuthMeResult): boolean {
   return isClientDriverPortal(auth);
 }
 
+/** Service Out pe WO — doar dacă Setup WO → allowDriverServiceOut. */
+export function canDriverMarkServiceOut(
+  auth: AuthMeResult,
+  allowDriverServiceOut: boolean,
+): boolean {
+  return isClientDriverPortal(auth) && allowDriverServiceOut;
+}
+
 export function canWriteTrips(auth: AuthMeResult): boolean {
   return canWriteFleetOps(auth) || canDriverWriteTrips(auth);
 }

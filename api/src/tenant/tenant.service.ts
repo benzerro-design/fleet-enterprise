@@ -30,6 +30,7 @@ import {
   parseWorkOrderSettings,
   parseWorkOrderSettingsPatch,
   type WorkOrderSettings,
+  type WorkOrderSettingsPatch,
 } from './work-order-settings';
 import {
   parseSlaSettings,
@@ -375,7 +376,7 @@ export class TenantService {
     body: unknown,
     actorUserId: string,
   ): Promise<WorkOrderSettings> {
-    let patch: Partial<WorkOrderSettings>;
+    let patch: WorkOrderSettingsPatch;
     try {
       patch = parseWorkOrderSettingsPatch(body);
     } catch (e) {
@@ -388,9 +389,20 @@ export class TenantService {
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
+    const current = parseWorkOrderSettings(tenant.workOrderSettings);
+    const { serviceTypeSettings: stPatch, ...rest } = patch;
     const next: WorkOrderSettings = {
-      ...parseWorkOrderSettings(tenant.workOrderSettings),
-      ...patch,
+      ...current,
+      ...rest,
+      serviceTypeSettings: stPatch
+        ? {
+            ...current.serviceTypeSettings,
+            ...stPatch,
+            M: stPatch.M ?? current.serviceTypeSettings.M,
+            E: stPatch.E ?? current.serviceTypeSettings.E,
+            TV: stPatch.TV ?? current.serviceTypeSettings.TV,
+          }
+        : current.serviceTypeSettings,
     };
 
     await this.prisma.tenant.update({

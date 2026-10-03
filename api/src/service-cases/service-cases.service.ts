@@ -12,7 +12,6 @@ import {
   DamageClaimStatus,
   DamageInsuranceType,
   DamageInspectionMode,
-  DamageInsurerPipelineStatus,
   DamagePayerType,
   DamageQuoteOrigin,
   MaintenanceWorkOrderStatus,
@@ -56,6 +55,11 @@ import { nextRoadsideDisplayNumber } from '../roadside/roadside-display-number';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import { assertSupplierDocumentsAllowOrders } from '../suppliers/supplier-document-compliance';
 import { assertDamageReadyForRepair } from '../work-orders/damage-repair-gates';
+import {
+  damagePipelineCodeSet,
+  isDamagePipelineFinal,
+  parseWorkOrderSettings,
+} from '../tenant/work-order-settings';
 import {
   blocksSilentScheduledAtEdit,
   fleetCounterActorLabel,
@@ -345,7 +349,7 @@ export type ServiceCaseRecord = {
   damageInsurerAgreedByUserId: string | null;
   damageInsurerAgreementNotes: string | null;
   damagePayerType: DamagePayerType | null;
-  damageInsurerPipelineStatus: DamageInsurerPipelineStatus | null;
+  damageInsurerPipelineStatus: string | null;
   damageDocuments: DamageDocumentItem[];
   damagePhotos: DamagePhotoItem[];
   damageSectionLocks: DamageSectionLocks;
@@ -388,7 +392,7 @@ export type PatchDamageClaimInput = {
   damageInsurerId?: string | null;
   damageClaimStatus?: DamageClaimStatus | null;
   damagePayerType?: DamagePayerType | null;
-  damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
+  damageInsurerPipelineStatus?: string | null;
   damageDocuments?: DamageDocumentItem[] | null;
   damagePhotos?: DamagePhotoItem[] | null;
   agreeInsurer?: boolean;
@@ -442,15 +446,15 @@ export type DecideDamageReinspectionInput = {
   approvalDocumentFileName?: string | null;
 };
 
-const PIPELINE_ORDER: DamageInsurerPipelineStatus[] = [
-  DamageInsurerPipelineStatus.docs_pending,
-  DamageInsurerPipelineStatus.ready_to_notify,
-  DamageInsurerPipelineStatus.notified,
-  DamageInsurerPipelineStatus.inspection_note,
-  DamageInsurerPipelineStatus.reinspection_requested,
-  DamageInsurerPipelineStatus.air,
-  DamageInsurerPipelineStatus.quote_ready,
-  DamageInsurerPipelineStatus.payment_accepted,
+const PIPELINE_ORDER: string[] = [
+  'docs_pending',
+  'ready_to_notify',
+  'notified',
+  'inspection_note',
+  'reinspection_requested',
+  'air',
+  'quote_ready',
+  'payment_accepted',
 ];
 
 const DAMAGE_SECTION_KEYS: DamageSectionKey[] = [
@@ -882,15 +886,18 @@ export class ServiceCasesService {
       }
     }
     if (dto.damageInsurerPipelineStatus !== undefined) {
+      const pipelineSteps = parseWorkOrderSettings(tenant.workOrderSettings).damagePipelineSteps;
+      const allowed = damagePipelineCodeSet(pipelineSteps);
       if (
         dto.damageInsurerPipelineStatus !== null &&
+        !allowed.has(dto.damageInsurerPipelineStatus) &&
         !PIPELINE_STATUSES.has(dto.damageInsurerPipelineStatus)
       ) {
         throw new BadRequestException('Invalid damageInsurerPipelineStatus');
       }
       data.damageInsurerPipelineStatus = dto.damageInsurerPipelineStatus;
       if (
-        dto.damageInsurerPipelineStatus === DamageInsurerPipelineStatus.payment_accepted &&
+        isDamagePipelineFinal(dto.damageInsurerPipelineStatus, pipelineSteps) &&
         (dto.damagePayerType === DamagePayerType.insurer ||
           (dto.damagePayerType === undefined &&
             (row.damagePayerType === DamagePayerType.insurer || row.damagePayerType == null)))
@@ -953,9 +960,9 @@ export class ServiceCasesService {
       if (
         data.damageInsurerQuotePdfUrl &&
         !dto.damageInsurerPipelineStatus &&
-        row.damageInsurerPipelineStatus !== DamageInsurerPipelineStatus.payment_accepted
+        row.damageInsurerPipelineStatus !== 'payment_accepted'
       ) {
-        data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.quote_ready;
+        data.damageInsurerPipelineStatus = 'quote_ready';
       }
     }
     if (dto.damageInspectionMode !== undefined) {
@@ -1057,15 +1064,15 @@ export class ServiceCasesService {
         }
 
         const current =
-          (data.damageInsurerPipelineStatus as DamageInsurerPipelineStatus | undefined) ??
+          (data.damageInsurerPipelineStatus as string | undefined) ??
           row.damageInsurerPipelineStatus;
         const currentIdx = current ? PIPELINE_ORDER.indexOf(current) : -1;
-        const noteIdx = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.inspection_note);
-        const quoteIdx = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.quote_ready);
+        const noteIdx = PIPELINE_ORDER.indexOf('inspection_note');
+        const quoteIdx = PIPELINE_ORDER.indexOf('quote_ready');
         if (currentIdx < 0 || currentIdx < noteIdx) {
-          data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.inspection_note;
-        } else if (current === DamageInsurerPipelineStatus.reinspection_requested) {
-          data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.inspection_note;
+          data.damageInsurerPipelineStatus = 'inspection_note';
+        } else if (current === 'reinspection_requested') {
+          data.damageInsurerPipelineStatus = 'inspection_note';
         } else if (currentIdx >= quoteIdx) {
           // keep quote_ready / payment_accepted
         }
@@ -1101,9 +1108,9 @@ export class ServiceCasesService {
         data.damagePaymentAcceptanceReceivedAt = receivedAt;
         if (
           !dto.damageInsurerPipelineStatus &&
-          row.damageInsurerPipelineStatus !== DamageInsurerPipelineStatus.payment_accepted
+          row.damageInsurerPipelineStatus !== 'payment_accepted'
         ) {
-          data.damageInsurerPipelineStatus = DamageInsurerPipelineStatus.payment_accepted;
+          data.damageInsurerPipelineStatus = 'payment_accepted';
         }
         const notes =
           dto.damagePaymentAcceptanceNotes !== undefined
@@ -1425,9 +1432,9 @@ export class ServiceCasesService {
         damageQuoteOrigin: origin,
         damageInsurerMailLogJson: nextLog as unknown as Prisma.InputJsonValue,
         damageInsurerPipelineStatus:
-          row.damageInsurerPipelineStatus === DamageInsurerPipelineStatus.payment_accepted
+          row.damageInsurerPipelineStatus === 'payment_accepted'
             ? row.damageInsurerPipelineStatus
-            : DamageInsurerPipelineStatus.quote_ready,
+            : 'quote_ready',
       },
       include: this.caseInclude(),
     });
@@ -1636,15 +1643,15 @@ export class ServiceCasesService {
 
     const currentPipeline = row.damageInsurerPipelineStatus;
     const currentIdx = currentPipeline ? PIPELINE_ORDER.indexOf(currentPipeline) : -1;
-    const notifiedIdx = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.notified);
+    const notifiedIdx = PIPELINE_ORDER.indexOf('notified');
     const nextPipeline =
-      currentIdx < notifiedIdx ? DamageInsurerPipelineStatus.notified : currentPipeline;
+      currentIdx < notifiedIdx ? 'notified' : currentPipeline;
 
     const updated = await this.prisma.serviceCase.update({
       where: { id: caseId },
       data: {
         damageInsurerMailLogJson: nextLog as unknown as Prisma.InputJsonValue,
-        damageInsurerPipelineStatus: nextPipeline ?? DamageInsurerPipelineStatus.notified,
+        damageInsurerPipelineStatus: nextPipeline ?? 'notified',
       },
       include: this.caseInclude(),
     });
@@ -1878,9 +1885,9 @@ export class ServiceCasesService {
 
     const current = row.damageInsurerPipelineStatus;
     const nextPipeline =
-      current === DamageInsurerPipelineStatus.payment_accepted
+      current === 'payment_accepted'
         ? current
-        : DamageInsurerPipelineStatus.reinspection_requested;
+        : 'reinspection_requested';
 
     const updated = await this.prisma.serviceCase.update({
       where: { id: caseId },
@@ -2055,10 +2062,10 @@ export class ServiceCasesService {
     );
     let nextPipeline = row.damageInsurerPipelineStatus;
     if (decision === 'approved') {
-      nextPipeline = DamageInsurerPipelineStatus.inspection_note;
+      nextPipeline = 'inspection_note';
     } else if (decision === 'rejected' && !hasPending) {
-      if (nextPipeline === DamageInsurerPipelineStatus.reinspection_requested) {
-        nextPipeline = DamageInsurerPipelineStatus.inspection_note;
+      if (nextPipeline === 'reinspection_requested') {
+        nextPipeline = 'inspection_note';
       }
     }
 
@@ -2130,7 +2137,7 @@ export class ServiceCasesService {
     caseId: string,
     snapshot: {
       workflowType: ServiceCaseWorkflowType;
-      damageInsurerPipelineStatus: DamageInsurerPipelineStatus | null;
+      damageInsurerPipelineStatus: string | null;
       damagePhotosJson: unknown;
       damageInsurerAgreedAt: Date | null;
       sourceTicketId: string | null;
@@ -2142,8 +2149,8 @@ export class ServiceCasesService {
     const rank = snapshot.damageInsurerPipelineStatus
       ? PIPELINE_ORDER.indexOf(snapshot.damageInsurerPipelineStatus)
       : -1;
-    const quoteReadyRank = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.quote_ready);
-    const paymentRank = PIPELINE_ORDER.indexOf(DamageInsurerPipelineStatus.payment_accepted);
+    const quoteReadyRank = PIPELINE_ORDER.indexOf('quote_ready');
+    const paymentRank = PIPELINE_ORDER.indexOf('payment_accepted');
     const insurerApproved =
       rank >= paymentRank || !!snapshot.damageInsurerAgreedAt;
     const photos = this.parseDamagePhotos(snapshot.damagePhotosJson);
@@ -4226,7 +4233,7 @@ export class ServiceCasesService {
       damageInsurerAgreedByUserId?: string | null;
       damageInsurerAgreementNotes?: string | null;
       damagePayerType?: DamagePayerType | null;
-      damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
+      damageInsurerPipelineStatus?: string | null;
       damageDocumentsJson?: unknown;
       damagePhotosJson?: unknown;
       damageSectionLocksJson?: unknown;

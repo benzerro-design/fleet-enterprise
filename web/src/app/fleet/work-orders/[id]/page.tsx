@@ -5,6 +5,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { WorkOrderSheetShell } from "@/components/fleet/work-orders/WorkOrderSheetShell";
 import {
   canApproveQuotes,
+  canDriverMarkServiceOut,
   canResubmitQuotes,
   canWriteFleetOps,
   getAuthMeResult,
@@ -66,6 +67,8 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
   ]);
   if (!wo) notFound();
   const canWrite = canWriteFleetOps(auth);
+  const canMarkServiceOut =
+    canWrite || canDriverMarkServiceOut(auth, workOrderSettings.allowDriverServiceOut);
   const canApprove = canApproveQuotes(auth);
   const canResubmit = canResubmitQuotes(auth);
   const hasInvoicedQuote = quotes.some((q) => q.status === "approved" && q.invoicedAt);
@@ -81,6 +84,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
         <WorkOrderSheetShell
           wo={wo}
           canWrite={canWrite}
+          canMarkServiceOut={canMarkServiceOut}
           canApprove={canApprove}
           canResubmitQuote={canResubmit}
           hasInvoicedQuote={hasInvoicedQuote}

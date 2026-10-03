@@ -1672,8 +1672,8 @@ model ServiceCase {
   damageInsurerAgreementNotes  String?
   /// Plătitor daună: asigurător vs client (client = skip pipeline asigurător).
   damagePayerType              DamagePayerType?
-  /// Pipeline dosar asigurător (doar când payer = insurer).
-  damageInsurerPipelineStatus  DamageInsurerPipelineStatus?
+  /// Pipeline dosar asigurător (doar când payer = insurer). Cod din Setup WO (string).
+  damageInsurerPipelineStatus  String?
   /// Documente daună: array { id, kind, label?, notes?, received, uploadedAt, uploadedByLabel? }
   damageDocumentsJson          Json?
   /// Foto daună: array { id, url, kind, caption?, uploadedAt, uploadedByUserId?, uploadedByLabel? }
@@ -2112,18 +2112,6 @@ enum VehicleMovableState {
 enum DamagePayerType {
   insurer
   client
-}
-
-enum DamageInsurerPipelineStatus {
-  docs_pending
-  ready_to_notify
-  notified
-  inspection_note
-  reinspection_requested
-  /// AIR — acord intrare în reparație (asigurător).
-  air
-  quote_ready
-  payment_accepted
 }
 
 enum DamageQuoteOrigin {

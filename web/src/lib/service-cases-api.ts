@@ -28,15 +28,8 @@ export type DamageInsuranceType = "RCA" | "CASCO" | "BOTH" | "UNKNOWN";
 export type VehicleMovableState = "movable" | "immovable";
 export type DamagePayerType = "insurer" | "client";
 
-export type DamageInsurerPipelineStatus =
-  | "docs_pending"
-  | "ready_to_notify"
-  | "notified"
-  | "inspection_note"
-  | "reinspection_requested"
-  | "air"
-  | "quote_ready"
-  | "payment_accepted";
+/** Cod pipeline asigurător — sistem + custom din Setup WO. */
+export type DamageInsurerPipelineStatus = string;
 
 export type DamageQuoteOrigin = "prepared_by_us" | "received_from_insurer";
 
@@ -341,17 +334,17 @@ export function damagePipelineStatusLabel(
   return DAMAGE_PIPELINE_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
-/** Pași vizibili pe dosar: din Setup WO (enabled) sau catalog default. */
+/** Pași vizibili pe dosar: din Setup WO (ordine + enabled) sau catalog default. */
 export function resolveDamagePipelineStatuses(
   steps?: Array<{ code: string; label: string; enabled: boolean }> | null,
 ): { value: DamageInsurerPipelineStatus; label: string }[] {
   if (!steps?.length) return DAMAGE_PIPELINE_STATUSES;
-  const byCode = new Map(steps.map((s) => [s.code, s]));
-  return DAMAGE_PIPELINE_STATUSES.flatMap((s) => {
-    const ov = byCode.get(s.value);
-    if (ov && ov.enabled === false) return [];
-    return [{ value: s.value, label: ov?.label?.trim() || s.label }];
-  });
+  return steps
+    .filter((s) => s.enabled !== false)
+    .map((s) => ({
+      value: s.code,
+      label: s.label?.trim() || s.code,
+    }));
 }
 
 export function vehicleMovableLabel(state: VehicleMovableState | string | null | undefined): string {
@@ -366,15 +359,20 @@ export function damagePayerLabel(payer: DamagePayerType | string | null | undefi
   return "—";
 }
 
-export function isDamageInsurerReady(sc: {
-  damagePayerType?: DamagePayerType | null;
-  damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
-  damageInsurerAgreedAt?: string | null;
-}): boolean {
+export function isDamageInsurerReady(
+  sc: {
+    damagePayerType?: DamagePayerType | null;
+    damageInsurerPipelineStatus?: DamageInsurerPipelineStatus | null;
+    damageInsurerAgreedAt?: string | null;
+  },
+  steps?: Array<{ code: string; isFinal?: boolean }> | null,
+): boolean {
   if (sc.damagePayerType === "client") return !!sc.damageInsurerAgreedAt;
-  return (
-    sc.damageInsurerPipelineStatus === "payment_accepted" || !!sc.damageInsurerAgreedAt
-  );
+  if (!!sc.damageInsurerAgreedAt) return true;
+  const status = sc.damageInsurerPipelineStatus;
+  if (!status) return false;
+  if (status === "payment_accepted") return true;
+  return !!steps?.some((s) => s.code === status && s.isFinal);
 }
 
 export type WorkOrderQuoteStatus = "draft" | "submitted" | "approved" | "rejected";

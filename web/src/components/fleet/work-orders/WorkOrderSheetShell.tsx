@@ -47,6 +47,11 @@ import {
 type Props = {
   wo: WorkOrderDetail;
   canWrite: boolean;
+  /**
+   * Marcă Out service (+ km/poze). Implicit = canWrite.
+   * Șofer: true când Setup WO → allowDriverServiceOut.
+   */
+  canMarkServiceOut?: boolean;
   canApprove: boolean;
   /** Retrimite spre aprobare — partener sau tenant_admin (nu manager L1). */
   canResubmitQuote?: boolean;
@@ -92,6 +97,7 @@ function sheetBtn(primary?: boolean) {
 export function WorkOrderSheetShell({
   wo,
   canWrite,
+  canMarkServiceOut: canMarkServiceOutProp,
   canApprove,
   canResubmitQuote = false,
   hasInvoicedQuote,
@@ -100,6 +106,7 @@ export function WorkOrderSheetShell({
   partnerSupplierId,
   workOrderSettings = DEFAULT_WORK_ORDER_SETTINGS,
 }: Props) {
+  const canMarkServiceOut = canMarkServiceOutProp ?? canWrite;
   const mobilityPrefillSupplierId = partnerSupplierId?.trim() || (isPartner ? wo.supplierId : null);
   const router = useRouter();
   const [serviceType, setServiceType] = useState<ServiceOrderType>(wo.serviceOrderType);
@@ -1040,7 +1047,7 @@ export function WorkOrderSheetShell({
                     type="number"
                     min={0}
                     value={kmOut}
-                    disabled={!canWrite || pending || !wo.inServiceAt || !!wo.outServiceAt}
+                    disabled={!canMarkServiceOut || pending || !wo.inServiceAt || !!wo.outServiceAt}
                     onChange={(e) => setKmOut(e.target.value)}
                     className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
                     placeholder={requireKm ? "Obligatoriu" : "Opțional"}
@@ -1050,7 +1057,7 @@ export function WorkOrderSheetShell({
                   <p className="text-[10px] text-zinc-500">
                     Out service: {new Date(wo.outServiceAt).toLocaleString("ro-RO")}
                   </p>
-                ) : canWrite && wo.inServiceAt ? (
+                ) : canMarkServiceOut && wo.inServiceAt ? (
                   <button
                     type="button"
                     disabled={pending}
@@ -1080,7 +1087,7 @@ export function WorkOrderSheetShell({
               <div className="pt-2">
                 <WorkOrderPhotoGallery
                   workOrderId={wo.id}
-                  canWrite={canWrite}
+                  canWrite={canMarkServiceOut}
                   mode="visit"
                   visitIndex={1}
                   phase="out"
@@ -1129,7 +1136,7 @@ export function WorkOrderSheetShell({
                         type="number"
                         min={0}
                         value={kmOut2}
-                        disabled={!canWrite || pending || !wo.visit2InServiceAt || !!wo.visit2OutServiceAt}
+                        disabled={!canMarkServiceOut || pending || !wo.visit2InServiceAt || !!wo.visit2OutServiceAt}
                         onChange={(e) => setKmOut2(e.target.value)}
                         className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
                       />
@@ -1138,7 +1145,7 @@ export function WorkOrderSheetShell({
                       <p className="text-[10px] text-zinc-500">
                         Out: {new Date(wo.visit2OutServiceAt).toLocaleString("ro-RO")}
                       </p>
-                    ) : canWrite && wo.visit2InServiceAt ? (
+                    ) : canMarkServiceOut && wo.visit2InServiceAt ? (
                       <button
                         type="button"
                         disabled={pending}

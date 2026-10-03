@@ -6,8 +6,10 @@ import {
 } from '@nestjs/common';
 import { WorkOrderPhotoKind, WorkOrderPhotoPhase } from '@prisma/client';
 import type { AccessContext } from '../iam/access-context.types';
+import { isDriverOnlyClientUser } from '../iam/client-access';
 import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
+import { parseWorkOrderSettings } from '../tenant/work-order-settings';
 
 export type WorkOrderPhotoRecord = {
   id: string;
@@ -129,7 +131,12 @@ export class WorkOrderPhotosService {
   private async loadWo(tenantSlug: string, workOrderId: string) {
     const wo = await this.prisma.maintenanceWorkOrder.findFirst({
       where: { id: workOrderId, tenant: { slug: tenantSlug } },
-      select: { id: true, supplierId: true, vehicle: { select: { clientId: true } } },
+      select: {
+        id: true,
+        vehicleId: true,
+        supplierId: true,
+        vehicle: { select: { clientId: true } },
+      },
     });
     if (!wo) throw new NotFoundException('Work order not found');
     return wo;
@@ -164,6 +171,20 @@ export class WorkOrderPhotosService {
     if (access.membershipRole === 'client_user') {
       const clientIds = access.allowedClientIds ?? [];
       if (!clientIds.includes(wo.vehicle.clientId)) throw new ForbiddenException('Work order access denied');
+      if (isDriverOnlyClientUser(access)) {
+        const tenant = await this.prisma.tenant.findUnique({
+          where: { slug: tenantSlug },
+          select: { workOrderSettings: true },
+        });
+        const settings = parseWorkOrderSettings(tenant?.workOrderSettings);
+        if (!settings.allowDriverServiceOut) {
+          throw new ForbiddenException('Șoferul nu poate încărca poze pe comandă (dezactivat în Setup)');
+        }
+        const assigned = access.assignedVehicleIds ?? [];
+        if (!assigned.includes(wo.vehicleId)) {
+          throw new ForbiddenException('Șoferul nu are acces la această comandă');
+        }
+      }
       return;
     }
     throw new ForbiddenException('Work order access denied');

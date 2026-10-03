@@ -46,6 +46,7 @@ const CLIENT_DRIVER_PREFIXES = [
   "/fleet/maintenance",
   "/fleet/costs",
   "/fleet/tickets",
+  "/fleet/work-orders",
   "/fleet/audit",
   "/fleet/preferences",
 ];
