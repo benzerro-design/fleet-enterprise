@@ -224,6 +224,28 @@ export class ClientsController {
     return this.clients.patchPricingSettings(tenantSlug, id, body, actorUserId, access);
   }
 
+  @Get(':id/sla-settings')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  getSlaSettings(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.getSlaSettings(tenantSlug, id, access);
+  }
+
+  @Patch(':id/sla-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchSlaSettings(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.patchSlaSettings(tenantSlug, id, body, actorUserId, access);
+  }
+
   @Get(':id/iam-settings')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   getIamSettings(

@@ -23,6 +23,8 @@ async function loadSettings(): Promise<TenantIntegrationsSettings> {
         ...DEFAULT_TENANT_INTEGRATIONS_SETTINGS.interCars,
         ...(raw.interCars ?? {}),
       },
+      customConnectors:
+        raw.customConnectors ?? DEFAULT_TENANT_INTEGRATIONS_SETTINGS.customConnectors,
     };
   } catch {
     return DEFAULT_TENANT_INTEGRATIONS_SETTINGS;

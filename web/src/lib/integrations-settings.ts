@@ -25,6 +25,18 @@ export type InterCarsConnectorPublic = {
   apiTokenSet: boolean;
 };
 
+export type CustomConnectorPublic = {
+  id: string;
+  label: string;
+  providerKey: string;
+  enabled: boolean;
+  apiBaseUrl: string | null;
+  notes: string | null;
+  clientId: string | null;
+  apiKeySet: boolean;
+  clientSecretSet: boolean;
+};
+
 export type TenantIntegrationsSettings = {
   audatexImportEnabled: boolean;
   serviceImportEnabled: boolean;
@@ -32,6 +44,7 @@ export type TenantIntegrationsSettings = {
   partsCatalogProviders: PartsCatalogProviderSetting[];
   partsOrderLaunchEnabled: boolean;
   interCars: InterCarsConnectorPublic;
+  customConnectors: CustomConnectorPublic[];
 };
 
 export const DEFAULT_TENANT_INTEGRATIONS_SETTINGS: TenantIntegrationsSettings = {
@@ -58,6 +71,7 @@ export const DEFAULT_TENANT_INTEGRATIONS_SETTINGS: TenantIntegrationsSettings = 
     accessTokenSet: false,
     apiTokenSet: false,
   },
+  customConnectors: [],
 };
 
 export const integrationsSettingsBrowserBase = "/api/tenant/integrations-settings";

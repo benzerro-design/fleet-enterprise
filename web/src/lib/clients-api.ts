@@ -71,6 +71,7 @@ export type ClientProfileTab =
   | "subscription"
   | "mail"
   | "pricing"
+  | "sla"
   | "iam"
   | "suppliers";
 

@@ -37,8 +37,19 @@ import {
   parseClientIamSettingsPatch,
   type ClientIamSettings,
 } from '../iam/client-iam-settings';
+import {
+  parseClientSlaSettings,
+  parseClientSlaSettingsPatch,
+  type ClientSlaSettings,
+} from './client-sla-settings';
 
-export type { ClientSubscriptionRow, DriverRecord, ClientMailSettings, ClientPricingSettings };
+export type {
+  ClientSubscriptionRow,
+  DriverRecord,
+  ClientMailSettings,
+  ClientPricingSettings,
+  ClientSlaSettings,
+};
 
 const MAX_PAGE_SIZE = 200;
 const REMINDER_SCAN_LIMIT = 500;
@@ -656,6 +667,63 @@ export class ClientsService {
       entityType: 'client',
       entityId: row.id,
       meta: { partsPriceSuspectPercent: next.partsPriceSuspectPercent },
+    });
+
+    return next;
+  }
+
+  async getSlaSettings(
+    tenantSlug: string,
+    id: string,
+    access?: AccessContext,
+  ): Promise<ClientSlaSettings> {
+    const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
+    return parseClientSlaSettings(
+      (row as { slaSettings?: unknown }).slaSettings,
+    );
+  }
+
+  async patchSlaSettings(
+    tenantSlug: string,
+    id: string,
+    body: unknown,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ClientSlaSettings> {
+    const row = await this.findRow(tenantSlug, id);
+    if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
+      throw new NotFoundException('Client not found');
+    }
+    let patch: Partial<ClientSlaSettings>;
+    try {
+      patch = parseClientSlaSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid body');
+    }
+
+    const current = parseClientSlaSettings(
+      (row as { slaSettings?: unknown }).slaSettings,
+    );
+    const next: ClientSlaSettings = {
+      override: patch.override ?? current.override,
+      priorities: patch.priorities ?? current.priorities,
+    };
+
+    await this.prisma.client.update({
+      where: { id: row.id },
+      data: { slaSettings: next as unknown as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: row.tenantId,
+      actorUserId,
+      action: 'client.sla_settings_update',
+      entityType: 'client',
+      entityId: row.id,
+      meta: { override: next.override },
     });
 
     return next;

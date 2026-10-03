@@ -184,6 +184,33 @@ export function computeSlaDeadlines(
   };
 }
 
+/**
+ * Merge override client peste setările tenant.
+ * Dacă client.override e false → doar tenant.
+ */
+export function mergeSlaSettings(
+  tenant: TenantSlaSettings,
+  clientOverride: {
+    override: boolean;
+    priorities?: Partial<Record<SlaPriorityKey, SlaPriorityHours>> | null;
+  } | null | undefined,
+): TenantSlaSettings {
+  if (!clientOverride?.override || !clientOverride.priorities) {
+    return tenant;
+  }
+  const priorities = { ...tenant.priorities };
+  for (const key of PRIORITY_KEYS) {
+    const block = clientOverride.priorities[key];
+    if (block) {
+      priorities[key] = {
+        firstResponseHours: block.firstResponseHours,
+        resolveHours: block.resolveHours,
+      };
+    }
+  }
+  return { ...tenant, priorities };
+}
+
 export type TicketSlaStatus =
   | 'ok'
   | 'first_response_overdue'

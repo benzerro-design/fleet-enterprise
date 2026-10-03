@@ -18,6 +18,7 @@ import {
   type TenantMailSettings,
 } from './mail-settings';
 import {
+  mergeCustomConnectorsPatch,
   mergeInterCarsPatch,
   parseTenantIntegrationsSettings,
   parseTenantIntegrationsSettingsPatch,
@@ -697,7 +698,11 @@ export class TenantService {
     if (!tenant) throw new NotFoundException('Tenant not found');
 
     const current = parseTenantIntegrationsSettings(tenant.integrationsSettings);
-    const { interCars: interCarsPatch, ...rest } = patch as Partial<TenantIntegrationsSettings> & {
+    const {
+      interCars: interCarsPatch,
+      customConnectors: customConnectorsPatch,
+      ...rest
+    } = patch as Partial<TenantIntegrationsSettings> & {
       interCars?: Partial<TenantIntegrationsSettings['interCars']>;
     };
     const next: TenantIntegrationsSettings = {
@@ -706,6 +711,9 @@ export class TenantService {
       interCars: interCarsPatch
         ? mergeInterCarsPatch(current.interCars, interCarsPatch)
         : current.interCars,
+      customConnectors: customConnectorsPatch
+        ? mergeCustomConnectorsPatch(current.customConnectors, customConnectorsPatch)
+        : current.customConnectors,
     };
 
     await this.prisma.tenant.update({

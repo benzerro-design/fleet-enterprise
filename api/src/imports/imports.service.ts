@@ -211,6 +211,10 @@ export class ImportsService {
         return this.applyDriver(input);
       case 'suppliers':
         return this.applySupplier(input);
+      case 'costs':
+        return this.applyCost(input);
+      case 'documents':
+        return this.applyDocument(input);
       default:
         throw new BadRequestException(`Import pentru ${input.entity} nu e implementat încă`);
     }
@@ -329,6 +333,134 @@ export class ImportsService {
         email,
         licenseNumber,
         status: DriverStatus.active,
+      },
+    });
+    return 'created';
+  }
+
+  private async applyCost(input: {
+    tenantId: string;
+    obj: Record<string, string>;
+    dryRun: boolean;
+    access: AccessContext;
+  }): Promise<'created' | 'updated' | 'skipped'> {
+    const reg = (input.obj.registrationNumber ?? '').trim().toUpperCase();
+    if (!reg) throw new Error('registrationNumber lipsește');
+    const category = (input.obj.category ?? '').trim() || 'other';
+    const amountRaw = (input.obj.amountCents ?? input.obj.amount ?? '').trim();
+    if (!amountRaw) throw new Error('amountCents (sau amount în RON) lipsește');
+
+    let amountCents: number;
+    if (input.obj.amountCents?.trim()) {
+      amountCents = Math.round(Number(amountRaw));
+    } else {
+      amountCents = Math.round(Number(amountRaw.replace(',', '.')) * 100);
+    }
+    if (!Number.isFinite(amountCents) || amountCents < 0) {
+      throw new Error('Sumă invalidă');
+    }
+
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { tenantId: input.tenantId, registrationNumber: reg },
+      select: { id: true, clientId: true },
+    });
+    if (!vehicle) throw new Error(`Vehicul necunoscut: ${reg}`);
+    this.assertClientScope(input.access, vehicle.clientId);
+
+    const invoiceNumber = input.obj.invoiceNumber?.trim() || null;
+    const provider = input.obj.provider?.trim() || null;
+    const notes = input.obj.notes?.trim() || null;
+    const incurredRaw = input.obj.incurredOn?.trim();
+    const incurredOn = incurredRaw ? new Date(incurredRaw) : new Date();
+    if (Number.isNaN(incurredOn.getTime())) throw new Error('incurredOn invalid');
+
+    const existing =
+      invoiceNumber
+        ? await this.prisma.costEntry.findFirst({
+            where: {
+              tenantId: input.tenantId,
+              vehicleId: vehicle.id,
+              invoiceNumber,
+            },
+            select: { id: true },
+          })
+        : null;
+
+    if (input.dryRun) return existing ? 'updated' : 'created';
+
+    if (existing) {
+      await this.prisma.costEntry.update({
+        where: { id: existing.id },
+        data: { category, amountCents, provider, notes, incurredOn },
+      });
+      return 'updated';
+    }
+
+    await this.prisma.costEntry.create({
+      data: {
+        tenantId: input.tenantId,
+        vehicleId: vehicle.id,
+        category,
+        amountCents,
+        provider,
+        notes,
+        invoiceNumber,
+        incurredOn,
+      },
+    });
+    return 'created';
+  }
+
+  private async applyDocument(input: {
+    tenantId: string;
+    obj: Record<string, string>;
+    dryRun: boolean;
+    access: AccessContext;
+  }): Promise<'created' | 'updated' | 'skipped'> {
+    const reg = (input.obj.registrationNumber ?? '').trim().toUpperCase();
+    if (!reg) throw new Error('registrationNumber lipsește');
+    const documentTypeCode = (input.obj.documentTypeCode ?? '').trim().toLowerCase();
+    if (!documentTypeCode) throw new Error('documentTypeCode lipsește');
+    const title = (input.obj.title ?? '').trim() || documentTypeCode;
+
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { tenantId: input.tenantId, registrationNumber: reg },
+      select: { id: true, clientId: true },
+    });
+    if (!vehicle) throw new Error(`Vehicul necunoscut: ${reg}`);
+    this.assertClientScope(input.access, vehicle.clientId);
+
+    const expiresRaw = input.obj.expiresOn?.trim();
+    const expiresOn = expiresRaw ? new Date(expiresRaw) : null;
+    if (expiresRaw && expiresOn && Number.isNaN(expiresOn.getTime())) {
+      throw new Error('expiresOn invalid');
+    }
+
+    const existing = await this.prisma.vehicleDocument.findFirst({
+      where: {
+        vehicleId: vehicle.id,
+        documentTypeCode,
+        title,
+      },
+      select: { id: true },
+    });
+
+    if (input.dryRun) return existing ? 'updated' : 'created';
+
+    if (existing) {
+      await this.prisma.vehicleDocument.update({
+        where: { id: existing.id },
+        data: { expiresOn, title },
+      });
+      return 'updated';
+    }
+
+    await this.prisma.vehicleDocument.create({
+      data: {
+        vehicleId: vehicle.id,
+        documentTypeCode,
+        title,
+        expiresOn,
       },
     });
     return 'created';

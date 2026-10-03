@@ -38,6 +38,26 @@ export type InterCarsConnectorSettings = {
   lastTestMessage: string | null;
 };
 
+/** Conector generic (credențiale pe măsură) — stocat pe tenant; consumat de integrări viitoare. */
+export type CustomConnectorSetting = {
+  id: string;
+  label: string;
+  /** Slug stabil (ex. dat, audatex_api, leasing_x). */
+  providerKey: string;
+  enabled: boolean;
+  apiBaseUrl: string | null;
+  notes: string | null;
+  clientId: string | null;
+  /** Scris doar la PATCH; nu e returnat în GET. */
+  apiKey: string | null;
+  clientSecret: string | null;
+};
+
+export type CustomConnectorPublic = Omit<CustomConnectorSetting, 'apiKey' | 'clientSecret'> & {
+  apiKeySet: boolean;
+  clientSecretSet: boolean;
+};
+
 export type TenantIntegrationsSettings = {
   audatexImportEnabled: boolean;
   /** Import deviz din sistem extern (POST /integrations/service/quotes). */
@@ -46,6 +66,8 @@ export type TenantIntegrationsSettings = {
   partsCatalogProviders: PartsCatalogProviderSetting[];
   partsOrderLaunchEnabled: boolean;
   interCars: InterCarsConnectorSettings;
+  /** Conectori custom (credențiale furnizori / API-uri pe măsură). */
+  customConnectors: CustomConnectorSetting[];
 };
 
 export const DEFAULT_INTER_CARS_SETTINGS: InterCarsConnectorSettings = {
@@ -74,7 +96,79 @@ export const DEFAULT_TENANT_INTEGRATIONS_SETTINGS: TenantIntegrationsSettings = 
   ],
   partsOrderLaunchEnabled: false,
   interCars: { ...DEFAULT_INTER_CARS_SETTINGS },
+  customConnectors: [],
 };
+
+const CONNECTOR_KEY_RE = /^[a-z][a-z0-9_]{0,47}$/;
+
+function slugConnector(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const code = raw.trim().toLowerCase().replace(/\s+/g, '_');
+  return CONNECTOR_KEY_RE.test(code) ? code : null;
+}
+
+function parseCustomConnectors(raw: unknown): CustomConnectorSetting[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CustomConnectorSetting[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const id = typeof o.id === 'string' && o.id.trim() ? o.id.trim() : null;
+    const providerKey = slugConnector(o.providerKey);
+    if (!id || !providerKey || seen.has(id)) continue;
+    seen.add(id);
+    const label =
+      typeof o.label === 'string' && o.label.trim() ? o.label.trim() : providerKey;
+    out.push({
+      id,
+      label,
+      providerKey,
+      enabled: o.enabled === true,
+      apiBaseUrl: parseOptionalString(o.apiBaseUrl),
+      notes: parseOptionalString(o.notes),
+      clientId: parseOptionalString(o.clientId),
+      apiKey: parseOptionalString(o.apiKey),
+      clientSecret: parseOptionalString(o.clientSecret),
+    });
+  }
+  return out;
+}
+
+function toCustomConnectorPublic(c: CustomConnectorSetting): CustomConnectorPublic {
+  return {
+    id: c.id,
+    label: c.label,
+    providerKey: c.providerKey,
+    enabled: c.enabled,
+    apiBaseUrl: c.apiBaseUrl,
+    notes: c.notes,
+    clientId: c.clientId,
+    apiKeySet: Boolean(c.apiKey),
+    clientSecretSet: Boolean(c.clientSecret),
+  };
+}
+
+/** Merge listă conectori: păstrează secretele dacă patch-ul trimite null/omit pe secret. */
+export function mergeCustomConnectorsPatch(
+  current: CustomConnectorSetting[],
+  nextRaw: CustomConnectorSetting[],
+): CustomConnectorSetting[] {
+  const byId = new Map(current.map((c) => [c.id, c]));
+  return nextRaw.map((row) => {
+    const prev = byId.get(row.id);
+    return {
+      ...row,
+      apiKey: row.apiKey !== null && row.apiKey !== undefined
+        ? row.apiKey
+        : (prev?.apiKey ?? null),
+      clientSecret:
+        row.clientSecret !== null && row.clientSecret !== undefined
+          ? row.clientSecret
+          : (prev?.clientSecret ?? null),
+    };
+  });
+}
 
 /** Răspuns public — fără secrete. */
 export type InterCarsConnectorPublic = Omit<
@@ -86,8 +180,12 @@ export type InterCarsConnectorPublic = Omit<
   apiTokenSet: boolean;
 };
 
-export type TenantIntegrationsSettingsPublic = Omit<TenantIntegrationsSettings, 'interCars'> & {
+export type TenantIntegrationsSettingsPublic = Omit<
+  TenantIntegrationsSettings,
+  'interCars' | 'customConnectors'
+> & {
   interCars: InterCarsConnectorPublic;
+  customConnectors: CustomConnectorPublic[];
 };
 
 function parseProviders(raw: unknown): PartsCatalogProviderSetting[] {
@@ -176,6 +274,7 @@ export function toIntegrationsSettingsPublic(
     partsCatalogProviders: settings.partsCatalogProviders.map((p) => ({ ...p })),
     partsOrderLaunchEnabled: settings.partsOrderLaunchEnabled,
     interCars: toInterCarsPublic(settings.interCars),
+    customConnectors: settings.customConnectors.map(toCustomConnectorPublic),
   };
 }
 
@@ -187,6 +286,7 @@ export function parseTenantIntegrationsSettings(raw: unknown): TenantIntegration
         ...p,
       })),
       interCars: { ...DEFAULT_INTER_CARS_SETTINGS },
+      customConnectors: [],
     };
   }
   const o = raw as Record<string, unknown>;
@@ -209,6 +309,7 @@ export function parseTenantIntegrationsSettings(raw: unknown): TenantIntegration
         ? o.partsOrderLaunchEnabled
         : DEFAULT_TENANT_INTEGRATIONS_SETTINGS.partsOrderLaunchEnabled,
     interCars: parseInterCarsSettings(o.interCars),
+    customConnectors: parseCustomConnectors(o.customConnectors),
   };
 }
 
@@ -246,6 +347,25 @@ export function parseTenantIntegrationsSettingsPatch(
   }
   if (o.partsCatalogProviders !== undefined) {
     patch.partsCatalogProviders = parseProviders(o.partsCatalogProviders);
+  }
+  if (o.customConnectors !== undefined) {
+    if (!Array.isArray(o.customConnectors)) {
+      throw new Error('customConnectors must be an array');
+    }
+    // Empty apiKey/clientSecret in patch means „keep previous” — encode as null for merge.
+    const parsed = parseCustomConnectors(
+      o.customConnectors.map((item) => {
+        if (!item || typeof item !== 'object') return item;
+        const row = item as Record<string, unknown>;
+        const next = { ...row };
+        if (typeof row.apiKey === 'string' && !row.apiKey.trim()) next.apiKey = null;
+        if (typeof row.clientSecret === 'string' && !row.clientSecret.trim()) {
+          next.clientSecret = null;
+        }
+        return next;
+      }),
+    );
+    patch.customConnectors = parsed;
   }
   if (o.interCars !== undefined) {
     if (!o.interCars || typeof o.interCars !== 'object' || Array.isArray(o.interCars)) {

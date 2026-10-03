@@ -34,8 +34,8 @@ export const DEFAULT_IMPORT_ENTITIES: ImportEntitySetting[] = [
   { code: 'vehicles', label: 'Vehicule', enabled: true, system: true },
   { code: 'drivers', label: 'Șoferi', enabled: true, system: true },
   { code: 'suppliers', label: 'Furnizori', enabled: true, system: true },
-  { code: 'costs', label: 'Costuri', enabled: false, system: true },
-  { code: 'documents', label: 'Documente flotă', enabled: false, system: true },
+  { code: 'costs', label: 'Costuri', enabled: true, system: true },
+  { code: 'documents', label: 'Documente flotă', enabled: true, system: true },
 ];
 
 export const DEFAULT_IMPORT_TEMPLATES: ImportTemplateSetting[] = [
@@ -60,6 +60,30 @@ export const DEFAULT_IMPORT_TEMPLATES: ImportTemplateSetting[] = [
     entity: 'suppliers',
     name: 'Furnizori — de bază',
     columns: ['code', 'legalName', 'taxId', 'category', 'contactEmail', 'contactPhone'],
+    enabled: true,
+    system: true,
+  },
+  {
+    id: 'costs_basic',
+    entity: 'costs',
+    name: 'Costuri — de bază',
+    columns: [
+      'registrationNumber',
+      'category',
+      'amountCents',
+      'provider',
+      'invoiceNumber',
+      'incurredOn',
+      'notes',
+    ],
+    enabled: true,
+    system: true,
+  },
+  {
+    id: 'documents_basic',
+    entity: 'documents',
+    name: 'Documente — de bază',
+    columns: ['registrationNumber', 'documentTypeCode', 'title', 'expiresOn'],
     enabled: true,
     system: true,
   },

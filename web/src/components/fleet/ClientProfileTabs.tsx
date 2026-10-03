@@ -17,6 +17,7 @@ import { ClientSubscriptionTab } from "@/components/fleet/ClientSubscriptionTab"
 import { ClientDriversTab } from "@/components/fleet/ClientDriversTab";
 import { ClientMailSettingsEditor } from "@/components/fleet/ClientMailSettingsEditor";
 import { ClientPricingSettingsEditor } from "@/components/fleet/ClientPricingSettingsEditor";
+import { ClientSlaSettingsEditor } from "@/components/fleet/ClientSlaSettingsEditor";
 import { ClientIamSettingsEditor } from "@/components/fleet/ClientIamSettingsEditor";
 import { ClientSupplierAllocationsEditor } from "@/components/fleet/ClientSupplierAllocationsEditor";
 import { ClientTeamTab } from "@/components/fleet/ClientTeamTab";
@@ -30,6 +31,7 @@ const TABS: { id: ClientProfileTab; label: string }[] = [
   { id: "subscription", label: "Abonament" },
   { id: "mail", label: "Corespondență" },
   { id: "pricing", label: "Prețuri" },
+  { id: "sla", label: "SLA" },
   { id: "iam", label: "Drepturi & politici L1" },
   { id: "suppliers", label: "Furnizori" },
 ];
@@ -245,6 +247,8 @@ export function ClientProfileTabs({
           <ClientMailSettingsEditor clientId={client.id} canWrite={canWrite} />
         ) : active === "pricing" ? (
           <ClientPricingSettingsEditor clientId={client.id} canWrite={canWrite} />
+        ) : active === "sla" ? (
+          <ClientSlaSettingsEditor clientId={client.id} canWrite={canWrite} />
         ) : active === "iam" ? (
           <ClientIamSettingsEditor clientId={client.id} canWrite={canEditIam} />
         ) : active === "suppliers" ? (

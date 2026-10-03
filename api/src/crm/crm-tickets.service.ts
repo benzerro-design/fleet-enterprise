@@ -30,10 +30,12 @@ import {
 } from '../iam/client-access';
 import {
   computeSlaDeadlines,
+  mergeSlaSettings,
   parseSlaSettings,
   suggestedPriorityForTicketType,
   ticketSlaStatus,
 } from '../tenant/sla-settings';
+import { parseClientSlaSettings } from '../clients/client-sla-settings';
 import { PartnerMailService } from '../partner/partner-mail.service';
 import { ClientNotificationMailService } from './client-notification-mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -490,8 +492,11 @@ export class CrmTicketsService {
       this.listAttachmentsSafe(tenant.id, id),
     ]);
 
+    const ticket = this.toRecord(row);
+    void this.maybeNotifySlaBreach(tenant.id, ticket);
+
     return {
-      ticket: this.toRecord(row),
+      ticket,
       events: events.map((e) => this.mapEventRecord(e)),
       links: links.map((l) => ({
         id: l.id,
@@ -585,7 +590,14 @@ export class CrmTicketsService {
       eventOdometerKm = Math.round(dto.eventOdometerKm);
     }
 
-    const sla = parseSlaSettings(tenant.slaSettings);
+    const clientSlaRow = await this.prisma.client.findFirst({
+      where: { id: client.id, tenantId: tenant.id },
+      select: { slaSettings: true },
+    });
+    const sla = mergeSlaSettings(
+      parseSlaSettings(tenant.slaSettings),
+      parseClientSlaSettings(clientSlaRow?.slaSettings),
+    );
     let priority = dto.priority ?? CrmTicketPriority.normal;
     if (dto.priority === undefined && sla.autoPrioritizeFromType) {
       priority = suggestedPriorityForTicketType(ticketType, sla);
@@ -690,7 +702,14 @@ export class CrmTicketsService {
     if (dto.priority !== undefined) {
       data.priority = dto.priority;
       if (!existing.resolvedAt) {
-        const sla = parseSlaSettings(tenant.slaSettings);
+        const clientRow = await this.prisma.client.findFirst({
+          where: { id: existing.clientId, tenantId: tenant.id },
+          select: { slaSettings: true },
+        });
+        const sla = mergeSlaSettings(
+          parseSlaSettings(tenant.slaSettings),
+          parseClientSlaSettings(clientRow?.slaSettings),
+        );
         const deadlines = computeSlaDeadlines(sla, dto.priority, existing.createdAt);
         data.firstResponseDueAt = deadlines.firstResponseDueAt;
         data.resolveDueAt = deadlines.resolveDueAt;
@@ -2169,6 +2188,55 @@ export class CrmTicketsService {
         actorDisplayName: input.actor?.displayName ?? null,
       },
     });
+  }
+
+  private async maybeNotifySlaBreach(
+    tenantId: string,
+    ticket: TicketRecord,
+  ): Promise<void> {
+    if (
+      ticket.slaStatus !== 'first_response_overdue' &&
+      ticket.slaStatus !== 'resolve_overdue'
+    ) {
+      return;
+    }
+    try {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recent = await this.prisma.crmTicketEvent.findFirst({
+        where: {
+          tenantId,
+          ticketId: ticket.id,
+          kind: CrmTicketEventKind.workflow_advance,
+          createdAt: { gte: since },
+          payload: { path: ['slaBreached'], equals: true },
+        },
+        select: { id: true },
+      });
+      if (recent) return;
+
+      await this.prisma.crmTicketEvent.create({
+        data: {
+          tenantId,
+          ticketId: ticket.id,
+          kind: CrmTicketEventKind.workflow_advance,
+          body: `SLA încălcat (${ticket.slaStatus}).`,
+          payload: { slaBreached: true, slaStatus: ticket.slaStatus },
+        },
+      });
+
+      void this.clientNotify.notify({
+        tenantId,
+        clientId: ticket.clientId,
+        event: 'sla_breached',
+        subject: `[CRM] SLA încălcat — ${ticket.displayId}`,
+        body: `Tichetul ${ticket.displayId} (${ticket.subject}) are SLA: ${ticket.slaStatus}.`,
+        driverId: ticket.driverId,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `maybeNotifySlaBreach failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   private async ensureTenant(slug: string) {

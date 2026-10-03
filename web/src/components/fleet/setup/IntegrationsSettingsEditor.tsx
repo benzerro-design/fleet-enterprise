@@ -5,10 +5,16 @@ import { fleetJsonHeaders } from "@/lib/fleet-api";
 import {
   DEFAULT_TENANT_INTEGRATIONS_SETTINGS,
   integrationsSettingsBrowserBase,
+  type CustomConnectorPublic,
   type InterCarsApiMode,
   type InterCarsEnvironment,
   type TenantIntegrationsSettings,
 } from "@/lib/integrations-settings";
+
+type ConnectorDraft = CustomConnectorPublic & {
+  apiKey: string;
+  clientSecret: string;
+};
 
 type Props = {
   initial: TenantIntegrationsSettings;
@@ -43,9 +49,23 @@ function toDraft(s: TenantIntegrationsSettings): InterCarsDraft {
   };
 }
 
+function toConnectorDrafts(list: CustomConnectorPublic[] | undefined): ConnectorDraft[] {
+  return (list ?? []).map((c) => ({
+    ...c,
+    apiKey: "",
+    clientSecret: "",
+  }));
+}
+
 export function IntegrationsSettingsEditor({ initial }: Props) {
-  const [settings, setSettings] = useState(initial);
+  const [settings, setSettings] = useState({
+    ...initial,
+    customConnectors: initial.customConnectors ?? [],
+  });
   const [icDraft, setIcDraft] = useState(() => toDraft(initial));
+  const [connectors, setConnectors] = useState(() =>
+    toConnectorDrafts(initial.customConnectors),
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -67,8 +87,9 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
         throw new Error(j.message ?? `HTTP ${res.status}`);
       }
       const next = (await res.json()) as TenantIntegrationsSettings;
-      setSettings(next);
+      setSettings({ ...next, customConnectors: next.customConnectors ?? [] });
       setIcDraft(toDraft(next));
+      setConnectors(toConnectorDrafts(next.customConnectors));
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
@@ -409,6 +430,224 @@ export function IntegrationsSettingsEditor({ initial }: Props) {
             </span>
           </span>
         </label>
+
+        <div className="border-t border-zinc-800 pt-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-medium text-zinc-200">Conectori pe măsură</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Credențiale generice pentru furnizori / API-uri (DAT, leasing, broker…). Nu înlocuiesc
+              Inter Cars sau Audatex; sunt stocate pe tenant pentru consum ulterior.
+            </p>
+          </div>
+
+          {connectors.map((c, idx) => (
+            <div
+              key={c.id}
+              className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm text-zinc-200">
+                  <input
+                    type="checkbox"
+                    checked={c.enabled}
+                    disabled={pending}
+                    onChange={(e) =>
+                      setConnectors((list) =>
+                        list.map((row, i) =>
+                          i === idx ? { ...row, enabled: e.target.checked } : row,
+                        ),
+                      )
+                    }
+                  />
+                  Activ
+                </label>
+                <button
+                  type="button"
+                  disabled={pending}
+                  className="text-xs text-red-400 hover:underline disabled:opacity-50"
+                  onClick={() => setConnectors((list) => list.filter((_, i) => i !== idx))}
+                >
+                  Șterge
+                </button>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block text-xs text-zinc-400">
+                  Etichetă
+                  <input
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+                    value={c.label}
+                    disabled={pending}
+                    onChange={(e) =>
+                      setConnectors((list) =>
+                        list.map((row, i) =>
+                          i === idx ? { ...row, label: e.target.value } : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="block text-xs text-zinc-400">
+                  Provider key
+                  <input
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-sm text-zinc-200"
+                    value={c.providerKey}
+                    disabled={pending}
+                    onChange={(e) =>
+                      setConnectors((list) =>
+                        list.map((row, i) =>
+                          i === idx
+                            ? {
+                                ...row,
+                                providerKey: e.target.value
+                                  .toLowerCase()
+                                  .replace(/\s+/g, "_"),
+                              }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="block text-xs text-zinc-400 sm:col-span-2">
+                  API base URL
+                  <input
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+                    value={c.apiBaseUrl ?? ""}
+                    disabled={pending}
+                    placeholder="https://…"
+                    onChange={(e) =>
+                      setConnectors((list) =>
+                        list.map((row, i) =>
+                          i === idx
+                            ? { ...row, apiBaseUrl: e.target.value.trim() || null }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="block text-xs text-zinc-400">
+                  Client ID
+                  <input
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+                    value={c.clientId ?? ""}
+                    disabled={pending}
+                    onChange={(e) =>
+                      setConnectors((list) =>
+                        list.map((row, i) =>
+                          i === idx
+                            ? { ...row, clientId: e.target.value.trim() || null }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="block text-xs text-zinc-400">
+                  API key {c.apiKeySet ? "(setat)" : ""}
+                  <input
+                    type="password"
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+                    value={c.apiKey}
+                    disabled={pending}
+                    placeholder={c.apiKeySet ? "••••••••" : ""}
+                    onChange={(e) =>
+                      setConnectors((list) =>
+                        list.map((row, i) =>
+                          i === idx ? { ...row, apiKey: e.target.value } : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="block text-xs text-zinc-400 sm:col-span-2">
+                  Client secret {c.clientSecretSet ? "(setat)" : ""}
+                  <input
+                    type="password"
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+                    value={c.clientSecret}
+                    disabled={pending}
+                    placeholder={c.clientSecretSet ? "••••••••" : ""}
+                    onChange={(e) =>
+                      setConnectors((list) =>
+                        list.map((row, i) =>
+                          i === idx ? { ...row, clientSecret: e.target.value } : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="block text-xs text-zinc-400 sm:col-span-2">
+                  Note
+                  <input
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+                    value={c.notes ?? ""}
+                    disabled={pending}
+                    onChange={(e) =>
+                      setConnectors((list) =>
+                        list.map((row, i) =>
+                          i === idx
+                            ? { ...row, notes: e.target.value.trim() || null }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              className="rounded border border-zinc-600 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 disabled:opacity-50"
+              onClick={() =>
+                setConnectors((list) => [
+                  ...list,
+                  {
+                    id: `conn_${Date.now().toString(36)}`,
+                    label: "Conector nou",
+                    providerKey: `provider_${list.length + 1}`,
+                    enabled: true,
+                    apiBaseUrl: null,
+                    notes: null,
+                    clientId: null,
+                    apiKeySet: false,
+                    clientSecretSet: false,
+                    apiKey: "",
+                    clientSecret: "",
+                  },
+                ])
+              }
+            >
+              Adaugă conector
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              className="rounded border border-emerald-600/50 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-100 disabled:opacity-50"
+              onClick={() =>
+                void patch({
+                  customConnectors: connectors.map((c) => ({
+                    id: c.id,
+                    label: c.label,
+                    providerKey: c.providerKey,
+                    enabled: c.enabled,
+                    apiBaseUrl: c.apiBaseUrl,
+                    notes: c.notes,
+                    clientId: c.clientId,
+                    apiKey: c.apiKey,
+                    clientSecret: c.clientSecret,
+                  })),
+                })
+              }
+            >
+              Salvează conectorii
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

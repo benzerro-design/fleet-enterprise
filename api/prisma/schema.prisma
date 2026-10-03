@@ -107,6 +107,8 @@ model Client {
   pricingSettings Json?
   /** IAM-008: OCR / date achiziție / acord șofer pentru managerul clientului. */
   iamSettings Json?
+  /** Override SLA pe client (null / override:false = Setup → Tipuri & servicii → SLA). */
+  slaSettings Json?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)

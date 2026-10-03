@@ -25,7 +25,12 @@ const IMPORTS_BASE = "/api/imports";
 
 export function ImportCsvRunner({ settings }: Props) {
   const enabledEntities = useMemo(
-    () => settings.entities.filter((e) => e.enabled && ["vehicles", "drivers", "suppliers"].includes(e.code)),
+    () =>
+      settings.entities.filter(
+        (e) =>
+          e.enabled &&
+          ["vehicles", "drivers", "suppliers", "costs", "documents"].includes(e.code),
+      ),
     [settings.entities],
   );
   const [entity, setEntity] = useState(enabledEntities[0]?.code ?? "vehicles");
@@ -110,7 +115,8 @@ export function ImportCsvRunner({ settings }: Props) {
       <div>
         <h2 className="text-sm font-medium text-zinc-200">Motor CSV</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Upload → dry-run (validare) → scriere DB. Istoricul job-urilor rămâne pe tenant.
+          Upload CSV → dry-run (validare) → scriere DB. Vehicul / șofer / furnizor / cost / document.
+          Pentru Excel: exportă ca CSV (UTF-8). XLSX nativ vine ulterior.
           {settings.requireDryRun ? " Dry-run e recomandat înainte de scriere." : null}
         </p>
       </div>

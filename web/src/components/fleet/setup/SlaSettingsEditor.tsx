@@ -79,8 +79,8 @@ export function SlaSettingsEditor() {
         <div>
           <h2 className="text-sm font-medium text-zinc-200">General</h2>
           <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-            Se aplică la crearea tichetelor și la schimbarea priorității. Override pe client nu există încă —
-            valorile sunt pe tot abonatul.
+            Se aplică la crearea tichetelor și la schimbarea priorității. Override pe un client: fișa
+            Clientului → tab SLA.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-6">
