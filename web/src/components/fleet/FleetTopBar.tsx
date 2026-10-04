@@ -13,6 +13,7 @@ import {
   writeFleetNavFavorites,
   type FleetNavFavorite,
 } from "@/lib/fleet-nav-favorites";
+import { useT } from "@/lib/i18n/useT";
 
 type Props = {
   userEmail?: string;
@@ -47,6 +48,7 @@ export function FleetTopBar({
   helpRailOpen,
   onToggleHelpRail,
 }: Props) {
+  const tx = useT();
   const pathname = usePathname() ?? "";
   const [menuOpen, setMenuOpen] = useState(false);
   const [favorites, setFavorites] = useState<FleetNavFavorite[]>([]);
@@ -115,9 +117,9 @@ export function FleetTopBar({
           type="button"
           onClick={() => openFleetCommandPalette()}
           className="flex min-w-0 max-w-sm flex-1 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 text-left text-xs text-zinc-500 hover:border-zinc-700 hover:bg-zinc-900"
-          aria-label="Căutare rapidă"
+          aria-label={tx("shell.searchAria")}
         >
-          <span className="truncate">Caută pagină sau acțiune…</span>
+          <span className="truncate">{tx("shell.searchPlaceholder")}</span>
           <kbd className="ml-auto hidden shrink-0 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500 sm:inline">
             Ctrl+K
           </kbd>
@@ -130,7 +132,7 @@ export function FleetTopBar({
                 href={s.href}
                 className="rounded-md px-2 py-1 text-[11px] font-medium text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
               >
-                {s.label}
+                {labelForHref(s.href, hrefLabels)}
               </Link>
             ))}
           </nav>
@@ -144,10 +146,10 @@ export function FleetTopBar({
                 ? "border-amber-700/60 bg-amber-950/40 text-amber-200"
                 : "border-zinc-800 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300"
             }`}
-            title={isFavorite ? "Scoate din favorite" : "Adaugă la favorite (max 5)"}
+            title={isFavorite ? tx("shell.favoriteRemove") : tx("shell.favoriteAdd")}
             aria-pressed={isFavorite}
           >
-            {isFavorite ? "★ Favorit" : "☆ Favorit"}
+            {isFavorite ? `★ ${tx("shell.favorite")}` : `☆ ${tx("shell.favorite")}`}
           </button>
         ) : null}
       </div>
@@ -163,9 +165,9 @@ export function FleetTopBar({
                 : "border-zinc-800 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
             }`}
             aria-pressed={!!helpRailOpen}
-            title="Ajutor contextual pe ecran"
+            title={tx("shell.helpTitle")}
           >
-            Help
+            {tx("common.help")}
           </button>
         ) : null}
         <TicketNotificationBell />
@@ -204,14 +206,14 @@ export function FleetTopBar({
                   className="block text-xs font-medium text-sky-400 hover:underline"
                   onClick={() => setMenuOpen(false)}
                 >
-                  Preferințe
+                  {tx("common.preferences")}
                 </Link>
                 <Link
                   href="/fleet/help"
                   className="block text-xs text-zinc-400 hover:text-zinc-200 hover:underline"
                   onClick={() => setMenuOpen(false)}
                 >
-                  Catalog Help
+                  {tx("shell.helpCatalog")}
                 </Link>
                 <LogoutButton />
               </div>

@@ -1,6 +1,10 @@
 "use client";
 
+import { useT } from "@/lib/i18n/useT";
+
 export function LogoutButton() {
+  const tx = useT();
+
   return (
     <button
       type="button"
@@ -12,7 +16,7 @@ export function LogoutButton() {
       }}
       className="text-sm text-zinc-400 hover:text-zinc-200"
     >
-      Ieșire
+      {tx("shell.logout")}
     </button>
   );
 }

@@ -15,6 +15,7 @@ import {
   partnerPendingActionsBrowserBase,
   type PartnerPendingAction,
 } from "@/lib/partner-pending-actions-api";
+import { useT } from "@/lib/i18n/useT";
 
 export type PartnerTopBarContext = {
   pageTitle: string;
@@ -37,6 +38,7 @@ type Props = {
 };
 
 export function PartnerTopBar({ ctx }: Props) {
+  const tx = useT();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pendingItems, setPendingItems] = useState<PartnerPendingAction[]>([]);
@@ -110,9 +112,9 @@ export function PartnerTopBar({ ctx }: Props) {
           type="button"
           onClick={() => openFleetCommandPalette()}
           className="hidden items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/50 px-2 py-1 text-[11px] text-zinc-500 hover:border-zinc-700 hover:text-zinc-300 sm:inline-flex"
-          aria-label="Căutare rapidă"
+          aria-label={tx("shell.searchAria")}
         >
-          <span>Caută…</span>
+          <span>{tx("shell.searchShort")}</span>
           <kbd className="rounded border border-zinc-700 px-1 font-mono text-[9px] text-zinc-600">⌘K</kbd>
         </button>
 
@@ -170,7 +172,7 @@ export function PartnerTopBar({ ctx }: Props) {
                   className="block text-xs font-medium text-sky-400 hover:underline"
                   onClick={() => setMenuOpen(false)}
                 >
-                  Preferințe
+                  {tx("common.preferences")}
                 </Link>
                 <LogoutButton />
               </div>

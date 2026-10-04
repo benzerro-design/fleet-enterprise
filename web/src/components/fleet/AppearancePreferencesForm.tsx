@@ -6,40 +6,73 @@ import type {
   AppearanceDensity,
   AppearanceTheme,
 } from "@/lib/appearance-prefs";
+import type { Locale } from "@/lib/i18n/types";
+import { useT } from "@/lib/i18n/useT";
 import { OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
 
-const THEME_OPTIONS: { value: AppearanceTheme; label: string; hint: string }[] = [
-  { value: "dark", label: "Întunecat", hint: "Implicit — chrome + canvas zinc" },
-  { value: "light", label: "Luminos", hint: "BO: canvas gri, carduri albe (PLAT-007)" },
-  { value: "system", label: "Sistem", hint: "Urmează OS-ul" },
+const LOCALE_OPTIONS: { value: Locale; labelKey: string }[] = [
+  { value: "ro", labelKey: "appearance.locale.ro" },
+  { value: "en", labelKey: "appearance.locale.en" },
 ];
 
-const DENSITY_OPTIONS: { value: AppearanceDensity; label: string; hint: string }[] = [
-  { value: "comfortable", label: "Comfortabil", hint: "Mai mult spațiu — formulare, lectură" },
-  { value: "compact", label: "Compact", hint: "Padding redus pe shell + liste (PLAT-007)" },
+const THEME_OPTIONS: { value: AppearanceTheme; labelKey: string; hintKey: string }[] = [
+  { value: "dark", labelKey: "appearance.theme.dark", hintKey: "appearance.theme.darkHint" },
+  { value: "light", labelKey: "appearance.theme.light", hintKey: "appearance.theme.lightHint" },
+  { value: "system", labelKey: "appearance.theme.system", hintKey: "appearance.theme.systemHint" },
 ];
 
-const DATE_OPTIONS: { value: AppearanceDateFormat; label: string; example: string }[] = [
-  { value: "ro", label: "Română (scurt)", example: "20 sept. 2026" },
-  { value: "numeric", label: "Numeric RO", example: "20.09.2026" },
-  { value: "iso", label: "ISO", example: "2026-09-20" },
+const DENSITY_OPTIONS: { value: AppearanceDensity; labelKey: string; hintKey: string }[] = [
+  { value: "comfortable", labelKey: "appearance.density.comfortable", hintKey: "appearance.density.comfortableHint" },
+  { value: "compact", labelKey: "appearance.density.compact", hintKey: "appearance.density.compactHint" },
+];
+
+const DATE_OPTIONS: { value: AppearanceDateFormat; labelKey: string; example: string }[] = [
+  { value: "ro", labelKey: "appearance.date.ro", example: "20 sept. 2026" },
+  { value: "numeric", labelKey: "appearance.date.numeric", example: "20.09.2026" },
+  { value: "iso", labelKey: "appearance.date.iso", example: "2026-09-20" },
 ];
 
 export function AppearancePreferencesForm() {
   const { prefs, hydrated, update } = useAppearancePrefs();
+  const tx = useT();
 
   return (
     <div className="space-y-8">
       {!hydrated ? (
-        <p className="text-sm text-zinc-500">Se încarcă preferințele…</p>
+        <p className="text-sm text-zinc-500">{tx("appearance.loading")}</p>
       ) : null}
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-100">Temă</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Se aplică imediat pe tot UI-ul din acest browser — preferință personală, nu setare tenant.
-          </p>
+          <h2 className="text-sm font-semibold text-zinc-100">{tx("appearance.locale.title")}</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">{tx("appearance.locale.description")}</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {LOCALE_OPTIONS.map((opt) => {
+            const active = prefs.locale === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={!hydrated}
+                onClick={() => update({ locale: opt.value })}
+                className={`rounded-lg border px-3 py-2.5 text-left transition-colors disabled:opacity-50 ${
+                  active
+                    ? "border-violet-500/50 bg-violet-950/30 text-violet-100"
+                    : "border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:bg-zinc-900"
+                }`}
+              >
+                <span className="block text-sm font-medium">{tx(opt.labelKey)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">{tx("appearance.theme.title")}</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">{tx("appearance.theme.description")}</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           {THEME_OPTIONS.map((opt) => {
@@ -56,8 +89,8 @@ export function AppearancePreferencesForm() {
                     : "border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:bg-zinc-900"
                 }`}
               >
-                <span className="block text-sm font-medium">{opt.label}</span>
-                <span className="mt-0.5 block text-[11px] text-zinc-500">{opt.hint}</span>
+                <span className="block text-sm font-medium">{tx(opt.labelKey)}</span>
+                <span className="mt-0.5 block text-[11px] text-zinc-500">{tx(opt.hintKey)}</span>
               </button>
             );
           })}
@@ -66,10 +99,8 @@ export function AppearancePreferencesForm() {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-100">Densitate</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Compact aliniază și listele (simplu). Comfortabil = detaliat.
-          </p>
+          <h2 className="text-sm font-semibold text-zinc-100">{tx("appearance.density.title")}</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">{tx("appearance.density.description")}</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {DENSITY_OPTIONS.map((opt) => {
@@ -86,8 +117,8 @@ export function AppearancePreferencesForm() {
                     : "border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:bg-zinc-900"
                 }`}
               >
-                <span className="block text-sm font-medium">{opt.label}</span>
-                <span className="mt-0.5 block text-[11px] text-zinc-500">{opt.hint}</span>
+                <span className="block text-sm font-medium">{tx(opt.labelKey)}</span>
+                <span className="mt-0.5 block text-[11px] text-zinc-500">{tx(opt.hintKey)}</span>
               </button>
             );
           })}
@@ -96,8 +127,8 @@ export function AppearancePreferencesForm() {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-100">Mișcare</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">Reduce animațiile și tranzițiile.</p>
+          <h2 className="text-sm font-semibold text-zinc-100">{tx("appearance.motion.title")}</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">{tx("appearance.motion.description")}</p>
         </div>
         <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5 text-sm text-zinc-200">
           <input
@@ -108,20 +139,16 @@ export function AppearancePreferencesForm() {
             onChange={(e) => update({ reduceMotion: e.target.checked })}
           />
           <span>
-            <span className="font-medium">Reduce motion</span>
-            <span className="mt-0.5 block text-xs text-zinc-500">
-              Respectă accesibilitatea — utile pe dispozitive lente sau la sensibilitate la mișcare.
-            </span>
+            <span className="font-medium">{tx("appearance.motion.reduce")}</span>
+            <span className="mt-0.5 block text-xs text-zinc-500">{tx("appearance.motion.hint")}</span>
           </span>
         </label>
       </section>
 
       <section className="space-y-3">
         <div>
-          <label className={OPS_LABEL_CLASS}>Format dată (afișare)</label>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Liste și detalii pe client. Formularele datetime-local rămân neschimbate.
-          </p>
+          <label className={OPS_LABEL_CLASS}>{tx("appearance.date.title")}</label>
+          <p className="mt-0.5 text-xs text-zinc-500">{tx("appearance.date.description")}</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           {DATE_OPTIONS.map((opt) => {
@@ -138,7 +165,7 @@ export function AppearancePreferencesForm() {
                     : "border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:bg-zinc-900"
                 }`}
               >
-                <span className="block text-sm font-medium">{opt.label}</span>
+                <span className="block text-sm font-medium">{tx(opt.labelKey)}</span>
                 <span className="mt-0.5 block font-mono text-[11px] text-zinc-500">{opt.example}</span>
               </button>
             );

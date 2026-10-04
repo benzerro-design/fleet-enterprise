@@ -8,6 +8,7 @@ import { FleetCommandPalette, type FleetCommandItem } from "@/components/fleet/F
 import { PartnerNavLinks } from "@/components/fleet/partner/PartnerNavLinks";
 import { PartnerTopBar, type PartnerTopBarContext } from "@/components/fleet/partner/PartnerTopBar";
 import { PARTNER_NAV_ITEMS, partnerNavActive } from "@/lib/partner-nav";
+import { useT } from "@/lib/i18n/useT";
 
 const PARTNER_PAGE_TITLES: Record<string, string> = {
   "/fleet/partner": "Dashboard",
@@ -32,6 +33,7 @@ type PartnerShellProps = {
 };
 
 export function PartnerShell({ children, topBar, supplierFooter, authBanner }: PartnerShellProps) {
+  const tx = useT();
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
@@ -49,13 +51,13 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
     }));
     nav.push({
       id: "/fleet/preferences",
-      label: "Preferințe",
+      label: tx("common.preferences"),
       href: "/fleet/preferences",
-      group: "Cont",
+      group: tx("common.account"),
       keywords: "aspect tema densitate",
     });
     return nav;
-  }, [supplierQ]);
+  }, [supplierQ, tx]);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
@@ -111,7 +113,7 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
             onClick={() => setMenuOpen(true)}
             className="rounded-lg border border-zinc-800 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
           >
-            Meniu
+            {tx("shell.menu")}
           </button>
           <p className="truncate text-sm font-medium text-zinc-200">{pageTitle}</p>
         </header>
@@ -128,7 +130,7 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
         <nav
           className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-4 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur lg:hidden"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-          aria-label="Navigare partener"
+          aria-label={tx("nav.aria.quick")}
         >
           <PartnerNavLinks items={PARTNER_NAV_ITEMS} className="grid-cols-4" />
         </nav>
@@ -139,18 +141,18 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
           <button
             type="button"
             className="absolute inset-0 bg-black/60"
-            aria-label="Închide meniul"
+            aria-label={tx("shell.closeMenu")}
             onClick={closeMenu}
           />
           <div className="absolute bottom-0 left-0 top-0 flex w-[min(100%,280px)] min-h-0 flex-col border-r border-zinc-800 bg-zinc-950 shadow-xl">
             <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-              <p className="text-sm font-semibold text-zinc-100">Meniu</p>
+              <p className="text-sm font-semibold text-zinc-100">{tx("shell.menu")}</p>
               <button
                 type="button"
                 onClick={closeMenu}
                 className="rounded-lg px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-900"
               >
-                Închide
+                {tx("common.close")}
               </button>
             </div>
             <div className="flex min-h-0 flex-1 flex-col">{sidebar}</div>

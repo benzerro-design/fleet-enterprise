@@ -49,6 +49,7 @@ export function FleetLayoutSwitcher({
       readOnly={readOnly}
       authBanner={authBanner}
       homeHref={homeHref}
+      clientDriverPortal={driverPortal}
       mobileTabs={getFleetMobileTabs({ clientDriverPortal: driverPortal })}
     >
       {children}

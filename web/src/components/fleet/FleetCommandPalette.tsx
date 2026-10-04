@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "@/lib/i18n/useT";
 
 export type FleetCommandItem = {
   id: string;
@@ -32,6 +33,7 @@ function normalize(s: string): string {
 }
 
 export function FleetCommandPalette({ items }: Props) {
+  const tx = useT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -127,8 +129,8 @@ export function FleetCommandPalette({ items }: Props) {
   if (!mounted || !open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 px-4 pt-[12vh] print:hidden" role="dialog" aria-modal="true" aria-label="Căutare rapidă">
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="Închide" onClick={close} />
+    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 px-4 pt-[12vh] print:hidden" role="dialog" aria-modal="true" aria-label={tx("commandPalette.aria")}>
+      <button type="button" className="absolute inset-0 cursor-default" aria-label={tx("commandPalette.close")} onClick={close} />
       <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950 shadow-2xl">
         <div className="border-b border-zinc-800 px-3 py-2.5">
           <input
@@ -136,14 +138,14 @@ export function FleetCommandPalette({ items }: Props) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Mergi la… (ex. programator, tichete)"
+            placeholder={tx("commandPalette.placeholder")}
             className="w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
             autoComplete="off"
           />
         </div>
         <ul className="max-h-[min(50vh,20rem)] overflow-y-auto py-1" role="listbox">
           {filtered.length === 0 ? (
-            <li className="px-3 py-4 text-center text-sm text-zinc-500">Niciun rezultat</li>
+            <li className="px-3 py-4 text-center text-sm text-zinc-500">{tx("commandPalette.empty")}</li>
           ) : (
             filtered.map((item, idx) => {
               const active = idx === highlight;
@@ -166,7 +168,7 @@ export function FleetCommandPalette({ items }: Props) {
           )}
         </ul>
         <p className="border-t border-zinc-800 px-3 py-1.5 text-[10px] text-zinc-600">
-          ↑↓ navighează · Enter deschide · Esc închide · Ctrl/Cmd+K
+          {tx("commandPalette.footer")}
         </p>
       </div>
     </div>,

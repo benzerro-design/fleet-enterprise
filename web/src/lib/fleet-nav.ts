@@ -378,9 +378,9 @@ export function getFleetMobileTabs(ctx: { clientDriverPortal?: boolean }): Fleet
     return [
       { label: "Acasă", href: "/fleet/vehicles", activePrefixes: ["/fleet/vehicles"] },
       { label: "Curse", href: "/fleet/trips", activePrefixes: ["/fleet/trips"] },
+      { label: "Alimentare", href: "/fleet/costs", activePrefixes: ["/fleet/costs"] },
       { label: "Tichete", href: "/fleet/tickets", activePrefixes: ["/fleet/tickets"] },
-      { label: "Remindere", href: "/fleet/reminders", activePrefixes: ["/fleet/reminders"] },
-      { label: "Mai mult", href: "#", activePrefixes: [], openMenu: true },
+      { label: "Meniu", href: "#", activePrefixes: [], openMenu: true },
     ];
   }
   return FLEET_MOBILE_TABS;
@@ -432,23 +432,17 @@ function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup 
       return { ...group, label: "Solicitări", items };
     }
     if (group.id === "operations") {
+      const driverOperationHrefs = new Set([
+        "/fleet/vehicles",
+        "/fleet/trips",
+        "/fleet/costs",
+        "/fleet/reminders",
+      ]);
       const items = group.items
-        .filter((e) => e.kind === "link" && e.href !== "/fleet/dashboard")
+        .filter((e) => e.kind === "link" && driverOperationHrefs.has(e.href))
         .map((e) =>
           e.kind === "link" && e.href === "/fleet/vehicles" ? { ...e, label: "Acasă" } : e,
         );
-      if (items.length === 0) return null;
-      return { ...group, items };
-    }
-    if (group.id === "suppliers") {
-      const items = group.items.filter(
-        (e) => e.kind === "link" && e.href === "/fleet/work-orders",
-      );
-      if (items.length === 0) return null;
-      return { ...group, label: "Comenzi", items };
-    }
-    if (group.id === "admin") {
-      const items = group.items.filter((e) => e.kind === "link" && e.href === "/fleet/audit");
       if (items.length === 0) return null;
       return { ...group, items };
     }

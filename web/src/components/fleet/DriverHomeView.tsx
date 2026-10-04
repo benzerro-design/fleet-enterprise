@@ -40,9 +40,11 @@ function daysUntil(iso: string | null): number | null {
 }
 
 const actionBtn =
-  "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium";
+  "inline-flex min-h-[44px] w-full touch-manipulation items-center justify-center rounded-lg px-4 py-3 text-sm font-medium sm:w-auto";
 const actionPrimary = `${actionBtn} bg-emerald-500 text-zinc-950 hover:bg-emerald-400`;
 const actionOutline = `${actionBtn} border border-zinc-700 bg-zinc-900/40 text-zinc-200 hover:bg-zinc-900`;
+const quickVehicleAction =
+  "inline-flex min-h-[44px] flex-1 touch-manipulation items-center justify-center rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs font-medium text-emerald-300 hover:bg-zinc-900 sm:flex-none";
 
 function Section({
   title,
@@ -87,15 +89,15 @@ export function DriverHomeView({
     <FleetPageMain>
       <div className="mb-2">
         <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Cont șofer</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
           {driverName ? `Salut, ${driverName}` : "Acasă"}
         </h1>
-        <p className="mt-3 max-w-2xl text-sm text-zinc-400">
+        <p className="mt-3 hidden max-w-2xl text-sm text-zinc-400 sm:block">
           Mașina alocată, termene, curse deschise și tichetele tale — fără lista de administrare flotă.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
         <Link href={tripHref} className={actionPrimary}>
           Cursă nouă
         </Link>
@@ -153,19 +155,19 @@ export function DriverHomeView({
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Link
                       href={`/fleet/trips/new?vehicleId=${encodeURIComponent(v.id)}`}
-                      className="text-xs text-emerald-400 hover:underline"
+                      className={quickVehicleAction}
                     >
                       Cursă
                     </Link>
                     <Link
                       href={`/fleet/costs/new?category=${encodeURIComponent(FUEL_COST_CATEGORY)}&vehicleId=${encodeURIComponent(v.id)}`}
-                      className="text-xs text-emerald-400 hover:underline"
+                      className={quickVehicleAction}
                     >
                       Alimentare
                     </Link>
                     <Link
                       href={`/fleet/tickets/new?vehicleId=${encodeURIComponent(v.id)}`}
-                      className="text-xs text-emerald-400 hover:underline"
+                      className={quickVehicleAction}
                     >
                       Tichet
                     </Link>

@@ -10,6 +10,7 @@ import {
   phaseBadgeLabel,
   type FleetNavLink,
 } from "@/lib/fleet-nav";
+import { useT } from "@/lib/i18n/useT";
 
 function PhaseBadge({ phase }: { phase: "phase1" | "phase2" | "later" }) {
   const label = phaseBadgeLabel(phase);
@@ -44,10 +45,11 @@ function NavLinkItem({ entry, pathname, onNavigate }: { entry: FleetNavLink; pat
 }
 
 function NavSoonItem({ entry }: { entry: Extract<FleetNavEntry, { kind: "soon" }> }) {
+  const tx = useT();
   return (
     <div
       className="flex cursor-not-allowed items-center justify-between gap-2 rounded-md border-l-2 border-transparent py-2 pl-3 pr-2 text-sm text-zinc-600"
-      title={entry.hint ?? "Modul planificat"}
+      title={entry.hint ?? tx("nav.phaseHint")}
     >
       <span>{entry.label}</span>
       <PhaseBadge phase={entry.phase} />
@@ -155,17 +157,18 @@ type FleetSidebarNavProps = {
 
 export function FleetSidebarNav({ groups, setup, admin, bot, onNavigate, variant = "desktop" }: FleetSidebarNavProps) {
   const pathname = usePathname() ?? "";
+  const tx = useT();
   const configGroups = [setup, bot, admin].filter((g): g is FleetNavGroup => g != null);
 
   return (
-    <nav className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col px-2 py-3`} aria-label="Navigare flotă">
+    <nav className={`${fleetScrollPaneClass} flex min-h-0 flex-1 flex-col px-2 py-3`} aria-label={tx("nav.aria.fleet")}>
       <div className="flex-1 space-y-1">
-        <SidebarSectionLabel label="Operare" />
+        <SidebarSectionLabel label={tx("nav.sections.operations")} />
         {renderNavGroups(groups, variant, pathname, onNavigate)}
       </div>
       {configGroups.length ? (
         <div className="mt-2 border-t border-zinc-800 pt-1">
-          <SidebarSectionLabel label="Configurare" />
+          <SidebarSectionLabel label={tx("nav.sections.configuration")} />
           {renderNavGroups(configGroups, variant, pathname, onNavigate)}
         </div>
       ) : null}
