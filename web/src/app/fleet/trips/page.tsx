@@ -1,26 +1,17 @@
 import Link from "next/link";
-import {
-  FleetDataTable,
-  fleetTableClass,
-  fleetTdClass,
-  fleetThClass,
-  fleetThRightClass,
-  fleetTheadClass,
-} from "@/components/fleet/fleet-data-table";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { DeleteTripButton } from "@/components/fleet/DeleteTripButton";
 import { TripSheetDocumentsList } from "@/components/fleet/TripSheetDocumentsList";
 import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
 import { ConsumptionFilterForm } from "@/components/fleet/ConsumptionFilterForm";
 import { DriverFilterSelect } from "@/components/fleet/DriverFilterSelect";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
+import { TripsDataGrid } from "@/components/fleet/TripsDataGrid";
 import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
 import { canWriteTrips, driverIdFromAuth, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
-import { formatDateTimeRo } from "@/lib/datetime-local";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
 import type { DriverRecord } from "@/lib/drivers-api";
@@ -573,74 +564,25 @@ export default async function TripsPage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există curse pentru filtrele curente.</p>
         ) : (
           <>
-            <FleetDataTable>
-              <table className={fleetTableClass}>
-                <thead className={fleetTheadClass}>
-                  <tr>
-                    <th className={fleetThClass}>Ref</th>
-                    <th className={fleetThClass}>Nr. auto</th>
-                    <th className={fleetThClass}>Client</th>
-                    <th className={fleetThClass}>Șofer</th>
-                    <th className={fleetThClass}>Start</th>
-                    <th className={fleetThClass}>Stop</th>
-                    <th className={fleetThClass}>Km</th>
-                    <th className={fleetThRightClass}>Detaliu</th>
-                    {write ? <th className={fleetThRightClass}>Acțiuni</th> : null}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800">
-                  {data.items.map((row) => (
-                    <tr key={row.id} className="bg-transparent">
-                      <td className={`${fleetTdClass} font-mono`}>{row.reference ?? "—"}</td>
-                      <td className={`${fleetTdClass} font-mono`}>{row.registrationNumber}</td>
-                      <td className={fleetTdClass}>{row.clientId}</td>
-                      <td className={fleetTdClass}>
-                        {row.driverId ? (
-                          <Link href={`/fleet/drivers/${row.driverId}`} className="text-emerald-400 hover:underline">
-                            {row.driverName ?? "—"}
-                          </Link>
-                        ) : (
-                          (row.driverName ?? "—")
-                        )}
-                      </td>
-                      <td className={fleetTdClass}>{formatDateTimeRo(row.startedAt)}</td>
-                      <td className={fleetTdClass}>{formatDateTimeRo(row.endedAt)}</td>
-                      <td className={`${fleetTdClass} font-mono`}>{row.distanceKm ?? "—"}</td>
-                      <td className={`${fleetTdClass} text-right`}>
-                        <Link href={`/fleet/trips/${row.id}`} className="text-emerald-400 hover:underline">
-                          Vezi
-                        </Link>
-                      </td>
-                      {write ? (
-                        <td className={fleetTdClass}>
-                          <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
-                            <Link
-                              href={`/fleet/trips/${row.id}/edit`}
-                              className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-                            >
-                              Editare
-                            </Link>
-                            <DeleteTripButton tripId={row.id} label={row.reference ?? row.id} />
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </FleetDataTable>
-            <div className="flex justify-between text-sm text-zinc-400">
-              <span>
-                Pagina {page} / {totalPages} · {data.total} curse
-              </span>
+            <TripsDataGrid items={data.items} canWrite={write} />
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
+              <p>
+                Pagina {page} din {totalPages} · {data.total} curse
+              </p>
               <div className="flex gap-2">
                 {page > 1 ? (
-                  <Link href={withPage(page - 1)} className="text-emerald-400 hover:underline">
+                  <Link
+                    href={withPage(page - 1)}
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900"
+                  >
                     ← Anterior
                   </Link>
                 ) : null}
                 {page < totalPages ? (
-                  <Link href={withPage(page + 1)} className="text-emerald-400 hover:underline">
+                  <Link
+                    href={withPage(page + 1)}
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900"
+                  >
                     Următor →
                   </Link>
                 ) : null}

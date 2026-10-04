@@ -1,22 +1,12 @@
 import Link from "next/link";
-import {
-  FleetDataTable,
-  fleetTableClass,
-  fleetTdClass,
-  fleetThClass,
-  fleetThRightClass,
-  fleetTheadClass,
-} from "@/components/fleet/fleet-data-table";
+import { CostsDataGrid } from "@/components/fleet/CostsDataGrid";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
-import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import { canWriteCosts, getAuthMeResult } from "@/lib/auth-server";
 import { costsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
-import { formatRonFromCents } from "@/lib/money";
 
 type Search = {
   page?: string;
@@ -229,92 +219,25 @@ export default async function CostsPage({ searchParams }: Props) {
           <p className="text-zinc-400">Nu există costuri pentru filtrele curente.</p>
         ) : (
           <>
-            <FleetDataTable>
-              <table className={fleetTableClass}>
-                <thead className={fleetTheadClass}>
-                  <tr>
-                    <th className={fleetThClass}>Categorie</th>
-                    <th className={fleetThClass}>Atribuit</th>
-                    <th className={fleetThClass}>Nr. auto</th>
-                    <th className={fleetThClass}>Client</th>
-                    <th className={fleetThClass}>Furnizor</th>
-                    <th className={fleetThClass}>Data</th>
-                    <th className={fleetThClass}>Km</th>
-                    <th className={fleetThClass}>Factură</th>
-                    <th className={fleetThClass}>Data factură</th>
-                    <th className={fleetThClass}>Document</th>
-                    <th className={fleetThClass}>Suma (RON fără TVA)</th>
-                    <th className={fleetThRightClass}>Detaliu</th>
-                    {write ? <th className={fleetThRightClass}>Acțiuni</th> : null}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800">
-                  {data.items.map((row) => (
-                    <tr key={row.id} className="bg-transparent">
-                      <td className={fleetTdClass}>{row.category}</td>
-                      <td className={fleetTdClass}>
-                        <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
-                      </td>
-                      <td className={`${fleetTdClass} font-mono`}>{row.registrationNumber}</td>
-                      <td className={fleetTdClass}>{row.clientId}</td>
-                      <td className={fleetTdClass}>{row.provider ?? "—"}</td>
-                      <td className={fleetTdClass}>{new Date(row.incurredOn).toLocaleDateString("ro-RO")}</td>
-                      <td className={`${fleetTdClass} font-mono`}>{row.odometerKm ?? "—"}</td>
-                      <td className={`${fleetTdClass} font-mono text-xs`}>{row.invoiceNumber ?? "—"}</td>
-                      <td className={fleetTdClass}>{row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString("ro-RO") : "—"}</td>
-                      <td className={fleetTdClass}>
-                        {row.invoiceAttachmentUrl ? (
-                          <a href={row.invoiceAttachmentUrl} download className="text-emerald-400 hover:underline">
-                            Descarcă
-                          </a>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className={`${fleetTdClass} font-mono`}>{formatRonFromCents(row.amountCents)}</td>
-                      <td className={`${fleetTdClass} text-right`}>
-                        <Link href={`/fleet/costs/${row.id}`} className="text-emerald-400 hover:underline">
-                          Vezi
-                        </Link>
-                        {row.linkedDocumentId ? (
-                          <>
-                            {" · "}
-                            <Link href={`/fleet/documents/${row.linkedDocumentId}`} className="text-sky-400 hover:underline">
-                              Doc
-                            </Link>
-                          </>
-                        ) : null}
-                      </td>
-                      {write ? (
-                        <td className={fleetTdClass}>
-                          <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
-                            <Link
-                              href={`/fleet/costs/${row.id}/edit`}
-                              className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-                            >
-                              Editare
-                            </Link>
-                            <DeleteCostButton entryId={row.id} label={row.category} />
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </FleetDataTable>
-            <div className="flex justify-between text-sm text-zinc-400">
-              <span>
-                Pagina {page} / {totalPages} · {data.total} costuri
-              </span>
+            <CostsDataGrid items={data.items} canWrite={write} />
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-400">
+              <p>
+                Pagina {page} din {totalPages} · {data.total} costuri
+              </p>
               <div className="flex gap-2">
                 {page > 1 ? (
-                  <Link href={withPage(page - 1)} className="text-emerald-400 hover:underline">
+                  <Link
+                    href={withPage(page - 1)}
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900"
+                  >
                     ← Anterior
                   </Link>
                 ) : null}
                 {page < totalPages ? (
-                  <Link href={withPage(page + 1)} className="text-emerald-400 hover:underline">
+                  <Link
+                    href={withPage(page + 1)}
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900"
+                  >
                     Următor →
                   </Link>
                 ) : null}
