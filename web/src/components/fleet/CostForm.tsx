@@ -35,6 +35,7 @@ import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
 import { useOdometerTimelineConfirm } from "@/lib/use-odometer-timeline-confirm";
 import type { VehicleOdometerSyncPayload } from "@/lib/vehicle-odometer-sync";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
+import { useT } from "@/lib/i18n/useT";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect, type FormEvent } from "react";
 
@@ -122,9 +123,15 @@ async function readErrorMessage(res: Response): Promise<string> {
 }
 
 export function CostForm(props: Props) {
+  const tx = useT();
   const router = useRouter();
   const isEdit = props.mode === "edit";
   const driverPortal = props.driverPortal === true;
+  const costForm = (key: string) => tx(`ops.costForm.${key}`);
+  const catalogLabel = (key: string, fallback: string) => {
+    const translated = tx(key);
+    return translated === key ? fallback : translated;
+  };
   const categoryOptions = driverPortal ? DRIVER_WRITABLE_COST_CATEGORIES : COST_CATEGORY_VALUES;
 
   const initial = useMemo(() => {
@@ -275,39 +282,39 @@ export function CostForm(props: Props) {
 
     const amount = parseRonToCents(amountCents);
     if (amount === null) {
-      setError("Suma trebuie să fie în RON fără TVA (maxim 2 zecimale).");
+      setError(costForm("errors.invalidAmount"));
       return;
     }
     const when = toIsoDate(incurredOn);
     const odo = odometerKm.trim() ? Number(odometerKm) : null;
     if (odo != null && (!Number.isInteger(odo) || odo < 0)) {
-      setError("Km trebuie să fie număr întreg >= 0.");
+      setError(costForm("errors.invalidKm"));
       return;
     }
 
     const invoiceWhen = invoiceDate.trim() ? toIsoDate(invoiceDate) : null;
     if (invoiceDate.trim() && !invoiceWhen) {
-      setError("Data facturii este invalidă.");
+      setError(costForm("errors.invalidInvoiceDate"));
       return;
     }
 
     if (!when) {
-      setError("Data costului este invalidă.");
+      setError(costForm("errors.invalidCostDate"));
       return;
     }
 
     if (!isEdit && !boundVehicleId) {
-      setError("Selectează vehiculul.");
+      setError(tx("ops.form.errors.selectVehicle"));
       return;
     }
 
     if (!category.trim()) {
-      setError("Alege o categorie.");
+      setError(costForm("errors.selectCategory"));
       return;
     }
 
     if (isFuelCostCategory(category.trim()) && !notes.trim()) {
-      setError("Câmpul explicații este obligatoriu pentru combustibil.");
+      setError(costForm("errors.fuelNotesRequired"));
       return;
     }
 
@@ -315,23 +322,23 @@ export function CostForm(props: Props) {
     if (isFuelCostCategory(category.trim())) {
       const raw = fuelLiters.trim();
       if (!raw) {
-        setError("Introdu litrii alimentați pentru costul de combustibil.");
+        setError(costForm("errors.fuelLitersRequired"));
         return;
       }
       liters = Number(raw);
       if (!Number.isFinite(liters) || liters <= 0) {
-        setError("Litrii alimentați trebuie să fie un număr pozitiv.");
+        setError(costForm("errors.invalidFuelLiters"));
         return;
       }
       if (!fuelProductType) {
-        setError("Alege tipul de carburant alimentat sau completează CIV P.3 în profilul vehiculului.");
+        setError(costForm("errors.selectFuelType"));
         return;
       }
     }
 
     const nextDue = constraintMode !== "km" ? toIsoDate(nextDueOn) : null;
     if (constraintMode !== "km" && nextDueOn.trim() && !nextDue) {
-      setError("Data termenului este invalidă.");
+      setError(costForm("errors.invalidDueDate"));
       return;
     }
     const kmDue = constraintMode !== "time" ? dueOdometerKm : null;
@@ -395,7 +402,7 @@ export function CostForm(props: Props) {
       });
       const parsed = await readOpsSaveResponse(res);
       if (!parsed.ok) {
-        setError(parsed.error ?? "Eroare la salvare.");
+        setError(parsed.error ?? tx("ops.form.errors.saveFailed"));
         return;
       }
       if (parsed.vehicleOdometerSync?.message) {
@@ -405,7 +412,7 @@ export function CostForm(props: Props) {
       router.push("/fleet/costs");
       router.refresh();
     } catch {
-      setError("Rețea sau server indisponibil.");
+      setError(tx("ops.form.errors.network"));
     } finally {
       setPending(false);
     }
@@ -419,7 +426,7 @@ export function CostForm(props: Props) {
       const url = await uploadInvoiceFile(file, invoiceNumber);
       setInvoiceAttachmentUrl(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload eșuat.");
+      setError(e instanceof Error ? e.message : costForm("errors.uploadFailed"));
     } finally {
       setUploading(false);
     }
@@ -442,15 +449,15 @@ export function CostForm(props: Props) {
       className={OPS_INPUT_CLASS}
     >
       <option value="" disabled>
-        Alege categoria…
+        {costForm("placeholders.category")}
       </option>
       {categoryOptions.map((c) => (
         <option key={c} value={c}>
-          {c}
+          {catalogLabel(`grids.catalogs.costCategories.${c}`, c)}
         </option>
       ))}
       {isEdit && props.initial.category && !isKnownCostCategory(props.initial.category) ? (
-        <option value={props.initial.category}>{props.initial.category} (înregistrat)</option>
+        <option value={props.initial.category}>{props.initial.category} {costForm("labels.recordedSuffix")}</option>
       ) : null}
     </select>
   );
@@ -461,11 +468,11 @@ export function CostForm(props: Props) {
       onConstraintModeChange={setConstraintMode}
       dueDate={nextDueOn}
       onDueDateChange={setNextDueOn}
-      dueDateLabel={isItp ? "ITP valabil până la" : "Termen / dată următoare acțiune"}
+      dueDateLabel={isItp ? costForm("fields.itpValidUntil") : costForm("fields.nextDueDate")}
       dueDateHint={
         isItp
-          ? "La salvare, data ITP și stația (furnizor) se actualizează automat în profilul vehiculului."
-          : "Opțional — pentru remindere pe dată (ex. următoarea plată sau termen)."
+          ? costForm("hints.itpSync")
+          : costForm("hints.nextDueDate")
       }
       reminderOffsetsDays={reminderOffsetsDays}
       onReminderOffsetsDaysChange={setReminderOffsetsDays}
@@ -495,7 +502,7 @@ export function CostForm(props: Props) {
       {!fuelTypeLockedByCiv ? <option value="">—</option> : null}
       {FUEL_TYPE_OPTIONS.map((o) => (
         <option key={o.value} value={o.value}>
-          {o.label}
+          {catalogLabel(`grids.catalogs.fuelTypes.${o.value}`, o.label)}
         </option>
       ))}
     </select>
@@ -517,15 +524,15 @@ export function CostForm(props: Props) {
         ) : null}
         <OpsOdometerSyncNotice sync={odometerSync} />
 
-        <OpsFormPrimaryBand module="costs" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
+        <OpsFormPrimaryBand module="costs" title={isEdit ? tx("ops.form.edit") : tx("ops.form.draft")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <OpsFormField label="Categorie" required>
+            <OpsFormField label={costForm("fields.category")} required>
               {categorySelect}
             </OpsFormField>
             <OpsFormField
-              label={driverPortal ? "Explicații" : "Note"}
+              label={driverPortal ? costForm("fields.explanations") : costForm("fields.notes")}
               required={isFuel}
-              hint={isFuel ? "Obligatoriu pentru combustibil." : "Opțional pentru spălare și restul categoriilor."}
+              hint={isFuel ? costForm("hints.fuelNotesRequired") : costForm("hints.notesOptional")}
             >
               <textarea
                 value={notes}
@@ -533,27 +540,27 @@ export function CostForm(props: Props) {
                 rows={2}
                 required={isFuel}
                 className={OPS_INPUT_CLASS}
-                placeholder={isFuel ? "Ex. motorină, pompă 4…" : "Opțional"}
+                placeholder={isFuel ? costForm("placeholders.fuelNotes") : costForm("placeholders.optional")}
               />
             </OpsFormField>
-            <OpsFormField label="Data costului" required>
+            <OpsFormField label={costForm("fields.costDate")} required>
               <input type="date" required value={incurredOn} onChange={(e) => setIncurredOn(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Suma (RON)" required>
+            <OpsFormField label={costForm("fields.amountRon")} required>
               <input
                 type="text"
                 inputMode="decimal"
                 required
                 value={amountCents}
                 onChange={(e) => setAmountCents(e.target.value)}
-                placeholder="ex. 485,20"
+                placeholder={costForm("placeholders.amount")}
                 className={OPS_INPUT_MONO_CLASS}
               />
             </OpsFormField>
           </div>
         </OpsFormPrimaryBand>
 
-        <OpsFormSection number={2} title="Atribuire">
+        <OpsFormSection number={2} title={costForm("sections.assignment")}>
           <OpsVehicleEquipmentField
             vehicleId={boundVehicleId}
             value={vehicleEquipmentId}
@@ -563,22 +570,22 @@ export function CostForm(props: Props) {
           />
         </OpsFormSection>
 
-        <OpsFormSection number={3} title="Detalii operaționale">
+        <OpsFormSection number={3} title={costForm("sections.operationalDetails")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {isFuel ? (
               <>
                 <OpsFormField
-                  label="Tip carburant"
+                  label={costForm("fields.fuelType")}
                   required
                   hint={
                     fuelTypeLockedByCiv
-                      ? "Completat automat din CIV P.3 (Motor / Propulsie)."
-                      : "Completează CIV P.3 în Advanced Info dacă lipsește."
+                      ? costForm("hints.fuelFromCiv")
+                      : costForm("hints.fuelMissingCiv")
                   }
                 >
                   {fuelProductTypeSelect(OPS_INPUT_CLASS)}
                 </OpsFormField>
-                <OpsFormField label="Litri alimentați" required hint="Cantitate la alimentare; L/100km pe segmente fill-to-fill.">
+                <OpsFormField label={costForm("fields.fuelLiters")} required hint={costForm("hints.fuelLiters")}>
                   <input
                     type="number"
                     min={0}
@@ -586,16 +593,16 @@ export function CostForm(props: Props) {
                     required
                     value={fuelLiters}
                     onChange={(e) => setFuelLiters(e.target.value)}
-                    placeholder="ex. 42,5"
+                    placeholder={costForm("placeholders.fuelLiters")}
                     className={OPS_INPUT_MONO_CLASS}
                   />
                 </OpsFormField>
                 <OpsFormField
-                  label="Cursă (opțional)"
+                  label={costForm("labels.tripOptional")}
                   hint={
                     tripsLoading
-                      ? "Se încarcă cursele vehiculului…"
-                      : "Leagă alimentarea de o cursă pentru Consum / FAZ."
+                      ? costForm("hints.tripsLoading")
+                      : costForm("hints.linkTrip")
                   }
                 >
                   <select
@@ -604,10 +611,10 @@ export function CostForm(props: Props) {
                     className={OPS_INPUT_CLASS}
                     disabled={!boundVehicleId || tripsLoading}
                   >
-                    <option value="">— fără legătură —</option>
+                    <option value="">{costForm("options.noTripLink")}</option>
                     {tripOptions.map((t) => {
                       const start = t.startedAt.slice(0, 10);
-                      const ref = t.reference?.trim() || "fără ref.";
+                      const ref = t.reference?.trim() || costForm("labels.noReference");
                       const km =
                         t.distanceKm != null
                           ? `${t.distanceKm} km`
@@ -625,7 +632,7 @@ export function CostForm(props: Props) {
                 </OpsFormField>
               </>
             ) : null}
-            <OpsFormField label="Km la eveniment">
+            <OpsFormField label={costForm("fields.eventKm")}>
               <input
                 type="number"
                 min={0}
@@ -646,9 +653,9 @@ export function CostForm(props: Props) {
           </div>
         </OpsFormSection>
 
-        <OpsFormSection number={4} title="Financiar & atașamente">
+        <OpsFormSection number={4} title={costForm("sections.financeAttachments")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <OpsFormField label="Furnizor">
+            <OpsFormField label={costForm("fields.supplier")}>
               <SupplierCombobox
                 value={supplierId}
                 onChange={(id, row) => {
@@ -657,13 +664,13 @@ export function CostForm(props: Props) {
                 }}
               />
             </OpsFormField>
-            <OpsFormField label="Nr. factură">
+            <OpsFormField label={costForm("fields.invoiceNumber")}>
               <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Data factură">
+            <OpsFormField label={costForm("fields.invoiceDate")}>
               <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
-            <OpsFormField label="PDF factură" hint="Doar PDF, max 10MB.">
+            <OpsFormField label={costForm("fields.invoicePdf")} hint={costForm("hints.pdfOnly")}>
               <input
                 type="file"
                 accept="application/pdf"
@@ -671,14 +678,14 @@ export function CostForm(props: Props) {
                 onChange={(e) => void onPickInvoice(e.target.files?.[0] ?? null)}
                 className={`${OPS_INPUT_CLASS} file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:text-zinc-200`}
               />
-              {uploading ? <p className="mt-1 text-xs text-zinc-500">Încarc factura PDF…</p> : null}
+              {uploading ? <p className="mt-1 text-xs text-zinc-500">{costForm("status.uploadingPdf")}</p> : null}
               {invoiceAttachmentUrl ? (
                 <div className="mt-1 flex items-center gap-3 text-xs">
                   <a href={invoiceAttachmentUrl} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">
-                    Factură încărcată
+                    {costForm("actions.invoiceUploaded")}
                   </a>
                   <button type="button" onClick={() => setInvoiceAttachmentUrl("")} className="text-zinc-400 hover:text-zinc-200">
-                    Elimină
+                    {costForm("actions.remove")}
                   </button>
                 </div>
               ) : null}
@@ -686,11 +693,11 @@ export function CostForm(props: Props) {
           </div>
         </OpsFormSection>
 
-        <OpsFormCollapsible title="5. Termene & remindere (pliable)">
+        <OpsFormCollapsible title={costForm("sections.dueRemindersCollapsible")}>
           {reminderBlock}
         </OpsFormCollapsible>
         {!isEdit && !driverPortal ? (
-          <OpsFormCollapsible title="6. Salvează și ca document (opțional)">
+          <OpsFormCollapsible title={costForm("sections.saveAsDocumentCollapsible")}>
             <CostLinkedDocumentFields
               enabled={alsoCreateDocument}
               onEnabledChange={setAlsoCreateDocument}
@@ -700,21 +707,22 @@ export function CostForm(props: Props) {
               onTitleChange={setDocTitle}
               expiresOn={docExpiresOn}
               onExpiresOnChange={setDocExpiresOn}
+              tx={costForm}
             />
           </OpsFormCollapsible>
         ) : null}
         {isEdit && props.initial.linkedDocumentId ? (
           <p className="text-sm text-zinc-400">
-            Document legat:{" "}
+            {costForm("labels.linkedDocument")}{" "}
             <Link href={`/fleet/documents/${props.initial.linkedDocumentId}`} className="text-emerald-400 hover:underline">
-              deschide documentul
+              {costForm("actions.openDocument")}
             </Link>
           </p>
         ) : null}
 
         <OpsFormStickyActions
-          submitLabel={isEdit ? "Salvează modificările" : "Creează costul"}
-          pendingLabel="Salvez..."
+          submitLabel={isEdit ? tx("common.actions.saveChanges") : tx("ops.form.createCost")}
+          pendingLabel={tx("common.actions.saving")}
           cancelHref="/fleet/costs"
           pending={pending}
         />
@@ -751,12 +759,12 @@ export function CostForm(props: Props) {
         subject="cost"
       />
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Categorie</label>
+        <label className="block text-sm font-medium text-zinc-300">{costForm("fields.category")}</label>
         {categorySelect}
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">
-          {driverPortal ? "Explicații" : "Note"}
+          {driverPortal ? costForm("fields.explanations") : costForm("fields.notes")}
           {isFuel ? " *" : ""}
         </label>
         <textarea
@@ -765,11 +773,11 @@ export function CostForm(props: Props) {
           rows={3}
           required={isFuel}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-          placeholder={isFuel ? "Obligatoriu pentru combustibil" : "Opțional"}
+          placeholder={isFuel ? costForm("placeholders.fuelRequired") : costForm("placeholders.optional")}
         />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Furnizor (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">{costForm("labels.supplierOptional")}</label>
         <SupplierCombobox
           value={supplierId}
           onChange={(id, row) => {
@@ -779,24 +787,24 @@ export function CostForm(props: Props) {
         />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Suma (RON fără TVA)</label>
-        <input type="text" inputMode="decimal" required value={amountCents} onChange={(e) => setAmountCents(e.target.value)} placeholder="ex. 150.00" className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
+        <label className="block text-sm font-medium text-zinc-300">{costForm("fields.amountRonNoVat")}</label>
+        <input type="text" inputMode="decimal" required value={amountCents} onChange={(e) => setAmountCents(e.target.value)} placeholder={costForm("placeholders.amountDot")} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       {isFuel ? (
         <div className="space-y-3 rounded-lg border border-amber-900/40 bg-amber-950/20 p-4">
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-amber-200/90">Tip carburant</label>
+            <label className="block text-sm font-medium text-amber-200/90">{costForm("fields.fuelType")}</label>
             {fuelProductTypeSelect(
               "w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2 disabled:opacity-70",
             )}
             <p className="text-xs text-zinc-500">
               {fuelTypeLockedByCiv
-                ? "Preluat automat din CIV P.3 (Motor / Propulsie)."
-                : "Selectează manual sau completează CIV P.3 în profilul vehiculului."}
+                ? costForm("hints.fuelFromCivShort")
+                : costForm("hints.fuelManualOrCiv")}
             </p>
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-amber-200/90">Litri alimentați</label>
+            <label className="block text-sm font-medium text-amber-200/90">{costForm("fields.fuelLiters")}</label>
             <input
               type="number"
               min={0}
@@ -804,22 +812,22 @@ export function CostForm(props: Props) {
               required
               value={fuelLiters}
               onChange={(e) => setFuelLiters(e.target.value)}
-              placeholder="ex. 45.5"
+              placeholder={costForm("placeholders.fuelLitersDot")}
               className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2"
             />
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-amber-200/90">Cursă (opțional)</label>
+            <label className="block text-sm font-medium text-amber-200/90">{costForm("labels.tripOptional")}</label>
             <select
               value={tripId}
               onChange={(e) => setTripId(e.target.value)}
               disabled={!boundVehicleId || tripsLoading}
               className="w-full rounded-lg border border-amber-900/50 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-amber-500/40 focus:ring-2 disabled:opacity-70"
             >
-              <option value="">— fără legătură —</option>
+              <option value="">{costForm("options.noTripLink")}</option>
               {tripOptions.map((t) => {
                 const start = t.startedAt.slice(0, 10);
-                const ref = t.reference?.trim() || "fără ref.";
+                const ref = t.reference?.trim() || costForm("labels.noReference");
                 return (
                   <option key={t.id} value={t.id}>
                     {start} · {ref}
@@ -828,16 +836,16 @@ export function CostForm(props: Props) {
               })}
             </select>
             <p className="text-xs text-zinc-500">
-              {tripsLoading ? "Se încarcă cursele…" : "Opțional — leagă alimentarea de o cursă."}
+              {tripsLoading ? costForm("hints.tripsLoadingShort") : costForm("hints.linkTripShort")}
             </p>
           </div>
           <p className="text-xs text-zinc-500">
-            Litrii se înregistrează la alimentare; consumul L/100km se calculează pe segmente între alimentări.
+            {costForm("hints.consumptionSegments")}
           </p>
         </div>
       ) : null}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Km (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">{costForm("labels.kmOptional")}</label>
         <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
         <OpsOdometerKmHint
           odometerKm={odometerKm}
@@ -847,19 +855,19 @@ export function CostForm(props: Props) {
         />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Data costului</label>
+        <label className="block text-sm font-medium text-zinc-300">{costForm("fields.costDate")}</label>
         <input type="date" required value={incurredOn} onChange={(e) => setIncurredOn(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Număr factură (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">{costForm("labels.invoiceNumberOptional")}</label>
         <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Data facturii (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">{costForm("labels.invoiceDateOptional")}</label>
         <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Atașare factură (upload) — opțional</label>
+        <label className="block text-sm font-medium text-zinc-300">{costForm("labels.invoiceUploadOptional")}</label>
         <input
           type="file"
           accept="application/pdf"
@@ -867,15 +875,15 @@ export function CostForm(props: Props) {
           onChange={(e) => void onPickInvoice(e.target.files?.[0] ?? null)}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:text-zinc-200"
         />
-        {uploading ? <p className="text-xs text-zinc-500">Încarc factura PDF…</p> : null}
-        <p className="text-xs text-zinc-500">Se acceptă doar PDF (max 10MB).</p>
+        {uploading ? <p className="text-xs text-zinc-500">{costForm("status.uploadingPdf")}</p> : null}
+        <p className="text-xs text-zinc-500">{costForm("hints.pdfOnly")}</p>
         {invoiceAttachmentUrl ? (
           <div className="flex items-center gap-3 text-xs">
             <a href={invoiceAttachmentUrl} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">
-              Factură încărcată
+              {costForm("actions.invoiceUploaded")}
             </a>
             <button type="button" onClick={() => setInvoiceAttachmentUrl("")} className="text-zinc-400 hover:text-zinc-200">
-              Elimină
+              {costForm("actions.remove")}
             </button>
           </div>
         ) : null}
@@ -891,23 +899,24 @@ export function CostForm(props: Props) {
           onTitleChange={setDocTitle}
           expiresOn={docExpiresOn}
           onExpiresOnChange={setDocExpiresOn}
+          tx={costForm}
         />
       ) : null}
       {isEdit && props.initial.linkedDocumentId ? (
         <p className="text-sm text-zinc-400">
-          Document legat:{" "}
+          {costForm("labels.linkedDocument")}{" "}
           <Link href={`/fleet/documents/${props.initial.linkedDocumentId}`} className="text-emerald-400 hover:underline">
-            deschide documentul
+            {costForm("actions.openDocument")}
           </Link>
         </p>
       ) : null}
 
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">
-          {pending ? "Salvez..." : isEdit ? "Salvează modificările" : "Creează costul"}
+          {pending ? tx("common.actions.saving") : isEdit ? tx("common.actions.saveChanges") : tx("ops.form.createCost")}
         </button>
         <Link href="/fleet/costs" className="inline-flex items-center rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900">
-          Anulează
+          {tx("common.actions.cancel")}
         </Link>
       </div>
     </form>
@@ -924,6 +933,7 @@ function CostLinkedDocumentFields({
   onTitleChange,
   expiresOn,
   onExpiresOnChange,
+  tx,
 }: {
   enabled: boolean;
   onEnabledChange: (v: boolean) => void;
@@ -933,21 +943,22 @@ function CostLinkedDocumentFields({
   onTitleChange: (v: string) => void;
   expiresOn: string;
   onExpiresOnChange: (v: string) => void;
+  tx: (key: string) => string;
 }) {
   return (
     <div className="space-y-3">
       <label className="flex items-start gap-2 text-sm text-zinc-300">
         <input type="checkbox" className="mt-0.5" checked={enabled} onChange={(e) => onEnabledChange(e.target.checked)} />
         <span>
-          Salvează și ca document
+          {tx("linkedDocument.saveAlso")}
           <span className="block text-[11px] text-zinc-500">
-            Creează fișa de document (RCA, CASCO, ITP…) din același cost. Atașamentul facturii se copiază.
+            {tx("linkedDocument.description")}
           </span>
         </span>
       </label>
       {enabled ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <OpsFormField label="Tip document" required>
+          <OpsFormField label={tx("linkedDocument.documentType")} required>
             <select value={documentTypeCode} onChange={(e) => onDocumentTypeCodeChange(e.target.value)} className={OPS_INPUT_CLASS}>
               {DOCUMENT_TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -956,10 +967,10 @@ function CostLinkedDocumentFields({
               ))}
             </select>
           </OpsFormField>
-          <OpsFormField label="Titlu document">
-            <input value={title} onChange={(e) => onTitleChange(e.target.value)} className={OPS_INPUT_CLASS} placeholder="Opțional — implicit din categorie" />
+          <OpsFormField label={tx("linkedDocument.documentTitle")}>
+            <input value={title} onChange={(e) => onTitleChange(e.target.value)} className={OPS_INPUT_CLASS} placeholder={tx("linkedDocument.titlePlaceholder")} />
           </OpsFormField>
-          <OpsFormField label="Expiră la" hint="Gol = termenul de pe cost, dacă există.">
+          <OpsFormField label={tx("linkedDocument.expiresOn")} hint={tx("linkedDocument.expiresHint")}>
             <input type="date" value={expiresOn} onChange={(e) => onExpiresOnChange(e.target.value)} className={OPS_INPUT_CLASS} />
           </OpsFormField>
         </div>

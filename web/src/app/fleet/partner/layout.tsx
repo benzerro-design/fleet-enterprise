@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { PartnerAdminBanner } from "@/components/fleet/partner/PartnerAdminChrome";
 import { PartnerShell } from "@/components/fleet/partner/PartnerShell";
 import {
@@ -16,6 +17,8 @@ import {
 import type { SupplierListPayload } from "@/lib/suppliers-api";
 import type { WorkOrderStats } from "@/lib/work-orders-api";
 import type { AppointmentStats } from "@/lib/appointments-api";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 
 async function loadStats(): Promise<WorkOrderStats | null> {
   try {
@@ -49,6 +52,8 @@ async function loadAdminSuppliers(): Promise<SupplierListPayload["items"]> {
 }
 
 export default async function PartnerLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const auth = await getAuthMeResult();
   if (!auth.ok) {
     redirect("/login?next=/fleet/partner");
@@ -66,21 +71,21 @@ export default async function PartnerLayout({ children }: { children: React.Reac
   const pending = partnerPendingTotal(stats, apptStats);
 
   const topBar = {
-    pageTitle: "Portal partener",
+    pageTitle: t(locale, "pages.partner.portal"),
     supplierLegalName: adminMode
-      ? "Toți furnizorii"
-      : (supplierMembership?.supplierLegalName ?? "Furnizor"),
+      ? t(locale, "pages.partner.allSuppliers")
+      : (supplierMembership?.supplierLegalName ?? t(locale, "pages.partner.supplier")),
     supplierCode: adminMode ? "L*" : (supplierMembership?.supplierCode ?? "—"),
     tenantSlug: auth.me.tenantSlug,
     userEmail: auth.me.email,
     userInitials: userInitialsFromEmail(auth.me.email),
     supplierRoleLabel: adminMode
-      ? "Administrator abonat (L*) — mod flotă"
+      ? t(locale, "pages.partner.adminRole")
       : supplierMembership
         ? supplierRoleLabel(supplierMembership.role)
-        : "Partener",
+        : t(locale, "pages.partner.rolePartner"),
     docAlert: !adminMode,
-    docAlertTitle: "Autorizație ITP expiră în curând",
+    docAlertTitle: t(locale, "pages.partner.docAlertTitle"),
     notificationCount: pending > 0 ? pending : undefined,
     pendingTotal: pending > 0 ? pending : undefined,
     isAdminMode: adminMode,
@@ -92,7 +97,7 @@ export default async function PartnerLayout({ children }: { children: React.Reac
   };
 
   const supplierFooter = adminMode
-    ? `${adminSuppliers.length} furnizori activi · mod admin`
+    ? t(locale, "pages.partner.adminSupplierFooter").replace("{count}", String(adminSuppliers.length))
     : supplierMembership
       ? `${supplierMembership.supplierLegalName} · ${supplierMembership.supplierCode}`
       : undefined;

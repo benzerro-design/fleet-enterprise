@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetIndexFilterChips, type FleetIndexFilterChip } from "@/components/fleet/FleetIndexFilterChips";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
@@ -18,6 +19,8 @@ import {
   type TicketListPayload,
   type TicketStats,
 } from "@/lib/tickets-api";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 
 type Search = {
   q?: string;
@@ -105,6 +108,8 @@ type PageProps = { searchParams: Promise<Search> };
 
 export default async function FleetTicketsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const viewBoard = sp.view === "board";
   const viewFocus = sp.view === "focus";
   const auth = await getAuthMeResult();
@@ -215,10 +220,10 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
         header={
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Clienți & CRM</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Tichete CRM</h1>
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">{t(locale, "pages.tickets.eyebrow")}</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t(locale, "pages.tickets.title")}</h1>
               <p className="mt-3 max-w-2xl text-zinc-400">
-                Solicitări flotă — inbox L1, escaladare L★, transformare în mentenanță.
+                {t(locale, "pages.tickets.description")}
               </p>
             </div>
             {write ? (
@@ -226,7 +231,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
                 href="/fleet/tickets/new"
                 className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
               >
-                Solicitare nouă
+                {t(locale, "pages.tickets.newRequest")}
               </Link>
             ) : null}
           </div>
@@ -238,42 +243,42 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
             ) : null}
             <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="text-xs text-zinc-500">Căutare</label>
+              <label className="text-xs text-zinc-500">{t(locale, "common.filters.search")}</label>
               <input
                 name="q"
                 defaultValue={sp.q ?? ""}
                 className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-                placeholder="subiect, descriere"
+                placeholder={t(locale, "pages.tickets.searchPlaceholder")}
               />
             </div>
             {!viewBoard && !viewFocus ? (
               <div>
-                <label className="text-xs text-zinc-500">Status</label>
+                <label className="text-xs text-zinc-500">{t(locale, "common.filters.status")}</label>
                 <select
                   name="status"
                   defaultValue={sp.status ?? ""}
                   className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
                 >
-                  <option value="">Toate</option>
-                  <option value="open">Deschis</option>
-                  <option value="in_progress">În lucru</option>
-                  <option value="resolved">Rezolvat</option>
-                  <option value="cancelled">Anulat</option>
+                  <option value="">{t(locale, "common.filters.all")}</option>
+                  <option value="open">{t(locale, "ops.grids.tickets.status.open")}</option>
+                  <option value="in_progress">{t(locale, "ops.grids.tickets.status.in_progress")}</option>
+                  <option value="resolved">{t(locale, "ops.grids.tickets.status.resolved")}</option>
+                  <option value="cancelled">{t(locale, "ops.grids.tickets.status.cancelled")}</option>
                 </select>
               </div>
             ) : null}
             {!viewFocus ? (
               <div>
-                <label className="text-xs text-zinc-500">Tip</label>
+                <label className="text-xs text-zinc-500">{t(locale, "pages.tickets.type")}</label>
                 <select
                   name="ticketType"
                   defaultValue={sp.ticketType ?? ""}
                   className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
                 >
-                  <option value="">Toate</option>
-                  {TICKET_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
+                  <option value="">{t(locale, "common.filters.all")}</option>
+                  {TICKET_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {t(locale, `ops.grids.tickets.type.${type.value}`)}
                     </option>
                   ))}
                 </select>
@@ -281,13 +286,13 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
             ) : null}
             {!clientScoped ? (
             <div>
-              <label className="text-xs text-zinc-500">Client</label>
+              <label className="text-xs text-zinc-500">{t(locale, "common.filters.client")}</label>
               <select
                 name="clientId"
                 defaultValue={sp.clientId ?? ""}
                 className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               >
-                <option value="">Toți</option>
+                <option value="">{t(locale, "common.filters.all")}</option>
                 {clients.map((c) => (
                   <option key={c.code} value={c.code}>
                     {c.code} — {c.legalName}
@@ -297,26 +302,26 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
             </div>
             ) : null}
             <div>
-              <label className="text-xs text-zinc-500">Inbox</label>
+              <label className="text-xs text-zinc-500">{t(locale, "pages.tickets.inbox")}</label>
               <select
                 name="inbox"
                 defaultValue={sp.inbox ?? ""}
                 className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               >
-                <option value="">Toate</option>
+                <option value="">{t(locale, "common.filters.all")}</option>
                 <option value="lstar">Doar L★</option>
               </select>
             </div>
             {!viewBoard && !viewFocus ? (
               <>
                 <div>
-                  <label className="text-xs text-zinc-500">Vehicul</label>
+                  <label className="text-xs text-zinc-500">{t(locale, "common.filters.vehicle")}</label>
                   <select
                     name="vehicleId"
                     defaultValue={sp.vehicleId ?? ""}
                     className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
                   >
-                    <option value="">Toate</option>
+                    <option value="">{t(locale, "common.filters.all")}</option>
                     {vehicleOptions.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.registrationNumber}
@@ -325,13 +330,13 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-500">Nivel rutare</label>
+                  <label className="text-xs text-zinc-500">{t(locale, "pages.tickets.routingLevel")}</label>
                   <select
                     name="routingLevel"
                     defaultValue={sp.routingLevel ?? ""}
                     className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
                   >
-                    <option value="">Toate</option>
+                    <option value="">{t(locale, "common.filters.all")}</option>
                     <option value="L0">L0</option>
                     <option value="L1">L1</option>
                     <option value="L1N">L1+N</option>
@@ -344,7 +349,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
               type="submit"
               className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
             >
-              Filtrează
+              {t(locale, "common.actions.filter")}
             </button>
             <FilterResetLink href="/fleet/tickets" />
             </div>
@@ -357,19 +362,19 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
               href={withParams({ view: undefined, page: "1" })}
               className={`rounded-lg px-3 py-1.5 text-sm ${!viewBoard ? "bg-emerald-600 text-white" : "border border-zinc-700 text-zinc-300 hover:bg-zinc-900"}`}
             >
-              Listă
+              {t(locale, "pages.tickets.list")}
             </Link>
             <Link
               href={withParams({ view: "board", page: "1" })}
               className={`rounded-lg px-3 py-1.5 text-sm ${viewBoard ? "bg-emerald-600 text-white" : "border border-zinc-700 text-zinc-300 hover:bg-zinc-900"}`}
             >
-              Board
+              {t(locale, "pages.tickets.board")}
             </Link>
             <Link
               href={withParams({ view: "focus", page: "1" })}
               className={`rounded-lg px-3 py-1.5 text-sm ${viewFocus ? "bg-amber-600 text-white" : "border border-zinc-700 text-zinc-300 hover:bg-zinc-900"}`}
             >
-              Focus urgențe
+              {t(locale, "pages.tickets.focus")}
             </Link>
           </div>
         }

@@ -19,12 +19,14 @@ import {
 import { useFleetSettings } from "@/lib/use-fleet-settings";
 import {
   readVehicleGridLayout,
+  VEHICLE_GRID_COLUMNS,
   seedVehicleGridFromTenant,
   type VehicleGridColumnKey,
   type VehicleGridLayout,
   visibleVehicleColumns,
   writeVehicleGridLayout,
 } from "@/lib/vehicle-grid-columns";
+import { useT } from "@/lib/i18n/useT";
 
 function IconEye({ className }: { className?: string }) {
   return (
@@ -66,12 +68,16 @@ const TYPE_SHORT: Record<string, string> = {
   semi_trailer: "Semiremorcă",
 };
 
-function typeLabel(type: string): string {
-  return TYPE_SHORT[type] ?? VEHICLE_TYPES.find((t) => t.value === type)?.label ?? type;
+function typeLabel(type: string, tx: (key: string) => string): string {
+  const key = `ops.grids.vehicles.type.${type}`;
+  const label = tx(key);
+  return label === key ? TYPE_SHORT[type] ?? VEHICLE_TYPES.find((t) => t.value === type)?.label ?? type : label;
 }
 
-function statusLabel(status: string): string {
-  return VEHICLE_STATUSES.find((s) => s.value === status)?.label ?? status;
+function statusLabel(status: string, tx: (key: string) => string): string {
+  const key = `ops.grids.vehicles.status.${status}`;
+  const label = tx(key);
+  return label === key ? VEHICLE_STATUSES.find((s) => s.value === status)?.label ?? status : label;
 }
 
 function statusClass(status: string): string {
@@ -99,10 +105,15 @@ type Props = {
 };
 
 export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
+  const tx = useT();
   const fleetSettings = useFleetSettings();
   const [layout, setLayout] = useState<VehicleGridLayout>(() => readVehicleGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const columns = useMemo(() => visibleVehicleColumns(layout), [layout]);
+  const translatedColumns = useMemo(
+    () => VEHICLE_GRID_COLUMNS.map((col) => ({ ...col, label: tx(`ops.grids.vehicles.columns.${col.key}`) })),
+    [tx],
+  );
 
   useEffect(() => {
     const seeded = seedVehicleGridFromTenant(fleetSettings.defaultVehicleColumnKeys);
@@ -120,8 +131,8 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
         <Link
           href={`/fleet/vehicles/${v.id}`}
           className={`${iconBtnClass} text-emerald-400/90 hover:text-emerald-300`}
-          title="Vezi detaliu"
-          aria-label={`Vezi ${v.registrationNumber}`}
+          title={tx("ops.grids.actions.viewDetails")}
+          aria-label={`${tx("ops.grids.actions.viewVehicle")} ${v.registrationNumber}`}
         >
           <IconEye className="h-3.5 w-3.5" />
         </Link>
@@ -130,8 +141,8 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
             <Link
               href={`/fleet/vehicles/${v.id}/edit`}
               className={iconBtnClass}
-              title="Editare"
-              aria-label={`Editează ${v.registrationNumber}`}
+              title={tx("ops.grids.actions.edit")}
+              aria-label={`${tx("ops.grids.actions.edit")} ${v.registrationNumber}`}
             >
               <IconPencil className="h-3.5 w-3.5" />
             </Link>
@@ -169,7 +180,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
               {title ? (
                 <p className="mt-0.5 truncate text-xs text-zinc-500">{title}</p>
               ) : (
-                <p className="mt-0.5 truncate text-xs text-zinc-600">Fără marcă / model</p>
+                <p className="mt-0.5 truncate text-xs text-zinc-600">{tx("ops.grids.vehicles.noBrandModel")}</p>
               )}
             </div>
           </div>
@@ -200,7 +211,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
               className="block truncate text-zinc-200 hover:text-emerald-300 hover:underline"
               title={name ?? id}
             >
-              {name || "Utilizator"}
+              {name || tx("ops.grids.vehicles.user")}
             </Link>
           );
         }
@@ -212,8 +223,8 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
       }
       case "type":
         return (
-          <span className="text-zinc-300" title={VEHICLE_TYPES.find((t) => t.value === v.type)?.label}>
-            {typeLabel(v.type)}
+          <span className="text-zinc-300" title={typeLabel(v.type, tx)}>
+            {typeLabel(v.type, tx)}
           </span>
         );
       case "status":
@@ -221,7 +232,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
           <span
             className={`inline-flex max-w-full truncate rounded-md border px-2 py-0.5 text-[11px] font-medium ${statusClass(v.status)}`}
           >
-            {statusLabel(v.status)}
+            {statusLabel(v.status, tx)}
           </span>
         );
       case "odometer":
@@ -264,7 +275,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
               checked={layout.rowLines}
               onChange={(e) => persist({ ...layout, rowLines: e.target.checked })}
             />
-            Linii orizontale
+            {tx("ops.grids.controls.rowLines")}
           </label>
           <label className="inline-flex cursor-pointer items-center gap-2 hover:text-zinc-200">
             <input
@@ -273,7 +284,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
               checked={layout.colLines}
               onChange={(e) => persist({ ...layout, colLines: e.target.checked })}
             />
-            Linii verticale
+            {tx("ops.grids.controls.colLines")}
           </label>
         </div>
         <button
@@ -281,11 +292,11 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
           onClick={() => setShowColumns((v) => !v)}
           className="rounded-lg border border-zinc-700/80 bg-zinc-950/40 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-900"
         >
-          {showColumns ? "Închide coloane" : "Coloane…"}
+          {showColumns ? tx("ops.grids.controls.closeColumns") : tx("ops.grids.controls.columns")}
         </button>
       </div>
       {showColumns ? (
-        <VehicleColumnPicker layout={layout} onChange={persist} onClose={() => setShowColumns(false)} />
+        <VehicleColumnPicker layout={layout} columns={translatedColumns} onChange={persist} onClose={() => setShowColumns(false)} />
       ) : null}
 
       <div className="space-y-3 md:hidden">
@@ -314,7 +325,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
                     <p className="mt-1 truncate text-xs text-zinc-500">{v.clientId}</p>
                     {v.assignedDriverName ? (
                       <p className="mt-0.5 truncate text-xs text-zinc-400">
-                        Utilizator:{" "}
+                        {tx("ops.grids.vehicles.user")}:{" "}
                         {v.assignedDriverId ? (
                           <Link
                             href={`/fleet/drivers/${v.assignedDriverId}`}
@@ -331,7 +342,7 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
                   <span
                     className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium ${statusClass(v.status)}`}
                   >
-                    {statusLabel(v.status)}
+                    {statusLabel(v.status, tx)}
                   </span>
                 </div>
                 <p className="mt-3 font-mono text-xs tabular-nums text-zinc-400">
@@ -362,9 +373,9 @@ export function VehiclesDataGrid({ vehicles, canWrite }: Props) {
                     className={`${thBase} ${colLineCell} ${alignRight(col.key) ? "text-right" : ""}`}
                   >
                     {col.key === "actions" ? (
-                      <span className="sr-only">{col.label}</span>
+                      <span className="sr-only">{tx(`ops.grids.vehicles.columns.${col.key}`)}</span>
                     ) : (
-                      col.label
+                      tx(`ops.grids.vehicles.columns.${col.key}`)
                     )}
                   </th>
                 ))}

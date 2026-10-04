@@ -3,16 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
-import {
-  FleetDataTable,
-  fleetTableClass,
-  fleetTdClass,
-  fleetThClass,
-  fleetTheadClass,
-} from "@/components/fleet/fleet-data-table";
+import { ClientVehiclesPanel } from "@/components/fleet/ClientVehiclesPanel";
+import { IconEye, listGridIconBtnClass } from "@/components/fleet/list-grid-icons";
+import { SheetListGrid, type SheetCol } from "@/components/fleet/SheetListGrid";
 import { formatRonFromCents } from "@/lib/money";
-import type { ClientProfileTab, ClientSummaryPayload } from "@/lib/clients-api";
-import { clientOpsQuery } from "@/lib/clients-api";
+import type { ClientProfileTab, ClientSummaryActivityRow, ClientSummaryPayload } from "@/lib/clients-api";
+import { clientHealthHref, clientOpsQuery } from "@/lib/clients-api";
 import { ClientSubscriptionTab } from "@/components/fleet/ClientSubscriptionTab";
 import { ClientDriversTab } from "@/components/fleet/ClientDriversTab";
 import { ClientMailSettingsEditor } from "@/components/fleet/ClientMailSettingsEditor";
@@ -42,7 +38,7 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function activityKindLabel(kind: ClientSummaryPayload["recentActivity"][0]["kind"]): string {
+function activityKindLabel(kind: ClientSummaryActivityRow["kind"]): string {
   switch (kind) {
     case "trip":
       return "Cursă";
@@ -54,6 +50,19 @@ function activityKindLabel(kind: ClientSummaryPayload["recentActivity"][0]["kind
       return kind;
   }
 }
+
+function activityHref(row: ClientSummaryActivityRow): string {
+  if (row.kind === "trip") return `/fleet/trips/${row.id}`;
+  if (row.kind === "cost") return `/fleet/costs/${row.id}`;
+  return `/fleet/maintenance/${row.id}`;
+}
+
+const ACTIVITY_COLUMNS: SheetCol<"when" | "kind" | "vehicle" | "actions">[] = [
+  { key: "when", label: "Activitate", defaultVisible: true, canHide: false, width: "46%" },
+  { key: "kind", label: "Tip", defaultVisible: true, canHide: true, width: "16%" },
+  { key: "vehicle", label: "Vehicul", defaultVisible: true, canHide: true, width: "22%" },
+  { key: "actions", label: "Acțiuni", defaultVisible: true, canHide: false, width: "7.5rem", align: "right" },
+];
 
 function ContactRow({ label, value }: { label: string; value: string | null }) {
   return (
@@ -79,7 +88,7 @@ export function ClientProfileTabs({
   canInviteTeam = false,
   canEditIam = false,
 }: Props) {
-  const { client, kpis, vehicles, recentActivity, subscriptions, drivers } = data;
+  const { client, kpis, recentActivity, subscriptions, drivers } = data;
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientQs = clientOpsQuery(client.code);
@@ -153,7 +162,12 @@ export function ClientProfileTabs({
           accent={kpis.itpWithin30Days > 0 ? "warn" : undefined}
           href={`/fleet/clients/${client.id}?tab=vehicles`}
         />
-        <KpiCard label="Sănătate" value={client.healthLabel ?? "OK"} />
+        <KpiCard
+          label="Sănătate"
+          value={client.healthLabel ?? "OK"}
+          accent={kpis.remindersActionCount > 0 || kpis.itpWithin30Days > 0 ? "warn" : undefined}
+          href={clientHealthHref(client, kpis)}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-zinc-800 px-4 py-3">
@@ -217,23 +231,55 @@ export function ClientProfileTabs({
               {recentActivity.length === 0 ? (
                 <p className="mt-4 text-sm text-zinc-500">Nicio activitate înregistrată.</p>
               ) : (
-                <ul className="mt-4 divide-y divide-zinc-800/80">
-                  {recentActivity.map((row, i) => (
-                    <li key={`${row.kind}-${row.at}-${i}`} className="flex flex-wrap items-baseline gap-x-2 py-2 text-sm">
-                      <span className="text-zinc-500">{formatDate(row.at)}</span>
-                      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400">
-                        {activityKindLabel(row.kind)}
-                      </span>
-                      <span className="text-zinc-200">{row.label}</span>
-                      <Link
-                        href={`/fleet/vehicles/${row.vehicleId}`}
-                        className="font-mono text-emerald-400 hover:underline"
-                      >
-                        {row.registrationNumber}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-4">
+                  <SheetListGrid
+                    storageKey="fleet-client-activity-grid-v1"
+                    pickerTitle="Coloane activitate"
+                    columns={ACTIVITY_COLUMNS}
+                    rows={recentActivity}
+                    rowKey={(row) => `${row.kind}-${row.id}`}
+                    searchPlaceholder="Titlu, nr. înmatriculare…"
+                    searchText={(row) => `${row.label} ${row.registrationNumber} ${activityKindLabel(row.kind)}`}
+                    empty={<p>Nicio activitate pentru căutarea curentă.</p>}
+                    renderCell={(key, row) => {
+                      if (key === "when") {
+                        return (
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-zinc-100">{row.label}</p>
+                            <p className="mt-0.5 truncate text-xs text-zinc-500">{formatDate(row.at)}</p>
+                          </div>
+                        );
+                      }
+                      if (key === "kind") {
+                        return (
+                          <span className="inline-flex rounded-md border border-zinc-600 bg-zinc-800/60 px-2 py-0.5 text-[11px] font-medium text-zinc-300">
+                            {activityKindLabel(row.kind)}
+                          </span>
+                        );
+                      }
+                      if (key === "vehicle") {
+                        return (
+                          <Link
+                            href={`/fleet/vehicles/${row.vehicleId}`}
+                            className="font-mono text-[13px] text-emerald-400 hover:underline"
+                          >
+                            {row.registrationNumber}
+                          </Link>
+                        );
+                      }
+                      return (
+                        <Link
+                          href={activityHref(row)}
+                          className={`${listGridIconBtnClass} text-emerald-400/90 hover:text-emerald-300`}
+                          title="Vezi detaliu"
+                          aria-label={`Vezi ${activityKindLabel(row.kind)}`}
+                        >
+                          <IconEye className="h-3.5 w-3.5" />
+                        </Link>
+                      );
+                    }}
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -254,42 +300,7 @@ export function ClientProfileTabs({
         ) : active === "suppliers" ? (
           <ClientSupplierAllocationsEditor clientId={client.id} canWrite={canAllocateSuppliers} />
         ) : (
-          <>
-            {vehicles.length === 0 ? (
-              <p className="text-sm text-zinc-500">Niciun vehicul alocat acestui client.</p>
-            ) : (
-              <FleetDataTable>
-                <table className={fleetTableClass}>
-                  <thead className={fleetTheadClass}>
-                    <tr>
-                      <th className={fleetThClass}>Nr. înmatriculare</th>
-                      <th className={fleetThClass}>Marcă / model</th>
-                      <th className={fleetThClass}>Status</th>
-                      <th className={fleetThClass}>Odometru</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/80">
-                    {vehicles.map((v) => (
-                      <tr key={v.id} className="text-zinc-200">
-                        <td className={fleetTdClass}>
-                          <Link href={`/fleet/vehicles/${v.id}`} className="font-mono text-emerald-400 hover:underline">
-                            {v.registrationNumber}
-                          </Link>
-                        </td>
-                        <td className={fleetTdClass}>
-                          {[v.brand, v.model].filter(Boolean).join(" ") || "—"}
-                        </td>
-                        <td className={`${fleetTdClass} capitalize`}>{v.status}</td>
-                        <td className={`${fleetTdClass} font-mono text-zinc-400`}>
-                          {v.odometerKm != null ? `${v.odometerKm.toLocaleString("ro-RO")} km` : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </FleetDataTable>
-            )}
-          </>
+          <ClientVehiclesPanel clientCode={client.code} canWrite={canWrite} />
         )}
       </div>
     </section>

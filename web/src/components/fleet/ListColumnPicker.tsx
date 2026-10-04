@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/lib/i18n/useT";
+
 type ColDef<K extends string> = {
   key: K;
   label: string;
@@ -30,6 +32,7 @@ export function ListColumnPicker<K extends string>({
   onReset,
   onClose,
 }: Props<K>) {
+  const tx = useT();
   const hidden = new Set(layout.hidden);
   const byKey = new Map(columns.map((c) => [c.key, c]));
 
@@ -57,15 +60,15 @@ export function ListColumnPicker<K extends string>({
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-sm font-medium text-zinc-100">{title}</h3>
         <button type="button" onClick={onClose} className="text-xs text-zinc-500 hover:text-zinc-300">
-          Închide
+          {tx("common.close")}
         </button>
       </div>
       <p className="mb-2 text-[11px] text-zinc-500">
-        Arată / ascunde și reordonare (↑ ↓). Preferința rămâne pe acest browser.
+        {tx("ops.grids.columnPicker.description")}
       </p>
       <div className="mb-3 flex flex-wrap gap-x-4 gap-y-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
         <span className="w-full text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-          Delimitare
+          {tx("ops.grids.columnPicker.dividers")}
         </span>
         <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
           <input
@@ -74,7 +77,7 @@ export function ListColumnPicker<K extends string>({
             checked={layout.rowLines}
             onChange={(e) => onChange({ ...layout, rowLines: e.target.checked })}
           />
-          Linii orizontale
+          {tx("ops.grids.controls.rowLines")}
         </label>
         <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
           <input
@@ -83,7 +86,7 @@ export function ListColumnPicker<K extends string>({
             checked={layout.colLines}
             onChange={(e) => onChange({ ...layout, colLines: e.target.checked })}
           />
-          Linii verticale
+          {tx("ops.grids.controls.colLines")}
         </label>
       </div>
       <ul className="max-h-64 space-y-1 overflow-y-auto">
@@ -109,7 +112,7 @@ export function ListColumnPicker<K extends string>({
                 type="button"
                 className="rounded px-1.5 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
                 onClick={() => move(key, -1)}
-                aria-label={`Mută ${def.label} în sus`}
+                aria-label={`${tx("ops.grids.columnPicker.moveUp")} ${def.label}`}
               >
                 ↑
               </button>
@@ -117,7 +120,7 @@ export function ListColumnPicker<K extends string>({
                 type="button"
                 className="rounded px-1.5 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
                 onClick={() => move(key, 1)}
-                aria-label={`Mută ${def.label} în jos`}
+                aria-label={`${tx("ops.grids.columnPicker.moveDown")} ${def.label}`}
               >
                 ↓
               </button>

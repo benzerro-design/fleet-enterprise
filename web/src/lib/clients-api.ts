@@ -40,12 +40,31 @@ export type ClientSummaryVehicleRow = {
 };
 
 export type ClientSummaryActivityRow = {
+  id: string;
   at: string;
   kind: "trip" | "cost" | "maintenance";
   label: string;
   vehicleId: string;
   registrationNumber: string;
 };
+
+/** Caseta Sănătate: acțiunile deschid reminderele clientului, ITP deschide vehiculele. */
+export function clientHealthHref(
+  client: { id: string; code: string; healthLabel?: string | null },
+  kpis?: { remindersActionCount?: number; itpWithin30Days?: number },
+): string {
+  const qs = clientOpsQuery(client.code);
+  const label = client.healthLabel ?? "";
+  const actions = kpis?.remindersActionCount ?? 0;
+  const itp = kpis?.itpWithin30Days ?? 0;
+  if (actions > 0 || /acțiun/i.test(label)) {
+    return `/fleet/reminders?${qs}&status=action`;
+  }
+  if (itp > 0 || label === "ITP") {
+    return `/fleet/clients/${client.id}?tab=vehicles`;
+  }
+  return `/fleet/reminders?${qs}`;
+}
 
 export type ClientSummaryPayload = {
   client: ClientRecord;

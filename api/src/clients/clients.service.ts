@@ -107,6 +107,7 @@ export type ClientSummaryVehicleRow = {
 };
 
 export type ClientSummaryActivityRow = {
+  id: string;
   at: string;
   kind: 'trip' | 'cost' | 'maintenance';
   label: string;
@@ -303,6 +304,7 @@ export class ClientsService {
         : this.prisma.costEntry.findMany({
             where: { tenantId: row.tenantId, vehicleId: { in: vehicleIds } },
             select: {
+              id: true,
               incurredOn: true,
               category: true,
               notes: true,
@@ -317,6 +319,7 @@ export class ClientsService {
         : this.prisma.trip.findMany({
             where: { tenantId: row.tenantId, vehicleId: { in: vehicleIds } },
             select: {
+              id: true,
               startedAt: true,
               purpose: true,
               vehicleId: true,
@@ -330,6 +333,7 @@ export class ClientsService {
         : this.prisma.maintenanceEntry.findMany({
             where: { tenantId: row.tenantId, vehicleId: { in: vehicleIds } },
             select: {
+              id: true,
               performedAt: true,
               title: true,
               vehicleId: true,
@@ -344,6 +348,7 @@ export class ClientsService {
 
     const recentActivity: ClientSummaryActivityRow[] = [
       ...tripRows.map((r) => ({
+        id: r.id,
         at: r.startedAt.toISOString(),
         kind: 'trip' as const,
         label: r.purpose ? String(r.purpose) : 'Cursă',
@@ -351,6 +356,7 @@ export class ClientsService {
         registrationNumber: r.vehicle.registrationNumber,
       })),
       ...costRows.map((r) => ({
+        id: r.id,
         at: r.incurredOn.toISOString(),
         kind: 'cost' as const,
         label: r.notes?.trim() || r.category || 'Cost',
@@ -358,6 +364,7 @@ export class ClientsService {
         registrationNumber: r.vehicle.registrationNumber,
       })),
       ...maintenanceRows.map((r) => ({
+        id: r.id,
         at: (r.performedAt ?? new Date(0)).toISOString(),
         kind: 'maintenance' as const,
         label: r.title?.trim() || 'Mentenanță',

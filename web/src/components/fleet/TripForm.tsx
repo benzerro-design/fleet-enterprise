@@ -17,6 +17,7 @@ import { readOpsSaveResponse } from "@/lib/ops-save-odometer-sync";
 import { useOdometerTimelineConfirm } from "@/lib/use-odometer-timeline-confirm";
 import type { VehicleOdometerSyncPayload } from "@/lib/vehicle-odometer-sync";
 import { useOpsFormVehicleBinding } from "@/lib/ops-form-context";
+import { useT } from "@/lib/i18n/useT";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toDatetimeLocalInput, toIsoFromDatetimeLocal } from "@/lib/datetime-local";
@@ -93,8 +94,10 @@ async function readErrorMessage(res: Response): Promise<string> {
 }
 
 export function TripForm(props: Props) {
+  const tx = useT();
   const router = useRouter();
   const isEdit = props.mode === "edit";
+  const tripForm = (key: string) => tx(`ops.tripForm.${key}`);
 
   const initial = useMemo(() => {
     if (props.mode === "create") {
@@ -174,7 +177,7 @@ export function TripForm(props: Props) {
   const tripEventDate = endedAt.trim() || startedAt;
   const clientCode = selectedVehicle?.clientId ?? "";
   const lockedDriverId = props.lockedDriverId?.trim() || "";
-  const lockedDriverName = props.lockedDriverName?.trim() || "Contul tău";
+  const lockedDriverName = props.lockedDriverName?.trim() || tripForm("yourAccount");
 
   useEffect(() => {
     if (isEdit || lockedDriverId || !boundVehicleId) return;
@@ -214,33 +217,33 @@ export function TripForm(props: Props) {
     setOdometerSync(null);
 
     if (!isEdit && !boundVehicleId) {
-      setError("Selectează vehiculul.");
+      setError(tx("ops.form.errors.selectVehicle"));
       return;
     }
 
     const startIso = toIsoFromDatetimeLocal(startedAt);
     if (!startIso) {
-      setError("Data de start este invalidă.");
+      setError(tripForm("errors.invalidStartDate"));
       return;
     }
     const endIso = endedAt.trim() ? toIsoFromDatetimeLocal(endedAt) : null;
     if (endedAt.trim() && !endIso) {
-      setError("Data de stop este invalidă.");
+      setError(tripForm("errors.invalidStopDate"));
       return;
     }
 
     const odoStart = parseOdometerKm(odometerStartKm);
     if (odometerStartKm.trim() && odoStart == null) {
-      setError("Odometru start trebuie să fie un număr întreg >= 0.");
+      setError(tripForm("errors.invalidOdometerStart"));
       return;
     }
     const odoEnd = parseOdometerKm(odometerEndKm);
     if (odometerEndKm.trim() && odoEnd == null) {
-      setError("Odometru final trebuie să fie un număr întreg >= 0.");
+      setError(tripForm("errors.invalidOdometerEnd"));
       return;
     }
     if (odoStart != null && odoEnd != null && odoEnd < odoStart) {
-      setError("Odometru final trebuie să fie >= odometru start.");
+      setError(tripForm("errors.odometerOrder"));
       return;
     }
 
@@ -250,7 +253,7 @@ export function TripForm(props: Props) {
     } else if (distanceKm.trim()) {
       const n = Number(distanceKm);
       if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-        setError("Distanța trebuie să fie un număr întreg >= 0.");
+        setError(tripForm("errors.invalidDistance"));
         return;
       }
       parsedDistance = n;
@@ -290,7 +293,7 @@ export function TripForm(props: Props) {
       });
       const parsed = await readOpsSaveResponse(res);
       if (!parsed.ok) {
-        setError(parsed.error ?? "Eroare la salvare.");
+        setError(parsed.error ?? tx("ops.form.errors.saveFailed"));
         return;
       }
       if (parsed.vehicleOdometerSync?.message) {
@@ -300,7 +303,7 @@ export function TripForm(props: Props) {
       router.push("/fleet/trips");
       router.refresh();
     } catch {
-      setError("Rețea sau server indisponibil.");
+      setError(tx("ops.form.errors.network"));
     } finally {
       setPending(false);
     }
@@ -321,28 +324,28 @@ export function TripForm(props: Props) {
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
         {error ? <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{error}</p> : null}
         <OpsOdometerSyncNotice sync={odometerSync} />
-        <OpsFormPrimaryBand module="trips" title={isEdit ? "Actualizare — câmpuri obligatorii" : "Înregistrare — câmpuri obligatorii"}>
+        <OpsFormPrimaryBand module="trips" title={isEdit ? tx("ops.form.edit") : tx("ops.form.draft")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <OpsFormField label="Start" required>
+            <OpsFormField label={tripForm("fields.start")} required>
               <input type="datetime-local" required value={startedAt} onChange={(e) => setStartedAt(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Stop">
+            <OpsFormField label={tripForm("fields.stop")}>
               <input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Referință">
+            <OpsFormField label={tripForm("fields.reference")}>
               <input value={reference} onChange={(e) => setReference(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
           </div>
         </OpsFormPrimaryBand>
-        <OpsFormSection number={3} title="Traseu">
+        <OpsFormSection number={3} title={tripForm("sections.route")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <OpsFormField label="Origine">
+            <OpsFormField label={tripForm("fields.origin")}>
               <input value={originLabel} onChange={(e) => setOriginLabel(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Destinație">
+            <OpsFormField label={tripForm("fields.destination")}>
               <input value={destLabel} onChange={(e) => setDestLabel(e.target.value)} className={OPS_INPUT_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Distanță km" hint={distanceFromOdometer ? "Calculată din odometru start/final" : undefined}>
+            <OpsFormField label={tripForm("fields.distanceKm")} hint={distanceFromOdometer ? tripForm("hints.distanceCalculated") : undefined}>
               <input
                 type="number"
                 min={0}
@@ -353,11 +356,11 @@ export function TripForm(props: Props) {
                 className={`${OPS_INPUT_MONO_CLASS}${distanceFromOdometer ? " cursor-default opacity-90" : ""}`}
               />
             </OpsFormField>
-            <OpsFormField label="Scop">
+            <OpsFormField label={tripForm("fields.purpose")}>
               <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className={OPS_INPUT_CLASS}>
                 {TRIP_PURPOSE_OPTIONS.map((o) => (
                   <option key={o.value || "none"} value={o.value}>
-                    {o.label}
+                    {tripForm(`purpose.${o.value || "unspecified"}`)}
                   </option>
                 ))}
               </select>
@@ -369,28 +372,28 @@ export function TripForm(props: Props) {
                 onChange={(e) => setIsRoundTrip(e.target.checked)}
                 className="rounded border-zinc-600"
               />
-              Dus-întors (retur inclus)
+              {tripForm("fields.roundTrip")}
             </label>
           </div>
         </OpsFormSection>
-        <OpsFormSection number={4} title="Odometru & conducător">
+        <OpsFormSection number={4} title={tripForm("sections.odometerDriver")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <OpsFormField label="Odometru start">
+            <OpsFormField label={tripForm("fields.odometerStart")}>
               <input type="number" min={0} step={1} value={odometerStartKm} onChange={(e) => setOdometerStartKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Odometru final">
+            <OpsFormField label={tripForm("fields.odometerEnd")}>
               <input type="number" min={0} step={1} value={odometerEndKm} onChange={(e) => setOdometerEndKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
             </OpsFormField>
-            <OpsFormField label="Tip drum">
+            <OpsFormField label={tripForm("fields.roadType")}>
               <select value={roadType} onChange={(e) => setRoadType(e.target.value)} className={OPS_INPUT_CLASS}>
                 {TRIP_ROAD_TYPE_OPTIONS.map((o) => (
                   <option key={o.value || "none"} value={o.value}>
-                    {o.label}
+                    {tripForm(`roadType.${o.value || "unspecified"}`)}
                   </option>
                 ))}
               </select>
             </OpsFormField>
-            <OpsFormField label="Șofer">
+            <OpsFormField label={tripForm("fields.driver")}>
               {lockedDriverId ? (
                 <>
                   <p className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
@@ -419,8 +422,8 @@ export function TripForm(props: Props) {
           </div>
         </OpsFormSection>
         <OpsFormStickyActions
-          submitLabel={isEdit ? "Salvează modificările" : "Creează cursa"}
-          pendingLabel="Salvez..."
+          submitLabel={isEdit ? tx("common.actions.saveChanges") : tx("ops.form.createTrip")}
+          pendingLabel={tx("common.actions.saving")}
           cancelHref="/fleet/trips"
           pending={pending}
         />
@@ -450,28 +453,28 @@ export function TripForm(props: Props) {
         />
       ) : null}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Referință (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">{tripForm("labels.referenceOptional")}</label>
         <input value={reference} onChange={(e) => setReference(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Start</label>
+        <label className="block text-sm font-medium text-zinc-300">{tripForm("fields.start")}</label>
         <input type="datetime-local" required value={startedAt} onChange={(e) => setStartedAt(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Stop (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">{tripForm("labels.stopOptional")}</label>
         <input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Origine (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">{tripForm("labels.originOptional")}</label>
         <input value={originLabel} onChange={(e) => setOriginLabel(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Destinație (opțional)</label>
+        <label className="block text-sm font-medium text-zinc-300">{tripForm("labels.destinationOptional")}</label>
         <input value={destLabel} onChange={(e) => setDestLabel(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
       </div>
       <div className="space-y-2">
         <label className="block text-sm font-medium text-zinc-300">
-          Distanță km {distanceFromOdometer ? "(calculată automat)" : "(opțional)"}
+          {tripForm("fields.distanceKm")} {distanceFromOdometer ? tripForm("labels.calculatedAuto") : tripForm("labels.optionalSuffix")}
         </label>
         <input
           type="number"
@@ -483,26 +486,26 @@ export function TripForm(props: Props) {
           className={`w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2${distanceFromOdometer ? " cursor-default opacity-90" : ""}`}
         />
         {distanceFromOdometer ? (
-          <p className="text-xs text-zinc-500">Diferență odometru final − odometru start.</p>
+          <p className="text-xs text-zinc-500">{tripForm("hints.odometerDifference")}</p>
         ) : null}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-300">Scop</label>
+          <label className="block text-sm font-medium text-zinc-300">{tripForm("fields.purpose")}</label>
           <select value={purpose} onChange={(e) => setPurpose(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
             {TRIP_PURPOSE_OPTIONS.map((o) => (
               <option key={o.value || "none"} value={o.value}>
-                {o.label}
+                {tripForm(`purpose.${o.value || "unspecified"}`)}
               </option>
             ))}
           </select>
         </div>
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-300">Tip drum</label>
+          <label className="block text-sm font-medium text-zinc-300">{tripForm("fields.roadType")}</label>
           <select value={roadType} onChange={(e) => setRoadType(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2">
             {TRIP_ROAD_TYPE_OPTIONS.map((o) => (
               <option key={o.value || "none"} value={o.value}>
-                {o.label}
+                {tripForm(`roadType.${o.value || "unspecified"}`)}
               </option>
             ))}
           </select>
@@ -515,21 +518,21 @@ export function TripForm(props: Props) {
           onChange={(e) => setIsRoundTrip(e.target.checked)}
           className="rounded border-zinc-600"
         />
-        Dus-întors (retur inclus)
+        {tripForm("fields.roundTrip")}
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-300">Odometru start (opțional)</label>
+          <label className="block text-sm font-medium text-zinc-300">{tripForm("labels.odometerStartOptional")}</label>
           <input type="number" min={0} step={1} value={odometerStartKm} onChange={(e) => setOdometerStartKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
         </div>
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-300">Odometru final (opțional)</label>
+          <label className="block text-sm font-medium text-zinc-300">{tripForm("labels.odometerEndOptional")}</label>
           <input type="number" min={0} step={1} value={odometerEndKm} onChange={(e) => setOdometerEndKm(e.target.value)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2" />
         </div>
       </div>
       {lockedDriverId ? (
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-300">Șofer</label>
+          <label className="block text-sm font-medium text-zinc-300">{tripForm("fields.driver")}</label>
           <p className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
             {lockedDriverName}
           </p>
@@ -550,10 +553,10 @@ export function TripForm(props: Props) {
       />
       <div className="flex flex-wrap gap-3 pt-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50">
-          {pending ? "Salvez..." : isEdit ? "Salvează modificările" : "Creează cursa"}
+          {pending ? tx("common.actions.saving") : isEdit ? tx("common.actions.saveChanges") : tx("ops.form.createTrip")}
         </button>
         <Link href="/fleet/trips" className="inline-flex items-center rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900">
-          Anulează
+          {tx("common.actions.cancel")}
         </Link>
       </div>
     </form>

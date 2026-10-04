@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
@@ -6,6 +8,7 @@ import { VehicleVisual } from "@/components/fleet/VehicleVisual";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { FUEL_COST_CATEGORY } from "@/lib/fuel-ops";
 import type { VehicleRecord } from "@/lib/fleet-api";
+import { useT } from "@/lib/i18n/useT";
 import type { ReminderActionRow } from "@/lib/reminder-actions";
 import type { TicketRecord } from "@/lib/tickets-api";
 
@@ -78,6 +81,7 @@ export function DriverHomeView({
   reminders,
   tickets,
   }: Props) {
+  const tx = useT();
   const primary = vehicles[0];
   const fuelHref = primary
     ? `/fleet/costs/new?category=${encodeURIComponent(FUEL_COST_CATEGORY)}&vehicleId=${encodeURIComponent(primary.id)}`
@@ -88,34 +92,34 @@ export function DriverHomeView({
   return (
     <FleetPageMain>
       <div className="mb-2">
-        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Cont șofer</p>
+        <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">{tx("driver.home.account")}</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-          {driverName ? `Salut, ${driverName}` : "Acasă"}
+          {driverName ? tx("driver.home.greeting").replace("{name}", driverName) : tx("driver.home.home")}
         </h1>
         <p className="mt-3 hidden max-w-2xl text-sm text-zinc-400 sm:block">
-          Mașina alocată, termene, curse deschise și tichetele tale — fără lista de administrare flotă.
+          {tx("driver.home.subtitle")}
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
         <Link href={tripHref} className={actionPrimary}>
-          Cursă nouă
+          {tx("driver.home.newTrip")}
         </Link>
         <Link href={fuelHref} className={actionOutline}>
-          Alimentare
+          {tx("driver.home.fuel")}
         </Link>
         <Link href={ticketHref} className={actionOutline}>
-          Tichet nou
+          {tx("driver.home.newTicket")}
         </Link>
       </div>
 
       <section>
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">Vehicule alocate</h2>
+        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">{tx("driver.home.allocatedVehicles")}</h2>
         {vehiclesLoadFailed ? (
-          <p className="mt-4 text-sm text-amber-400">Nu am putut încărca vehiculele. Reîncearcă după reîmprospătare.</p>
+          <p className="mt-4 text-sm text-amber-400">{tx("driver.home.vehiclesLoadFailed")}</p>
         ) : vehicles.length === 0 ? (
           <p className="mt-4 text-sm text-zinc-500">
-            Nu ai vehicule alocate. Cere managerului să te pună pe o mașină.
+            {tx("driver.home.noVehicles")}
           </p>
         ) : (
           <ul className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -140,15 +144,21 @@ export function DriverHomeView({
                       href={`/fleet/vehicles/${v.id}`}
                       className="shrink-0 text-sm text-emerald-400 hover:text-emerald-300"
                     >
-                      Detaliu
+                      {tx("driver.home.detail")}
                     </Link>
                   </div>
                   <p className="mt-3 text-2xl font-semibold tracking-tight text-zinc-100">{formatKm(v.odometerKm)}</p>
                   <p className={`mt-1 text-xs ${itpWarn ? "text-amber-300" : "text-zinc-500"}`}>
-                    ITP{" "}
+                    {tx("driver.home.itp")}{" "}
                     {v.itpExpiresOn
                       ? `${new Date(v.itpExpiresOn).toLocaleDateString("ro-RO")}${
-                          days != null ? ` · ${days < 0 ? `depășit ${Math.abs(days)}z` : `${days}z`}` : ""
+                          days != null
+                            ? ` · ${
+                                days < 0
+                                  ? tx("driver.home.itpOverdue").replace("{days}", String(Math.abs(days)))
+                                  : tx("driver.home.itpRemaining").replace("{days}", String(days))
+                              }`
+                            : ""
                         }`
                       : "—"}
                   </p>
@@ -157,19 +167,19 @@ export function DriverHomeView({
                       href={`/fleet/trips/new?vehicleId=${encodeURIComponent(v.id)}`}
                       className={quickVehicleAction}
                     >
-                      Cursă
+                      {tx("driver.home.trip")}
                     </Link>
                     <Link
                       href={`/fleet/costs/new?category=${encodeURIComponent(FUEL_COST_CATEGORY)}&vehicleId=${encodeURIComponent(v.id)}`}
                       className={quickVehicleAction}
                     >
-                      Alimentare
+                      {tx("driver.home.fuel")}
                     </Link>
                     <Link
                       href={`/fleet/tickets/new?vehicleId=${encodeURIComponent(v.id)}`}
                       className={quickVehicleAction}
                     >
-                      Tichet
+                      {tx("driver.home.ticket")}
                     </Link>
                   </div>
                 </li>
@@ -180,9 +190,9 @@ export function DriverHomeView({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Section title="Remindere de acțiune" href="/fleet/reminders?status=action" hrefLabel="Toate →">
+        <Section title={tx("driver.home.actionReminders")} href="/fleet/reminders?status=action" hrefLabel={tx("driver.home.viewAll")}>
           {reminders.length === 0 ? (
-            <p className="text-sm text-zinc-500">Nimic de făcut acum.</p>
+            <p className="text-sm text-zinc-500">{tx("driver.home.emptyReminders")}</p>
           ) : (
             <ul className="divide-y divide-zinc-800">
               {reminders.map((r) => (
@@ -200,9 +210,9 @@ export function DriverHomeView({
           )}
         </Section>
 
-        <Section title="Curse deschise" href="/fleet/trips?ended=open" hrefLabel="Toate →">
+        <Section title={tx("driver.home.trips")} href="/fleet/trips?ended=open" hrefLabel={tx("driver.home.viewAll")}>
           {trips.length === 0 ? (
-            <p className="text-sm text-zinc-500">Nicio cursă deschisă.</p>
+            <p className="text-sm text-zinc-500">{tx("driver.home.emptyTrips")}</p>
           ) : (
             <ul className="divide-y divide-zinc-800">
               {trips.map((t) => (
@@ -220,9 +230,9 @@ export function DriverHomeView({
           )}
         </Section>
 
-        <Section title="Tichetele tale" href="/fleet/tickets" hrefLabel="Toate →">
+        <Section title={tx("driver.home.tickets")} href="/fleet/tickets" hrefLabel={tx("driver.home.viewAll")}>
           {tickets.length === 0 ? (
-            <p className="text-sm text-zinc-500">Niciun tichet deschis.</p>
+            <p className="text-sm text-zinc-500">{tx("driver.home.emptyTickets")}</p>
           ) : (
             <ul className="divide-y divide-zinc-800">
               {tickets.map((t) => (
@@ -231,7 +241,7 @@ export function DriverHomeView({
                     {t.displayId} · {t.subject}
                   </Link>
                   <p className="text-xs text-zinc-500">
-                    {t.registrationNumber ?? "Fără vehicul"} · {t.status}
+                    {t.registrationNumber ?? tx("driver.home.noVehicle")} · {t.status}
                   </p>
                 </li>
               ))}

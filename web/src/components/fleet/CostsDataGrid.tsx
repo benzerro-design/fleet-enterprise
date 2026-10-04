@@ -12,6 +12,7 @@ import {
 import { ListColumnPicker } from "@/components/fleet/ListColumnPicker";
 import { IconEye, IconPencil, listGridIconBtnClass } from "@/components/fleet/list-grid-icons";
 import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
+import { useT } from "@/lib/i18n/useT";
 import {
   COST_GRID_COLUMNS,
   defaultCostGridLayout,
@@ -46,9 +47,14 @@ type Props = {
 };
 
 export function CostsDataGrid({ items, canWrite }: Props) {
+  const tx = useT();
   const [layout, setLayout] = useState<CostGridLayout>(() => readCostGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const columns = useMemo(() => visibleCostColumns(layout), [layout]);
+  const translatedColumns = useMemo(
+    () => COST_GRID_COLUMNS.map((col) => ({ ...col, label: tx(`ops.grids.costs.columns.${col.key}`) })),
+    [tx],
+  );
 
   function persist(next: CostGridLayout) {
     setLayout(next);
@@ -61,8 +67,8 @@ export function CostsDataGrid({ items, canWrite }: Props) {
         <Link
           href={`/fleet/costs/${row.id}`}
           className={`${listGridIconBtnClass} text-emerald-400/90 hover:text-emerald-300`}
-          title="Vezi detaliu"
-          aria-label={`Vezi cost ${row.category}`}
+          title={tx("ops.grids.actions.viewDetails")}
+          aria-label={`${tx("ops.grids.actions.viewCost")} ${row.category}`}
         >
           <IconEye className="h-3.5 w-3.5" />
         </Link>
@@ -71,8 +77,8 @@ export function CostsDataGrid({ items, canWrite }: Props) {
             <Link
               href={`/fleet/costs/${row.id}/edit`}
               className={listGridIconBtnClass}
-              title="Editare"
-              aria-label={`Editează ${row.category}`}
+              title={tx("ops.grids.actions.edit")}
+              aria-label={`${tx("ops.grids.actions.edit")} ${row.category}`}
             >
               <IconPencil className="h-3.5 w-3.5" />
             </Link>
@@ -83,10 +89,10 @@ export function CostsDataGrid({ items, canWrite }: Props) {
           <Link
             href={`/fleet/documents/${row.linkedDocumentId}`}
             className={`${listGridIconBtnClass} text-sky-400/90 hover:text-sky-300`}
-            title="Document legat"
-            aria-label="Document legat"
+            title={tx("ops.grids.costs.linkedDocument")}
+            aria-label={tx("ops.grids.costs.linkedDocument")}
           >
-            <span className="text-[10px] font-semibold">Doc</span>
+            <span className="text-[10px] font-semibold">{tx("ops.grids.costs.docShort")}</span>
           </Link>
         ) : null}
       </div>
@@ -141,7 +147,7 @@ export function CostsDataGrid({ items, canWrite }: Props) {
       case "document":
         return row.invoiceAttachmentUrl ? (
           <a href={row.invoiceAttachmentUrl} download className="text-emerald-400 hover:underline">
-            Descarcă
+            {tx("ops.grids.actions.download")}
           </a>
         ) : (
           <span className="text-zinc-600">—</span>
@@ -177,7 +183,7 @@ export function CostsDataGrid({ items, canWrite }: Props) {
               checked={layout.rowLines}
               onChange={(e) => persist({ ...layout, rowLines: e.target.checked })}
             />
-            Linii orizontale
+            {tx("ops.grids.controls.rowLines")}
           </label>
           <label className="inline-flex cursor-pointer items-center gap-2 hover:text-zinc-200">
             <input
@@ -186,7 +192,7 @@ export function CostsDataGrid({ items, canWrite }: Props) {
               checked={layout.colLines}
               onChange={(e) => persist({ ...layout, colLines: e.target.checked })}
             />
-            Linii verticale
+            {tx("ops.grids.controls.colLines")}
           </label>
         </div>
         <button
@@ -194,13 +200,13 @@ export function CostsDataGrid({ items, canWrite }: Props) {
           onClick={() => setShowColumns((v) => !v)}
           className="rounded-lg border border-zinc-700/80 bg-zinc-950/40 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-900"
         >
-          {showColumns ? "Închide coloane" : "Coloane…"}
+          {showColumns ? tx("ops.grids.controls.closeColumns") : tx("ops.grids.controls.columns")}
         </button>
       </div>
       {showColumns ? (
         <ListColumnPicker
-          title="Coloane listă costuri"
-          columns={COST_GRID_COLUMNS}
+          title={tx("ops.grids.costs.columnPickerTitle")}
+          columns={translatedColumns}
           layout={layout}
           onChange={persist}
           onReset={() => persist(defaultCostGridLayout())}
@@ -253,9 +259,9 @@ export function CostsDataGrid({ items, canWrite }: Props) {
                     className={`${thBase} ${colLineCell} ${alignRight(col.key) ? "text-right" : ""}`}
                   >
                     {col.key === "actions" ? (
-                      <span className="sr-only">{col.label}</span>
+                      <span className="sr-only">{tx(`ops.grids.costs.columns.${col.key}`)}</span>
                     ) : (
-                      col.label
+                      tx(`ops.grids.costs.columns.${col.key}`)
                     )}
                   </th>
                 ))}

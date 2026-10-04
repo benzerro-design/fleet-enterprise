@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
@@ -12,6 +13,8 @@ import {
   parsePartnerSupplierQuery,
   partnerSupplierSearchParams,
 } from "@/lib/partner-context";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 import { SERVICE_ORDER_TYPES } from "@/lib/work-order-sheet";
 import {
@@ -89,6 +92,8 @@ function quickTabClass(active: boolean): string {
 
 export default async function PartnerWorkOrdersPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const [list, stats, vehicles] = await Promise.all([loadWorkOrders(sp), loadStats(sp), getVehicleOptions()]);
   const supplierQuery = parsePartnerSupplierQuery(sp);
 
@@ -121,12 +126,12 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
   if (supplierQuery.suppliers?.length) filterParams.suppliers = supplierQuery.suppliers.join(",");
 
   const quickTabs: { label: string; inbox?: WorkOrderInbox | "all" }[] = [
-    { label: "Deschise", inbox: "open" },
-    { label: "Așteaptă aprobare", inbox: "pending_approval" },
-    { label: "In service", inbox: "in_service" },
-    { label: "Lucrare gata", inbox: "ready" },
-    { label: "Facturate", inbox: "invoiced" },
-    { label: "Toate", inbox: "all" },
+    { label: t(locale, "pages.partner.workOrders.tabs.open"), inbox: "open" },
+    { label: t(locale, "pages.partner.workOrders.tabs.pending_approval"), inbox: "pending_approval" },
+    { label: t(locale, "pages.partner.workOrders.tabs.in_service"), inbox: "in_service" },
+    { label: t(locale, "pages.partner.workOrders.tabs.ready"), inbox: "ready" },
+    { label: t(locale, "pages.partner.workOrders.tabs.invoiced"), inbox: "invoiced" },
+    { label: t(locale, "pages.partner.workOrders.tabs.all"), inbox: "all" },
   ];
 
   return (
@@ -135,10 +140,10 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
         densityToolbar={false}
         header={
           <div>
-            <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Devize & comenzi</h1>
+            <p className="text-sm font-medium uppercase tracking-widest text-violet-400">{t(locale, "pages.partner.portal")}</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t(locale, "pages.partner.workOrders.title")}</h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Aceeași interfață ca în aplicația flotă — filtrată automat pe furnizorul dvs. Fără selector Partener.
+              {t(locale, "pages.partner.workOrders.description")}
             </p>
           </div>
         }
@@ -160,22 +165,22 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
               <input type="hidden" name="suppliers" value={supplierQuery.suppliers.join(",")} />
             ) : null}
             <div>
-              <label className="text-xs text-zinc-500">Căutare</label>
+              <label className="text-xs text-zinc-500">{t(locale, "pages.partner.workOrders.search")}</label>
               <input
                 name="q"
                 defaultValue={sp.q ?? ""}
-                placeholder="titlu, nr. auto"
+                placeholder={t(locale, "pages.partner.workOrders.searchPlaceholder")}
                 className="mt-1 block w-48 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               />
             </div>
             <div>
-              <label className="text-xs text-zinc-500">Status WO</label>
+              <label className="text-xs text-zinc-500">{t(locale, "pages.partner.workOrders.status")}</label>
               <select
                 name="status"
                 defaultValue={sp.status ?? ""}
                 className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               >
-                <option value="">Toate</option>
+                <option value="">{t(locale, "common.filters.all")}</option>
                 {WORK_ORDER_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
@@ -184,13 +189,13 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
               </select>
             </div>
             <div>
-              <label className="text-xs text-zinc-500">Etapă dosar</label>
+              <label className="text-xs text-zinc-500">{t(locale, "pages.partner.workOrders.stage")}</label>
               <select
                 name="serviceCaseStage"
                 defaultValue={sp.serviceCaseStage ?? ""}
                 className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               >
-                <option value="">Toate</option>
+                <option value="">{t(locale, "common.filters.all")}</option>
                 {SERVICE_CASE_STAGES.map((s) => (
                   <option key={s} value={s}>
                     {serviceCaseStageLabel(s)}
@@ -199,13 +204,13 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
               </select>
             </div>
             <div>
-              <label className="text-xs text-zinc-500">Tip</label>
+              <label className="text-xs text-zinc-500">{t(locale, "pages.partner.workOrders.type")}</label>
               <select
                 name="serviceOrderType"
                 defaultValue={sp.serviceOrderType ?? ""}
                 className="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               >
-                <option value="">Toate</option>
+                <option value="">{t(locale, "common.filters.all")}</option>
                 {SERVICE_ORDER_TYPES.map((t) => (
                   <option key={t.code} value={t.code}>
                     {t.code} — {t.label}
@@ -214,13 +219,13 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
               </select>
             </div>
             <div>
-              <label className="text-xs text-zinc-500">Vehicul</label>
+              <label className="text-xs text-zinc-500">{t(locale, "pages.partner.workOrders.vehicle")}</label>
               <select
                 name="vehicleId"
                 defaultValue={sp.vehicleId ?? ""}
                 className="mt-1 block max-w-[10rem] rounded-lg border border-zinc-700 bg-zinc-950 font-mono text-sm text-zinc-100"
               >
-                <option value="">Toate</option>
+                <option value="">{t(locale, "common.filters.all")}</option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.registrationNumber}
@@ -232,7 +237,7 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
               type="submit"
               className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
             >
-              Filtrează
+              {t(locale, "common.actions.filter")}
             </button>
             <FilterResetLink href={appendPartnerSupplierQuery(`${BASE}?inbox=open`, supplierQuery)} />
           </form>
@@ -261,13 +266,12 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
         ) : null}
 
         {!list ? (
-          <p className="text-amber-400">Nu am putut încărca comenzile. Verifică API-ul și migrarea.</p>
+          <p className="text-amber-400">{t(locale, "pages.partner.workOrders.loadFailed")}</p>
         ) : (
           <>
             {list.items.length === 0 ? (
               <p className="mb-3 text-sm text-zinc-500">
-                Nicio comandă pentru filtrele / furnizorul curent. Lista rămâne aici — schimbă filtrul sau
-                furnizorul, nu se pierde scope-ul.
+                {t(locale, "pages.partner.workOrders.empty")}
               </p>
             ) : null}
             <WorkOrderDataGrid
@@ -279,17 +283,19 @@ export default async function PartnerWorkOrdersPage({ searchParams }: PageProps)
             {list.total > list.pageSize ? (
               <div className="mt-4 flex items-center justify-between text-sm text-zinc-500">
                 <span>
-                  Pagina {page} · {list.total} comenzi
+                  {t(locale, "pages.partner.workOrders.pageSummary")
+                    .replace("{page}", String(page))
+                    .replace("{total}", String(list.total))}
                 </span>
                 <div className="flex gap-2">
                   {page > 1 ? (
                     <Link href={withPage(page - 1)} className="rounded border border-zinc-700 px-3 py-1 hover:bg-zinc-900">
-                      Înapoi
+                      {t(locale, "pages.partner.workOrders.prev")}
                     </Link>
                   ) : null}
                   {page * list.pageSize < list.total ? (
                     <Link href={withPage(page + 1)} className="rounded border border-zinc-700 px-3 py-1 hover:bg-zinc-900">
-                      Înainte
+                      {t(locale, "pages.partner.workOrders.next")}
                     </Link>
                   ) : null}
                 </div>

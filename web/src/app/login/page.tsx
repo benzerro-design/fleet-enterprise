@@ -1,24 +1,24 @@
+import { cookies } from "next/headers";
 import { LoginForm } from "./login-form";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 
 type Props = { searchParams: Promise<{ next?: string }> };
 
 export default async function LoginPage({ searchParams }: Props) {
   const { next } = await searchParams;
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const nextPath = next?.startsWith("/") ? next : "/fleet/dashboard";
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto flex max-w-md flex-col gap-8 px-6 py-16">
         <div>
-          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Fleet enterprise</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Autentificare</h1>
+          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">{t(locale, "auth.login.eyebrow")}</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t(locale, "auth.login.title")}</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Autentificare cu utilizator din Postgres. JWT-ul (httpOnly) conține abonatul și rolul. După{" "}
-            <code className="text-zinc-300">npm run db:seed</code>: administrator abonat{" "}
-            <code className="text-zinc-300">admin@demo.local</code> sau{" "}
-            <code className="text-zinc-300">viewer@demo.local</code> (cititor abonat), parolă{" "}
-            <code className="text-zinc-300">demo12345</code>, abonat <code className="text-zinc-300">demo</code>. După
-            update la cod, rulează din nou <code className="text-zinc-300">npm run db:seed</code> în <code className="text-zinc-300">api/</code> dacă viewer nu se conectează.
+            {t(locale, "auth.login.description")} {t(locale, "auth.login.seedHint")}
           </p>
         </div>
 

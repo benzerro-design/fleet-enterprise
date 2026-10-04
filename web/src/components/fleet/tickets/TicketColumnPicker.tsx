@@ -8,6 +8,7 @@ import {
   type TicketGridLayout,
   writeTicketGridLayout,
 } from "@/lib/ticket-grid-columns";
+import { useT } from "@/lib/i18n/useT";
 
 type Props = {
   layout: TicketGridLayout;
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
+  const tx = useT();
   const hidden = new Set(layout.hidden);
   const hasCustomWidths = Object.keys(layout.widths ?? {}).length > 0;
 
@@ -57,13 +59,13 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
   return (
     <div className="rounded-xl border border-zinc-700 bg-zinc-950 p-4 shadow-xl">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-zinc-100">Coloane listă</h3>
+        <h3 className="text-sm font-medium text-zinc-100">{tx("ops.grids.tickets.columnPickerTitle")}</h3>
         <button type="button" onClick={onClose} className="text-xs text-zinc-500 hover:text-zinc-300">
-          Închide
+          {tx("common.close")}
         </button>
       </div>
       <p className="mb-3 text-xs text-zinc-500">
-        Mutare, ascundere, lățimi (trage muchia header-ului). Layout salvat local.
+        {tx("ops.grids.tickets.columnPickerDescription")}
       </p>
       <ul className="max-h-64 space-y-1 overflow-y-auto">
         {layout.order.map((key) => {
@@ -75,7 +77,7 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
               key={key}
               className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-2 py-1.5 text-xs"
             >
-              <span className="min-w-[5rem] font-medium text-zinc-300">{def.label || def.key}</span>
+              <span className="min-w-[5rem] font-medium text-zinc-300">{tx(`ops.grids.tickets.columns.${def.key}`) || def.key}</span>
               <div className="ml-auto flex gap-1">
                 <button type="button" className="rounded border border-zinc-700 px-1.5 py-0.5 hover:bg-zinc-800" onClick={() => move(key, -1)}>
                   ↑
@@ -89,7 +91,7 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
                     className={`rounded border px-1.5 py-0.5 ${isHidden ? "border-emerald-800 text-emerald-300" : "border-zinc-700 text-zinc-400"} hover:bg-zinc-800`}
                     onClick={() => toggle(key)}
                   >
-                    {isHidden ? "Arată" : "Ascunde"}
+                    {isHidden ? tx("ops.grids.columnPicker.show") : tx("ops.grids.columnPicker.hide")}
                   </button>
                 ) : null}
               </div>
@@ -99,11 +101,11 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
       </ul>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={reset} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800">
-          Reset layout
+          {tx("ops.grids.columnPicker.resetLayout")}
         </button>
         {hasCustomWidths ? (
           <button type="button" onClick={resetWidths} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800">
-            Resetează lățimi
+            {tx("ops.grids.tickets.resetWidths")}
           </button>
         ) : null}
       </div>

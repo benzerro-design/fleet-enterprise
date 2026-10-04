@@ -12,6 +12,7 @@ import {
 import { ListColumnPicker } from "@/components/fleet/ListColumnPicker";
 import { IconEye, IconPencil, listGridIconBtnClass } from "@/components/fleet/list-grid-icons";
 import { formatDateTimeRo } from "@/lib/datetime-local";
+import { useT } from "@/lib/i18n/useT";
 import {
   defaultTripGridLayout,
   readTripGridLayout,
@@ -42,10 +43,10 @@ type Props = {
   canWrite: boolean;
 };
 
-function tripTitle(row: TripGridRow): string {
+function tripTitle(row: TripGridRow, fallback: string): string {
   if (row.reference?.trim()) return row.reference.trim();
   const route = [row.originLabel, row.destLabel].filter((x) => x?.trim()).join(" → ");
-  return route || "Cursă";
+  return route || fallback;
 }
 
 function tripSubtitle(row: TripGridRow): string {
@@ -61,9 +62,14 @@ function statusClass(open: boolean): string {
 }
 
 export function TripsDataGrid({ items, canWrite }: Props) {
+  const tx = useT();
   const [layout, setLayout] = useState<TripGridLayout>(() => readTripGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const columns = useMemo(() => visibleTripColumns(layout), [layout]);
+  const translatedColumns = useMemo(
+    () => TRIP_GRID_COLUMNS.map((col) => ({ ...col, label: tx(`ops.grids.trips.columns.${col.key}`) })),
+    [tx],
+  );
 
   function persist(next: TripGridLayout) {
     setLayout(next);
@@ -76,8 +82,8 @@ export function TripsDataGrid({ items, canWrite }: Props) {
         <Link
           href={`/fleet/trips/${row.id}`}
           className={`${listGridIconBtnClass} text-emerald-400/90 hover:text-emerald-300`}
-          title="Vezi detaliu"
-          aria-label={`Vezi cursa ${tripTitle(row)}`}
+          title={tx("ops.grids.actions.viewDetails")}
+          aria-label={`${tx("ops.grids.actions.viewTrip")} ${tripTitle(row, tx("ops.grids.trips.fallbackTitle"))}`}
         >
           <IconEye className="h-3.5 w-3.5" />
         </Link>
@@ -86,8 +92,8 @@ export function TripsDataGrid({ items, canWrite }: Props) {
             <Link
               href={`/fleet/trips/${row.id}/edit`}
               className={listGridIconBtnClass}
-              title="Editare"
-              aria-label={`Editează ${tripTitle(row)}`}
+              title={tx("ops.grids.actions.edit")}
+              aria-label={`${tx("ops.grids.actions.edit")} ${tripTitle(row, tx("ops.grids.trips.fallbackTitle"))}`}
             >
               <IconPencil className="h-3.5 w-3.5" />
             </Link>
@@ -105,7 +111,7 @@ export function TripsDataGrid({ items, canWrite }: Props) {
         return (
           <div className="min-w-0">
             <p className="truncate font-mono text-[13px] font-semibold tracking-tight text-zinc-100">
-              {tripTitle(row)}
+              {tripTitle(row, tx("ops.grids.trips.fallbackTitle"))}
             </p>
             <p className="mt-0.5 truncate text-xs text-zinc-500">{tripSubtitle(row)}</p>
           </div>
@@ -127,7 +133,7 @@ export function TripsDataGrid({ items, canWrite }: Props) {
               className="block truncate text-zinc-200 hover:text-emerald-300 hover:underline"
               title={name ?? row.driverId}
             >
-              {name || "Șofer"}
+              {name || tx("ops.grids.common.driver")}
             </Link>
           );
         }
@@ -152,7 +158,7 @@ export function TripsDataGrid({ items, canWrite }: Props) {
           <span
             className={`inline-flex max-w-full truncate rounded-md border px-2 py-0.5 text-[11px] font-medium ${statusClass(open)}`}
           >
-            {open ? "Deschisă" : "Închisă"}
+            {open ? tx("ops.grids.trips.status.open") : tx("ops.grids.trips.status.closed")}
           </span>
         );
       case "actions":
@@ -181,7 +187,7 @@ export function TripsDataGrid({ items, canWrite }: Props) {
               checked={layout.rowLines}
               onChange={(e) => persist({ ...layout, rowLines: e.target.checked })}
             />
-            Linii orizontale
+            {tx("ops.grids.controls.rowLines")}
           </label>
           <label className="inline-flex cursor-pointer items-center gap-2 hover:text-zinc-200">
             <input
@@ -190,7 +196,7 @@ export function TripsDataGrid({ items, canWrite }: Props) {
               checked={layout.colLines}
               onChange={(e) => persist({ ...layout, colLines: e.target.checked })}
             />
-            Linii verticale
+            {tx("ops.grids.controls.colLines")}
           </label>
         </div>
         <button
@@ -198,13 +204,13 @@ export function TripsDataGrid({ items, canWrite }: Props) {
           onClick={() => setShowColumns((v) => !v)}
           className="rounded-lg border border-zinc-700/80 bg-zinc-950/40 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-900"
         >
-          {showColumns ? "Închide coloane" : "Coloane…"}
+          {showColumns ? tx("ops.grids.controls.closeColumns") : tx("ops.grids.controls.columns")}
         </button>
       </div>
       {showColumns ? (
         <ListColumnPicker
-          title="Coloane listă curse"
-          columns={TRIP_GRID_COLUMNS}
+          title={tx("ops.grids.trips.columnPickerTitle")}
+          columns={translatedColumns}
           layout={layout}
           onChange={persist}
           onReset={() => persist(defaultTripGridLayout())}
@@ -222,17 +228,17 @@ export function TripsDataGrid({ items, canWrite }: Props) {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-mono text-sm font-semibold text-zinc-100">{tripTitle(row)}</p>
+                  <p className="font-mono text-sm font-semibold text-zinc-100">{tripTitle(row, tx("ops.grids.trips.fallbackTitle"))}</p>
                   <p className="mt-0.5 text-xs text-zinc-400">{tripSubtitle(row)}</p>
                   <p className="mt-1 truncate text-xs text-zinc-500">{row.clientId}</p>
                   {row.driverName ? (
-                    <p className="mt-0.5 truncate text-xs text-zinc-400">Șofer: {row.driverName}</p>
+                    <p className="mt-0.5 truncate text-xs text-zinc-400">{tx("ops.grids.common.driver")}: {row.driverName}</p>
                   ) : null}
                 </div>
                 <span
                   className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium ${statusClass(open)}`}
                 >
-                  {open ? "Deschisă" : "Închisă"}
+                  {open ? tx("ops.grids.trips.status.open") : tx("ops.grids.trips.status.closed")}
                 </span>
               </div>
               <p className="mt-3 font-mono text-xs tabular-nums text-zinc-400">
@@ -262,9 +268,9 @@ export function TripsDataGrid({ items, canWrite }: Props) {
                     className={`${thBase} ${colLineCell} ${alignRight(col.key) ? "text-right" : ""}`}
                   >
                     {col.key === "actions" ? (
-                      <span className="sr-only">{col.label}</span>
+                      <span className="sr-only">{tx(`ops.grids.trips.columns.${col.key}`)}</span>
                     ) : (
-                      col.label
+                      tx(`ops.grids.trips.columns.${col.key}`)
                     )}
                   </th>
                 ))}

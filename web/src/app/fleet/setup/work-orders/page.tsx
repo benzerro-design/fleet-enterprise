@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { SetupShell } from "@/components/fleet/setup/SetupShell";
 import { WorkOrderSettingsEditor } from "@/components/fleet/setup/WorkOrderSettingsEditor";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 import {
   DEFAULT_WORK_ORDER_SETTINGS,
   type WorkOrderSettings,
@@ -20,6 +23,8 @@ async function loadSettings(): Promise<WorkOrderSettings> {
 }
 
 export default async function SetupWorkOrdersPage() {
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const auth = await getAuthMeResult();
   if (!canManageFleet(auth)) {
     redirect("/fleet/vehicles");
@@ -30,8 +35,8 @@ export default async function SetupWorkOrdersPage() {
   return (
     <FleetPageMain className="min-h-0">
       <SetupShell
-        title="Comenzi (WO)"
-        description="Reguli de recepție, garanții implicite, facturare pe deviz și pașii pe dosarul de daună — pentru tot abonatul."
+        title={t(locale, "pages.setup.pillars.work-orders.label")}
+        description={t(locale, "pages.setup.pillars.work-orders.blurb")}
       >
         <WorkOrderSettingsEditor initial={settings} />
       </SetupShell>

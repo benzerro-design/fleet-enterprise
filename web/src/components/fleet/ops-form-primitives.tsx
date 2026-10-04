@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import type { OpsFormModuleKey } from "@/lib/ops-section-theme";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
+import { useT } from "@/lib/i18n/useT";
 
 export const OPS_INPUT_CLASS =
   "w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2";
@@ -159,6 +160,7 @@ export function OpsFormStickyActions({
   disabled?: boolean;
   submitClassName?: string;
 }) {
+  const tx = useT();
   return (
     <div className="sticky bottom-0 mt-2 flex flex-wrap gap-3 border-t border-zinc-800 bg-zinc-950/95 py-4 backdrop-blur-sm">
       <button
@@ -172,7 +174,7 @@ export function OpsFormStickyActions({
         href={cancelHref}
         className="inline-flex items-center rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
       >
-        Anulează
+        {tx("common.actions.cancel")}
       </Link>
     </div>
   );
@@ -189,12 +191,13 @@ export function OpsFormVehicleField({
   onVehicleIdChange: (id: string) => void;
   locked?: boolean;
 }) {
+  const tx = useT();
   const selected = vehicles.find((v) => v.id === vehicleId);
 
   return (
     <>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Vehicul</label>
+        <label className="block text-sm font-medium text-zinc-300">{tx("ops.form.vehicle")}</label>
         {locked ? (
           <>
             <div className="flex items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2">
@@ -202,10 +205,10 @@ export function OpsFormVehicleField({
                 {selected?.registrationNumber ?? "—"}
               </span>
               <span className="shrink-0 rounded-full border border-sky-800/60 bg-sky-950/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-300/90">
-                Fixat
+                {tx("ops.form.fixed")}
               </span>
             </div>
-            <p className="text-xs text-zinc-500">Vehiculul înregistrării nu poate fi schimbat la editare.</p>
+            <p className="text-xs text-zinc-500">{tx("ops.form.fixedVehicleHint")}</p>
           </>
         ) : (
           <select
@@ -215,9 +218,9 @@ export function OpsFormVehicleField({
             className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
           >
             {vehicles.length === 0 ? (
-              <option value="">Nu există vehicule</option>
+              <option value="">{tx("ops.form.noVehicles")}</option>
             ) : (
-              <option value="">— Selectează vehiculul —</option>
+              <option value="">{tx("ops.form.selectVehicle")}</option>
             )}
             {vehicles.map((v) => (
               <option key={v.id} value={v.id}>
@@ -228,7 +231,7 @@ export function OpsFormVehicleField({
         )}
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Client</label>
+        <label className="block text-sm font-medium text-zinc-300">{tx("ops.form.client")}</label>
         <input
           value={selected?.clientId ?? ""}
           readOnly

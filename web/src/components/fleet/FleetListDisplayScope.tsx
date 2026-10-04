@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useFleetListDisplayPrefs } from "@/components/fleet/useFleetListDisplayPrefs";
+import { useT } from "@/lib/i18n/useT";
 
 type Props = {
   children: ReactNode;
@@ -14,6 +15,7 @@ type Props = {
  * FLEET-028: densitate listă + delimitare rânduri (localStorage per browser).
  */
 export function FleetListDisplayScope({ children, hideToolbar = false, className = "" }: Props) {
+  const tx = useT();
   const { prefs, setDensity, setRowDividers } = useFleetListDisplayPrefs();
 
   const btn =
@@ -52,30 +54,30 @@ export function FleetListDisplayScope({ children, hideToolbar = false, className
       {!hideToolbar ? (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-            Afișare
+            {tx("common.list.display")}
           </span>
           <button
             type="button"
             className={`${btn} ${prefs.density === "detailed" ? active : idle}`}
             onClick={() => setDensity("detailed")}
           >
-            Detaliat
+            {tx("common.list.detailed")}
           </button>
           <button
             type="button"
             className={`${btn} ${prefs.density === "simple" ? active : idle}`}
             onClick={() => setDensity("simple")}
           >
-            Simplu
+            {tx("common.list.simple")}
           </button>
           <span className="mx-1 hidden h-4 w-px bg-zinc-700 sm:inline-block" aria-hidden />
           <button
             type="button"
             className={`${btn} ${prefs.rowDividers ? active : idle}`}
             onClick={() => setRowDividers(!prefs.rowDividers)}
-            title="Linie fină între rânduri"
+            title={tx("common.list.rowLinesTitle")}
           >
-            {prefs.rowDividers ? "Cu linii" : "Fără linii"}
+            {prefs.rowDividers ? tx("common.list.rowLinesOn") : tx("common.list.rowLinesOff")}
           </button>
         </div>
       ) : null}

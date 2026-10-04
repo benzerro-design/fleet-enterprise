@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { CostsDataGrid } from "@/components/fleet/CostsDataGrid";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
@@ -7,6 +8,8 @@ import { canWriteCosts, getAuthMeResult } from "@/lib/auth-server";
 import { costsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 
 type Search = {
   page?: string;
@@ -78,6 +81,8 @@ type Props = { searchParams: Promise<Search> };
 
 export default async function CostsPage({ searchParams }: Props) {
   const sp = await searchParams;
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const [data, auth] = await Promise.all([fetchRows(sp), getAuthMeResult()]);
   const write = canWriteCosts(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
@@ -105,10 +110,10 @@ export default async function CostsPage({ searchParams }: Props) {
         header={
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Operațional</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Costuri</h1>
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">{t(locale, "pages.costs.eyebrow")}</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t(locale, "pages.costs.title")}</h1>
               <p className="mt-3 text-zinc-400">
-                Filtrare după nr. înmatriculare/client, categorie, furnizor, text în categorie/note, interval dată, export CSV.
+                {t(locale, "pages.costs.description")}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -117,20 +122,20 @@ export default async function CostsPage({ searchParams }: Props) {
                   href="/fleet/costs/new"
                   className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
                 >
-                  Cost nou
+                  {t(locale, "pages.costs.newCost")}
                 </Link>
               ) : null}
               <a
                 href={exportHref}
                 className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
               >
-                Export CSV
+                {t(locale, "common.actions.exportCsv")}
               </a>
               <Link
                 href="/fleet/vehicles"
                 className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
               >
-                Înapoi la vehicule
+                {t(locale, "common.actions.backToVehicles")}
               </Link>
             </div>
           </div>
@@ -144,7 +149,7 @@ export default async function CostsPage({ searchParams }: Props) {
           >
             <input type="hidden" name="page" value="1" />
             <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Nr. înmatriculare</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "common.filters.registrationNumber")}</label>
               <input
                 name="registrationNumber"
                 defaultValue={sp.registrationNumber ?? ""}
@@ -153,7 +158,7 @@ export default async function CostsPage({ searchParams }: Props) {
               />
             </div>
             <div className="flex min-w-[10rem] flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Client</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "common.filters.client")}</label>
               <input
                 name="clientId"
                 defaultValue={sp.clientId ?? ""}
@@ -162,7 +167,7 @@ export default async function CostsPage({ searchParams }: Props) {
               />
             </div>
             <div className="flex min-w-[10rem] flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Categorie (exact)</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.costs.categoryExact")}</label>
               <input
                 name="category"
                 defaultValue={sp.category ?? ""}
@@ -171,7 +176,7 @@ export default async function CostsPage({ searchParams }: Props) {
               />
             </div>
             <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Furnizor</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.costs.provider")}</label>
               <input
                 name="provider"
                 defaultValue={sp.provider ?? ""}
@@ -180,16 +185,16 @@ export default async function CostsPage({ searchParams }: Props) {
               />
             </div>
             <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Căutare text</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "common.filters.searchText")}</label>
               <input
                 name="q"
                 defaultValue={sp.q ?? ""}
-                placeholder="Categorie, note…"
+                placeholder={t(locale, "pages.costs.searchPlaceholder")}
                 className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
               />
             </div>
             <div className="flex min-w-[9rem] flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Data de la</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.costs.dateFrom")}</label>
               <input
                 name="incurredFrom"
                 type="date"
@@ -198,7 +203,7 @@ export default async function CostsPage({ searchParams }: Props) {
               />
             </div>
             <div className="flex min-w-[9rem] flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Data până la</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.costs.dateTo")}</label>
               <input
                 name="incurredTo"
                 type="date"
@@ -207,7 +212,7 @@ export default async function CostsPage({ searchParams }: Props) {
               />
             </div>
             <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
-              Aplică
+              {t(locale, "common.actions.apply")}
             </button>
             <FilterResetLink href="/fleet/costs" />
           </form>

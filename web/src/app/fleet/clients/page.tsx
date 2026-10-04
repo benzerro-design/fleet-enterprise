@@ -10,7 +10,7 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
-import { clientsBrowserBase, type ClientListPayload } from "@/lib/clients-api";
+import { clientHealthHref, clientsBrowserBase, type ClientListPayload } from "@/lib/clients-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 
@@ -162,8 +162,16 @@ export default async function FleetClientsPage({ searchParams }: PageProps) {
                   <td className={`${fleetTdClass} font-mono text-zinc-400`}>{row.taxId ?? "—"}</td>
                   <td className={`${fleetTdClass} capitalize`}>{row.status}</td>
                   <td className={fleetTdClass}>{row.vehicleCount}</td>
-                  <td className={`${fleetTdClass} text-sm font-medium ${healthBadgeClass(row.healthLabel)}`}>
-                    {row.healthLabel ?? "OK"}
+                  <td className={`${fleetTdClass} text-sm font-medium`}>
+                    <Link
+                      href={clientHealthHref(row, {
+                        remindersActionCount: row.remindersActionCount,
+                        itpWithin30Days: row.itpWithin30Days,
+                      })}
+                      className={`hover:underline ${healthBadgeClass(row.healthLabel)}`}
+                    >
+                      {row.healthLabel ?? "OK"}
+                    </Link>
                   </td>
                   <td className={`${fleetTdClass} text-right`}>
                     <Link href={`/fleet/clients/${row.id}`} className="mr-3 text-zinc-400 hover:text-zinc-200 hover:underline">

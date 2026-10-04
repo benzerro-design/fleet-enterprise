@@ -34,13 +34,8 @@ import {
   withColumnWidth,
   writeTicketGridLayout,
 } from "@/lib/ticket-grid-columns";
-import {
-  ticketPriorityLabel,
-  ticketRoutingLabel,
-  ticketStatusLabel,
-  ticketTypeLabel,
-  type TicketRecord,
-} from "@/lib/tickets-api";
+import { ticketRoutingLabel, type TicketRecord } from "@/lib/tickets-api";
+import { useT } from "@/lib/i18n/useT";
 
 function formatAge(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -72,6 +67,7 @@ export function TicketDataGrid({
   exportHref,
   filterParams = {},
 }: Props) {
+  const tx = useT();
   const [layout, setLayout] = useState<TicketGridLayout>(() => readTicketGridLayout());
   const [showColumns, setShowColumns] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
@@ -173,7 +169,7 @@ export function TicketDataGrid({
                 type="checkbox"
                 checked={selected.has(row.id)}
                 onChange={() => toggleOne(row.id)}
-                aria-label={`Selectează #${row.displayId}`}
+                aria-label={`${tx("ops.grids.tickets.select")} #${row.displayId}`}
                 className="rounded border-zinc-600"
                 onClick={(e) => e.stopPropagation()}
               />
@@ -187,7 +183,7 @@ export function TicketDataGrid({
         return canPatch ? (
           <TicketInlinePatchCell ticket={row} field="status" />
         ) : (
-          <FleetGlyphTooltip label={ticketStatusLabel(row.status)}>
+          <FleetGlyphTooltip label={tx(`ops.grids.tickets.status.${row.status}`)}>
             <TicketStatusGlyph status={row.status} />
           </FleetGlyphTooltip>
         );
@@ -197,7 +193,7 @@ export function TicketDataGrid({
             {canPatch ? (
               <TicketInlinePatchCell ticket={row} field="priority" />
             ) : (
-              <FleetGlyphTooltip label={ticketPriorityLabel(row.priority)}>
+              <FleetGlyphTooltip label={tx(`ops.grids.tickets.priority.${row.priority}`)}>
                 <TicketPriorityGlyph priority={row.priority} />
               </FleetGlyphTooltip>
             )}
@@ -206,8 +202,8 @@ export function TicketDataGrid({
                 className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200 bg-amber-950/60 ring-1 ring-amber-800/60"
                 title={
                   row.slaStatus === "first_response_overdue"
-                    ? "Prim răspuns depășit"
-                    : "Rezolvare depășită"
+                    ? tx("ops.grids.tickets.sla.firstResponseOverdue")
+                    : tx("ops.grids.tickets.sla.resolveOverdue")
                 }
               >
                 SLA
@@ -217,7 +213,7 @@ export function TicketDataGrid({
         );
       case "type":
         return (
-          <FleetGlyphTooltip label={ticketTypeLabel(row.ticketType)}>
+          <FleetGlyphTooltip label={tx(`ops.grids.tickets.type.${row.ticketType}`)}>
             <TicketTypeGlyph type={row.ticketType} />
           </FleetGlyphTooltip>
         );
@@ -236,7 +232,7 @@ export function TicketDataGrid({
       case "vehicle":
         return (
           <span className="inline-flex items-center gap-1.5 font-mono text-zinc-300">
-            <FleetGlyphTooltip label="Vehicul">
+            <FleetGlyphTooltip label={tx("ops.grids.tickets.columns.vehicle")}>
               <TicketVehicleGlyph />
             </FleetGlyphTooltip>
             {row.registrationNumber ?? "—"}
@@ -295,15 +291,15 @@ export function TicketDataGrid({
   if (items.length === 0) {
     return (
       <FleetListEmptyState
-        title={hasFilters ? "Niciun tichet pentru filtrele curente" : "Niciun tichet încă"}
+        title={hasFilters ? tx("ops.grids.tickets.empty.filteredTitle") : tx("ops.grids.tickets.empty.title")}
         description={
           hasFilters
-            ? "Schimbă sau resetează filtrele ca să vezi alte rezultate."
-            : "Creează o solicitare nouă sau așteaptă primul tichet din inbox."
+            ? tx("ops.grids.tickets.empty.filteredDescription")
+            : tx("ops.grids.tickets.empty.description")
         }
         hasFilters={hasFilters}
         clearFiltersHref="/fleet/tickets"
-        primaryAction={canWrite ? { label: "Solicitare nouă", href: "/fleet/tickets/new" } : undefined}
+        primaryAction={canWrite ? { label: tx("ops.grids.tickets.empty.primaryAction"), href: "/fleet/tickets/new" } : undefined}
       />
     );
   }
@@ -319,7 +315,7 @@ export function TicketDataGrid({
           }}
           className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
         >
-          Coloane…
+          {tx("ops.grids.controls.columns")}
         </button>
         <TicketGridViewsPanel currentParams={filterParams} />
         <button
@@ -330,37 +326,37 @@ export function TicketDataGrid({
           }}
           className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
         >
-          Legendă iconițe
+          {tx("ops.grids.tickets.legend")}
         </button>
         {exportHref ? (
           <a
             href={exportHref}
             className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
           >
-            Export CSV
+            {tx("common.actions.exportCsv")}
           </a>
         ) : null}
       </div>
 
       {enableBulk && selected.size > 0 ? (
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-100">
-          <span className="font-medium">{selected.size} selectate</span>
+          <span className="font-medium">{tx("ops.grids.tickets.selectedCount").replace("{count}", String(selected.size))}</span>
           <button
             type="button"
             onClick={openSelected}
             className="rounded-md border border-emerald-700/60 px-2.5 py-1 hover:bg-emerald-900/50"
           >
-            Deschide (max 5)
+            {tx("ops.grids.tickets.openSelected")}
           </button>
           <button
             type="button"
             onClick={() => void copySelectedIds()}
             className="rounded-md border border-emerald-700/60 px-2.5 py-1 hover:bg-emerald-900/50"
           >
-            Copiază ID-uri
+            {tx("ops.grids.tickets.copyIds")}
           </button>
           <button type="button" onClick={() => setSelected(new Set())} className="text-emerald-400/80 hover:underline">
-            Debifează
+            {tx("ops.grids.tickets.clearSelection")}
           </button>
         </div>
       ) : null}
@@ -388,19 +384,19 @@ export function TicketDataGrid({
                         type="checkbox"
                         checked={allSelected}
                         onChange={toggleAll}
-                        aria-label="Selectează toate pe pagină"
+                        aria-label={tx("ops.grids.tickets.selectAll")}
                         className="rounded border-zinc-600"
                       />
                       <span>#</span>
                     </span>
                   ) : (
-                    col.label
+                    tx(`ops.grids.tickets.columns.${col.key}`)
                   )}
                   <span
                     role="separator"
                     aria-orientation="vertical"
-                    aria-label={`Redimensionează coloana ${col.label || col.key}`}
-                    title="Trage pentru lățime · dublu-click = reset"
+                    aria-label={`${tx("ops.grids.tickets.resizeColumn")} ${tx(`ops.grids.tickets.columns.${col.key}`) || col.key}`}
+                    title={tx("ops.grids.tickets.resizeHint")}
                     className={`absolute top-0 right-0 z-30 h-full w-1.5 cursor-col-resize hover:bg-emerald-500/40 ${
                       resizingKey === col.key ? "bg-emerald-500/50" : ""
                     }`}

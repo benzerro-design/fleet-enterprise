@@ -7,6 +7,7 @@ import {
   isSetupPillarActive,
   type SetupPillar,
 } from "@/lib/setup-pillars";
+import { useT } from "@/lib/i18n/useT";
 
 type SetupShellProps = {
   children: React.ReactNode;
@@ -18,18 +19,28 @@ type SetupShellProps = {
   actions?: React.ReactNode;
 };
 
-function PillarNavItem({ pillar, pathname }: { pillar: SetupPillar; pathname: string }) {
+function PillarNavItem({
+  pillar,
+  pathname,
+  tx,
+}: {
+  pillar: SetupPillar;
+  pathname: string;
+  tx: (key: string) => string;
+}) {
   const active = isSetupPillarActive(pathname, pillar);
   const base =
     "group flex flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors";
+  const label = tx(`pages.setup.pillars.${pillar.id}.label`);
+  const blurb = tx(`pages.setup.pillars.${pillar.id}.blurb`);
 
   if (pillar.status === "soon" || !pillar.href) {
     return (
       <div className={`${base} cursor-default opacity-55`} aria-disabled>
         <span className="flex items-center justify-between gap-2">
-          <span className="text-sm text-zinc-500">{pillar.label}</span>
+          <span className="text-sm text-zinc-500">{label}</span>
           <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">
-            Curând
+            {tx("pages.setup.soon")}
           </span>
         </span>
       </div>
@@ -46,9 +57,9 @@ function PillarNavItem({ pillar, pathname }: { pillar: SetupPillar; pathname: st
       }`}
       aria-current={active ? "page" : undefined}
     >
-      <span className="text-sm font-medium">{pillar.label}</span>
+      <span className="text-sm font-medium">{label}</span>
       {active ? (
-        <span className="text-[11px] leading-snug text-zinc-500">{pillar.blurb}</span>
+        <span className="text-[11px] leading-snug text-zinc-500">{blurb}</span>
       ) : null}
     </Link>
   );
@@ -59,6 +70,7 @@ function PillarNavItem({ pillar, pathname }: { pillar: SetupPillar; pathname: st
  * Doar L* (paginile părinte fac redirect dacă nu e admin).
  */
 export function SetupShell({ children, title, description, actions }: SetupShellProps) {
+  const tx = useT();
   const pathname = usePathname() ?? "";
   const isHead = pathname === "/fleet/setup" || pathname === "/fleet/setup/";
 
@@ -72,16 +84,16 @@ export function SetupShell({ children, title, description, actions }: SetupShell
               isHead ? "text-zinc-200" : "text-zinc-500 hover:text-zinc-300"
             }`}
           >
-            Setup
+            {tx("pages.setup.eyebrow")}
           </Link>
           <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-            Setări pentru tot abonatul. Politicile pe un client se editează pe fișa lui.
+            {tx("pages.setup.shellDescription")}
           </p>
         </div>
-        <nav className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible" aria-label="Piloni Setup">
+        <nav className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible" aria-label={tx("pages.setup.navAria")}>
           {SETUP_PILLARS.map((pillar) => (
             <div key={pillar.id} className="min-w-[9.5rem] shrink-0 lg:min-w-0">
-              <PillarNavItem pillar={pillar} pathname={pathname} />
+              <PillarNavItem pillar={pillar} pathname={pathname} tx={tx} />
             </div>
           ))}
         </nav>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ClientProfileTabs } from "@/components/fleet/ClientProfileTabs";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { clientHealthHref } from "@/lib/clients-api";
 import type { ClientDetailData } from "@/lib/client-detail-server";
 
 type Props = {
@@ -43,11 +44,15 @@ export function ClientDetailLayout({
             <span className="text-zinc-600">·</span>
             <span>{client.vehicleCount} vehicule</span>
             {client.healthLabel ? (
-              <span
-                className={`rounded-full border px-2 py-0.5 text-xs font-medium ${healthBadgeClass(client.healthLabel)}`}
+              <Link
+                href={clientHealthHref(client, {
+                  remindersActionCount: client.remindersActionCount,
+                  itpWithin30Days: client.itpWithin30Days,
+                })}
+                className={`rounded-full border px-2 py-0.5 text-xs font-medium hover:brightness-125 ${healthBadgeClass(client.healthLabel)}`}
               >
                 {client.healthLabel}
-              </span>
+              </Link>
             ) : null}
           </p>
         </div>

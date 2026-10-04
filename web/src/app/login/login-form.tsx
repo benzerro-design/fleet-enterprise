@@ -2,10 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { useT } from "@/lib/i18n/useT";
 
 type Props = { nextPath: string };
 
 export function LoginForm({ nextPath }: Props) {
+  const tx = useT();
   const router = useRouter();
   const [email, setEmail] = useState("admin@demo.local");
   const [tenantSlug, setTenantSlug] = useState("demo");
@@ -64,7 +66,7 @@ export function LoginForm({ nextPath }: Props) {
       router.replace(destination);
       router.refresh();
     } catch {
-      setError("Nu m-am putut conecta la server.");
+      setError(tx("auth.login.serverError"));
     } finally {
       setPending(false);
     }
@@ -79,7 +81,7 @@ export function LoginForm({ nextPath }: Props) {
       ) : null}
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Email</label>
+        <label className="block text-sm font-medium text-zinc-300">{tx("auth.login.email")}</label>
         <input
           required
           type="email"
@@ -92,31 +94,28 @@ export function LoginForm({ nextPath }: Props) {
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Abonat (slug)</label>
+        <label className="block text-sm font-medium text-zinc-300">{tx("auth.login.tenant")}</label>
         <input
           value={tenantSlug}
           onChange={(e) => setTenantSlug(e.target.value)}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-          placeholder="demo (opțional dacă ai un singur abonat)"
+          placeholder={tx("auth.login.tenantPlaceholder")}
           autoComplete="organization"
         />
         <p className="text-xs text-zinc-500">
-          Obligatoriu dacă utilizatorul are acces la mai mulți abonați; după seed, demo are un singur abonat. Viewer:
-          același abonat <span className="font-mono text-zinc-400">demo</span> și aceeași parolă demo ca administrator abonat (
-          <span className="font-mono text-zinc-400">demo12345</span>); dacă primești „Invalid credentials”, rulează
-          din nou <span className="font-mono text-zinc-400">npm run db:seed</span> în folderul API.
+          {tx("auth.login.tenantHint")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-300">Parolă</label>
+        <label className="block text-sm font-medium text-zinc-300">{tx("auth.login.password")}</label>
         <input
           required
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
-          placeholder="parola din baza de date (vezi seed)"
+          placeholder={tx("auth.login.passwordPlaceholder")}
           autoComplete="current-password"
         />
       </div>
@@ -126,7 +125,7 @@ export function LoginForm({ nextPath }: Props) {
         disabled={pending}
         className="w-full rounded-lg bg-emerald-500 py-2.5 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
       >
-        {pending ? "Conectare… (poate dura câteva secunde)" : "Intră"}
+        {pending ? tx("auth.login.pending") : tx("auth.login.submit")}
       </button>
     </form>
   );

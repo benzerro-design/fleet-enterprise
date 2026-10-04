@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { OPS_INPUT_CLASS } from "@/components/fleet/ops-form-primitives";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { SheetListGrid, type SheetCol } from "@/components/fleet/SheetListGrid";
 import { clientsBrowserBase, type ClientSupplierAllocationItem } from "@/lib/clients-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import {
@@ -23,7 +24,6 @@ export function ClientSupplierAllocationsEditor({ clientId, canWrite }: Props) {
   const [allocated, setAllocated] = useState<ClientSupplierAllocationItem[]>([]);
   const [catalog, setCatalog] = useState<SupplierRecord[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [q, setQ] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -58,17 +58,6 @@ export function ClientSupplierAllocationsEditor({ clientId, canWrite }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return catalog;
-    return catalog.filter(
-      (s) =>
-        s.legalName.toLowerCase().includes(needle) ||
-        s.code.toLowerCase().includes(needle) ||
-        (s.taxId ?? "").toLowerCase().includes(needle),
-    );
-  }, [catalog, q]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -107,6 +96,61 @@ export function ClientSupplierAllocationsEditor({ clientId, canWrite }: Props) {
     }
   }
 
+  type SupplierCol = "pick" | "name" | "code" | "category" | "status";
+  type SupplierGridRow = {
+    id: string;
+    legalName: string;
+    code: string;
+    category: string;
+    status: string;
+    taxId: string | null;
+  };
+
+  const WRITE_COLUMNS: SheetCol<SupplierCol>[] = [
+    { key: "pick", label: "Alocat", defaultVisible: true, canHide: false, width: "4.5rem" },
+    { key: "name", label: "Furnizor", defaultVisible: true, canHide: false, width: "34%" },
+    { key: "code", label: "Cod", defaultVisible: true, canHide: true, width: "16%" },
+    { key: "category", label: "Categorie", defaultVisible: true, canHide: true, width: "22%" },
+    { key: "status", label: "Status", defaultVisible: true, canHide: true, width: "14%" },
+  ];
+  const READ_COLUMNS = WRITE_COLUMNS.filter((c) => c.key !== "pick");
+
+  function renderSupplierCell(key: SupplierCol, s: SupplierGridRow, writable: boolean) {
+    if (key === "pick") {
+      return (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 text-emerald-500"
+          checked={selected.has(s.id)}
+          disabled={pending || !writable}
+          onChange={() => toggle(s.id)}
+          aria-label={`Alocă ${s.legalName}`}
+        />
+      );
+    }
+    if (key === "name") {
+      return (
+        <Link href={`/fleet/suppliers/${s.id}`} className="block truncate text-[13px] font-semibold text-zinc-100 hover:text-emerald-300 hover:underline">
+          {s.legalName}
+        </Link>
+      );
+    }
+    if (key === "code") return <span className="font-mono text-xs text-zinc-400">{s.code}</span>;
+    if (key === "category") {
+      return <span className="text-zinc-300">{supplierCategoryLabel(s.category as SupplierCategory)}</span>;
+    }
+    const active = s.status === "active";
+    return (
+      <span
+        className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${
+          active ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-zinc-500/40 bg-zinc-500/10 text-zinc-300"
+        }`}
+      >
+        {supplierStatusLabel(s.status as SupplierStatus)}
+      </span>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -122,61 +166,53 @@ export function ClientSupplierAllocationsEditor({ clientId, canWrite }: Props) {
 
       {canWrite ? (
         <>
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Caută furnizor…"
-            className={OPS_INPUT_CLASS}
+          <SheetListGrid
+            storageKey="fleet-client-suppliers-grid-v1"
+            pickerTitle="Coloane furnizori"
+            columns={WRITE_COLUMNS}
+            rows={catalog}
+            rowKey={(s) => s.id}
+            searchPlaceholder="Denumire, cod, CUI…"
+            searchText={(s) => `${s.legalName} ${s.code} ${s.taxId ?? ""}`}
+            statusOptions={[
+              { value: "active", label: "Activ" },
+              { value: "inactive", label: "Inactiv" },
+              { value: "blocked", label: "Blocat" },
+            ]}
+            rowStatus={(s) => s.status}
+            toolbarEnd={
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void save()}
+                className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+              >
+                {pending ? "Se salvează…" : "Salvează alocarea"}
+              </button>
+            }
+            empty={<p>Niciun furnizor pentru filtrele curente.</p>}
+            renderCell={(key, s) => renderSupplierCell(key, s, true)}
           />
-          {filtered.length === 0 ? (
-            <p className="text-sm text-zinc-500">Niciun furnizor de alocat.</p>
-          ) : (
-            <ul className="max-h-96 divide-y divide-zinc-800/80 overflow-y-auto rounded-lg border border-zinc-800">
-              {filtered.map((s) => (
-                <li key={s.id}>
-                  <label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm hover:bg-zinc-900/60">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={selected.has(s.id)}
-                      disabled={pending}
-                      onChange={() => toggle(s.id)}
-                    />
-                    <span>
-                      <span className="font-medium text-zinc-100">{s.legalName}</span>
-                      <span className="mt-0.5 block font-mono text-xs text-zinc-500">
-                        {s.code} · {supplierCategoryLabel(s.category)} · {supplierStatusLabel(s.status)}
-                      </span>
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => void save()}
-            className="rounded-lg border border-emerald-600/50 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-100 disabled:opacity-50"
-          >
-            {pending ? "Se salvează…" : "Salvează alocarea"}
-          </button>
         </>
-      ) : allocated.length === 0 ? (
-        <p className="text-sm text-zinc-500">Niciun furnizor alocat acestui client.</p>
       ) : (
-        <ul className="divide-y divide-zinc-800/80 rounded-lg border border-zinc-800">
-          {allocated.map((s) => (
-            <li key={s.supplierId} className="px-3 py-2 text-sm">
-              <p className="font-medium text-zinc-100">{s.legalName}</p>
-              <p className="mt-0.5 font-mono text-xs text-zinc-500">
-                {s.code} · {supplierCategoryLabel(s.category as SupplierCategory)} ·{" "}
-                {supplierStatusLabel(s.status as SupplierStatus)}
-              </p>
-            </li>
-          ))}
-        </ul>
+        <SheetListGrid
+          storageKey="fleet-client-suppliers-readonly-grid-v1"
+          pickerTitle="Coloane furnizori"
+          columns={READ_COLUMNS}
+          rows={allocated.map((s) => ({
+            id: s.supplierId,
+            legalName: s.legalName,
+            code: s.code,
+            category: s.category,
+            status: s.status,
+            taxId: null as string | null,
+          }))}
+          rowKey={(s) => s.id}
+          searchPlaceholder="Denumire, cod…"
+          searchText={(s) => `${s.legalName} ${s.code}`}
+          empty={<p>Niciun furnizor alocat acestui client.</p>}
+          renderCell={(key, s) => renderSupplierCell(key, s, false)}
+        />
       )}
     </div>
   );

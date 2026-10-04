@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { SchedulerShell } from "@/components/fleet/scheduler/SchedulerShell";
@@ -9,6 +10,8 @@ import { parsePartnerSupplierQuery, partnerSupplierSearchParams } from "@/lib/pa
 import { primarySupplierMembership } from "@/lib/partner-auth";
 import type { SupplierListPayload } from "@/lib/suppliers-api";
 import { parseSchedulerFlagParam, parseSchedulerInboxParam, parseSchedulerViewParam } from "@/lib/scheduler-deep-link";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 async function loadStats(supplierQuery: ReturnType<typeof parsePartnerSupplierQuery>): Promise<AppointmentStats | null> {
@@ -52,6 +55,8 @@ type PageProps = {
 
 export default async function PartnerAppointmentsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const supplierQuery = parsePartnerSupplierQuery(sp);
   const extraSearch = partnerSupplierSearchParams(supplierQuery).toString();
   const initialViewMode = parseSchedulerViewParam(sp.view);
@@ -96,6 +101,11 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
     registrationNumber: v.registrationNumber,
     clientId: v.clientId,
   }));
+  const supplierLabel =
+    membership?.supplierCode ??
+    (suppliers.length === 1
+      ? suppliers[0].code
+      : t(locale, "pages.partner.suppliersCount").replace("{count}", String(suppliers.length)));
 
   return (
     <FleetPageMain fill>
@@ -104,17 +114,19 @@ export default async function PartnerAppointmentsPage({ searchParams }: PageProp
         listSurface={false}
         header={
           <div>
-            <p className="text-sm font-medium uppercase tracking-widest text-violet-400">Portal partener</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Programator</h1>
+            <p className="text-sm font-medium uppercase tracking-widest text-violet-400">{t(locale, "pages.partner.portal")}</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t(locale, "pages.partner.appointments.title")}</h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Programări service — listă + calendar, propunere de slot, validare și altă oră pe{" "}
-              {membership?.supplierCode ?? (suppliers.length === 1 ? suppliers[0].code : `${suppliers.length} furnizori`)}.
+              {t(locale, "pages.partner.appointments.description").replace(
+                "{supplier}",
+                supplierLabel,
+              )}
             </p>
           </div>
         }
       >
         <div className="flex min-h-[calc(100vh-16rem)] flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/30">
-          <Suspense fallback={<p className="p-6 text-sm text-zinc-500">Se încarcă programatorul…</p>}>
+          <Suspense fallback={<p className="p-6 text-sm text-zinc-500">{t(locale, "pages.partner.appointments.loading")}</p>}>
             <SchedulerShell
               canWrite={canWrite}
               initialStats={stats}

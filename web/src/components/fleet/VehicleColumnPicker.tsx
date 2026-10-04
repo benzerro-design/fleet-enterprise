@@ -3,22 +3,26 @@
 import {
   defaultVehicleGridLayout,
   VEHICLE_GRID_COLUMNS,
+  type VehicleGridColumnDef,
   type VehicleGridColumnKey,
   type VehicleGridLayout,
   writeVehicleGridLayout,
 } from "@/lib/vehicle-grid-columns";
+import { useT } from "@/lib/i18n/useT";
 
 type Props = {
   layout: VehicleGridLayout;
+  columns?: VehicleGridColumnDef[];
   onChange: (layout: VehicleGridLayout) => void;
   onClose: () => void;
 };
 
-export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
+export function VehicleColumnPicker({ layout, columns = VEHICLE_GRID_COLUMNS, onChange, onClose }: Props) {
+  const tx = useT();
   const hidden = new Set(layout.hidden);
 
   function toggle(key: VehicleGridColumnKey) {
-    const def = VEHICLE_GRID_COLUMNS.find((c) => c.key === key);
+    const def = columns.find((c) => c.key === key);
     if (!def?.canHide) return;
     const nextHidden = new Set(layout.hidden);
     if (nextHidden.has(key)) nextHidden.delete(key);
@@ -49,17 +53,17 @@ export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
   return (
     <div className="rounded-xl border border-zinc-700 bg-zinc-950 p-4 shadow-xl">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium text-zinc-100">Coloane listă vehicule</h3>
+        <h3 className="text-sm font-medium text-zinc-100">{tx("ops.grids.vehicles.columnPickerTitle")}</h3>
         <button type="button" onClick={onClose} className="text-xs text-zinc-500 hover:text-zinc-300">
-          Închide
+          {tx("common.close")}
         </button>
       </div>
       <p className="mb-2 text-[11px] text-zinc-500">
-        Arată / ascunde și reordonare (↑ ↓). Preferința rămâne pe acest browser.
+        {tx("ops.grids.columnPicker.description")}
       </p>
       <div className="mb-3 flex flex-wrap gap-x-4 gap-y-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
         <span className="w-full text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-          Delimitare
+          {tx("ops.grids.columnPicker.dividers")}
         </span>
         <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
           <input
@@ -72,7 +76,7 @@ export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
               writeVehicleGridLayout(next);
             }}
           />
-          Linii orizontale
+          {tx("ops.grids.controls.rowLines")}
         </label>
         <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
           <input
@@ -85,12 +89,12 @@ export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
               writeVehicleGridLayout(next);
             }}
           />
-          Linii verticale
+          {tx("ops.grids.controls.colLines")}
         </label>
       </div>
       <ul className="max-h-72 space-y-1 overflow-y-auto">
         {layout.order.map((key) => {
-          const def = VEHICLE_GRID_COLUMNS.find((c) => c.key === key);
+          const def = columns.find((c) => c.key === key);
           if (!def) return null;
           const isHidden = hidden.has(key);
           return (
@@ -104,7 +108,7 @@ export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
                   type="button"
                   className="rounded border border-zinc-700 px-1.5 py-0.5 hover:bg-zinc-800"
                   onClick={() => move(key, -1)}
-                  aria-label={`Mută ${def.label} în sus`}
+                  aria-label={`${tx("ops.grids.columnPicker.moveUp")} ${def.label}`}
                 >
                   ↑
                 </button>
@@ -112,7 +116,7 @@ export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
                   type="button"
                   className="rounded border border-zinc-700 px-1.5 py-0.5 hover:bg-zinc-800"
                   onClick={() => move(key, 1)}
-                  aria-label={`Mută ${def.label} în jos`}
+                  aria-label={`${tx("ops.grids.columnPicker.moveDown")} ${def.label}`}
                 >
                   ↓
                 </button>
@@ -124,10 +128,10 @@ export function VehicleColumnPicker({ layout, onChange, onClose }: Props) {
                     } hover:bg-zinc-800`}
                     onClick={() => toggle(key)}
                   >
-                    {isHidden ? "Arată" : "Ascunde"}
+                    {isHidden ? tx("ops.grids.columnPicker.show") : tx("ops.grids.columnPicker.hide")}
                   </button>
                 ) : (
-                  <span className="px-1.5 py-0.5 text-[10px] text-zinc-600">obligatoriu</span>
+                  <span className="px-1.5 py-0.5 text-[10px] text-zinc-600">{tx("ops.grids.columnPicker.required")}</span>
                 )}
               </div>
             </li>

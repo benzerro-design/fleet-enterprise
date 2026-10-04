@@ -1,10 +1,4 @@
-import {
-  FleetDataTable,
-  fleetTableClass,
-  fleetTdClass,
-  fleetThClass,
-  fleetTheadClass,
-} from "@/components/fleet/fleet-data-table";
+import { SheetListGrid, type SheetCol } from "@/components/fleet/SheetListGrid";
 import { formatRonFromCents } from "@/lib/money";
 import type { ClientSubscriptionRow } from "@/lib/clients-api";
 import {
@@ -20,6 +14,18 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+type Col = "plan" | "code" | "cycle" | "price" | "from" | "to" | "status";
+
+const COLUMNS: SheetCol<Col>[] = [
+  { key: "plan", label: "Plan", defaultVisible: true, canHide: false, width: "28%" },
+  { key: "code", label: "Cod", defaultVisible: true, canHide: true, width: "12%" },
+  { key: "cycle", label: "Ciclu", defaultVisible: true, canHide: true, width: "12%" },
+  { key: "price", label: "Preț", defaultVisible: true, canHide: true, width: "14%", align: "right" },
+  { key: "from", label: "De la", defaultVisible: true, canHide: true, width: "12%" },
+  { key: "to", label: "Până la", defaultVisible: true, canHide: true, width: "12%" },
+  { key: "status", label: "Status", defaultVisible: true, canHide: true, width: "12%" },
+];
+
 type Props = {
   subscriptions: ClientSubscriptionRow[];
 };
@@ -31,63 +37,59 @@ export function ClientSubscriptionTab({ subscriptions }: Props) {
         <p className="text-sm font-medium text-zinc-300">Niciun plan tarifar aplicat</p>
         <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">
           Planurile tarifare ale clientului vor apărea aici după configurare din{" "}
-          <span className="text-zinc-400">Setări → Clienți</span> (superadmin) — funcționalitate planificată.
+          <span className="text-zinc-400">Setări → Clienți</span> (superadmin).
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-zinc-400">
-        Planuri tarifare active sau programate pentru acest client.
-      </p>
-      <FleetDataTable>
-        <table className={fleetTableClass}>
-          <thead className={fleetTheadClass}>
-            <tr>
-              <th className={fleetThClass}>Plan</th>
-              <th className={fleetThClass}>Cod</th>
-              <th className={fleetThClass}>Ciclu</th>
-              <th className={fleetThClass}>Preț</th>
-              <th className={fleetThClass}>Valabil de la</th>
-              <th className={fleetThClass}>Valabil până</th>
-              <th className={fleetThClass}>Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/80">
-            {subscriptions.map((row) => (
-              <tr key={row.assignmentId} className="text-zinc-200">
-                <td className={fleetTdClass}>
-                  <div>
-                    <p className="font-medium text-zinc-100">{row.plan.name}</p>
-                    {row.plan.description?.trim() ? (
-                      <p className="mt-0.5 text-xs text-zinc-500">{row.plan.description}</p>
-                    ) : null}
-                    {row.notes?.trim() ? (
-                      <p className="mt-1 text-xs text-zinc-500">Notă: {row.notes}</p>
-                    ) : null}
-                  </div>
-                </td>
-                <td className={`${fleetTdClass} font-mono text-sm text-zinc-400`}>{row.plan.code}</td>
-                <td className={fleetTdClass}>{billingCycleLabel(row.plan.billingCycle)}</td>
-                <td className={`${fleetTdClass} font-mono`}>
-                  {formatRonFromCents(row.plan.priceCents)} {row.plan.currency}
-                </td>
-                <td className={`${fleetTdClass} text-zinc-400`}>{formatDate(row.effectiveFrom)}</td>
-                <td className={`${fleetTdClass} text-zinc-400`}>{formatDate(row.effectiveTo)}</td>
-                <td className={fleetTdClass}>
-                  <span
-                    className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${planAssignmentStatusClass(row.status)}`}
-                  >
-                    {planAssignmentStatusLabel(row.status)}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </FleetDataTable>
-    </div>
+    <SheetListGrid
+      storageKey="fleet-client-subscription-grid-v1"
+      pickerTitle="Coloane abonament"
+      columns={COLUMNS}
+      rows={subscriptions}
+      rowKey={(row) => row.assignmentId}
+      searchPlaceholder="Plan, cod…"
+      searchText={(row) => `${row.plan.name} ${row.plan.code} ${row.notes ?? ""}`}
+      statusOptions={[
+        { value: "active", label: "Activ" },
+        { value: "scheduled", label: "Programat" },
+        { value: "expired", label: "Expirat" },
+        { value: "cancelled", label: "Anulat" },
+      ]}
+      rowStatus={(row) => row.status}
+      empty={<p>Niciun plan pentru filtrele curente.</p>}
+      renderCell={(key, row) => {
+        if (key === "plan") {
+          return (
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold text-zinc-100">{row.plan.name}</p>
+              <p className="mt-0.5 truncate text-xs text-zinc-500">
+                {row.plan.description?.trim() || row.notes?.trim() || "—"}
+              </p>
+            </div>
+          );
+        }
+        if (key === "code") return <span className="font-mono text-xs text-zinc-400">{row.plan.code}</span>;
+        if (key === "cycle") return <span className="text-zinc-300">{billingCycleLabel(row.plan.billingCycle)}</span>;
+        if (key === "price") {
+          return (
+            <span className="font-mono tabular-nums text-zinc-200">
+              {formatRonFromCents(row.plan.priceCents)} {row.plan.currency}
+            </span>
+          );
+        }
+        if (key === "from") return <span className="text-zinc-400">{formatDate(row.effectiveFrom)}</span>;
+        if (key === "to") return <span className="text-zinc-400">{formatDate(row.effectiveTo)}</span>;
+        return (
+          <span
+            className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${planAssignmentStatusClass(row.status)}`}
+          >
+            {planAssignmentStatusLabel(row.status)}
+          </span>
+        );
+      }}
+    />
   );
 }

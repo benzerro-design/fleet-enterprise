@@ -15,10 +15,7 @@ import {
   formatLineDiscount,
   computeQuoteLineMoney,
   quoteDisplayName,
-  quoteLineTypeLabel,
   quoteLinesIncludedInTotals,
-  quoteParseStatusLabel,
-  quoteStatusLabel,
   workOrdersBrowserBase,
   type QuoteLineApprovalStatus,
   type QuoteLineInput,
@@ -36,6 +33,7 @@ import {
   type PartsPriceBasis,
 } from "@/lib/supplier-rate-card";
 import { supplierMenuLineTypeLabel, type SupplierMenuItemRecord } from "@/lib/suppliers-api";
+import { useT } from "@/lib/i18n/useT";
 
 type SupplierDiscountDefaults = {
   partsDiscountPercent: number;
@@ -208,6 +206,7 @@ function QuoteSubtotals({
   gross,
   rejectedCount = 0,
   currency = "RON",
+  tx,
 }: {
   labor: number;
   parts: number;
@@ -216,35 +215,42 @@ function QuoteSubtotals({
   gross: number;
   rejectedCount?: number;
   currency?: string;
+  tx: (key: string) => string;
 }) {
   const net = labor + parts + other;
+  const quoteT = (key: string) => tx(`workOrders.quote.${key}`);
   return (
     <div className="ml-auto w-full max-w-xs space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-sm">
       <p className="pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-        Subtotaluri (inclusiv TVA pe linie)
+        {quoteT("subtotals.title")}
       </p>
-      <SubtotalRow label="Subtotal manoperă" cents={labor} currency={currency} />
-      <SubtotalRow label="Subtotal piese" cents={parts} currency={currency} />
-      <SubtotalRow label="Subtotal altele" cents={other} currency={currency} />
+      <SubtotalRow label={quoteT("subtotals.labor")} cents={labor} currency={currency} />
+      <SubtotalRow label={quoteT("subtotals.parts")} cents={parts} currency={currency} />
+      <SubtotalRow label={quoteT("subtotals.other")} cents={other} currency={currency} />
       <div className="border-t border-zinc-800 pt-1">
-        <SubtotalRow label="Total net" cents={net} currency={currency} />
+        <SubtotalRow label={quoteT("subtotals.net")} cents={net} currency={currency} />
       </div>
-      <SubtotalRow label="TVA" cents={vat} currency={currency} />
-      <SubtotalRow label="Total brut" cents={gross} currency={currency} bold />
+      <SubtotalRow label={quoteT("subtotals.vat")} cents={vat} currency={currency} />
+      <SubtotalRow label={quoteT("subtotals.gross")} cents={gross} currency={currency} bold />
       {rejectedCount > 0 ? (
         <p className="pt-1 text-[11px] text-zinc-500">
-          Fără {rejectedCount} {rejectedCount === 1 ? "linie respinsă" : "linii respinse"}
+          {quoteT("subtotals.withoutRejected")
+            .replace("{count}", String(rejectedCount))
+            .replace(
+              "{lines}",
+              rejectedCount === 1 ? quoteT("subtotals.rejectedLineOne") : quoteT("subtotals.rejectedLineMany"),
+            )}
         </p>
       ) : null}
     </div>
   );
 }
 
-function QuoteStatusStepper({ status }: { status: WorkOrderQuoteStatus }) {
+function QuoteStatusStepper({ status, tx }: { status: WorkOrderQuoteStatus; tx: (key: string) => string }) {
   const steps: { id: WorkOrderQuoteStatus | "sent"; label: string }[] = [
-    { id: "draft", label: "Ciornă" },
-    { id: "submitted", label: "Trimis" },
-    { id: "approved", label: "Aprobat" },
+    { id: "draft", label: tx("workOrders.quote.status.draft") },
+    { id: "submitted", label: tx("workOrders.quote.status.sent") },
+    { id: "approved", label: tx("workOrders.quote.status.approved") },
   ];
   const order: Record<string, number> = {
     draft: 0,
@@ -272,7 +278,7 @@ function QuoteStatusStepper({ status }: { status: WorkOrderQuoteStatus }) {
                       : "border-zinc-800 text-zinc-600"
               }`}
             >
-              {status === "rejected" && s.id === "submitted" ? "Respins" : s.label}
+              {status === "rejected" && s.id === "submitted" ? tx("workOrders.quote.status.rejected") : s.label}
             </span>
           </span>
         );
@@ -302,19 +308,6 @@ function SubtotalRow({
 
 const sheetBtnClass =
   "inline-flex h-7 items-center justify-center rounded border px-2.5 text-xs whitespace-nowrap disabled:opacity-50";
-
-const partsOrderLabels: Record<QuotePartsOrderStatus, string> = {
-  none: "Nicio comandă",
-  ordered: "Comandate",
-  in_stock: "Sosite (în stoc)",
-  delivered: "Livrate la atelier",
-};
-
-const approvalLabels: Record<QuoteLineApprovalStatus, string> = {
-  pending: "În așteptare",
-  approved: "Aprobată",
-  rejected: "Respinsă",
-};
 
 function statusBadgeClass(status: WorkOrderQuoteStatus): string {
   switch (status) {
@@ -421,6 +414,32 @@ export function WorkOrderQuotePanel({
   supplierDiscounts = null,
   supplierMenuItems = [],
 }: Props) {
+  const tx = useT();
+  const quoteT = (key: string) => tx(`workOrders.quote.${key}`);
+  const formatMsg = (key: string, values: Record<string, string | number>) => {
+    let text = quoteT(key);
+    for (const [name, value] of Object.entries(values)) {
+      text = text.replace(`{${name}}`, String(value));
+    }
+    return text;
+  };
+  const quoteStatus = (status: WorkOrderQuoteStatus | string) => {
+    const key = `workOrders.quote.status.${status}`;
+    const translated = tx(key);
+    return translated === key ? status : translated;
+  };
+  const quoteParseStatus = (status: WorkOrderQuoteParseStatus | string) => {
+    const key = `workOrders.quote.parseStatus.${status}`;
+    const translated = tx(key);
+    return translated === key ? status : translated;
+  };
+  const quoteLineType = (lineType: QuoteLineInput["lineType"] | string) => {
+    const key = `workOrders.quote.lineTypes.${lineType}`;
+    const translated = tx(key);
+    return translated === key ? lineType : translated;
+  };
+  const partsOrderLabel = (status: QuotePartsOrderStatus) => quoteT(`partsOrder.${status}`);
+  const approvalLabel = (status: QuoteLineApprovalStatus) => quoteT(`approvalStatus.${status}`);
   const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -467,16 +486,14 @@ export function WorkOrderQuotePanel({
   const saveEstimatedRepair = useCallback(async (): Promise<boolean> => {
     const iso = toIsoFromDateInput(estimatedDate);
     if (!iso) {
-      setError("Completați data estimativă de finalizare reparație.");
+      setError(quoteT("errors.estimatedRepairRequired"));
       return false;
     }
     // Deja setată pe WO (ex. la Deviz 1) — nu mai PATCH; altfel API blochează după quote submitted.
     if (estimatedRepairAt && toDateInput(estimatedRepairAt) === estimatedDate) return true;
     if (estimatedRepairAt) {
       // Altă zi decât cea salvată: după Deviz 1 trimis/aprobat API refuză schimbarea.
-      setError(
-        "Estimarea e deja setată pe comandă (din Deviz 1). Nu o puteți schimba după ce un deviz a fost trimis — Trimite fără a modifica data.",
-      );
+      setError(quoteT("errors.estimatedRepairLocked"));
       return false;
     }
     setPending(true);
@@ -494,7 +511,7 @@ export function WorkOrderQuotePanel({
       router.refresh();
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Eroare la salvarea estimării");
+      setError(e instanceof Error ? e.message : quoteT("errors.saveEstimateFailed"));
       return false;
     } finally {
       setPending(false);
@@ -649,15 +666,15 @@ export function WorkOrderQuotePanel({
       };
       for (const line of payload.lines) {
         if (!line.description?.trim()) {
-          setError("Completați descrierea pentru toate liniile.");
+          setError(quoteT("errors.descriptionRequired"));
           return;
         }
         if (requirePartCode && line.lineType === "parts" && !line.partCodeExempt && !line.partNumber?.trim()) {
-          setError("Completați codul piesei sau bifați „fără cod”.");
+          setError(quoteT("errors.partCodeRequired"));
           return;
         }
         if (!Number.isFinite(line.unitNetCents) || line.unitNetCents < 0) {
-          setError("Preț unitar invalid.");
+          setError(quoteT("errors.invalidUnitPrice"));
           return;
         }
       }
@@ -694,14 +711,12 @@ export function WorkOrderQuotePanel({
     if (ticketSettlement) {
       const kind =
         ticketSettlement.entityType === "maintenance"
-          ? "Mentenanță"
+          ? quoteT("labels.maintenance")
           : ticketSettlement.entityType === "cost"
-            ? "Cost"
-            : "Document";
+            ? quoteT("labels.cost")
+            : quoteT("labels.document");
       const date = new Date(ticketSettlement.createdAt).toLocaleDateString("ro-RO");
-      const ok = window.confirm(
-        `ATENȚIE: această reparație a fost transformată în ${kind} la data ${date}.\n\nSunteți sigur că vreți să generați încă un cost din deviz?`,
-      );
+      const ok = window.confirm(formatMsg("confirm.generateCostAgain", { kind, date }));
       if (!ok) return;
     }
     setPending(true);
@@ -786,7 +801,7 @@ export function WorkOrderQuotePanel({
     try {
       let body: string | undefined;
       if (action === "reject") {
-        const reason = window.prompt("Motiv respingere (opțional):") ?? "";
+        const reason = window.prompt(quoteT("prompts.rejectReason")) ?? "";
         body = JSON.stringify({ reason });
       } else if (action === "approve" && approveBody) {
         body = JSON.stringify(approveBody);
@@ -814,11 +829,11 @@ export function WorkOrderQuotePanel({
       await load(submittedId);
       setQuotePane("lines");
       if (action === "submit") {
-        setOk("Deviz trimis — se așteaptă aprobarea. Managerul / adminul poate aproba pe tichet sau pe acest WO.");
+        setOk(quoteT("messages.sent"));
       } else if (action === "approve") {
-        setOk("Deviz aprobat.");
+        setOk(quoteT("messages.approved"));
       } else {
-        setOk("Deviz respins.");
+        setOk(quoteT("messages.rejected"));
       }
       setLineDecisions({});
       router.refresh();
@@ -832,15 +847,11 @@ export function WorkOrderQuotePanel({
     const submittedId = activeQuote.id;
     const iso = toIsoFromDateInput(estimatedDate);
     if (!iso) {
-      setError("Alegeți noua dată estimativă de finalizare reparație înainte de retrimitere.");
+      setError(quoteT("errors.chooseNewEstimateBeforeResubmit"));
       return;
     }
     const estLabel = formatDateRo(iso);
-    if (
-      !window.confirm(
-        `Retrimiți acest deviz spre aprobare?\n\nNoua estimare finalizare: ${estLabel}\nData trimiterii se actualizează.`,
-      )
-    ) {
+    if (!window.confirm(formatMsg("confirm.resubmit", { date: estLabel }))) {
       return;
     }
     setPending(true);
@@ -871,7 +882,7 @@ export function WorkOrderQuotePanel({
       setQuotePane("lines");
       setLineDecisions({});
       const nextLabel = data.estimatedRepairAt ? formatDateRo(data.estimatedRepairAt) : estLabel;
-      setOk(`Deviz retrimis — se așteaptă aprobarea. Estimare finalizare: ${nextLabel}.`);
+      setOk(formatMsg("messages.resubmitted", { date: nextLabel }));
       router.refresh();
     } finally {
       setPending(false);
@@ -882,7 +893,7 @@ export function WorkOrderQuotePanel({
     if (!activeQuote || !canMoveQuote || !hasLucrare2) return;
     const current = quoteLucrareIndex(activeQuote);
     if (target === current) {
-      setOk(`Devizul e deja pe L${target}.`);
+      setOk(formatMsg("messages.quoteAlreadyOnTrack", { track: target }));
       setMovePickerOpen(false);
       return;
     }
@@ -912,7 +923,7 @@ export function WorkOrderQuotePanel({
       setMovePickerOpen(false);
       await load(activeQuote.id);
       onLucrareTrackChange?.(target);
-      setOk(`Deviz mutat pe L${target}.`);
+      setOk(formatMsg("messages.quoteMoved", { track: target }));
       router.refresh();
     } finally {
       setPending(false);
@@ -921,7 +932,7 @@ export function WorkOrderQuotePanel({
 
   async function deleteDraft() {
     if (!activeQuote || activeQuote.status !== "draft") return;
-    if (!window.confirm(`Ștergi ciorna „${quoteDisplayName(activeQuote)}”? Acțiunea e ireversibilă.`)) {
+    if (!window.confirm(formatMsg("confirm.deleteDraft", { quote: quoteDisplayName(activeQuote) }))) {
       return;
     }
     setPending(true);
@@ -948,7 +959,7 @@ export function WorkOrderQuotePanel({
       setCreatingNew(false);
       setEditingDraftId(null);
       await load();
-      setOk("Ciornă ștearsă.");
+      setOk(quoteT("messages.deletedDraft"));
     } finally {
       setPending(false);
     }
@@ -984,11 +995,11 @@ export function WorkOrderQuotePanel({
     if (!activeQuote) return;
     const decisions = activeQuote.lines.map((line) => ({ lineId: line.id, status: lineDecisions[line.id] }));
     if (decisions.some((line) => !line.status)) {
-      setError("Alegeți aprobat/respins pentru fiecare linie.");
+      setError(quoteT("errors.chooseLineDecision"));
       return;
     }
     if (!decisions.some((line) => line.status === "approved")) {
-      setError("Selecția trebuie să conțină cel puțin o linie aprobată.");
+      setError(quoteT("errors.selectApprovedLine"));
       return;
     }
     await quoteAction("approve", {
@@ -1018,7 +1029,7 @@ export function WorkOrderQuotePanel({
       }
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Eroare la actualizarea pieselor");
+      setError(e instanceof Error ? e.message : quoteT("errors.updatePartsFailed"));
     } finally {
       setPending(false);
     }
@@ -1042,8 +1053,8 @@ export function WorkOrderQuotePanel({
       setError(null);
       setOk(
         hasLucrare2 && track !== lucrareTrack
-          ? `Există deja o ciornă pe L${track} — o deschidem pentru editare.`
-          : "Există deja o ciornă — o deschidem pentru editare.",
+          ? formatMsg("messages.draftExistsOnTrack", { track })
+          : quoteT("messages.draftExists"),
       );
       return;
     }
@@ -1058,7 +1069,7 @@ export function WorkOrderQuotePanel({
     setQuotePane("lines");
     setActiveTab("quote");
     setError(null);
-    setOk(`Ciornă nouă pe ${hasLucrare2 ? `L${lucrareTrack}` : "comandă"} — completați liniile și salvați.`);
+    setOk(formatMsg("messages.newDraft", { target: hasLucrare2 ? `L${lucrareTrack}` : quoteT("labels.order") }));
   }
 
   function addMenuLine() {
@@ -1086,7 +1097,7 @@ export function WorkOrderQuotePanel({
           }));
 
     if (!payloadLines.some((l) => l.lineType === "parts")) {
-      setError("Nu există linii de tip piese de verificat.");
+      setError(quoteT("errors.noPartsLines"));
       return;
     }
 
@@ -1108,7 +1119,7 @@ export function WorkOrderQuotePanel({
       for (const row of data.lines) byKey[row.key] = row;
       setPriceVerifyByKey(byKey);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Verificare preț eșuată");
+      setError(e instanceof Error ? e.message : quoteT("errors.priceVerifyFailed"));
       setPriceVerify(null);
       setPriceVerifyByKey({});
     } finally {
@@ -1151,7 +1162,7 @@ export function WorkOrderQuotePanel({
       .filter(([, on]) => on)
       .map(([id]) => id);
     if (!lineIds.length) {
-      setError("Selectează cel puțin o linie de piese.");
+      setError(quoteT("errors.choosePartsLine"));
       return;
     }
     setPending(true);
@@ -1190,7 +1201,7 @@ export function WorkOrderQuotePanel({
       await load();
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Lansare comenzi eșuată");
+      setError(e instanceof Error ? e.message : quoteT("errors.launchFailed"));
     } finally {
       setPending(false);
     }
@@ -1199,7 +1210,7 @@ export function WorkOrderQuotePanel({
   if (quotes === undefined) {
     return (
       <section className={sheetLayout ? "border-t border-zinc-800 p-4" : "mt-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4"}>
-        <p className="text-sm text-zinc-500">Se încarcă devizele…</p>
+        <p className="text-sm text-zinc-500">{quoteT("messages.loading")}</p>
       </section>
     );
   }
@@ -1214,7 +1225,7 @@ export function WorkOrderQuotePanel({
         <div className="mb-4 space-y-2">
           <div className="flex flex-nowrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-              Lucrare
+              {quoteT("labels.work")}
             </span>
             <span className="shrink-0 text-sm font-semibold text-zinc-200">
               {hasLucrare2 ? `L${lucrareTrack}` : "L1"}
@@ -1225,31 +1236,31 @@ export function WorkOrderQuotePanel({
                 disabled={pending}
                 onClick={() => onStartNewLucrare()}
                 className={`${sheetBtnClass} border-amber-600/50 bg-amber-950/40 font-semibold text-amber-100 hover:bg-amber-950/60`}
-                title="Deschide L2 după Lucrare gata pe L1 — apoi adăugați Deviz pe L2"
+                title={quoteT("tooltips.newWork")}
               >
-                Lucrare nouă
+                {quoteT("actions.newWork")}
               </button>
             ) : null}
             <span className="min-w-2 flex-1" />
           </div>
           <div className="flex flex-nowrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-              Deviz
+              {quoteT("labels.quote")}
             </span>
             {activeQuote ? (
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusBadgeClass(activeQuote.status)}`}>
-                  v{activeQuote.version} · {quoteStatusLabel(activeQuote.status)}
+                  v{activeQuote.version} · {quoteStatus(activeQuote.status)}
                   {activeQuote.title ? ` · ${activeQuote.title}` : ""}
                 </span>
-                <QuoteStatusStepper status={activeQuote.status} />
+                <QuoteStatusStepper status={activeQuote.status} tx={tx} />
                 {activeQuote.sourcePdfUrl ? (
                   <>
                     {activeQuote.parseStatus ? (
                       <span
                         className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${parseStatusBadgeClass(activeQuote.parseStatus)}`}
                       >
-                        {quoteParseStatusLabel(activeQuote.parseStatus)}
+                        {quoteParseStatus(activeQuote.parseStatus)}
                       </span>
                     ) : null}
                     <a
@@ -1258,14 +1269,14 @@ export function WorkOrderQuotePanel({
                       rel="noopener noreferrer"
                       className="shrink-0 text-[10px] text-sky-400 underline-offset-2 hover:underline"
                     >
-                      PDF sursă
+                      {quoteT("labels.sourcePdf")}
                     </a>
                   </>
                 ) : null}
               </div>
             ) : isCreatingDraft ? (
               <span className="shrink-0 rounded-full border border-emerald-700/50 px-2 py-0.5 text-xs text-emerald-200">
-                Ciornă nouă
+                {quoteT("labels.draftNew")}
               </span>
             ) : (
               <span className="shrink-0 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-400">
@@ -1278,9 +1289,9 @@ export function WorkOrderQuotePanel({
                 disabled={pending}
                 onClick={startNewDraft}
                 className={`${sheetBtnClass} border-emerald-600/50 bg-emerald-950/40 font-semibold text-emerald-100 hover:bg-emerald-950/60`}
-                title="Creează Deviz pe Lucrarea curentă"
+                title={quoteT("tooltips.newQuote")}
               >
-                Deviz nou
+                {quoteT("actions.newQuote")}
               </button>
             ) : null}
             {canWrite && (isEditingDraft || quotes.length === 0 || isCreatingDraft) ? (
@@ -1291,7 +1302,7 @@ export function WorkOrderQuotePanel({
                   onClick={() => setLines([...lines, newLine(supplierDiscounts)])}
                   className={`${sheetBtnClass} border-violet-500/50 bg-violet-950/40 font-semibold text-violet-100`}
                 >
-                  + Linie
+                  {quoteT("actions.addLine")}
                 </button>
                 <button
                   type="button"
@@ -1299,7 +1310,7 @@ export function WorkOrderQuotePanel({
                   onClick={() => setLines(lines.slice(0, -1))}
                   className={`${sheetBtnClass} border-zinc-700 bg-zinc-900 text-zinc-200`}
                 >
-                  Șterge linie
+                  {quoteT("actions.deleteLine")}
                 </button>
               </>
             ) : null}
@@ -1309,8 +1320,8 @@ export function WorkOrderQuotePanel({
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-medium text-zinc-200">Deviz</h2>
-            <p className="mt-1 text-xs text-zinc-500">Linii structurate, trimitere și aprobare</p>
+            <h2 className="text-sm font-medium text-zinc-200">{quoteT("labels.quote")}</h2>
+            <p className="mt-1 text-xs text-zinc-500">{quoteT("descriptions.quote")}</p>
           </div>
           {canWrite ? (
             <button
@@ -1318,7 +1329,7 @@ export function WorkOrderQuotePanel({
               onClick={startNewDraft}
               className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
             >
-              Deviz nou
+              {quoteT("actions.newQuote")}
             </button>
           ) : null}
         </div>
@@ -1351,10 +1362,9 @@ export function WorkOrderQuotePanel({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-zinc-100">Lansează comenzi piese</h2>
+                <h2 className="text-base font-semibold text-zinc-100">{quoteT("actions.launchParts")}</h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Marchează liniile ca „Comandate” și setează WO pe waiting_parts. Opțional încearcă
-                  rechiziție Inter Cars.
+                  {quoteT("descriptions.launchParts")}
                 </p>
               </div>
               <button
@@ -1362,7 +1372,7 @@ export function WorkOrderQuotePanel({
                 onClick={() => setLaunchOpen(false)}
                 className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300"
               >
-                Închide
+                {quoteT("actions.close")}
               </button>
             </div>
 
@@ -1383,12 +1393,12 @@ export function WorkOrderQuotePanel({
                       />
                       <span>
                         <span className="font-mono text-xs text-zinc-400">
-                          {line.partNumber ?? "fără cod"}
+                          {line.partNumber ?? quoteT("labels.partNumberMissing")}
                         </span>{" "}
                         · {line.description}
                         {line.partsOrderStatus !== "none" ? (
                           <span className="ml-1 text-xs text-zinc-500">
-                            ({partsOrderLabels[line.partsOrderStatus]})
+                            ({partsOrderLabel(line.partsOrderStatus)})
                           </span>
                         ) : null}
                       </span>
@@ -1399,7 +1409,7 @@ export function WorkOrderQuotePanel({
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="space-y-1 text-xs text-zinc-400">
-                Canal
+                {quoteT("fields.channel")}
                 <select
                   className={OPS_INPUT_CLASS}
                   value={launchChannel}
@@ -1407,12 +1417,12 @@ export function WorkOrderQuotePanel({
                     setLaunchChannel(e.target.value as "intercars" | "manual")
                   }
                 >
-                  <option value="manual">Manual (doar status)</option>
+                  <option value="manual">{quoteT("options.manualStatus")}</option>
                   <option value="intercars">Inter Cars (API + status)</option>
                 </select>
               </label>
               <label className="space-y-1 text-xs text-zinc-400">
-                Dată estimată livrare
+                {quoteT("fields.estimatedDeliveryDate")}
                 <input
                   type="date"
                   className={OPS_INPUT_CLASS}
@@ -1428,7 +1438,7 @@ export function WorkOrderQuotePanel({
                 onClick={() => setLaunchOpen(false)}
                 className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
               >
-                Anulează
+                {quoteT("actions.cancel")}
               </button>
               <button
                 type="button"
@@ -1436,7 +1446,7 @@ export function WorkOrderQuotePanel({
                 onClick={() => void confirmLaunchParts()}
                 className="rounded border border-amber-500/50 bg-amber-950/40 px-3 py-1.5 text-xs font-semibold text-amber-100 disabled:opacity-50"
               >
-                Confirmă lansarea
+                {quoteT("actions.confirmLaunch")}
               </button>
             </div>
           </div>
@@ -1446,13 +1456,13 @@ export function WorkOrderQuotePanel({
       <div className="mt-3 flex gap-2 border-b border-zinc-800">
         {(hasLucrare2
           ? [
-              { id: "l1" as const, label: "Lucrare 1" },
-              { id: "l2" as const, label: "Lucrare 2" },
-              { id: "warranty" as const, label: "Garanție" },
+              { id: "l1" as const, label: `${quoteT("labels.work")} 1` },
+              { id: "l2" as const, label: `${quoteT("labels.work")} 2` },
+              { id: "warranty" as const, label: quoteT("labels.warranty") },
             ]
           : [
-              { id: "quote" as const, label: "Deviz" },
-              { id: "warranty" as const, label: "Garanție" },
+              { id: "quote" as const, label: quoteT("labels.quote") },
+              { id: "warranty" as const, label: quoteT("labels.warranty") },
             ]
         ).map((tab) => {
           const selected =
@@ -1494,13 +1504,13 @@ export function WorkOrderQuotePanel({
       {priceVerify ? (
         <div className="mt-3 rounded-lg border border-amber-800/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100/90">
           <p>
-            Verificare catalog
+            {quoteT("labels.catalogCheck")}
             {priceVerify.stubCatalog ? " (stub)" : ""}: {priceVerify.summary.ok} ok ·{" "}
             <span className={priceVerify.summary.suspect ? "font-semibold text-amber-200" : ""}>
               {priceVerify.summary.suspect} suspecte
             </span>
-            {priceVerify.summary.noCode ? ` · ${priceVerify.summary.noCode} fără cod` : ""}
-            {" · "}prag {priceVerify.suspectPercent}%
+            {priceVerify.summary.noCode ? ` · ${priceVerify.summary.noCode} ${quoteT("labels.noCode")}` : ""}
+            {" · "}{quoteT("labels.threshold")} {priceVerify.suspectPercent}%
             {priceVerify.suspectPercentSource === "client" ? " (client)" : ""}
             {priceVerify.providersUsed.length
               ? ` · ${priceVerify.providersUsed.map((p) => p.label).join(", ")}`
@@ -1521,8 +1531,8 @@ export function WorkOrderQuotePanel({
       {activeTab === "quote" && trackQuotes.length === 0 && !isCreatingDraft ? (
         <p className="mt-4 text-sm text-zinc-500">
           {hasLucrare2
-            ? `Niciun Deviz pe L${lucrareTrack}. Folosiți „Deviz nou” sau „Mută Devizul…” de pe cealaltă Lucrare.`
-            : "Niciun Deviz pe această comandă."}
+            ? formatMsg("empty.noTrackQuotes", { track: lucrareTrack })
+            : quoteT("empty.noQuotes")}
         </p>
       ) : null}
 
@@ -1537,11 +1547,11 @@ export function WorkOrderQuotePanel({
                   setEditingDraftId(null);
                 }}
                 className={fleetSheetTabClass(quotePane === "consol")}
-                title="Liniile aprobate din Devizele acestei Lucrări"
+                title={quoteT("tooltips.consolidated")}
               >
-                Consolidat
+                {quoteT("labels.consolidated")}
                 <span className="ml-1.5 text-[11px] font-normal opacity-80">
-                  {consolidatedLines.length} lin.
+                  {consolidatedLines.length} {quoteT("labels.lineShort")}
                 </span>
               </button>
             ) : null}
@@ -1574,11 +1584,11 @@ export function WorkOrderQuotePanel({
                       setQuotePane("lines");
                     }}
                     className={fleetSheetTabClass(linesSelected)}
-                    title={`${q.lines.length} linii · ${formatMoneyCents(q.totalGrossCents, q.currency)}`}
+                    title={`${q.lines.length} ${quoteT("labels.lines")} · ${formatMoneyCents(q.totalGrossCents, q.currency)}`}
                   >
                     {quoteDisplayName(q)}
                     <span className="ml-1.5 text-[11px] font-normal opacity-80">
-                      {quoteStatusLabel(q.status)}
+                      {quoteStatus(q.status)}
                     </span>
                   </button>,
                   <button
@@ -1589,9 +1599,9 @@ export function WorkOrderQuotePanel({
                       setQuotePane("photos");
                     }}
                     className={fleetSheetTabClass(photosSelected)}
-                    title={`Poze defect pentru ${quoteDisplayName(q)}`}
+                    title={`${quoteT("labels.photos")} ${quoteDisplayName(q)}`}
                   >
-                    Poze {q.version}
+                    {quoteT("labels.photos")} {q.version}
                   </button>,
                 ];
               })}
@@ -1603,33 +1613,33 @@ export function WorkOrderQuotePanel({
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap gap-4 text-sm">
             <span>
-              Total net aprobat:{" "}
+              {quoteT("labels.totalNetApproved")}:{" "}
               <strong>{formatMoneyCents(consolidatedTotals.net)}</strong>
             </span>
             <span>
-              TVA: <strong>{formatMoneyCents(consolidatedTotals.vat)}</strong>
+              {quoteT("labels.vat")}: <strong>{formatMoneyCents(consolidatedTotals.vat)}</strong>
             </span>
             <span>
-              Total: <strong>{formatMoneyCents(consolidatedTotals.gross)}</strong>
+              {quoteT("labels.total")}: <strong>{formatMoneyCents(consolidatedTotals.gross)}</strong>
             </span>
           </div>
           <p className="text-xs text-zinc-500">
             {quoteInvoiceMode === "per_work_order"
-              ? "Setup: o factură pe comandă — înregistrați factura din liniile de mai jos (pe fiecare deviz aprobat până la fluxul consolidat dedicat)."
-              : "Setup: factură pe fiecare deviz — vedeți tab-urile individuale pentru înregistrare."}
+              ? quoteT("messages.invoiceModePerWorkOrder")
+              : quoteT("messages.invoiceModePerQuote")}
           </p>
           {consolidatedLines.length === 0 ? (
-            <p className="text-sm text-zinc-500">Nicio linie aprobată încă.</p>
+            <p className="text-sm text-zinc-500">{quoteT("empty.noApprovedLines")}</p>
           ) : (
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
-                  <th className="py-2 pr-2">Deviz</th>
-                  <th className="py-2 pr-2">Tip</th>
-                  <th className="py-2 pr-2">Descriere</th>
-                  <th className="py-2 pr-2">Cod</th>
-                  <th className="py-2 pr-2">Cant.</th>
-                  <th className="py-2 pr-2">Total net</th>
+                  <th className="py-2 pr-2">{quoteT("labels.quote")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.type")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.description")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.partCode")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.quantity")}</th>
+                  <th className="py-2 pr-2">{quoteT("labels.totalNet")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1647,7 +1657,7 @@ export function WorkOrderQuotePanel({
                         {row.quoteLabel}
                       </button>
                     </td>
-                    <td className="py-2 pr-2">{quoteLineTypeLabel(row.line.lineType)}</td>
+                    <td className="py-2 pr-2">{quoteLineType(row.line.lineType)}</td>
                     <td className="py-2 pr-2">{row.line.description}</td>
                     <td className="py-2 pr-2 font-mono text-xs">{row.line.partNumber ?? "—"}</td>
                     <td className="py-2 pr-2">{row.line.quantity}</td>
@@ -1665,8 +1675,7 @@ export function WorkOrderQuotePanel({
       {activeTab === "quote" && quotePane === "photos" && activeQuote ? (
         <div className="mt-4 space-y-2">
           <p className="text-xs text-zinc-500">
-            Defecte și atelier pentru {quoteDisplayName(activeQuote)}. Pozele de recepție stau pe
-            Rezumat.
+            {formatMsg("descriptions.photos", { quote: quoteDisplayName(activeQuote) })}
           </p>
           <WorkOrderPhotoGallery
             workOrderId={workOrderId}
@@ -1682,12 +1691,12 @@ export function WorkOrderQuotePanel({
           {canWrite ? (
             <div className="flex flex-wrap items-end gap-3">
               <label className="min-w-[12rem] flex-1 space-y-1">
-                <span className={OPS_LABEL_CLASS}>Denumire</span>
+                <span className={OPS_LABEL_CLASS}>{quoteT("fields.title")}</span>
                 <input
                   type="text"
                   value={title}
                   disabled={pending}
-                  placeholder={`Deviz ${activeQuote.version}`}
+                  placeholder={`${quoteT("labels.quote")} ${activeQuote.version}`}
                   onChange={(e) => setTitle(e.target.value)}
                   onBlur={() => {
                     const next = title.trim();
@@ -1707,22 +1716,22 @@ export function WorkOrderQuotePanel({
               <button
                 type="button"
                 disabled={pending}
-                title="Import PDF / Audatex → preview → ciornă"
+                title={quoteT("tooltips.importPdf")}
                 onClick={() => setImportOpen(true)}
                 className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-2.5 py-1 text-xs font-semibold text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
               >
-                Import PDF
+                {quoteT("actions.importPdf")}
               </button>
             ) : null}
             {canWrite && allowPartsPriceVerify ? (
               <button
                 type="button"
                 disabled={pending}
-                title="Compară prețurile pieselor cu catalogul"
+                title={quoteT("tooltips.verifyPrice")}
                 onClick={() => void verifyPartsPrices()}
                 className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
               >
-                Verifică preț
+                {quoteT("actions.verifyPrice")}
               </button>
             ) : null}
             {activeQuote.status !== "draft" ? (
@@ -1732,7 +1741,7 @@ export function WorkOrderQuotePanel({
                 rel="noopener noreferrer"
                 className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800"
               >
-                Export PDF
+                {quoteT("actions.exportPdf")}
               </a>
             ) : null}
             <span className="min-w-2 flex-1" />
@@ -1741,12 +1750,12 @@ export function WorkOrderQuotePanel({
                 const totals = quoteSubtotalsFromLines(activeQuote.lines, lineDecisions);
                 return (
                   <>
-                    Total net:{" "}
+                    {quoteT("labels.totalNet")}:{" "}
                     <strong>
                       {formatMoneyCents(totals.labor + totals.parts + totals.other, activeQuote.currency)}
                     </strong>
-                    {" · "}TVA: <strong>{formatMoneyCents(totals.vat, activeQuote.currency)}</strong>
-                    {" · "}Total:{" "}
+                    {" · "}{quoteT("labels.vat")}: <strong>{formatMoneyCents(totals.vat, activeQuote.currency)}</strong>
+                    {" · "}{quoteT("labels.total")}:{" "}
                     <strong>{formatMoneyCents(totals.gross, activeQuote.currency)}</strong>
                   </>
                 );
@@ -1758,7 +1767,7 @@ export function WorkOrderQuotePanel({
             {canMoveQuote && hasLucrare2 ? (
               movePickerOpen ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950/80 px-2.5 py-1.5">
-                  <span className="text-xs text-zinc-400">Mută pe:</span>
+                  <span className="text-xs text-zinc-400">{quoteT("labels.moveTo")}</span>
                   {([1, 2] as const).map((n) => {
                     const current = quoteLucrareIndex(activeQuote);
                     const disabled = n === current || pending;
@@ -1775,7 +1784,7 @@ export function WorkOrderQuotePanel({
                         }`}
                       >
                         L{n}
-                        {n === current ? " (acum)" : ""}
+                        {n === current ? ` (${quoteT("labels.current")})` : ""}
                       </button>
                     );
                   })}
@@ -1785,18 +1794,18 @@ export function WorkOrderQuotePanel({
                     onClick={() => setMovePickerOpen(false)}
                     className="rounded-lg border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
                   >
-                    Anulează
+                    {quoteT("actions.cancel")}
                   </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   disabled={pending}
-                  title="Mută doar acest Deviz pe altă Lucrare"
+                  title={quoteT("tooltips.moveQuote")}
                   onClick={() => setMovePickerOpen(true)}
                   className="rounded-lg border border-zinc-600 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
                 >
-                  Mută Devizul
+                  {quoteT("actions.moveQuote")}
                 </button>
               )
             ) : null}
@@ -1813,16 +1822,16 @@ export function WorkOrderQuotePanel({
                   }}
                   className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
                 >
-                  Editează
+                  {quoteT("actions.edit")}
                 </button>
                 <button
                   type="button"
                   disabled={pending || !hasEstimatedRepair}
-                  title={!hasEstimatedRepair ? "Completați estimarea finalizării reparației" : undefined}
+                  title={!hasEstimatedRepair ? quoteT("errors.estimatedRepairRequired") : undefined}
                   onClick={() => void quoteAction("submit")}
                   className="rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
                 >
-                  Trimite spre aprobare
+                  {quoteT("actions.submit")}
                 </button>
                 <button
                   type="button"
@@ -1830,7 +1839,7 @@ export function WorkOrderQuotePanel({
                   onClick={() => void deleteDraft()}
                   className="rounded-lg border border-red-800/60 px-2.5 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
                 >
-                  Șterge ciorna
+                  {quoteT("actions.deleteDraft")}
                 </button>
               </>
             ) : null}
@@ -1840,18 +1849,18 @@ export function WorkOrderQuotePanel({
                 disabled={pending || !toIsoFromDateInput(estimatedDate)}
                 title={
                   !toIsoFromDateInput(estimatedDate)
-                    ? "Alegeți noua dată estimativă de finalizare"
-                    : "Reamintește aprobarea: actualizează data trimiterii cu noua estimare aleasă"
+                    ? quoteT("tooltips.chooseNewEstimate")
+                    : quoteT("tooltips.resubmit")
                 }
                 onClick={() => void resubmitForApproval()}
                 className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1 text-xs font-medium text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
               >
-                Retrimite spre aprobare
+                {quoteT("actions.resubmit")}
               </button>
             ) : null}
             {activeQuote.lines.some((line) => line.partsOrderStatus === "ordered") ? (
               <span className="rounded-full border border-amber-700/50 bg-amber-950/30 px-2 py-0.5 text-xs text-amber-200">
-                Comandă piese
+                {quoteT("aria.partsOrder")}
               </span>
             ) : null}
             {canLaunchPartsOrders &&
@@ -1869,14 +1878,14 @@ export function WorkOrderQuotePanel({
                 onClick={() => openLaunchParts()}
                 className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-2.5 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
               >
-                Lansează comenzi piese
+                {quoteT("actions.launchParts")}
               </button>
             ) : null}
           </div>
           {launchInfo ? <p className="text-sm text-amber-200/90">{launchInfo}</p> : null}
           {activeQuote.status === "submitted" ? (
             <div className="rounded-lg border border-amber-500/40 bg-amber-950/25 px-3 py-2 text-sm text-amber-50">
-              <p className="font-medium">Trimis — se așteaptă aprobarea devizului</p>
+              <p className="font-medium">{quoteT("status.submitted")}</p>
               <p className="mt-0.5 text-xs text-amber-100/80">
                 {activeQuote.submittedAt
                   ? `Trimis la ${new Date(activeQuote.submittedAt).toLocaleString("ro-RO", {
@@ -1884,16 +1893,16 @@ export function WorkOrderQuotePanel({
                       timeStyle: "short",
                     })}. `
                   : ""}
-                Managerul / adminul flotă aprobă pe tichet sau pe această comandă.
+                {quoteT("messages.waitingApproval")}
                 {canResubmitQuote
-                  ? " Dacă nu răspunde, alegeți o nouă estimare finalizare și folosiți „Retrimite spre aprobare”."
+                  ? ` ${quoteT("messages.resubmitHint")}`
                   : ""}
               </p>
               {canResubmitQuote ? (
                 <div className="mt-2 flex flex-wrap items-end gap-2">
                   <div>
                     <label className={`${OPS_LABEL_CLASS} text-amber-100/90`}>
-                      Noua estimare finalizare <span className="text-amber-300">*</span>
+                      {quoteT("fields.newEstimatedCompletion")} <span className="text-amber-300">*</span>
                     </label>
                     <input
                       type="date"
@@ -1908,12 +1917,12 @@ export function WorkOrderQuotePanel({
             </div>
           ) : null}
           {activeQuote.rejectionReason ? (
-            <p className="text-sm text-red-300">Motiv respingere: {activeQuote.rejectionReason}</p>
+            <p className="text-sm text-red-300">{quoteT("labels.rejectionReason")}: {activeQuote.rejectionReason}</p>
           ) : null}
           {canWrite && activeQuote.status === "draft" ? (
             <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
               <label className={OPS_LABEL_CLASS}>
-                Estimare finalizare reparație <span className="text-amber-300">*</span>
+                {quoteT("fields.estimatedRepairCompletion")} <span className="text-amber-300">*</span>
               </label>
               {estimatedRepairAt ? (
                 <>
@@ -1921,7 +1930,7 @@ export function WorkOrderQuotePanel({
                     <span className="font-medium">{formatDateRo(estimatedRepairAt)}</span>
                   </p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Deja setată pe comandă — Trimite Deviz 2+ fără a o modifica.
+                    {quoteT("messages.estimateAlreadySet")}
                   </p>
                 </>
               ) : (
@@ -1937,7 +1946,7 @@ export function WorkOrderQuotePanel({
                     className={`${OPS_INPUT_CLASS} max-w-xs`}
                   />
                   <p className="mt-1 text-xs text-zinc-500">
-                    Obligatorie înainte de „Trimite spre aprobare”.
+                    {quoteT("messages.estimateRequiredBeforeSubmit")}
                   </p>
                 </>
               )}
@@ -1946,16 +1955,16 @@ export function WorkOrderQuotePanel({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
-                <th className="py-2 pr-2">Tip</th>
-                <th className="py-2 pr-2">Descriere</th>
-                <th className="py-2 pr-2">Cod</th>
-                <th className="py-2 pr-2">Cant.</th>
-                <th className="py-2 pr-2">Preț unit.</th>
-                <th className="py-2 pr-2">Disc.</th>
-                <th className="py-2 pr-2">TVA %</th>
-                <th className="py-2 pr-2">Total net</th>
-                <th className="py-2 pr-2">Aprobare</th>
-                <th className="py-2">Piese</th>
+                <th className="py-2 pr-2">{quoteT("fields.type")}</th>
+                <th className="py-2 pr-2">{quoteT("fields.description")}</th>
+                <th className="py-2 pr-2">{quoteT("fields.partCode")}</th>
+                <th className="py-2 pr-2">{quoteT("fields.quantity")}</th>
+                <th className="py-2 pr-2">{quoteT("fields.unitPrice")}</th>
+                <th className="py-2 pr-2">{quoteT("fields.discount")}</th>
+                <th className="py-2 pr-2">{quoteT("fields.vat")}</th>
+                <th className="py-2 pr-2">{quoteT("labels.totalNet")}</th>
+                <th className="py-2 pr-2">{quoteT("labels.approval")}</th>
+                <th className="py-2">{quoteT("labels.parts")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1978,16 +1987,16 @@ export function WorkOrderQuotePanel({
                     key={line.id}
                     className={`border-b border-zinc-800/60 ${tint} ${rejected ? "text-zinc-500 line-through decoration-zinc-600" : ""}`}
                   >
-                    <td className="py-2 pr-2 text-zinc-400">{quoteLineTypeLabel(line.lineType)}</td>
+                    <td className="py-2 pr-2 text-zinc-400">{quoteLineType(line.lineType)}</td>
                     <td className="py-2 pr-2">{line.description}</td>
                     <td className="py-2 pr-2 font-mono text-xs text-zinc-300">
-                      {line.partNumber ?? (line.partCodeExempt ? "fără cod" : "—")}
+                      {line.partNumber ?? (line.partCodeExempt ? quoteT("labels.noCode") : "—")}
                     </td>
                     <td className="py-2 pr-2 font-mono">{line.quantity}</td>
                     <td className="py-2 pr-2 font-mono">
                       {formatMoneyCents(line.unitNetCents)}
                       {priceVerifyByKey[line.id] ? (
-                        <PriceVerifyHint result={priceVerifyByKey[line.id]} canApply={false} />
+                        <PriceVerifyHint result={priceVerifyByKey[line.id]} canApply={false} tx={tx} />
                       ) : null}
                     </td>
                     <td className="py-2 pr-2 font-mono text-xs text-zinc-400">
@@ -2007,7 +2016,7 @@ export function WorkOrderQuotePanel({
                                 ? "border-emerald-500 bg-emerald-950/50 text-emerald-200"
                                 : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
                             }`}
-                            aria-label="Aprobă linia"
+                            aria-label={quoteT("actions.approveLine")}
                           >
                             ✓
                           </button>
@@ -2020,7 +2029,7 @@ export function WorkOrderQuotePanel({
                                 ? "border-red-500 bg-red-950/50 text-red-200"
                                 : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
                             }`}
-                            aria-label="Respinge linia"
+                            aria-label={quoteT("actions.reject")}
                           >
                             ✗
                           </button>
@@ -2033,7 +2042,7 @@ export function WorkOrderQuotePanel({
                               : "border-red-700/50 text-red-200"
                           }`}
                         >
-                          {approvalLabels[displayedApproval]}
+                          {approvalLabel(displayedApproval)}
                         </span>
                       ) : (
                         <span className="text-xs text-zinc-500">—</span>
@@ -2052,12 +2061,12 @@ export function WorkOrderQuotePanel({
                                 })
                               }
                               className={`${OPS_INPUT_CLASS} w-32`}
-                              aria-label="Comandă piese"
+                              aria-label={quoteT("aria.partsOrder")}
                             >
-                              <option value="none">{partsOrderLabels.none}</option>
-                              <option value="ordered">{partsOrderLabels.ordered}</option>
-                              <option value="in_stock">{partsOrderLabels.in_stock}</option>
-                              <option value="delivered">{partsOrderLabels.delivered}</option>
+                              <option value="none">{partsOrderLabel("none")}</option>
+                              <option value="ordered">{partsOrderLabel("ordered")}</option>
+                              <option value="in_stock">{partsOrderLabel("in_stock")}</option>
+                              <option value="delivered">{partsOrderLabel("delivered")}</option>
                             </select>
                             <input
                               type="date"
@@ -2069,12 +2078,12 @@ export function WorkOrderQuotePanel({
                                 })
                               }
                               className={`${OPS_INPUT_CLASS} w-36`}
-                              aria-label="Data estimată piese"
+                              aria-label={quoteT("aria.partsDate")}
                             />
                           </div>
                         ) : (
                           <span className="text-xs text-zinc-400">
-                            {partsOrderLabels[line.partsOrderStatus]}
+                            {partsOrderLabel(line.partsOrderStatus)}
                             {line.partsExpectedOn
                               ? ` · ${new Date(line.partsExpectedOn).toLocaleDateString("ro-RO")}`
                               : ""}
@@ -2093,6 +2102,7 @@ export function WorkOrderQuotePanel({
             <QuoteSubtotals
               {...quoteSubtotalsFromLines(activeQuote.lines, lineDecisions)}
               currency={activeQuote.currency}
+              tx={tx}
             />
           </div>
           {canApprove && activeQuote.status === "submitted" ? (
@@ -2106,7 +2116,7 @@ export function WorkOrderQuotePanel({
                 }}
                 className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
               >
-                Aprobă tot
+                {quoteT("actions.approveAll")}
               </button>
               <button
                 type="button"
@@ -2114,7 +2124,7 @@ export function WorkOrderQuotePanel({
                 onClick={() => void approveSelection()}
                 className="rounded-lg border border-emerald-500/50 px-3 py-1.5 text-sm text-emerald-200 hover:bg-emerald-950/40 disabled:opacity-50"
               >
-                Aprobă selecția
+                {quoteT("actions.approveSelection")}
               </button>
               <button
                 type="button"
@@ -2122,23 +2132,23 @@ export function WorkOrderQuotePanel({
                 onClick={() => void quoteAction("reject")}
                 className="rounded-lg border border-red-500/50 px-3 py-1.5 text-sm text-red-200 hover:bg-red-950/40 disabled:opacity-50"
               >
-                Respinge
+                {quoteT("actions.reject")}
               </button>
             </div>
           ) : null}
 
           {activeQuote.status === "approved" ? (
             <div className="mt-4 space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-              <p className="text-xs uppercase text-zinc-500">Factură & cost</p>
+              <p className="text-xs uppercase text-zinc-500">{quoteT("invoice.invoiceAndCost")}</p>
               {isPartner && !activeQuote.invoicedAt ? (
                 <p className="text-[11px] text-zinc-500">
-                  Încarcă PDF-ul facturii și înregistrează numărul — fără acces la tichetul flotei.
+                  {quoteT("invoice.uploadHint")}
                 </p>
               ) : null}
 
               {activeQuote.invoicedAt ? (
                 <p className="text-sm text-emerald-300">
-                  Factură: {activeQuote.costInvoiceNumber ?? "—"}
+                  {quoteT("invoice.invoice")}: {activeQuote.costInvoiceNumber ?? "—"}
                   {activeQuote.costInvoiceDate
                     ? ` · ${new Date(activeQuote.costInvoiceDate).toLocaleDateString("ro-RO")}`
                     : ""}
@@ -2151,13 +2161,13 @@ export function WorkOrderQuotePanel({
                         rel="noreferrer"
                         className="text-violet-300 hover:underline"
                       >
-                        PDF factură
+                        {quoteT("invoice.pdf")}
                       </a>
                     </>
                   ) : null}
                   {activeQuote.invoiceMismatch ? (
                     <span className="mt-1 block text-amber-300">
-                      Suma facturii diferă de totalul devizului.
+                      {quoteT("invoice.grossMismatch")}
                     </span>
                   ) : null}
                 </p>
@@ -2165,7 +2175,7 @@ export function WorkOrderQuotePanel({
                 <div className="space-y-3">
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div>
-                      <label className={OPS_LABEL_CLASS}>Nr. factură</label>
+                      <label className={OPS_LABEL_CLASS}>{quoteT("fields.invoiceNumber")}</label>
                       <input
                         value={invoiceNumber}
                         onChange={(e) => setInvoiceNumber(e.target.value)}
@@ -2173,7 +2183,7 @@ export function WorkOrderQuotePanel({
                       />
                     </div>
                     <div>
-                      <label className={OPS_LABEL_CLASS}>Data</label>
+                      <label className={OPS_LABEL_CLASS}>{quoteT("fields.invoiceDate")}</label>
                       <input
                         type="date"
                         value={invoiceDate}
@@ -2182,7 +2192,7 @@ export function WorkOrderQuotePanel({
                       />
                     </div>
                     <div>
-                      <label className={OPS_LABEL_CLASS}>Sumă brută (RON)</label>
+                      <label className={OPS_LABEL_CLASS}>{quoteT("fields.grossAmountRon")}</label>
                       <input
                         value={invoiceGross}
                         onChange={(e) => setInvoiceGross(e.target.value)}
@@ -2192,7 +2202,7 @@ export function WorkOrderQuotePanel({
                     </div>
                   </div>
                   <p className="text-xs text-zinc-500">
-                    Total deviz:{" "}
+                    {quoteT("invoice.totalQuote")}:{" "}
                     {formatMoneyCents(
                       activeQuote.approvedGrossCents ?? activeQuote.totalGrossCents,
                       activeQuote.currency,
@@ -2211,21 +2221,21 @@ export function WorkOrderQuotePanel({
                     onClick={() => void recordInvoice()}
                     className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-500 disabled:opacity-50"
                   >
-                    Înregistrează factura
+                  {quoteT("actions.recordInvoice")}
                   </button>
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">Factura nu a fost încă înregistrată.</p>
+                <p className="text-sm text-zinc-500">{quoteT("invoice.invoiceNotRecorded")}</p>
               )}
 
               {activeQuote.costEntryId ? (
                 <p className="text-sm">
-                  Cost înregistrat
+                  {quoteT("invoice.costRecorded")}
                   {!isPartner ? (
                     <>
                       {": "}
                       <Link href={`/fleet/costs/${activeQuote.costEntryId}`} className="text-sky-300 hover:underline">
-                        deschide costul
+                        {quoteT("invoice.viewCost")}
                       </Link>
                     </>
                   ) : null}
@@ -2239,12 +2249,12 @@ export function WorkOrderQuotePanel({
                   onClick={() => void postCost()}
                   className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
                 >
-                  Generează cost din deviz
+                  {quoteT("actions.generateCost")}
                 </button>
               ) : activeQuote.invoicedAt && isPartner && !activeQuote.costEntryId ? (
-                <p className="text-sm text-zinc-500">Factura e înregistrată. Costul îl generează flota.</p>
+                <p className="text-sm text-zinc-500">{quoteT("invoice.fleetGeneratesCost")}</p>
               ) : !activeQuote.invoicedAt ? (
-                <p className="text-sm text-zinc-500">Înregistrează factura înainte de cost.</p>
+                <p className="text-sm text-zinc-500">{quoteT("invoice.recordBeforeCost")}</p>
               ) : null}
             </div>
           ) : null}
@@ -2257,12 +2267,12 @@ export function WorkOrderQuotePanel({
       canWrite ? (
         <div className="mt-4 space-y-4">
           <label className="block max-w-sm space-y-1">
-            <span className={OPS_LABEL_CLASS}>Denumire</span>
+            <span className={OPS_LABEL_CLASS}>{quoteT("fields.title")}</span>
             <input
               type="text"
               value={title}
               disabled={pending}
-              placeholder="ex. Revizie, Anvelope…"
+              placeholder={quoteT("placeholders.title")}
               onChange={(e) => setTitle(e.target.value)}
               className={OPS_INPUT_CLASS}
             />
@@ -2270,14 +2280,14 @@ export function WorkOrderQuotePanel({
           {activeMenuItems.length ? (
             <div className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
               <label className="min-w-[16rem] flex-1 space-y-1">
-                <span className={OPS_LABEL_CLASS}>Meniu atelier</span>
+                <span className={OPS_LABEL_CLASS}>{quoteT("fields.menu")}</span>
                 <select
                   value={selectedMenuItemId}
                   onChange={(e) => setSelectedMenuItemId(e.target.value)}
                   className={OPS_INPUT_CLASS}
                   disabled={pending}
                 >
-                  <option value="">Alege meniu…</option>
+                  <option value="">{quoteT("placeholders.chooseMenu")}</option>
                   {activeMenuItems.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.label} · {supplierMenuLineTypeLabel(item.lineType)} · {centsToLei(item.unitNetCents)} RON
@@ -2291,7 +2301,7 @@ export function WorkOrderQuotePanel({
                 onClick={addMenuLine}
                 className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
               >
-                Adaugă din meniu
+                {quoteT("actions.addFromMenu")}
               </button>
             </div>
           ) : null}
@@ -2299,15 +2309,15 @@ export function WorkOrderQuotePanel({
             <table className="w-full min-w-[1080px] text-left text-sm">
               <thead>
                 <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
-                  <th className="py-2 pr-2">Tip</th>
-                  <th className="py-2 pr-2">Descriere</th>
-                  <th className="py-2 pr-2">Cod piesă</th>
-                  <th className="py-2 pr-2">Cant.</th>
-                  <th className="py-2 pr-2">Preț net (lei)</th>
-                  <th className="py-2 pr-2">Disc. %</th>
-                  <th className="py-2 pr-2">Disc. lei</th>
-                  <th className="py-2 pr-2">TVA %</th>
-                  <th className="py-2 pr-2">Net</th>
+                  <th className="py-2 pr-2">{quoteT("fields.type")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.description")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.partCode")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.quantity")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.unitNet")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.discountPercent")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.discountLei")}</th>
+                  <th className="py-2 pr-2">{quoteT("fields.vat")}</th>
+                  <th className="py-2 pr-2">{quoteT("labels.net")}</th>
                   <th className="py-2 w-8" />
                 </tr>
               </thead>
@@ -2335,9 +2345,9 @@ export function WorkOrderQuotePanel({
                         }}
                         className={OPS_INPUT_CLASS}
                       >
-                        <option value="parts">Piese</option>
-                        <option value="labor">Manoperă</option>
-                        <option value="other">Altele</option>
+                        <option value="parts">{quoteT("lineTypes.parts")}</option>
+                        <option value="labor">{quoteT("lineTypes.labor")}</option>
+                        <option value="other">{quoteT("lineTypes.other")}</option>
                       </select>
                     </td>
                     <td className="py-2 pr-2">
@@ -2349,7 +2359,7 @@ export function WorkOrderQuotePanel({
                           setLines(next);
                         }}
                         className={OPS_INPUT_CLASS}
-                        placeholder="Descriere linie"
+                        placeholder={quoteT("fields.lineDescription")}
                       />
                     </td>
                     <td className="py-2 pr-2">
@@ -2363,7 +2373,11 @@ export function WorkOrderQuotePanel({
                             setLines(next);
                           }}
                           className={`${OPS_INPUT_CLASS} w-36 font-mono`}
-                          placeholder={line.lineType === "parts" && requirePartCode ? "Obligatoriu" : "Opțional"}
+                          placeholder={
+                            line.lineType === "parts" && requirePartCode
+                              ? quoteT("placeholders.required")
+                              : quoteT("placeholders.optional")
+                          }
                         />
                         <label className="flex items-center gap-1 text-[11px] text-zinc-500">
                           <input
@@ -2379,7 +2393,7 @@ export function WorkOrderQuotePanel({
                               setLines(next);
                             }}
                           />
-                          fără cod
+                          {quoteT("labels.noCode")}
                         </label>
                       </div>
                     </td>
@@ -2410,6 +2424,7 @@ export function WorkOrderQuotePanel({
                           result={priceVerifyByKey[line.key]}
                           canApply={Boolean(isEditingDraft || isCreatingDraft)}
                           onApply={() => applyCatalogPrice(line.key)}
+                          tx={tx}
                         />
                       ) : null}
                     </td>
@@ -2427,8 +2442,8 @@ export function WorkOrderQuotePanel({
                         }}
                         className={`${OPS_INPUT_CLASS} w-16 font-mono`}
                         placeholder="0"
-                        title="Dacă e > 0, are prioritate față de suma în lei"
-                        aria-label="Discount procent"
+                        title={quoteT("tooltips.discountPercent")}
+                        aria-label={quoteT("fields.discountPercent")}
                       />
                     </td>
                     <td className="py-2 pr-2">
@@ -2446,8 +2461,8 @@ export function WorkOrderQuotePanel({
                         className={`${OPS_INPUT_CLASS} w-24 font-mono`}
                         placeholder="0.00"
                         disabled={Boolean(parseFloat(line.discountPercent.replace(",", ".")))}
-                        title="Sumă netă. Ignorată dacă completezi %."
-                        aria-label="Discount lei"
+                        title={quoteT("tooltips.discountLei")}
+                        aria-label={quoteT("fields.discountLei")}
                       />
                     </td>
                     <td className="py-2 pr-2">
@@ -2469,7 +2484,7 @@ export function WorkOrderQuotePanel({
                         type="button"
                         onClick={() => setLines(lines.filter((_, i) => i !== idx))}
                         className="text-zinc-500 hover:text-red-400"
-                        aria-label="Șterge linia"
+                        aria-label={quoteT("actions.deleteLine")}
                       >
                         ×
                       </button>
@@ -2485,11 +2500,11 @@ export function WorkOrderQuotePanel({
               onClick={() => setLines([...lines, newLine(supplierDiscounts)])}
               className="text-xs text-sky-300 hover:underline"
             >
-              + Linie
+              {quoteT("actions.addLine")}
             </button>
           ) : null}
           <div>
-            <label className={OPS_LABEL_CLASS}>Notițe deviz</label>
+            <label className={OPS_LABEL_CLASS}>{quoteT("fields.notes")}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -2500,7 +2515,7 @@ export function WorkOrderQuotePanel({
           {canWrite && draftQuote ? (
             <div className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-3">
               <label className={OPS_LABEL_CLASS}>
-                Estimare finalizare reparație <span className="text-amber-300">*</span>
+                {quoteT("fields.estimatedRepairCompletion")} <span className="text-amber-300">*</span>
               </label>
               {estimatedRepairAt ? (
                 <>
@@ -2508,8 +2523,7 @@ export function WorkOrderQuotePanel({
                     <span className="font-medium">{formatDateRo(estimatedRepairAt)}</span>
                   </p>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Deja setată pe comandă (nu se schimbă după primul deviz trimis). Poți trimite Deviz 2+
-                    cu această dată.
+                    {quoteT("messages.estimateAlreadySetDraft")}
                   </p>
                 </>
               ) : (
@@ -2525,15 +2539,14 @@ export function WorkOrderQuotePanel({
                     className={`${OPS_INPUT_CLASS} max-w-xs`}
                   />
                   <p className="mt-1 text-xs text-zinc-500">
-                    Completată de partener — obligatorie înainte de „Trimite spre aprobare”. Vizibilă și pe
-                    tichet.
+                    {quoteT("messages.estimatePartnerRequired")}
                   </p>
                 </>
               )}
             </div>
           ) : estimatedRepairAt ? (
             <p className="text-sm text-zinc-400">
-              Estimare finalizare reparație:{" "}
+              {quoteT("fields.estimatedRepairCompletion")}:{" "}
               <span className="font-medium text-zinc-200">{formatDateRo(estimatedRepairAt)}</span>
             </p>
           ) : null}
@@ -2545,18 +2558,18 @@ export function WorkOrderQuotePanel({
                 onClick={() => void saveDraft()}
                 className="rounded-lg bg-zinc-700 px-3 py-1.5 text-sm text-white hover:bg-zinc-600 disabled:opacity-50"
               >
-                Salvează ciornă
+                {quoteT("actions.saveDraft")}
               </button>
               {draftQuote ? (
                 <>
                   <button
                     type="button"
                     disabled={pending || !hasEstimatedRepair}
-                    title={!hasEstimatedRepair ? "Completați estimarea finalizării reparației" : undefined}
+                    title={!hasEstimatedRepair ? quoteT("errors.estimatedRepairRequired") : undefined}
                     onClick={() => void quoteAction("submit")}
                     className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
                   >
-                    Trimite spre aprobare
+                    {quoteT("actions.submit")}
                   </button>
                   <button
                     type="button"
@@ -2564,7 +2577,7 @@ export function WorkOrderQuotePanel({
                     onClick={() => void deleteDraft()}
                     className="rounded-lg border border-red-800/60 px-3 py-1.5 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
                   >
-                    Șterge ciorna
+                    {quoteT("actions.deleteDraft")}
                   </button>
                 </>
               ) : null}
@@ -2575,13 +2588,14 @@ export function WorkOrderQuotePanel({
               other={previewTotals.other}
               vat={previewTotals.vat}
               gross={previewTotals.gross}
+              tx={tx}
             />
           </div>
         </div>
       ) : null}
 
       {activeTab === "quote" && !canWrite && quotes.length === 0 ? (
-        <p className="mt-4 text-sm text-zinc-500">Nu există devize pentru această comandă.</p>
+        <p className="mt-4 text-sm text-zinc-500">{quoteT("empty.noQuotesReadOnly")}</p>
       ) : null}
     </section>
   );
@@ -2591,10 +2605,12 @@ function PriceVerifyHint({
   result,
   canApply,
   onApply,
+  tx,
 }: {
   result: PartsPriceVerifyLineResult;
   canApply: boolean;
   onApply?: () => void;
+  tx: (key: string) => string;
 }) {
   if (result.status === "skipped") return null;
 
@@ -2609,14 +2625,14 @@ function PriceVerifyHint({
     <div className={`mt-1 space-y-0.5 text-[10px] leading-snug ${tone}`}>
       <div title={result.message ?? undefined}>
         {result.status === "suspect"
-          ? `Suspect +${result.deltaPercent}%`
+          ? `${tx("workOrders.quote.priceVerify.suspect")} +${result.deltaPercent}%`
           : result.status === "ok"
             ? result.deltaPercent != null && result.deltaPercent <= 0
-              ? "≤ catalog"
-              : "În prag"
+              ? tx("workOrders.quote.priceVerify.atOrBelowCatalog")
+              : tx("workOrders.quote.priceVerify.withinThreshold")
             : result.status === "no_code"
-              ? "Fără cod"
-              : "Fără ofertă"}
+              ? tx("workOrders.quote.priceVerify.noCode")
+              : tx("workOrders.quote.priceVerify.noOffer")}
         {result.bestUnitNetCents != null
           ? ` · cat. ${formatMoneyCents(result.bestUnitNetCents)}`
           : null}
@@ -2627,7 +2643,7 @@ function PriceVerifyHint({
           onClick={onApply}
           className="text-[10px] text-sky-300 underline hover:text-sky-200"
         >
-          Aplică preț catalog
+          {tx("workOrders.quote.actions.applyCatalogPrice")}
         </button>
       ) : null}
     </div>

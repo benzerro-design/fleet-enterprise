@@ -9,6 +9,7 @@ import { OpsOdometerKmConfirm, shouldConfirmOdometerKm } from "@/components/flee
 import { OpsOdometerKmHint } from "@/components/fleet/OpsOdometerKmHint";
 import { TicketFormLayout } from "@/components/fleet/tickets/TicketFormLayout";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
+import { useT } from "@/lib/i18n/useT";
 import { parseOdometerInput } from "@/lib/vehicle-odometer-sync";
 import {
   fleetJsonHeaders,
@@ -49,6 +50,8 @@ export function TicketForm({
   lockedDriverName,
   serviceTypes,
 }: Props) {
+  const tx = useT();
+  const ticketForm = (key: string) => tx(`ops.ticketForm.${key}`);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [subject, setSubject] = useState(initial?.subject ?? "");
@@ -106,7 +109,7 @@ export function TicketForm({
     setPending(true);
     setError(null);
     if (resolvedTicketType === "damage" && !vehicleMovable) {
-      setError("Pentru daună alege dacă vehiculul e deplasabil sau nedeplasabil.");
+      setError(ticketForm("errors.selectVehicleMobility"));
       setPending(false);
       return;
     }
@@ -184,7 +187,7 @@ export function TicketForm({
             {error ? <p className="text-sm text-red-400">{error}</p> : null}
 
             <div>
-              <label className="text-xs text-zinc-500">Client *</label>
+              <label className="text-xs text-zinc-500">{ticketForm("fields.client")} *</label>
               <ClientSelect
                 value={ctx.clientId}
                 onChange={ctx.setClientId}
@@ -195,10 +198,10 @@ export function TicketForm({
             </div>
 
             <div>
-              <label className="text-xs text-zinc-500">Șofer</label>
+              <label className="text-xs text-zinc-500">{ticketForm("fields.driver")}</label>
               {lockedDriverId ? (
                 <p className="mt-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
-                  {lockedDriverName ?? "Contul tău"}
+                  {lockedDriverName ?? ticketForm("yourAccount")}
                 </p>
               ) : (
                 <DriverSelect
@@ -211,18 +214,18 @@ export function TicketForm({
             </div>
 
             <div>
-              <label className="text-xs text-zinc-500">Subiect *</label>
+              <label className="text-xs text-zinc-500">{ticketForm("fields.subject")} *</label>
               <input
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 required
                 className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-                placeholder="Descriere scurtă solicitare"
+                placeholder={ticketForm("placeholders.subject")}
               />
             </div>
 
             <div>
-              <label className="text-xs text-zinc-500">Descriere</label>
+              <label className="text-xs text-zinc-500">{ticketForm("fields.description")}</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -233,7 +236,7 @@ export function TicketForm({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-xs text-zinc-500">Tip solicitare</label>
+                <label className="text-xs text-zinc-500">{ticketForm("fields.requestType")}</label>
                 {useCatalog ? (
                   <>
                     <select
@@ -261,30 +264,30 @@ export function TicketForm({
                   >
                     {TICKET_TYPES.map((t) => (
                       <option key={t.value} value={t.value}>
-                        {t.label}
+                        {ticketForm(`types.${t.value}`)}
                       </option>
                     ))}
                   </select>
                 )}
               </div>
               <div>
-                <label className="text-xs text-zinc-500">Prioritate</label>
+                <label className="text-xs text-zinc-500">{ticketForm("fields.priority")}</label>
                 <select
                   value={priority}
                   onChange={(e) => setPriority(e.target.value as TicketPriority)}
                   className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
                 >
-                  <option value="low">Scăzută</option>
-                  <option value="normal">Normală</option>
-                  <option value="high">Ridicată</option>
-                  <option value="urgent">Urgentă</option>
+                  <option value="low">{ticketForm("priority.low")}</option>
+                  <option value="normal">{ticketForm("priority.normal")}</option>
+                  <option value="high">{ticketForm("priority.high")}</option>
+                  <option value="urgent">{ticketForm("priority.urgent")}</option>
                 </select>
               </div>
             </div>
 
             {isDamageTicket ? (
               <div>
-                <label className="text-xs text-zinc-500">Vehicul *</label>
+                <label className="text-xs text-zinc-500">{ticketForm("fields.vehicle")} *</label>
                 <select
                   required
                   value={vehicleMovable}
@@ -293,19 +296,19 @@ export function TicketForm({
                   }
                   className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
                 >
-                  <option value="">— alege —</option>
-                  <option value="movable">Deplasabilă</option>
-                  <option value="immovable">Nedeplasabilă (asistență rutieră)</option>
+                  <option value="">{ticketForm("options.choose")}</option>
+                  <option value="movable">{ticketForm("vehicleMobility.movable")}</option>
+                  <option value="immovable">{ticketForm("vehicleMobility.immovable")}</option>
                 </select>
                 <p className="mt-1 text-[10px] text-zinc-500">
-                  Nedeplasabilă activează asistența rutieră la deschiderea dosarului service.
+                  {ticketForm("hints.immovableRoadside")}
                 </p>
               </div>
             ) : null}
 
             {ctx.vehicleId ? (
               <div>
-                <label className="text-xs text-zinc-500">Km la eveniment</label>
+                <label className="text-xs text-zinc-500">{ticketForm("fields.eventKm")}</label>
                 <input
                   type="number"
                   min={0}
@@ -331,13 +334,13 @@ export function TicketForm({
                 disabled={pending}
                 className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
               >
-                {pending ? "Se salvează…" : "Creează tichet"}
+                {pending ? tx("common.actions.saving") : tx("ops.form.createTicket")}
               </button>
               <Link
                 href="/fleet/tickets"
                 className="rounded-lg border border-zinc-700 px-4 py-2 text-sm hover:bg-zinc-900"
               >
-                Anulează
+                {tx("common.actions.cancel")}
               </Link>
             </div>
           </form>

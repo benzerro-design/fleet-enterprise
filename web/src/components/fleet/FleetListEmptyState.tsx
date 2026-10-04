@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { t } from "@/lib/i18n/t";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/types";
 
 type Props = {
   title: string;
@@ -7,6 +9,7 @@ type Props = {
   hasFilters?: boolean;
   clearFiltersHref?: string;
   primaryAction?: { label: string; href: string };
+  locale?: Locale;
 };
 
 /** Empty state Index (listă) — CTA clar, fără carduri decorative. */
@@ -16,6 +19,7 @@ export function FleetListEmptyState({
   hasFilters,
   clearFiltersHref,
   primaryAction,
+  locale = DEFAULT_LOCALE,
 }: Props) {
   return (
     <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-zinc-700 bg-zinc-950/40 px-5 py-10">
@@ -29,7 +33,7 @@ export function FleetListEmptyState({
             href={clearFiltersHref}
             className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
           >
-            Resetează filtrele
+            {t(locale, "common.list.clearFilters")}
           </Link>
         ) : null}
         {primaryAction ? (

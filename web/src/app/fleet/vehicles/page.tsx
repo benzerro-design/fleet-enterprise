@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
@@ -14,12 +15,15 @@ import {
 import { type VehicleListPayload, VEHICLE_STATUSES, fleetBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 import type { ReminderActionRow } from "@/lib/reminder-actions";
 import type { TicketListPayload } from "@/lib/tickets-api";
 
 type Search = {
   q?: string;
   status?: string;
+  clientId?: string;
   page?: string;
 };
 
@@ -27,6 +31,7 @@ function buildListQuery(sp: Search, pageSize = 20): string {
   const p = new URLSearchParams();
   if (sp.q?.trim()) p.set("q", sp.q.trim());
   if (sp.status?.trim()) p.set("status", sp.status.trim());
+  if (sp.clientId?.trim()) p.set("clientId", sp.clientId.trim());
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   p.set("page", String(page));
   p.set("pageSize", String(pageSize));
@@ -83,6 +88,8 @@ type PageProps = { searchParams: Promise<Search> };
 
 export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const auth = await getAuthMeResult();
   const write = canWriteFleetOps(auth);
   const driverPortal = isClientDriverPortal(auth);
@@ -114,12 +121,14 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   const exportQs = new URLSearchParams();
   if (sp.q?.trim()) exportQs.set("q", sp.q.trim());
   if (sp.status?.trim()) exportQs.set("status", sp.status.trim());
+  if (sp.clientId?.trim()) exportQs.set("clientId", sp.clientId.trim());
   const exportHref = `${fleetBrowserBase}/vehicles/export?${exportQs.toString()}`;
 
   const withPage = (nextPage: number) => {
     const p = new URLSearchParams();
     if (sp.q?.trim()) p.set("q", sp.q.trim());
     if (sp.status?.trim()) p.set("status", sp.status.trim());
+    if (sp.clientId?.trim()) p.set("clientId", sp.clientId.trim());
     p.set("page", String(nextPage));
     return `/fleet/vehicles?${p.toString()}`;
   };
@@ -132,15 +141,15 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">
-                {driverPortal ? "Cont șofer" : "Fleet core"}
+                {driverPortal ? t(locale, "pages.vehicles.driverEyebrow") : t(locale, "pages.vehicles.eyebrow")}
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-                {driverPortal ? "Vehiculele tale" : "Vehicule"}
+                {driverPortal ? t(locale, "pages.vehicles.driverTitle") : t(locale, "pages.vehicles.title")}
               </h1>
               <p className="mt-3 max-w-2xl text-zinc-400">
                 {driverPortal
-                  ? "Vehiculele alocate ție. Deschide un vehicul pentru curse, costuri și documente."
-                  : "Căutare, filtru status, paginare și export CSV. Detaliu pe vehicul fără a intra direct în editare."}
+                  ? t(locale, "pages.vehicles.driverDescription")
+                  : t(locale, "pages.vehicles.description")}
               </p>
             </div>
 
@@ -151,13 +160,13 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                     href="/fleet/vehicles/new"
                     className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
                   >
-                    Vehicul nou
+                    {t(locale, "pages.vehicles.newVehicle")}
                   </Link>
                   <Link
                     href="/fleet/vehicles/assemblies/new"
                     className="inline-flex items-center justify-center rounded-lg border border-emerald-600/50 bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-950/50"
                   >
-                    Ansamblu nou
+                    {t(locale, "pages.vehicles.newAssembly")}
                   </Link>
                 </>
               ) : null}
@@ -166,7 +175,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                   href={exportHref}
                   className="inline-flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
                 >
-                  Export CSV
+                  {t(locale, "common.actions.exportCsv")}
                 </a>
               ) : null}
             </div>
@@ -179,23 +188,24 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
             method="get"
             className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
           >
+            {sp.clientId?.trim() ? <input type="hidden" name="clientId" value={sp.clientId.trim()} /> : null}
             <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Căutare</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "common.filters.search")}</label>
               <input
                 name="q"
                 defaultValue={sp.q ?? ""}
-                placeholder="Nr. înmatriculare, client, VIN…"
+                placeholder={t(locale, "pages.vehicles.searchPlaceholder")}
                 className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
               />
             </div>
             <div className="flex min-w-[10rem] flex-col gap-1">
-              <label className="text-xs font-medium text-zinc-500">Status</label>
+              <label className="text-xs font-medium text-zinc-500">{t(locale, "common.filters.status")}</label>
               <select
                 name="status"
                 defaultValue={sp.status ?? ""}
                 className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 focus:ring-2"
               >
-                <option value="">Toate</option>
+                <option value="">{t(locale, "common.filters.all")}</option>
                 {VEHICLE_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
@@ -207,7 +217,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
               type="submit"
               className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
             >
-              Aplică
+              {t(locale, "common.actions.apply")}
             </button>
             <FilterResetLink href="/fleet/vehicles" />
           </form>
@@ -215,21 +225,21 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
       >
         {!list ? (
           <p className="text-amber-400">
-            Nu am putut încărca vehiculele. Verifică API-ul și sesiunea.
+            {t(locale, "pages.vehicles.loadFailed")}
           </p>
         ) : vehicles.length === 0 ? (
           <p className="text-zinc-400">
-            Nu există vehicule pentru filtrele curente.
+            {t(locale, "common.list.empty")}
             {write ? (
               <>
                 {" "}
                 <Link href="/fleet/vehicles/new" className="text-emerald-400 underline hover:text-emerald-300">
-                  Adaugă vehicul
+                  {t(locale, "pages.vehicles.addVehicle")}
                 </Link>
                 .
               </>
             ) : (
-              <> Contul tău are rol de citire; un administrator poate adăuga vehicule.</>
+              <> {t(locale, "pages.vehicles.readOnlyEmpty")}</>
             )}
           </p>
         ) : (

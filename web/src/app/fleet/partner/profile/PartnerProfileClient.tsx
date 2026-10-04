@@ -4,6 +4,7 @@ import { SupplierProfileShell } from "@/components/fleet/suppliers/SupplierProfi
 import type { SupplierMembershipMe } from "@/lib/auth-server";
 import type { SupplierRecord } from "@/lib/suppliers-api";
 import type { SupplierServiceCatalogEntry } from "@/lib/supplier-service-catalog";
+import { useT } from "@/lib/i18n/useT";
 
 type Props = {
   supplierMembership?: SupplierMembershipMe;
@@ -22,6 +23,7 @@ export function PartnerProfileClient({
   canWriteServices,
   canInvite = false,
 }: Props) {
+  const tx = useT();
   return (
     <SupplierProfileShell
       mode="partner"
@@ -31,7 +33,7 @@ export function PartnerProfileClient({
       supplierMembership={supplierMembership}
       canWriteServices={canWriteServices}
       canInviteTeam={canInvite}
-      assignedByLabel="Partener / flotă"
+      assignedByLabel={tx("pages.partner.assignedBy")}
     />
   );
 }

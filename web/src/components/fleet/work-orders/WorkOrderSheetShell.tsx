@@ -44,6 +44,7 @@ import {
   type ServiceTypeSettingsKey,
   type WorkOrderSettings,
 } from "@/lib/work-order-settings";
+import { useT } from "@/lib/i18n/useT";
 
 type Props = {
   wo: WorkOrderDetail;
@@ -107,6 +108,8 @@ export function WorkOrderSheetShell({
   partnerSupplierId,
   workOrderSettings = DEFAULT_WORK_ORDER_SETTINGS,
 }: Props) {
+  const tx = useT();
+  const woT = (key: string) => tx(`ops.workOrders.sheet.${key}`);
   const canMarkServiceOut = canMarkServiceOutProp ?? canWrite;
   const mobilityPrefillSupplierId = partnerSupplierId?.trim() || (isPartner ? wo.supplierId : null);
   const router = useRouter();
@@ -192,13 +195,13 @@ export function WorkOrderSheetShell({
   const ticketSettlement = wo.ticketSettlement ?? null;
 
   const visitOptions = useMemo(() => {
-    const opts: { n: number; label: string }[] = [{ n: 1, label: "Vizită 1" }];
-    if (useVisit2) opts.push({ n: 2, label: "Vizită 2 — reparație" });
+    const opts: { n: number; label: string }[] = [{ n: 1, label: woT("visit.one") }];
+    if (useVisit2) opts.push({ n: 2, label: woT("visit.twoRepair") });
     for (const v of extraVisits) {
-      opts.push({ n: v.n, label: `Vizită ${v.n}` });
+      opts.push({ n: v.n, label: woT("visit.number").replace("{n}", String(v.n)) });
     }
     return opts;
-  }, [useVisit2, extraVisits]);
+  }, [useVisit2, extraVisits, tx]);
 
   const latestVisitN = visitOptions[visitOptions.length - 1]!.n;
   const [selectedVisit, setSelectedVisit] = useState(() => {
@@ -279,7 +282,9 @@ export function WorkOrderSheetShell({
         };
         if (j.fleetOdometerUpdate?.updated && j.fleetOdometerUpdate.newKm != null) {
           setFleetOdoNotice(
-            `Odometru flotă actualizat: ${j.fleetOdometerUpdate.previousKm.toLocaleString("ro-RO")} → ${j.fleetOdometerUpdate.newKm.toLocaleString("ro-RO")} km`,
+            woT("messages.fleetOdometerUpdatedFromTo")
+              .replace("{previous}", j.fleetOdometerUpdate.previousKm.toLocaleString("ro-RO"))
+              .replace("{next}", j.fleetOdometerUpdate.newKm.toLocaleString("ro-RO")),
           );
         }
         router.refresh();
@@ -315,7 +320,7 @@ export function WorkOrderSheetShell({
     if (requirePhotosIn) {
       const n = await countVisitPhotos(visitIndex, "in");
       if (n < 1) {
-        setError("Poze la In service sunt obligatorii pentru acest tip — încarcă pe tab-ul Poze In.");
+        setError(woT("errors.photosInRequired"));
         setSelectedVisit(useVisit2 ? 2 : 1);
         setVisitPane("in");
         return;
@@ -326,12 +331,12 @@ export function WorkOrderSheetShell({
     if (kmVal.trim()) {
       const n = parseInt(kmVal, 10);
       if (!Number.isFinite(n) || n < 0) {
-        setError("Km intrare invalid.");
+        setError(woT("errors.invalidKmIn"));
         return;
       }
       body.odometerKmIn = n;
     } else if (requireKm) {
-      setError("Km intrare este obligatoriu.");
+      setError(woT("errors.kmInRequired"));
       return;
     }
     await patchServiceTimes(body);
@@ -342,7 +347,7 @@ export function WorkOrderSheetShell({
     if (requirePhotosOut) {
       const n = await countVisitPhotos(visitIndex, "out");
       if (n < 1) {
-        setError("Poze la Out service sunt obligatorii pentru acest tip — încarcă pe tab-ul Poze Out.");
+        setError(woT("errors.photosOutRequired"));
         setSelectedVisit(useVisit2 ? 2 : 1);
         setVisitPane("out");
         return;
@@ -353,12 +358,12 @@ export function WorkOrderSheetShell({
     if (kmVal.trim()) {
       const n = parseInt(kmVal, 10);
       if (!Number.isFinite(n) || n < 0) {
-        setError("Km ieșire invalid.");
+        setError(woT("errors.invalidKmOut"));
         return;
       }
       body.odometerKmOut = n;
     } else if (requireKm) {
-      setError("Km ieșire este obligatoriu.");
+      setError(woT("errors.kmOutRequired"));
       return;
     }
     await patchServiceTimes(body);
@@ -368,7 +373,7 @@ export function WorkOrderSheetShell({
     if (requirePhotosIn) {
       const count = await countVisitPhotos(n, "in");
       if (count < 1) {
-        setError(`Poze In obligatorii pentru vizita ${n}.`);
+        setError(woT("errors.visitPhotosInRequired").replace("{n}", String(n)));
         setSelectedVisit(n);
         setVisitPane("in");
         return;
@@ -382,12 +387,12 @@ export function WorkOrderSheetShell({
     if (kmVal.trim()) {
       const km = parseInt(kmVal, 10);
       if (!Number.isFinite(km) || km < 0) {
-        setError("Km intrare invalid.");
+        setError(woT("errors.invalidKmIn"));
         return;
       }
       body.odometerKmIn = km;
     } else if (requireKm) {
-      setError("Km intrare este obligatoriu.");
+      setError(woT("errors.kmInRequired"));
       return;
     }
     await patchServiceTimes(body);
@@ -397,7 +402,7 @@ export function WorkOrderSheetShell({
     if (requirePhotosOut) {
       const count = await countVisitPhotos(n, "out");
       if (count < 1) {
-        setError(`Poze Out obligatorii pentru vizita ${n}.`);
+        setError(woT("errors.visitPhotosOutRequired").replace("{n}", String(n)));
         setSelectedVisit(n);
         setVisitPane("out");
         return;
@@ -411,12 +416,12 @@ export function WorkOrderSheetShell({
     if (kmVal.trim()) {
       const km = parseInt(kmVal, 10);
       if (!Number.isFinite(km) || km < 0) {
-        setError("Km ieșire invalid.");
+        setError(woT("errors.invalidKmOut"));
         return;
       }
       body.odometerKmOut = km;
     } else if (requireKm) {
-      setError("Km ieșire este obligatoriu.");
+      setError(woT("errors.kmOutRequired"));
       return;
     }
     await patchServiceTimes(body);
@@ -556,24 +561,24 @@ export function WorkOrderSheetShell({
 
   const navActions: { label: string; href: string }[] = isPartner
     ? [
-        { label: "← Inbox", href: "/fleet/partner/work-orders" },
-        { label: "Programator", href: schedulerLink },
+        { label: woT("nav.inbox"), href: "/fleet/partner/work-orders" },
+        { label: woT("nav.scheduler"), href: schedulerLink },
       ]
     : [
-        { label: "← Inbox", href: "/fleet/work-orders" },
-        { label: "Vehicul", href: `/fleet/vehicles/${wo.vehicleId}` },
-        { label: "Programator", href: schedulerLink },
+        { label: woT("nav.inbox"), href: "/fleet/work-orders" },
+        { label: woT("nav.vehicle"), href: `/fleet/vehicles/${wo.vehicleId}` },
+        { label: woT("nav.scheduler"), href: schedulerLink },
         ...(wo.sourceTicketId
-          ? [{ label: "Tichet", href: `/fleet/tickets/${wo.sourceTicketId}` }]
+          ? [{ label: woT("nav.ticket"), href: `/fleet/tickets/${wo.sourceTicketId}` }]
           : []),
       ];
 
   const toolbarGroups = [
     {
-      label: "Comandă",
+      label: woT("tabs.order"),
       items: [] as { label: string; href?: string; onClick?: () => void }[],
     },
-    { label: "Navigare", items: navActions },
+    { label: woT("toolbar.navigation"), items: navActions },
   ];
 
   return (
@@ -581,14 +586,14 @@ export function WorkOrderSheetShell({
       <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/60 px-2 py-2">
         <div className={`grid min-w-[640px] gap-1.5 ${isDamageWo ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2"}`}>
           {toolbarGroups.map((g) => {
-            if (g.label === "Comandă") {
+            if (g.label === woT("tabs.order")) {
               return (
                 <div
                   key={g.label}
                   className="rounded-md border border-zinc-800 bg-zinc-950 px-2 pt-1.5"
                 >
                   <div className="mb-0 px-1 text-[9px] font-semibold uppercase text-zinc-500">
-                    Comandă
+                    {woT("tabs.order")}
                   </div>
                   <nav className="border-b border-zinc-800">
                     <div className="flex flex-wrap gap-2">
@@ -598,7 +603,7 @@ export function WorkOrderSheetShell({
                         onClick={() => setSheetView("comanda")}
                         className={fleetSheetTabClass(sheetView === "comanda")}
                       >
-                        Comandă
+                        {woT("tabs.order")}
                       </button>
                       {isDamageWo ? (
                         <button
@@ -607,7 +612,7 @@ export function WorkOrderSheetShell({
                           onClick={() => setSheetView("dosar")}
                           className={fleetSheetTabClass(sheetView === "dosar")}
                         >
-                          Dosar daună
+                          {woT("tabs.claimFile")}
                         </button>
                       ) : null}
                       <button
@@ -616,7 +621,7 @@ export function WorkOrderSheetShell({
                         onClick={() => setSheetView("mobilitate")}
                         className={fleetSheetTabClass(sheetView === "mobilitate")}
                       >
-                        Mobilitate
+                        {woT("tabs.mobility")}
                       </button>
                     </div>
                   </nav>
@@ -627,7 +632,7 @@ export function WorkOrderSheetShell({
               <div key={g.label} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5">
                 <div className="mb-1 text-[9px] font-semibold uppercase text-zinc-500">{g.label}</div>
                 <div className="flex flex-wrap gap-1">
-                  {g.items.length === 0 && g.label === "Comandă" ? (
+                  {g.items.length === 0 && g.label === woT("tabs.order") ? (
                     <span className="text-[10px] text-zinc-600">—</span>
                   ) : null}
                   {g.items.map((act) =>
@@ -686,11 +691,11 @@ export function WorkOrderSheetShell({
                 )}
                 <span>·</span>
                 <span>
-                  Total deviz <span className="font-mono text-zinc-200">{totalDisplay}</span>
+                  {woT("labels.quoteTotal")} <span className="font-mono text-zinc-200">{totalDisplay}</span>
                 </span>
               </div>
               <span className="flex items-center gap-1 text-xs font-normal text-zinc-400">
-                Tip:
+                {woT("labels.type")}:
                 {SERVICE_ORDER_TYPES.map((st) => (
                   <button
                     key={st.code}
@@ -710,7 +715,7 @@ export function WorkOrderSheetShell({
               </span>
               {workshopStatuses.length > 0 ? (
                 <label className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                  <span>Atelier:</span>
+                  <span>{woT("labels.workshop")}:</span>
                   <select
                     value={workshopStatusCode}
                     disabled={!canWrite || pending}
@@ -729,16 +734,16 @@ export function WorkOrderSheetShell({
               {(requirePhotosIn || requirePhotosOut) && !outServiceDone ? (
                 <p className="mt-1 text-[11px] text-amber-200/80">
                   {requirePhotosIn && requirePhotosOut
-                    ? "Poze In și Out obligatorii pe tip — API blochează marcarea fără ele."
+                    ? woT("messages.photosInOutRequired")
                     : requirePhotosIn
-                      ? "Poze In obligatorii pe tip — încarcă înainte de In service."
-                      : "Poze Out obligatorii pe tip — încarcă înainte de Out service."}
+                      ? woT("messages.photosInRequired")
+                      : woT("messages.photosOutRequired")}
                 </p>
               ) : null}
             </>
           ) : sheetView === "mobilitate" ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-              <span>Mobilitate — mașină la schimb</span>
+              <span>{woT("labels.mobilityReplacement")}</span>
               <span>·</span>
               <span>{wo.registrationNumber}</span>
               <button
@@ -746,12 +751,12 @@ export function WorkOrderSheetShell({
                 onClick={() => setSheetView("comanda")}
                 className="text-sky-300 hover:underline"
               >
-                ← înapoi la comandă
+                {woT("actions.backToOrder")}
               </button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-              <span>Dosar daună</span>
+              <span>{woT("tabs.claimFile")}</span>
               <span>·</span>
               <span>{wo.registrationNumber}</span>
               <button
@@ -759,7 +764,7 @@ export function WorkOrderSheetShell({
                 onClick={() => setSheetView("comanda")}
                 className="text-sky-300 hover:underline"
               >
-                ← înapoi la comandă
+                {woT("actions.backToOrder")}
               </button>
             </div>
           )}
@@ -801,7 +806,7 @@ export function WorkOrderSheetShell({
               }}
             />
           ) : (
-            <p className="text-sm text-zinc-500">Nu ai drept de alocare pe această comandă.</p>
+            <p className="text-sm text-zinc-500">{woT("messages.noAllocationPermission")}</p>
           )}
         </div>
       ) : null}
@@ -824,13 +829,13 @@ export function WorkOrderSheetShell({
               onClick={() => setSheetView("dosar")}
               className="w-full rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2 text-left text-xs text-amber-100 hover:bg-amber-950/35"
             >
-              Reparație (În lucru) blocată —{" "}
+              {woT("damage.repairBlocked")}{" "}
               {wo.damagePayerType === "client"
-                ? "confirmă plătitorul client"
-                : "Accept plată (pipeline)"}{" "}
-              + mobilitate
-              {wo.vehicleMovable === "immovable" ? " (+ asistență la recepție dacă e imobil)" : ""}.
-              Deschide dosarul daună →
+                ? woT("damage.confirmClientPayer")
+                : woT("damage.acceptPaymentPipeline")}{" "}
+              + {woT("tabs.mobility").toLowerCase()}
+              {wo.vehicleMovable === "immovable" ? ` ${woT("damage.roadsideReceptionSuffix")}` : ""}.
+              {woT("damage.openClaimFile")}
             </button>
           ) : !wo.damagePayerType ? (
             <button
@@ -838,7 +843,7 @@ export function WorkOrderSheetShell({
               onClick={() => setSheetView("dosar")}
               className="w-full rounded-lg border border-sky-500/40 bg-sky-950/20 px-3 py-2 text-left text-xs text-sky-100 hover:bg-sky-950/35"
             >
-              Alege plătitorul pe dosarul de daună →
+              {woT("damage.choosePayer")}
             </button>
           ) : (
             <button
@@ -846,9 +851,9 @@ export function WorkOrderSheetShell({
               onClick={() => setSheetView("dosar")}
               className="text-xs text-zinc-500 hover:text-zinc-300 hover:underline"
             >
-              Dosar daună
+              {woT("tabs.claimFile")}
               {wo.damageCascoFranchiseCents != null
-                ? ` · franciză ${(wo.damageCascoFranchiseCents / 100).toFixed(2)} RON`
+                ? ` · ${woT("damage.franchise")} ${(wo.damageCascoFranchiseCents / 100).toFixed(2)} RON`
                 : ""}{" "}
               →
             </button>
@@ -860,15 +865,15 @@ export function WorkOrderSheetShell({
 
       <div className="grid border-b border-zinc-800 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className={panelClass()}>
-          {panelTitle("Tranzacție")}
+          {panelTitle(woT("panels.transaction"))}
           <div className="space-y-1 text-xs text-zinc-300">
             <div>
-              Comandă:{" "}
+              {woT("labels.order")}:{" "}
               <span className="font-mono font-medium text-violet-300">{workOrderDisplayLabel(wo)}</span>
             </div>
             {wo.sourceTicketId ? (
               <div>
-                Referință{" "}
+                {woT("labels.reference")}{" "}
                 {isPartner ? (
                   <span className="font-mono text-emerald-300">#{wo.ticketDisplayId}</span>
                 ) : (
@@ -883,47 +888,47 @@ export function WorkOrderSheetShell({
                 <PartnerSourceTicketPanel workOrderId={wo.id} compact />
               </div>
             ) : null}
-            <div>Programare: {fmtDate(wo.plannedAt ?? wo.linkedAppointmentScheduledAt)}</div>
+            <div>{woT("labels.appointment")}: {fmtDate(wo.plannedAt ?? wo.linkedAppointmentScheduledAt)}</div>
             {wo.linkedAppointmentScheduledAt && wo.linkedAppointmentStatus ? (
               <div className="text-[11px] text-zinc-400">
-                Status programare:{" "}
+                {woT("labels.appointmentStatus")}:{" "}
                 <span className="text-amber-200/90">
                   {appointmentStatusLabel(wo.linkedAppointmentStatus)}
                 </span>
               </div>
             ) : null}
             <div>
-              Estimare finalizare:{" "}
+              {woT("labels.estimatedCompletion")}:{" "}
               {wo.estimatedRepairAt ? (
                 <span className="text-zinc-100">{formatDateRo(wo.estimatedRepairAt)}</span>
               ) : (
-                <span className="text-amber-400/90">necompletată</span>
+                <span className="text-amber-400/90">{woT("status.missing")}</span>
               )}
             </div>
-            <div className="pt-1 font-semibold text-zinc-100">Total: {totalDisplay}</div>
+            <div className="pt-1 font-semibold text-zinc-100">{woT("labels.total")}: {totalDisplay}</div>
           </div>
         </div>
 
         <div className={panelClass()}>
-          {panelTitle("Vehicul + Client")}
+          {panelTitle(woT("panels.vehicleClient"))}
           <dl className="space-y-1 text-xs">
             <Row
-              label="Nr. înmatriculare"
+              label={woT("labels.registrationNumber")}
               value={wo.vehicle.registrationNumber}
               href={!isPartner ? `/fleet/vehicles/${wo.vehicleId}` : null}
             />
             <Row
-              label="Marcă / model"
+              label={woT("labels.brandModel")}
               value={[wo.vehicle.brand, wo.vehicle.model].filter(Boolean).join(" ") || "—"}
             />
-            <Row label="VIN / șasiu" value={wo.vehicle.vin ?? "—"} mono />
+            <Row label={woT("labels.vin")} value={wo.vehicle.vin ?? "—"} mono />
             <div className="grid grid-cols-[88px_1fr] gap-2">
-              <dt className="text-zinc-500">Km flotă</dt>
+              <dt className="text-zinc-500">{woT("labels.fleetKm")}</dt>
               <dd className="text-zinc-200">
                 {wo.vehicle.odometerKm.toLocaleString("ro-RO")} km
                 {fleetOdoNotice || fleetAlignedFromService ? (
                   <span className="ml-1.5 inline-flex items-center rounded border border-emerald-800/50 bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                    actualizat
+                    {woT("status.updated")}
                   </span>
                 ) : null}
               </dd>
@@ -931,22 +936,22 @@ export function WorkOrderSheetShell({
             {fleetOdoNotice ? (
               <p className="text-[10px] text-emerald-400/80">{fleetOdoNotice}</p>
             ) : fleetAlignedFromService ? (
-              <p className="text-[10px] text-emerald-400/80">Odometru flotă actualizat din recepție service</p>
+              <p className="text-[10px] text-emerald-400/80">{woT("messages.fleetOdometerUpdated")}</p>
             ) : null}
-            <Row label="ITP expiră" value={fmtItp(wo.vehicle.itpExpiresOn)} />
+            <Row label={woT("labels.itpExpires")} value={fmtItp(wo.vehicle.itpExpiresOn)} />
             <div className="my-2 border-t border-zinc-800" />
             <Row
-              label="Denumire"
+              label={woT("labels.legalName")}
               value={wo.client.legalName}
               href={!isPartner ? `/fleet/clients/${wo.clientId}` : null}
             />
-            <Row label="CUI" value={wo.client.taxId ?? "—"} />
-            <Row label="Adresă" value={wo.client.addressLine ?? "—"} />
+            <Row label={woT("labels.taxId")} value={wo.client.taxId ?? "—"} />
+            <Row label={woT("labels.address")} value={wo.client.addressLine ?? "—"} />
             <Row
-              label="Contact"
+              label={woT("labels.contact")}
               value={[wo.client.contactPhone, wo.client.contactEmail].filter(Boolean).join(" · ") || "—"}
             />
-            <Row label="Grupă / contract" value={wo.client.billingNotes ?? "—"} />
+            <Row label={woT("labels.groupContract")} value={wo.client.billingNotes ?? "—"} />
           </dl>
           {isPartner && wo.vehicleId ? (
             <PartnerVehicleHistoryPanel
@@ -954,11 +959,11 @@ export function WorkOrderSheetShell({
               currentWorkOrderId={wo.id}
             />
           ) : null}
-          <p className="mt-2 text-[10px] text-zinc-600">Read-only — date master flotă</p>
+          <p className="mt-2 text-[10px] text-zinc-600">{woT("messages.readOnlyMasterData")}</p>
         </div>
 
         <div className={panelClass()}>
-          {panelTitle("Partener + Responsabil")}
+          {panelTitle(woT("panels.partnerResponsible"))}
           {wo.supplier ? (
             <div className="space-y-2 text-xs text-zinc-300">
               <div>
@@ -983,17 +988,17 @@ export function WorkOrderSheetShell({
                 </div>
               </div>
               <div className="border-t border-zinc-800 pt-2">
-                <div className="text-[10px] uppercase text-zinc-500">Contact service</div>
-                <div className="text-zinc-400">Coordonator alocat pe comandă (pilot: contact furnizor)</div>
+                <div className="text-[10px] uppercase text-zinc-500">{woT("labels.serviceContact")}</div>
+                <div className="text-zinc-400">{woT("messages.assignedCoordinator")}</div>
               </div>
             </div>
           ) : (
-            <p className="text-xs text-zinc-500">Fără furnizor alocat</p>
+            <p className="text-xs text-zinc-500">{woT("messages.noSupplier")}</p>
           )}
         </div>
 
         <div className={`${panelClass()} bg-zinc-900/40`}>
-          {panelTitle("Stare (Tila)")}
+          {panelTitle(woT("panels.status"))}
           {hasLucrare2 ? (
             <div className="mb-2 flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
               <button
@@ -1022,11 +1027,11 @@ export function WorkOrderSheetShell({
           ) : null}
           {tilaTrack === 2 && hasLucrare2 ? (
             <p className="mb-2 rounded border border-amber-800/40 bg-amber-950/25 px-2 py-1.5 text-[11px] text-amber-100">
-              L2 activă — istoricul L1 rămâne pe tab-ul alăturat.
+              {woT("messages.l2Active")}
             </p>
           ) : wo.supplementRepairAt && !wo.readyAt && tilaTrack === 1 ? (
             <p className="mb-2 rounded border border-zinc-700/60 bg-zinc-900/50 px-2 py-1.5 text-[11px] text-zinc-400">
-              L1 (istoric înghețat). Activă acum: L2.
+              {woT("messages.l1Frozen")}
             </p>
           ) : null}
           <ul className="space-y-1">
@@ -1056,7 +1061,7 @@ export function WorkOrderSheetShell({
                     onClick={() => void markWorkReady()}
                     className="ml-1 rounded border border-emerald-600/50 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-950/30"
                   >
-                    Bifează
+                    {woT("actions.check")}
                   </button>
                 ) : null}
               </li>
@@ -1070,21 +1075,19 @@ export function WorkOrderSheetShell({
               onClick={() => void startSupplementRepair()}
               className="mt-2 w-full rounded border border-amber-700/50 px-2 py-1.5 text-[11px] text-amber-100 hover:bg-amber-950/40 disabled:opacity-50"
             >
-              Lucrare nouă (L2)
+              {woT("actions.newWorkL2")}
             </button>
           ) : null}
           {isDamageWo ? (
             <p className="mt-2 text-[10px] leading-snug text-zinc-500">
-              Daună: Verificare / Deviz urmează dosarul. Lucrare gata — bifează manual sau urcă poze
-              «auto reparat» pe Dosar. După Lucrare gata pe L1: „Lucrare nouă” pentru L2, apoi Deviz pe
-              L2.
+              {woT("messages.damageFlowHint")}
             </p>
           ) : null}
         </div>
 
         <div className={panelClass()}>
           <div className="mb-2 flex items-start justify-between gap-2">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Rezumat</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{woT("panels.summary")}</div>
             {canWrite &&
             wo.outServiceAt &&
             !(wo.visit2InServiceAt && !wo.visit2OutServiceAt) ? (
@@ -1094,7 +1097,7 @@ export function WorkOrderSheetShell({
                 onClick={() => void addExtraVisit()}
                 className="shrink-0 rounded border border-zinc-600 px-2 py-0.5 text-[10px] font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
               >
-                Adaugă vizită
+                {woT("actions.addVisit")}
               </button>
             ) : null}
           </div>
@@ -1112,11 +1115,11 @@ export function WorkOrderSheetShell({
                     : "rounded border border-amber-800/40 bg-amber-950/20 px-2 py-1.5"
                 }
               >
-                Data eveniment:{" "}
+                {woT("damage.eventDate")}:{" "}
                 {wo.damageEventOn ? (
                   <span className="text-zinc-200">{formatDateRo(wo.damageEventOn)}</span>
                 ) : (
-                  <span className="text-amber-300">necompletată — completează pe Dosar daună</span>
+                  <span className="text-amber-300">{woT("damage.eventDateMissing")}</span>
                 )}
                 {" · "}
                 <button
@@ -1124,13 +1127,13 @@ export function WorkOrderSheetShell({
                   onClick={() => setSheetView("dosar")}
                   className="text-sky-300 hover:underline"
                 >
-                  editează pe Dosar
+                  {woT("damage.editOnClaim")}
                 </button>
               </div>
             ) : null}
             {wo.driverName ? (
               <div>
-                Șofer:{" "}
+                {woT("labels.driver")}:{" "}
                 {!isPartner && wo.driverId ? (
                   <Link href={`/fleet/drivers/${wo.driverId}`} className="text-sky-300 hover:underline">
                     {wo.driverName}
@@ -1150,7 +1153,7 @@ export function WorkOrderSheetShell({
             <div className="pt-2">
               {visitOptions.length > 1 ? (
                 <label className="mb-1.5 block text-[10px] text-zinc-500">
-                  Vizită
+                  {woT("visit.label")}
                   <select
                     value={selectedVisit}
                     onChange={(e) => {
@@ -1171,9 +1174,9 @@ export function WorkOrderSheetShell({
               <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
                 {(
                   [
-                    { id: "details" as const, label: selectedVisit === 1 ? "Vizită 1" : `Vizită ${selectedVisit}` },
-                    { id: "in" as const, label: "Poze IN" },
-                    { id: "out" as const, label: "Poze OUT" },
+                    { id: "details" as const, label: selectedVisit === 1 ? woT("visit.one") : woT("visit.number").replace("{n}", String(selectedVisit)) },
+                    { id: "in" as const, label: woT("visit.photosIn") },
+                    { id: "out" as const, label: woT("visit.photosOut") },
                   ]
                 ).map((t) => {
                   const activeTone =
@@ -1205,7 +1208,7 @@ export function WorkOrderSheetShell({
                     mode="visit"
                     visitIndex={selectedVisit}
                     phase="in"
-                    title={`Poze intrare — vizită ${selectedVisit}`}
+                    title={woT("visit.photosInTitle").replace("{n}", String(selectedVisit))}
                   />
                 </div>
               ) : visitPane === "out" ? (
@@ -1216,7 +1219,7 @@ export function WorkOrderSheetShell({
                     mode="visit"
                     visitIndex={selectedVisit}
                     phase="out"
-                    title={`Poze ieșire — vizită ${selectedVisit}`}
+                    title={woT("visit.photosOutTitle").replace("{n}", String(selectedVisit))}
                   />
                 </div>
               ) : selectedVisit === 1 ? (
@@ -1231,7 +1234,7 @@ export function WorkOrderSheetShell({
                         disabled={!canWrite || pending || !!wo.inServiceAt}
                         onChange={(e) => setKmIn(e.target.value)}
                         className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                        placeholder={requireKm ? "Obligatoriu" : "Opțional"}
+                        placeholder={requireKm ? woT("placeholders.required") : woT("placeholders.optional")}
                       />
                     </label>
                     {wo.inServiceAt ? (
@@ -1259,7 +1262,7 @@ export function WorkOrderSheetShell({
                         disabled={!canMarkServiceOut || pending || !wo.inServiceAt || !!wo.outServiceAt}
                         onChange={(e) => setKmOut(e.target.value)}
                         className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                        placeholder={requireKm ? "Obligatoriu" : "Opțional"}
+                        placeholder={requireKm ? woT("placeholders.required") : woT("placeholders.optional")}
                       />
                     </label>
                     {wo.outServiceAt ? (
@@ -1281,7 +1284,7 @@ export function WorkOrderSheetShell({
               ) : selectedVisit === 2 && useVisit2 ? (
                 <div className="mt-2 space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
-                    Vizită 2 — reparație
+                    {woT("visit.twoRepair")}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
@@ -1353,7 +1356,7 @@ export function WorkOrderSheetShell({
                   return (
                     <div className="mt-2 space-y-2 rounded-lg border border-sky-500/30 bg-sky-950/20 p-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/90">
-                        Vizită {v.n}
+                        {woT("visit.number").replace("{n}", String(v.n))}
                       </p>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
@@ -1435,7 +1438,7 @@ export function WorkOrderSheetShell({
       {wo.awaitingPostApproval || wo.postApprovalPath ? (
         <div className="border-b border-zinc-800 bg-zinc-950/60 px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-            Decizie după aprobare deviz
+            {woT("postApproval.title")}
           </p>
           {wo.awaitingPostApproval && canWrite ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1445,7 +1448,7 @@ export function WorkOrderSheetShell({
                 onClick={() => void applyPostApproval("immediate")}
                 className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
               >
-                Continuă reparația
+                {woT("postApproval.continueRepair")}
               </button>
               <button
                 type="button"
@@ -1453,24 +1456,24 @@ export function WorkOrderSheetShell({
                 onClick={() => void applyPostApproval("reschedule")}
                 className="rounded-lg border border-amber-500/50 bg-amber-950/30 px-3 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
               >
-                Programează din nou
+                {woT("postApproval.reschedule")}
               </button>
-              <span className="text-[10px] text-zinc-500">Flotă sau partener</span>
+              <span className="text-[10px] text-zinc-500">{woT("postApproval.actorHint")}</span>
             </div>
           ) : wo.postApprovalPath === "immediate" ? (
             <p className="mt-1 text-xs text-emerald-200">
-              {wo.repairPathNote ?? "Reparație directă — devizul rămâne pe comandă"}
+              {wo.repairPathNote ?? woT("postApproval.immediateNote")}
             </p>
           ) : wo.postApprovalPath === "reschedule" ? (
             <div className="mt-1 space-y-2">
               <p className="text-xs text-amber-100">
-                {wo.repairPathNote ?? "Reprogramare — devizul aprobat rămâne valid"}
+                {wo.repairPathNote ?? woT("postApproval.rescheduleNote")}
               </p>
               <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-zinc-200">
                 {wo.linkedAppointmentScheduledAt ? (
                   <>
                     <p>
-                      Propunere programare:{" "}
+                      {woT("postApproval.appointmentProposal")}:{" "}
                       <span className="font-medium text-zinc-50">
                         {fmtDate(wo.linkedAppointmentScheduledAt)}
                       </span>
@@ -1485,15 +1488,15 @@ export function WorkOrderSheetShell({
                     </p>
                     <p className="mt-1 text-[10px] text-zinc-500">
                       {wo.linkedAppointmentStatus === "pending_supplier"
-                        ? "Așteaptă validarea partenerului sau o propunere alternativă de dată."
+                        ? woT("postApproval.waitingSupplier")
                         : wo.linkedAppointmentStatus === "scheduled"
-                          ? "Validat de partener — așteaptă confirmarea managerului."
-                          : "Deschide programatorul pentru detalii / acțiuni."}
+                          ? woT("postApproval.waitingManager")
+                          : woT("postApproval.openSchedulerHint")}
                     </p>
                   </>
                 ) : (
                   <p className="text-amber-100/90">
-                    Nu există încă o programare legată — creează sau alege una din calendar.
+                    {woT("postApproval.noAppointment")}
                   </p>
                 )}
                 <p className="mt-2">
@@ -1502,8 +1505,8 @@ export function WorkOrderSheetShell({
                     className="font-medium text-sky-300 hover:underline"
                   >
                     {wo.linkedAppointmentId
-                      ? "Deschide programarea în calendar →"
-                      : "Solicită programare la furnizor →"}
+                      ? woT("postApproval.openAppointment")
+                      : woT("postApproval.requestAppointment")}
                   </Link>
                 </p>
               </div>
@@ -1512,13 +1515,12 @@ export function WorkOrderSheetShell({
                 onClick={() => setRescheduleOpen((v) => !v)}
                 className="text-xs text-zinc-500 hover:text-zinc-300 hover:underline"
               >
-                {rescheduleOpen ? "Ascunde detalii ▴" : "Detalii reprogramare ▾"}
+                {rescheduleOpen ? woT("postApproval.hideDetails") : woT("postApproval.rescheduleDetails")}
               </button>
               {rescheduleOpen ? (
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
                   <p>
-                    Partenerul validează propunerea (Validează) sau propune altă dată; după confirmare
-                    duală folosești km In/Out vizită 2 pe această comandă.
+                    {woT("postApproval.partnerValidationHint")}
                   </p>
                 </div>
               ) : null}
