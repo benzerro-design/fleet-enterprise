@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
 import { WorkOrderMessageThread } from "@/components/fleet/work-orders/WorkOrderMessageThread";
 import { WorkOrderPhotoGallery } from "@/components/fleet/work-orders/WorkOrderPhotoGallery";
@@ -134,7 +134,7 @@ export function WorkOrderSheetShell({
   const [fleetOdoNotice, setFleetOdoNotice] = useState<string | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [sheetView, setSheetView] = useState<"comanda" | "dosar" | "mobilitate">("comanda");
-  const [rezumatTab, setRezumatTab] = useState<string>("v1");
+  const [visitPane, setVisitPane] = useState<"details" | "in" | "out">("details");
   const [tilaTrack, setTilaTrack] = useState<1 | 2>(1);
   /** Dosar pe WO: același ServiceCase ca pe tichet (nu mapare parțială din WO). */
   const [dosarServiceCase, setDosarServiceCase] = useState<ServiceCaseRecord | null>(null);
@@ -190,6 +190,39 @@ export function WorkOrderSheetShell({
   const useVisit2 = wo.postApprovalPath === "reschedule" && !!wo.outServiceAt;
   const outServiceDone = useVisit2 ? !!wo.visit2OutServiceAt : !!wo.outServiceAt;
   const ticketSettlement = wo.ticketSettlement ?? null;
+
+  const visitOptions = useMemo(() => {
+    const opts: { n: number; label: string }[] = [{ n: 1, label: "Vizită 1" }];
+    if (useVisit2) opts.push({ n: 2, label: "Vizită 2 — reparație" });
+    for (const v of extraVisits) {
+      opts.push({ n: v.n, label: `Vizită ${v.n}` });
+    }
+    return opts;
+  }, [useVisit2, extraVisits]);
+
+  const latestVisitN = visitOptions[visitOptions.length - 1]!.n;
+  const [selectedVisit, setSelectedVisit] = useState(() => {
+    for (let i = extraVisits.length - 1; i >= 0; i--) {
+      const v = extraVisits[i]!;
+      if (v.inServiceAt && !v.outServiceAt) return v.n;
+    }
+    for (let i = extraVisits.length - 1; i >= 0; i--) {
+      if (!extraVisits[i]!.inServiceAt) return extraVisits[i]!.n;
+    }
+    if (useVisit2 && !wo.visit2OutServiceAt) return 2;
+    return latestVisitN;
+  });
+  const prevLatestVisitRef = useRef(latestVisitN);
+
+  useEffect(() => {
+    if (latestVisitN > prevLatestVisitRef.current) {
+      setSelectedVisit(latestVisitN);
+      setVisitPane("details");
+    } else if (!visitOptions.some((o) => o.n === selectedVisit)) {
+      setSelectedVisit(latestVisitN);
+    }
+    prevLatestVisitRef.current = latestVisitN;
+  }, [latestVisitN, visitOptions, selectedVisit]);
 
   const fleetAlignedFromService =
     (wo.odometerKmOut != null && wo.vehicle.odometerKm === wo.odometerKmOut) ||
@@ -283,7 +316,8 @@ export function WorkOrderSheetShell({
       const n = await countVisitPhotos(visitIndex, "in");
       if (n < 1) {
         setError("Poze la In service sunt obligatorii pentru acest tip — încarcă pe tab-ul Poze In.");
-        setRezumatTab(useVisit2 ? "v2-in" : "v1-in");
+        setSelectedVisit(useVisit2 ? 2 : 1);
+        setVisitPane("in");
         return;
       }
     }
@@ -309,7 +343,8 @@ export function WorkOrderSheetShell({
       const n = await countVisitPhotos(visitIndex, "out");
       if (n < 1) {
         setError("Poze la Out service sunt obligatorii pentru acest tip — încarcă pe tab-ul Poze Out.");
-        setRezumatTab(useVisit2 ? "v2-out" : "v1-out");
+        setSelectedVisit(useVisit2 ? 2 : 1);
+        setVisitPane("out");
         return;
       }
     }
@@ -334,7 +369,8 @@ export function WorkOrderSheetShell({
       const count = await countVisitPhotos(n, "in");
       if (count < 1) {
         setError(`Poze In obligatorii pentru vizita ${n}.`);
-        setRezumatTab(`vx-${n}-in`);
+        setSelectedVisit(n);
+        setVisitPane("in");
         return;
       }
     }
@@ -362,7 +398,8 @@ export function WorkOrderSheetShell({
       const count = await countVisitPhotos(n, "out");
       if (count < 1) {
         setError(`Poze Out obligatorii pentru vizita ${n}.`);
-        setRezumatTab(`vx-${n}-out`);
+        setSelectedVisit(n);
+        setVisitPane("out");
         return;
       }
     }
@@ -1109,54 +1146,80 @@ export function WorkOrderSheetShell({
               <p className="pt-1 text-[11px] text-emerald-400/90">{fleetOdoNotice}</p>
             ) : null}
 
-            {/* Vizită 1; Vizită 2+ stau sub tot blocul V1 */}
+            {/* O singură vizită activă — selector când există mai multe */}
             <div className="pt-2">
+              {visitOptions.length > 1 ? (
+                <label className="mb-1.5 block text-[10px] text-zinc-500">
+                  Vizită
+                  <select
+                    value={selectedVisit}
+                    onChange={(e) => {
+                      setSelectedVisit(Number(e.target.value));
+                      setVisitPane("details");
+                    }}
+                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-100"
+                  >
+                    {visitOptions.map((o) => (
+                      <option key={o.n} value={o.n}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
               <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
                 {(
                   [
-                    { id: "v1", label: "Vizită 1" },
-                    { id: "v1-in", label: "Poze IN" },
-                    { id: "v1-out", label: "Poze OUT" },
-                  ] as { id: string; label: string }[]
-                ).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setRezumatTab(t.id)}
-                    className={`rounded px-1.5 py-0.5 text-[10px] ${
-                      rezumatTab === t.id
-                        ? "bg-violet-900/50 text-violet-100"
-                        : "text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                    { id: "details" as const, label: selectedVisit === 1 ? "Vizită 1" : `Vizită ${selectedVisit}` },
+                    { id: "in" as const, label: "Poze IN" },
+                    { id: "out" as const, label: "Poze OUT" },
+                  ]
+                ).map((t) => {
+                  const activeTone =
+                    selectedVisit === 2
+                      ? "bg-amber-900/50 text-amber-100"
+                      : selectedVisit >= 3
+                        ? "bg-sky-900/50 text-sky-100"
+                        : "bg-violet-900/50 text-violet-100";
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setVisitPane(t.id)}
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${
+                        visitPane === t.id ? activeTone : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
               </div>
 
-              {rezumatTab === "v1-in" ? (
+              {visitPane === "in" ? (
                 <div className="pt-2">
                   <WorkOrderPhotoGallery
                     workOrderId={wo.id}
                     canWrite={canWrite}
                     mode="visit"
-                    visitIndex={1}
+                    visitIndex={selectedVisit}
                     phase="in"
-                    title="Poze intrare — vizită 1"
+                    title={`Poze intrare — vizită ${selectedVisit}`}
                   />
                 </div>
-              ) : rezumatTab === "v1-out" ? (
+              ) : visitPane === "out" ? (
                 <div className="pt-2">
                   <WorkOrderPhotoGallery
                     workOrderId={wo.id}
-                    canWrite={canMarkServiceOut}
+                    canWrite={selectedVisit === 1 ? canMarkServiceOut : canWrite}
                     mode="visit"
-                    visitIndex={1}
+                    visitIndex={selectedVisit}
                     phase="out"
-                    title="Poze ieșire — vizită 1"
+                    title={`Poze ieșire — vizită ${selectedVisit}`}
                   />
                 </div>
-              ) : (
+              ) : selectedVisit === 1 ? (
                 <div className="grid gap-3 pt-2 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="block text-zinc-500">
@@ -1215,181 +1278,79 @@ export function WorkOrderSheetShell({
                     ) : null}
                   </div>
                 </div>
-              )}
-            </div>
-
-            {useVisit2 ? (
-              <div className="mt-3 border-t border-zinc-800 pt-2">
-                <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
-                  {(
-                    [
-                      { id: "v2", label: "Vizită 2" },
-                      { id: "v2-in", label: "Poze IN 2" },
-                      { id: "v2-out", label: "Poze OUT 2" },
-                    ] as { id: string; label: string }[]
-                  ).map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setRezumatTab(t.id)}
-                      className={`rounded px-1.5 py-0.5 text-[10px] ${
-                        rezumatTab === t.id
-                          ? "bg-amber-900/50 text-amber-100"
-                          : "text-zinc-500 hover:text-zinc-300"
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
+              ) : selectedVisit === 2 && useVisit2 ? (
+                <div className="mt-2 space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
+                    Vizită 2 — reparație
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="block text-zinc-500">
+                        Km in V2{requireKm ? <span className="text-amber-400"> *</span> : null}
+                        <input
+                          type="number"
+                          min={0}
+                          value={kmIn2}
+                          disabled={!canWrite || pending || !!wo.visit2InServiceAt}
+                          onChange={(e) => setKmIn2(e.target.value)}
+                          className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                        />
+                      </label>
+                      {wo.visit2InServiceAt ? (
+                        <p className="text-[10px] text-zinc-500">
+                          In: {new Date(wo.visit2InServiceAt).toLocaleString("ro-RO")}
+                        </p>
+                      ) : canWrite ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => void markIn()}
+                          className="w-full rounded-lg bg-amber-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                        >
+                          In service (V2)
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-zinc-500">
+                        Km out V2{requireKm ? <span className="text-amber-400"> *</span> : null}
+                        <input
+                          type="number"
+                          min={0}
+                          value={kmOut2}
+                          disabled={
+                            !canMarkServiceOut ||
+                            pending ||
+                            !wo.visit2InServiceAt ||
+                            !!wo.visit2OutServiceAt
+                          }
+                          onChange={(e) => setKmOut2(e.target.value)}
+                          className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                        />
+                      </label>
+                      {wo.visit2OutServiceAt ? (
+                        <p className="text-[10px] text-zinc-500">
+                          Out: {new Date(wo.visit2OutServiceAt).toLocaleString("ro-RO")}
+                        </p>
+                      ) : canMarkServiceOut && wo.visit2InServiceAt ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => void markOut()}
+                          className="w-full rounded-lg border border-amber-500/50 bg-amber-950/40 px-2 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-900/40 disabled:opacity-50"
+                        >
+                          Out service (V2)
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
-
-                {rezumatTab === "v2-in" ? (
-                  <div className="pt-2">
-                    <WorkOrderPhotoGallery
-                      workOrderId={wo.id}
-                      canWrite={canWrite}
-                      mode="visit"
-                      visitIndex={2}
-                      phase="in"
-                      title="Poze intrare — vizită 2"
-                    />
-                  </div>
-                ) : rezumatTab === "v2-out" ? (
-                  <div className="pt-2">
-                    <WorkOrderPhotoGallery
-                      workOrderId={wo.id}
-                      canWrite={canWrite}
-                      mode="visit"
-                      visitIndex={2}
-                      phase="out"
-                      title="Poze ieșire — vizită 2"
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-2 space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
-                      Vizită 2 — reparație
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <label className="block text-zinc-500">
-                          Km in V2{requireKm ? <span className="text-amber-400"> *</span> : null}
-                          <input
-                            type="number"
-                            min={0}
-                            value={kmIn2}
-                            disabled={!canWrite || pending || !!wo.visit2InServiceAt}
-                            onChange={(e) => setKmIn2(e.target.value)}
-                            className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                          />
-                        </label>
-                        {wo.visit2InServiceAt ? (
-                          <p className="text-[10px] text-zinc-500">
-                            In: {new Date(wo.visit2InServiceAt).toLocaleString("ro-RO")}
-                          </p>
-                        ) : canWrite ? (
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => {
-                              setRezumatTab("v2");
-                              void markIn();
-                            }}
-                            className="w-full rounded-lg bg-amber-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
-                          >
-                            In service (V2)
-                          </button>
-                        ) : null}
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-zinc-500">
-                          Km out V2{requireKm ? <span className="text-amber-400"> *</span> : null}
-                          <input
-                            type="number"
-                            min={0}
-                            value={kmOut2}
-                            disabled={!canMarkServiceOut || pending || !wo.visit2InServiceAt || !!wo.visit2OutServiceAt}
-                            onChange={(e) => setKmOut2(e.target.value)}
-                            className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                          />
-                        </label>
-                        {wo.visit2OutServiceAt ? (
-                          <p className="text-[10px] text-zinc-500">
-                            Out: {new Date(wo.visit2OutServiceAt).toLocaleString("ro-RO")}
-                          </p>
-                        ) : canMarkServiceOut && wo.visit2InServiceAt ? (
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => {
-                              setRezumatTab("v2");
-                              void markOut();
-                            }}
-                            className="w-full rounded-lg border border-amber-500/50 bg-amber-950/40 px-2 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-900/40 disabled:opacity-50"
-                          >
-                            Out service (V2)
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {extraVisits.map((v) => {
-              const km = extraKm[v.n] ?? { in: "", out: "" };
-              const tabMain = `vx-${v.n}`;
-              const tabIn = `vx-${v.n}-in`;
-              const tabOut = `vx-${v.n}-out`;
-              return (
-                <div key={v.n} className="mt-3 border-t border-zinc-800 pt-2">
-                  <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
-                    {(
-                      [
-                        { id: tabMain, label: `Vizită ${v.n}` },
-                        { id: tabIn, label: `IN ${v.n}` },
-                        { id: tabOut, label: `OUT ${v.n}` },
-                      ] as { id: string; label: string }[]
-                    ).map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setRezumatTab(t.id)}
-                        className={`rounded px-1.5 py-0.5 text-[10px] ${
-                          rezumatTab === t.id
-                            ? "bg-sky-900/50 text-sky-100"
-                            : "text-zinc-500 hover:text-zinc-300"
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {rezumatTab === tabIn ? (
-                    <div className="pt-2">
-                      <WorkOrderPhotoGallery
-                        workOrderId={wo.id}
-                        canWrite={canWrite}
-                        mode="visit"
-                        visitIndex={v.n}
-                        phase="in"
-                        title={`Poze intrare — vizită ${v.n}`}
-                      />
-                    </div>
-                  ) : rezumatTab === tabOut ? (
-                    <div className="pt-2">
-                      <WorkOrderPhotoGallery
-                        workOrderId={wo.id}
-                        canWrite={canWrite}
-                        mode="visit"
-                        visitIndex={v.n}
-                        phase="out"
-                        title={`Poze ieșire — vizită ${v.n}`}
-                      />
-                    </div>
-                  ) : (
+              ) : (
+                (() => {
+                  const v = extraVisits.find((x) => x.n === selectedVisit);
+                  if (!v) return null;
+                  const km = extraKm[v.n] ?? { in: "", out: "" };
+                  return (
                     <div className="mt-2 space-y-2 rounded-lg border border-sky-500/30 bg-sky-950/20 p-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/90">
                         Vizită {v.n}
@@ -1463,10 +1424,10 @@ export function WorkOrderSheetShell({
                         </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })()
+              )}
+            </div>
           </div>
         </div>
       </div>
