@@ -31,6 +31,14 @@ import {
   mapSupplierDocumentRow,
 } from './supplier-document-compliance';
 import { parseSupplierSettings } from '../tenant/supplier-settings';
+import {
+  parseDiscountPercent as parseDiscountPercentValue,
+  parsePartsPriceBasis,
+  parseSupplierRatePatch,
+  resolveSupplierCreateDiscounts,
+  resolveSupplierDiscountPatch,
+  type PartsPriceBasis,
+} from './supplier-rate-card';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -71,6 +79,12 @@ export type SupplierRecord = {
   slotCapacity: number;
   partsDiscountPercent: number;
   laborDiscountPercent: number;
+  laborRateMechanicalCents: number | null;
+  laborRateBodyCents: number | null;
+  laborRatePaintCents: number | null;
+  laborRateDiagnosticCents: number | null;
+  partsPriceBasis: PartsPriceBasis;
+  pricingNotes: string | null;
   integrationEnabled: boolean;
   integrationKeyLast4: string | null;
   services: string[];
@@ -96,6 +110,13 @@ export type CreateSupplierInput = {
   services?: string[];
   partsDiscountPercent?: number | null;
   laborDiscountPercent?: number | null;
+  /** RON/oră (sau null ca să șteargă). */
+  laborRateMechanicalRon?: number | string | null;
+  laborRateBodyRon?: number | string | null;
+  laborRatePaintRon?: number | string | null;
+  laborRateDiagnosticRon?: number | string | null;
+  partsPriceBasis?: PartsPriceBasis | string | null;
+  pricingNotes?: string | null;
   integrationEnabled?: boolean;
   /** Scris o singură dată; se păstrează doar ultimele 4 caractere. */
   integrationApiKey?: string | null;
@@ -132,12 +153,11 @@ export type SupplierStats = {
 };
 
 function parseDiscountPercent(raw: unknown, field: string): number {
-  if (raw == null || raw === '') return 0;
-  const n = typeof raw === 'number' ? raw : Number.parseFloat(String(raw).replace(',', '.'));
-  if (!Number.isFinite(n) || n < 0 || n > 100) {
-    throw new BadRequestException(`${field} must be 0–100`);
+  try {
+    return parseDiscountPercentValue(raw, field);
+  } catch (e) {
+    throw new BadRequestException(e instanceof Error ? e.message : 'Invalid discount');
   }
-  return Math.round(n * 100) / 100;
 }
 
 function normalizeCode(code: string): string {
@@ -200,6 +220,12 @@ export class SuppliersService {
       slotCapacity?: number | null;
       partsDiscountPercent?: number | null;
       laborDiscountPercent?: number | null;
+      laborRateMechanicalCents?: number | null;
+      laborRateBodyCents?: number | null;
+      laborRatePaintCents?: number | null;
+      laborRateDiagnosticCents?: number | null;
+      partsPriceBasis?: string | null;
+      pricingNotes?: string | null;
       integrationEnabled?: boolean;
       integrationKeyLast4?: string | null;
       createdAt: Date;
@@ -225,6 +251,12 @@ export class SuppliersService {
       slotCapacity: Math.max(1, Math.round(Number(row.slotCapacity) || 1)),
       partsDiscountPercent: Number(row.partsDiscountPercent) || 0,
       laborDiscountPercent: Number(row.laborDiscountPercent) || 0,
+      laborRateMechanicalCents: row.laborRateMechanicalCents ?? null,
+      laborRateBodyCents: row.laborRateBodyCents ?? null,
+      laborRatePaintCents: row.laborRatePaintCents ?? null,
+      laborRateDiagnosticCents: row.laborRateDiagnosticCents ?? null,
+      partsPriceBasis: parsePartsPriceBasis(row.partsPriceBasis),
+      pricingNotes: row.pricingNotes?.trim() || null,
       integrationEnabled: row.integrationEnabled === true,
       integrationKeyLast4: row.integrationKeyLast4 ?? null,
       services,
@@ -232,6 +264,14 @@ export class SuppliersService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  private parseRatePatch(dto: PatchSupplierInput): Prisma.SupplierUpdateInput {
+    try {
+      return parseSupplierRatePatch(dto);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid labor rate');
+    }
   }
 
   async getServiceCatalog(tenantSlug: string) {
@@ -453,16 +493,33 @@ export class SuppliersService {
             dto.slotCapacity == null
               ? supplierSettings.defaultSlotCapacity
               : Math.max(1, Math.min(50, Math.round(Number(dto.slotCapacity)))),
-          partsDiscountPercent: supplierSupportsQuoteDiscountDefaults(
-            dto.category ?? 'other',
-          )
-            ? parseDiscountPercent(dto.partsDiscountPercent, 'partsDiscountPercent')
-            : 0,
-          laborDiscountPercent: supplierSupportsQuoteDiscountDefaults(
-            dto.category ?? 'other',
-          )
-            ? parseDiscountPercent(dto.laborDiscountPercent, 'laborDiscountPercent')
-            : 0,
+          ...(() => {
+            const rates = this.parseRatePatch(dto);
+            const partsPriceBasis =
+              dto.partsPriceBasis != null
+                ? parsePartsPriceBasis(dto.partsPriceBasis)
+                : 'list';
+            const discounts = resolveSupplierCreateDiscounts({
+              discountsEligible: supplierSupportsQuoteDiscountDefaults(
+                dto.category ?? 'other',
+              ),
+              partsPriceBasis,
+              partsDiscountPercent: dto.partsDiscountPercent,
+              laborDiscountPercent: dto.laborDiscountPercent,
+            });
+            return {
+              partsDiscountPercent: discounts.partsDiscountPercent,
+              laborDiscountPercent: discounts.laborDiscountPercent,
+              laborRateMechanicalCents:
+                (rates.laborRateMechanicalCents as number | null | undefined) ?? null,
+              laborRateBodyCents: (rates.laborRateBodyCents as number | null | undefined) ?? null,
+              laborRatePaintCents: (rates.laborRatePaintCents as number | null | undefined) ?? null,
+              laborRateDiagnosticCents:
+                (rates.laborRateDiagnosticCents as number | null | undefined) ?? null,
+              partsPriceBasis,
+              pricingNotes: dto.pricingNotes?.trim() || null,
+            };
+          })(),
           integrationEnabled:
             integrationKeyLast4(dto.integrationApiKey) != null || dto.integrationEnabled === true,
           integrationKeyLast4: integrationKeyLast4(dto.integrationApiKey),
@@ -562,22 +619,20 @@ export class SuppliersService {
 
     const nextCategory = dto.category !== undefined ? dto.category : before.category;
     const discountsEligible = supplierSupportsQuoteDiscountDefaults(nextCategory);
-    if (!discountsEligible) {
-      data.partsDiscountPercent = 0;
-      data.laborDiscountPercent = 0;
-    } else {
-      if (dto.partsDiscountPercent !== undefined) {
-        data.partsDiscountPercent = parseDiscountPercent(
-          dto.partsDiscountPercent,
-          'partsDiscountPercent',
-        );
-      }
-      if (dto.laborDiscountPercent !== undefined) {
-        data.laborDiscountPercent = parseDiscountPercent(
-          dto.laborDiscountPercent,
-          'laborDiscountPercent',
-        );
-      }
+    Object.assign(data, this.parseRatePatch(dto));
+    try {
+      Object.assign(
+        data,
+        resolveSupplierDiscountPatch({
+          discountsEligible,
+          storedPartsPriceBasis: before.partsPriceBasis,
+          partsPriceBasis: dto.partsPriceBasis,
+          partsDiscountPercent: dto.partsDiscountPercent,
+          laborDiscountPercent: dto.laborDiscountPercent,
+        }),
+      );
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid discount');
     }
     if (dto.integrationEnabled !== undefined) {
       data.integrationEnabled = dto.integrationEnabled === true;

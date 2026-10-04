@@ -33,6 +33,12 @@ export type SupplierRecord = {
   slotCapacity?: number;
   partsDiscountPercent: number;
   laborDiscountPercent: number;
+  laborRateMechanicalCents?: number | null;
+  laborRateBodyCents?: number | null;
+  laborRatePaintCents?: number | null;
+  laborRateDiagnosticCents?: number | null;
+  partsPriceBasis?: "list" | "net";
+  pricingNotes?: string | null;
   services: string[];
   integrationEnabled: boolean;
   integrationKeyLast4: string | null;

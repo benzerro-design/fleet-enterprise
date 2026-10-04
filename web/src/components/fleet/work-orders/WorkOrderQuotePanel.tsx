@@ -30,10 +30,20 @@ import {
   type WorkOrderQuoteStatus,
 } from "@/lib/work-orders-api";
 import type { WorkOrderSettings } from "@/lib/work-order-settings";
+import {
+  defaultLaborUnitLei,
+  effectivePartsDiscountForBasis,
+  type PartsPriceBasis,
+} from "@/lib/supplier-rate-card";
 
 type SupplierDiscountDefaults = {
   partsDiscountPercent: number;
   laborDiscountPercent: number;
+  laborRateMechanicalCents?: number | null;
+  laborRateBodyCents?: number | null;
+  laborRatePaintCents?: number | null;
+  laborRateDiagnosticCents?: number | null;
+  partsPriceBasis?: PartsPriceBasis;
 };
 
 type EditableLine = {
@@ -61,7 +71,9 @@ function defaultDiscountForType(
   discounts?: SupplierDiscountDefaults | null,
 ): number {
   if (!discounts) return 0;
-  if (lineType === "parts") return discounts.partsDiscountPercent || 0;
+  if (lineType === "parts") {
+    return effectivePartsDiscountForBasis(discounts.partsPriceBasis, discounts.partsDiscountPercent || 0);
+  }
   if (lineType === "labor") return discounts.laborDiscountPercent || 0;
   return 0;
 }
@@ -70,12 +82,13 @@ function newLine(
   discounts?: SupplierDiscountDefaults | null,
   lineType: QuoteLineInput["lineType"] = "parts",
 ): EditableLine {
+  const unitNetLei = lineType === "labor" ? defaultLaborUnitLei(discounts) : "";
   return {
     key: Math.random().toString(36).slice(2),
     lineType,
     description: "",
     quantity: "1",
-    unitNetLei: "",
+    unitNetLei,
     vatRatePercent: "21",
     discountPercent: formatDiscountPercentInput(defaultDiscountForType(lineType, discounts)),
     discountLei: "",
@@ -2250,6 +2263,9 @@ export function WorkOrderQuotePanel({
                               defaultDiscountForType(nextType, supplierDiscounts),
                             );
                             updated.discountLei = "";
+                          }
+                          if (nextType === "labor" && !line.unitNetLei.trim()) {
+                            updated.unitNetLei = defaultLaborUnitLei(supplierDiscounts);
                           }
                           next[idx] = updated;
                           setLines(next);

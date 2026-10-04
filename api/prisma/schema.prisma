@@ -1342,6 +1342,14 @@ model Supplier {
   partsDiscountPercent Float    @default(0)
   /// Default pe linii noi de tip manoperă (0–100). UAT-034.
   laborDiscountPercent Float    @default(0)
+  /// Tarif manoperă mecanică (bani RON). PARTNER-014 Faza A.
+  laborRateMechanicalCents Int?
+  laborRateBodyCents       Int?
+  laborRatePaintCents      Int?
+  laborRateDiagnosticCents Int?
+  /// list = discount pe preț listă; net = preț unitar deja negociat (discount default 0).
+  partsPriceBasis String  @default("list")
+  pricingNotes    String?
   /// Robinet integrare (broker / asigurător). Cheia completă nu se păstrează — doar ultimele 4 caractere.
   integrationEnabled Boolean         @default(false)
   integrationKeyLast4 String?

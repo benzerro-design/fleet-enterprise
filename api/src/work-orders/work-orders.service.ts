@@ -85,6 +85,11 @@ export type WorkOrderSupplierSnapshot = {
   contactEmail: string | null;
   partsDiscountPercent: number;
   laborDiscountPercent: number;
+  laborRateMechanicalCents?: number | null;
+  laborRateBodyCents?: number | null;
+  laborRatePaintCents?: number | null;
+  laborRateDiagnosticCents?: number | null;
+  partsPriceBasis?: 'list' | 'net';
 };
 
 export type WorkOrderListRow = {
@@ -792,6 +797,11 @@ export class WorkOrdersService {
             contactEmail: true,
             partsDiscountPercent: true,
             laborDiscountPercent: true,
+            laborRateMechanicalCents: true,
+            laborRateBodyCents: true,
+            laborRatePaintCents: true,
+            laborRateDiagnosticCents: true,
+            partsPriceBasis: true,
             category: true,
           },
         },
@@ -955,6 +965,11 @@ export class WorkOrdersService {
               category: row.supplier.category,
               partsDiscountPercent: eff.partsDiscountPercent,
               laborDiscountPercent: eff.laborDiscountPercent,
+              laborRateMechanicalCents: row.supplier.laborRateMechanicalCents ?? null,
+              laborRateBodyCents: row.supplier.laborRateBodyCents ?? null,
+              laborRatePaintCents: row.supplier.laborRatePaintCents ?? null,
+              laborRateDiagnosticCents: row.supplier.laborRateDiagnosticCents ?? null,
+              partsPriceBasis: row.supplier.partsPriceBasis === 'net' ? 'net' : 'list',
             };
           })()
         : null,

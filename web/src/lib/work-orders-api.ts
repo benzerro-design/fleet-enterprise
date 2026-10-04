@@ -40,6 +40,11 @@ export type WorkOrderSupplierSnapshot = {
   contactEmail: string | null;
   partsDiscountPercent?: number;
   laborDiscountPercent?: number;
+  laborRateMechanicalCents?: number | null;
+  laborRateBodyCents?: number | null;
+  laborRatePaintCents?: number | null;
+  laborRateDiagnosticCents?: number | null;
+  partsPriceBasis?: "list" | "net";
 };
 
 export type WorkOrderListRow = {

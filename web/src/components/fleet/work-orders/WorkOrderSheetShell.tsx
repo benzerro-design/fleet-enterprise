@@ -1596,6 +1596,11 @@ export function WorkOrderSheetShell({
             ? {
                 partsDiscountPercent: wo.supplier.partsDiscountPercent ?? 0,
                 laborDiscountPercent: wo.supplier.laborDiscountPercent ?? 0,
+                laborRateMechanicalCents: wo.supplier.laborRateMechanicalCents ?? null,
+                laborRateBodyCents: wo.supplier.laborRateBodyCents ?? null,
+                laborRatePaintCents: wo.supplier.laborRatePaintCents ?? null,
+                laborRateDiagnosticCents: wo.supplier.laborRateDiagnosticCents ?? null,
+                partsPriceBasis: wo.supplier.partsPriceBasis === "net" ? "net" : "list",
               }
             : null
         }
