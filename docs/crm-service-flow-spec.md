@@ -99,8 +99,8 @@ Profile **F / T / G** pe L* și L1: documentate în IAM §3.5; implementare IAM 
 |--------------|---------------------|----------------------|---------------|-----------|
 | Creare tichet | ✓ | ✓ | ✓ | ✓ șofer/manager; API OK |
 | Mesagerie tichet | ✓ full | ✓ | ✓ | ✓ șofer (comment) |
-| Listă tichete scoped | proprii + pe vehicul(e) | toate client | toate tenant | ⚠️ șofer: `createdBy` + `driverId`, **fără vehicul asignat** |
-| Transformare → cursă | ✓ | ✓ | ✓ | ✗ șofer blocat în API (`transform`) |
+| Listă tichete scoped | proprii + pe vehicul(e) | toate client | toate tenant | ✓ șofer: `createdBy` ∪ `driverId` ∪ `vehicleId ∈ assigned` |
+| Transformare → cursă | ✓ | ✓ | ✓ | ✓ API + UI L0 (`→ Cursă`); claim/resolve/route ascunse pe L0 |
 | Confirmare programare | ✓ cu manager | ✓ cu șofer | ✓ | ✗ nu există flux confirmare |
 | Programator | vizualizare? | ✓ full | ✓ | manager ✓; șofer ✗ (middleware) |
 | Dosar / avans flux | vizualizare | ✓ | ✓ | ✗ doar `tenant_admin` API |
@@ -119,18 +119,16 @@ Profile **F / T / G** pe L* și L1: documentate în IAM §3.5; implementare IAM 
 
 **Cerință:** create + mesagerie + confirmare programare + transform cursă; rest read-only; listă = `{createdBy = me} ∪ {vehicleId ∈ vehicule mele}`.
 
-**Azi:**
-- `ticketListScope` (`client-access.ts`): șofer vede `createdByUserId` sau `driverId` pe tichet — **nu** tichete deschise de alții pe vehiculul asignat fără `driverId`.
-- `canPerformTicketAction('transform')`: **false** pentru orice `client_user`.
-- Stepper folosește `canWriteTickets` → șofer vede butoane care eșuează la API.
+**Azi (F5a livrat):**
+- `ticketListScope` / `canReadTicket`: `createdBy` ∪ `driverId` ∪ `vehicleId ∈ assignedVehicleIds`.
+- `canPerformTicketAction('transform')`: **true** pentru șofer pe tichete vizibile.
+- UI: `canManage` (claim/resolve/route) separat de `canWrite` (comment + `→ Cursă`); stepper dosar rămâne pe `canOperateServiceCase`.
+- Unit: `api/src/iam/client-access.spec.ts`.
 
-**Design F5a:**
-1. Extinde `ticketListScope` / `canReadTicket`: OR `{ vehicleId: { in: assignedVehicleIds } }` când `assignedVehicleIds` non-gol.
-2. Permite `transform` pentru șofer pe tichetele vizibile (scoped).
-3. Introduce **`canOperateServiceCase`** granular în web (nu reutiliza `canWriteTickets` pentru stepper).
-4. Middleware șofer: eventual `/fleet/scheduler` **read-only** pentru confirmări (F5b).
+**Rămas F5b:**
+1. Middleware șofer: eventual `/fleet/scheduler` **read-only** pentru confirmări.
 
-**Acceptanță:** login `sofer.alpha` → listă filtrată corect; transform cursă OK; fără butoane „Avansează dosar”.
+**Acceptanță:** login `sofer.alpha` → listă filtrată corect; transform cursă OK; fără butoane „Avansează dosar” / claim / resolve.
 
 ---
 

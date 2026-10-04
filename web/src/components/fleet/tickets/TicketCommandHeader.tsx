@@ -17,7 +17,8 @@ type Props = {
   detail: TicketDetailPayload;
   serviceCase: ServiceCaseRecord | null | undefined;
   closed: boolean;
-  canWrite: boolean;
+  /** Claim — L1 / L* (nu șofer). */
+  canManage: boolean;
   onClaim?: () => void;
   claimPending?: boolean;
 };
@@ -26,13 +27,13 @@ export function TicketCommandHeader({
   detail,
   serviceCase,
   closed,
-  canWrite,
+  canManage,
   onClaim,
   claimPending,
 }: Props) {
   const { ticket } = detail;
   const headline = operationalHeadline(serviceCase, closed, ticket.status);
-  const needsClaim = !ticket.ownerUserId && !closed && canWrite;
+  const needsClaim = !ticket.ownerUserId && !closed && canManage;
   const serviceCaseLabel =
     serviceCase?.status === "completed"
       ? "Dosar service: închis"

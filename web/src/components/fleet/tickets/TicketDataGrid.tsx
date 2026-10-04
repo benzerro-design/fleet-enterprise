@@ -286,7 +286,7 @@ export function TicketDataGrid({
           </span>
         );
       case "actions":
-        return <TicketRowActions ticket={row} canWrite={canWrite} compact />;
+        return <TicketRowActions ticket={row} canWrite={canWrite} canManage={canPatch} compact />;
       default:
         return null;
     }

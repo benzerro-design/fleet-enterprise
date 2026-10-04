@@ -142,7 +142,12 @@ export type CrmTicketAction =
 export function canPerformTicketAction(
   ctx: AccessContext,
   action: CrmTicketAction,
-  ticket?: { clientId: string; createdByUserId: string | null; driverId: string | null },
+  ticket?: {
+    clientId: string;
+    createdByUserId: string | null;
+    driverId: string | null;
+    vehicleId?: string | null;
+  },
 ): boolean {
   if (ctx.membershipRole === MembershipRole.tenant_admin) return true;
 

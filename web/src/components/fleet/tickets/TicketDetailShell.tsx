@@ -84,7 +84,7 @@ export function TicketDetailShell({
 
   return (
     <>
-      {needsTicketResolve && write ? (
+      {needsTicketResolve && patch ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-950/25 px-4 py-3">
           <p className="text-sm text-amber-100">
             Dosarul service e închis, dar tichetul apare încă „în lucru” în listă.
@@ -104,7 +104,7 @@ export function TicketDetailShell({
         detail={detail}
         serviceCase={serviceCase}
         closed={closed}
-        canWrite={write}
+        canManage={patch}
         onClaim={() => void claim()}
         claimPending={claimPending}
       />
@@ -155,7 +155,7 @@ export function TicketDetailShell({
               canWrite={write && canOperate}
             />
           }
-          actions={<TicketActionsPanel detail={detail} canWrite={write} />}
+          actions={<TicketActionsPanel detail={detail} canWrite={write} canManage={patch} />}
           history={<TicketActionTimeline events={detail.events} />}
           details={<TicketEditPanel ticket={ticket} canPatch={patch} />}
         />

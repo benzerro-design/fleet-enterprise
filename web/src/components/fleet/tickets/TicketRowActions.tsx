@@ -9,7 +9,10 @@ import { fleetJsonHeaders, ticketsBrowserBase } from "@/lib/tickets-api";
 
 type Props = {
   ticket: TicketRecord;
+  /** Transform cursă — L0 + L1. */
   canWrite: boolean;
+  /** Claim / route / resolve — doar L1 / L*. */
+  canManage?: boolean;
   compact?: boolean;
 };
 
@@ -43,11 +46,12 @@ function IconBtn({
   );
 }
 
-export function TicketRowActions({ ticket, canWrite, compact }: Props) {
+export function TicketRowActions({ ticket, canWrite, canManage = false, compact }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const closed = ticket.status === "resolved" || ticket.status === "cancelled";
-  const needsClaim = !ticket.ownerUserId && !closed;
+  const needsClaim = canManage && !ticket.ownerUserId && !closed;
+  const canTransform = canWrite && !!ticket.vehicleId && !closed;
 
   async function post(path: string, body?: unknown) {
     setPending(true);
@@ -66,12 +70,12 @@ export function TicketRowActions({ ticket, canWrite, compact }: Props) {
   return (
     <div className={`flex items-center gap-0.5 ${compact ? "" : "justify-end"}`}>
       <IconBtn title="Deschide" action="open" href={`/fleet/tickets/${ticket.id}`} />
-      {canWrite && !closed ? (
+      {!closed ? (
         <>
           {needsClaim ? (
             <IconBtn title="Preluare" action="claim" disabled={pending} onClick={() => post("/claim")} />
           ) : null}
-          {ticket.routingLevel !== "L_STAR" ? (
+          {canManage && ticket.routingLevel !== "L_STAR" ? (
             <IconBtn
               title="Rutare L★"
               action="route"
@@ -84,23 +88,29 @@ export function TicketRowActions({ ticket, canWrite, compact }: Props) {
               }}
             />
           ) : null}
-          {ticket.vehicleId ? (
+          {canTransform ? (
             <IconBtn
-              title="Transformă → cost"
+              title={canManage ? "Transformă → cost" : "Transformă → cursă"}
               action="transform"
               disabled={pending}
-              onClick={() => post("/transform", { entityType: "cost", category: "alte", amountCents: 0 })}
+              onClick={() =>
+                canManage
+                  ? post("/transform", { entityType: "cost", category: "alte", amountCents: 0 })
+                  : post("/transform", { entityType: "trip" })
+              }
             />
           ) : null}
-          <IconBtn
-            title="Rezolvă"
-            action="resolve"
-            disabled={pending}
-            onClick={() => {
-              const comment = window.prompt("Comentariu rezolvare (opțional):") ?? "";
-              void post("/resolve", { comment: comment.trim(), closeReminder: true });
-            }}
-          />
+          {canManage ? (
+            <IconBtn
+              title="Rezolvă"
+              action="resolve"
+              disabled={pending}
+              onClick={() => {
+                const comment = window.prompt("Comentariu rezolvare (opțional):") ?? "";
+                void post("/resolve", { comment: comment.trim(), closeReminder: true });
+              }}
+            />
+          ) : null}
         </>
       ) : null}
     </div>

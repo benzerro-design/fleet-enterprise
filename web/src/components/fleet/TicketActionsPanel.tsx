@@ -8,10 +8,13 @@ import { fleetJsonHeaders, ticketLinkHref, ticketsBrowserBase } from "@/lib/tick
 
 type Props = {
   detail: TicketDetailPayload;
+  /** Comentarii / transform — L0 + L1 (nu client_viewer). */
   canWrite: boolean;
+  /** Claim / resolve / route — doar L1 / L* (nu șofer). */
+  canManage?: boolean;
 };
 
-export function TicketActionsPanel({ detail, canWrite }: Props) {
+export function TicketActionsPanel({ detail, canWrite, canManage = false }: Props) {
   const router = useRouter();
   const { ticket } = detail;
   const [pending, setPending] = useState<string | null>(null);
@@ -27,7 +30,8 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
   const [l1UserId, setL1UserId] = useState("");
 
   const closed = ticket.status === "resolved" || ticket.status === "cancelled";
-  const needsClaim = !ticket.ownerUserId && !closed;
+  const needsClaim = canManage && !ticket.ownerUserId && !closed;
+  const canTransform = canWrite && !!ticket.vehicleId && !closed;
   const lstarPeople = (detail.routeTargets ?? []).filter((t) => t.level === "L_STAR");
   const l1People = (detail.routeTargets ?? []).filter((t) => t.level === "L1");
 
@@ -74,7 +78,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
     }
   }
 
-  if (!canWrite) return null;
+  if (!canWrite && !canManage) return null;
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -92,17 +96,19 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
             Preia tichetul
           </button>
         ) : null}
-        {!closed ? (
+        {!closed && canManage ? (
+          <button
+            type="button"
+            disabled={!!pending || !comment.trim()}
+            onClick={() => post("/resolve", { comment: comment.trim(), closeReminder: true })}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            Tratează (rezolvă)
+          </button>
+        ) : null}
+        {canTransform ? (
           <>
-            <button
-              type="button"
-              disabled={!!pending || !comment.trim()}
-              onClick={() => post("/resolve", { comment: comment.trim(), closeReminder: true })}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              Tratează (rezolvă)
-            </button>
-            {ticket.vehicleId ? (
+            {canManage ? (
               <>
                 <Link
                   href={`/fleet/documents/new?vehicleId=${ticket.vehicleId}`}
@@ -126,16 +132,20 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
                 >
                   → Cost
                 </button>
-                <button
-                  type="button"
-                  disabled={!!pending}
-                  onClick={() => post("/transform", { entityType: "trip" })}
-                  className="rounded-lg border border-violet-700/60 bg-violet-950/40 px-3 py-1.5 text-sm text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
-                >
-                  → Cursă
-                </button>
               </>
             ) : null}
+            <button
+              type="button"
+              disabled={!!pending}
+              onClick={() => post("/transform", { entityType: "trip" })}
+              className="rounded-lg border border-violet-700/60 bg-violet-950/40 px-3 py-1.5 text-sm text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+            >
+              → Cursă
+            </button>
+          </>
+        ) : null}
+        {!closed && canManage ? (
+          <>
             {ticket.routingLevel !== "L_STAR" ? (
               <button
                 type="button"
@@ -179,7 +189,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
         ) : null}
       </div>
 
-      {!closed ? (
+      {!closed && canManage ? (
         <div className="mt-4">
           <label className="text-xs text-zinc-500">Comentariu rezolvare (obligatoriu la „Tratează”)</label>
           <textarea
@@ -192,7 +202,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
         </div>
       ) : null}
 
-      {showForward ? (
+      {showForward && canManage ? (
         <div className="mt-4 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
           <p className="text-xs font-medium text-amber-200">Redirecționează tichetul</p>
           <p className="mt-1 text-[11px] text-zinc-500">
@@ -272,7 +282,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
         </div>
       ) : null}
 
-      {showRoute ? (
+      {showRoute && canManage ? (
         <div className="mt-4 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
           <label className="text-xs text-amber-200">Motiv escaladare L★ (obligatoriu)</label>
           <textarea
@@ -309,7 +319,7 @@ export function TicketActionsPanel({ detail, canWrite }: Props) {
         </div>
       ) : null}
 
-      {showReturn ? (
+      {showReturn && canManage ? (
         <div className="mt-4 rounded-lg border border-sky-900/40 bg-sky-950/20 p-3">
           <label className="text-xs text-sky-200">Motiv returnare L1 (obligatoriu)</label>
           <textarea
