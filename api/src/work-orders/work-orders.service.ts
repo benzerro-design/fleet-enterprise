@@ -90,6 +90,18 @@ export type WorkOrderSupplierSnapshot = {
   laborRatePaintCents?: number | null;
   laborRateDiagnosticCents?: number | null;
   partsPriceBasis?: 'list' | 'net';
+  menuItems?: Array<{
+    id: string;
+    supplierId: string;
+    label: string;
+    description: string | null;
+    lineType: 'parts' | 'labor' | 'other';
+    unitNetCents: number;
+    active: boolean;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };
 
 export type WorkOrderListRow = {
@@ -803,6 +815,10 @@ export class WorkOrdersService {
             laborRateDiagnosticCents: true,
             partsPriceBasis: true,
             category: true,
+            menuItems: {
+              where: { active: true },
+              orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+            },
           },
         },
         serviceCase: {
@@ -970,6 +986,21 @@ export class WorkOrdersService {
               laborRatePaintCents: row.supplier.laborRatePaintCents ?? null,
               laborRateDiagnosticCents: row.supplier.laborRateDiagnosticCents ?? null,
               partsPriceBasis: row.supplier.partsPriceBasis === 'net' ? 'net' : 'list',
+              menuItems: row.supplier.menuItems.map((item) => ({
+                id: item.id,
+                supplierId: item.supplierId,
+                label: item.label,
+                description: item.description,
+                lineType:
+                  item.lineType === 'parts' || item.lineType === 'labor'
+                    ? item.lineType
+                    : 'other',
+                unitNetCents: item.unitNetCents,
+                active: item.active,
+                sortOrder: item.sortOrder,
+                createdAt: item.createdAt.toISOString(),
+                updatedAt: item.updatedAt.toISOString(),
+              })),
             };
           })()
         : null,

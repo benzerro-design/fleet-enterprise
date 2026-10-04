@@ -42,9 +42,35 @@ export type SupplierRecord = {
   services: string[];
   integrationEnabled: boolean;
   integrationKeyLast4: string | null;
+  menuItems?: SupplierMenuItemRecord[];
   workOrderCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type SupplierMenuLineType = "parts" | "labor" | "other";
+
+export type SupplierMenuItemRecord = {
+  id: string;
+  supplierId: string;
+  label: string;
+  description: string | null;
+  lineType: SupplierMenuLineType;
+  unitNetCents: number;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SupplierMenuItemInput = {
+  label?: string | null;
+  description?: string | null;
+  lineType?: SupplierMenuLineType;
+  unitNetRon?: number | string | null;
+  unitNetCents?: number | null;
+  active?: boolean;
+  sortOrder?: number | null;
 };
 
 export type SupplierDocumentKind = string;
@@ -138,4 +164,64 @@ export function supplierStatusLabel(s: SupplierStatus): string {
   if (s === "active") return "Activ";
   if (s === "inactive") return "Inactiv";
   return "Blocat";
+}
+
+export function supplierMenuLineTypeLabel(type: SupplierMenuLineType): string {
+  if (type === "parts") return "Piese";
+  if (type === "labor") return "Manoperă";
+  return "Altele";
+}
+
+export async function loadSupplierMenuItems(
+  supplierId: string,
+  opts: { all?: boolean } = {},
+): Promise<{ items: SupplierMenuItemRecord[] }> {
+  const url = `${suppliersBrowserBase}/${supplierId}/menu-items${opts.all ? "?all=1" : ""}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as { items: SupplierMenuItemRecord[] };
+}
+
+export async function createSupplierMenuItem(
+  supplierId: string,
+  input: SupplierMenuItemInput,
+): Promise<SupplierMenuItemRecord> {
+  const res = await fetch(`${suppliersBrowserBase}/${supplierId}/menu-items`, {
+    method: "POST",
+    headers: fleetJsonHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(j.message ?? `HTTP ${res.status}`);
+  }
+  return (await res.json()) as SupplierMenuItemRecord;
+}
+
+export async function patchSupplierMenuItem(
+  supplierId: string,
+  itemId: string,
+  input: SupplierMenuItemInput,
+): Promise<SupplierMenuItemRecord> {
+  const res = await fetch(`${suppliersBrowserBase}/${supplierId}/menu-items/${itemId}`, {
+    method: "PATCH",
+    headers: fleetJsonHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(j.message ?? `HTTP ${res.status}`);
+  }
+  return (await res.json()) as SupplierMenuItemRecord;
+}
+
+export async function deactivateSupplierMenuItem(supplierId: string, itemId: string): Promise<void> {
+  const res = await fetch(`${suppliersBrowserBase}/${supplierId}/menu-items/${itemId}`, {
+    method: "DELETE",
+    headers: fleetJsonHeaders(),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(j.message ?? `HTTP ${res.status}`);
+  }
 }

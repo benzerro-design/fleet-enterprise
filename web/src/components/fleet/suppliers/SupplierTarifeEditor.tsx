@@ -1,11 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { OPS_INPUT_CLASS } from "@/components/fleet/ops-form-primitives";
 import { supplierSupportsQuoteDiscountDefaults } from "@/lib/supplier-discount-eligibility";
 import { centsToRonInput, type PartsPriceBasis } from "@/lib/supplier-rate-card";
-import { fleetJsonHeaders, suppliersBrowserBase, type SupplierRecord } from "@/lib/suppliers-api";
+import {
+  createSupplierMenuItem,
+  deactivateSupplierMenuItem,
+  fleetJsonHeaders,
+  loadSupplierMenuItems,
+  suppliersBrowserBase,
+  supplierMenuLineTypeLabel,
+  type SupplierMenuItemRecord,
+  type SupplierMenuLineType,
+  type SupplierRecord,
+} from "@/lib/suppliers-api";
 
 type Props = {
   supplier: SupplierRecord;
@@ -55,6 +65,27 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [menuItems, setMenuItems] = useState<SupplierMenuItemRecord[]>(supplier.menuItems ?? []);
+  const [menuLabel, setMenuLabel] = useState("");
+  const [menuPrice, setMenuPrice] = useState("");
+  const [menuLineType, setMenuLineType] = useState<SupplierMenuLineType>("other");
+  const [menuPending, setMenuPending] = useState(false);
+  const [menuError, setMenuError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!eligible) return;
+    let cancelled = false;
+    void loadSupplierMenuItems(supplier.id, { all: canWrite })
+      .then((data) => {
+        if (!cancelled) setMenuItems(data.items);
+      })
+      .catch(() => {
+        if (!cancelled) setMenuItems(supplier.menuItems ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supplier.id, supplier.menuItems, canWrite, eligible]);
 
   if (!eligible) {
     return (
@@ -98,6 +129,41 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
       setError(e instanceof Error ? e.message : "Salvare eșuată");
     } finally {
       setPending(false);
+    }
+  }
+
+  async function addMenuItem() {
+    setMenuPending(true);
+    setMenuError(null);
+    try {
+      const item = await createSupplierMenuItem(supplier.id, {
+        label: menuLabel.trim(),
+        lineType: menuLineType,
+        unitNetRon: menuPrice.trim(),
+      });
+      setMenuItems((items) => [...items, item].sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label)));
+      setMenuLabel("");
+      setMenuPrice("");
+      setMenuLineType("other");
+      router.refresh();
+    } catch (e) {
+      setMenuError(e instanceof Error ? e.message : "Meniul nu a fost salvat");
+    } finally {
+      setMenuPending(false);
+    }
+  }
+
+  async function deactivateMenuItem(itemId: string) {
+    setMenuPending(true);
+    setMenuError(null);
+    try {
+      await deactivateSupplierMenuItem(supplier.id, itemId);
+      setMenuItems((items) => items.map((item) => (item.id === itemId ? { ...item, active: false } : item)));
+      router.refresh();
+    } catch (e) {
+      setMenuError(e instanceof Error ? e.message : "Meniul nu a fost dezactivat");
+    } finally {
+      setMenuPending(false);
     }
   }
 
@@ -155,6 +221,27 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
         {supplier.pricingNotes ? (
           <p className="text-xs text-zinc-500 whitespace-pre-wrap">{supplier.pricingNotes}</p>
         ) : null}
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium text-zinc-200">4. Meniuri atelier</h3>
+          {menuItems.filter((item) => item.active).length ? (
+            <ul className="space-y-2">
+              {menuItems
+                .filter((item) => item.active)
+                .map((item) => (
+                  <li key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm text-zinc-200">{item.label}</span>
+                      <span className="text-xs text-zinc-500">
+                        {supplierMenuLineTypeLabel(item.lineType)} · {centsToRonInput(item.unitNetCents)} RON
+                      </span>
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-zinc-500">Niciun meniu activ.</p>
+          )}
+        </section>
       </div>
     );
   }
@@ -261,6 +348,95 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
           placeholder="ex. Acord 2026: mecanică 180 RON/h, piese −12% față de listă Stahlgruber…"
         />
       </label>
+
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-medium text-zinc-200">4. Meniuri atelier</h3>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+            Operațiuni fixe (ITP, schimb ulei etc.) ce pot fi adăugate rapid pe deviz.
+          </p>
+        </div>
+
+        {menuItems.length ? (
+          <ul className="space-y-2">
+            {menuItems.map((item) => (
+              <li
+                key={item.id}
+                className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 ${
+                  item.active
+                    ? "border-zinc-800 bg-zinc-950/50"
+                    : "border-zinc-900 bg-zinc-950/30 opacity-60"
+                }`}
+              >
+                <span className="min-w-[12rem] flex-1">
+                  <span className="block text-sm text-zinc-200">{item.label}</span>
+                  <span className="text-xs text-zinc-500">
+                    {supplierMenuLineTypeLabel(item.lineType)} · {centsToRonInput(item.unitNetCents)} RON
+                    {!item.active ? " · inactiv" : ""}
+                  </span>
+                </span>
+                {item.active ? (
+                  <button
+                    type="button"
+                    disabled={menuPending}
+                    onClick={() => void deactivateMenuItem(item.id)}
+                    className="rounded-lg border border-red-800/60 px-2.5 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                  >
+                    Dezactivează
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-sm text-zinc-500">
+            Niciun meniu definit.
+          </p>
+        )}
+
+        <div className="grid gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 sm:grid-cols-[1fr_10rem_10rem_auto] sm:items-end">
+          <label className="text-xs text-zinc-500">
+            Denumire
+            <input
+              value={menuLabel}
+              onChange={(e) => setMenuLabel(e.target.value)}
+              className={`${OPS_INPUT_CLASS} mt-1`}
+              placeholder="ex. ITP"
+            />
+          </label>
+          <label className="text-xs text-zinc-500">
+            Preț net (RON)
+            <input
+              value={menuPrice}
+              onChange={(e) => setMenuPrice(e.target.value)}
+              className={`${OPS_INPUT_CLASS} mt-1`}
+              inputMode="decimal"
+              placeholder="ex. 150"
+            />
+          </label>
+          <label className="text-xs text-zinc-500">
+            Tip linie
+            <select
+              value={menuLineType}
+              onChange={(e) => setMenuLineType(e.target.value as SupplierMenuLineType)}
+              className={`${OPS_INPUT_CLASS} mt-1`}
+            >
+              <option value="parts">Piese</option>
+              <option value="labor">Manoperă</option>
+              <option value="other">Altele</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={menuPending || !menuLabel.trim() || !menuPrice.trim()}
+            onClick={() => void addMenuItem()}
+            className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+          >
+            Adaugă
+          </button>
+        </div>
+        {menuError ? <p className="text-sm text-red-400">{menuError}</p> : null}
+      </section>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
       {saved ? <p className="text-sm text-emerald-400">Salvat.</p> : null}

@@ -35,6 +35,7 @@ import {
   effectivePartsDiscountForBasis,
   type PartsPriceBasis,
 } from "@/lib/supplier-rate-card";
+import { supplierMenuLineTypeLabel, type SupplierMenuItemRecord } from "@/lib/suppliers-api";
 
 type SupplierDiscountDefaults = {
   partsDiscountPercent: number;
@@ -95,6 +96,26 @@ function newLine(
     discountTouched: false,
     partNumber: "",
     partCodeExempt: false,
+  };
+}
+
+function lineFromMenuItem(
+  item: SupplierMenuItemRecord,
+  discounts?: SupplierDiscountDefaults | null,
+): EditableLine {
+  const lineType = item.lineType;
+  return {
+    key: Math.random().toString(36).slice(2),
+    lineType,
+    description: item.description?.trim() || item.label,
+    quantity: "1",
+    unitNetLei: centsToLei(item.unitNetCents),
+    vatRatePercent: "21",
+    discountPercent: formatDiscountPercentInput(defaultDiscountForType(lineType, discounts)),
+    discountLei: "",
+    discountTouched: false,
+    partNumber: "",
+    partCodeExempt: lineType === "parts",
   };
 }
 
@@ -365,6 +386,7 @@ type Props = {
     createdAt: string;
   } | null;
   supplierDiscounts?: SupplierDiscountDefaults | null;
+  supplierMenuItems?: SupplierMenuItemRecord[];
 };
 
 function quoteLucrareIndex(q: WorkOrderQuoteRecord): 1 | 2 {
@@ -397,6 +419,7 @@ export function WorkOrderQuotePanel({
   ticketSettlement = null,
   isPartner = false,
   supplierDiscounts = null,
+  supplierMenuItems = [],
 }: Props) {
   const router = useRouter();
   const [quotes, setQuotes] = useState<WorkOrderQuoteRecord[] | undefined>(undefined);
@@ -429,6 +452,11 @@ export function WorkOrderQuotePanel({
   const [creatingNew, setCreatingNew] = useState(false);
   /** Panel inline „Mută Devizul” (fără window.prompt). */
   const [movePickerOpen, setMovePickerOpen] = useState(false);
+  const activeMenuItems = useMemo(
+    () => supplierMenuItems.filter((item) => item.active),
+    [supplierMenuItems],
+  );
+  const [selectedMenuItemId, setSelectedMenuItemId] = useState("");
 
   useEffect(() => {
     setEstimatedDate(toDateInput(estimatedRepairAt));
@@ -1031,6 +1059,13 @@ export function WorkOrderQuotePanel({
     setActiveTab("quote");
     setError(null);
     setOk(`Ciornă nouă pe ${hasLucrare2 ? `L${lucrareTrack}` : "comandă"} — completați liniile și salvați.`);
+  }
+
+  function addMenuLine() {
+    const item = activeMenuItems.find((m) => m.id === selectedMenuItemId) ?? activeMenuItems[0];
+    if (!item) return;
+    setLines((prev) => [...prev, lineFromMenuItem(item, supplierDiscounts)]);
+    setSelectedMenuItemId("");
   }
 
   async function verifyPartsPrices() {
@@ -2232,6 +2267,34 @@ export function WorkOrderQuotePanel({
               className={OPS_INPUT_CLASS}
             />
           </label>
+          {activeMenuItems.length ? (
+            <div className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
+              <label className="min-w-[16rem] flex-1 space-y-1">
+                <span className={OPS_LABEL_CLASS}>Meniu atelier</span>
+                <select
+                  value={selectedMenuItemId}
+                  onChange={(e) => setSelectedMenuItemId(e.target.value)}
+                  className={OPS_INPUT_CLASS}
+                  disabled={pending}
+                >
+                  <option value="">Alege meniu…</option>
+                  {activeMenuItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label} · {supplierMenuLineTypeLabel(item.lineType)} · {centsToLei(item.unitNetCents)} RON
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                disabled={pending || !selectedMenuItemId}
+                onClick={addMenuLine}
+                className="rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-950/60 disabled:opacity-50"
+              >
+                Adaugă din meniu
+              </button>
+            </div>
+          ) : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] text-left text-sm">
               <thead>

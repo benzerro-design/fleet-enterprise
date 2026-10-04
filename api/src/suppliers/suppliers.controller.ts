@@ -24,7 +24,7 @@ import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { assertPartnerSupplierId, assertPartnerWrite, isPartnerUser } from '../iam/partner-access';
-import type { CreateSupplierInput, PatchSupplierInput } from './suppliers.service';
+import type { CreateSupplierInput, PatchSupplierInput, SupplierMenuItemInput } from './suppliers.service';
 import { SuppliersService } from './suppliers.service';
 import { ClientsService } from '../clients/clients.service';
 import { supplierServiceCatalog } from './supplier-services';
@@ -152,6 +152,56 @@ export class SuppliersController {
     return this.suppliers.listDocuments(tenantSlug, id, access);
   }
 
+  @Get(':id/menu-items')
+  @Roles(...FLEET_READ_ROLES)
+  listMenuItems(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('all') all?: string,
+  ) {
+    return this.suppliers.listMenuItems(tenantSlug, id, access, all === '1' || all === 'true');
+  }
+
+  @Post(':id/menu-items')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  @HttpCode(201)
+  createMenuItem(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: SupplierMenuItemInput,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.suppliers.createMenuItem(tenantSlug, id, body ?? {}, actorUserId, access);
+  }
+
+  @Patch(':id/menu-items/:menuItemId')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  patchMenuItem(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Param('menuItemId') menuItemId: string,
+    @Body() body: SupplierMenuItemInput,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.suppliers.patchMenuItem(tenantSlug, id, menuItemId, body ?? {}, actorUserId, access);
+  }
+
+  @Delete(':id/menu-items/:menuItemId')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
+  @HttpCode(204)
+  async deleteMenuItem(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Param('menuItemId') menuItemId: string,
+    @CurrentUserId() actorUserId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    await this.suppliers.deleteMenuItem(tenantSlug, id, menuItemId, actorUserId, access);
+  }
+
   @Post(':id/documents')
   @Roles(MembershipRole.tenant_admin, MembershipRole.supplier_user)
   @HttpCode(201)
@@ -221,21 +271,12 @@ export class SuppliersController {
     await this.suppliers.deleteDocument(tenantSlug, id, documentId, access);
   }
 
+  /** SUPP-042: write canonic pe Client → supplier-allocations. Pe Furnizor = GET only. */
   @Put(':id/client-allocations')
   @Roles(MembershipRole.tenant_admin)
-  replaceClientAllocations(
-    @TenantId() tenantSlug: string,
-    @Param('id') id: string,
-    @Body() body: { clientIds?: string[] },
-    @CurrentUserId() actorUserId: string,
-    @CurrentAccess() access: AccessContext,
-  ) {
-    return this.clients.replaceClientAllocationsForSupplier(
-      tenantSlug,
-      id,
-      Array.isArray(body?.clientIds) ? body.clientIds : [],
-      actorUserId,
-      access,
+  replaceClientAllocations() {
+    throw new BadRequestException(
+      'Alocarea client↔furnizor se editează pe fișa Client (PUT /clients/:id/supplier-allocations). Pe furnizor e doar vizualizare.',
     );
   }
 

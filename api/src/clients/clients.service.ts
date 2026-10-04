@@ -911,69 +911,19 @@ export class ClientsService {
     };
   }
 
+  /** @deprecated SUPP-042 — write doar pe Client.replaceSupplierAllocations */
   async replaceClientAllocationsForSupplier(
-    tenantSlug: string,
-    supplierId: string,
-    clientIds: string[],
-    actorUserId?: string,
-    access?: AccessContext,
+    _tenantSlug: string,
+    _supplierId: string,
+    _clientIds: string[],
+    _actorUserId?: string,
+    _access?: AccessContext,
   ): Promise<{
     items: Array<{ clientId: string; code: string; legalName: string; status: string }>;
   }> {
-    if (access && !access.isTenantWide) {
-      throw new ForbiddenException('Only tenant admin can allocate suppliers');
-    }
-    const supplier = await this.prisma.supplier.findFirst({
-      where: { id: supplierId, tenant: { slug: tenantSlug } },
-    });
-    if (!supplier) throw new NotFoundException('Supplier not found');
-    const unique = [...new Set(clientIds.map((id) => id.trim()).filter(Boolean))];
-    if (unique.length) {
-      const found = await this.prisma.client.findMany({
-        where: { id: { in: unique }, tenantId: supplier.tenantId },
-        select: { id: true },
-      });
-      if (found.length !== unique.length) {
-        throw new BadRequestException('One or more clients are invalid');
-      }
-    }
-
-    const existing = await this.prisma.clientSupplierAllocation.findMany({
-      where: { supplierId: supplier.id },
-      select: { clientId: true },
-    });
-    const have = new Set(existing.map((e) => e.clientId));
-    const want = new Set(unique);
-    const toRemove = [...have].filter((id) => !want.has(id));
-    const toAdd = [...want].filter((id) => !have.has(id));
-
-    await this.prisma.$transaction(async (tx) => {
-      if (toRemove.length) {
-        await tx.clientSupplierAllocation.deleteMany({
-          where: { supplierId: supplier.id, clientId: { in: toRemove } },
-        });
-      }
-      if (toAdd.length) {
-        await tx.clientSupplierAllocation.createMany({
-          data: toAdd.map((clientId) => ({
-            tenantId: supplier.tenantId,
-            clientId,
-            supplierId: supplier.id,
-          })),
-        });
-      }
-    });
-
-    await this.audit.log({
-      tenantId: supplier.tenantId,
-      actorUserId,
-      action: 'supplier.client_allocations_update',
-      entityType: 'supplier',
-      entityId: supplier.id,
-      meta: { clientIds: unique },
-    });
-
-    return this.listClientAllocationsForSupplier(tenantSlug, supplierId, access);
+    throw new BadRequestException(
+      'Alocarea client↔furnizor se editează pe fișa Client (PUT /clients/:id/supplier-allocations).',
+    );
   }
 
   async delete(tenantSlug: string, id: string, actorUserId?: string): Promise<void> {

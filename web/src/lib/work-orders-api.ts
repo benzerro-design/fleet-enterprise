@@ -45,6 +45,18 @@ export type WorkOrderSupplierSnapshot = {
   laborRatePaintCents?: number | null;
   laborRateDiagnosticCents?: number | null;
   partsPriceBasis?: "list" | "net";
+  menuItems?: Array<{
+    id: string;
+    supplierId: string;
+    label: string;
+    description: string | null;
+    lineType: "parts" | "labor" | "other";
+    unitNetCents: number;
+    active: boolean;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };
 
 export type WorkOrderListRow = {

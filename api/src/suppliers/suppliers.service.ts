@@ -34,6 +34,7 @@ import { parseSupplierSettings } from '../tenant/supplier-settings';
 import {
   parseDiscountPercent as parseDiscountPercentValue,
   parsePartsPriceBasis,
+  parseOptionalRonToCents,
   parseSupplierRatePatch,
   resolveSupplierCreateDiscounts,
   resolveSupplierDiscountPatch,
@@ -88,9 +89,33 @@ export type SupplierRecord = {
   integrationEnabled: boolean;
   integrationKeyLast4: string | null;
   services: string[];
+  menuItems?: SupplierMenuItemRecord[];
   workOrderCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type SupplierMenuItemRecord = {
+  id: string;
+  supplierId: string;
+  label: string;
+  description: string | null;
+  lineType: 'parts' | 'labor' | 'other';
+  unitNetCents: number;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SupplierMenuItemInput = {
+  label?: string | null;
+  description?: string | null;
+  lineType?: string | null;
+  unitNetRon?: number | string | null;
+  unitNetCents?: number | null;
+  active?: boolean;
+  sortOrder?: number | null;
 };
 
 export type CreateSupplierInput = {
@@ -167,6 +192,31 @@ function normalizeCode(code: string): string {
   return t;
 }
 
+function parseMenuLineType(raw: unknown): SupplierMenuItemRecord['lineType'] {
+  if (raw === 'parts' || raw === 'labor' || raw === 'other') return raw;
+  throw new BadRequestException('lineType must be parts, labor or other');
+}
+
+function parseMenuPriceCents(dto: SupplierMenuItemInput): number | undefined {
+  if (dto.unitNetCents !== undefined && dto.unitNetCents !== null) {
+    const n = Math.round(Number(dto.unitNetCents));
+    if (!Number.isFinite(n) || n < 0) {
+      throw new BadRequestException('unitNetCents must be a non-negative integer');
+    }
+    return n;
+  }
+  if (dto.unitNetRon !== undefined) {
+    try {
+      const cents = parseOptionalRonToCents(dto.unitNetRon, 'unitNetRon');
+      if (cents == null) throw new Error('unitNetRon required');
+      return cents;
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid unitNetRon');
+    }
+  }
+  return undefined;
+}
+
 @Injectable()
 export class SuppliersService {
   constructor(
@@ -233,6 +283,7 @@ export class SuppliersService {
     },
     workOrderCount = 0,
     services: string[] = [],
+    menuItems?: SupplierMenuItemRecord[],
   ): SupplierRecord {
     return {
       id: row.id,
@@ -260,7 +311,34 @@ export class SuppliersService {
       integrationEnabled: row.integrationEnabled === true,
       integrationKeyLast4: row.integrationKeyLast4 ?? null,
       services,
+      ...(menuItems ? { menuItems } : {}),
       workOrderCount,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  private mapMenuItem(row: {
+    id: string;
+    supplierId: string;
+    label: string;
+    description: string | null;
+    lineType: string;
+    unitNetCents: number;
+    active: boolean;
+    sortOrder: number;
+    createdAt: Date;
+    updatedAt: Date;
+  }): SupplierMenuItemRecord {
+    return {
+      id: row.id,
+      supplierId: row.supplierId,
+      label: row.label,
+      description: row.description,
+      lineType: row.lineType === 'parts' || row.lineType === 'labor' ? row.lineType : 'other',
+      unitNetCents: row.unitNetCents,
+      active: row.active,
+      sortOrder: row.sortOrder,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -395,7 +473,7 @@ export class SuppliersService {
       await assertSupplierReadById(this.prisma, tenantSlug, id, access);
     }
     const row = await this.findRow(tenantSlug, id);
-    const [woCount, offerings] = await Promise.all([
+    const [woCount, offerings, menuItems] = await Promise.all([
       this.prisma.maintenanceWorkOrder.count({
         where: { supplierId: id, tenant: { slug: tenantSlug } },
       }),
@@ -404,11 +482,16 @@ export class SuppliersService {
         orderBy: { serviceType: { sortOrder: 'asc' } },
         select: { serviceType: { select: { code: true } } },
       }),
+      this.prisma.supplierMenuItem.findMany({
+        where: { tenantId: row.tenantId, supplierId: id, active: true },
+        orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+      }),
     ]);
     return this.toRecord(
       row,
       woCount,
       offerings.map((o) => o.serviceType.code),
+      menuItems.map((item) => this.mapMenuItem(item)),
     );
   }
 
@@ -738,6 +821,137 @@ export class SuppliersService {
     }));
   }
 
+  async listMenuItems(
+    tenantSlug: string,
+    supplierId: string,
+    access: AccessContext,
+    includeInactive = false,
+  ) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await assertSupplierReadById(this.prisma, tenantSlug, supplierId, access);
+    const canSeeInactive = includeInactive && this.canManageMenuItems(access, supplierId);
+    const rows = await this.prisma.supplierMenuItem.findMany({
+      where: {
+        tenantId: tenant.id,
+        supplierId,
+        ...(canSeeInactive ? {} : { active: true }),
+      },
+      orderBy: [{ active: 'desc' }, { sortOrder: 'asc' }, { label: 'asc' }],
+    });
+    return { items: rows.map((r) => this.mapMenuItem(r)) };
+  }
+
+  async createMenuItem(
+    tenantSlug: string,
+    supplierId: string,
+    dto: SupplierMenuItemInput,
+    actorUserId: string | undefined,
+    access: AccessContext,
+  ) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await this.assertMenuItemWrite(access, supplierId);
+    const supplier = await this.findRow(tenantSlug, supplierId);
+    if (supplier.tenantId !== tenant.id) throw new NotFoundException('Supplier not found');
+    if (!supplierSupportsQuoteDiscountDefaults(supplier.category)) {
+      throw new BadRequestException('Meniurile atelier sunt disponibile doar pentru service auto/anvelope');
+    }
+    const label = dto.label?.trim();
+    if (!label) throw new BadRequestException('label required');
+    const unitNetCents = parseMenuPriceCents(dto);
+    if (unitNetCents === undefined) throw new BadRequestException('unitNetRon required');
+    const row = await this.prisma.supplierMenuItem.create({
+      data: {
+        tenantId: tenant.id,
+        supplierId,
+        label,
+        description: dto.description?.trim() || null,
+        lineType: parseMenuLineType(dto.lineType ?? 'other'),
+        unitNetCents,
+        active: dto.active !== false,
+        sortOrder: Math.round(Number(dto.sortOrder) || 0),
+      },
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'supplier.menu_item.create',
+      entityType: 'supplier',
+      entityId: supplierId,
+      meta: { menuItemId: row.id },
+    });
+    return this.mapMenuItem(row);
+  }
+
+  async patchMenuItem(
+    tenantSlug: string,
+    supplierId: string,
+    menuItemId: string,
+    dto: SupplierMenuItemInput,
+    actorUserId: string | undefined,
+    access: AccessContext,
+  ) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await this.assertMenuItemWrite(access, supplierId);
+    const existing = await this.prisma.supplierMenuItem.findFirst({
+      where: { id: menuItemId, tenantId: tenant.id, supplierId },
+    });
+    if (!existing) throw new NotFoundException('Menu item not found');
+    const data: Prisma.SupplierMenuItemUpdateInput = {};
+    if (dto.label !== undefined) {
+      const label = dto.label?.trim();
+      if (!label) throw new BadRequestException('label required');
+      data.label = label;
+    }
+    if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.lineType !== undefined) data.lineType = parseMenuLineType(dto.lineType ?? 'other');
+    const unitNetCents = parseMenuPriceCents(dto);
+    if (unitNetCents !== undefined) data.unitNetCents = unitNetCents;
+    if (dto.active !== undefined) data.active = Boolean(dto.active);
+    if (dto.sortOrder !== undefined && dto.sortOrder !== null) {
+      data.sortOrder = Math.round(Number(dto.sortOrder) || 0);
+    }
+    const row = await this.prisma.supplierMenuItem.update({
+      where: { id: menuItemId },
+      data,
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'supplier.menu_item.patch',
+      entityType: 'supplier',
+      entityId: supplierId,
+      meta: { menuItemId },
+    });
+    return this.mapMenuItem(row);
+  }
+
+  async deleteMenuItem(
+    tenantSlug: string,
+    supplierId: string,
+    menuItemId: string,
+    actorUserId: string | undefined,
+    access: AccessContext,
+  ) {
+    const tenant = await this.ensureTenant(tenantSlug);
+    await this.assertMenuItemWrite(access, supplierId);
+    const existing = await this.prisma.supplierMenuItem.findFirst({
+      where: { id: menuItemId, tenantId: tenant.id, supplierId },
+    });
+    if (!existing) throw new NotFoundException('Menu item not found');
+    await this.prisma.supplierMenuItem.update({
+      where: { id: menuItemId },
+      data: { active: false },
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'supplier.menu_item.deactivate',
+      entityType: 'supplier',
+      entityId: supplierId,
+      meta: { menuItemId },
+    });
+  }
+
   async listDocuments(tenantSlug: string, supplierId: string, access: AccessContext) {
     const tenant = await this.ensureTenant(tenantSlug);
     await assertSupplierReadById(this.prisma, tenantSlug, supplierId, access);
@@ -854,6 +1068,28 @@ export class SuppliersService {
       return;
     }
     throw new ForbiddenException('Only tenant admin or partner can manage supplier documents');
+  }
+
+  private canManageMenuItems(access: AccessContext, supplierId: string): boolean {
+    if (access.membershipRole === MembershipRole.tenant_admin) return true;
+    if (!isPartnerUser(access)) return false;
+    try {
+      assertPartnerWrite(access);
+      assertPartnerSupplierId(access, supplierId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async assertMenuItemWrite(access: AccessContext, supplierId: string) {
+    if (access.membershipRole === MembershipRole.tenant_admin) return;
+    if (isPartnerUser(access)) {
+      assertPartnerWrite(access);
+      assertPartnerSupplierId(access, supplierId);
+      return;
+    }
+    throw new ForbiddenException('Only tenant admin or partner can manage supplier menu items');
   }
 
   private async ensureTenant(tenantSlug: string) {

@@ -332,8 +332,8 @@ export function SupplierForm({ mode, initial, serviceCatalog }: Props) {
       {mode === "create" ? (
         <OpsFormSection number={5} title="Alocare clienți">
           <p className="mb-3 text-xs text-zinc-500">
-            Opțional. Managerul clientului vede furnizorul în costuri doar după alocare. Poți aloca și ulterior din
-            profil.
+            Opțional la creare. Ulterior alocarea se editează pe Client → Furnizori (nu pe fișa
+            furnizorului).
           </p>
           {clients.length === 0 ? (
             <p className="text-sm text-zinc-500">Niciun client activ de alocat.</p>

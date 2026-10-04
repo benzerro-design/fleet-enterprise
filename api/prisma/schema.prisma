@@ -60,6 +60,7 @@ model Tenant {
   supplierMemberships SupplierMembership[]
   supplierInvites     SupplierInvite[]
   supplierDocuments   SupplierDocument[]
+  supplierMenuItems   SupplierMenuItem[]
   partnerNotifications PartnerNotificationOutbox[]
   botPopulationSessions BotPopulationSession[]
   suppliers              Supplier[]
@@ -1368,6 +1369,7 @@ model Supplier {
   roadsideInterventions RoadsideIntervention[]
   clientAllocations    ClientSupplierAllocation[]
   documents            SupplierDocument[]
+  menuItems            SupplierMenuItem[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1400,6 +1402,27 @@ model SupplierDocument {
   @@index([tenantId])
   @@index([supplierId, kind])
   @@index([supplierId, expiresOn])
+}
+
+/// Meniuri atelier cu preț fix (PARTNER-014 Faza B).
+model SupplierMenuItem {
+  id           String   @id @default(cuid())
+  tenantId     String
+  supplierId   String
+  label        String
+  description  String?
+  lineType     String   @default("other")
+  unitNetCents Int
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier     Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([supplierId, active, sortOrder])
 }
 
 /// Alocare L* : furnizor vizibil pentru un Client (L1).

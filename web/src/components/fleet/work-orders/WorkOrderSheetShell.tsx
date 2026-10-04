@@ -1565,6 +1565,7 @@ export function WorkOrderSheetShell({
               }
             : null
         }
+        supplierMenuItems={wo.supplier?.menuItems ?? []}
       />
 
       <div className="border-t border-zinc-800 p-4">

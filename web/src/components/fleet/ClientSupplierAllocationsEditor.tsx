@@ -112,7 +112,8 @@ export function ClientSupplierAllocationsEditor({ clientId, canWrite }: Props) {
       <div>
         <h3 className="text-sm font-semibold text-zinc-100">Furnizori alocați</h3>
         <p className="mt-1 text-xs text-zinc-500">
-          Managerul clientului (L1) vede în costuri / mentenanță doar furnizorii bifați aici.
+          Locul canonic de alocare (SUPP-042). Managerul clientului (L1) vede în costuri / mentenanță /
+          WO doar furnizorii bifați aici. Pe fișa furnizorului lista e doar vizualizare.
         </p>
       </div>
 
