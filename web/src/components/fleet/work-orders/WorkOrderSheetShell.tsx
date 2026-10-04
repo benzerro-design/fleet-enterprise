@@ -1046,7 +1046,21 @@ export function WorkOrderSheetShell({
         </div>
 
         <div className={panelClass()}>
-          {panelTitle("Rezumat")}
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Rezumat</div>
+            {canWrite &&
+            wo.outServiceAt &&
+            !(wo.visit2InServiceAt && !wo.visit2OutServiceAt) ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void addExtraVisit()}
+                className="shrink-0 rounded border border-zinc-600 px-2 py-0.5 text-[10px] font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Adaugă vizită
+              </button>
+            ) : null}
+          </div>
           <div className="space-y-1 text-xs text-zinc-400">
             {wo.ticketSubject ? (
               <div>
@@ -1095,337 +1109,364 @@ export function WorkOrderSheetShell({
               <p className="pt-1 text-[11px] text-emerald-400/90">{fleetOdoNotice}</p>
             ) : null}
 
-            <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-1 pt-2">
-              {(
-                [
-                  { id: "v1", label: "Vizită 1" },
-                  { id: "v1-in", label: "Poze IN" },
-                  { id: "v1-out", label: "Poze OUT" },
-                  ...(useVisit2
-                    ? [
-                        { id: "v2", label: "Vizită 2" },
-                        { id: "v2-in", label: "Poze IN 2" },
-                        { id: "v2-out", label: "Poze OUT 2" },
-                      ]
-                    : []),
-                  ...extraVisits.flatMap((v) => [
-                    { id: `vx-${v.n}`, label: `Vizită ${v.n}` },
-                    { id: `vx-${v.n}-in`, label: `IN ${v.n}` },
-                    { id: `vx-${v.n}-out`, label: `OUT ${v.n}` },
-                  ]),
-                ] as { id: string; label: string }[]
-              ).map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setRezumatTab(t.id)}
-                  className={`rounded px-1.5 py-0.5 text-[10px] ${
-                    rezumatTab === t.id
-                      ? "bg-violet-900/50 text-violet-100"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {rezumatTab === "v1" ? (
-            <div className="grid gap-3 pt-2 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="block text-zinc-500">
-                  Km in{requireKm ? <span className="text-amber-400"> *</span> : null}
-                  <input
-                    type="number"
-                    min={0}
-                    value={kmIn}
-                    disabled={!canWrite || pending || !!wo.inServiceAt}
-                    onChange={(e) => setKmIn(e.target.value)}
-                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                    placeholder={requireKm ? "Obligatoriu" : "Opțional"}
-                  />
-                </label>
-                {wo.inServiceAt ? (
-                  <p className="text-[10px] text-zinc-500">
-                    In service: {new Date(wo.inServiceAt).toLocaleString("ro-RO")}
-                  </p>
-                ) : canWrite ? (
+            {/* Vizită 1; Vizită 2+ stau sub tot blocul V1 */}
+            <div className="pt-2">
+              <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
+                {(
+                  [
+                    { id: "v1", label: "Vizită 1" },
+                    { id: "v1-in", label: "Poze IN" },
+                    { id: "v1-out", label: "Poze OUT" },
+                  ] as { id: string; label: string }[]
+                ).map((t) => (
                   <button
+                    key={t.id}
                     type="button"
-                    disabled={pending}
-                    onClick={() => void markIn()}
-                    className="w-full rounded-lg bg-violet-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+                    onClick={() => setRezumatTab(t.id)}
+                    className={`rounded px-1.5 py-0.5 text-[10px] ${
+                      rezumatTab === t.id
+                        ? "bg-violet-900/50 text-violet-100"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
                   >
-                    In service
+                    {t.label}
                   </button>
-                ) : null}
+                ))}
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-zinc-500">
-                  Km out{requireKm ? <span className="text-amber-400"> *</span> : null}
-                  <input
-                    type="number"
-                    min={0}
-                    value={kmOut}
-                    disabled={!canMarkServiceOut || pending || !wo.inServiceAt || !!wo.outServiceAt}
-                    onChange={(e) => setKmOut(e.target.value)}
-                    className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                    placeholder={requireKm ? "Obligatoriu" : "Opțional"}
+
+              {rezumatTab === "v1-in" ? (
+                <div className="pt-2">
+                  <WorkOrderPhotoGallery
+                    workOrderId={wo.id}
+                    canWrite={canWrite}
+                    mode="visit"
+                    visitIndex={1}
+                    phase="in"
+                    title="Poze intrare — vizită 1"
                   />
-                </label>
-                {wo.outServiceAt ? (
-                  <p className="text-[10px] text-zinc-500">
-                    Out service: {new Date(wo.outServiceAt).toLocaleString("ro-RO")}
-                  </p>
-                ) : canMarkServiceOut && wo.inServiceAt ? (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => void markOut()}
-                    className="w-full rounded-lg border border-violet-500/50 bg-violet-950/40 px-2 py-1.5 text-xs font-medium text-violet-100 hover:bg-violet-900/40 disabled:opacity-50"
-                  >
-                    Out service
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            ) : null}
-
-            {rezumatTab === "v1-in" ? (
-              <div className="pt-2">
-                <WorkOrderPhotoGallery
-                  workOrderId={wo.id}
-                  canWrite={canWrite}
-                  mode="visit"
-                  visitIndex={1}
-                  phase="in"
-                  title="Poze intrare — vizită 1"
-                />
-              </div>
-            ) : null}
-            {rezumatTab === "v1-out" ? (
-              <div className="pt-2">
-                <WorkOrderPhotoGallery
-                  workOrderId={wo.id}
-                  canWrite={canMarkServiceOut}
-                  mode="visit"
-                  visitIndex={1}
-                  phase="out"
-                  title="Poze ieșire — vizită 1"
-                />
-              </div>
-            ) : null}
-
-            {rezumatTab === "v2" && useVisit2 ? (
-              <div className="mt-3 space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
-                  Vizită 2 — reparație
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
+                </div>
+              ) : rezumatTab === "v1-out" ? (
+                <div className="pt-2">
+                  <WorkOrderPhotoGallery
+                    workOrderId={wo.id}
+                    canWrite={canMarkServiceOut}
+                    mode="visit"
+                    visitIndex={1}
+                    phase="out"
+                    title="Poze ieșire — vizită 1"
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-3 pt-2 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="block text-zinc-500">
-                      Km in V2{requireKm ? <span className="text-amber-400"> *</span> : null}
+                      Km in{requireKm ? <span className="text-amber-400"> *</span> : null}
                       <input
                         type="number"
                         min={0}
-                        value={kmIn2}
-                        disabled={!canWrite || pending || !!wo.visit2InServiceAt}
-                        onChange={(e) => setKmIn2(e.target.value)}
+                        value={kmIn}
+                        disabled={!canWrite || pending || !!wo.inServiceAt}
+                        onChange={(e) => setKmIn(e.target.value)}
                         className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                        placeholder={requireKm ? "Obligatoriu" : "Opțional"}
                       />
                     </label>
-                    {wo.visit2InServiceAt ? (
+                    {wo.inServiceAt ? (
                       <p className="text-[10px] text-zinc-500">
-                        In: {new Date(wo.visit2InServiceAt).toLocaleString("ro-RO")}
+                        In service: {new Date(wo.inServiceAt).toLocaleString("ro-RO")}
                       </p>
                     ) : canWrite ? (
                       <button
                         type="button"
                         disabled={pending}
                         onClick={() => void markIn()}
-                        className="w-full rounded-lg bg-amber-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                        className="w-full rounded-lg bg-violet-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
                       >
-                        In service (V2)
+                        In service
                       </button>
                     ) : null}
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-zinc-500">
-                      Km out V2{requireKm ? <span className="text-amber-400"> *</span> : null}
+                      Km out{requireKm ? <span className="text-amber-400"> *</span> : null}
                       <input
                         type="number"
                         min={0}
-                        value={kmOut2}
-                        disabled={!canMarkServiceOut || pending || !wo.visit2InServiceAt || !!wo.visit2OutServiceAt}
-                        onChange={(e) => setKmOut2(e.target.value)}
+                        value={kmOut}
+                        disabled={!canMarkServiceOut || pending || !wo.inServiceAt || !!wo.outServiceAt}
+                        onChange={(e) => setKmOut(e.target.value)}
                         className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                        placeholder={requireKm ? "Obligatoriu" : "Opțional"}
                       />
                     </label>
-                    {wo.visit2OutServiceAt ? (
+                    {wo.outServiceAt ? (
                       <p className="text-[10px] text-zinc-500">
-                        Out: {new Date(wo.visit2OutServiceAt).toLocaleString("ro-RO")}
+                        Out service: {new Date(wo.outServiceAt).toLocaleString("ro-RO")}
                       </p>
-                    ) : canMarkServiceOut && wo.visit2InServiceAt ? (
+                    ) : canMarkServiceOut && wo.inServiceAt ? (
                       <button
                         type="button"
                         disabled={pending}
                         onClick={() => void markOut()}
-                        className="w-full rounded-lg border border-amber-500/50 bg-amber-950/40 px-2 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-900/40 disabled:opacity-50"
+                        className="w-full rounded-lg border border-violet-500/50 bg-violet-950/40 px-2 py-1.5 text-xs font-medium text-violet-100 hover:bg-violet-900/40 disabled:opacity-50"
                       >
-                        Out service (V2)
+                        Out service
                       </button>
                     ) : null}
                   </div>
                 </div>
-              </div>
-            ) : null}
+              )}
+            </div>
 
-            {rezumatTab === "v2-in" && useVisit2 ? (
-              <div className="pt-2">
-                <WorkOrderPhotoGallery
-                  workOrderId={wo.id}
-                  canWrite={canWrite}
-                  mode="visit"
-                  visitIndex={2}
-                  phase="in"
-                  title="Poze intrare — vizită 2"
-                />
-              </div>
-            ) : null}
-            {rezumatTab === "v2-out" && useVisit2 ? (
-              <div className="pt-2">
-                <WorkOrderPhotoGallery
-                  workOrderId={wo.id}
-                  canWrite={canWrite}
-                  mode="visit"
-                  visitIndex={2}
-                  phase="out"
-                  title="Poze ieșire — vizită 2"
-                />
+            {useVisit2 ? (
+              <div className="mt-3 border-t border-zinc-800 pt-2">
+                <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
+                  {(
+                    [
+                      { id: "v2", label: "Vizită 2" },
+                      { id: "v2-in", label: "Poze IN 2" },
+                      { id: "v2-out", label: "Poze OUT 2" },
+                    ] as { id: string; label: string }[]
+                  ).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setRezumatTab(t.id)}
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${
+                        rezumatTab === t.id
+                          ? "bg-amber-900/50 text-amber-100"
+                          : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {rezumatTab === "v2-in" ? (
+                  <div className="pt-2">
+                    <WorkOrderPhotoGallery
+                      workOrderId={wo.id}
+                      canWrite={canWrite}
+                      mode="visit"
+                      visitIndex={2}
+                      phase="in"
+                      title="Poze intrare — vizită 2"
+                    />
+                  </div>
+                ) : rezumatTab === "v2-out" ? (
+                  <div className="pt-2">
+                    <WorkOrderPhotoGallery
+                      workOrderId={wo.id}
+                      canWrite={canWrite}
+                      mode="visit"
+                      visitIndex={2}
+                      phase="out"
+                      title="Poze ieșire — vizită 2"
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/90">
+                      Vizită 2 — reparație
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="block text-zinc-500">
+                          Km in V2{requireKm ? <span className="text-amber-400"> *</span> : null}
+                          <input
+                            type="number"
+                            min={0}
+                            value={kmIn2}
+                            disabled={!canWrite || pending || !!wo.visit2InServiceAt}
+                            onChange={(e) => setKmIn2(e.target.value)}
+                            className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                          />
+                        </label>
+                        {wo.visit2InServiceAt ? (
+                          <p className="text-[10px] text-zinc-500">
+                            In: {new Date(wo.visit2InServiceAt).toLocaleString("ro-RO")}
+                          </p>
+                        ) : canWrite ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => {
+                              setRezumatTab("v2");
+                              void markIn();
+                            }}
+                            className="w-full rounded-lg bg-amber-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                          >
+                            In service (V2)
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-zinc-500">
+                          Km out V2{requireKm ? <span className="text-amber-400"> *</span> : null}
+                          <input
+                            type="number"
+                            min={0}
+                            value={kmOut2}
+                            disabled={!canMarkServiceOut || pending || !wo.visit2InServiceAt || !!wo.visit2OutServiceAt}
+                            onChange={(e) => setKmOut2(e.target.value)}
+                            className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                          />
+                        </label>
+                        {wo.visit2OutServiceAt ? (
+                          <p className="text-[10px] text-zinc-500">
+                            Out: {new Date(wo.visit2OutServiceAt).toLocaleString("ro-RO")}
+                          </p>
+                        ) : canMarkServiceOut && wo.visit2InServiceAt ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => {
+                              setRezumatTab("v2");
+                              void markOut();
+                            }}
+                            className="w-full rounded-lg border border-amber-500/50 bg-amber-950/40 px-2 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-900/40 disabled:opacity-50"
+                          >
+                            Out service (V2)
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
 
             {extraVisits.map((v) => {
-              if (rezumatTab !== `vx-${v.n}`) return null;
               const km = extraKm[v.n] ?? { in: "", out: "" };
+              const tabMain = `vx-${v.n}`;
+              const tabIn = `vx-${v.n}-in`;
+              const tabOut = `vx-${v.n}-out`;
               return (
-                <div key={v.n} className="mt-3 space-y-2 rounded-lg border border-sky-500/30 bg-sky-950/20 p-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/90">
-                    Vizită {v.n}
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <label className="block text-zinc-500">
-                        Km in V{v.n}
-                        {requireKm ? <span className="text-amber-400"> *</span> : null}
-                        <input
-                          type="number"
-                          min={0}
-                          value={km.in}
-                          disabled={!canWrite || pending || !!v.inServiceAt}
-                          onChange={(e) =>
-                            setExtraKm((prev) => ({
-                              ...prev,
-                              [v.n]: { in: e.target.value, out: prev[v.n]?.out ?? km.out },
-                            }))
-                          }
-                          className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                        />
-                      </label>
-                      {v.inServiceAt ? (
-                        <p className="text-[10px] text-zinc-500">
-                          In: {new Date(v.inServiceAt).toLocaleString("ro-RO")}
-                        </p>
-                      ) : canWrite ? (
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => void markExtraIn(v.n)}
-                          className="w-full rounded-lg bg-sky-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50"
-                        >
-                          In service (V{v.n})
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-zinc-500">
-                        Km out V{v.n}
-                        {requireKm ? <span className="text-amber-400"> *</span> : null}
-                        <input
-                          type="number"
-                          min={0}
-                          value={km.out}
-                          disabled={!canWrite || pending || !v.inServiceAt || !!v.outServiceAt}
-                          onChange={(e) =>
-                            setExtraKm((prev) => ({
-                              ...prev,
-                              [v.n]: { in: prev[v.n]?.in ?? km.in, out: e.target.value },
-                            }))
-                          }
-                          className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
-                        />
-                      </label>
-                      {v.outServiceAt ? (
-                        <p className="text-[10px] text-zinc-500">
-                          Out: {new Date(v.outServiceAt).toLocaleString("ro-RO")}
-                        </p>
-                      ) : canWrite && v.inServiceAt ? (
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => void markExtraOut(v.n)}
-                          className="w-full rounded-lg border border-sky-500/50 bg-sky-950/40 px-2 py-1.5 text-xs font-medium text-sky-100 hover:bg-sky-900/40 disabled:opacity-50"
-                        >
-                          Out service (V{v.n})
-                        </button>
-                      ) : null}
-                    </div>
+                <div key={v.n} className="mt-3 border-t border-zinc-800 pt-2">
+                  <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-1">
+                    {(
+                      [
+                        { id: tabMain, label: `Vizită ${v.n}` },
+                        { id: tabIn, label: `IN ${v.n}` },
+                        { id: tabOut, label: `OUT ${v.n}` },
+                      ] as { id: string; label: string }[]
+                    ).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setRezumatTab(t.id)}
+                        className={`rounded px-1.5 py-0.5 text-[10px] ${
+                          rezumatTab === t.id
+                            ? "bg-sky-900/50 text-sky-100"
+                            : "text-zinc-500 hover:text-zinc-300"
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
                   </div>
+
+                  {rezumatTab === tabIn ? (
+                    <div className="pt-2">
+                      <WorkOrderPhotoGallery
+                        workOrderId={wo.id}
+                        canWrite={canWrite}
+                        mode="visit"
+                        visitIndex={v.n}
+                        phase="in"
+                        title={`Poze intrare — vizită ${v.n}`}
+                      />
+                    </div>
+                  ) : rezumatTab === tabOut ? (
+                    <div className="pt-2">
+                      <WorkOrderPhotoGallery
+                        workOrderId={wo.id}
+                        canWrite={canWrite}
+                        mode="visit"
+                        visitIndex={v.n}
+                        phase="out"
+                        title={`Poze ieșire — vizită ${v.n}`}
+                      />
+                    </div>
+                  ) : (
+                    <div className="mt-2 space-y-2 rounded-lg border border-sky-500/30 bg-sky-950/20 p-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-200/90">
+                        Vizită {v.n}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <label className="block text-zinc-500">
+                            Km in V{v.n}
+                            {requireKm ? <span className="text-amber-400"> *</span> : null}
+                            <input
+                              type="number"
+                              min={0}
+                              value={km.in}
+                              disabled={!canWrite || pending || !!v.inServiceAt}
+                              onChange={(e) =>
+                                setExtraKm((prev) => ({
+                                  ...prev,
+                                  [v.n]: { in: e.target.value, out: prev[v.n]?.out ?? km.out },
+                                }))
+                              }
+                              className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                            />
+                          </label>
+                          {v.inServiceAt ? (
+                            <p className="text-[10px] text-zinc-500">
+                              In: {new Date(v.inServiceAt).toLocaleString("ro-RO")}
+                            </p>
+                          ) : canWrite ? (
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => void markExtraIn(v.n)}
+                              className="w-full rounded-lg bg-sky-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+                            >
+                              In service (V{v.n})
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="block text-zinc-500">
+                            Km out V{v.n}
+                            {requireKm ? <span className="text-amber-400"> *</span> : null}
+                            <input
+                              type="number"
+                              min={0}
+                              value={km.out}
+                              disabled={!canWrite || pending || !v.inServiceAt || !!v.outServiceAt}
+                              onChange={(e) =>
+                                setExtraKm((prev) => ({
+                                  ...prev,
+                                  [v.n]: { in: prev[v.n]?.in ?? km.in, out: e.target.value },
+                                }))
+                              }
+                              className="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 font-mono text-zinc-200 disabled:opacity-50"
+                            />
+                          </label>
+                          {v.outServiceAt ? (
+                            <p className="text-[10px] text-zinc-500">
+                              Out: {new Date(v.outServiceAt).toLocaleString("ro-RO")}
+                            </p>
+                          ) : canWrite && v.inServiceAt ? (
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => void markExtraOut(v.n)}
+                              className="w-full rounded-lg border border-sky-500/50 bg-sky-950/40 px-2 py-1.5 text-xs font-medium text-sky-100 hover:bg-sky-900/40 disabled:opacity-50"
+                            >
+                              Out service (V{v.n})
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
-
-            {extraVisits.map((v) =>
-              rezumatTab === `vx-${v.n}-in` ? (
-                <div key={`in-${v.n}`} className="pt-2">
-                  <WorkOrderPhotoGallery
-                    workOrderId={wo.id}
-                    canWrite={canWrite}
-                    mode="visit"
-                    visitIndex={v.n}
-                    phase="in"
-                    title={`Poze intrare — vizită ${v.n}`}
-                  />
-                </div>
-              ) : rezumatTab === `vx-${v.n}-out` ? (
-                <div key={`out-${v.n}`} className="pt-2">
-                  <WorkOrderPhotoGallery
-                    workOrderId={wo.id}
-                    canWrite={canWrite}
-                    mode="visit"
-                    visitIndex={v.n}
-                    phase="out"
-                    title={`Poze ieșire — vizită ${v.n}`}
-                  />
-                </div>
-              ) : null,
-            )}
-
-            {canWrite &&
-            (rezumatTab === "v1" || rezumatTab === "v2" || rezumatTab.startsWith("vx-")) &&
-            !rezumatTab.includes("-in") &&
-            !rezumatTab.includes("-out") &&
-            wo.outServiceAt &&
-            !(wo.visit2InServiceAt && !wo.visit2OutServiceAt) ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void addExtraVisit()}
-                className="mt-3 w-full rounded-lg border border-zinc-600 px-2 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-              >
-                Adaugă vizită
-              </button>
-            ) : null}
           </div>
         </div>
       </div>
