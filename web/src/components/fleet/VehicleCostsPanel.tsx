@@ -40,9 +40,11 @@ type Props = {
   items: VehicleCostRow[];
   totalInDb: number;
   regQs: string;
+  /** Șofer pe telefon: carduri, fără filtru desktop */
+  driverPortal?: boolean;
 };
 
-export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
+export function VehicleCostsPanel({ items, totalInDb, regQs, driverPortal = false }: Props) {
   const [category, setCategory] = useState("");
   const [providerQ, setProviderQ] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -74,7 +76,30 @@ export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
     return <p className="mt-2 text-sm text-zinc-500">Nu există costuri înregistrate.</p>;
   }
 
-  return (
+  const mobileList = (
+    <ul className="divide-y divide-zinc-800/80">
+      {items.map((row) => (
+        <li key={row.id}>
+          <Link
+            href={`/fleet/costs/${row.id}`}
+            className="flex min-h-[64px] items-center justify-between gap-3 py-3.5 touch-manipulation"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-base font-medium text-zinc-100">{row.category}</span>
+              <span className="mt-0.5 block truncate text-sm text-zinc-500">
+                {new Date(row.incurredOn).toLocaleDateString("ro-RO")}
+                {row.provider ? ` · ${row.provider}` : ""}
+                {isFuelCostCategory(row.category) && row.fuelLiters != null ? ` · ${row.fuelLiters} L` : ""}
+              </span>
+            </span>
+            <span className="shrink-0 font-mono text-sm text-zinc-300">{formatRonFromCents(row.amountCents)}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+
+  const desktopPanel = (
     <>
       <div className={vehicleDetailFilterBarClass}>
         <div className="flex min-w-[8rem] flex-col gap-0.5">
@@ -204,6 +229,26 @@ export function VehicleCostsPanel({ items, totalInDb, regQs }: Props) {
       ) : null}
     </>
   );
+
+  if (driverPortal) {
+    return (
+      <>
+        <div className="lg:hidden">
+          {mobileList}
+          <p className="mt-3 text-xs text-zinc-500">
+            Total{" "}
+            <span className="font-mono text-zinc-300">
+              {formatRonFromCents(items.reduce((s, r) => s + r.amountCents, 0))}
+            </span>{" "}
+            RON fără TVA
+          </p>
+        </div>
+        <div className="hidden lg:block">{desktopPanel}</div>
+      </>
+    );
+  }
+
+  return desktopPanel;
 }
 
 export function vehicleCostsSummary(items: VehicleCostRow[], totalInDb: number): string {

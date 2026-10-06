@@ -236,6 +236,7 @@ const ro = {
     costs: "Alimentări",
     tickets: "Tichete",
     reminders: "Remindere",
+    documents: "Documente",
     all: "Toate",
     open: "Deschise",
     closed: "Închise",

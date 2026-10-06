@@ -13,6 +13,8 @@ type Props = {
   currentClientId: string;
   vehicles: OpsVehicleOption[];
   mode: "view" | "edit";
+  /** Șofer pe telefon: fără filtru / hint-uri tastatură / duplicate meta */
+  driverMobile?: boolean;
 };
 
 function modelLabelFromOption(v: OpsVehicleOption): string {
@@ -42,6 +44,7 @@ export function VehicleSwitcher({
   currentClientId,
   vehicles,
   mode,
+  driverMobile = false,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -138,7 +141,92 @@ export function VehicleSwitcher({
 
   if (vehicles.length === 0) {
     return (
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight font-mono">{currentRegistration}</h1>
+      <h1
+        className={`mt-2 font-semibold tracking-tight font-mono ${driverMobile ? "text-2xl" : "text-3xl"}`}
+      >
+        {currentRegistration}
+      </h1>
+    );
+  }
+
+  if (driverMobile) {
+    return (
+      <div ref={rootRef} className="relative mt-1">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          aria-label="Schimbă vehiculul"
+          className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left touch-manipulation ${
+            open
+              ? "border-emerald-700/60 bg-emerald-950/30"
+              : "border-zinc-800 bg-zinc-900/40"
+          }`}
+        >
+          <span className="min-w-0">
+            <span className="block text-[11px] font-medium uppercase tracking-widest text-zinc-500">
+              Vehicul curent
+            </span>
+            <span className="mt-0.5 block font-mono text-xl font-semibold tracking-tight text-zinc-50">
+              {currentRegistration}
+            </span>
+            <span className="mt-0.5 block truncate text-sm text-zinc-400">
+              {currentModelLabel}
+              <span className="mx-1.5 text-zinc-600">·</span>
+              {currentOdometerKm.toLocaleString("ro-RO")} km
+            </span>
+          </span>
+          <span className="shrink-0 rounded-full bg-zinc-800 px-3 py-1.5 text-xs font-medium text-emerald-300">
+            Schimbă
+          </span>
+        </button>
+
+        {open ? (
+          <div
+            role="listbox"
+            aria-label="Schimbă vehiculul"
+            className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 shadow-xl"
+          >
+            <div className="max-h-72 overflow-y-auto overscroll-contain">
+              {listItems.length === 0 ? (
+                <p className="px-4 py-4 text-sm text-zinc-500">Niciun vehicul.</p>
+              ) : (
+                listItems.map((v, idx) => {
+                  const selected = v.id === currentId;
+                  const model = modelLabelFromOption(v);
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      onClick={() => navigateTo(v.id)}
+                      className={`flex w-full items-center justify-between gap-3 border-t border-zinc-800/80 px-4 py-3.5 text-left first:border-t-0 touch-manipulation ${
+                        selected ? "bg-emerald-950/35" : "active:bg-zinc-900"
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-mono text-base font-semibold text-zinc-100">
+                          {v.registrationNumber}
+                        </span>
+                        <span className="mt-0.5 block truncate text-sm text-zinc-500">
+                          {model}
+                          <span className="mx-1.5 text-zinc-700">·</span>
+                          {(v.odometerKm ?? 0).toLocaleString("ro-RO")} km
+                        </span>
+                      </span>
+                      {selected ? (
+                        <span className="shrink-0 text-[10px] uppercase tracking-wide text-emerald-400">activ</span>
+                      ) : null}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -254,7 +342,7 @@ export function VehicleSwitcher({
             )}
           </div>
 
-          <div className="border-t border-zinc-800 bg-zinc-900/40 px-3 py-2 text-[10px] text-zinc-600">
+          <div className="hidden border-t border-zinc-800 bg-zinc-900/40 px-3 py-2 text-[10px] text-zinc-600 lg:block">
             Enter = selectează · Esc = închide · ↑↓ navigare
           </div>
         </div>

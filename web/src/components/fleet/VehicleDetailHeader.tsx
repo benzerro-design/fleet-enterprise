@@ -13,6 +13,7 @@ type Props = {
   vehicles: OpsVehicleOption[];
   editable: boolean;
   canWrite: boolean;
+  driverPortal?: boolean;
   driverAssignments?: DriverAssignmentRecord[];
   /** Poză hero din galerie (isHero → exterior → orice). */
   heroPhotoUrl?: string | null;
@@ -24,9 +25,12 @@ function modelLabel(vehicle: VehicleRecord): string {
 }
 
 function VehicleSwitcherSlot(
-  props: Omit<Props, "editable" | "canWrite" | "heroPhotoUrl"> & { mode: "view" | "edit" },
+  props: Omit<Props, "editable" | "canWrite" | "heroPhotoUrl" | "driverPortal"> & {
+    mode: "view" | "edit";
+    driverMobile?: boolean;
+  },
 ) {
-  const { vehicle, vehicles, mode } = props;
+  const { vehicle, vehicles, mode, driverMobile } = props;
   return (
     <VehicleSwitcher
       currentId={vehicle.id}
@@ -36,6 +40,7 @@ function VehicleSwitcherSlot(
       currentClientId={vehicle.clientId}
       vehicles={vehicles}
       mode={mode}
+      driverMobile={driverMobile}
     />
   );
 }
@@ -68,6 +73,7 @@ export function VehicleDetailHeader({
   vehicles,
   editable,
   canWrite,
+  driverPortal = false,
   driverAssignments = [],
   heroPhotoUrl = null,
 }: Props) {
@@ -75,6 +81,77 @@ export function VehicleDetailHeader({
   const activeDriver = driverAssignments.find((a) => !a.unassignedAt) ?? null;
   const photo = heroPhotoUrl ?? vehicle.heroPhotoUrl ?? null;
   const driverName = activeDriver?.driverFullName?.trim() || "—";
+
+  if (driverPortal) {
+    return (
+      <>
+        {/* Driver mobile */}
+        <div className="mb-6 space-y-3 lg:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/fleet/vehicles" className="text-sm font-medium text-zinc-400 touch-manipulation">
+              ← Acasă
+            </Link>
+            <Link
+              href={`/fleet/tickets/new?vehicleId=${encodeURIComponent(vehicle.id)}`}
+              className="text-sm font-medium text-emerald-400 touch-manipulation"
+            >
+              Tichet
+            </Link>
+          </div>
+          <Suspense
+            fallback={
+              <h1 className="font-mono text-2xl font-semibold tracking-tight">{vehicle.registrationNumber}</h1>
+            }
+          >
+            <VehicleSwitcherSlot vehicle={vehicle} vehicles={vehicles} mode={mode} driverMobile />
+          </Suspense>
+        </div>
+
+        {/* Driver desktop — keep fleet chrome */}
+        <div className="mb-10 hidden flex-col gap-4 sm:flex-row sm:items-end sm:justify-between lg:flex">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            {photo ? (
+              <VehicleVisual
+                photoUrl={photo}
+                alt={[vehicle.brand, vehicle.model, vehicle.registrationNumber].filter(Boolean).join(" ")}
+                size="xl"
+                className="mt-1"
+              />
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Vehicul alocat</p>
+              <Suspense
+                fallback={
+                  <h1 className="mt-2 font-mono text-3xl font-semibold tracking-tight">
+                    {vehicle.registrationNumber}
+                  </h1>
+                }
+              >
+                <VehicleSwitcherSlot vehicle={vehicle} vehicles={vehicles} mode={mode} />
+              </Suspense>
+              <p className="mt-2 text-sm text-zinc-400">
+                <span className="font-mono text-sky-300">{vehicle.odometerKm.toLocaleString("ro-RO")} km</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/fleet/vehicles"
+              className="inline-flex w-fit items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+            >
+              Înapoi
+            </Link>
+            <Link
+              href={`/fleet/tickets/new?vehicleId=${encodeURIComponent(vehicle.id)}`}
+              className="inline-flex w-fit items-center justify-center rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-4 py-2 text-sm text-emerald-100 hover:bg-emerald-950/50"
+            >
+              Deschide tichet
+            </Link>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

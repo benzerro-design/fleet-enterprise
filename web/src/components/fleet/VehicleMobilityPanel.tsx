@@ -14,6 +14,7 @@ type Props = {
   data: VehicleMobilityPayload;
   vehicleId: string;
   regQs: string;
+  driverPortal?: boolean;
 };
 
 function formatMonth(key: string): string {
@@ -78,10 +79,68 @@ function MobilityChart({ monthly }: { monthly: VehicleMobilityPayload["monthly"]
   );
 }
 
-export function VehicleMobilityPanel({ data, vehicleId, regQs }: Props) {
+export function VehicleMobilityPanel({ data, vehicleId, regQs, driverPortal = false }: Props) {
   const { summary } = data;
 
-  return (
+  const mobile = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-500">Km curse</p>
+          <p className="mt-1 font-mono text-lg text-zinc-100">{summary.totalTripKm.toLocaleString("ro-RO")}</p>
+        </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-500">Litri</p>
+          <p className="mt-1 font-mono text-lg text-zinc-100">{summary.totalFuelLiters.toLocaleString("ro-RO")}</p>
+        </div>
+      </div>
+      {data.trips.length > 0 ? (
+        <div>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-widest text-zinc-500">Cursele tale</h3>
+          <ul className="divide-y divide-zinc-800/80">
+            {data.trips.slice(0, 8).map((t) => (
+              <li key={t.id}>
+                <Link href={`/fleet/trips/${t.id}`} className="block min-h-[56px] py-3 touch-manipulation">
+                  <span className="block text-sm text-zinc-100">
+                    {t.originLabel || t.destLabel
+                      ? `${t.originLabel ?? "?"} → ${t.destLabel ?? "?"}`
+                      : t.reference ?? t.id}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    {new Date(t.startedAt).toLocaleString("ro-RO")}
+                    {t.distanceKm != null ? ` · ${t.distanceKm} km` : ""}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-500">Nicio cursă pe acest vehicul.</p>
+      )}
+      {data.fuelEvents.length > 0 ? (
+        <div>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-widest text-zinc-500">Alimentări</h3>
+          <ul className="divide-y divide-zinc-800/80">
+            {data.fuelEvents.slice(0, 6).map((f) => (
+              <li key={f.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <span className="text-zinc-300">{new Date(f.incurredOn).toLocaleDateString("ro-RO")}</span>
+                <span className="font-mono text-zinc-100">{f.fuelLiters} L</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <Link
+        href={`/fleet/costs/new?vehicleId=${encodeURIComponent(vehicleId)}&category=${encodeURIComponent("Combustibil")}`}
+        className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-emerald-500 text-sm font-medium text-zinc-950 touch-manipulation"
+      >
+        Cost nou
+      </Link>
+    </div>
+  );
+
+  const desktop = (
     <div className="space-y-8">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -222,6 +281,16 @@ export function VehicleMobilityPanel({ data, vehicleId, regQs }: Props) {
       </div>
     </div>
   );
+
+  if (driverPortal) {
+    return (
+      <>
+        <div className="lg:hidden">{mobile}</div>
+        <div className="hidden lg:block">{desktop}</div>
+      </>
+    );
+  }
+  return desktop;
 }
 
 function StatCard({

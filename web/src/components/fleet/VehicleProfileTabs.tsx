@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
+import { DriverMobileTabStrip } from "@/components/fleet/DriverMobileTabStrip";
 import { VehicleAcquisitionTab } from "@/components/fleet/VehicleAcquisitionTab";
 import { VehicleAdvancedCivTab } from "@/components/fleet/VehicleAdvancedCivTab";
 import { VehicleBasicInfoTab } from "@/components/fleet/VehicleBasicInfoTab";
@@ -157,27 +158,55 @@ export function VehicleProfileTabs({
   );
 
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/50">
-      <div className="border-b border-zinc-800 px-4 pt-4">
-        <div className="flex flex-wrap gap-2">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setTab(tab.id)}
-              className={`rounded-t-lg border px-4 py-2 text-sm transition-colors ${
-                active === tab.id
-                  ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
-                  : "border-transparent text-zinc-500 hover:text-zinc-200"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+    <section className={`rounded-xl border border-zinc-800 bg-zinc-900/50 ${driverPortal ? "min-w-0 overflow-x-hidden" : ""}`}>
+      <div className="border-b border-zinc-800 px-3 pt-3 sm:px-4 sm:pt-4">
+        {driverPortal ? (
+          <>
+            <div className="lg:hidden">
+              <DriverMobileTabStrip
+                items={visibleTabs.map((tab) => ({ id: tab.id, label: tab.label }))}
+                activeId={active}
+                onSelect={(id) => setTab(id as VehicleProfileTab)}
+              />
+            </div>
+            <div className="hidden flex-wrap gap-2 lg:flex">
+              {visibleTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setTab(tab.id)}
+                  className={`rounded-t-lg border px-4 py-2 text-sm transition-colors ${
+                    active === tab.id
+                      ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
+                      : "border-transparent text-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setTab(tab.id)}
+                className={`rounded-t-lg border px-4 py-2 text-sm transition-colors ${
+                  active === tab.id
+                    ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
+                    : "border-transparent text-zinc-500 hover:text-zinc-200"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="p-6">
+      <div className={driverPortal ? "p-4 sm:p-6" : "p-6"}>
         {active === "basic" ? (
           <VehicleBasicInfoTab vehicle={vehicle} write={write} lockClient={lockClient} />
         ) : null}

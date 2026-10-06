@@ -256,11 +256,11 @@ export function VehicleDetailSections({
     "rounded-md bg-emerald-500/90 px-2.5 py-1 text-[11px] font-medium text-zinc-950 hover:bg-emerald-400";
 
   return (
-    <section className="mt-10">
+    <section className={`mt-10 min-w-0 ${driverPortal ? "overflow-x-hidden" : ""}`}>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-sm font-medium uppercase tracking-widest text-zinc-500">Operațiuni vehicul</h2>
-          <p className="mt-1 text-xs text-zinc-600">
+          <p className={`mt-1 text-xs text-zinc-600 ${driverPortal ? "hidden lg:block" : ""}`}>
             {openCount === 0
               ? "Toate secțiunile sunt închise"
               : openCount === sectionCount
@@ -268,7 +268,7 @@ export function VehicleDetailSections({
                 : `${openCount} din ${sectionCount} secțiuni deschise`}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={`flex flex-wrap gap-2 ${driverPortal ? "hidden lg:flex" : ""}`}>
           <button
             type="button"
             onClick={expandAll}
@@ -349,7 +349,7 @@ export function VehicleDetailSections({
           {!costs.ok ? (
             <p className="text-sm text-amber-400">Nu am putut încărca costurile.</p>
           ) : (
-            <VehicleCostsPanel items={costs.items} totalInDb={costs.total} regQs={regQs} />
+            <VehicleCostsPanel items={costs.items} totalInDb={costs.total} regQs={regQs} driverPortal={driverPortal} />
           )}
         </AccordionSection>
 
@@ -428,7 +428,7 @@ export function VehicleDetailSections({
           {!mobility.ok ? (
             <p className="text-sm text-amber-400">Nu am putut încărca datele de rulaj și consum.</p>
           ) : (
-            <VehicleMobilityPanel data={mobility.data} vehicleId={vehicleId} regQs={regQs} />
+            <VehicleMobilityPanel data={mobility.data} vehicleId={vehicleId} regQs={regQs} driverPortal={driverPortal} />
           )}
         </AccordionSection>
       </div>

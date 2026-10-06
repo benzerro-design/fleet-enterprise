@@ -65,20 +65,21 @@ export function VehicleDetailLayout({
   const maintenancePlanWrite = planWrite ?? profileWrite;
 
   return (
-    <FleetPageMain>
-      <VehicleDetailHeader
-        vehicle={vehicle}
-        vehicles={vehicles}
-        editable={editable}
-        canWrite={canWrite}
-        driverAssignments={driverAssignments}
-        heroPhotoUrl={
-          photosPayload.items.find((p) => p.isHero && p.fileUrl)?.fileUrl ??
-          photosPayload.items.find((p) => p.kind === "exterior" && p.fileUrl)?.fileUrl ??
-          photosPayload.items.find((p) => p.fileUrl)?.fileUrl ??
-          null
-        }
-      />
+    <FleetPageMain className={driverPortal ? "min-w-0 overflow-x-hidden" : undefined}>
+        <VehicleDetailHeader
+          vehicle={vehicle}
+          vehicles={vehicles}
+          editable={editable}
+          canWrite={canWrite}
+          driverPortal={driverPortal}
+          driverAssignments={driverAssignments}
+          heroPhotoUrl={
+            photosPayload.items.find((p) => p.isHero && p.fileUrl)?.fileUrl ??
+            photosPayload.items.find((p) => p.kind === "exterior" && p.fileUrl)?.fileUrl ??
+            photosPayload.items.find((p) => p.fileUrl)?.fileUrl ??
+            null
+          }
+        />
 
       <Suspense fallback={<p className="mb-10 text-sm text-zinc-500">Se încarcă profilul…</p>}>
         <div className="mb-10">

@@ -235,6 +235,7 @@ const en = {
     costs: "Fuel",
     tickets: "Tickets",
     reminders: "Reminders",
+    documents: "Documents",
     all: "All",
     open: "Open",
     closed: "Closed",

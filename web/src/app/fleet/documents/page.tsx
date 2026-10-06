@@ -1,16 +1,21 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DeleteDocumentButton } from "@/components/fleet/DeleteDocumentButton";
+import { DriverPager, DriverRecordList, DriverStatusBand } from "@/components/fleet/DriverPortalList";
+import { DriverViewportSplit } from "@/components/fleet/DriverViewportSplit";
 import { ReminderStatusBadge } from "@/components/fleet/ReminderStatusBadge";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteFleetOps, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { documentExpiryBadge, documentExpiryStatus } from "@/lib/document-expiry";
 import type { DocumentReminderSummary } from "@/lib/document-reminders";
 import { documentsBrowserBase } from "@/lib/fleet-api";
 import { DOCUMENT_EXPIRY_STATUS_OPTIONS, DOCUMENT_TYPE_OPTIONS, documentTypeLabel } from "@/lib/document-types";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { t } from "@/lib/i18n/t";
+import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 
 type Search = {
   page?: string;
@@ -80,8 +85,11 @@ type Props = { searchParams: Promise<Search> };
 
 export default async function DocumentsPage({ searchParams }: Props) {
   const sp = await searchParams;
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const [data, auth] = await Promise.all([fetchRows(sp), getAuthMeResult()]);
   const write = canWriteFleetOps(auth);
+  const driverPortal = isClientDriverPortal(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
 
@@ -101,7 +109,7 @@ export default async function DocumentsPage({ searchParams }: Props) {
     return `/fleet/documents?${p.toString()}`;
   };
 
-  return (
+  const desktop = (
     <FleetPageMain fill>
       <FleetListPageLayout
         header={
@@ -350,4 +358,63 @@ export default async function DocumentsPage({ searchParams }: Props) {
       </FleetListPageLayout>
     </FleetPageMain>
   );
+
+  if (!driverPortal) return desktop;
+
+  const expiry =
+    sp.expiryStatus === "valid" || sp.expiryStatus === "expiring" || sp.expiryStatus === "expired"
+      ? sp.expiryStatus
+      : "all";
+  const bandHref = (next: string) =>
+    next === "all" ? "/fleet/documents" : `/fleet/documents?expiryStatus=${next}`;
+  const mobilePageHref = (nextPage: number) => {
+    const p = new URLSearchParams();
+    if (expiry !== "all") p.set("expiryStatus", expiry);
+    if (nextPage > 1) p.set("page", String(nextPage));
+    const qs = p.toString();
+    return `/fleet/documents${qs ? `?${qs}` : ""}`;
+  };
+  const expiryBadge = (row: DocumentRow) => {
+    const status = documentExpiryStatus(row.expiresOn);
+    if (!status || status === "none") return undefined;
+    return documentExpiryBadge(status).label;
+  };
+
+  const mobile = (
+    <FleetPageMain>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.documents")}</h1>
+      </div>
+      <DriverStatusBand
+        items={[
+          { href: bandHref("all"), label: t(locale, "driverLists.all"), active: expiry === "all" },
+          { href: bandHref("expiring"), label: t(locale, "driverLists.upcoming"), active: expiry === "expiring" },
+          { href: bandHref("expired"), label: t(locale, "driverLists.expired"), active: expiry === "expired" },
+        ]}
+      />
+      {data ? (
+        <DriverRecordList
+          empty={t(locale, "driverLists.empty")}
+          items={data.items.map((row) => ({
+            href: `/fleet/documents/${row.id}`,
+            title: row.title,
+            meta: [row.registrationNumber, documentTypeLabel(row.documentTypeCode)].filter(Boolean).join(" · "),
+            badge: expiryBadge(row),
+          }))}
+        />
+      ) : (
+        <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+      )}
+      <DriverPager
+        page={page}
+        totalPages={totalPages}
+        prevHref={page > 1 ? mobilePageHref(page - 1) : null}
+        nextHref={page < totalPages ? mobilePageHref(page + 1) : null}
+        prevLabel={t(locale, "driverLists.prev")}
+        nextLabel={t(locale, "driverLists.next")}
+      />
+    </FleetPageMain>
+  );
+
+  return <DriverViewportSplit mobile={mobile} desktop={desktop} />;
 }
