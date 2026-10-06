@@ -210,6 +210,11 @@ const ro = {
       itpRemaining: "{days}z",
       newTicket: "Tichet nou",
       newTrip: "Cursă nouă",
+      closeTrip: "Închide cursa",
+      startTrip: "Pornește cursa",
+      onTrip: "Cursă deschisă",
+      noOpenTrip: "Fără cursă deschisă",
+      attention: "Necesită atenție",
       noVehicle: "Fără vehicul",
       noVehicles: "Nu ai vehicule alocate. Cere managerului să te pună pe o mașină.",
       tickets: "Tichetele tale",
@@ -224,6 +229,23 @@ const ro = {
   },
   driverHome: {
     home: "Acasă",
+  },
+  driverLists: {
+    trips: "Curse",
+    costs: "Alimentări",
+    tickets: "Tichete",
+    reminders: "Remindere",
+    all: "Toate",
+    open: "Deschise",
+    closed: "Închise",
+    inProgress: "În lucru",
+    fuelOnly: "Combustibil",
+    upcoming: "Viitoare",
+    expired: "Depășite",
+    empty: "Nimic de afișat.",
+    loadFailed: "Nu am putut încărca lista.",
+    prev: "Înapoi",
+    next: "Înainte",
   },
   ops: {
     form: {
@@ -668,6 +690,13 @@ const ro = {
           partsDate: "Data estimată piese",
           partsOrder: "Comandă piese",
         },
+        confirm: {
+          deleteDraft: "Ștergi ciorna „{quote}”? Acțiunea nu poate fi anulată.",
+          generateCostAgain:
+            "ATENȚIE: această reparație a fost transformată în {kind} la {date}.\n\nSigur vrei să generezi încă un cost din deviz?",
+          resubmit:
+            "Retrimiți acest deviz spre aprobare?\n\nNoua estimare de finalizare: {date}\nData trimiterii va fi actualizată.",
+        },
         descriptions: {
           launchParts:
             "Marchează liniile ca „Comandate” și setează WO pe waiting_parts. Opțional încearcă rechiziție Inter Cars.",
@@ -682,6 +711,7 @@ const ro = {
         },
         errors: {
           chooseLineDecision: "Alegeți aprobat/respins pentru fiecare linie.",
+          chooseNewEstimateBeforeResubmit: "Alegeți noua dată estimativă de finalizare a reparației înainte de retrimitere.",
           choosePartsLine: "Selectează cel puțin o linie de piese.",
           descriptionRequired: "Completați descrierea pentru toate liniile.",
           estimatedRepairLocked:
@@ -736,12 +766,17 @@ const ro = {
           approval: "Aprobare",
           catalogCheck: "Verificare catalog",
           consolidated: "Consolidat",
+          cost: "Cost",
           current: "acum",
+          document: "Document",
           draftNew: "Ciornă nouă",
           lineShort: "lin.",
+          lines: "linii",
+          maintenance: "Mentenanță",
           moveTo: "Mută pe:",
           net: "Net",
           noCode: "fără cod",
+          order: "comandă",
           partNumberMissing: "fără cod",
           parts: "Piese",
           photos: "Poze",
@@ -767,6 +802,7 @@ const ro = {
           deletedDraft: "Ciornă ștearsă.",
           draftExists: "Există deja o ciornă — o deschidem pentru editare.",
           draftExistsOnTrack: "Există deja o ciornă pe L{track} — o deschidem pentru editare.",
+          newDraft: "Ciornă nouă pe {target} — completați liniile și salvați.",
           invoiceModePerQuote: "Setup: factură pe fiecare deviz — vedeți tab-urile individuale pentru înregistrare.",
           invoiceModePerWorkOrder:
             "Setup: o factură pe comandă — înregistrați factura din liniile de mai jos (pe fiecare deviz aprobat până la fluxul consolidat dedicat).",
@@ -794,6 +830,9 @@ const ro = {
           optional: "Opțional",
           required: "Obligatoriu",
           title: "ex. Revizie, Anvelope…",
+        },
+        prompts: {
+          rejectReason: "Motiv respingere (opțional):",
         },
         priceVerify: {
           atOrBelowCatalog: "≤ catalog",

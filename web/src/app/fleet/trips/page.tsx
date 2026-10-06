@@ -8,12 +8,14 @@ import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
 import { ConsumptionFilterForm } from "@/components/fleet/ConsumptionFilterForm";
 import { DriverFilterSelect } from "@/components/fleet/DriverFilterSelect";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
+import { DriverPager, DriverRecordList, DriverStatusBand } from "@/components/fleet/DriverPortalList";
 import { TripsDataGrid } from "@/components/fleet/TripsDataGrid";
 import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
 import { canWriteTrips, driverIdFromAuth, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { formatDateTimeRo } from "@/lib/datetime-local";
 import { t } from "@/lib/i18n/t";
 import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
@@ -241,13 +243,74 @@ export default async function TripsPage({ searchParams }: Props) {
   const driverPortal = isClientDriverPortal(auth);
   const lockedDriverId = driverIdFromAuth(auth);
   const [data, documents, vehicles, drivers, consumption] = await Promise.all([
-    showTrips ? fetchTrips(sp) : Promise.resolve(null),
-    showDocuments ? fetchTripSheets(sp) : Promise.resolve(null),
+    showTrips || driverPortal ? fetchTrips(sp) : Promise.resolve(null),
+    driverPortal || !showDocuments ? Promise.resolve(null) : fetchTripSheets(sp),
     fetchVehicleOptions(driverPortal),
     driverPortal ? Promise.resolve([]) : fetchDriverOptions(),
-    showConsumption ? fetchConsumption(sp) : Promise.resolve(null),
+    driverPortal || !showConsumption ? Promise.resolve(null) : fetchConsumption(sp),
   ]);
   const write = canWriteTrips(auth);
+
+  if (driverPortal) {
+    const ended = sp.ended === "open" || sp.ended === "closed" ? sp.ended : "all";
+    const bandHref = (next: "all" | "open" | "closed") => (next === "all" ? "/fleet/trips" : `/fleet/trips?ended=${next}`);
+    const pageHref = (nextPage: number) => {
+      const p = new URLSearchParams();
+      if (ended !== "all") p.set("ended", ended);
+      if (nextPage > 1) p.set("page", String(nextPage));
+      const qs = p.toString();
+      return `/fleet/trips${qs ? `?${qs}` : ""}`;
+    };
+    const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+    const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
+    return (
+      <FleetPageMain>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.trips")}</h1>
+          {write ? (
+            <Link href="/fleet/trips/new" className="text-sm font-medium text-emerald-400">
+              {t(locale, "driver.home.startTrip")}
+            </Link>
+          ) : null}
+        </div>
+        <DriverStatusBand
+          items={[
+            { href: bandHref("all"), label: t(locale, "driverLists.all"), active: ended === "all" },
+            { href: bandHref("open"), label: t(locale, "driverLists.open"), active: ended === "open" },
+            { href: bandHref("closed"), label: t(locale, "driverLists.closed"), active: ended === "closed" },
+          ]}
+        />
+        {data ? (
+          <DriverRecordList
+            empty={t(locale, "driverLists.empty")}
+            items={(data.items ?? []).map((trip) => ({
+              href: `/fleet/trips/${trip.id}`,
+              title: trip.registrationNumber,
+              meta: [
+                trip.originLabel || trip.destLabel
+                  ? `${trip.originLabel ?? "?"} → ${trip.destLabel ?? "?"}`
+                  : null,
+                formatDateTimeRo(trip.startedAt),
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              badge: trip.endedAt ? t(locale, "driverLists.closed") : t(locale, "driverLists.open"),
+            }))}
+          />
+        ) : (
+          <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+        )}
+        <DriverPager
+          page={page}
+          totalPages={totalPages}
+          prevHref={page > 1 ? pageHref(page - 1) : null}
+          nextHref={page < totalPages ? pageHref(page + 1) : null}
+          prevLabel={t(locale, "driverLists.prev")}
+          nextLabel={t(locale, "driverLists.next")}
+        />
+      </FleetPageMain>
+    );
+  }
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
   const docsPage = documents?.page ?? page;

@@ -7,7 +7,8 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { RemindersListView } from "@/components/fleet/RemindersListView";
 import { RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolbar";
-import { canWriteFleetOps, getAuthMeResult } from "@/lib/auth-server";
+import { DriverStatusBand } from "@/components/fleet/DriverPortalList";
+import { canWriteFleetOps, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { remindersBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import type { DriverLicenseAlert } from "@/lib/drivers-api";
@@ -58,7 +59,30 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
   const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const [auth, licenseAlerts] = await Promise.all([getAuthMeResult(), loadDriverLicenseAlerts()]);
   const write = canWriteFleetOps(auth);
+  const driverPortal = isClientDriverPortal(auth);
   const exportQs = buildExportQuery(sp);
+
+  if (driverPortal) {
+    const status =
+      sp.status === "action" || sp.status === "upcoming" || sp.status === "expired" ? sp.status : "all";
+    const bandHref = (next: string) => (next === "all" ? "/fleet/reminders" : `/fleet/reminders?status=${next}`);
+    return (
+      <FleetPageMain>
+        <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.reminders")}</h1>
+        <DriverStatusBand
+          items={[
+            { href: bandHref("all"), label: t(locale, "driverLists.all"), active: status === "all" },
+            { href: bandHref("action"), label: t(locale, "driver.home.attention"), active: status === "action" },
+            { href: bandHref("upcoming"), label: t(locale, "driverLists.upcoming"), active: status === "upcoming" },
+            { href: bandHref("expired"), label: t(locale, "driverLists.expired"), active: status === "expired" },
+          ]}
+        />
+        <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
+          <RemindersListView backHref="/fleet/vehicles" write={false} showStatusToolbar={false} />
+        </Suspense>
+      </FleetPageMain>
+    );
+  }
   const exportHref = `${remindersBrowserBase}/export${exportQs ? `?${exportQs}` : ""}`;
 
   return (

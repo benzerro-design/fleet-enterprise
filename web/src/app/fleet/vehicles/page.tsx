@@ -25,6 +25,7 @@ type Search = {
   status?: string;
   clientId?: string;
   page?: string;
+  vehicleId?: string;
 };
 
 function buildListQuery(sp: Search, pageSize = 20): string {
@@ -84,6 +85,21 @@ async function loadDriverHomeData(driverId?: string) {
   return { trips, reminders, tickets };
 }
 
+async function loadDriverProfile(driverId?: string): Promise<{ fullName: string | null; photoUrl: string | null }> {
+  if (!driverId) return { fullName: null, photoUrl: null };
+  try {
+    const res = await fleetServerFetch(`/drivers/${driverId}`);
+    if (!res?.ok) return { fullName: null, photoUrl: null };
+    const data = (await res.json()) as { driver?: { fullName?: string | null; photoUrl?: string | null } };
+    return {
+      fullName: data.driver?.fullName?.trim() || null,
+      photoUrl: data.driver?.photoUrl ?? null,
+    };
+  } catch {
+    return { fullName: null, photoUrl: null };
+  }
+}
+
 type PageProps = { searchParams: Promise<Search> };
 
 export default async function FleetVehiclesPage({ searchParams }: PageProps) {
@@ -95,13 +111,17 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   const driverPortal = isClientDriverPortal(auth);
 
   if (driverPortal) {
-    const [list, extra] = await Promise.all([
+    const driverId = driverIdFromAuth(auth);
+    const [list, extra, profile] = await Promise.all([
       getVehiclesList({ page: "1" }, 50),
-      loadDriverHomeData(driverIdFromAuth(auth)),
+      loadDriverHomeData(driverId),
+      loadDriverProfile(driverId),
     ]);
     return (
       <DriverHomeView
-        driverName={driverNameFromAuth(auth)}
+        driverName={profile.fullName ?? driverNameFromAuth(auth)}
+        driverPhotoUrl={profile.photoUrl}
+        selectedVehicleId={sp.vehicleId}
         vehicles={list?.items ?? []}
         vehiclesLoadFailed={!list}
         trips={extra.trips}

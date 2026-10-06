@@ -3,12 +3,13 @@ import { cookies } from "next/headers";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetIndexFilterChips, type FleetIndexFilterChip } from "@/components/fleet/FleetIndexFilterChips";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
+import { DriverPager, DriverRecordList, DriverStatusBand } from "@/components/fleet/DriverPortalList";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
-import { canPatchTickets, canUseTicketListBulk, canWriteTickets, getAuthMeResult, isClientPortalUser } from "@/lib/auth-server";
+import { canPatchTickets, canUseTicketListBulk, canWriteTickets, getAuthMeResult, isClientDriverPortal, isClientPortalUser } from "@/lib/auth-server";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { ticketsBrowserBase } from "@/lib/tickets-api";
@@ -110,9 +111,10 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const cookieStore = await cookies();
   const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
-  const viewBoard = sp.view === "board";
-  const viewFocus = sp.view === "focus";
   const auth = await getAuthMeResult();
+  const driverPortal = isClientDriverPortal(auth);
+  const viewBoard = !driverPortal && sp.view === "board";
+  const viewFocus = !driverPortal && sp.view === "focus";
   const clientScoped = isClientPortalUser(auth);
   const [list, focus, stats, board, clients, vehicles] = await Promise.all([
     viewBoard || viewFocus ? Promise.resolve(null) : loadTickets(sp),
@@ -123,6 +125,66 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
     getVehicleOptions(),
   ]);
   const write = canWriteTickets(auth);
+
+  if (driverPortal) {
+    const status = sp.status === "open" || sp.status === "in_progress" || sp.status === "resolved" ? sp.status : "all";
+    const bandHref = (next: string) => (next === "all" ? "/fleet/tickets" : `/fleet/tickets?status=${next}`);
+    const pageHref = (nextPage: number) => {
+      const p = new URLSearchParams();
+      if (status !== "all") p.set("status", status);
+      if (nextPage > 1) p.set("page", String(nextPage));
+      const qs = p.toString();
+      return `/fleet/tickets${qs ? `?${qs}` : ""}`;
+    };
+    const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+    const totalPages = Math.max(1, Math.ceil((list?.total ?? 0) / 50));
+    const statusLabel = (value: string) => {
+      const key = `ops.grids.tickets.status.${value}`;
+      const label = t(locale, key);
+      return label === key ? value : label;
+    };
+    return (
+      <FleetPageMain>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.tickets")}</h1>
+          {write ? (
+            <Link href="/fleet/tickets/new" className="text-sm font-medium text-emerald-400">
+              {t(locale, "driver.home.newTicket")}
+            </Link>
+          ) : null}
+        </div>
+        <DriverStatusBand
+          items={[
+            { href: bandHref("all"), label: t(locale, "driverLists.all"), active: status === "all" },
+            { href: bandHref("open"), label: t(locale, "driverLists.open"), active: status === "open" },
+            { href: bandHref("in_progress"), label: t(locale, "driverLists.inProgress"), active: status === "in_progress" },
+          ]}
+        />
+        {list ? (
+          <DriverRecordList
+            empty={t(locale, "driverLists.empty")}
+            items={list.items.map((row) => ({
+              href: `/fleet/tickets/${row.id}`,
+              title: row.subject,
+              meta: [row.displayId, row.registrationNumber].filter(Boolean).join(" · "),
+              badge: statusLabel(row.status),
+            }))}
+          />
+        ) : (
+          <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+        )}
+        <DriverPager
+          page={page}
+          totalPages={totalPages}
+          prevHref={page > 1 ? pageHref(page - 1) : null}
+          nextHref={page < totalPages ? pageHref(page + 1) : null}
+          prevLabel={t(locale, "driverLists.prev")}
+          nextLabel={t(locale, "driverLists.next")}
+        />
+      </FleetPageMain>
+    );
+  }
+
   const patch = canPatchTickets(auth);
   const enableBulk = canUseTicketListBulk(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);

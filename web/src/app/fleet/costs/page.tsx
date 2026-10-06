@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { CostsDataGrid } from "@/components/fleet/CostsDataGrid";
+import { DriverPager, DriverRecordList, DriverStatusBand } from "@/components/fleet/DriverPortalList";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
-import { canWriteCosts, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { costsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
+import { FUEL_COST_CATEGORY } from "@/lib/fuel-ops";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { t } from "@/lib/i18n/t";
 import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
@@ -85,7 +87,70 @@ export default async function CostsPage({ searchParams }: Props) {
   const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const [data, auth] = await Promise.all([fetchRows(sp), getAuthMeResult()]);
   const write = canWriteCosts(auth);
+  const driverPortal = isClientDriverPortal(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+
+  if (driverPortal) {
+    const fuelOnly = sp.category === FUEL_COST_CATEGORY;
+    const pageHref = (nextPage: number, fuel: boolean) => {
+      const p = new URLSearchParams();
+      if (fuel) p.set("category", FUEL_COST_CATEGORY);
+      if (nextPage > 1) p.set("page", String(nextPage));
+      const qs = p.toString();
+      return `/fleet/costs${qs ? `?${qs}` : ""}`;
+    };
+    const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
+    const categoryLabel = (category: string) => {
+      const key = `ops.catalogs.costCategories.${category}`;
+      const label = t(locale, key);
+      return label === key ? category : label;
+    };
+    return (
+      <FleetPageMain>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.costs")}</h1>
+          {write ? (
+            <Link
+              href={`/fleet/costs/new?category=${encodeURIComponent(FUEL_COST_CATEGORY)}`}
+              className="text-sm font-medium text-emerald-400"
+            >
+              {t(locale, "driver.home.fuel")}
+            </Link>
+          ) : null}
+        </div>
+        <DriverStatusBand
+          items={[
+            { href: "/fleet/costs", label: t(locale, "driverLists.all"), active: !fuelOnly },
+            { href: pageHref(1, true), label: t(locale, "driverLists.fuelOnly"), active: fuelOnly },
+          ]}
+        />
+        {data ? (
+          <DriverRecordList
+            empty={t(locale, "driverLists.empty")}
+            items={data.items.map((row) => ({
+              href: `/fleet/costs/${row.id}`,
+              title: categoryLabel(row.category),
+              meta: [
+                row.registrationNumber,
+                new Date(row.incurredOn).toLocaleDateString("ro-RO"),
+              ].join(" · "),
+              badge: `${(row.amountCents / 100).toLocaleString("ro-RO", { minimumFractionDigits: 2 })} RON`,
+            }))}
+          />
+        ) : (
+          <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+        )}
+        <DriverPager
+          page={page}
+          totalPages={totalPages}
+          prevHref={page > 1 ? pageHref(page - 1, fuelOnly) : null}
+          nextHref={page < totalPages ? pageHref(page + 1, fuelOnly) : null}
+          prevLabel={t(locale, "driverLists.prev")}
+          nextLabel={t(locale, "driverLists.next")}
+        />
+      </FleetPageMain>
+    );
+  }
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
 
   const exportQs = buildExportQuery(sp);

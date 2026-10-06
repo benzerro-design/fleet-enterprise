@@ -218,7 +218,7 @@ function QuoteSubtotals({
   tx: (key: string) => string;
 }) {
   const net = labor + parts + other;
-  const quoteT = (key: string) => tx(`workOrders.quote.${key}`);
+  const quoteT = (key: string) => tx(`ops.workOrders.quote.${key}`);
   return (
     <div className="ml-auto w-full max-w-xs space-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 text-sm">
       <p className="pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
@@ -248,9 +248,9 @@ function QuoteSubtotals({
 
 function QuoteStatusStepper({ status, tx }: { status: WorkOrderQuoteStatus; tx: (key: string) => string }) {
   const steps: { id: WorkOrderQuoteStatus | "sent"; label: string }[] = [
-    { id: "draft", label: tx("workOrders.quote.status.draft") },
-    { id: "submitted", label: tx("workOrders.quote.status.sent") },
-    { id: "approved", label: tx("workOrders.quote.status.approved") },
+    { id: "draft", label: tx("ops.workOrders.quote.status.draft") },
+    { id: "submitted", label: tx("ops.workOrders.quote.status.sent") },
+    { id: "approved", label: tx("ops.workOrders.quote.status.approved") },
   ];
   const order: Record<string, number> = {
     draft: 0,
@@ -278,7 +278,7 @@ function QuoteStatusStepper({ status, tx }: { status: WorkOrderQuoteStatus; tx: 
                       : "border-zinc-800 text-zinc-600"
               }`}
             >
-              {status === "rejected" && s.id === "submitted" ? tx("workOrders.quote.status.rejected") : s.label}
+              {status === "rejected" && s.id === "submitted" ? tx("ops.workOrders.quote.status.rejected") : s.label}
             </span>
           </span>
         );
@@ -415,7 +415,7 @@ export function WorkOrderQuotePanel({
   supplierMenuItems = [],
 }: Props) {
   const tx = useT();
-  const quoteT = (key: string) => tx(`workOrders.quote.${key}`);
+  const quoteT = (key: string) => tx(`ops.workOrders.quote.${key}`);
   const formatMsg = (key: string, values: Record<string, string | number>) => {
     let text = quoteT(key);
     for (const [name, value] of Object.entries(values)) {
@@ -424,17 +424,17 @@ export function WorkOrderQuotePanel({
     return text;
   };
   const quoteStatus = (status: WorkOrderQuoteStatus | string) => {
-    const key = `workOrders.quote.status.${status}`;
+    const key = `ops.workOrders.quote.status.${status}`;
     const translated = tx(key);
     return translated === key ? status : translated;
   };
   const quoteParseStatus = (status: WorkOrderQuoteParseStatus | string) => {
-    const key = `workOrders.quote.parseStatus.${status}`;
+    const key = `ops.workOrders.quote.parseStatus.${status}`;
     const translated = tx(key);
     return translated === key ? status : translated;
   };
   const quoteLineType = (lineType: QuoteLineInput["lineType"] | string) => {
-    const key = `workOrders.quote.lineTypes.${lineType}`;
+    const key = `ops.workOrders.quote.lineTypes.${lineType}`;
     const translated = tx(key);
     return translated === key ? lineType : translated;
   };
@@ -2625,14 +2625,14 @@ function PriceVerifyHint({
     <div className={`mt-1 space-y-0.5 text-[10px] leading-snug ${tone}`}>
       <div title={result.message ?? undefined}>
         {result.status === "suspect"
-          ? `${tx("workOrders.quote.priceVerify.suspect")} +${result.deltaPercent}%`
+          ? `${tx("ops.workOrders.quote.priceVerify.suspect")} +${result.deltaPercent}%`
           : result.status === "ok"
             ? result.deltaPercent != null && result.deltaPercent <= 0
-              ? tx("workOrders.quote.priceVerify.atOrBelowCatalog")
-              : tx("workOrders.quote.priceVerify.withinThreshold")
+              ? tx("ops.workOrders.quote.priceVerify.atOrBelowCatalog")
+              : tx("ops.workOrders.quote.priceVerify.withinThreshold")
             : result.status === "no_code"
-              ? tx("workOrders.quote.priceVerify.noCode")
-              : tx("workOrders.quote.priceVerify.noOffer")}
+              ? tx("ops.workOrders.quote.priceVerify.noCode")
+              : tx("ops.workOrders.quote.priceVerify.noOffer")}
         {result.bestUnitNetCents != null
           ? ` · cat. ${formatMoneyCents(result.bestUnitNetCents)}`
           : null}
@@ -2643,7 +2643,7 @@ function PriceVerifyHint({
           onClick={onApply}
           className="text-[10px] text-sky-300 underline hover:text-sky-200"
         >
-          {tx("workOrders.quote.actions.applyCatalogPrice")}
+          {tx("ops.workOrders.quote.actions.applyCatalogPrice")}
         </button>
       ) : null}
     </div>

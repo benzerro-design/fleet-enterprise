@@ -950,15 +950,15 @@ function CostLinkedDocumentFields({
       <label className="flex items-start gap-2 text-sm text-zinc-300">
         <input type="checkbox" className="mt-0.5" checked={enabled} onChange={(e) => onEnabledChange(e.target.checked)} />
         <span>
-          {tx("linkedDocument.saveAlso")}
+          {tx("ops.costForm.linkedDocument.saveAlso")}
           <span className="block text-[11px] text-zinc-500">
-            {tx("linkedDocument.description")}
+            {tx("ops.costForm.linkedDocument.description")}
           </span>
         </span>
       </label>
       {enabled ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <OpsFormField label={tx("linkedDocument.documentType")} required>
+          <OpsFormField label={tx("ops.costForm.linkedDocument.documentType")} required>
             <select value={documentTypeCode} onChange={(e) => onDocumentTypeCodeChange(e.target.value)} className={OPS_INPUT_CLASS}>
               {DOCUMENT_TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -967,10 +967,10 @@ function CostLinkedDocumentFields({
               ))}
             </select>
           </OpsFormField>
-          <OpsFormField label={tx("linkedDocument.documentTitle")}>
-            <input value={title} onChange={(e) => onTitleChange(e.target.value)} className={OPS_INPUT_CLASS} placeholder={tx("linkedDocument.titlePlaceholder")} />
+          <OpsFormField label={tx("ops.costForm.linkedDocument.documentTitle")}>
+            <input value={title} onChange={(e) => onTitleChange(e.target.value)} className={OPS_INPUT_CLASS} placeholder={tx("ops.costForm.linkedDocument.titlePlaceholder")} />
           </OpsFormField>
-          <OpsFormField label={tx("linkedDocument.expiresOn")} hint={tx("linkedDocument.expiresHint")}>
+          <OpsFormField label={tx("ops.costForm.linkedDocument.expiresOn")} hint={tx("ops.costForm.linkedDocument.expiresHint")}>
             <input type="date" value={expiresOn} onChange={(e) => onExpiresOnChange(e.target.value)} className={OPS_INPUT_CLASS} />
           </OpsFormField>
         </div>
