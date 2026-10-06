@@ -24,10 +24,26 @@ export async function loadDriverAssignments(driverId: string): Promise<DriverAss
   }
 }
 
-export async function resolveCurrentVehicleId(driverId: string | undefined): Promise<string | null> {
-  if (!driverId) return null;
-  const assignments = await loadDriverAssignments(driverId);
-  return pickCurrentAssignment(assignments)?.vehicleId ?? null;
+/**
+ * Resolve the single current vehicle for a driver.
+ * Prefer live assignments; fall back to access.assignedVehicleIds / vehicle list
+ * (drivers were previously blocked from GET /drivers/:id).
+ */
+export async function resolveCurrentVehicleId(
+  driverId: string | undefined,
+  options?: {
+    assignedVehicleIds?: string[] | null;
+    listVehicleIds?: string[] | null;
+  },
+): Promise<string | null> {
+  if (driverId) {
+    const fromAssignments = pickCurrentAssignment(await loadDriverAssignments(driverId))?.vehicleId;
+    if (fromAssignments) return fromAssignments;
+  }
+  const fromAccess = (options?.assignedVehicleIds ?? []).map((id) => id.trim()).filter(Boolean);
+  if (fromAccess[0]) return fromAccess[0];
+  const fromList = (options?.listVehicleIds ?? []).map((id) => id.trim()).filter(Boolean);
+  return fromList[0] ?? null;
 }
 
 export async function loadVehicleById(id: string): Promise<VehicleRecord | null> {

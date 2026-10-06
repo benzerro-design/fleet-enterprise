@@ -125,18 +125,30 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   if (driverPortal) {
     const driverId = driverIdFromAuth(auth);
     const userId = auth.ok ? auth.me.userId : undefined;
-    const currentVehicleId = await resolveCurrentVehicleId(driverId);
-    const [vehicle, extra, profile] = await Promise.all([
-      currentVehicleId ? loadVehicleById(currentVehicleId) : Promise.resolve(null),
-      loadDriverHomeData(driverId, userId, currentVehicleId),
+    const assignedFromAuth = auth.ok ? (auth.me.access?.assignedVehicleIds ?? []) : [];
+    const [list, profile] = await Promise.all([
+      getVehiclesList({ page: "1" }, 50),
       loadDriverProfile(driverId),
     ]);
+    const currentVehicleId = await resolveCurrentVehicleId(driverId, {
+      assignedVehicleIds: assignedFromAuth,
+      listVehicleIds: (list?.items ?? []).map((v) => v.id),
+    });
+    let vehicles = list?.items ?? [];
+    if (vehicles.length === 0 && currentVehicleId) {
+      const one = await loadVehicleById(currentVehicleId);
+      if (one) vehicles = [one];
+    } else if (currentVehicleId && vehicles.length > 1) {
+      const current = vehicles.find((v) => v.id === currentVehicleId);
+      if (current) vehicles = [current, ...vehicles.filter((v) => v.id !== currentVehicleId)];
+    }
+    const extra = await loadDriverHomeData(driverId, userId, currentVehicleId ?? vehicles[0]?.id ?? null);
     return (
       <DriverHomeView
         driverName={profile.fullName ?? driverNameFromAuth(auth)}
         driverPhotoUrl={profile.photoUrl}
-        vehicle={vehicle}
-        vehiclesLoadFailed={currentVehicleId != null && !vehicle}
+        vehicles={vehicles}
+        vehiclesLoadFailed={list === null && vehicles.length === 0}
         trips={extra.trips}
         reminders={extra.reminders}
         tickets={extra.tickets}

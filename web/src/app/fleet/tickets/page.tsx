@@ -4,6 +4,7 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetIndexFilterChips, type FleetIndexFilterChip } from "@/components/fleet/FleetIndexFilterChips";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { DriverPager, DriverRecordList, DriverStatusBand } from "@/components/fleet/DriverPortalList";
+import { DriverViewportSplit } from "@/components/fleet/DriverViewportSplit";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
@@ -127,72 +128,6 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
   ]);
   const write = canWriteTickets(auth);
 
-  if (driverPortal) {
-    const driverId = driverIdFromAuth(auth);
-    const userId = auth.ok ? auth.me.userId : undefined;
-    const status = sp.status === "open" || sp.status === "in_progress" || sp.status === "resolved" ? sp.status : "all";
-    const bandHref = (next: string) => (next === "all" ? "/fleet/tickets" : `/fleet/tickets?status=${next}`);
-    const pageHref = (nextPage: number) => {
-      const p = new URLSearchParams();
-      if (status !== "all") p.set("status", status);
-      if (nextPage > 1) p.set("page", String(nextPage));
-      const qs = p.toString();
-      return `/fleet/tickets${qs ? `?${qs}` : ""}`;
-    };
-    const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-    const driverItems = list ? filterDriverPortalTickets(list.items, userId, driverId) : [];
-    const filteredByStatus =
-      status === "all" ? driverItems : driverItems.filter((row) => row.status === status);
-    const pageSize = 50;
-    const totalPages = Math.max(1, Math.ceil(filteredByStatus.length / pageSize));
-    const pageItems = filteredByStatus.slice((page - 1) * pageSize, page * pageSize);
-    const statusLabel = (value: string) => {
-      const key = `ops.grids.tickets.status.${value}`;
-      const label = t(locale, key);
-      return label === key ? value : label;
-    };
-    return (
-      <FleetPageMain narrow="sm">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.tickets")}</h1>
-          {write ? (
-            <Link href="/fleet/tickets/new" className="text-sm font-medium text-emerald-400">
-              {t(locale, "driver.home.newTicket")}
-            </Link>
-          ) : null}
-        </div>
-        <DriverStatusBand
-          items={[
-            { href: bandHref("all"), label: t(locale, "driverLists.all"), active: status === "all" },
-            { href: bandHref("open"), label: t(locale, "driverLists.open"), active: status === "open" },
-            { href: bandHref("in_progress"), label: t(locale, "driverLists.inProgress"), active: status === "in_progress" },
-          ]}
-        />
-        {list ? (
-          <DriverRecordList
-            empty={t(locale, "driverLists.empty")}
-            items={pageItems.map((row) => ({
-              href: `/fleet/tickets/${row.id}`,
-              title: row.subject,
-              meta: [row.displayId, row.registrationNumber].filter(Boolean).join(" · "),
-              badge: statusLabel(row.status),
-            }))}
-          />
-        ) : (
-          <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
-        )}
-        <DriverPager
-          page={page}
-          totalPages={totalPages}
-          prevHref={page > 1 ? pageHref(page - 1) : null}
-          nextHref={page < totalPages ? pageHref(page + 1) : null}
-          prevLabel={t(locale, "driverLists.prev")}
-          nextLabel={t(locale, "driverLists.next")}
-        />
-      </FleetPageMain>
-    );
-  }
-
   const patch = canPatchTickets(auth);
   const enableBulk = canUseTicketListBulk(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
@@ -284,7 +219,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
     });
   }
 
-  return (
+  const desktop = (
     <FleetPageMain fill>
       <FleetListPageLayout
         header={
@@ -495,4 +430,71 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
       </FleetListPageLayout>
     </FleetPageMain>
   );
+
+  if (!driverPortal) return desktop;
+
+  const driverId = driverIdFromAuth(auth);
+  const userId = auth.ok ? auth.me.userId : undefined;
+  const status = sp.status === "open" || sp.status === "in_progress" || sp.status === "resolved" ? sp.status : "all";
+  const bandHref = (next: string) => (next === "all" ? "/fleet/tickets" : `/fleet/tickets?status=${next}`);
+  const mobilePageHref = (nextPage: number) => {
+    const p = new URLSearchParams();
+    if (status !== "all") p.set("status", status);
+    if (nextPage > 1) p.set("page", String(nextPage));
+    const qs = p.toString();
+    return `/fleet/tickets${qs ? `?${qs}` : ""}`;
+  };
+  const driverItems = list ? filterDriverPortalTickets(list.items, userId, driverId) : [];
+  const filteredByStatus = status === "all" ? driverItems : driverItems.filter((row) => row.status === status);
+  const pageSize = 50;
+  const mobileTotalPages = Math.max(1, Math.ceil(filteredByStatus.length / pageSize));
+  const pageItems = filteredByStatus.slice((page - 1) * pageSize, page * pageSize);
+  const statusLabel = (value: string) => {
+    const key = `ops.grids.tickets.status.${value}`;
+    const label = t(locale, key);
+    return label === key ? value : label;
+  };
+
+  const mobile = (
+    <FleetPageMain narrow="sm">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.tickets")}</h1>
+        {write ? (
+          <Link href="/fleet/tickets/new" className="text-sm font-medium text-emerald-400">
+            {t(locale, "driver.home.newTicket")}
+          </Link>
+        ) : null}
+      </div>
+      <DriverStatusBand
+        items={[
+          { href: bandHref("all"), label: t(locale, "driverLists.all"), active: status === "all" },
+          { href: bandHref("open"), label: t(locale, "driverLists.open"), active: status === "open" },
+          { href: bandHref("in_progress"), label: t(locale, "driverLists.inProgress"), active: status === "in_progress" },
+        ]}
+      />
+      {list ? (
+        <DriverRecordList
+          empty={t(locale, "driverLists.empty")}
+          items={pageItems.map((row) => ({
+            href: `/fleet/tickets/${row.id}`,
+            title: row.subject,
+            meta: [row.displayId, row.registrationNumber].filter(Boolean).join(" · "),
+            badge: statusLabel(row.status),
+          }))}
+        />
+      ) : (
+        <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+      )}
+      <DriverPager
+        page={page}
+        totalPages={mobileTotalPages}
+        prevHref={page > 1 ? mobilePageHref(page - 1) : null}
+        nextHref={page < mobileTotalPages ? mobilePageHref(page + 1) : null}
+        prevLabel={t(locale, "driverLists.prev")}
+        nextLabel={t(locale, "driverLists.next")}
+      />
+    </FleetPageMain>
+  );
+
+  return <DriverViewportSplit mobile={mobile} desktop={desktop} />;
 }

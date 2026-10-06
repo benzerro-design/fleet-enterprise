@@ -8,6 +8,7 @@ import { Suspense } from "react";
 import { RemindersListView } from "@/components/fleet/RemindersListView";
 import { RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolbar";
 import { DriverStatusBand } from "@/components/fleet/DriverPortalList";
+import { DriverViewportSplit } from "@/components/fleet/DriverViewportSplit";
 import { canWriteFleetOps, driverIdFromAuth, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { resolveCurrentVehicleId } from "@/lib/driver-portal-server";
 import { remindersBrowserBase } from "@/lib/fleet-api";
@@ -62,38 +63,9 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
   const write = canWriteFleetOps(auth);
   const driverPortal = isClientDriverPortal(auth);
   const exportQs = buildExportQuery(sp);
-
-  if (driverPortal) {
-    const driverId = driverIdFromAuth(auth);
-    const currentVehicleId = await resolveCurrentVehicleId(driverId);
-    const status =
-      sp.status === "action" || sp.status === "upcoming" || sp.status === "expired" ? sp.status : "all";
-    const bandHref = (next: string) => (next === "all" ? "/fleet/reminders" : `/fleet/reminders?status=${next}`);
-    return (
-      <FleetPageMain narrow="sm">
-        <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.reminders")}</h1>
-        <DriverStatusBand
-          items={[
-            { href: bandHref("all"), label: t(locale, "driverLists.all"), active: status === "all" },
-            { href: bandHref("action"), label: t(locale, "driver.home.attention"), active: status === "action" },
-            { href: bandHref("upcoming"), label: t(locale, "driverLists.upcoming"), active: status === "upcoming" },
-            { href: bandHref("expired"), label: t(locale, "driverLists.expired"), active: status === "expired" },
-          ]}
-        />
-        <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
-          <RemindersListView
-            backHref="/fleet/vehicles"
-            write={false}
-            showStatusToolbar={false}
-            vehicleId={currentVehicleId ?? undefined}
-          />
-        </Suspense>
-      </FleetPageMain>
-    );
-  }
   const exportHref = `${remindersBrowserBase}/export${exportQs ? `?${exportQs}` : ""}`;
 
-  return (
+  const desktop = (
     <FleetPageMain fill>
       <FleetListPageLayout
         header={
@@ -194,4 +166,36 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
       </FleetListPageLayout>
     </FleetPageMain>
   );
+
+  if (!driverPortal) return desktop;
+
+  const driverId = driverIdFromAuth(auth);
+  const currentVehicleId = await resolveCurrentVehicleId(driverId);
+  const status =
+    sp.status === "action" || sp.status === "upcoming" || sp.status === "expired" ? sp.status : "all";
+  const bandHref = (next: string) => (next === "all" ? "/fleet/reminders" : `/fleet/reminders?status=${next}`);
+
+  const mobile = (
+    <FleetPageMain narrow="sm">
+      <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.reminders")}</h1>
+      <DriverStatusBand
+        items={[
+          { href: bandHref("all"), label: t(locale, "driverLists.all"), active: status === "all" },
+          { href: bandHref("action"), label: t(locale, "driver.home.attention"), active: status === "action" },
+          { href: bandHref("upcoming"), label: t(locale, "driverLists.upcoming"), active: status === "upcoming" },
+          { href: bandHref("expired"), label: t(locale, "driverLists.expired"), active: status === "expired" },
+        ]}
+      />
+      <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
+        <RemindersListView
+          backHref="/fleet/vehicles"
+          write={false}
+          showStatusToolbar={false}
+          vehicleId={currentVehicleId ?? undefined}
+        />
+      </Suspense>
+    </FleetPageMain>
+  );
+
+  return <DriverViewportSplit mobile={mobile} desktop={desktop} />;
 }

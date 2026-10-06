@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DriverStatus, Prisma } from '@prisma/client';
+import { ClientRole, DriverStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
@@ -229,7 +229,12 @@ export class DriversService {
   async getDetail(tenantSlug: string, id: string, access?: AccessContext): Promise<DriverDetailPayload> {
     const row = await this.findDriverRow(tenantSlug, id);
     if (access && !canAccessClientFleet(access)) {
-      throw new NotFoundException('Driver not found');
+      const ownDriverIds = access.clientMemberships
+        .filter((m) => m.role === ClientRole.driver && m.driverId)
+        .map((m) => m.driverId as string);
+      if (!ownDriverIds.includes(id)) {
+        throw new NotFoundException('Driver not found');
+      }
     }
     if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.clientId)) {
       throw new NotFoundException('Driver not found');

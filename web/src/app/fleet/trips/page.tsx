@@ -9,6 +9,7 @@ import { ConsumptionFilterForm } from "@/components/fleet/ConsumptionFilterForm"
 import { DriverFilterSelect } from "@/components/fleet/DriverFilterSelect";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { DriverPager, DriverRecordList, DriverStatusBand } from "@/components/fleet/DriverPortalList";
+import { DriverViewportSplit } from "@/components/fleet/DriverViewportSplit";
 import { TripsDataGrid } from "@/components/fleet/TripsDataGrid";
 import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
 import { canWriteTrips, driverIdFromAuth, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
@@ -250,67 +251,6 @@ export default async function TripsPage({ searchParams }: Props) {
     driverPortal || !showConsumption ? Promise.resolve(null) : fetchConsumption(sp),
   ]);
   const write = canWriteTrips(auth);
-
-  if (driverPortal) {
-    const ended = sp.ended === "open" || sp.ended === "closed" ? sp.ended : "all";
-    const bandHref = (next: "all" | "open" | "closed") => (next === "all" ? "/fleet/trips" : `/fleet/trips?ended=${next}`);
-    const pageHref = (nextPage: number) => {
-      const p = new URLSearchParams();
-      if (ended !== "all") p.set("ended", ended);
-      if (nextPage > 1) p.set("page", String(nextPage));
-      const qs = p.toString();
-      return `/fleet/trips${qs ? `?${qs}` : ""}`;
-    };
-    const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-    const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
-    return (
-      <FleetPageMain narrow="sm">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.trips")}</h1>
-          {write ? (
-            <Link href="/fleet/trips/new" className="text-sm font-medium text-emerald-400">
-              {t(locale, "driver.home.startTrip")}
-            </Link>
-          ) : null}
-        </div>
-        <DriverStatusBand
-          items={[
-            { href: bandHref("all"), label: t(locale, "driverLists.all"), active: ended === "all" },
-            { href: bandHref("open"), label: t(locale, "driverLists.open"), active: ended === "open" },
-            { href: bandHref("closed"), label: t(locale, "driverLists.closed"), active: ended === "closed" },
-          ]}
-        />
-        {data ? (
-          <DriverRecordList
-            empty={t(locale, "driverLists.empty")}
-            items={(data.items ?? []).map((trip) => ({
-              href: `/fleet/trips/${trip.id}`,
-              title: trip.registrationNumber,
-              meta: [
-                trip.originLabel || trip.destLabel
-                  ? `${trip.originLabel ?? "?"} → ${trip.destLabel ?? "?"}`
-                  : null,
-                formatDateTimeRo(trip.startedAt),
-              ]
-                .filter(Boolean)
-                .join(" · "),
-              badge: trip.endedAt ? t(locale, "driverLists.closed") : t(locale, "driverLists.open"),
-            }))}
-          />
-        ) : (
-          <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
-        )}
-        <DriverPager
-          page={page}
-          totalPages={totalPages}
-          prevHref={page > 1 ? pageHref(page - 1) : null}
-          nextHref={page < totalPages ? pageHref(page + 1) : null}
-          prevLabel={t(locale, "driverLists.prev")}
-          nextLabel={t(locale, "driverLists.next")}
-        />
-      </FleetPageMain>
-    );
-  }
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
   const docsPage = documents?.page ?? page;
@@ -348,7 +288,7 @@ export default async function TripsPage({ searchParams }: Props) {
     return `/fleet/trips?${p.toString()}`;
   };
 
-  return (
+  const desktop = (
     <FleetPageMain fill>
       <FleetListPageLayout
         header={
@@ -661,4 +601,66 @@ export default async function TripsPage({ searchParams }: Props) {
       </FleetListPageLayout>
     </FleetPageMain>
   );
+
+  if (!driverPortal) return desktop;
+
+  const ended = sp.ended === "open" || sp.ended === "closed" ? sp.ended : "all";
+  const bandHref = (next: "all" | "open" | "closed") => (next === "all" ? "/fleet/trips" : `/fleet/trips?ended=${next}`);
+  const mobilePageHref = (nextPage: number) => {
+    const p = new URLSearchParams();
+    if (ended !== "all") p.set("ended", ended);
+    if (nextPage > 1) p.set("page", String(nextPage));
+    const qs = p.toString();
+    return `/fleet/trips${qs ? `?${qs}` : ""}`;
+  };
+
+  const mobile = (
+    <FleetPageMain narrow="sm">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.trips")}</h1>
+        {write ? (
+          <Link href="/fleet/trips/new" className="text-sm font-medium text-emerald-400">
+            {t(locale, "driver.home.startTrip")}
+          </Link>
+        ) : null}
+      </div>
+      <DriverStatusBand
+        items={[
+          { href: bandHref("all"), label: t(locale, "driverLists.all"), active: ended === "all" },
+          { href: bandHref("open"), label: t(locale, "driverLists.open"), active: ended === "open" },
+          { href: bandHref("closed"), label: t(locale, "driverLists.closed"), active: ended === "closed" },
+        ]}
+      />
+      {data ? (
+        <DriverRecordList
+          empty={t(locale, "driverLists.empty")}
+          items={(data.items ?? []).map((trip) => ({
+            href: `/fleet/trips/${trip.id}`,
+            title: trip.registrationNumber,
+            meta: [
+              trip.originLabel || trip.destLabel
+                ? `${trip.originLabel ?? "?"} → ${trip.destLabel ?? "?"}`
+                : null,
+              formatDateTimeRo(trip.startedAt),
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            badge: trip.endedAt ? t(locale, "driverLists.closed") : t(locale, "driverLists.open"),
+          }))}
+        />
+      ) : (
+        <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+      )}
+      <DriverPager
+        page={page}
+        totalPages={totalPages}
+        prevHref={page > 1 ? mobilePageHref(page - 1) : null}
+        nextHref={page < totalPages ? mobilePageHref(page + 1) : null}
+        prevLabel={t(locale, "driverLists.prev")}
+        nextLabel={t(locale, "driverLists.next")}
+      />
+    </FleetPageMain>
+  );
+
+  return <DriverViewportSplit mobile={mobile} desktop={desktop} />;
 }
