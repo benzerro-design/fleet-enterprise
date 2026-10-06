@@ -59,9 +59,9 @@ export function DeleteCostButton({ entryId, label, redirectTo, variant = "text" 
           disabled={pending}
           title={pending ? "Șterg…" : "Șterge"}
           aria-label={`Șterge ${label ?? entryId}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-900/50 bg-red-950/30 text-red-300 transition-colors hover:bg-red-950/60 disabled:opacity-50"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-red-900/50 bg-red-950/30 text-red-300 transition-colors hover:bg-red-950/60 disabled:opacity-50 touch-manipulation"
         >
-          <IconTrash className="h-3.5 w-3.5" />
+          <IconTrash className="h-4 w-4" />
         </button>
         {error ? <p className="max-w-[10rem] text-right text-[10px] text-amber-400">{error}</p> : null}
       </div>

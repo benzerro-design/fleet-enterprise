@@ -203,7 +203,12 @@ export function FleetShell({
   }, [menuOpen, closeMenu]);
 
   return (
-    <div data-fleet-shell className="fleet-chrome flex h-dvh max-h-dvh overflow-hidden print:h-auto print:max-h-none print:overflow-visible">
+    <div
+      data-fleet-shell={clientDriverPortal ? "driver" : "true"}
+      className={`fleet-chrome flex h-dvh max-h-dvh overflow-hidden print:h-auto print:max-h-none print:overflow-visible ${
+        clientDriverPortal ? "overflow-x-hidden touch-pan-y" : ""
+      }`}
+    >
       <FleetCommandPalette items={commandItems} />
       {/* Desktop sidebar — chrome BO */}
       <aside className="fleet-chrome hidden h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 print:hidden lg:flex">
@@ -240,7 +245,11 @@ export function FleetShell({
         </div>
       </aside>
 
-      <div className="fleet-canvas flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div
+        className={`fleet-canvas flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
+          clientDriverPortal ? "overflow-x-hidden" : ""
+        }`}
+      >
         {authBanner}
 
         <FleetTopBar
@@ -284,9 +293,15 @@ export function FleetShell({
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] print:overflow-visible print:pb-0 lg:pb-0">
+          <div
+            className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] print:overflow-visible print:pb-0 lg:pb-0 ${
+              clientDriverPortal ? "overflow-x-hidden" : ""
+            }`}
+          >
             <div
-              className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 sm:px-6 lg:px-8"
+              className={`mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col px-4 sm:px-6 lg:px-8 ${
+                clientDriverPortal ? "min-w-0 overflow-x-hidden" : ""
+              }`}
               style={{
                 paddingTop: "var(--fleet-pad-y)",
                 paddingBottom: "var(--fleet-pad-y)",

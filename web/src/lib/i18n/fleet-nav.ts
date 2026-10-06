@@ -34,7 +34,7 @@ function mobileTabLabelKey(tab: FleetMobileTab): string {
   if (tab.href === "/fleet/trips") return "nav.mobileTabs.trips";
   if (tab.href === "/fleet/tickets") return "nav.mobileTabs.tickets";
   if (tab.href === "/fleet/reminders") return "nav.mobileTabs.reminders";
-  if (tab.href === "/fleet/costs" && (tab.label === "Alimentare" || tab.label === "Fuel")) {
+  if (tab.href === "/fleet/costs" && (tab.label === "Alimentare" || tab.label === "Fuel" || tab.label === "Costuri" || tab.label === "Costs")) {
     return "nav.mobileTabs.fueling";
   }
   if (tab.href === "/fleet/costs") return "nav.links./fleet/costs";

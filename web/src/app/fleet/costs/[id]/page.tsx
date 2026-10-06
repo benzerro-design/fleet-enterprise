@@ -2,6 +2,7 @@
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { notFound } from "next/navigation";
 import { DeleteCostButton } from "@/components/fleet/DeleteCostButton";
+import { DriverDetailActionBar } from "@/components/fleet/DriverDetailActionBar";
 import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import { canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { isDriverWritableCostCategory } from "@/lib/cost-categories";
@@ -39,61 +40,145 @@ export default async function CostDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const [row, auth] = await Promise.all([getEntry(id), getAuthMeResult()]);
   if (!row) notFound();
+  const driverPortal = isClientDriverPortal(auth);
   const write =
     canWriteCosts(auth) &&
-    (!auth.ok || !isClientDriverPortal(auth) || isDriverWritableCostCategory(row.category));
+    (!auth.ok || !driverPortal || isDriverWritableCostCategory(row.category));
 
   return (
-    <FleetPageMain narrow="md">
-        <div className="mb-8 flex items-end justify-between gap-4">
-          <div><p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Cost</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">{row.category}</h1></div>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/fleet/costs" className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm">
-              Înapoi la listă
-            </Link>
-            {write ? (
-              <>
-                <Link href={`/fleet/costs/${id}/edit`} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900">
-                  Editare
-                </Link>
-                <DeleteCostButton entryId={id} label={row.category} redirectTo="/fleet/costs" />
-              </>
-            ) : null}
-          </div>
+    <FleetPageMain narrow="md" className={driverPortal ? "min-w-0 overflow-x-hidden" : undefined}>
+      {driverPortal ? (
+        <DriverDetailActionBar
+          backHref="/fleet/costs"
+          backLabel="Costuri"
+          title={row.category}
+          editHref={write ? `/fleet/costs/${id}/edit` : undefined}
+          deleteSlot={
+            write ? (
+              <DeleteCostButton entryId={id} label={row.category} redirectTo="/fleet/costs" variant="icon" />
+            ) : null
+          }
+        />
+      ) : null}
+
+      <div className={`mb-8 items-end justify-between gap-4 ${driverPortal ? "hidden lg:flex" : "flex"}`}>
+        <div>
+          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Cost</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">{row.category}</h1>
         </div>
-        <dl className="grid gap-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:grid-cols-2">
-          <div><dt className="text-xs uppercase text-zinc-500">Număr auto</dt><dd className="mt-1 font-mono">{row.registrationNumber}</dd></div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/fleet/costs" className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm">
+            Înapoi la listă
+          </Link>
+          {write ? (
+            <>
+              <Link
+                href={`/fleet/costs/${id}/edit`}
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+              >
+                Editare
+              </Link>
+              <DeleteCostButton entryId={id} label={row.category} redirectTo="/fleet/costs" />
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {driverPortal ? (
+        <h1 className="mb-4 text-2xl font-semibold tracking-tight lg:hidden">{row.category}</h1>
+      ) : null}
+
+      <dl
+        className={`grid gap-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:grid-cols-2 ${
+          driverPortal ? "gap-4 p-4 sm:gap-6 sm:p-6" : ""
+        }`}
+      >
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Număr auto</dt>
+          <dd className="mt-1 font-mono">{row.registrationNumber}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Atribuit la</dt>
+          <dd className="mt-1">
+            <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
+          </dd>
+        </div>
+        {!driverPortal ? (
+          <>
+            <div>
+              <dt className="text-xs uppercase text-zinc-500">Client</dt>
+              <dd className="mt-1">{row.clientId}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase text-zinc-500">Tenant</dt>
+              <dd className="mt-1 font-mono">{row.tenantSlug}</dd>
+            </div>
+          </>
+        ) : null}
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Data</dt>
+          <dd className="mt-1">{new Date(row.incurredOn).toLocaleString("ro-RO")}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Furnizor</dt>
+          <dd className="mt-1">{row.provider ?? "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Km</dt>
+          <dd className="mt-1 font-mono">{row.odometerKm ?? "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Cursă legată</dt>
+          <dd className="mt-1">
+            {row.tripId ? (
+              <Link href={`/fleet/trips/${row.tripId}`} className="font-mono text-emerald-400 hover:underline">
+                {row.tripReference ?? row.tripId}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Număr factură</dt>
+          <dd className="mt-1 font-mono">{row.invoiceNumber ?? "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Data facturii</dt>
+          <dd className="mt-1">{row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString("ro-RO") : "—"}</dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-xs uppercase text-zinc-500">Atașare factură</dt>
+          <dd className="mt-1">
+            {row.invoiceAttachmentUrl ? (
+              <a
+                className="text-emerald-400 hover:underline"
+                href={row.invoiceAttachmentUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Deschide document
+              </a>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase text-zinc-500">Suma (RON fără TVA)</dt>
+          <dd className="mt-1 font-mono">{formatRonFromCents(row.amountCents)}</dd>
+        </div>
+        {!driverPortal ? (
           <div>
-            <dt className="text-xs uppercase text-zinc-500">Atribuit la</dt>
-            <dd className="mt-1">
-              <OpsAssetScopeBadge equipmentLabel={row.vehicleEquipmentLabel} />
-            </dd>
+            <dt className="text-xs uppercase text-zinc-500">Vehicle ID</dt>
+            <dd className="mt-1 font-mono text-xs text-zinc-400">{row.vehicleId}</dd>
           </div>
-          <div><dt className="text-xs uppercase text-zinc-500">Client</dt><dd className="mt-1">{row.clientId}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Tenant</dt><dd className="mt-1 font-mono">{row.tenantSlug}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Data</dt><dd className="mt-1">{new Date(row.incurredOn).toLocaleString("ro-RO")}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Furnizor</dt><dd className="mt-1">{row.provider ?? "—"}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Km</dt><dd className="mt-1 font-mono">{row.odometerKm ?? "—"}</dd></div>
-          <div>
-            <dt className="text-xs uppercase text-zinc-500">Cursă legată</dt>
-            <dd className="mt-1">
-              {row.tripId ? (
-                <Link href={`/fleet/trips/${row.tripId}`} className="font-mono text-emerald-400 hover:underline">
-                  {row.tripReference ?? row.tripId}
-                </Link>
-              ) : (
-                "—"
-              )}
-            </dd>
-          </div>
-          <div><dt className="text-xs uppercase text-zinc-500">Număr factură</dt><dd className="mt-1 font-mono">{row.invoiceNumber ?? "—"}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Data facturii</dt><dd className="mt-1">{row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString("ro-RO") : "—"}</dd></div>
-          <div className="sm:col-span-2"><dt className="text-xs uppercase text-zinc-500">Atașare factură</dt><dd className="mt-1">{row.invoiceAttachmentUrl ? <a className="text-emerald-400 hover:underline" href={row.invoiceAttachmentUrl} target="_blank" rel="noreferrer">Deschide document</a> : "—"}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Suma (RON fără TVA)</dt><dd className="mt-1 font-mono">{formatRonFromCents(row.amountCents)}</dd></div>
-          <div><dt className="text-xs uppercase text-zinc-500">Vehicle ID</dt><dd className="mt-1 font-mono text-xs text-zinc-400">{row.vehicleId}</dd></div>
-          <div className="sm:col-span-2"><dt className="text-xs uppercase text-zinc-500">Notițe</dt><dd className="mt-1 text-zinc-200">{row.notes ?? "—"}</dd></div>
-        </dl>
+        ) : null}
+        <div className="sm:col-span-2">
+          <dt className="text-xs uppercase text-zinc-500">Notițe</dt>
+          <dd className="mt-1 text-zinc-200">{row.notes ?? "—"}</dd>
+        </div>
+      </dl>
     </FleetPageMain>
   );
 }
-

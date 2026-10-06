@@ -415,7 +415,7 @@ export function VehicleDetailSections({
                   href={`/fleet/costs/new?vehicleId=${encodeURIComponent(vehicleId)}&category=${encodeURIComponent("Combustibil")}`}
                   className="rounded-md border border-amber-800/60 bg-amber-600/90 px-2.5 py-1 text-[11px] font-medium text-zinc-950 hover:bg-amber-500"
                 >
-                  + Alimentare
+                  {driverPortal ? "+ Cost nou" : "+ Alimentare"}
                 </Link>
               ) : null}
             </>

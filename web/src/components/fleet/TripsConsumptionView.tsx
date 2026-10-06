@@ -35,8 +35,8 @@ function WeeklyChart({ weekly }: { weekly: ConsumptionPayload["weekly"] }) {
   const slot = (w - pad * 2) / weekly.length;
 
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${w} ${h}`} className="min-w-[320px] w-full max-w-2xl text-zinc-400" role="img" aria-label="Km curse vs litri alimentați pe săptămână">
+    <div className="min-w-0 overflow-x-hidden">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-auto w-full max-w-2xl text-zinc-400" role="img" aria-label="Km curse vs litri alimentați pe săptămână">
         {weekly.map((b, i) => {
           const x = pad + i * slot;
           const barW = slot / 2.6;
@@ -83,8 +83,8 @@ function ReconciliationChart({ weekly }: { weekly: ConsumptionPayload["weekly"] 
   const slot = (w - pad * 2) / withOdo.length;
 
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${w} ${h}`} className="min-w-[320px] w-full max-w-2xl" role="img" aria-label="Reconciliere km curse vs odometru">
+    <div className="min-w-0 overflow-x-hidden">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-auto w-full max-w-2xl" role="img" aria-label="Reconciliere km curse vs odometru">
         {withOdo.map((b, i) => {
           const x = pad + i * slot;
           const barW = slot / 2.6;

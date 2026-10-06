@@ -378,7 +378,7 @@ export function getFleetMobileTabs(ctx: { clientDriverPortal?: boolean }): Fleet
     return [
       { label: "Acasă", href: "/fleet/vehicles", activePrefixes: ["/fleet/vehicles"] },
       { label: "Curse", href: "/fleet/trips", activePrefixes: ["/fleet/trips"] },
-      { label: "Alimentare", href: "/fleet/costs", activePrefixes: ["/fleet/costs"] },
+      { label: "Costuri", href: "/fleet/costs", activePrefixes: ["/fleet/costs"] },
       { label: "Tichete", href: "/fleet/tickets", activePrefixes: ["/fleet/tickets"] },
       { label: "Meniu", href: "#", activePrefixes: [], openMenu: true },
     ];

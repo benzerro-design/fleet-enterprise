@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import { AppearanceProvider } from "@/components/fleet/AppearanceProvider";
@@ -18,6 +18,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Fleet enterprise",
   description: "Fleet management MVP (Next.js + NestJS)",
+};
+
+/** App-like mobile: prevent accidental pinch/zoom-out from overflow. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 /** Anti-FOUC: aplică data-theme + lang din localStorage înainte de paint. */

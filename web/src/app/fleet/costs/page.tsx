@@ -281,9 +281,9 @@ export default async function CostsPage({ searchParams }: Props) {
         {write ? (
           <Link
             href={`/fleet/costs/new?category=${encodeURIComponent(FUEL_COST_CATEGORY)}`}
-            className="text-sm font-medium text-emerald-400"
+            className="inline-flex h-10 items-center rounded-full bg-emerald-500 px-4 text-sm font-medium text-zinc-950 touch-manipulation"
           >
-            {t(locale, "driver.home.fuel")}
+            {t(locale, "pages.costs.newCost")}
           </Link>
         ) : null}
       </div>

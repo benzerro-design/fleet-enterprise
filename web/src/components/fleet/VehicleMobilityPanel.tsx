@@ -36,8 +36,8 @@ function MobilityChart({ monthly }: { monthly: VehicleMobilityPayload["monthly"]
   const barW = (w - pad * 2) / monthly.length / 2.4;
 
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${w} ${h}`} className="min-w-[320px] w-full max-w-xl text-zinc-400" role="img" aria-label="Grafic km curse vs litri combustibil">
+    <div className="min-w-0 overflow-x-hidden">
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-auto w-full max-w-xl text-zinc-400" role="img" aria-label="Grafic km curse vs litri combustibil">
         {monthly.map((b, i) => {
           const x = pad + i * ((w - pad * 2) / monthly.length);
           const kmH = ((h - pad * 2) * b.tripKm) / maxKm;

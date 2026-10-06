@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { DriverAssignmentsPanel } from "@/components/fleet/DriverAssignmentsPanel";
 import { DriverDocumentsPanel } from "@/components/fleet/DriverDocumentsPanel";
+import { DriverMobileTabStrip } from "@/components/fleet/DriverMobileTabStrip";
 import { DriverTripsPanel, type DriverTripsSearch } from "@/components/fleet/DriverTripsPanel";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { documentExpiryBadge } from "@/lib/document-expiry";
@@ -77,8 +78,15 @@ export function DriverProfileTabs({
   const activeVehicles = driver.activeVehicleRegistrations;
 
   return (
-    <div className="space-y-6">
-      <div className="border-b border-zinc-800">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
+      <div className="lg:hidden">
+        <DriverMobileTabStrip
+          items={TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
+          activeId={active}
+          onSelect={(id) => setTab(id as DriverProfileTab)}
+        />
+      </div>
+      <div className="hidden border-b border-zinc-800 lg:block">
         <div className="flex flex-wrap gap-2">
           {TABS.map((tab) => (
             <button

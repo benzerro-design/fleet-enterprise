@@ -158,6 +158,16 @@ body:has([data-fleet-shell]) {
   scrollbar-color: rgb(82 82 91 / 0.5) transparent;
 }
 
+/* Driver mobile: no sideways page scroll / pinch-zoom from overflow. */
+[data-fleet-shell="driver"] .fleet-scroll-pane {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+[data-fleet-shell="driver"] {
+  overscroll-behavior-x: none;
+}
+
 .fleet-scroll-pane::-webkit-scrollbar {
   width: 7px;
   height: 7px;
