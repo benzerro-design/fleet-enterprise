@@ -12,6 +12,8 @@ import { resolveVehicleFuelFromCivP3 } from '../fleet/vehicle-fuel-resolve';
 import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
 import { resolveOptionalClientVehicleFilter } from '../clients/client-resolve';
 import type { AccessContext } from '../iam/access-context.types';
+import { isDriverOnlyClientUser } from '../iam/client-access';
+import { driverIdsFromAccess } from '../iam/driver-access';
 import { mergeVehicleLinkedScope } from './ops-client-scope';
 import { assertCostCreateWrite, assertCostOpsWrite, assertTripVehicleWrite } from './ops-write-access';
 import { assertVehicleInTenant } from './ops-scope';
@@ -106,6 +108,25 @@ async function costWhere(
 ): Promise<Prisma.CostEntryWhereInput> {
   const parts: Prisma.CostEntryWhereInput[] = [{ tenantId }];
   mergeVehicleLinkedScope(parts, access);
+  if (access && isDriverOnlyClientUser(access)) {
+    const ownDriverIds = driverIdsFromAccess(access);
+    const createdIds = (
+      await prisma.auditLog.findMany({
+        where: {
+          tenantId,
+          actorUserId: access.userId,
+          entityType: 'cost_entry',
+          action: 'create',
+        },
+        select: { entityId: true },
+        take: 5000,
+      })
+    ).map((row) => row.entityId);
+    const orParts: Prisma.CostEntryWhereInput[] = [];
+    if (createdIds.length > 0) orParts.push({ id: { in: createdIds } });
+    if (ownDriverIds.length > 0) orParts.push({ trip: { driverId: { in: ownDriverIds } } });
+    parts.push(orParts.length > 0 ? { OR: orParts } : { id: { in: [] } });
+  }
   if (f.registrationNumber?.trim()) {
     const reg = f.registrationNumber.trim();
     parts.push({

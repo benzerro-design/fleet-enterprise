@@ -38,8 +38,8 @@ import { loadWebUploadBytes, WebUploadLoadError } from '../storage/web-upload-st
 import { isPlausibleCivValue, isReadableCivOcrText } from './civ-text-quality';
 import type { VehicleMobilityPayload } from './vehicle-mobility.types';
 import type { AccessContext } from '../iam/access-context.types';
-import { vehicleClientScope } from '../iam/client-access';
-import { tripOpsVehicleScope } from '../iam/driver-access';
+import { isDriverOnlyClientUser, vehicleClientScope } from '../iam/client-access';
+import { driverIdsFromAccess, tripOpsVehicleScope } from '../iam/driver-access';
 import { assertClientIamFeature } from '../iam/client-iam-settings';
 import { assertClientCodeOpsWrite, assertDriverMediaWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import {
@@ -984,8 +984,12 @@ export class FleetService {
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
+    const driverOnly = access && isDriverOnlyClientUser(access);
     const rows = await this.prisma.vehiclePhoto.findMany({
-      where: { vehicleId },
+      where: {
+        vehicleId,
+        ...(driverOnly && access?.userId ? { uploadedByUserId: access.userId } : {}),
+      },
       orderBy: [{ sessionLabel: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: { uploadedBy: { select: { email: true } } },
     });
@@ -1143,8 +1147,12 @@ export class FleetService {
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
     const take = Math.min(Math.max(1, limit), 100);
+    const driverOnly = access && isDriverOnlyClientUser(access);
     const rows = await this.prisma.odometerReading.findMany({
-      where: { vehicleId },
+      where: {
+        vehicleId,
+        ...(driverOnly && access?.userId ? { recordedByUserId: access.userId } : {}),
+      },
       orderBy: { recordedAt: 'desc' },
       take,
       include: { recordedBy: { select: { email: true } } },
@@ -1606,13 +1614,42 @@ export class FleetService {
     await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      select: { id: true, odometerKm: true },
+      select: { id: true, odometerKm: true, tenantId: true },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
+    const driverOnly = access && isDriverOnlyClientUser(access);
+    const ownDriverIds = driverOnly ? driverIdsFromAccess(access!) : [];
+    const createdCostIds =
+      driverOnly && access?.userId
+        ? (
+            await this.prisma.auditLog.findMany({
+              where: {
+                tenantId: vehicle.tenantId,
+                actorUserId: access.userId,
+                entityType: 'cost_entry',
+                action: 'create',
+              },
+              select: { entityId: true },
+              take: 5000,
+            })
+          ).map((row) => row.entityId)
+        : [];
+
+    const costWhere = driverOnly
+      ? {
+          vehicleId,
+          OR: [
+            ...(createdCostIds.length > 0 ? [{ id: { in: createdCostIds } }] : []),
+            ...(ownDriverIds.length > 0 ? [{ trip: { driverId: { in: ownDriverIds } } }] : []),
+            ...(createdCostIds.length === 0 && ownDriverIds.length === 0 ? [{ id: { in: [] as string[] } }] : []),
+          ],
+        }
+      : { vehicleId };
+
     const [costs, trips, odometerReadings] = await Promise.all([
       this.prisma.costEntry.findMany({
-        where: { vehicleId },
+        where: costWhere,
         select: {
           id: true,
           category: true,
@@ -1625,7 +1662,11 @@ export class FleetService {
         take: 200,
       }),
       this.prisma.trip.findMany({
-        where: { vehicleId },
+        where: {
+          vehicleId,
+          ...(driverOnly && ownDriverIds.length > 0 ? { driverId: { in: ownDriverIds } } : {}),
+          ...(driverOnly && ownDriverIds.length === 0 ? { id: { in: [] } } : {}),
+        },
         select: {
           id: true,
           startedAt: true,
@@ -1638,7 +1679,10 @@ export class FleetService {
         take: 200,
       }),
       this.prisma.odometerReading.findMany({
-        where: { vehicleId },
+        where: {
+          vehicleId,
+          ...(driverOnly && access?.userId ? { recordedByUserId: access.userId } : {}),
+        },
         select: { id: true, recordedAt: true, odometerKm: true, source: true },
         orderBy: { recordedAt: 'desc' },
         take: 100,

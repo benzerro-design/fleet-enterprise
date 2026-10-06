@@ -51,6 +51,13 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "consumption", label: "Consum" },
 ];
 
+const DRIVER_HIDDEN_TABS = new Set<VehicleProfileTab>([
+  "acquisition",
+  "maintenance_plan",
+  "dsr",
+  "drivers",
+]);
+
 type Props = {
   vehicle: VehicleRecord;
   write: boolean;
@@ -58,6 +65,7 @@ type Props = {
   odometerWrite?: boolean;
   planWrite?: boolean;
   lockClient?: boolean;
+  driverPortal?: boolean;
   civ: VehicleCivPayload;
   acquisition: VehicleAcquisitionPayload;
   photos: VehiclePhotosPayload;
@@ -84,6 +92,7 @@ export function VehicleProfileTabs({
   odometerWrite,
   planWrite,
   lockClient = false,
+  driverPortal = false,
   civ,
   acquisition,
   photos,
@@ -104,13 +113,19 @@ export function VehicleProfileTabs({
   const router = useRouter();
   const searchParams = useSearchParams();
   const visibleTabs = useMemo(
-    () => TABS.filter((tab) => tab.id !== "acquisition" || showAcquisition),
-    [showAcquisition],
+    () =>
+      TABS.filter((tab) => {
+        if (tab.id === "acquisition" && !showAcquisition) return false;
+        if (driverPortal && DRIVER_HIDDEN_TABS.has(tab.id)) return false;
+        return true;
+      }),
+    [showAcquisition, driverPortal],
   );
 
   const active = useMemo((): VehicleProfileTab => {
     const t = searchParams.get("tab");
     if (t === "acquisition" && !showAcquisition) return "basic";
+    if (driverPortal && t && DRIVER_HIDDEN_TABS.has(t as VehicleProfileTab)) return "basic";
     if (
       t === "advanced" ||
       t === "acquisition" ||
@@ -128,7 +143,7 @@ export function VehicleProfileTabs({
       return t;
     }
     return "basic";
-  }, [searchParams, showAcquisition]);
+  }, [searchParams, showAcquisition, driverPortal]);
 
   const planItemHighlight = searchParams.get("planItem");
 

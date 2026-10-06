@@ -65,6 +65,7 @@ type Props = {
   vehicleId: string;
   registrationNumber: string;
   write: boolean;
+  driverPortal?: boolean;
   regQs: string;
   maintenance: { ok: true; items: VehicleMaintenanceRow[]; total: number } | { ok: false };
   costs: { ok: true; items: VehicleCostRow[]; total: number } | { ok: false };
@@ -159,6 +160,7 @@ export function VehicleDetailSections({
   vehicleId,
   registrationNumber,
   write,
+  driverPortal = false,
   regQs,
   maintenance,
   costs,
@@ -166,8 +168,19 @@ export function VehicleDetailSections({
   mobility,
 }: Props) {
   const storageKey = `fleet-vehicle-sections:${vehicleId}`;
+  const sectionKeys = useMemo(
+    () =>
+      SECTION_KEYS.filter((key) => {
+        if (!driverPortal) return true;
+        return key === "costs" || key === "reminders" || key === "mobility";
+      }),
+    [driverPortal],
+  );
 
-  const [open, setOpen] = useState<Record<SectionKey, boolean>>(DEFAULT_OPEN);
+  const [open, setOpen] = useState<Record<SectionKey, boolean>>({
+    ...DEFAULT_OPEN,
+    ...(driverPortal ? { maintenance: false, documents: false, costs: true } : {}),
+  });
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -198,27 +211,23 @@ export function VehicleDetailSections({
     }
   }, [open, storageKey, hydrated]);
 
-  const openCount = SECTION_KEYS.filter((k) => open[k]).length;
+  const openCount = sectionKeys.filter((k) => open[k]).length;
 
   const expandAll = useCallback(() => {
-    setOpen({
-      maintenance: true,
-      costs: true,
-      documents: true,
-      reminders: true,
-      mobility: true,
+    setOpen((prev) => {
+      const next = { ...prev };
+      for (const key of sectionKeys) next[key] = true;
+      return next;
     });
-  }, []);
+  }, [sectionKeys]);
 
   const collapseAll = useCallback(() => {
-    setOpen({
-      maintenance: false,
-      costs: false,
-      documents: false,
-      reminders: false,
-      mobility: false,
+    setOpen((prev) => {
+      const next = { ...prev };
+      for (const key of sectionKeys) next[key] = false;
+      return next;
     });
-  }, []);
+  }, [sectionKeys]);
 
   const toggle = useCallback((key: SectionKey) => {
     setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -239,7 +248,7 @@ export function VehicleDetailSections({
     [maintenance, costs, documents, mobility],
   );
 
-  const sectionCount = SECTION_KEYS.length;
+  const sectionCount = sectionKeys.length;
 
   const actionLinkClass =
     "rounded-md border border-zinc-700/80 px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800/80";
@@ -254,9 +263,9 @@ export function VehicleDetailSections({
           <p className="mt-1 text-xs text-zinc-600">
             {openCount === 0
               ? "Toate secțiunile sunt închise"
-              : openCount === 4
+              : openCount === sectionCount
                 ? "Toate secțiunile sunt deschise"
-                : `${openCount} din 4 secțiuni deschise`}
+                : `${openCount} din ${sectionCount} secțiuni deschise`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -280,38 +289,40 @@ export function VehicleDetailSections({
       </div>
 
       <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/30 shadow-sm shadow-black/20">
-        <AccordionSection
-          sectionId="maintenance"
-          title="Mentenanță"
-          summary={summaries.maintenance}
-          open={open.maintenance}
-          onToggle={() => toggle("maintenance")}
-          actions={
-            <>
-              <Link href={`/fleet/maintenance?${regQs}`} className={actionLinkClass}>
-                Listă
-              </Link>
-              {write ? (
-                <Link
-                  href={`/fleet/maintenance/new?vehicleId=${encodeURIComponent(vehicleId)}`}
-                  className={actionPrimaryClass}
-                >
-                  + Nou
+        {!driverPortal ? (
+          <AccordionSection
+            sectionId="maintenance"
+            title="Mentenanță"
+            summary={summaries.maintenance}
+            open={open.maintenance}
+            onToggle={() => toggle("maintenance")}
+            actions={
+              <>
+                <Link href={`/fleet/maintenance?${regQs}`} className={actionLinkClass}>
+                  Listă
                 </Link>
-              ) : null}
-            </>
-          }
-        >
-          {!maintenance.ok ? (
-            <p className="text-sm text-amber-400">Nu am putut încărca mentenanța.</p>
-          ) : (
-            <VehicleMaintenancePanel
-              items={maintenance.items}
-              totalInDb={maintenance.total}
-              regQs={regQs}
-            />
-          )}
-        </AccordionSection>
+                {write ? (
+                  <Link
+                    href={`/fleet/maintenance/new?vehicleId=${encodeURIComponent(vehicleId)}`}
+                    className={actionPrimaryClass}
+                  >
+                    + Nou
+                  </Link>
+                ) : null}
+              </>
+            }
+          >
+            {!maintenance.ok ? (
+              <p className="text-sm text-amber-400">Nu am putut încărca mentenanța.</p>
+            ) : (
+              <VehicleMaintenancePanel
+                items={maintenance.items}
+                totalInDb={maintenance.total}
+                regQs={regQs}
+              />
+            )}
+          </AccordionSection>
+        ) : null}
 
         <AccordionSection
           sectionId="costs"
@@ -342,34 +353,36 @@ export function VehicleDetailSections({
           )}
         </AccordionSection>
 
-        <AccordionSection
-          sectionId="documents"
-          title="Documente"
-          summary={summaries.documents}
-          open={open.documents}
-          onToggle={() => toggle("documents")}
-          actions={
-            <>
-              <Link href={`/fleet/documents?${regQs}`} className={actionLinkClass}>
-                Listă
-              </Link>
-              {write ? (
-                <Link
-                  href={`/fleet/documents/new?vehicleId=${encodeURIComponent(vehicleId)}`}
-                  className={actionPrimaryClass}
-                >
-                  + Nou
+        {!driverPortal ? (
+          <AccordionSection
+            sectionId="documents"
+            title="Documente"
+            summary={summaries.documents}
+            open={open.documents}
+            onToggle={() => toggle("documents")}
+            actions={
+              <>
+                <Link href={`/fleet/documents?${regQs}`} className={actionLinkClass}>
+                  Listă
                 </Link>
-              ) : null}
-            </>
-          }
-        >
-          {!documents.ok ? (
-            <p className="text-sm text-amber-400">Nu am putut încărca documentele.</p>
-          ) : (
-            <VehicleDocumentsPanel items={documents.items} totalInDb={documents.total} regQs={regQs} />
-          )}
-        </AccordionSection>
+                {write ? (
+                  <Link
+                    href={`/fleet/documents/new?vehicleId=${encodeURIComponent(vehicleId)}`}
+                    className={actionPrimaryClass}
+                  >
+                    + Nou
+                  </Link>
+                ) : null}
+              </>
+            }
+          >
+            {!documents.ok ? (
+              <p className="text-sm text-amber-400">Nu am putut încărca documentele.</p>
+            ) : (
+              <VehicleDocumentsPanel items={documents.items} totalInDb={documents.total} regQs={regQs} />
+            )}
+          </AccordionSection>
+        ) : null}
 
         <AccordionSection
           sectionId="reminders"
@@ -378,28 +391,12 @@ export function VehicleDetailSections({
           open={open.reminders}
           onToggle={() => toggle("reminders")}
           actions={
-            <>
-              <Link href={`/fleet/reminders?registrationNumber=${encodeURIComponent(registrationNumber)}`} className={actionLinkClass}>
-                Listă
-              </Link>
-              {write ? (
-                <Link
-                  href={`/fleet/reminders/new?vehicleId=${encodeURIComponent(vehicleId)}`}
-                  className="rounded-md border border-fuchsia-800/60 bg-fuchsia-600/90 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-fuchsia-500"
-                >
-                  + Nou
-                </Link>
-              ) : null}
-            </>
+            <Link href={`/fleet/reminders?${regQs}`} className={actionLinkClass}>
+              Listă
+            </Link>
           }
         >
-          <div id="reminders">
-            <VehicleRemindersSection
-              vehicleId={vehicleId}
-              registrationNumber={registrationNumber}
-              write={write}
-            />
-          </div>
+          <VehicleRemindersSection vehicleId={vehicleId} registrationNumber={registrationNumber} write={write} />
         </AccordionSection>
 
         <AccordionSection

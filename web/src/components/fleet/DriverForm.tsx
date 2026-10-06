@@ -18,9 +18,11 @@ type Props = {
   initial?: DriverRecord;
   defaultClientCode?: string;
   lockClient?: boolean;
+  /** După salvare / Anulare — ex. /fleet/profile pentru self-service șofer */
+  returnHref?: string;
 };
 
-export function DriverForm({ mode, initial, defaultClientCode, lockClient = false }: Props) {
+export function DriverForm({ mode, initial, defaultClientCode, lockClient = false, returnHref }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [clientId, setClientId] = useState(initial?.clientCode ?? defaultClientCode ?? "");
@@ -52,7 +54,7 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
     setPending(true);
     setError(null);
     const body = {
-      clientId: clientId.trim(),
+      ...(lockClient ? {} : { clientId: clientId.trim() }),
       fullName: fullName.trim(),
       employeeCode: employeeCode.trim() || null,
       phone: phone.trim() || null,
@@ -60,7 +62,7 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
       licenseNumber: licenseNumber.trim() || null,
       licenseCategories: licenseCategories.trim() || null,
       licenseExpiresOn: licenseExpiresOn.trim() || null,
-      status,
+      ...(lockClient ? {} : { status }),
       notes: notes.trim() || null,
       photoUrl: photoUrl.trim() || null,
     };
@@ -85,7 +87,9 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
         return;
       }
       const saved = (await res.json()) as DriverRecord;
-      router.push(mode === "create" ? `/fleet/drivers/${saved.id}` : `/fleet/drivers/${initial!.id}`);
+      const fallback =
+        mode === "create" ? `/fleet/drivers/${saved.id}` : `/fleet/drivers/${initial!.id}`;
+      router.push(returnHref ?? fallback);
       router.refresh();
     } finally {
       setPending(false);
@@ -93,7 +97,8 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
   }
 
   const cancelHref =
-    mode === "edit" && initial ? `/fleet/drivers/${initial.id}` : "/fleet/drivers";
+    returnHref ??
+    (mode === "edit" && initial ? `/fleet/drivers/${initial.id}` : "/fleet/drivers");
 
   const previewDriver: DriverRecord | null =
     mode === "edit" && initial
@@ -265,18 +270,20 @@ export function DriverForm({ mode, initial, defaultClientCode, lockClient = fals
           className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
         />
       </div>
-      <div>
-        <label className="text-sm text-zinc-400">Status</label>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as DriverStatus)}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-        >
-          <option value="active">Activ</option>
-          <option value="inactive">Inactiv</option>
-          <option value="suspended">Suspendat</option>
-        </select>
-      </div>
+      {!lockClient ? (
+        <div>
+          <label className="text-sm text-zinc-400">Status</label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as DriverStatus)}
+            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+          >
+            <option value="active">Activ</option>
+            <option value="inactive">Inactiv</option>
+            <option value="suspended">Suspendat</option>
+          </select>
+        </div>
+      ) : null}
       <div>
         <label className="text-sm text-zinc-400">Note interne</label>
         <textarea

@@ -435,14 +435,18 @@ function filterGroup(group: FleetNavGroup, ctx: FleetNavContext): FleetNavGroup 
       const driverOperationHrefs = new Set([
         "/fleet/vehicles",
         "/fleet/trips",
+        "/fleet/documents",
         "/fleet/costs",
         "/fleet/reminders",
       ]);
       const items = group.items
         .filter((e) => e.kind === "link" && driverOperationHrefs.has(e.href))
-        .map((e) =>
-          e.kind === "link" && e.href === "/fleet/vehicles" ? { ...e, label: "Acasă" } : e,
-        );
+        .map((e) => {
+          if (e.kind !== "link") return e;
+          if (e.href === "/fleet/vehicles") return { ...e, label: "Acasă" };
+          if (e.href === "/fleet/documents") return { ...e, label: "Documente" };
+          return e;
+        });
       if (items.length === 0) return null;
       return { ...group, items };
     }

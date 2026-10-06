@@ -247,6 +247,7 @@ export function FleetShell({
           userEmail={userEmail}
           userDisplayName={clientDriverPortal ? userDisplayName : undefined}
           userPhotoUrl={clientDriverPortal ? userPhotoUrl : undefined}
+          profileHref={clientDriverPortal ? "/fleet/profile" : undefined}
           allowedHrefs={allowedHrefs}
           hrefLabels={hrefLabels}
           helpRailOpen={helpRailOpen}
@@ -273,7 +274,9 @@ export function FleetShell({
           {clientDriverPortal ? (
             <div className="flex shrink-0 items-center gap-2">
               <TicketNotificationBell />
-              <DriverMobileAvatar name={userDisplayName} photoUrl={userPhotoUrl} />
+              <Link href="/fleet/profile" className="shrink-0" aria-label="Profil șofer" title="Profil șofer">
+                <DriverMobileAvatar name={userDisplayName} photoUrl={userPhotoUrl} />
+              </Link>
             </div>
           ) : (
             <LogoutButton />

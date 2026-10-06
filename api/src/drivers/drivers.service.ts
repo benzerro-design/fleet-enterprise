@@ -13,7 +13,7 @@ import {
   driverClientScope,
   isDriverOnlyClientUser,
 } from '../iam/client-access';
-import { assertClientCodeOpsWrite, assertDriverOpsWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
+import { assertClientCodeOpsWrite, assertDriverOpsWrite, assertDriverSelfOrFleetWrite, assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import { licenseExpiryStatus, licenseExpiryWhere, type LicenseExpiryStatus } from './license-expiry';
 
 const MAX_PAGE_SIZE = 200;
@@ -343,7 +343,7 @@ export class DriversService {
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<DriverRecord> {
-    await assertDriverOpsWrite(this.prisma, tenantSlug, id, access);
+    await assertDriverSelfOrFleetWrite(this.prisma, tenantSlug, id, access);
     const tenant = await this.ensureTenant(tenantSlug);
     const existing = await this.findDriverRow(tenantSlug, id);
 

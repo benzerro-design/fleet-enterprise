@@ -20,6 +20,8 @@ type Props = {
   mediaWrite?: boolean;
   /** plan mentenanță — doar manager */
   planWrite?: boolean;
+  /** Portal șofer — tab-uri și operațiuni reduse */
+  driverPortal?: boolean;
   consumption?: ConsumptionPayload | null;
   consumptionRequested?: boolean;
   showAcquisition?: boolean;
@@ -34,6 +36,7 @@ export function VehicleDetailLayout({
   canChangeClient = true,
   mediaWrite,
   planWrite,
+  driverPortal = false,
   consumption = null,
   consumptionRequested = false,
   showAcquisition = false,
@@ -63,69 +66,69 @@ export function VehicleDetailLayout({
 
   return (
     <FleetPageMain>
-        <VehicleDetailHeader
-          vehicle={vehicle}
-          vehicles={vehicles}
-          editable={editable}
-          canWrite={canWrite}
-          driverAssignments={driverAssignments}
-          heroPhotoUrl={
-            photosPayload.items.find((p) => p.isHero && p.fileUrl)?.fileUrl ??
-            photosPayload.items.find((p) => p.kind === "exterior" && p.fileUrl)?.fileUrl ??
-            photosPayload.items.find((p) => p.fileUrl)?.fileUrl ??
-            null
-          }
-        />
+      <VehicleDetailHeader
+        vehicle={vehicle}
+        vehicles={vehicles}
+        editable={editable}
+        canWrite={canWrite}
+        driverAssignments={driverAssignments}
+        heroPhotoUrl={
+          photosPayload.items.find((p) => p.isHero && p.fileUrl)?.fileUrl ??
+          photosPayload.items.find((p) => p.kind === "exterior" && p.fileUrl)?.fileUrl ??
+          photosPayload.items.find((p) => p.fileUrl)?.fileUrl ??
+          null
+        }
+      />
 
-        <Suspense fallback={<p className="mb-10 text-sm text-zinc-500">Se încarcă profilul…</p>}>
-          <div className="mb-10">
-            <VehicleProfileTabs
-              vehicle={vehicle}
-              write={profileWrite}
-              photosWrite={photosWrite}
-              odometerWrite={odometerWrite}
-              planWrite={maintenancePlanWrite}
-              lockClient={!canChangeClient}
-              civ={civPayload}
-              acquisition={acquisitionPayload}
-              photos={photosPayload}
-              equipment={equipmentPayload}
-              wheels={wheelsPayload}
-              odometer={odometerPayload}
-              fuelLevel={fuelLevelPayload}
-              maintenancePlan={maintenancePlanPayload}
-              maintenanceList={maintenanceList}
-              documentsList={documentsList}
-              costsList={costsList}
-              driverAssignments={driverAssignments}
-              consumption={consumption}
-              consumptionRequested={consumptionRequested}
-              showAcquisition={showAcquisition}
-              civWrite={civWrite}
-            />
-          </div>
-        </Suspense>
+      <Suspense fallback={<p className="mb-10 text-sm text-zinc-500">Se încarcă profilul…</p>}>
+        <div className="mb-10">
+          <VehicleProfileTabs
+            vehicle={vehicle}
+            write={profileWrite}
+            photosWrite={photosWrite}
+            odometerWrite={odometerWrite}
+            planWrite={maintenancePlanWrite}
+            lockClient={!canChangeClient}
+            driverPortal={driverPortal}
+            civ={civPayload}
+            acquisition={acquisitionPayload}
+            photos={photosPayload}
+            equipment={equipmentPayload}
+            wheels={wheelsPayload}
+            odometer={odometerPayload}
+            fuelLevel={fuelLevelPayload}
+            maintenancePlan={maintenancePlanPayload}
+            maintenanceList={maintenanceList}
+            documentsList={documentsList}
+            costsList={costsList}
+            driverAssignments={driverAssignments}
+            consumption={consumption}
+            consumptionRequested={consumptionRequested}
+            showAcquisition={showAcquisition && !driverPortal}
+            civWrite={civWrite}
+          />
+        </div>
+      </Suspense>
 
-        <VehicleDetailSections
-          vehicleId={vehicle.id}
-          registrationNumber={vehicle.registrationNumber}
-          write={profileWrite}
-          regQs={regQs}
-          maintenance={
-            maintenanceList
-              ? { ok: true, items: maintenanceList.items, total: maintenanceList.total }
-              : { ok: false }
-          }
-          costs={costsList ? { ok: true, items: costsList.items, total: costsList.total } : { ok: false }}
-          documents={
-            documentsList
-              ? { ok: true, items: documentsList.items, total: documentsList.total }
-              : { ok: false }
-          }
-          mobility={
-            mobilityPayload ? { ok: true, data: mobilityPayload } : { ok: false }
-          }
-        />
+      <VehicleDetailSections
+        vehicleId={vehicle.id}
+        registrationNumber={vehicle.registrationNumber}
+        write={profileWrite}
+        driverPortal={driverPortal}
+        regQs={regQs}
+        maintenance={
+          maintenanceList
+            ? { ok: true, items: maintenanceList.items, total: maintenanceList.total }
+            : { ok: false }
+        }
+        costs={costsList ? { ok: true, items: costsList.items, total: costsList.total } : { ok: false }}
+        documents={
+          documentsList
+            ? { ok: true, items: documentsList.items, total: documentsList.total }
+            : { ok: false }
+        }
+        mobility={mobilityPayload ? { ok: true, data: mobilityPayload } : { ok: false }}
+      />
     </FleetPageMain>
   );
 }

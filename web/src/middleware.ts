@@ -49,6 +49,7 @@ const CLIENT_DRIVER_PREFIXES = [
   "/fleet/work-orders",
   "/fleet/audit",
   "/fleet/preferences",
+  "/fleet/profile",
 ];
 
 const CLIENT_FLEET_HOME = "/fleet/dashboard";

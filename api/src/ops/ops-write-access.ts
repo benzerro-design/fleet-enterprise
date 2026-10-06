@@ -181,6 +181,27 @@ export async function assertDriverOpsWrite(
   assertClientAccess(access, driver.clientId);
 }
 
+/** Șoferul își poate actualiza propriul profil / documente; managerii folosesc assertDriverOpsWrite. */
+export async function assertDriverSelfOrFleetWrite(
+  prisma: PrismaService,
+  tenantSlug: string,
+  driverId: string,
+  access?: AccessContext,
+): Promise<void> {
+  denyViewerWrite(access);
+  if (!access || access.isTenantWide) return;
+
+  if (isDriverOnlyClientUser(access)) {
+    const ownIds = driverIdsFromAccess(access);
+    if (!ownIds.includes(driverId)) {
+      throw new ForbiddenException('Driver can only update own profile');
+    }
+    return;
+  }
+
+  await assertDriverOpsWrite(prisma, tenantSlug, driverId, access);
+}
+
 async function vehicleIdFromTrip(prisma: PrismaService, tenantSlug: string, tripId: string): Promise<string> {
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, tenant: { slug: tenantSlug } },

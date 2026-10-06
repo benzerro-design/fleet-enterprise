@@ -19,6 +19,8 @@ type Props = {
   userEmail?: string;
   userDisplayName?: string;
   userPhotoUrl?: string | null;
+  /** Cont șofer — chip-ul duce la profilul propriu */
+  profileHref?: string;
   /** Href-uri live din nav — scorcuturile se filtrează după ele. */
   allowedHrefs?: string[];
   /** Catalog label per href (din Cmd+K / nav). */
@@ -84,6 +86,7 @@ export function FleetTopBar({
   userEmail,
   userDisplayName,
   userPhotoUrl,
+  profileHref,
   allowedHrefs,
   hrefLabels,
   helpRailOpen,
@@ -214,22 +217,48 @@ export function FleetTopBar({
         ) : null}
         <TicketNotificationBell />
         <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-md border border-zinc-800 px-1.5 py-1 hover:bg-zinc-900"
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-            aria-label="Cont"
-          >
-            <AccountAvatar email={userEmail} displayName={userDisplayName} photoUrl={userPhotoUrl} />
-            {chipLabel ? (
-              <span className="max-w-[8rem] truncate text-[11px] text-zinc-300 xl:max-w-[10rem]">
-                {userDisplayName?.trim() ? userDisplayName : userEmail}
-              </span>
-            ) : null}
-            <span className="text-[8px] text-zinc-500">▾</span>
-          </button>
+          <div className="flex items-center gap-0.5 rounded-md border border-zinc-800">
+            {profileHref ? (
+              <Link
+                href={profileHref}
+                className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-zinc-900"
+                title="Profil șofer"
+              >
+                <AccountAvatar email={userEmail} displayName={userDisplayName} photoUrl={userPhotoUrl} />
+                {chipLabel ? (
+                  <span className="max-w-[8rem] truncate text-[11px] text-zinc-300 xl:max-w-[10rem]">
+                    {userDisplayName?.trim() ? userDisplayName : userEmail}
+                  </span>
+                ) : null}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-zinc-900"
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                aria-label="Cont"
+              >
+                <AccountAvatar email={userEmail} displayName={userDisplayName} photoUrl={userPhotoUrl} />
+                {chipLabel ? (
+                  <span className="max-w-[8rem] truncate text-[11px] text-zinc-300 xl:max-w-[10rem]">
+                    {userDisplayName?.trim() ? userDisplayName : userEmail}
+                  </span>
+                ) : null}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="border-l border-zinc-800 px-1.5 py-1 text-[8px] text-zinc-500 hover:bg-zinc-900"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-label="Meniu cont"
+            >
+              ▾
+            </button>
+          </div>
           {menuOpen ? (
             <div
               role="menu"
@@ -244,6 +273,15 @@ export function FleetTopBar({
                 </div>
               ) : null}
               <div className="space-y-2 px-3 py-2">
+                {profileHref ? (
+                  <Link
+                    href={profileHref}
+                    className="block text-xs font-medium text-emerald-400 hover:underline"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Profil șofer
+                  </Link>
+                ) : null}
                 <Link
                   href="/fleet/preferences"
                   className="block text-xs font-medium text-sky-400 hover:underline"

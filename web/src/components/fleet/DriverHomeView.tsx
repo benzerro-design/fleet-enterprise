@@ -335,6 +335,9 @@ export function DriverHomeView({
                 {openTrip ? tx("driver.home.closeTrip") : tx("driver.home.startTrip")}
               </Link>
               <div className="flex flex-wrap gap-2">
+                <Link href={`/fleet/vehicles/${primary.id}`} className={mobileQuiet}>
+                  {tx("driver.home.detail")}
+                </Link>
                 <Link href={fuelHref} className={mobileQuiet}>
                   {tx("driver.home.fuel")}
                 </Link>

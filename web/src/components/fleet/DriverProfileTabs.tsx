@@ -38,6 +38,9 @@ type Props = {
   tripsSearch: DriverTripsSearch;
   consumption: ConsumptionPayload | null;
   canWrite: boolean;
+  /** Alocări — doar vizualizare pentru șoferul pe contul propriu */
+  canWriteAssignments?: boolean;
+  editHref?: string;
 };
 
 export function DriverProfileTabs({
@@ -48,9 +51,13 @@ export function DriverProfileTabs({
   tripsSearch,
   consumption,
   canWrite,
+  canWriteAssignments,
+  editHref,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const assignmentWrite = canWriteAssignments ?? canWrite;
+  const profileEditHref = editHref ?? `/fleet/drivers/${driver.id}/edit`;
 
   const active = useMemo((): DriverProfileTab => {
     const t = searchParams.get("tab");
@@ -101,7 +108,7 @@ export function DriverProfileTabs({
           driverId={driver.id}
           clientCode={driver.clientCode}
           initialAssignments={assignments}
-          canWrite={canWrite}
+          canWrite={assignmentWrite}
         />
       ) : active === "documents" ? (
         <DriverDocumentsPanel driverId={driver.id} initialDocuments={documents} canWrite={canWrite} />
@@ -131,9 +138,9 @@ export function DriverProfileTabs({
               <h2 className="text-sm font-medium text-zinc-300">Date contact & permis</h2>
               {canWrite ? (
                 <p className="mt-1 text-xs text-zinc-500">
-                  Poza se încarcă din{" "}
-                  <Link href={`/fleet/drivers/${driver.id}/edit`} className="text-emerald-400 hover:underline">
-                    Editare șofer
+                  Poza și datele se actualizează din{" "}
+                  <Link href={profileEditHref} className="text-emerald-400 hover:underline">
+                    Editare profil
                   </Link>
                   .
                 </p>

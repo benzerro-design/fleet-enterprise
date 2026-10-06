@@ -3,10 +3,10 @@ import { VehicleDetailLayout } from "@/components/fleet/VehicleDetailLayout";
 import {
   canManageFleet,
   canUseClientAcquisition,
-  canUseClientOcr,
   canWriteFleetOps,
   canWriteVehicleMedia,
   getAuthMeResult,
+  isClientDriverPortal,
 } from "@/lib/auth-server";
 import { loadVehicleConsumption, loadVehicleDetail } from "@/lib/vehicle-detail-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
@@ -30,6 +30,8 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
   ]);
   if (!data) notFound();
 
+  const driverPortal = isClientDriverPortal(auth);
+
   return (
     <VehicleDetailLayout
       data={data}
@@ -39,9 +41,12 @@ export default async function VehicleDetailPage({ params, searchParams }: PagePr
       mediaWrite={canWriteVehicleMedia(auth)}
       planWrite={canWriteFleetOps(auth)}
       canChangeClient={canManageFleet(auth)}
+      driverPortal={driverPortal}
       consumption={consumption}
       consumptionRequested={showConsumption}
-      showAcquisition={canUseClientAcquisition(auth, data.vehicle.clientRefId, data.vehicle.clientId)}
+      showAcquisition={
+        !driverPortal && canUseClientAcquisition(auth, data.vehicle.clientRefId, data.vehicle.clientId)
+      }
       civWrite={false}
     />
   );

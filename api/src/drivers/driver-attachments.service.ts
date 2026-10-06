@@ -7,7 +7,7 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessContext } from '../iam/access-context.types';
 import { driverClientScope } from '../iam/client-access';
-import { assertDriverOpsWrite } from '../ops/ops-write-access';
+import { assertDriverSelfOrFleetWrite } from '../ops/ops-write-access';
 
 const DRIVER_DOCUMENT_TYPES = new Set([
   'permis',
@@ -87,7 +87,7 @@ export class DriverAttachmentsService {
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<DriverDocumentRecord> {
-    await assertDriverOpsWrite(this.prisma, tenantSlug, driverId, access);
+    await assertDriverSelfOrFleetWrite(this.prisma, tenantSlug, driverId, access);
     const { tenant, driver } = await this.ensureDriver(tenantSlug, driverId, access);
     const documentTypeCode = assertDocumentType(input.documentTypeCode);
     const title = input.title?.trim();
@@ -128,7 +128,7 @@ export class DriverAttachmentsService {
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<DriverDocumentRecord> {
-    await assertDriverOpsWrite(this.prisma, tenantSlug, driverId, access);
+    await assertDriverSelfOrFleetWrite(this.prisma, tenantSlug, driverId, access);
     const { tenant } = await this.ensureDriver(tenantSlug, driverId, access);
     const existing = await this.findDocument(driverId, documentId);
 
@@ -165,7 +165,7 @@ export class DriverAttachmentsService {
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<void> {
-    await assertDriverOpsWrite(this.prisma, tenantSlug, driverId, access);
+    await assertDriverSelfOrFleetWrite(this.prisma, tenantSlug, driverId, access);
     const { tenant } = await this.ensureDriver(tenantSlug, driverId, access);
     const existing = await this.findDocument(driverId, documentId);
     await this.prisma.driverDocument.delete({ where: { id: existing.id } });
