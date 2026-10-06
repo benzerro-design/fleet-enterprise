@@ -10,10 +10,12 @@ import {
   DEFAULT_BRIEF_LIMIT,
   OPS_FORM_MODULE_LABELS,
   OPS_FORM_MODULE_ORDER,
+  DRIVER_OPS_FORM_MODULE_ORDER,
   OPS_SECTION_ACCENT,
   readBriefLimit,
   writeBriefLimit,
 } from "@/lib/ops-section-theme";
+import { isDriverWritableCostCategory } from "@/lib/cost-categories";
 import { fetchVehicleFormBrief } from "@/lib/vehicle-form-brief-client";
 import type { VehicleFormBriefEntry, VehicleFormBriefPayload } from "@/lib/vehicle-form-brief-types";
 
@@ -23,6 +25,7 @@ type Props = {
   onVehicleIdChange: (id: string) => void;
   vehicles: OpsVehicleOption[];
   vehicleLocked?: boolean;
+  driverPortal?: boolean;
 };
 
 function BriefChevron({ open }: { open: boolean }) {
@@ -284,7 +287,14 @@ function fmtDateRo(iso: string | null): string {
   return new Date(iso).toLocaleDateString("ro-RO");
 }
 
-export function VehicleFormBrief({ activeModule, vehicleId, onVehicleIdChange, vehicles, vehicleLocked = false }: Props) {
+export function VehicleFormBrief({
+  activeModule,
+  vehicleId,
+  onVehicleIdChange,
+  vehicles,
+  vehicleLocked = false,
+  driverPortal = false,
+}: Props) {
   const [payload, setPayload] = useState<VehicleFormBriefPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -311,6 +321,24 @@ export function VehicleFormBrief({ activeModule, vehicleId, onVehicleIdChange, v
     const parts = [payload.vehicle.brand, payload.vehicle.model].filter(Boolean);
     return parts.length ? parts.join(" ") : "—";
   }, [payload]);
+
+  const displayPayload = useMemo(() => {
+    if (!payload || !driverPortal) return payload;
+    const costsEntries = payload.modules.costs.entries.filter((e) =>
+      isDriverWritableCostCategory(e.detail.Categorie ?? ""),
+    );
+    return {
+      ...payload,
+      modules: {
+        ...payload.modules,
+        maintenance: { total: 0, entries: [] },
+        documents: { total: 0, entries: [] },
+        costs: { total: costsEntries.length, entries: costsEntries },
+      },
+    };
+  }, [payload, driverPortal]);
+
+  const moduleOrder = driverPortal ? DRIVER_OPS_FORM_MODULE_ORDER : OPS_FORM_MODULE_ORDER;
 
   return (
     <div className="space-y-3">
@@ -354,15 +382,17 @@ export function VehicleFormBrief({ activeModule, vehicleId, onVehicleIdChange, v
       {loading ? <p className="text-[11px] text-zinc-500">Se încarcă contextul vehiculului…</p> : null}
       {error ? <p className="text-[11px] text-amber-400">Nu am putut încărca istoricul vehiculului.</p> : null}
 
-      {payload ? (
+      {displayPayload ? (
         <>
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 text-[11px]">
-            <p className="text-sm font-semibold text-zinc-100">{payload.vehicle.registrationNumber}</p>
+            <p className="text-sm font-semibold text-zinc-100">{displayPayload.vehicle.registrationNumber}</p>
             <dl className="mt-2 space-y-1">
               {[
-                ["Client", payload.vehicle.clientLegalName ?? payload.vehicle.clientId],
-                ["Km", payload.vehicle.odometerKm.toLocaleString("ro-RO")],
-                ["ITP", fmtDateRo(payload.vehicle.itpExpiresOn)],
+                ...(driverPortal
+                  ? []
+                  : ([["Client", displayPayload.vehicle.clientLegalName ?? displayPayload.vehicle.clientId]] as const)),
+                ["Km", displayPayload.vehicle.odometerKm.toLocaleString("ro-RO")],
+                ["ITP", fmtDateRo(displayPayload.vehicle.itpExpiresOn)],
                 ["Model", modelLabel],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-2">
@@ -371,56 +401,62 @@ export function VehicleFormBrief({ activeModule, vehicleId, onVehicleIdChange, v
                 </div>
               ))}
             </dl>
-            {payload.lastPeriodicRevision ? (
+            {!driverPortal && displayPayload.lastPeriodicRevision ? (
               <>
                 <hr className="my-2 border-zinc-800" />
                 <p className="text-[10px] uppercase tracking-wide text-zinc-500">Ultima revizie periodică</p>
                 <div className="mt-1 flex justify-between gap-2">
-                  <span className="text-zinc-400">{payload.lastPeriodicRevision.title}</span>
+                  <span className="text-zinc-400">{displayPayload.lastPeriodicRevision.title}</span>
                   <span className="text-right text-zinc-200">
-                    <span className="block">{fmtDateRo(payload.lastPeriodicRevision.performedOn)}</span>
-                    {payload.lastPeriodicRevision.odometerKm != null ? (
+                    <span className="block">{fmtDateRo(displayPayload.lastPeriodicRevision.performedOn)}</span>
+                    {displayPayload.lastPeriodicRevision.odometerKm != null ? (
                       <span className="font-mono text-[10px]">
-                        {payload.lastPeriodicRevision.odometerKm.toLocaleString("ro-RO")} km
+                        {displayPayload.lastPeriodicRevision.odometerKm.toLocaleString("ro-RO")} km
                       </span>
                     ) : null}
                   </span>
                 </div>
               </>
             ) : null}
-            <hr className="my-2 border-zinc-800" />
-            <p className="text-[10px] uppercase tracking-wide text-zinc-500">Documente obligatorii</p>
-            <ul className="mt-1 space-y-1">
-              {(
-                [
-                  ["RCA", payload.compliance.rca],
-                  ["CASCO", payload.compliance.casco],
-                  ["Vignetă", payload.compliance.vignette],
-                ] as const
-              ).map(([label, item]) => (
-                <li key={label} className="flex items-center justify-between gap-2">
-                  <span className="text-zinc-500">{label}</span>
-                  <span className="flex items-center gap-2">
-                    {item.status === "valid" && item.expiresOn ? (
-                      <span className="text-[10px] text-zinc-600">{fmtDateRo(item.expiresOn)}</span>
-                    ) : null}
-                    <CompliancePill status={item.status} />
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {!driverPortal ? (
+              <>
+                <hr className="my-2 border-zinc-800" />
+                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Documente obligatorii</p>
+                <ul className="mt-1 space-y-1">
+                  {(
+                    [
+                      ["RCA", displayPayload.compliance.rca],
+                      ["CASCO", displayPayload.compliance.casco],
+                      ["Vignetă", displayPayload.compliance.vignette],
+                    ] as const
+                  ).map(([label, item]) => (
+                    <li key={label} className="flex items-center justify-between gap-2">
+                      <span className="text-zinc-500">{label}</span>
+                      <span className="flex items-center gap-2">
+                        {item.status === "valid" && item.expiresOn ? (
+                          <span className="text-[10px] text-zinc-600">{fmtDateRo(item.expiresOn)}</span>
+                        ) : null}
+                        <CompliancePill status={item.status} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
           </div>
 
           <div>
-            <p className="mb-2 text-[11px] font-semibold text-zinc-300">Istoric vehicul — toate modulele</p>
+            <p className="mb-2 text-[11px] font-semibold text-zinc-300">
+              {driverPortal ? "Istoric vehicul — modulele tale" : "Istoric vehicul — toate modulele"}
+            </p>
             <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/30">
-              {OPS_FORM_MODULE_ORDER.map((moduleKey, index) => (
+              {moduleOrder.map((moduleKey, index) => (
                 <BriefAccordionSection
                   key={moduleKey}
                   moduleKey={moduleKey}
                   isActive={moduleKey === activeModule}
-                  payload={payload}
-                  isLast={index === OPS_FORM_MODULE_ORDER.length - 1}
+                  payload={displayPayload}
+                  isLast={index === moduleOrder.length - 1}
                 />
               ))}
             </div>

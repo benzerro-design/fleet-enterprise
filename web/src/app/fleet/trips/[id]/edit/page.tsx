@@ -3,7 +3,7 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { TripForm } from "@/components/fleet/TripForm";
-import { canWriteTrips, getAuthMeResult } from "@/lib/auth-server";
+import { canWriteTrips, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
@@ -36,6 +36,7 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   }
   const [trip, vehicles] = await Promise.all([getTrip(id), getVehicleOptions()]);
   if (!trip) notFound();
+  const driverPortal = isClientDriverPortal(auth);
 
   return (
     <FleetPageMain>
@@ -54,6 +55,7 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
         formTitle="Editare cursă"
         vehicles={vehicles}
         defaultVehicleId={trip.vehicleId}
+        driverPortal={driverPortal}
       >
         <TripForm mode="edit" tripId={id} initial={trip} vehicles={vehicles} />
       </OpsFormLayout>

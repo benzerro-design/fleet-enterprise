@@ -22,7 +22,7 @@ export function DriverDetailActionBar({
   deleteSlot?: ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-20 -mx-4 mb-5 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur-sm lg:hidden">
+    <header className="sticky top-0 z-20 -mx-4 mb-5 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <Link
           href={backHref}

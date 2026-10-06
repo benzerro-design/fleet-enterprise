@@ -41,7 +41,7 @@ export default async function NewCostPage({ searchParams }: { searchParams: Prom
         formTitle="Cost nou"
         vehicles={vehicles}
         defaultVehicleId={defaultVehicleId}
-        hideVehicleBrief={driverPortal}
+        driverPortal={driverPortal}
       >
         <CostForm mode="create" vehicles={vehicles} defaultVehicleId={defaultVehicleId} defaultCategory={sp.category} driverPortal={driverPortal} />
       </OpsFormLayout>

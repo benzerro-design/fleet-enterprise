@@ -157,8 +157,9 @@ export function TripSheetWizard({
           <div
             role="dialog"
             aria-labelledby="trip-sheet-wizard-title"
-            className="max-h-[92dvh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-t-2xl border border-zinc-700 bg-zinc-950 p-5 shadow-xl touch-manipulation sm:rounded-xl sm:p-6"
+            className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-zinc-700 bg-zinc-950 shadow-xl touch-manipulation sm:rounded-xl"
           >
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-5 pb-3 sm:p-6">
             <h2 id="trip-sheet-wizard-title" className="text-lg font-semibold text-zinc-100">
               Generează document parcurs
             </h2>
@@ -168,7 +169,7 @@ export function TripSheetWizard({
                 : "Agregă cursele din perioada selectată. Opțional, filtrează după client și șofer — doar cursele acelui șofer intră în document."}
             </p>
 
-            <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4">
+            <form id="trip-sheet-wizard-form" onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4">
               {error ? (
                 <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
                   {error}
@@ -190,25 +191,25 @@ export function TripSheetWizard({
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="min-w-0 space-y-1">
                   <label className="text-xs font-medium text-zinc-500">Perioadă de la</label>
                   <input
                     type="date"
                     required
                     value={periodStart}
                     onChange={(e) => setPeriodStart(e.target.value)}
-                    className="min-h-[44px] w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-base sm:text-sm"
+                    className="min-h-[44px] w-full min-w-0 max-w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-base sm:text-sm"
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1">
                   <label className="text-xs font-medium text-zinc-500">Până la</label>
                   <input
                     type="date"
                     required
                     value={periodEnd}
                     onChange={(e) => setPeriodEnd(e.target.value)}
-                    className="min-h-[44px] w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-base sm:text-sm"
+                    className="min-h-[44px] w-full min-w-0 max-w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-base sm:text-sm"
                   />
                 </div>
               </div>
@@ -279,25 +280,30 @@ export function TripSheetWizard({
                   )}
                 </div>
               </div>
-
-              <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-wrap">
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-5 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
-                >
-                  {pending ? "Generez PDF…" : "Generează și arhivează"}
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => setOpen(false)}
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-zinc-700 px-4 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
-                >
-                  Închide
-                </button>
-              </div>
             </form>
+            </div>
+
+            <div
+              className="flex shrink-0 flex-col gap-2 border-t border-zinc-800 bg-zinc-950 px-5 pt-3 sm:flex-row sm:px-6"
+              style={{ paddingBottom: "max(0.75rem, calc(3.75rem + env(safe-area-inset-bottom, 0px)))" }}
+            >
+              <button
+                type="submit"
+                form="trip-sheet-wizard-form"
+                disabled={pending}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-5 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+              >
+                {pending ? "Generez PDF…" : "Generează și arhivează"}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setOpen(false)}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-zinc-700 px-4 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+              >
+                Închide
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

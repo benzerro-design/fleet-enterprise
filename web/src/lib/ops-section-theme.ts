@@ -11,6 +11,9 @@ export const OPS_FORM_MODULE_ORDER: OpsFormModuleKey[] = [
   "trips",
 ];
 
+/** Șofer — aceleași module ca pe detaliu vehicul (Basic Info). */
+export const DRIVER_OPS_FORM_MODULE_ORDER: OpsFormModuleKey[] = ["costs", "reminders", "trips"];
+
 export const OPS_FORM_MODULE_LABELS: Record<OpsFormModuleKey, string> = {
   maintenance: "Mentenanță",
   costs: "Costuri",

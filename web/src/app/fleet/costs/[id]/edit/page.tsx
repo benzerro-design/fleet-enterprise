@@ -69,6 +69,7 @@ export default async function EditCostPage({ params }: { params: Promise<{ id: s
         formTitle="Editare cost"
         vehicles={vehicles}
         defaultVehicleId={entry.vehicleId}
+        driverPortal={driverPortal}
       >
         <CostForm mode="edit" entryId={id} initial={entry} vehicles={vehicles} driverPortal={driverPortal} />
       </OpsFormLayout>

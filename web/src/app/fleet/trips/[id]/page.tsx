@@ -77,34 +77,30 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
             ) : null
           }
         />
-      ) : null}
-
-      <div className={`mb-8 items-end justify-between gap-4 ${driverPortal ? "hidden lg:flex" : "flex"}`}>
-        <div>
-          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Trip</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">{trip.reference ?? trip.id}</h1>
+      ) : (
+        <div className="mb-8 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Trip</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{trip.reference ?? trip.id}</h1>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/fleet/trips" className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm">
+              Înapoi la listă
+            </Link>
+            {write ? (
+              <>
+                <Link
+                  href={`/fleet/trips/${id}/edit`}
+                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+                >
+                  Editare
+                </Link>
+                <DeleteTripButton tripId={id} label={trip.reference ?? id} redirectTo="/fleet/trips" />
+              </>
+            ) : null}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/fleet/trips" className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm">
-            Înapoi la listă
-          </Link>
-          {write ? (
-            <>
-              <Link
-                href={`/fleet/trips/${id}/edit`}
-                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-              >
-                Editare
-              </Link>
-              <DeleteTripButton tripId={id} label={trip.reference ?? id} redirectTo="/fleet/trips" />
-            </>
-          ) : null}
-        </div>
-      </div>
-
-      {driverPortal ? (
-        <h1 className="mb-4 text-2xl font-semibold tracking-tight lg:hidden">{title}</h1>
-      ) : null}
+      )}
 
       <dl
         className={`grid gap-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:grid-cols-2 ${

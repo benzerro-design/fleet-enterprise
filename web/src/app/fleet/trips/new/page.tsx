@@ -47,7 +47,7 @@ export default async function NewTripPage({ searchParams }: { searchParams: Prom
         formTitle="Cursă nouă"
         vehicles={vehicles}
         defaultVehicleId={defaultVehicleId}
-        hideVehicleBrief={driverPortal}
+        driverPortal={driverPortal}
       >
         <TripForm
           mode="create"

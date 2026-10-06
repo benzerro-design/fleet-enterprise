@@ -15,6 +15,7 @@ import { VehicleWheelsTab } from "@/components/fleet/VehicleWheelsTab";
 import { VehicleDsrTab } from "@/components/fleet/VehicleDsrTab";
 import { VehicleInsuranceTab } from "@/components/fleet/VehicleInsuranceTab";
 import { VehicleLegislativeKitTab } from "@/components/fleet/VehicleLegislativeKitTab";
+import { VehicleDetailSections } from "@/components/fleet/VehicleDetailSections";
 import { VehicleFuelLevelPanel } from "@/components/fleet/VehicleFuelLevelPanel";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { FuelTypeFilter } from "@/components/fleet/FuelTypeFilter";
@@ -90,6 +91,17 @@ type Props = {
   consumptionRequested?: boolean;
   showAcquisition?: boolean;
   civWrite?: boolean;
+  /** Șofer: accordion operațiuni doar pe Basic Info */
+  opsSections?: {
+    vehicleId: string;
+    registrationNumber: string;
+    write: boolean;
+    regQs: string;
+    maintenance: Parameters<typeof VehicleDetailSections>[0]["maintenance"];
+    costs: Parameters<typeof VehicleDetailSections>[0]["costs"];
+    documents: Parameters<typeof VehicleDetailSections>[0]["documents"];
+    mobility: Parameters<typeof VehicleDetailSections>[0]["mobility"];
+  };
 };
 
 export function VehicleProfileTabs({
@@ -118,6 +130,7 @@ export function VehicleProfileTabs({
   consumptionRequested = false,
   showAcquisition = true,
   civWrite,
+  opsSections,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -217,7 +230,22 @@ export function VehicleProfileTabs({
 
       <div className={driverPortal ? "p-4 sm:p-6" : "p-6"}>
         {active === "basic" ? (
-          <VehicleBasicInfoTab vehicle={vehicle} write={write} lockClient={lockClient} />
+          <>
+            <VehicleBasicInfoTab vehicle={vehicle} write={write} lockClient={lockClient} />
+            {driverPortal && opsSections ? (
+              <VehicleDetailSections
+                vehicleId={opsSections.vehicleId}
+                registrationNumber={opsSections.registrationNumber}
+                write={opsSections.write}
+                driverPortal
+                regQs={opsSections.regQs}
+                maintenance={opsSections.maintenance}
+                costs={opsSections.costs}
+                documents={opsSections.documents}
+                mobility={opsSections.mobility}
+              />
+            ) : null}
+          </>
         ) : null}
         {active === "advanced" ? (
           <VehicleAdvancedCivTab vehicle={vehicle} write={civWrite ?? write} initial={civ} />

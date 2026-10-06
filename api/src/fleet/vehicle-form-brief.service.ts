@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import type { AccessContext } from '../iam/access-context.types';
+import { isDriverOnlyClientUser } from '../iam/client-access';
+import {
+  driverIdsFromAccess,
+  isDriverWritableCostCategory,
+} from '../iam/driver-access';
 import { assertVehicleOpsRead } from '../ops/ops-write-access';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -201,6 +206,7 @@ export class VehicleFormBriefService {
           odometerStartKm: true,
           odometerEndKm: true,
           driverName: true,
+          driverId: true,
         },
       }),
       this.prisma.maintenanceEntry.findFirst({
@@ -214,16 +220,33 @@ export class VehicleFormBriefService {
       throw new Error('Vehicle not found');
     }
 
+    const driverOnly = Boolean(access && isDriverOnlyClientUser(access));
+    const ownDriverIds = driverOnly ? driverIdsFromAccess(access!) : [];
+    const scopedCostRows = driverOnly
+      ? costRows.filter((c) => isDriverWritableCostCategory(c.category))
+      : costRows;
+    const scopedTripRows = driverOnly
+      ? tripRows.filter((t) => t.driverId != null && ownDriverIds.includes(t.driverId))
+      : tripRows;
+    const scopedMaintenanceRows = driverOnly ? [] : maintenanceRows;
+    const scopedDocuments = driverOnly ? [] : documents;
+
     const rcaDocs = documents.filter((d) => d.documentTypeCode === 'rca');
     const cascoDocs = documents.filter((d) => d.documentTypeCode === 'casco');
 
-    const maintenanceTotal = await this.prisma.maintenanceEntry.count({ where: { vehicleId } });
-    const costsTotal = await this.prisma.costEntry.count({ where: { vehicleId } });
-    const documentsTotal = documents.length;
+    const maintenanceTotal = driverOnly
+      ? 0
+      : await this.prisma.maintenanceEntry.count({ where: { vehicleId } });
+    const costsTotal = driverOnly
+      ? scopedCostRows.length
+      : await this.prisma.costEntry.count({ where: { vehicleId } });
+    const documentsTotal = driverOnly ? 0 : documents.length;
     const remindersTotal = await this.prisma.reminderAction.count({
       where: { vehicleId, isActive: true },
     });
-    const tripsTotal = await this.prisma.trip.count({ where: { vehicleId } });
+    const tripsTotal = driverOnly
+      ? scopedTripRows.length
+      : await this.prisma.trip.count({ where: { vehicleId } });
 
     return {
       vehicle: {
@@ -251,7 +274,7 @@ export class VehicleFormBriefService {
       modules: {
         maintenance: {
           total: maintenanceTotal,
-          entries: maintenanceRows.map((m) => ({
+          entries: scopedMaintenanceRows.map((m) => ({
             id: m.id,
             cells: [
               fmtDateShort(m.performedAt?.toISOString() ?? null),
@@ -273,7 +296,7 @@ export class VehicleFormBriefService {
         },
         costs: {
           total: costsTotal,
-          entries: costRows.map((c) => ({
+          entries: scopedCostRows.map((c) => ({
             id: c.id,
             cells: [
               fmtDateShort(c.incurredOn.toISOString()),
@@ -296,7 +319,7 @@ export class VehicleFormBriefService {
         },
         documents: {
           total: documentsTotal,
-          entries: documents.map((d) => ({
+          entries: scopedDocuments.map((d) => ({
             id: d.id,
             cells: [
               d.title.length > 16 ? `${d.title.slice(0, 16)}…` : d.title,
@@ -331,7 +354,7 @@ export class VehicleFormBriefService {
         },
         trips: {
           total: tripsTotal,
-          entries: tripRows.map((t) => ({
+          entries: scopedTripRows.map((t) => ({
             id: t.id,
             cells: [
               fmtDateShort(t.startedAt.toISOString()),

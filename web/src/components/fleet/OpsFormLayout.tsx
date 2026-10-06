@@ -17,6 +17,8 @@ type Props = {
   defaultVehicleId?: string;
   /** Driver portal — hide cost/history brief panel; vehicle stays locked to assignment. */
   hideVehicleBrief?: boolean;
+  /** Șofer — brief redus (costuri/remindere/curse) ca pe detaliu vehicul */
+  driverPortal?: boolean;
   children: ReactNode;
 };
 
@@ -59,9 +61,10 @@ export function OpsFormLayout({
   vehicles,
   defaultVehicleId,
   hideVehicleBrief = false,
+  driverPortal = false,
   children,
 }: Props) {
-  const vehicleLocked = mode === "edit" || hideVehicleBrief;
+  const vehicleLocked = mode === "edit" || hideVehicleBrief || driverPortal;
   const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? "");
 
   const selectedVehicle = useMemo(
@@ -81,10 +84,12 @@ export function OpsFormLayout({
     [vehicleId, vehicles, selectedVehicle, vehicleLocked],
   );
 
+  const showBrief = !hideVehicleBrief;
+
   return (
     <OpsFormProvider value={ctx}>
-      <div className={`flex flex-col gap-6 ${hideVehicleBrief ? "" : "lg:flex-row lg:items-start"}`}>
-        {hideVehicleBrief ? null : (
+      <div className={`flex flex-col gap-6 ${showBrief ? "lg:flex-row lg:items-start" : ""}`}>
+        {showBrief ? (
           <aside className="w-full shrink-0 lg:w-[40%] lg:max-w-[40%] lg:border-r lg:border-zinc-800/80 lg:pr-5">
             <VehicleFormBrief
               activeModule={module}
@@ -92,10 +97,11 @@ export function OpsFormLayout({
               onVehicleIdChange={setVehicleId}
               vehicles={vehicles}
               vehicleLocked={vehicleLocked}
+              driverPortal={driverPortal}
             />
           </aside>
-        )}
-        <div className={`min-w-0 flex-1 ${hideVehicleBrief ? "max-w-3xl" : "lg:w-[60%]"}`}>
+        ) : null}
+        <div className={`min-w-0 flex-1 ${showBrief ? "lg:w-[60%]" : "max-w-3xl"}`}>
           <OpsFormModuleHeader module={module} formTitle={formTitle} mode={mode} />
           {children}
         </div>

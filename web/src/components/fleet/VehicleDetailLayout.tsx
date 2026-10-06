@@ -111,29 +111,53 @@ export function VehicleDetailLayout({
             consumptionRequested={consumptionRequested}
             showAcquisition={showAcquisition && !driverPortal}
             civWrite={civWrite}
+            opsSections={
+              driverPortal
+                ? {
+                    vehicleId: vehicle.id,
+                    registrationNumber: vehicle.registrationNumber,
+                    write: profileWrite,
+                    regQs,
+                    maintenance: maintenanceList
+                      ? { ok: true as const, items: maintenanceList.items, total: maintenanceList.total }
+                      : { ok: false as const },
+                    costs: costsList
+                      ? { ok: true as const, items: costsList.items, total: costsList.total }
+                      : { ok: false as const },
+                    documents: documentsList
+                      ? { ok: true as const, items: documentsList.items, total: documentsList.total }
+                      : { ok: false as const },
+                    mobility: mobilityPayload
+                      ? { ok: true as const, data: mobilityPayload }
+                      : { ok: false as const },
+                  }
+                : undefined
+            }
           />
         </div>
       </Suspense>
 
-      <VehicleDetailSections
-        vehicleId={vehicle.id}
-        registrationNumber={vehicle.registrationNumber}
-        write={profileWrite}
-        driverPortal={driverPortal}
-        regQs={regQs}
-        maintenance={
-          maintenanceList
-            ? { ok: true, items: maintenanceList.items, total: maintenanceList.total }
-            : { ok: false }
-        }
-        costs={costsList ? { ok: true, items: costsList.items, total: costsList.total } : { ok: false }}
-        documents={
-          documentsList
-            ? { ok: true, items: documentsList.items, total: documentsList.total }
-            : { ok: false }
-        }
-        mobility={mobilityPayload ? { ok: true, data: mobilityPayload } : { ok: false }}
-      />
+      {!driverPortal ? (
+        <VehicleDetailSections
+          vehicleId={vehicle.id}
+          registrationNumber={vehicle.registrationNumber}
+          write={profileWrite}
+          driverPortal={false}
+          regQs={regQs}
+          maintenance={
+            maintenanceList
+              ? { ok: true, items: maintenanceList.items, total: maintenanceList.total }
+              : { ok: false }
+          }
+          costs={costsList ? { ok: true, items: costsList.items, total: costsList.total } : { ok: false }}
+          documents={
+            documentsList
+              ? { ok: true, items: documentsList.items, total: documentsList.total }
+              : { ok: false }
+          }
+          mobility={mobilityPayload ? { ok: true, data: mobilityPayload } : { ok: false }}
+        />
+      ) : null}
     </FleetPageMain>
   );
 }
