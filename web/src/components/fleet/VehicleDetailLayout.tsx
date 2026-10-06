@@ -52,6 +52,7 @@ export function VehicleDetailLayout({
     photosPayload,
     equipmentPayload,
     wheelsPayload,
+    legislativeKitPayload,
     odometerPayload,
     fuelLevelPayload,
     mobilityPayload,
@@ -62,6 +63,7 @@ export function VehicleDetailLayout({
   const profileWrite = editable && canWrite;
   const photosWrite = mediaWrite ?? profileWrite;
   const odometerWrite = mediaWrite ?? profileWrite;
+  const legislativeKitWrite = mediaWrite ?? profileWrite;
   const maintenancePlanWrite = planWrite ?? profileWrite;
 
   return (
@@ -89,6 +91,7 @@ export function VehicleDetailLayout({
             photosWrite={photosWrite}
             odometerWrite={odometerWrite}
             planWrite={maintenancePlanWrite}
+            legislativeKitWrite={legislativeKitWrite}
             lockClient={!canChangeClient}
             driverPortal={driverPortal}
             civ={civPayload}
@@ -96,6 +99,7 @@ export function VehicleDetailLayout({
             photos={photosPayload}
             equipment={equipmentPayload}
             wheels={wheelsPayload}
+            legislativeKit={legislativeKitPayload}
             odometer={odometerPayload}
             fuelLevel={fuelLevelPayload}
             maintenancePlan={maintenancePlanPayload}

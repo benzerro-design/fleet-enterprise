@@ -80,7 +80,17 @@ export type VehicleAcquisitionPayload = {
   acquisitionNotes: string | null;
 };
 
-export type VehiclePhotoKind = "exterior" | "interior" | "damage" | "document" | "other";
+export type VehiclePhotoKind =
+  | "exterior"
+  | "interior"
+  | "damage"
+  | "document"
+  | "other"
+  | "kit_extinguisher"
+  | "kit_medical"
+  | "kit_puncture"
+  | "kit_triangle"
+  | "kit_vest";
 
 export type VehiclePhotoRow = {
   id: string;
@@ -107,6 +117,7 @@ export type VehicleProfileTab =
   | "photos"
   | "equipment"
   | "wheels"
+  | "legislative_kit"
   | "odometer"
   | "maintenance_plan"
   | "dsr"

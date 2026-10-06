@@ -25,7 +25,18 @@ export type VehiclePhotoRecord = {
   fileName: string | null;
   caption: string | null;
   sessionLabel: string | null;
-  kind: 'exterior' | 'interior' | 'damage' | 'document' | 'other' | null;
+  kind:
+    | 'exterior'
+    | 'interior'
+    | 'damage'
+    | 'document'
+    | 'other'
+    | 'kit_extinguisher'
+    | 'kit_medical'
+    | 'kit_puncture'
+    | 'kit_triangle'
+    | 'kit_vest'
+    | null;
   isHero: boolean;
   sortOrder: number;
   createdAt: string;

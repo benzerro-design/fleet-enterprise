@@ -26,6 +26,13 @@ import type { CreateVehicleDto } from './dto/create-vehicle.dto';
 import type { PatchVehicleDto } from './dto/patch-vehicle.dto';
 import type { PatchVehicleCivDto, RecordOdometerDto } from './dto/patch-vehicle-civ.dto';
 import type { CreateVehiclePhotoDto, PatchVehicleAcquisitionDto, PatchVehiclePhotoDto } from './dto/patch-vehicle-acquisition.dto';
+import type { PatchVehicleLegislativeKitDto } from './dto/patch-vehicle-legislative-kit.dto';
+import {
+  KIT_PHOTO_KINDS,
+  mergeLegislativeKitPatch,
+  normalizeLegislativeKit,
+  type VehicleLegislativeKit,
+} from './dto/vehicle-legislative-kit.shared';
 import type { VehicleDocument, VehicleRecord, VehicleStatus } from './fleet.types';
 import type { CivImportSource, OdometerReadingRecord, VehicleCivPayload } from './vehicle-civ.types';
 import type {
@@ -976,6 +983,87 @@ export class FleetService {
     return this.getVehicleAcquisition(tenantSlug, vehicleId);
   }
 
+  async getVehicleLegislativeKit(
+    tenantSlug: string,
+    vehicleId: string,
+    access?: AccessContext,
+  ): Promise<{
+    kit: VehicleLegislativeKit;
+    spareWheelPresent: boolean;
+    photos: VehiclePhotoRecord[];
+  }> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, legislativeKit: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    const [spare, photoRows] = await Promise.all([
+      this.prisma.vehicleWheelFitment.findFirst({
+        where: {
+          vehicleId,
+          position: 'spare',
+          OR: [
+            { size: { not: null } },
+            { brand: { not: null } },
+            { model: { not: null } },
+            { rimSize: { not: null } },
+            { dot: { not: null } },
+          ],
+        },
+        select: { id: true },
+      }),
+      this.prisma.vehiclePhoto.findMany({
+        where: { vehicleId, kind: { in: [...KIT_PHOTO_KINDS] } },
+        orderBy: [{ kind: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+        include: { uploadedBy: { select: { email: true } } },
+      }),
+    ]);
+
+    return {
+      kit: normalizeLegislativeKit(vehicle.legislativeKit),
+      spareWheelPresent: Boolean(spare),
+      photos: photoRows.map((r) => this.toPhotoRecord(r)),
+    };
+  }
+
+  async patchVehicleLegislativeKit(
+    tenantSlug: string,
+    vehicleId: string,
+    dto: PatchVehicleLegislativeKitDto,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<{
+    kit: VehicleLegislativeKit;
+    spareWheelPresent: boolean;
+    photos: VehiclePhotoRecord[];
+  }> {
+    await assertDriverMediaWrite(this.prisma, tenantSlug, vehicleId, access);
+    const existing = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true, tenantId: true, registrationNumber: true, legislativeKit: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found');
+
+    const next = mergeLegislativeKitPatch(normalizeLegislativeKit(existing.legislativeKit), dto);
+
+    await this.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { legislativeKit: next as Prisma.InputJsonValue, updatedByUserId: actorUserId ?? undefined },
+    });
+
+    await this.audit.logVehicle({
+      tenantUuid: existing.tenantId,
+      actorUserId: actorUserId ?? undefined,
+      action: 'vehicle_legislative_kit_update',
+      vehicleId,
+      meta: { registrationNumber: existing.registrationNumber },
+    });
+
+    return this.getVehicleLegislativeKit(tenantSlug, vehicleId, access);
+  }
+
   async listVehiclePhotos(tenantSlug: string, vehicleId: string, access?: AccessContext): Promise<VehiclePhotosPayload> {
     await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     const vehicle = await this.prisma.vehicle.findFirst({
@@ -1857,7 +1945,7 @@ export class FleetService {
     fileName: string | null;
     caption: string | null;
     sessionLabel: string | null;
-    kind: 'exterior' | 'interior' | 'damage' | 'document' | 'other' | null;
+    kind: VehiclePhotoRecord['kind'];
     isHero: boolean;
     sortOrder: number;
     createdAt: Date;

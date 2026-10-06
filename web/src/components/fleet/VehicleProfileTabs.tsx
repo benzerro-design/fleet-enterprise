@@ -14,6 +14,7 @@ import { VehicleEquipmentTab } from "@/components/fleet/VehicleEquipmentTab";
 import { VehicleWheelsTab } from "@/components/fleet/VehicleWheelsTab";
 import { VehicleDsrTab } from "@/components/fleet/VehicleDsrTab";
 import { VehicleInsuranceTab } from "@/components/fleet/VehicleInsuranceTab";
+import { VehicleLegislativeKitTab } from "@/components/fleet/VehicleLegislativeKitTab";
 import { VehicleFuelLevelPanel } from "@/components/fleet/VehicleFuelLevelPanel";
 import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { FuelTypeFilter } from "@/components/fleet/FuelTypeFilter";
@@ -35,6 +36,7 @@ import type {
   VehicleProfileTab,
   VehicleWheelsPayload,
 } from "@/lib/vehicle-profile-types";
+import type { VehicleLegislativeKitPayload } from "@/lib/vehicle-legislative-kit";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
 
 const TABS: { id: VehicleProfileTab; label: string }[] = [
@@ -44,6 +46,7 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "photos", label: "Fotografii" },
   { id: "equipment", label: "Echipări" },
   { id: "wheels", label: "Roti" },
+  { id: "legislative_kit", label: "Kit legislativ" },
   { id: "odometer", label: "Odometru" },
   { id: "maintenance_plan", label: "Plan Mentenanță" },
   { id: "dsr", label: "DSR" },
@@ -65,6 +68,8 @@ type Props = {
   photosWrite?: boolean;
   odometerWrite?: boolean;
   planWrite?: boolean;
+  /** Kit legislativ — șofer + manager + admin (ca media) */
+  legislativeKitWrite?: boolean;
   lockClient?: boolean;
   driverPortal?: boolean;
   civ: VehicleCivPayload;
@@ -72,6 +77,7 @@ type Props = {
   photos: VehiclePhotosPayload;
   equipment: VehicleEquipmentPayload;
   wheels: VehicleWheelsPayload;
+  legislativeKit: VehicleLegislativeKitPayload;
   odometer: OdometerReadingsPayload;
   fuelLevel: FuelLevelReadingsPayload;
   maintenancePlan: MaintenancePlanPayload;
@@ -92,6 +98,7 @@ export function VehicleProfileTabs({
   photosWrite,
   odometerWrite,
   planWrite,
+  legislativeKitWrite,
   lockClient = false,
   driverPortal = false,
   civ,
@@ -99,6 +106,7 @@ export function VehicleProfileTabs({
   photos,
   equipment,
   wheels,
+  legislativeKit,
   odometer,
   fuelLevel,
   maintenancePlan,
@@ -133,6 +141,7 @@ export function VehicleProfileTabs({
       t === "photos" ||
       t === "equipment" ||
       t === "wheels" ||
+      t === "legislative_kit" ||
       t === "odometer" ||
       t === "basic" ||
       t === "maintenance_plan" ||
@@ -231,6 +240,14 @@ export function VehicleProfileTabs({
               civ.civProfile?.tyresFront != null ? String(civ.civProfile.tyresFront) : null
             }
             tyresRear={civ.civProfile?.tyresRear != null ? String(civ.civProfile.tyresRear) : null}
+            punctureKitPresent={legislativeKit.kit.punctureKitPresent}
+          />
+        ) : null}
+        {active === "legislative_kit" ? (
+          <VehicleLegislativeKitTab
+            vehicleId={vehicle.id}
+            write={legislativeKitWrite ?? write}
+            initial={legislativeKit}
           />
         ) : null}
         {active === "odometer" ? (

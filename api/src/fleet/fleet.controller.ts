@@ -276,6 +276,34 @@ export class FleetController {
     return this.fleet.patchVehicleAcquisition(tenantId, vehicleId, dto, actorUserId, access);
   }
 
+  @Get('vehicles/:vehicleId/legislative-kit')
+  @Roles(...FLEET_READ_ROLES)
+  getVehicleLegislativeKit(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.fleet.getVehicleLegislativeKit(tenantId, vehicleId, access);
+  }
+
+  @Patch('vehicles/:vehicleId/legislative-kit')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchVehicleLegislativeKit(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.fleet.patchVehicleLegislativeKit(
+      tenantId,
+      vehicleId,
+      assertPatchVehicleLegislativeKitDto(body),
+      actorUserId,
+      access,
+    );
+  }
+
   @Get('vehicles/:vehicleId/photos')
   @Roles(...FLEET_READ_ROLES)
   listVehiclePhotos(
@@ -1025,11 +1053,139 @@ function asFuelCardStatus(v: unknown): 'active' | 'inactive' | 'blocked' {
   throw new BadRequestException('Invalid fuelCardStatus');
 }
 
-function asVehiclePhotoKind(v: unknown): 'exterior' | 'interior' | 'damage' | 'document' | 'other' {
-  if (v === 'exterior' || v === 'interior' || v === 'damage' || v === 'document' || v === 'other') {
+function asVehiclePhotoKind(
+  v: unknown,
+):
+  | 'exterior'
+  | 'interior'
+  | 'damage'
+  | 'document'
+  | 'other'
+  | 'kit_extinguisher'
+  | 'kit_medical'
+  | 'kit_puncture'
+  | 'kit_triangle'
+  | 'kit_vest' {
+  if (
+    v === 'exterior' ||
+    v === 'interior' ||
+    v === 'damage' ||
+    v === 'document' ||
+    v === 'other' ||
+    v === 'kit_extinguisher' ||
+    v === 'kit_medical' ||
+    v === 'kit_puncture' ||
+    v === 'kit_triangle' ||
+    v === 'kit_vest'
+  ) {
     return v;
   }
   throw new BadRequestException('Invalid photo kind');
+}
+
+function assertPatchVehicleLegislativeKitDto(
+  body: unknown,
+): import('./dto/patch-vehicle-legislative-kit.dto').PatchVehicleLegislativeKitDto {
+  if (!isRecord(body)) throw new BadRequestException('Invalid JSON body');
+  const dto: import('./dto/patch-vehicle-legislative-kit.dto').PatchVehicleLegislativeKitDto = {};
+
+  if ('extinguisher' in body) {
+    if (body.extinguisher !== null && !isRecord(body.extinguisher)) {
+      throw new BadRequestException('extinguisher must be an object');
+    }
+    if (isRecord(body.extinguisher)) {
+      dto.extinguisher = {};
+      if ('type' in body.extinguisher) {
+        dto.extinguisher.type =
+          body.extinguisher.type === null ? null : optionalString(body.extinguisher.type) ?? null;
+      }
+      if ('expiresOn' in body.extinguisher) {
+        dto.extinguisher.expiresOn =
+          body.extinguisher.expiresOn === null
+            ? null
+            : optionalString(body.extinguisher.expiresOn) ?? null;
+      }
+    }
+  }
+  if ('medicalKit' in body) {
+    if (body.medicalKit !== null && !isRecord(body.medicalKit)) {
+      throw new BadRequestException('medicalKit must be an object');
+    }
+    if (isRecord(body.medicalKit)) {
+      dto.medicalKit = {};
+      if ('type' in body.medicalKit) {
+        dto.medicalKit.type =
+          body.medicalKit.type === null ? null : optionalString(body.medicalKit.type) ?? null;
+      }
+      if ('expiresOn' in body.medicalKit) {
+        dto.medicalKit.expiresOn =
+          body.medicalKit.expiresOn === null
+            ? null
+            : optionalString(body.medicalKit.expiresOn) ?? null;
+      }
+    }
+  }
+  if ('punctureKitPresent' in body) {
+    if (typeof body.punctureKitPresent !== 'boolean') {
+      throw new BadRequestException('punctureKitPresent must be boolean');
+    }
+    dto.punctureKitPresent = body.punctureKitPresent;
+  }
+  if ('triangle' in body) {
+    if (body.triangle !== null && !isRecord(body.triangle)) {
+      throw new BadRequestException('triangle must be an object');
+    }
+    if (isRecord(body.triangle)) {
+      dto.triangle = {};
+      if ('present' in body.triangle) {
+        if (typeof body.triangle.present !== 'boolean') {
+          throw new BadRequestException('triangle.present must be boolean');
+        }
+        dto.triangle.present = body.triangle.present;
+      }
+      if ('quantity' in body.triangle) {
+        if (body.triangle.quantity === null) dto.triangle.quantity = null;
+        else if (typeof body.triangle.quantity === 'number' && Number.isFinite(body.triangle.quantity)) {
+          dto.triangle.quantity = Math.min(99, Math.max(0, Math.round(body.triangle.quantity)));
+        } else throw new BadRequestException('triangle.quantity must be a number');
+      }
+    }
+  }
+  if ('vest' in body) {
+    if (body.vest !== null && !isRecord(body.vest)) {
+      throw new BadRequestException('vest must be an object');
+    }
+    if (isRecord(body.vest)) {
+      dto.vest = {};
+      if ('present' in body.vest) {
+        if (typeof body.vest.present !== 'boolean') {
+          throw new BadRequestException('vest.present must be boolean');
+        }
+        dto.vest.present = body.vest.present;
+      }
+      if ('quantity' in body.vest) {
+        if (body.vest.quantity === null) dto.vest.quantity = null;
+        else if (typeof body.vest.quantity === 'number' && Number.isFinite(body.vest.quantity)) {
+          dto.vest.quantity = Math.min(99, Math.max(0, Math.round(body.vest.quantity)));
+        } else throw new BadRequestException('vest.quantity must be a number');
+      }
+    }
+  }
+  if ('notes' in body) {
+    dto.notes = body.notes === null ? null : optionalString(body.notes) ?? null;
+  }
+
+  if (
+    dto.extinguisher === undefined &&
+    dto.medicalKit === undefined &&
+    dto.punctureKitPresent === undefined &&
+    dto.triangle === undefined &&
+    dto.vest === undefined &&
+    dto.notes === undefined
+  ) {
+    throw new BadRequestException('No fields to update');
+  }
+  return dto;
 }
 
 function assertRecordOdometerDto(body: unknown): RecordOdometerDto {

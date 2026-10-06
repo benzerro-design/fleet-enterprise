@@ -41,6 +41,8 @@ type Props = {
   /** Din Advanced Infos (civProfile). */
   tyresFront?: string | null;
   tyresRear?: string | null;
+  /** Din Kit legislativ — corelare roată rezervă vs kit pană */
+  punctureKitPresent?: boolean;
 };
 
 function emptyDraft(): WheelDraft {
@@ -102,7 +104,14 @@ function draftToBody(position: VehicleWheelPosition, d: WheelDraft) {
 type CopyMode = "none" | "all" | "axles";
 
 /** FLEET-019 — jante/anvelope pe poziții pe vehicul. */
-export function VehicleWheelsTab({ vehicleId, write, initial, tyresFront, tyresRear }: Props) {
+export function VehicleWheelsTab({
+  vehicleId,
+  write,
+  initial,
+  tyresFront,
+  tyresRear,
+  punctureKitPresent = false,
+}: Props) {
   const router = useRouter();
   const [layout, setLayout] = useState<VehicleWheelLayout>(initial.wheelLayout ?? "four");
   const positions = LAYOUT_POSITIONS[layout];
@@ -337,6 +346,13 @@ export function VehicleWheelsTab({ vehicleId, write, initial, tyresFront, tyresR
         Anvelope / jante montate pe mașină. DOT și uzura rămân per poziție (nu se copiază). Inventar
         depozit = FLEET-007.
       </p>
+
+      {punctureKitPresent ? (
+        <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+          Pe tab-ul Kit legislativ e bifat kitul de pană — de obicei în loc de roată de rezervă. Dacă
+          completezi poziția Spare, verifică și kitul.
+        </p>
+      ) : null}
 
       {write ? (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">

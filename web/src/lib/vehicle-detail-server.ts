@@ -13,6 +13,10 @@ import type { VehicleEquipmentPayload } from "@/lib/vehicle-equipment-types";
 import type { VehicleWheelsPayload } from "@/lib/vehicle-wheels-types";
 import type { VehicleMobilityPayload } from "@/lib/vehicle-mobility-types";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
+import {
+  EMPTY_LEGISLATIVE_KIT,
+  type VehicleLegislativeKitPayload,
+} from "@/lib/vehicle-legislative-kit";
 
 const OPS_PREVIEW_PAGE_SIZE = 50;
 
@@ -253,6 +257,16 @@ async function getVehicleWheels(id: string): Promise<VehicleWheelsPayload | null
   }
 }
 
+async function getVehicleLegislativeKit(id: string): Promise<VehicleLegislativeKitPayload | null> {
+  try {
+    const res = await fleetServerFetch(`/fleet/vehicles/${id}/legislative-kit`);
+    if (!res?.ok) return null;
+    return (await res.json()) as VehicleLegislativeKitPayload;
+  } catch {
+    return null;
+  }
+}
+
 export type VehicleDetailData = {
   vehicle: VehicleRecord;
   maintenanceList: MaintenanceListPayload | null;
@@ -263,6 +277,7 @@ export type VehicleDetailData = {
   photosPayload: VehiclePhotosPayload;
   equipmentPayload: VehicleEquipmentPayload;
   wheelsPayload: VehicleWheelsPayload;
+  legislativeKitPayload: VehicleLegislativeKitPayload;
   odometerPayload: OdometerReadingsPayload;
   fuelLevelPayload: FuelLevelReadingsPayload;
   mobilityPayload: VehicleMobilityPayload | null;
@@ -303,6 +318,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     photos,
     equipment,
     wheels,
+    legislativeKit,
     odometer,
     fuelLevel,
     mobility,
@@ -317,6 +333,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     getVehiclePhotos(id),
     getVehicleEquipment(id),
     getVehicleWheels(id),
+    getVehicleLegislativeKit(id),
     getOdometerReadings(id),
     getFuelLevelReadings(id),
     getVehicleMobility(id),
@@ -334,6 +351,11 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     photosPayload: photos ?? { items: [] },
     equipmentPayload: equipment ?? { items: [] },
     wheelsPayload: wheels ?? { wheelLayout: "four", items: [] },
+    legislativeKitPayload: legislativeKit ?? {
+      kit: EMPTY_LEGISLATIVE_KIT,
+      spareWheelPresent: false,
+      photos: [],
+    },
     odometerPayload: odometer ?? { items: [], vehicleOdometerKm: vehicle.odometerKm },
     fuelLevelPayload: fuelLevel ?? { items: [] },
     mobilityPayload: mobility,

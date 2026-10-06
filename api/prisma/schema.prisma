@@ -538,6 +538,8 @@ model Vehicle {
   /** Pagina 4 — Mențiuni CIV. */
   civMentions        String?
   civImportedFromDocumentId String?
+  /** Kit legislativ (stingător, trusă, pană, triunghi, vestă) — JSON structurat. */
+  legislativeKit     Json?
   /** Date achiziție — tip, dealer, finanțator, contract, garanție. */
   acquisitionType    AcquisitionType?
   acquiredOn         DateTime?
@@ -630,6 +632,11 @@ enum VehiclePhotoKind {
   damage
   document
   other
+  kit_extinguisher
+  kit_medical
+  kit_puncture
+  kit_triangle
+  kit_vest
 }
 
 /// Echipări montate pe vehicul (FLEET-016) — docs/reparații per echipare = FLEET-027.
