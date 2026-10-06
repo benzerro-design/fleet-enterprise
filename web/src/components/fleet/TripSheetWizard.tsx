@@ -14,6 +14,7 @@ type VehicleOption = {
 type Props = {
   vehicles: VehicleOption[];
   triggerClassName?: string;
+  triggerLabel?: string;
   /** L0 — șofer preselectat, fără listă din API. */
   lockedDriverId?: string;
   lockedDriverName?: string;
@@ -35,6 +36,7 @@ async function readErrorMessage(res: Response): Promise<string> {
 export function TripSheetWizard({
   vehicles,
   triggerClassName,
+  triggerLabel,
   lockedDriverId,
   lockedDriverName,
   driverPortal = false,
@@ -135,28 +137,35 @@ export function TripSheetWizard({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          resetForm();
+          if (driverPortal && vehicles.length === 1) {
+            setSelectedIds(new Set([vehicles[0].id]));
+          }
+          setOpen(true);
+        }}
         className={
           triggerClassName ??
           "rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-950/70"
         }
       >
-        Generează foaie / FAZ
+        {triggerLabel ?? "Generează foaie / FAZ"}
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
           <div
             role="dialog"
             aria-labelledby="trip-sheet-wizard-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-950 p-6 shadow-xl"
+            className="max-h-[92dvh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-t-2xl border border-zinc-700 bg-zinc-950 p-5 shadow-xl touch-manipulation sm:rounded-xl sm:p-6"
           >
             <h2 id="trip-sheet-wizard-title" className="text-lg font-semibold text-zinc-100">
               Generează document parcurs
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              Agregă cursele din perioada selectată. Opțional, filtrează după client și șofer — doar cursele
-              acelui șofer intră în document.
+              {driverPortal
+                ? "Agregă cursele tale din perioada selectată pe vehiculele alocate."
+                : "Agregă cursele din perioada selectată. Opțional, filtrează după client și șofer — doar cursele acelui șofer intră în document."}
             </p>
 
             <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4">
@@ -171,7 +180,7 @@ export function TripSheetWizard({
                 <select
                   value={docType}
                   onChange={(e) => setDocType(e.target.value as "trip_sheet" | "faz_monthly")}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                  className="min-h-[44px] w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
                 >
                   {TRIP_SHEET_DOC_TYPES.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -189,7 +198,7 @@ export function TripSheetWizard({
                     required
                     value={periodStart}
                     onChange={(e) => setPeriodStart(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                    className="min-h-[44px] w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-base sm:text-sm"
                   />
                 </div>
                 <div className="space-y-1">
@@ -199,7 +208,7 @@ export function TripSheetWizard({
                     required
                     value={periodEnd}
                     onChange={(e) => setPeriodEnd(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                    className="min-h-[44px] w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-base sm:text-sm"
                   />
                 </div>
               </div>
@@ -214,7 +223,7 @@ export function TripSheetWizard({
                       if (!lockedDriverId) setDriverId("");
                     }}
                     placeholder="Restrânge lista de vehicule"
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                    className="min-h-[44px] w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
                   />
                 </div>
               ) : null}
@@ -222,7 +231,7 @@ export function TripSheetWizard({
               {driverPortal && lockedDriverId ? (
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-zinc-500">Șofer</label>
-                  <p className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-200">
+                  <p className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 text-sm text-zinc-200">
                     {lockedDriverName ?? "Contul tău"}
                   </p>
                   <input type="hidden" name="driverId" value={lockedDriverId} />
@@ -239,29 +248,30 @@ export function TripSheetWizard({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-zinc-500">Vehicule</label>
                   <div className="flex gap-2 text-xs">
-                    <button type="button" onClick={selectAllFiltered} className="text-emerald-400 hover:underline">
+                    <button type="button" onClick={selectAllFiltered} className="min-h-[36px] text-emerald-400 hover:underline">
                       Toate
                     </button>
-                    <button type="button" onClick={clearSelection} className="text-zinc-400 hover:underline">
+                    <button type="button" onClick={clearSelection} className="min-h-[36px] text-zinc-400 hover:underline">
                       Niciunul
                     </button>
                   </div>
                 </div>
-                <div className="max-h-40 overflow-y-auto rounded-lg border border-zinc-800">
+                <div className="max-h-40 overflow-y-auto overflow-x-hidden rounded-lg border border-zinc-800">
                   {filteredVehicles.length === 0 ? (
                     <p className="p-3 text-sm text-zinc-500">Niciun vehicul.</p>
                   ) : (
                     <ul className="divide-y divide-zinc-800">
                       {filteredVehicles.map((v) => (
                         <li key={v.id}>
-                          <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-zinc-900/60">
+                          <label className="flex min-h-[48px] cursor-pointer items-center gap-3 px-3 py-2 text-sm touch-manipulation hover:bg-zinc-900/60">
                             <input
                               type="checkbox"
                               checked={selectedIds.has(v.id)}
                               onChange={() => toggleVehicle(v.id)}
+                              className="h-4 w-4"
                             />
                             <span className="font-mono">{v.registrationNumber}</span>
-                            <span className="text-zinc-500">{v.clientId}</span>
+                            {!driverPortal ? <span className="text-zinc-500">{v.clientId}</span> : null}
                           </label>
                         </li>
                       ))}
@@ -270,27 +280,19 @@ export function TripSheetWizard({
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-2">
+              <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-wrap">
                 <button
                   type="submit"
                   disabled={pending}
-                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+                  className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-5 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
                 >
                   {pending ? "Generez PDF…" : "Generează și arhivează"}
                 </button>
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={resetForm}
-                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
-                >
-                  Resetează
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
                   onClick={() => setOpen(false)}
-                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-zinc-700 px-4 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
                 >
                   Închide
                 </button>

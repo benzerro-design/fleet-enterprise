@@ -17,6 +17,7 @@ import { tripsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { formatDateTimeRo } from "@/lib/datetime-local";
+import { formatPeriodRange } from "@/lib/calendar-date";
 import { t } from "@/lib/i18n/t";
 import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
@@ -244,8 +245,8 @@ export default async function TripsPage({ searchParams }: Props) {
   const driverPortal = isClientDriverPortal(auth);
   const lockedDriverId = driverIdFromAuth(auth);
   const [data, documents, vehicles, drivers, consumption] = await Promise.all([
-    showTrips || driverPortal ? fetchTrips(sp) : Promise.resolve(null),
-    driverPortal || !showDocuments ? Promise.resolve(null) : fetchTripSheets(sp),
+    showTrips ? fetchTrips(sp) : Promise.resolve(null),
+    showDocuments ? fetchTripSheets(sp) : Promise.resolve(null),
     fetchVehicleOptions(driverPortal),
     driverPortal ? Promise.resolve([]) : fetchDriverOptions(),
     driverPortal || !showConsumption ? Promise.resolve(null) : fetchConsumption(sp),
@@ -605,7 +606,25 @@ export default async function TripsPage({ searchParams }: Props) {
   if (!driverPortal) return desktop;
 
   const ended = sp.ended === "open" || sp.ended === "closed" ? sp.ended : "all";
-  const bandHref = (next: "all" | "open" | "closed") => (next === "all" ? "/fleet/trips" : `/fleet/trips?ended=${next}`);
+  const docTypeFilter =
+    sp.docType === "trip_sheet" || sp.docType === "faz_monthly" ? sp.docType : "all";
+
+  const viewHref = (next: TripsView) => {
+    if (next === "trips") return "/fleet/trips";
+    return `/fleet/trips?view=${next}`;
+  };
+  const bandHref = (next: "all" | "open" | "closed") => {
+    const p = new URLSearchParams();
+    if (next !== "all") p.set("ended", next);
+    const qs = p.toString();
+    return `/fleet/trips${qs ? `?${qs}` : ""}`;
+  };
+  const docsBandHref = (next: "all" | "trip_sheet" | "faz_monthly") => {
+    const p = new URLSearchParams();
+    p.set("view", "documents");
+    if (next !== "all") p.set("docType", next);
+    return `/fleet/trips?${p.toString()}`;
+  };
   const mobilePageHref = (nextPage: number) => {
     const p = new URLSearchParams();
     if (ended !== "all") p.set("ended", ended);
@@ -613,52 +632,159 @@ export default async function TripsPage({ searchParams }: Props) {
     const qs = p.toString();
     return `/fleet/trips${qs ? `?${qs}` : ""}`;
   };
+  const mobileDocsPageHref = (nextPage: number) => {
+    const p = new URLSearchParams();
+    p.set("view", "documents");
+    if (docTypeFilter !== "all") p.set("docType", docTypeFilter);
+    if (nextPage > 1) p.set("page", String(nextPage));
+    return `/fleet/trips?${p.toString()}`;
+  };
+
+  const mobileCta =
+    "inline-flex h-10 shrink-0 items-center rounded-full bg-emerald-500 px-4 text-sm font-medium text-zinc-950 touch-manipulation";
 
   const mobile = (
-    <FleetPageMain narrow="sm">
+    <FleetPageMain narrow="sm" className="min-w-0 overflow-x-hidden">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.trips")}</h1>
-        {write ? (
-          <Link href="/fleet/trips/new" className="text-sm font-medium text-emerald-400">
+        <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">
+          {showDocuments
+            ? t(locale, "driverLists.tripDocs")
+            : showTachograph
+              ? t(locale, "driverLists.tachograph")
+              : t(locale, "driverLists.trips")}
+        </h1>
+        {showTrips && write ? (
+          <Link href="/fleet/trips/new" className={mobileCta}>
             {t(locale, "driver.home.startTrip")}
           </Link>
         ) : null}
+        {showDocuments && write ? (
+          <TripSheetWizard
+            vehicles={vehicles}
+            triggerClassName={mobileCta}
+            triggerLabel={t(locale, "driverLists.generateSheet")}
+            driverPortal
+            lockedDriverId={lockedDriverId}
+            lockedDriverName={auth.ok ? auth.me.email : undefined}
+          />
+        ) : null}
       </div>
+
       <DriverStatusBand
         items={[
-          { href: bandHref("all"), label: t(locale, "driverLists.all"), active: ended === "all" },
-          { href: bandHref("open"), label: t(locale, "driverLists.open"), active: ended === "open" },
-          { href: bandHref("closed"), label: t(locale, "driverLists.closed"), active: ended === "closed" },
+          {
+            href: viewHref("trips"),
+            label: t(locale, "driverLists.trips"),
+            active: showTrips,
+          },
+          {
+            href: viewHref("documents"),
+            label: t(locale, "driverLists.tripDocs"),
+            active: showDocuments,
+          },
+          {
+            href: viewHref("tachograph"),
+            label: t(locale, "driverLists.tachograph"),
+            active: showTachograph,
+          },
         ]}
       />
-      {data ? (
-        <DriverRecordList
-          empty={t(locale, "driverLists.empty")}
-          items={(data.items ?? []).map((trip) => ({
-            href: `/fleet/trips/${trip.id}`,
-            title: trip.registrationNumber,
-            meta: [
-              trip.originLabel || trip.destLabel
-                ? `${trip.originLabel ?? "?"} → ${trip.destLabel ?? "?"}`
-                : null,
-              formatDateTimeRo(trip.startedAt),
-            ]
-              .filter(Boolean)
-              .join(" · "),
-            badge: trip.endedAt ? t(locale, "driverLists.closed") : t(locale, "driverLists.open"),
-          }))}
-        />
+
+      {showTachograph ? (
+        <TripTachographPlaceholder compact />
+      ) : showDocuments ? (
+        <>
+          <DriverStatusBand
+            items={[
+              {
+                href: docsBandHref("all"),
+                label: t(locale, "driverLists.all"),
+                active: docTypeFilter === "all",
+              },
+              {
+                href: docsBandHref("trip_sheet"),
+                label: t(locale, "driverLists.foaie"),
+                active: docTypeFilter === "trip_sheet",
+              },
+              {
+                href: docsBandHref("faz_monthly"),
+                label: t(locale, "driverLists.faz"),
+                active: docTypeFilter === "faz_monthly",
+              },
+            ]}
+          />
+          {sp.generated ? (
+            <p className="rounded-xl border border-emerald-800/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+              Document generat. Descarcă PDF din listă.
+            </p>
+          ) : null}
+          {documents ? (
+            <DriverRecordList
+              empty={t(locale, "driverLists.empty")}
+              items={documents.items.map((doc) => ({
+                href: `/api/trip-sheets/${doc.id}/pdf`,
+                title: doc.title,
+                meta: [doc.docTypeLabel, formatPeriodRange(doc.periodStart, doc.periodEnd)]
+                  .filter(Boolean)
+                  .join(" · "),
+                badge: t(locale, "driverLists.downloadPdf"),
+              }))}
+            />
+          ) : (
+            <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+          )}
+          <DriverPager
+            page={docsPage}
+            totalPages={docsTotalPages}
+            prevHref={docsPage > 1 ? mobileDocsPageHref(docsPage - 1) : null}
+            nextHref={docsPage < docsTotalPages ? mobileDocsPageHref(docsPage + 1) : null}
+            prevLabel={t(locale, "driverLists.prev")}
+            nextLabel={t(locale, "driverLists.next")}
+          />
+        </>
       ) : (
-        <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+        <>
+          <DriverStatusBand
+            items={[
+              { href: bandHref("all"), label: t(locale, "driverLists.all"), active: ended === "all" },
+              { href: bandHref("open"), label: t(locale, "driverLists.open"), active: ended === "open" },
+              {
+                href: bandHref("closed"),
+                label: t(locale, "driverLists.closed"),
+                active: ended === "closed",
+              },
+            ]}
+          />
+          {data ? (
+            <DriverRecordList
+              empty={t(locale, "driverLists.empty")}
+              items={(data.items ?? []).map((trip) => ({
+                href: `/fleet/trips/${trip.id}`,
+                title: trip.registrationNumber,
+                meta: [
+                  trip.originLabel || trip.destLabel
+                    ? `${trip.originLabel ?? "?"} → ${trip.destLabel ?? "?"}`
+                    : null,
+                  formatDateTimeRo(trip.startedAt),
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+                badge: trip.endedAt ? t(locale, "driverLists.closed") : t(locale, "driverLists.open"),
+              }))}
+            />
+          ) : (
+            <p className="py-8 text-sm text-amber-400">{t(locale, "driverLists.loadFailed")}</p>
+          )}
+          <DriverPager
+            page={page}
+            totalPages={totalPages}
+            prevHref={page > 1 ? mobilePageHref(page - 1) : null}
+            nextHref={page < totalPages ? mobilePageHref(page + 1) : null}
+            prevLabel={t(locale, "driverLists.prev")}
+            nextLabel={t(locale, "driverLists.next")}
+          />
+        </>
       )}
-      <DriverPager
-        page={page}
-        totalPages={totalPages}
-        prevHref={page > 1 ? mobilePageHref(page - 1) : null}
-        nextHref={page < totalPages ? mobilePageHref(page + 1) : null}
-        prevLabel={t(locale, "driverLists.prev")}
-        nextLabel={t(locale, "driverLists.next")}
-      />
     </FleetPageMain>
   );
 
