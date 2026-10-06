@@ -2,13 +2,32 @@ import { FleetLayoutSwitcher } from "@/components/fleet/FleetLayoutSwitcher";
 import {
   canManageFleet,
   canUseBot,
+  driverIdFromAuth,
   getAuthMeResult,
   getDefaultFleetHome,
   getSessionPortalHint,
   isClientDriverPortal,
   isClientFleetPortal,
 } from "@/lib/auth-server";
+import { shortDisplayName } from "@/lib/driver-portal-server";
+import { fleetServerFetch } from "@/lib/fleet-server";
 import { getFleetNavForUser } from "@/lib/fleet-nav";
+
+async function loadDriverTopBarProfile(driverId: string | undefined): Promise<{
+  displayName?: string;
+  photoUrl?: string | null;
+}> {
+  if (!driverId) return {};
+  try {
+    const res = await fleetServerFetch(`/drivers/${driverId}`);
+    if (!res?.ok) return {};
+    const data = (await res.json()) as { driver?: { fullName?: string | null; photoUrl?: string | null } };
+    const fullName = data.driver?.fullName?.trim() || null;
+    return { displayName: fullName ?? undefined, photoUrl: data.driver?.photoUrl ?? null };
+  } catch {
+    return {};
+  }
+}
 
 export default async function FleetLayout({ children }: { children: React.ReactNode }) {
   const [auth, hint] = await Promise.all([getAuthMeResult(), getSessionPortalHint()]);
@@ -22,6 +41,14 @@ export default async function FleetLayout({ children }: { children: React.ReactN
     clientDriverPortal: driverPortal,
     clientFleetPortal: fleetPortal,
   });
+
+  const driverId = driverPortal ? driverIdFromAuth(auth) : undefined;
+  const driverProfile = driverPortal ? await loadDriverTopBarProfile(driverId) : {};
+  const userEmail = auth.ok ? auth.me.email : hint?.email;
+  const userDisplayName = driverPortal
+    ? shortDisplayName(driverProfile.displayName, userEmail) || userEmail
+    : undefined;
+  const userPhotoUrl = driverPortal ? driverProfile.photoUrl : undefined;
 
   const authBanner =
     auth.ok === false && auth.kind === "backend_error" ? (
@@ -40,7 +67,9 @@ export default async function FleetLayout({ children }: { children: React.ReactN
       admin={admin}
       bot={bot}
       tenantSlug={auth.ok ? auth.me.tenantSlug : undefined}
-      userEmail={auth.ok ? auth.me.email : hint?.email}
+      userEmail={userEmail}
+      userDisplayName={userDisplayName}
+      userPhotoUrl={userPhotoUrl}
       readOnly={auth.ok && auth.me.role === "tenant_viewer"}
       authBanner={authBanner}
       homeHref={getDefaultFleetHome(auth, hint)}

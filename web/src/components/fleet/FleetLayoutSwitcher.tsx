@@ -12,6 +12,8 @@ type Props = {
   bot?: FleetNavGroup | null;
   tenantSlug?: string;
   userEmail?: string;
+  userDisplayName?: string;
+  userPhotoUrl?: string | null;
   readOnly?: boolean;
   authBanner?: React.ReactNode;
   homeHref?: string;
@@ -26,6 +28,8 @@ export function FleetLayoutSwitcher({
   bot,
   tenantSlug,
   userEmail,
+  userDisplayName,
+  userPhotoUrl,
   readOnly,
   authBanner,
   homeHref,
@@ -46,6 +50,8 @@ export function FleetLayoutSwitcher({
       bot={bot}
       tenantSlug={tenantSlug}
       userEmail={userEmail}
+      userDisplayName={userDisplayName}
+      userPhotoUrl={userPhotoUrl}
       readOnly={readOnly}
       authBanner={authBanner}
       homeHref={homeHref}

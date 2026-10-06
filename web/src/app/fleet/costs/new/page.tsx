@@ -3,7 +3,8 @@ import { OpsFormLayout } from "@/components/fleet/OpsFormLayout";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CostForm } from "@/components/fleet/CostForm";
-import { canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
+import { canWriteCosts, driverIdFromAuth, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
+import { resolveCurrentVehicleId } from "@/lib/driver-portal-server";
 import { getVehicleOptions } from "@/lib/vehicle-options-server";
 
 export default async function NewCostPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string; category?: string }> }) {
@@ -15,8 +16,14 @@ export default async function NewCostPage({ searchParams }: { searchParams: Prom
   if (!canWriteCosts(auth)) {
     redirect("/fleet/costs");
   }
-  const vehicles = await getVehicleOptions();
   const driverPortal = auth.ok && isClientDriverPortal(auth);
+  const lockedDriverId = driverPortal ? driverIdFromAuth(auth) : undefined;
+  const currentVehicleId = driverPortal ? await resolveCurrentVehicleId(lockedDriverId) : null;
+  const defaultVehicleId = sp.vehicleId ?? (driverPortal ? (currentVehicleId ?? undefined) : undefined);
+  let vehicles = await getVehicleOptions();
+  if (driverPortal && defaultVehicleId) {
+    vehicles = vehicles.filter((v) => v.id === defaultVehicleId);
+  }
 
   return (
     <FleetPageMain>
@@ -29,8 +36,14 @@ export default async function NewCostPage({ searchParams }: { searchParams: Prom
           Înapoi la listă
         </Link>
       </div>
-      <OpsFormLayout module="costs" formTitle="Cost nou" vehicles={vehicles} defaultVehicleId={sp.vehicleId}>
-        <CostForm mode="create" vehicles={vehicles} defaultVehicleId={sp.vehicleId} defaultCategory={sp.category} driverPortal={driverPortal} />
+      <OpsFormLayout
+        module="costs"
+        formTitle="Cost nou"
+        vehicles={vehicles}
+        defaultVehicleId={defaultVehicleId}
+        hideVehicleBrief={driverPortal}
+      >
+        <CostForm mode="create" vehicles={vehicles} defaultVehicleId={defaultVehicleId} defaultCategory={sp.category} driverPortal={driverPortal} />
       </OpsFormLayout>
     </FleetPageMain>
   );

@@ -9,7 +9,8 @@ import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
 import { TicketKpiStrip } from "@/components/fleet/TicketKpiStrip";
-import { canPatchTickets, canUseTicketListBulk, canWriteTickets, getAuthMeResult, isClientDriverPortal, isClientPortalUser } from "@/lib/auth-server";
+import { canPatchTickets, canUseTicketListBulk, canWriteTickets, driverIdFromAuth, getAuthMeResult, isClientDriverPortal, isClientPortalUser } from "@/lib/auth-server";
+import { filterDriverPortalTickets } from "@/lib/driver-portal-server";
 import type { ClientListPayload } from "@/lib/clients-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import { ticketsBrowserBase } from "@/lib/tickets-api";
@@ -127,6 +128,8 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
   const write = canWriteTickets(auth);
 
   if (driverPortal) {
+    const driverId = driverIdFromAuth(auth);
+    const userId = auth.ok ? auth.me.userId : undefined;
     const status = sp.status === "open" || sp.status === "in_progress" || sp.status === "resolved" ? sp.status : "all";
     const bandHref = (next: string) => (next === "all" ? "/fleet/tickets" : `/fleet/tickets?status=${next}`);
     const pageHref = (nextPage: number) => {
@@ -137,14 +140,19 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
       return `/fleet/tickets${qs ? `?${qs}` : ""}`;
     };
     const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-    const totalPages = Math.max(1, Math.ceil((list?.total ?? 0) / 50));
+    const driverItems = list ? filterDriverPortalTickets(list.items, userId, driverId) : [];
+    const filteredByStatus =
+      status === "all" ? driverItems : driverItems.filter((row) => row.status === status);
+    const pageSize = 50;
+    const totalPages = Math.max(1, Math.ceil(filteredByStatus.length / pageSize));
+    const pageItems = filteredByStatus.slice((page - 1) * pageSize, page * pageSize);
     const statusLabel = (value: string) => {
       const key = `ops.grids.tickets.status.${value}`;
       const label = t(locale, key);
       return label === key ? value : label;
     };
     return (
-      <FleetPageMain>
+      <FleetPageMain narrow="sm">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.tickets")}</h1>
           {write ? (
@@ -163,7 +171,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
         {list ? (
           <DriverRecordList
             empty={t(locale, "driverLists.empty")}
-            items={list.items.map((row) => ({
+            items={pageItems.map((row) => ({
               href: `/fleet/tickets/${row.id}`,
               title: row.subject,
               meta: [row.displayId, row.registrationNumber].filter(Boolean).join(" · "),

@@ -15,6 +15,8 @@ type Props = {
   mode?: "create" | "edit";
   vehicles: OpsVehicleOption[];
   defaultVehicleId?: string;
+  /** Driver portal — hide cost/history brief panel; vehicle stays locked to assignment. */
+  hideVehicleBrief?: boolean;
   children: ReactNode;
 };
 
@@ -50,8 +52,16 @@ export function OpsFormModuleHeader({
   );
 }
 
-export function OpsFormLayout({ module, formTitle, mode = "create", vehicles, defaultVehicleId, children }: Props) {
-  const vehicleLocked = mode === "edit";
+export function OpsFormLayout({
+  module,
+  formTitle,
+  mode = "create",
+  vehicles,
+  defaultVehicleId,
+  hideVehicleBrief = false,
+  children,
+}: Props) {
+  const vehicleLocked = mode === "edit" || hideVehicleBrief;
   const [vehicleId, setVehicleId] = useState(defaultVehicleId ?? "");
 
   const selectedVehicle = useMemo(
@@ -73,17 +83,19 @@ export function OpsFormLayout({ module, formTitle, mode = "create", vehicles, de
 
   return (
     <OpsFormProvider value={ctx}>
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <aside className="w-full shrink-0 lg:w-[40%] lg:max-w-[40%] lg:border-r lg:border-zinc-800/80 lg:pr-5">
-          <VehicleFormBrief
-            activeModule={module}
-            vehicleId={vehicleId}
-            onVehicleIdChange={setVehicleId}
-            vehicles={vehicles}
-            vehicleLocked={vehicleLocked}
-          />
-        </aside>
-        <div className="min-w-0 flex-1 lg:w-[60%]">
+      <div className={`flex flex-col gap-6 ${hideVehicleBrief ? "" : "lg:flex-row lg:items-start"}`}>
+        {hideVehicleBrief ? null : (
+          <aside className="w-full shrink-0 lg:w-[40%] lg:max-w-[40%] lg:border-r lg:border-zinc-800/80 lg:pr-5">
+            <VehicleFormBrief
+              activeModule={module}
+              vehicleId={vehicleId}
+              onVehicleIdChange={setVehicleId}
+              vehicles={vehicles}
+              vehicleLocked={vehicleLocked}
+            />
+          </aside>
+        )}
+        <div className={`min-w-0 flex-1 ${hideVehicleBrief ? "max-w-3xl" : "lg:w-[60%]"}`}>
           <OpsFormModuleHeader module={module} formTitle={formTitle} mode={mode} />
           {children}
         </div>

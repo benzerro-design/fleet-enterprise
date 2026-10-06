@@ -15,7 +15,7 @@ export type DriverRecordItem = {
 
 export function DriverStatusBand({ items }: { items: DriverStatusItem[] }) {
   return (
-    <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+    <nav className="sticky top-0 z-10 -mx-4 flex gap-2 overflow-x-auto border-b border-zinc-800/80 bg-zinc-950/95 px-4 py-2 backdrop-blur-sm">
       {items.map((item) => (
         <Link
           key={item.href + item.label}

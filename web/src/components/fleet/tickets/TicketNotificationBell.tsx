@@ -63,7 +63,7 @@ export function TicketNotificationBell() {
           setOpen((v) => !v);
           void load();
         }}
-        className="relative rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900"
+        className="relative inline-flex h-10 min-w-10 items-center justify-center rounded-lg border border-zinc-700 px-2.5 text-xs text-zinc-200 hover:bg-zinc-900"
       >
         Notificări
         {unread > 0 ? (

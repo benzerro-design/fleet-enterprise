@@ -8,7 +8,8 @@ import { Suspense } from "react";
 import { RemindersListView } from "@/components/fleet/RemindersListView";
 import { RemindersStatusToolbar } from "@/components/fleet/RemindersStatusToolbar";
 import { DriverStatusBand } from "@/components/fleet/DriverPortalList";
-import { canWriteFleetOps, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
+import { canWriteFleetOps, driverIdFromAuth, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
+import { resolveCurrentVehicleId } from "@/lib/driver-portal-server";
 import { remindersBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import type { DriverLicenseAlert } from "@/lib/drivers-api";
@@ -63,11 +64,13 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
   const exportQs = buildExportQuery(sp);
 
   if (driverPortal) {
+    const driverId = driverIdFromAuth(auth);
+    const currentVehicleId = await resolveCurrentVehicleId(driverId);
     const status =
       sp.status === "action" || sp.status === "upcoming" || sp.status === "expired" ? sp.status : "all";
     const bandHref = (next: string) => (next === "all" ? "/fleet/reminders" : `/fleet/reminders?status=${next}`);
     return (
-      <FleetPageMain>
+      <FleetPageMain narrow="sm">
         <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.reminders")}</h1>
         <DriverStatusBand
           items={[
@@ -78,7 +81,12 @@ export default async function FleetRemindersPage({ searchParams }: Props) {
           ]}
         />
         <Suspense fallback={<p className="text-sm text-zinc-500">Se încarcă…</p>}>
-          <RemindersListView backHref="/fleet/vehicles" write={false} showStatusToolbar={false} />
+          <RemindersListView
+            backHref="/fleet/vehicles"
+            write={false}
+            showStatusToolbar={false}
+            vehicleId={currentVehicleId ?? undefined}
+          />
         </Suspense>
       </FleetPageMain>
     );

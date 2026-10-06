@@ -12,6 +12,11 @@ import {
   getAuthMeResult,
   isClientDriverPortal,
 } from "@/lib/auth-server";
+import {
+  filterDriverPortalTickets,
+  loadVehicleById,
+  resolveCurrentVehicleId,
+} from "@/lib/driver-portal-server";
 import { type VehicleListPayload, VEHICLE_STATUSES, fleetBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { fleetServerFetch } from "@/lib/fleet-server";
@@ -53,12 +58,18 @@ async function getVehiclesList(sp: Search, pageSize = 20): Promise<VehicleListPa
 type TripListPayload = { items: DriverHomeTrip[] };
 type ReminderListPayload = { items: ReminderActionRow[] };
 
-async function loadDriverHomeData(driverId?: string) {
+async function loadDriverHomeData(
+  driverId: string | undefined,
+  userId: string | undefined,
+  vehicleId: string | null,
+) {
   const tripQs = new URLSearchParams({ page: "1", pageSize: "8", ended: "open" });
   if (driverId) tripQs.set("driverId", driverId);
+  const reminderQs = new URLSearchParams({ status: "action", page: "1", pageSize: "8" });
+  if (vehicleId) reminderQs.set("vehicleId", vehicleId);
   const [tripsRes, remindersRes, ticketsRes] = await Promise.all([
     fleetServerFetch(`/trips?${tripQs.toString()}`),
-    fleetServerFetch("/reminders?status=action&page=1&pageSize=8"),
+    fleetServerFetch(`/reminders?${reminderQs.toString()}`),
     fleetServerFetch("/tickets?page=1&pageSize=20"),
   ]);
   let trips: DriverHomeTrip[] = [];
@@ -77,7 +88,8 @@ async function loadDriverHomeData(driverId?: string) {
   try {
     if (ticketsRes?.ok) {
       const payload = (await ticketsRes.json()) as TicketListPayload;
-      tickets = (payload.items ?? []).filter((t) => t.status === "open" || t.status === "in_progress").slice(0, 8);
+      const open = (payload.items ?? []).filter((row) => row.status === "open" || row.status === "in_progress");
+      tickets = filterDriverPortalTickets(open, userId, driverId).slice(0, 8);
     }
   } catch {
     tickets = [];
@@ -112,18 +124,19 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
 
   if (driverPortal) {
     const driverId = driverIdFromAuth(auth);
-    const [list, extra, profile] = await Promise.all([
-      getVehiclesList({ page: "1" }, 50),
-      loadDriverHomeData(driverId),
+    const userId = auth.ok ? auth.me.userId : undefined;
+    const currentVehicleId = await resolveCurrentVehicleId(driverId);
+    const [vehicle, extra, profile] = await Promise.all([
+      currentVehicleId ? loadVehicleById(currentVehicleId) : Promise.resolve(null),
+      loadDriverHomeData(driverId, userId, currentVehicleId),
       loadDriverProfile(driverId),
     ]);
     return (
       <DriverHomeView
         driverName={profile.fullName ?? driverNameFromAuth(auth)}
         driverPhotoUrl={profile.photoUrl}
-        selectedVehicleId={sp.vehicleId}
-        vehicles={list?.items ?? []}
-        vehiclesLoadFailed={!list}
+        vehicle={vehicle}
+        vehiclesLoadFailed={currentVehicleId != null && !vehicle}
         trips={extra.trips}
         reminders={extra.reminders}
         tickets={extra.tickets}

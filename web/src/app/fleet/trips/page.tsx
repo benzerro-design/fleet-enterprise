@@ -264,7 +264,7 @@ export default async function TripsPage({ searchParams }: Props) {
     const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
     const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
     return (
-      <FleetPageMain>
+      <FleetPageMain narrow="sm">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.trips")}</h1>
           {write ? (

@@ -10,6 +10,7 @@ import {
   getAuthMeResult,
   isClientDriverPortal,
 } from "@/lib/auth-server";
+import { resolveCurrentVehicleId } from "@/lib/driver-portal-server";
 import { getTripVehicleOptions, getVehicleOptions } from "@/lib/vehicle-options-server";
 
 export default async function NewTripPage({ searchParams }: { searchParams: Promise<{ vehicleId?: string }> }) {
@@ -23,9 +24,12 @@ export default async function NewTripPage({ searchParams }: { searchParams: Prom
   }
   const driverPortal = isClientDriverPortal(auth);
   const lockedDriverId = driverPortal ? driverIdFromAuth(auth) : undefined;
-  const assignedIds = auth.ok ? (auth.me.access?.assignedVehicleIds ?? []) : [];
-  const defaultVehicleId = sp.vehicleId ?? (driverPortal ? assignedIds[0] : undefined);
-  const vehicles = driverPortal ? await getTripVehicleOptions() : await getVehicleOptions();
+  const currentVehicleId = driverPortal ? await resolveCurrentVehicleId(lockedDriverId) : null;
+  const defaultVehicleId = sp.vehicleId ?? (driverPortal ? (currentVehicleId ?? undefined) : undefined);
+  let vehicles = driverPortal ? await getTripVehicleOptions() : await getVehicleOptions();
+  if (driverPortal && defaultVehicleId) {
+    vehicles = vehicles.filter((v) => v.id === defaultVehicleId);
+  }
 
   return (
     <FleetPageMain>
@@ -38,7 +42,13 @@ export default async function NewTripPage({ searchParams }: { searchParams: Prom
           Înapoi la listă
         </Link>
       </div>
-      <OpsFormLayout module="trips" formTitle="Cursă nouă" vehicles={vehicles} defaultVehicleId={defaultVehicleId}>
+      <OpsFormLayout
+        module="trips"
+        formTitle="Cursă nouă"
+        vehicles={vehicles}
+        defaultVehicleId={defaultVehicleId}
+        hideVehicleBrief={driverPortal}
+      >
         <TripForm
           mode="create"
           vehicles={vehicles}

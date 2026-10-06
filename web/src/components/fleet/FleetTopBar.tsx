@@ -17,6 +17,8 @@ import { useT } from "@/lib/i18n/useT";
 
 type Props = {
   userEmail?: string;
+  userDisplayName?: string;
+  userPhotoUrl?: string | null;
   /** Href-uri live din nav — scorcuturile se filtrează după ele. */
   allowedHrefs?: string[];
   /** Catalog label per href (din Cmd+K / nav). */
@@ -25,7 +27,14 @@ type Props = {
   onToggleHelpRail?: () => void;
 };
 
-function userInitials(email?: string): string {
+function userInitials(email?: string, displayName?: string): string {
+  const fromName = displayName?.trim();
+  if (fromName) {
+    const parts = fromName.split(/\s+/).filter(Boolean).slice(0, 2);
+    const letters = parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
+    if (letters) return letters;
+    return fromName.slice(0, 2).toUpperCase();
+  }
   if (!email) return "?";
   const local = email.split("@")[0] ?? "";
   const parts = local.split(/[._-]+/).filter(Boolean);
@@ -41,8 +50,40 @@ function labelForHref(href: string, hrefLabels?: Record<string, string>): string
   return last.replace(/-/g, " ");
 }
 
+function AccountAvatar({
+  email,
+  displayName,
+  photoUrl,
+}: {
+  email?: string;
+  displayName?: string;
+  photoUrl?: string | null;
+}) {
+  const [failed, setFailed] = useState(false);
+  const initials = userInitials(email, displayName);
+  const src = photoUrl?.trim() || null;
+  if (src && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={displayName ?? email ?? ""}
+        onError={() => setFailed(true)}
+        className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-zinc-700"
+      />
+    );
+  }
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-semibold text-zinc-200 ring-1 ring-zinc-700">
+      {initials}
+    </span>
+  );
+}
+
 export function FleetTopBar({
   userEmail,
+  userDisplayName,
+  userPhotoUrl,
   allowedHrefs,
   hrefLabels,
   helpRailOpen,
@@ -54,7 +95,8 @@ export function FleetTopBar({
   const [favorites, setFavorites] = useState<FleetNavFavorite[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const initials = userInitials(userEmail);
+  const chipLabel = userDisplayName?.trim() || userEmail;
+  const menuTitle = userDisplayName?.trim() || userEmail;
 
   useEffect(() => {
     setFavorites(readFleetNavFavorites());
@@ -180,12 +222,10 @@ export function FleetTopBar({
             aria-haspopup="menu"
             aria-label="Cont"
           >
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-950 text-[10px] font-semibold text-emerald-200">
-              {initials}
-            </span>
-            {userEmail ? (
-              <span className="hidden max-w-[10rem] truncate text-[11px] text-zinc-400 2xl:inline">
-                {userEmail}
+            <AccountAvatar email={userEmail} displayName={userDisplayName} photoUrl={userPhotoUrl} />
+            {chipLabel ? (
+              <span className="max-w-[8rem] truncate text-[11px] text-zinc-300 xl:max-w-[10rem]">
+                {userDisplayName?.trim() ? userDisplayName : userEmail}
               </span>
             ) : null}
             <span className="text-[8px] text-zinc-500">▾</span>
@@ -195,9 +235,12 @@ export function FleetTopBar({
               role="menu"
               className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border border-zinc-800 bg-zinc-950 py-1 shadow-xl"
             >
-              {userEmail ? (
+              {menuTitle ? (
                 <div className="border-b border-zinc-800 px-3 py-2">
-                  <p className="truncate text-xs font-medium text-zinc-200">{userEmail}</p>
+                  <p className="truncate text-xs font-medium text-zinc-200">{menuTitle}</p>
+                  {userDisplayName && userEmail ? (
+                    <p className="truncate text-[10px] text-zinc-500">{userEmail}</p>
+                  ) : null}
                 </div>
               ) : null}
               <div className="space-y-2 px-3 py-2">

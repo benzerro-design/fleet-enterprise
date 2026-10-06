@@ -203,6 +203,7 @@ const ro = {
       emptyTickets: "Niciun tichet deschis.",
       emptyTrips: "Nicio cursă deschisă.",
       fuel: "Alimentare",
+      fuelCard: "Card combustibil",
       greeting: "Salut, {name}",
       home: "Acasă",
       itp: "ITP",

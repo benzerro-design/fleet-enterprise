@@ -7,6 +7,7 @@ import { FleetCommandPalette, type FleetCommandItem } from "@/components/fleet/F
 import { FleetHelpRail } from "@/components/fleet/FleetHelpRail";
 import { FleetSidebarNav } from "@/components/fleet/FleetSidebarNav";
 import { FleetTopBar } from "@/components/fleet/FleetTopBar";
+import { TicketNotificationBell } from "@/components/fleet/tickets/TicketNotificationBell";
 import { useAppearancePrefs } from "@/components/fleet/AppearanceProvider";
 import { FLEET_MOBILE_TABS, type FleetMobileTab, type FleetNavGroup } from "@/lib/fleet-nav";
 import { readHelpRailOpen, writeHelpRailOpen } from "@/lib/fleet-help-rail";
@@ -22,12 +23,41 @@ type FleetShellProps = {
   bot?: FleetNavGroup | null;
   tenantSlug?: string;
   userEmail?: string;
+  userDisplayName?: string;
+  userPhotoUrl?: string | null;
   readOnly?: boolean;
   authBanner?: React.ReactNode;
   homeHref?: string;
   clientDriverPortal?: boolean;
   mobileTabs?: FleetMobileTab[];
 };
+
+function DriverMobileAvatar({ name, photoUrl }: { name?: string; photoUrl?: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const src = photoUrl?.trim() || null;
+  const initials = (name?.trim() || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "?";
+  if (!src || failed) {
+    return (
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-semibold text-zinc-200 ring-1 ring-zinc-700">
+        {initials}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={name ?? ""}
+      onError={() => setFailed(true)}
+      className="h-8 w-8 rounded-full object-cover ring-1 ring-zinc-700"
+    />
+  );
+}
 
 function mobileTabActive(pathname: string, prefixes: string[]): boolean {
   if (prefixes.length === 0) return false;
@@ -90,6 +120,8 @@ export function FleetShell({
   bot,
   tenantSlug,
   userEmail,
+  userDisplayName,
+  userPhotoUrl,
   readOnly,
   authBanner,
   homeHref = "/fleet/dashboard",
@@ -213,6 +245,8 @@ export function FleetShell({
 
         <FleetTopBar
           userEmail={userEmail}
+          userDisplayName={clientDriverPortal ? userDisplayName : undefined}
+          userPhotoUrl={clientDriverPortal ? userPhotoUrl : undefined}
           allowedHrefs={allowedHrefs}
           hrefLabels={hrefLabels}
           helpRailOpen={helpRailOpen}
@@ -232,11 +266,18 @@ export function FleetShell({
           </button>
           <div className="min-w-0 flex-1 text-center">
             <p className="truncate text-sm font-medium text-zinc-200">{mobileTitle}</p>
-            {tenantSlug ? (
+            {tenantSlug && !clientDriverPortal ? (
               <p className="truncate font-mono text-[10px] text-zinc-600">{tenantSlug}</p>
             ) : null}
           </div>
-          <LogoutButton />
+          {clientDriverPortal ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <TicketNotificationBell />
+              <DriverMobileAvatar name={userDisplayName} photoUrl={userPhotoUrl} />
+            </div>
+          ) : (
+            <LogoutButton />
+          )}
         </header>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">

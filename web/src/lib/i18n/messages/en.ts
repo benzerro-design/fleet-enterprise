@@ -203,6 +203,7 @@ const en = {
       emptyTickets: "No open tickets.",
       emptyTrips: "No open trips.",
       fuel: "Fuel",
+      fuelCard: "Fuel card",
       greeting: "Hi, {name}",
       home: "Home",
       itp: "ITP",
