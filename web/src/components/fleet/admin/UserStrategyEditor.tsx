@@ -22,6 +22,7 @@ import {
 import { resetIamStrategy, saveIamStrategy } from "@/lib/iam-strategy/iam-strategy-api";
 import type { IamNodeStatus, IamNodeTone, IamStrategyNode, IamStrategyResponse } from "@/lib/iam-strategy/types";
 import { newIamNode } from "@/lib/iam-strategy/types";
+import { UserStrategyRights } from "@/components/fleet/admin/UserStrategyRights";
 
 type Props = {
   initial: IamStrategyResponse;
@@ -134,7 +135,7 @@ export function UserStrategyEditor({ initial }: Props) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto ${fleetScrollPaneClass}`}>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
         <button
@@ -245,7 +246,7 @@ export function UserStrategyEditor({ initial }: Props) {
         reordonare nod.
       </p>
 
-      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_min(100%,18rem)]">
+      <div className="grid min-h-[32rem] shrink-0 gap-6 lg:grid-cols-[minmax(0,1fr)_min(100%,18rem)]">
         <StrategyMapViewport view={view} onViewChange={setView}>
           <div className="flex flex-col items-stretch gap-0">
             {nodes.map((node, idx) => (
@@ -289,16 +290,13 @@ export function UserStrategyEditor({ initial }: Props) {
             <p className="mt-1">F/T/G = profile funcționale (financiar, tehnic, logistică) — aceeași treaptă L.</p>
             <p className="mt-1">Axa R = parteneri furnizori — separat de ierarhia L.</p>
           </div>
-          <div className="mt-4 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/50 p-3 text-[11px] text-zinc-500">
-            <p className="font-medium text-zinc-400">Drepturi (viitor)</p>
-            <p className="mt-1">
-              Matricea de permisiuni (cine poate aproba deviz, edita km etc.) va fi în{" "}
-              <span className="text-zinc-300">Administrare → Setări tenant</span>. Aici rămâne doar{" "}
-              <strong className="font-medium text-zinc-400">structura</strong> ierarhică și etichetele de rol.
-            </p>
-          </div>
+          <p className="mt-4 text-[11px] leading-relaxed text-zinc-500">
+            Drepturile efective sunt în rubrica de sub hartă. Aici editezi structura și etichetele.
+          </p>
         </aside>
       </div>
+
+      <UserStrategyRights />
     </div>
   );
 }

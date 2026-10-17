@@ -31,8 +31,8 @@ export default async function UserStrategyPage() {
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Strategie useri</h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-            Hartă ierarhică L** / L* / L1 / L0 / R — editabilă per tenant. Trage noduri, adaugă sau șterge niveluri
-            pe măsură ce produsul evoluează. Canonic:{" "}
+            Hartă ierarhică L** / L* / L1 / L0 / R și rubrica de drepturi F/T/G. Harta se editează per tenant.
+            Canonic:{" "}
             <code className="text-zinc-300">docs/identity-access-model.md</code> §3.5.
           </p>
         </div>
