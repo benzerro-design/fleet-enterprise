@@ -16,8 +16,8 @@ export default async function FleetHelpPage() {
         <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
         <h1 className="mt-1 text-2xl font-semibold text-zinc-50">Help</h1>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Ghiduri despre cum funcționează produsul. Faza 1: doar Admin abonat (L*). Separat de
-          procedurile de lucru pe firmă (viitor).
+          Ghiduri despre cum funcționează produsul. Doar Admin abonat (L*). Procedurile firmei stau
+          separat, în Administrare → Proceduri.
         </p>
       </div>
 

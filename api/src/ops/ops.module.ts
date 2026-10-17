@@ -11,6 +11,8 @@ import { RemindersController } from './reminders.controller';
 import { RemindersService } from './reminders.service';
 import { TripSheetsController } from './trip-sheets.controller';
 import { TripSheetsService } from './trip-sheets.service';
+import { TachographController } from './tachograph.controller';
+import { TachographService } from './tachograph.service';
 import { TripsController } from './trips.controller';
 import { TripsService } from './trips.service';
 import { TripSheetPdfStorageService } from '../storage/trip-sheet-pdf-storage.service';
@@ -21,6 +23,7 @@ import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
   controllers: [
     TripSheetsController,
     TripsController,
+    TachographController,
     MaintenanceController,
     CostsController,
     DocumentsController,
@@ -28,6 +31,7 @@ import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
   ],
   providers: [
     TripsService,
+    TachographService,
     TripSheetsService,
     TripSheetPdfStorageService,
     MaintenanceService,

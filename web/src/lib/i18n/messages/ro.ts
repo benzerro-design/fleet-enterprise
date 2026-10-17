@@ -91,6 +91,7 @@ const ro = {
       "/fleet/setup": "Prezentare",
       "/fleet/setup/clients": "Tipuri & servicii",
       "/fleet/setup/work-orders": "Comenzi (WO)",
+      "/fleet/setup/quote-thresholds": "Plafoane deviz",
       "/fleet/setup/mail": "Email",
       "/fleet/setup/integrations": "Integrări",
       "/fleet/setup/suppliers": "Furnizori",
@@ -100,6 +101,7 @@ const ro = {
       "/fleet/user-strategy": "Strategie useri",
       "/fleet/audit": "Audit",
       "/fleet/help": "Help",
+      "/fleet/procedures": "Proceduri",
       "/fleet/preferences": "Preferințe",
     },
     driverLinks: {

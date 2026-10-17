@@ -49,6 +49,10 @@ import { useT } from "@/lib/i18n/useT";
 type Props = {
   wo: WorkOrderDetail;
   canWrite: boolean;
+  /** Editare linii deviz. Implicit = canWrite. F nu editează. */
+  canEditQuote?: boolean;
+  /** Înregistrare cost din deviz aprobat. Implicit = canWrite și nu e partener. */
+  canPostCost?: boolean;
   /**
    * Marcă Out service (+ km/poze). Implicit = canWrite.
    * Șofer: true când Setup WO → allowDriverServiceOut.
@@ -99,6 +103,8 @@ function sheetBtn(primary?: boolean) {
 export function WorkOrderSheetShell({
   wo,
   canWrite,
+  canEditQuote: canEditQuoteProp,
+  canPostCost: canPostCostProp,
   canMarkServiceOut: canMarkServiceOutProp,
   canApprove,
   canResubmitQuote = false,
@@ -111,6 +117,8 @@ export function WorkOrderSheetShell({
   const tx = useT();
   const woT = (key: string) => tx(`ops.workOrders.sheet.${key}`);
   const canMarkServiceOut = canMarkServiceOutProp ?? canWrite;
+  const canEditQuote = canEditQuoteProp ?? canWrite;
+  const canPostCost = canPostCostProp ?? (canWrite && !isPartner);
   const mobilityPrefillSupplierId = partnerSupplierId?.trim() || (isPartner ? wo.supplierId : null);
   const router = useRouter();
   const [serviceType, setServiceType] = useState<ServiceOrderType>(wo.serviceOrderType);
@@ -1531,11 +1539,11 @@ export function WorkOrderSheetShell({
 
       <WorkOrderQuotePanel
         workOrderId={wo.id}
-        canWrite={canWrite}
+        canWrite={canEditQuote}
         canApprove={canApprove}
         canResubmitQuote={canResubmitQuote}
-        canMoveQuote={canWrite}
-        canPostCost={canWrite && !isPartner}
+        canMoveQuote={canEditQuote}
+        canPostCost={canPostCost}
         isPartner={isPartner}
         sheetLayout
         hasLucrare2={hasLucrare2}

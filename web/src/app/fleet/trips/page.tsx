@@ -11,7 +11,7 @@ import { TripsConsumptionView } from "@/components/fleet/TripsConsumptionView";
 import { DriverPager, DriverRecordList, DriverStatusBand } from "@/components/fleet/DriverPortalList";
 import { DriverViewportSplit } from "@/components/fleet/DriverViewportSplit";
 import { TripsDataGrid } from "@/components/fleet/TripsDataGrid";
-import { TripTachographPlaceholder } from "@/components/fleet/TripTachographPlaceholder";
+import { TachographBoard } from "@/components/fleet/TachographBoard";
 import { canWriteTrips, driverIdFromAuth, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { tripsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
@@ -525,7 +525,12 @@ export default async function TripsPage({ searchParams }: Props) {
         }
       >
         {showTachograph ? (
-          <TripTachographPlaceholder />
+          <TachographBoard
+            vehicles={vehicles}
+            drivers={drivers}
+            canWrite={write}
+            lockedDriverId={lockedDriverId}
+          />
         ) : showConsumption ? (
           !consumption ? (
             <p className="text-amber-400">Nu am putut încărca datele de consum.</p>
@@ -534,6 +539,13 @@ export default async function TripsPage({ searchParams }: Props) {
           )
         ) : showDocuments ? (
           <>
+            <TachographBoard
+              vehicles={vehicles}
+              drivers={drivers}
+              canWrite={false}
+              lockedDriverId={lockedDriverId}
+              summaryOnly
+            />
             {sp.generated ? (
               <p className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
                 Document generat. Descarcă PDF din tabelul de mai jos.
@@ -691,9 +703,21 @@ export default async function TripsPage({ searchParams }: Props) {
       />
 
       {showTachograph ? (
-        <TripTachographPlaceholder compact />
+        <TachographBoard
+          vehicles={vehicles}
+          drivers={drivers}
+          canWrite={write}
+          lockedDriverId={lockedDriverId}
+        />
       ) : showDocuments ? (
         <>
+          <TachographBoard
+            vehicles={vehicles}
+            drivers={drivers}
+            canWrite={false}
+            lockedDriverId={lockedDriverId}
+            summaryOnly
+          />
           <DriverStatusBand
             items={[
               {

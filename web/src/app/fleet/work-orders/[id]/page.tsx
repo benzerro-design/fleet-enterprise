@@ -5,6 +5,8 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { WorkOrderSheetShell } from "@/components/fleet/work-orders/WorkOrderSheetShell";
 import {
   canApproveQuotes,
+  canEditQuotes,
+  canPostCostQuotes,
   canDriverMarkServiceOut,
   canResubmitQuotes,
   canWriteFleetOps,
@@ -84,6 +86,8 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
         <WorkOrderSheetShell
           wo={wo}
           canWrite={canWrite}
+          canEditQuote={canEditQuotes(auth)}
+          canPostCost={canPostCostQuotes(auth)}
           canMarkServiceOut={canMarkServiceOut}
           canApprove={canApprove}
           canResubmitQuote={canResubmit}

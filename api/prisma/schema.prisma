@@ -30,6 +30,8 @@ model Tenant {
   fleetSettings      Json?
   /// Setup → Importuri: entități, șabloane, drepturi bulk.
   importSettings     Json?
+  /// CRM-020 — plafoane de aprobare deviz (user + sumă). Nu se aplică încă pe fluxul de aprobare.
+  quoteApprovalSettings Json?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   auditLogs          AuditLog[]
@@ -38,6 +40,8 @@ model Tenant {
   memberships        TenantMembership[]
   trips              Trip[]
   tripSheetDocuments TripSheetDocument[]
+  tachographDays     TachographDay[]
+  workProcedures     WorkProcedure[]
   vehicles           Vehicle[]
   vehicleEquipment   VehicleEquipment[]
   vehicleWheelFitments VehicleWheelFitment[]
@@ -255,6 +259,7 @@ model Driver {
   client             Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   vehicleAssignments DriverVehicleAssignment[]
   trips              Trip[]
+  tachographDays     TachographDay[]
   documents          DriverDocument[]
   crmTickets         CrmTicket[]
   clientMemberships  ClientMembership[]        @relation("ClientMembershipDriver")
@@ -563,6 +568,7 @@ model Vehicle {
   costEntries        CostEntry[]
   maintenanceEntries MaintenanceEntry[]
   trips              Trip[]
+  tachographDays     TachographDay[]
   createdBy          User?              @relation("VehicleCreatedBy", fields: [createdByUserId], references: [id])
   tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   updatedBy          User?              @relation("VehicleUpdatedBy", fields: [updatedByUserId], references: [id])
@@ -777,6 +783,57 @@ model Trip {
   @@index([tenantId])
   @@index([vehicleId])
   @@index([driverId])
+}
+
+/// Felie 1 tahograf: activitate zilnică introdusă manual (fără import de card).
+model TachographDay {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  vehicleId            String
+  driverId             String
+  /// Ziua calendaristică (fără oră).
+  day                  DateTime @db.Date
+  drivingMinutes       Int      @default(0)
+  otherWorkMinutes     Int      @default(0)
+  availabilityMinutes  Int      @default(0)
+  restMinutes          Int      @default(0)
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle              Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driver               Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, vehicleId, driverId, day])
+  @@index([tenantId, day])
+  @@index([vehicleId])
+  @@index([driverId])
+}
+
+enum ProcedureStatus {
+  draft
+  published
+  withdrawn
+}
+
+/// PROC-001 slice 1: procedură de lucru a abonatului (nu Help, nu client, nu partener).
+model WorkProcedure {
+  id           String          @id @default(cuid())
+  tenantId     String
+  title        String
+  status       ProcedureStatus @default(draft)
+  version      Int             @default(1)
+  /// Pași numerotați, text simplu.
+  steps        Json
+  /// Rută din aplicație, opțională (ex. /fleet/members).
+  screenPath   String?
+  ownerUserId  String?
+  publishedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
 }
 
 enum TripSheetDocType {

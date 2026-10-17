@@ -2171,7 +2171,7 @@ export function WorkOrderQuotePanel({
                     </span>
                   ) : null}
                 </p>
-              ) : canWrite ? (
+              ) : (isPartner ? canWrite : canPostCost) ? (
                 <div className="space-y-3">
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div>
@@ -2242,7 +2242,7 @@ export function WorkOrderQuotePanel({
                   {" · "}
                   {formatMoneyCents(activeQuote.totalGrossCents, activeQuote.currency)}
                 </p>
-              ) : activeQuote.invoicedAt && canWrite && canPostCost ? (
+              ) : activeQuote.invoicedAt && canPostCost ? (
                 <button
                   type="button"
                   disabled={pending}

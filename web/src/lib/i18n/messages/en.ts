@@ -91,6 +91,7 @@ const en = {
       "/fleet/setup": "Overview",
       "/fleet/setup/clients": "Types & services",
       "/fleet/setup/work-orders": "Work orders",
+      "/fleet/setup/quote-thresholds": "Quote thresholds",
       "/fleet/setup/mail": "Email",
       "/fleet/setup/integrations": "Integrations",
       "/fleet/setup/suppliers": "Suppliers",
@@ -100,6 +101,7 @@ const en = {
       "/fleet/user-strategy": "User strategy",
       "/fleet/audit": "Audit",
       "/fleet/help": "Help",
+      "/fleet/procedures": "Procedures",
       "/fleet/preferences": "Preferences",
     },
     driverLinks: {

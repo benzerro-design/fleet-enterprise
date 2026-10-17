@@ -283,6 +283,14 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
     },
     {
       kind: "link",
+      label: "Plafoane deviz",
+      href: "/fleet/setup/quote-thresholds",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/setup/quote-thresholds"],
+    },
+    {
+      kind: "link",
       label: "Email",
       href: "/fleet/setup/mail",
       phase: "live",
@@ -353,6 +361,14 @@ export const FLEET_NAV_ADMIN_GROUP: FleetNavGroup = {
       phase: "live",
       requireAuth: true,
       activePrefixes: ["/fleet/audit"],
+    },
+    {
+      kind: "link",
+      label: "Proceduri",
+      href: "/fleet/procedures",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/procedures"],
     },
     {
       kind: "link",

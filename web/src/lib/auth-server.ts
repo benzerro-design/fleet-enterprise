@@ -83,19 +83,43 @@ export function canUseBot(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "tenant_admin" && auth.me.tenantSlug === "demo";
 }
 
+type FunctionalCap = "quote.edit" | "quote.approve" | "quote.postCost" | "scheduler.write" | "fleet.write";
+type FunctionalProfileName = "F" | "T" | "G" | "full";
+
+const PROFILE_CAPS: Record<FunctionalProfileName, readonly FunctionalCap[]> = {
+  F: ["quote.approve", "quote.postCost"],
+  T: ["quote.edit", "fleet.write"],
+  G: ["scheduler.write", "fleet.write"],
+  full: ["quote.edit", "quote.approve", "quote.postCost", "scheduler.write", "fleet.write"],
+};
+
+/** null / lipsă = legacy, fără restricție F/T/G. */
+function profileAllows(
+  profile: FunctionalProfileName | null | undefined,
+  cap: FunctionalCap,
+): boolean {
+  if (profile == null) return true;
+  return PROFILE_CAPS[profile].includes(cap);
+}
+
 export function canWriteClientFleet(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
-  if (auth.me.role === "tenant_admin") return true;
+  if (auth.me.role === "tenant_admin") {
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "fleet.write");
+  }
   if (auth.me.role === "client_user") {
-    const roles = auth.me.access?.clientMemberships.map((m) => m.role) ?? [];
-    return roles.some((r) => r === "client_admin" || r === "client_dispatcher");
+    return (auth.me.access?.clientMemberships ?? []).some(
+      (m) =>
+        (m.role === "client_admin" || m.role === "client_dispatcher") &&
+        profileAllows(m.functionalProfile, "fleet.write"),
+    );
   }
   return false;
 }
 
-/** Scriere operațională flotă — tenant_admin sau client_admin/dispatcher scoped. */
+/** Scriere operațională flotă — tenant_admin sau client_admin/dispatcher, cu profil F/T/G. */
 export function canWriteFleetOps(auth: AuthMeResult): boolean {
-  return canManageFleet(auth) || canWriteClientFleet(auth);
+  return canWriteClientFleet(auth);
 }
 
 export function defaultClientCodeForTickets(auth: AuthMeResult): string | undefined {
@@ -116,9 +140,18 @@ export function canWriteTickets(auth: AuthMeResult): boolean {
   return false;
 }
 
-/** Dosar lucrare, programator, devize — manager client sau tenant_admin. */
+/** Dosar lucrare / programator — G, full sau legacy. T editează devizul, nu programatorul. */
 export function canOperateServiceCase(auth: AuthMeResult): boolean {
-  return canWriteClientFleet(auth) || canManageFleet(auth);
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") {
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "scheduler.write");
+  }
+  if (auth.me.role !== "client_user") return false;
+  return (auth.me.access?.clientMemberships ?? []).some(
+    (m) =>
+      (m.role === "client_admin" || m.role === "client_dispatcher") &&
+      profileAllows(m.functionalProfile, "scheduler.write"),
+  );
 }
 
 /** Validare programare în locul furnizorului — doar tenant_admin (nu manager client). */
@@ -159,12 +192,41 @@ export function canUseAppointmentProposalHistory(
   );
 }
 
-/** Aprobare deviz — client_admin sau tenant_admin. */
+/** Aprobare deviz — F / full / legacy. T și G nu aprobă. */
 export function canApproveQuotes(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
-  if (auth.me.role === "tenant_admin") return true;
-  const roles = auth.me.access?.clientMemberships.map((m) => m.role) ?? [];
-  return roles.some((r) => r === "client_admin");
+  if (auth.me.role === "tenant_admin") {
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.approve");
+  }
+  return (auth.me.access?.clientMemberships ?? []).some(
+    (m) => m.role === "client_admin" && profileAllows(m.functionalProfile, "quote.approve"),
+  );
+}
+
+/** Editare deviz — T / full / legacy. F aprobă, nu editează liniile. */
+export function canEditQuotes(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") {
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.edit");
+  }
+  return (auth.me.access?.clientMemberships ?? []).some(
+    (m) =>
+      (m.role === "client_admin" || m.role === "client_dispatcher") &&
+      profileAllows(m.functionalProfile, "quote.edit"),
+  );
+}
+
+/** Post-cost din deviz — F / full / legacy. */
+export function canPostCostQuotes(auth: AuthMeResult): boolean {
+  if (!auth.ok) return false;
+  if (auth.me.role === "tenant_admin") {
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.postCost");
+  }
+  return (auth.me.access?.clientMemberships ?? []).some(
+    (m) =>
+      (m.role === "client_admin" || m.role === "client_dispatcher") &&
+      profileAllows(m.functionalProfile, "quote.postCost"),
+  );
 }
 
 /**

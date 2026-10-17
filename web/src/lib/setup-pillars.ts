@@ -35,6 +35,14 @@ export const SETUP_PILLARS: SetupPillar[] = [
     activePrefixes: ["/fleet/setup/work-orders"],
   },
   {
+    id: "quote-thresholds",
+    href: "/fleet/setup/quote-thresholds",
+    label: "Plafoane deviz",
+    blurb: "Useri și sume maxime de aprobare. Nu se aplică încă pe deviz.",
+    status: "live",
+    activePrefixes: ["/fleet/setup/quote-thresholds"],
+  },
+  {
     id: "mail",
     href: "/fleet/setup/mail",
     label: "Email",
