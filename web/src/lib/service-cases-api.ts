@@ -410,6 +410,10 @@ export type WorkOrderRecord = {
   completedAt: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
+  visit2InServiceAt?: string | null;
+  visit2OutServiceAt?: string | null;
+  visit2OdometerKmIn?: number | null;
+  visit2OdometerKmOut?: number | null;
   createdAt: string;
   latestQuote: QuoteSummary | null;
   approvedQuote?: QuoteSummary | null;

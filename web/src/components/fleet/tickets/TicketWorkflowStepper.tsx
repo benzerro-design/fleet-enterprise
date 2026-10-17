@@ -61,6 +61,11 @@ type Props = {
   /** Manager / admin — gated by prop (setare client / admin always). */
   showProposalHistoryTabs?: boolean;
   compact?: boolean;
+  /** Portal șofer — fără link către comanda de lucru. */
+  driverPortal?: boolean;
+  /** Out service pe tichet, doar dacă setarea WO e pornită. */
+  canMarkServiceOut?: boolean;
+  requireServiceKm?: boolean;
 };
 
 export function TicketWorkflowStepper({
@@ -78,6 +83,9 @@ export function TicketWorkflowStepper({
   onServiceCaseChange,
   ticketEvents = [],
   showProposalHistoryTabs: showProposalHistoryTabsProp = false,
+  driverPortal = false,
+  canMarkServiceOut = false,
+  requireServiceKm = false,
   compact = false,
 }: Props) {
   const router = useRouter();
@@ -720,6 +728,9 @@ export function TicketWorkflowStepper({
                   closed={closed}
                   onTransformMaintenance={transformToMaintenance}
                   ticketSettlement={ticketSettlement}
+                  driverPortal={driverPortal}
+                  canMarkServiceOut={canMarkServiceOut && !closed}
+                  requireServiceKm={requireServiceKm}
                 />
               ))}
             </div>
@@ -1215,6 +1226,9 @@ function WorkOrderStepCard({
   closed,
   onTransformMaintenance,
   ticketSettlement,
+  driverPortal = false,
+  canMarkServiceOut = false,
+  requireServiceKm = false,
 }: {
   wo: WorkOrderRecord;
   pending: boolean;
@@ -1238,6 +1252,9 @@ function WorkOrderStepCard({
     entityId: string;
     createdAt: string;
   } | null;
+  driverPortal?: boolean;
+  canMarkServiceOut?: boolean;
+  requireServiceKm?: boolean;
 }) {
   const approved = wo.approvedQuote ?? (wo.latestQuote?.status === "approved" ? wo.latestQuote : null);
   const pendingQuotes =
@@ -1276,10 +1293,32 @@ function WorkOrderStepCard({
     return null;
   })();
 
+  const visit2 = repairPath === "reschedule" && !!wo.outServiceAt;
+  const driverInAt = visit2 ? (wo.visit2InServiceAt ?? null) : wo.inServiceAt;
+  const driverOutAt = visit2 ? (wo.visit2OutServiceAt ?? null) : wo.outServiceAt;
+  const driverKmIn = visit2 ? (wo.visit2OdometerKmIn ?? null) : wo.odometerKmIn;
+  const driverKmOut = visit2 ? (wo.visit2OdometerKmOut ?? null) : wo.odometerKmOut;
+  const showDriverOut = canMarkServiceOut && !!driverInAt && !driverOutAt;
+  const shownInAt = driverPortal ? driverInAt : wo.inServiceAt;
+  const shownOutAt = driverPortal ? driverOutAt : wo.outServiceAt;
+  const shownKmIn = driverPortal ? driverKmIn : wo.odometerKmIn;
+  const shownKmOut = driverPortal ? driverKmOut : wo.odometerKmOut;
+
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
+          {driverPortal ? (
+            <p className="font-medium text-zinc-100">
+              {wo.displayNumber ? (
+                <>
+                  <span className="font-mono text-violet-200">{wo.displayNumber}</span>
+                  {" · "}
+                </>
+              ) : null}
+              {wo.title}
+            </p>
+          ) : (
           <Link href={`/fleet/work-orders/${wo.id}`} className="font-medium text-sky-300 hover:underline">
             {wo.displayNumber ? (
               <>
@@ -1289,6 +1328,7 @@ function WorkOrderStepCard({
             ) : null}
             {wo.title}
           </Link>
+          )}
           <p className="mt-0.5 text-xs text-zinc-500">
             {wo.status}
             {wo.supplierLegalName ? ` · ${wo.supplierLegalName}` : ""}
@@ -1296,9 +1336,11 @@ function WorkOrderStepCard({
             {wo.repairPathNote ? ` · ${wo.repairPathNote}` : ""}
           </p>
         </div>
-        <Link href={`/fleet/work-orders/${wo.id}`} className="text-[10px] text-zinc-400 hover:text-zinc-200">
-          Deschide comandă →
-        </Link>
+        {driverPortal ? null : (
+          <Link href={`/fleet/work-orders/${wo.id}`} className="text-[10px] text-zinc-400 hover:text-zinc-200">
+            Deschide comandă →
+          </Link>
+        )}
       </div>
 
       {nextStep ? (
@@ -1309,31 +1351,40 @@ function WorkOrderStepCard({
       ) : null}
 
       <div className="mt-2 rounded-md border border-violet-800/40 bg-violet-950/20 p-2">
-        <p className="text-[10px] uppercase text-violet-300/80">In / Out service</p>
+        <p className="text-[10px] uppercase text-violet-300/80">
+          {driverPortal && visit2 ? "Vizita 2 · In / Out service" : "In / Out service"}
+        </p>
         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-300">
           <span title="Data intrării în service">
             In:{" "}
-            {wo.inServiceAt ? (
-              <strong className="text-violet-200">{new Date(wo.inServiceAt).toLocaleString("ro-RO")}</strong>
+            {shownInAt ? (
+              <strong className="text-violet-200">{new Date(shownInAt).toLocaleString("ro-RO")}</strong>
             ) : (
               <span className="text-zinc-500">—</span>
             )}
-            {wo.odometerKmIn != null ? (
-              <span className="text-zinc-500"> · {wo.odometerKmIn.toLocaleString("ro-RO")} km</span>
+            {shownKmIn != null ? (
+              <span className="text-zinc-500"> · {shownKmIn.toLocaleString("ro-RO")} km</span>
             ) : null}
           </span>
           <span title="Data ieșirii din service">
             Out:{" "}
-            {wo.outServiceAt ? (
-              <strong className="text-violet-200">{new Date(wo.outServiceAt).toLocaleString("ro-RO")}</strong>
+            {shownOutAt ? (
+              <strong className="text-violet-200">{new Date(shownOutAt).toLocaleString("ro-RO")}</strong>
             ) : (
               <span className="text-zinc-500">—</span>
             )}
-            {wo.odometerKmOut != null ? (
-              <span className="text-zinc-500"> · {wo.odometerKmOut.toLocaleString("ro-RO")} km</span>
+            {shownKmOut != null ? (
+              <span className="text-zinc-500"> · {shownKmOut.toLocaleString("ro-RO")} km</span>
             ) : null}
           </span>
         </div>
+        {showDriverOut ? (
+          <DriverServiceOutForm
+            pending={pending}
+            requireKm={requireServiceKm}
+            onSubmit={(km) => void onRecordServiceTime(wo.id, "outServiceAt", undefined, km)}
+          />
+        ) : null}
         {canOperate ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {!wo.inServiceAt ? (
@@ -1385,9 +1436,13 @@ function WorkOrderStepCard({
               >
                 <p className="text-xs text-amber-50">
                   Deviz{" "}
-                  <Link href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
-                    v{pq.version}
-                  </Link>
+                  {driverPortal ? (
+                    <span>v{pq.version}</span>
+                  ) : (
+                    <Link href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
+                      v{pq.version}
+                    </Link>
+                  )}
                   {" · "}
                   {quoteStatusLabel(pq.status)} ·{" "}
                   {formatQuoteMoney(pq.totalGrossCents, pq.currency)}
@@ -1436,19 +1491,24 @@ function WorkOrderStepCard({
                 <div className="rounded-md border border-emerald-800/50 bg-emerald-950/20 p-2">
                   <p className="text-xs font-medium text-emerald-200">
                     Deviz{" "}
-                    <Link href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
-                      v{aq.version}
-                    </Link>
+                    {driverPortal ? (
+                      <span>v{aq.version}</span>
+                    ) : (
+                      <Link href={`/fleet/work-orders/${wo.id}`} className="text-sky-300 hover:underline">
+                        v{aq.version}
+                      </Link>
+                    )}
                     {" aprobat · "}
                     {formatQuoteMoney(aq.totalGrossCents, aq.currency)}
                     {aq.invoicedAt ? " · facturat" : ""}
                   </p>
-                  {!aq.invoicedAt ? (
+                  {!aq.invoicedAt && !driverPortal ? (
                     <p className="mt-1 text-[10px] text-emerald-300/70">
                       Factură și cost pe acest Deviz (nu pe altul).
                     </p>
                   ) : null}
                 </div>
+                {driverPortal ? null : (
                 <WorkOrderQuoteBillingActions
                   key={`${aq.id}-${aq.invoicedAt ?? ""}-${aq.costEntryId ?? ""}-${ticketSettlement?.entityId ?? ""}`}
                   workOrderId={wo.id}
@@ -1461,6 +1521,7 @@ function WorkOrderStepCard({
                   ticketSettlement={ticketSettlement}
                   onUpdated={onRefresh}
                 />
+                )}
               </div>
             ))}
           {canOperate &&
@@ -1486,8 +1547,68 @@ function WorkOrderStepCard({
       ) : null}
 
       {!pendingQuotes.length && !approvedQuotes.length ? (
-        <p className="mt-2 text-xs text-zinc-500">Fără deviz — adaugă din pagina comenzii.</p>
+        <p className="mt-2 text-xs text-zinc-500">
+          {driverPortal ? "Fără deviz." : "Fără deviz — adaugă din pagina comenzii."}
+        </p>
       ) : null}
+    </div>
+  );
+}
+
+function DriverServiceOutForm({
+  pending,
+  requireKm,
+  onSubmit,
+}: {
+  pending: boolean;
+  requireKm: boolean;
+  onSubmit: (km?: number) => void;
+}) {
+  const [kmOut, setKmOut] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  return (
+    <div className="mt-2 space-y-2">
+      <label className="block text-xs text-zinc-400">
+        Km out{requireKm ? <span className="text-amber-400"> *</span> : null}
+        <input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          value={kmOut}
+          disabled={pending}
+          onChange={(e) => setKmOut(e.target.value)}
+          className="mt-1 block w-full max-w-[12rem] rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 font-mono text-sm text-zinc-200 disabled:opacity-50"
+          placeholder={requireKm ? "obligatoriu" : "opțional"}
+        />
+      </label>
+      {localError ? <p className="text-xs text-amber-300">{localError}</p> : null}
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          const raw = kmOut.trim();
+          if (!raw) {
+            if (requireKm) {
+              setLocalError("Km la ieșire este obligatoriu.");
+              return;
+            }
+            setLocalError(null);
+            onSubmit(undefined);
+            return;
+          }
+          const km = Number.parseInt(raw, 10);
+          if (!Number.isFinite(km) || km < 0) {
+            setLocalError("Km trebuie să fie un număr întreg, cel puțin 0.");
+            return;
+          }
+          setLocalError(null);
+          onSubmit(km);
+        }}
+        className="w-full rounded-lg border border-violet-500/50 bg-violet-950/40 px-3 py-2 text-sm font-medium text-violet-100 hover:bg-violet-900/40 disabled:opacity-50 sm:w-auto"
+      >
+        Mașina a ieșit
+      </button>
     </div>
   );
 }

@@ -59,6 +59,8 @@ type Props = {
   compact?: boolean;
   /** When opened from WO, treat as „după WO” for payer hint. */
   fromWorkOrder?: boolean;
+  /** Șoferul nu deschide foaia comenzii. */
+  hideWorkOrderLink?: boolean;
   /** Nr. înmatriculare — pentru import din Documente flotă. */
   registrationNumber?: string | null;
 };
@@ -102,6 +104,7 @@ export function DamageClaimPanel({
   onUpdated,
   compact,
   fromWorkOrder = false,
+  hideWorkOrderLink = false,
   registrationNumber = null,
 }: Props) {
   const isDamage = serviceCase?.workflowType === "damage";
@@ -2255,7 +2258,7 @@ export function DamageClaimPanel({
               </p>
               {primaryWo ? (
                 <p className="text-xs text-zinc-300">
-                  {fromWorkOrder ? (
+                  {fromWorkOrder || hideWorkOrderLink ? (
                     <span>
                       Comanda curentă
                       {primaryWo.displayNumber ? ` ${primaryWo.displayNumber}` : ""}

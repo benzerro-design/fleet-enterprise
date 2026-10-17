@@ -109,9 +109,13 @@ export type WorkOrderRecord = {
   completedAt: string | null;
   inServiceAt: string | null;
   outServiceAt: string | null;
+  visit2InServiceAt: string | null;
+  visit2OutServiceAt: string | null;
   displayNumber: string | null;
   odometerKmIn: number | null;
   odometerKmOut: number | null;
+  visit2OdometerKmIn: number | null;
+  visit2OdometerKmOut: number | null;
   repairPathNote: string | null;
   serviceOrderType: string;
   readyAt: string | null;
@@ -4273,6 +4277,10 @@ export class ServiceCasesService {
         displayNumber: string | null;
         odometerKmIn: number | null;
         odometerKmOut: number | null;
+        visit2InServiceAt: Date | null;
+        visit2OutServiceAt: Date | null;
+        visit2OdometerKmIn: number | null;
+        visit2OdometerKmOut: number | null;
         repairPathNote: string | null;
         serviceOrderType: string;
         readyAt: Date | null;
@@ -4448,9 +4456,13 @@ export class ServiceCasesService {
           completedAt: wo.completedAt?.toISOString() ?? null,
           inServiceAt: wo.inServiceAt?.toISOString() ?? null,
           outServiceAt: wo.outServiceAt?.toISOString() ?? null,
+          visit2InServiceAt: wo.visit2InServiceAt?.toISOString() ?? null,
+          visit2OutServiceAt: wo.visit2OutServiceAt?.toISOString() ?? null,
           displayNumber: wo.displayNumber ?? null,
           odometerKmIn: wo.odometerKmIn ?? null,
           odometerKmOut: wo.odometerKmOut ?? null,
+          visit2OdometerKmIn: wo.visit2OdometerKmIn ?? null,
+          visit2OdometerKmOut: wo.visit2OdometerKmOut ?? null,
           repairPathNote: wo.repairPathNote ?? null,
           serviceOrderType: wo.serviceOrderType,
           readyAt: wo.readyAt?.toISOString() ?? null,

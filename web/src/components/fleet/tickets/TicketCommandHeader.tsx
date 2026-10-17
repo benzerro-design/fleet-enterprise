@@ -19,6 +19,8 @@ type Props = {
   closed: boolean;
   /** Claim — L1 / L* (nu șofer). */
   canManage: boolean;
+  /** Șoferul rămâne pe tichet; numărul comenzii nu e link. */
+  driverPortal?: boolean;
   onClaim?: () => void;
   claimPending?: boolean;
 };
@@ -28,6 +30,7 @@ export function TicketCommandHeader({
   serviceCase,
   closed,
   canManage,
+  driverPortal = false,
   onClaim,
   claimPending,
 }: Props) {
@@ -102,12 +105,16 @@ export function TicketCommandHeader({
               {serviceCaseLabel}
             </p>
             {serviceCase?.workOrders[0]?.displayNumber ? (
-              <Link
-                href={`/fleet/work-orders/${serviceCase.workOrders[0]!.id}`}
-                className="mt-1 block font-mono text-violet-300 hover:underline"
-              >
-                {serviceCase.workOrders[0]!.displayNumber}
-              </Link>
+              driverPortal ? (
+                <p className="mt-1 font-mono text-violet-300">{serviceCase.workOrders[0]!.displayNumber}</p>
+              ) : (
+                <Link
+                  href={`/fleet/work-orders/${serviceCase.workOrders[0]!.id}`}
+                  className="mt-1 block font-mono text-violet-300 hover:underline"
+                >
+                  {serviceCase.workOrders[0]!.displayNumber}
+                </Link>
+              )
             ) : null}
           </div>
 

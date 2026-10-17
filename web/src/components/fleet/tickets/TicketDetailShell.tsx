@@ -26,6 +26,11 @@ type Props = {
   canAckAppt: boolean;
   showProposalHistoryTabs?: boolean;
   currentUserId?: string;
+  /** Portal șofer — fără linkuri către comanda de lucru. */
+  driverPortal?: boolean;
+  /** Șoferul poate marca Out, dacă setarea WO e pornită. */
+  canMarkServiceOut?: boolean;
+  requireServiceKm?: boolean;
 };
 
 export function TicketDetailShell({
@@ -40,6 +45,9 @@ export function TicketDetailShell({
   canAckAppt,
   showProposalHistoryTabs = false,
   currentUserId,
+  driverPortal = false,
+  canMarkServiceOut = false,
+  requireServiceKm = false,
 }: Props) {
   const router = useRouter();
   const { ticket } = detail;
@@ -105,6 +113,7 @@ export function TicketDetailShell({
         serviceCase={serviceCase}
         closed={closed}
         canManage={patch}
+        driverPortal={driverPortal}
         onClaim={() => void claim()}
         claimPending={claimPending}
       />
@@ -138,12 +147,16 @@ export function TicketDetailShell({
               ticketEvents={detail.events}
               showProposalHistoryTabs={showProposalHistoryTabs}
               onServiceCaseChange={setServiceCase}
+              driverPortal={driverPortal}
+              canMarkServiceOut={canMarkServiceOut}
+              requireServiceKm={requireServiceKm}
             />
           }
           damage={
             <DamageClaimPanel
               serviceCase={serviceCase}
               canWrite={write && canOperate}
+              hideWorkOrderLink={driverPortal}
               registrationNumber={ticket.registrationNumber}
               onUpdated={(next) => setServiceCase(next)}
             />
