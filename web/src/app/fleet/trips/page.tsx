@@ -292,6 +292,7 @@ export default async function TripsPage({ searchParams }: Props) {
   const desktop = (
     <FleetPageMain fill>
       <FleetListPageLayout
+        densityToolbar={!showTachograph}
         header={
           <>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -527,7 +528,6 @@ export default async function TripsPage({ searchParams }: Props) {
         {showTachograph ? (
           <TachographBoard
             vehicles={vehicles}
-            drivers={drivers}
             canWrite={write}
             lockedDriverId={lockedDriverId}
           />
@@ -541,7 +541,6 @@ export default async function TripsPage({ searchParams }: Props) {
           <>
             <TachographBoard
               vehicles={vehicles}
-              drivers={drivers}
               canWrite={false}
               lockedDriverId={lockedDriverId}
               summaryOnly
@@ -705,7 +704,6 @@ export default async function TripsPage({ searchParams }: Props) {
       {showTachograph ? (
         <TachographBoard
           vehicles={vehicles}
-          drivers={drivers}
           canWrite={write}
           lockedDriverId={lockedDriverId}
         />
@@ -713,7 +711,6 @@ export default async function TripsPage({ searchParams }: Props) {
         <>
           <TachographBoard
             vehicles={vehicles}
-            drivers={drivers}
             canWrite={false}
             lockedDriverId={lockedDriverId}
             summaryOnly

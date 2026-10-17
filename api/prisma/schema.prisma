@@ -798,6 +798,9 @@ model TachographDay {
   availabilityMinutes  Int      @default(0)
   restMinutes          Int      @default(0)
   notes                String?
+  /// Bon / print emis de tahograf (PDF sau poză).
+  slipFileUrl          String?
+  slipFileName         String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)

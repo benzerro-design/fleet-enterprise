@@ -18,6 +18,8 @@ type DayRow = {
   availabilityMinutes: number;
   restMinutes: number;
   notes: string | null;
+  slipFileUrl?: string | null;
+  slipFileName?: string | null;
 };
 
 type Payload = {
@@ -46,13 +48,11 @@ function hours(minutes: number) {
 
 export function TachographBoard({
   vehicles,
-  drivers,
   canWrite,
   lockedDriverId,
   summaryOnly = false,
 }: {
   vehicles: VehicleOption[];
-  drivers: DriverOption[];
   canWrite: boolean;
   lockedDriverId?: string;
   summaryOnly?: boolean;
@@ -61,7 +61,9 @@ export function TachographBoard({
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [vehicleId, setVehicleId] = useState(vehicles.length === 1 ? vehicles[0]!.id : "");
-  const [driverId, setDriverId] = useState(lockedDriverId ?? "");
+  const [filterDriverId, setFilterDriverId] = useState("");
+  const [formDriverId, setFormDriverId] = useState(lockedDriverId ?? "");
+  const [assignedDrivers, setAssignedDrivers] = useState<DriverOption[]>([]);
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -70,12 +72,41 @@ export function TachographBoard({
   const [availability, setAvailability] = useState("0");
   const [rest, setRest] = useState("0");
   const [notes, setNotes] = useState("");
+  const [slip, setSlip] = useState<{ url: string; name: string } | null>(null);
   const [day, setDay] = useState(initial.to);
+
+  useEffect(() => {
+    if (lockedDriverId || !vehicleId) {
+      setAssignedDrivers([]);
+      if (!lockedDriverId) setFormDriverId("");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch(`/api/fleet/vehicles/${vehicleId}/driver-assignments`);
+      if (!res.ok || cancelled) return;
+      const rows = (await res.json()) as {
+        driverId: string;
+        driverFullName?: string | null;
+        unassignedAt: string | null;
+      }[];
+      if (cancelled) return;
+      const active = rows
+        .filter((row) => !row.unassignedAt)
+        .map((row) => ({ id: row.driverId, fullName: row.driverFullName?.trim() || "Șofer" }));
+      setAssignedDrivers(active);
+      setFilterDriverId("");
+      setFormDriverId(active.length === 1 ? active[0]!.id : "");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [vehicleId, lockedDriverId]);
 
   const load = useCallback(async () => {
     const q = new URLSearchParams({ from, to });
     if (vehicleId) q.set("vehicleId", vehicleId);
-    if (driverId) q.set("driverId", driverId);
+    if (filterDriverId) q.set("driverId", filterDriverId);
     const res = await fetch(`${tripsBrowserBase}/tachograph-days?${q}`, { headers: fleetJsonHeaders() });
     if (!res.ok) {
       setError("Nu am putut încărca zilele de tahograf.");
@@ -83,7 +114,7 @@ export function TachographBoard({
     }
     setError(null);
     setData((await res.json()) as Payload);
-  }, [from, to, vehicleId, driverId]);
+  }, [from, to, vehicleId, filterDriverId]);
 
   useEffect(() => {
     void load();
@@ -101,8 +132,38 @@ export function TachographBoard({
     ] as const;
   }, [totals]);
 
+  async function readError(res: Response, fallback: string) {
+    try {
+      const body = (await res.json()) as { message?: string | string[] };
+      if (typeof body.message === "string" && body.message.trim()) return body.message;
+      if (Array.isArray(body.message) && body.message.length) return body.message.join(" ");
+    } catch {
+      /* răspuns fără JSON */
+    }
+    return fallback;
+  }
+
+  async function uploadSlip(file: File) {
+    const form = new FormData();
+    form.set("file", file);
+    form.set("label", "tahograf");
+    const res = await fetch("/api/uploads/documents", { method: "POST", body: form });
+    if (!res.ok) {
+      setError(await readError(res, "Nu am putut încărca bonul."));
+      return;
+    }
+    const body = (await res.json()) as { url: string; name: string };
+    setSlip({ url: body.url, name: body.name });
+    setError(null);
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    const chosenDriver = lockedDriverId || formDriverId;
+    if (!vehicleId || !chosenDriver) {
+      setError(assignedDrivers.length === 0 ? "Vehiculul nu are un șofer alocat." : "Alege conducătorul alocat pe vehicul.");
+      return;
+    }
     setPending(true);
     setError(null);
     const res = await fetch(`${tripsBrowserBase}/tachograph-days`, {
@@ -110,20 +171,22 @@ export function TachographBoard({
       headers: fleetJsonHeaders(),
       body: JSON.stringify({
         vehicleId,
-        driverId: lockedDriverId || driverId,
+        driverId: chosenDriver,
         day,
         drivingMinutes: Number(driving) || 0,
         otherWorkMinutes: Number(otherWork) || 0,
         availabilityMinutes: Number(availability) || 0,
         restMinutes: Number(rest) || 0,
         notes,
+        ...(slip ? { slipFileUrl: slip.url, slipFileName: slip.name } : {}),
       }),
     });
     setPending(false);
     if (!res.ok) {
-      setError("Nu am putut salva ziua.");
+      setError(await readError(res, "Nu am putut salva ziua."));
       return;
     }
+    setSlip(null);
     await load();
   }
 
@@ -140,7 +203,7 @@ export function TachographBoard({
         <p className="text-xs font-medium uppercase tracking-widest text-emerald-400/90">Lângă FAZ</p>
         <h2 className="mt-1 text-lg font-semibold text-zinc-100">Rezumat activitate zilnică</h2>
         <p className="mt-1 text-sm text-zinc-400">
-          Minute introduse manual pe vehicul, zi și conducător. Importul de card nu face parte din această felie.
+          Minute introduse manual, cu bonul de tahograf atașat la zi. Când apare importul de card, aceleași zile se completează automat.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
           {(summary ?? []).map(([label, value]) => (
@@ -181,9 +244,9 @@ export function TachographBoard({
             {lockedDriverId ? null : (
               <label className="text-xs text-zinc-500">
                 Conducător
-                <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100">
-                  <option value="">Toți</option>
-                  {drivers.map((d) => (
+                <select value={filterDriverId} onChange={(e) => setFilterDriverId(e.target.value)} disabled={!vehicleId} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100">
+                  <option value="">{vehicleId ? "Șoferii alocați" : "Alege vehiculul"}</option>
+                  {assignedDrivers.map((d) => (
                     <option key={d.id} value={d.id}>{d.fullName}</option>
                   ))}
                 </select>
@@ -209,9 +272,9 @@ export function TachographBoard({
               {lockedDriverId ? null : (
                 <label className="text-xs text-zinc-500">
                   Conducător
-                  <select required value={driverId} onChange={(e) => setDriverId(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm">
-                    <option value="">Alege</option>
-                    {drivers.map((d) => (
+                  <select required value={formDriverId} onChange={(e) => setFormDriverId(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm">
+                    <option value="">{assignedDrivers.length ? "Alege" : "Niciun șofer alocat"}</option>
+                    {assignedDrivers.map((d) => (
                       <option key={d.id} value={d.id}>{d.fullName}</option>
                     ))}
                   </select>
@@ -237,6 +300,19 @@ export function TachographBoard({
                 Note
                 <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
               </label>
+              <label className="text-xs text-zinc-500 sm:col-span-2">
+                Bon tahograf (PDF sau poză)
+                <input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void uploadSlip(file);
+                  }}
+                  className="mt-1 block w-full text-sm text-zinc-300"
+                />
+                {slip ? <span className="mt-1 block text-zinc-400">{slip.name}</span> : null}
+              </label>
               <div className="flex items-end">
                 <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 disabled:opacity-50">
                   Salvează ziua
@@ -254,6 +330,14 @@ export function TachographBoard({
                   </p>
                   <p className="text-xs text-zinc-500">
                     Condus {hours(row.drivingMinutes)} · Muncă {hours(row.otherWorkMinutes)} · Disp. {hours(row.availabilityMinutes)} · Odihnă {hours(row.restMinutes)}
+                    {row.slipFileUrl ? (
+                      <>
+                        {" · "}
+                        <a href={row.slipFileUrl} target="_blank" rel="noreferrer" className="text-emerald-300 hover:underline">
+                          {row.slipFileName || "Bon"}
+                        </a>
+                      </>
+                    ) : null}
                   </p>
                 </div>
                 {canWrite ? (

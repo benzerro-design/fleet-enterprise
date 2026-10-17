@@ -23,6 +23,8 @@ export type TachographDayInput = {
   availabilityMinutes?: number;
   restMinutes?: number;
   notes?: string | null;
+  slipFileUrl?: string | null;
+  slipFileName?: string | null;
 };
 
 function parseDay(raw: string | undefined): Date {
@@ -42,6 +44,16 @@ function parseMinutes(raw: unknown, field: string): number {
     throw new BadRequestException(`${field} must be an integer between 0 and 1440`);
   }
   return n;
+}
+
+function parseSlip(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const value = raw.trim();
+  if (!value) return null;
+  if (!value.startsWith('/uploads/') || value.length > 400) {
+    throw new BadRequestException('slipFileUrl must be an uploaded file');
+  }
+  return value;
 }
 
 function dayKey(day: Date): string {
@@ -91,6 +103,8 @@ export class TachographService {
       availabilityMinutes: row.availabilityMinutes,
       restMinutes: row.restMinutes,
       notes: row.notes,
+      slipFileUrl: row.slipFileUrl,
+      slipFileName: row.slipFileName,
     }));
 
     const totals = items.reduce(
@@ -127,12 +141,19 @@ export class TachographService {
     });
     if (!driver) throw new NotFoundException('Driver not found');
 
+    const slipProvided = body.slipFileUrl !== undefined;
     const data = {
       drivingMinutes: parseMinutes(body.drivingMinutes, 'drivingMinutes'),
       otherWorkMinutes: parseMinutes(body.otherWorkMinutes, 'otherWorkMinutes'),
       availabilityMinutes: parseMinutes(body.availabilityMinutes, 'availabilityMinutes'),
       restMinutes: parseMinutes(body.restMinutes, 'restMinutes'),
       notes: body.notes?.trim() ? body.notes.trim() : null,
+      ...(slipProvided
+        ? {
+            slipFileUrl: parseSlip(body.slipFileUrl),
+            slipFileName: body.slipFileName?.trim() ? body.slipFileName.trim().slice(0, 180) : null,
+          }
+        : {}),
     };
 
     const row = await this.prisma.tachographDay.upsert({
@@ -160,6 +181,8 @@ export class TachographService {
       availabilityMinutes: row.availabilityMinutes,
       restMinutes: row.restMinutes,
       notes: row.notes,
+      slipFileUrl: row.slipFileUrl,
+      slipFileName: row.slipFileName,
     };
   }
 
