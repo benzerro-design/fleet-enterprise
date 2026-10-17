@@ -109,7 +109,7 @@ export function TachographBoard({
     if (filterDriverId) q.set("driverId", filterDriverId);
     const res = await fetch(`${tripsBrowserBase}/tachograph-days?${q}`, { headers: fleetJsonHeaders() });
     if (!res.ok) {
-      setError("Nu am putut încărca zilele de tahograf.");
+      setError(await readError(res, "Nu am putut încărca zilele de tahograf."));
       return;
     }
     setError(null);

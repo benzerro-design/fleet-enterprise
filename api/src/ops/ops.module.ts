@@ -22,8 +22,8 @@ import { VehicleOdometerSyncService } from './vehicle-odometer-sync.service';
   imports: [AuthModule, AuditModule],
   controllers: [
     TripSheetsController,
-    TripsController,
     TachographController,
+    TripsController,
     MaintenanceController,
     CostsController,
     DocumentsController,
