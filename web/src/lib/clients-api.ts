@@ -94,12 +94,42 @@ export type ClientProfileTab =
   | "iam"
   | "suppliers";
 
+export type ClientSupplierRateOverlay = {
+  partsDiscountPercent: number | null;
+  laborDiscountPercent: number | null;
+  laborRateMechanicalCents: number | null;
+  laborRateBodyCents: number | null;
+  laborRatePaintCents: number | null;
+  laborRateDiagnosticCents: number | null;
+  partsPriceBasis: string | null;
+  pricingNotes: string | null;
+};
+
+export type ClientSupplierCatalogRates = {
+  partsDiscountPercent: number;
+  laborDiscountPercent: number;
+  laborRateMechanicalCents: number | null;
+  laborRateBodyCents: number | null;
+  laborRatePaintCents: number | null;
+  laborRateDiagnosticCents: number | null;
+  partsPriceBasis: "list" | "net";
+  pricingNotes: string | null;
+};
+
+export type ClientSupplierEffectiveRates = ClientSupplierCatalogRates & {
+  overlayActive: boolean;
+};
+
 export type ClientSupplierAllocationItem = {
   supplierId: string;
   code: string;
   legalName: string;
   category: string;
   status: string;
+  /** PARTNER-014 Faza C — opțional pe răspunsuri vechi. */
+  catalog?: ClientSupplierCatalogRates;
+  overlay?: ClientSupplierRateOverlay;
+  effective?: ClientSupplierEffectiveRates;
 };
 
 export type ClientSubscriptionRow = {

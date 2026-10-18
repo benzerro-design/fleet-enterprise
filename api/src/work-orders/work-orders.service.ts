@@ -31,7 +31,7 @@ import {
   isTenantWideAccess,
 } from '../iam/client-access';
 import type { AccessContext } from '../iam/access-context.types';
-import { effectiveSupplierDiscountDefaults } from '../suppliers/supplier-discount-eligibility';
+import { mergeClientSupplierRateOverlay } from '../suppliers/supplier-rate-card';
 import {
   assertPartnerSupplierId,
   assertPartnerWrite,
@@ -90,6 +90,8 @@ export type WorkOrderSupplierSnapshot = {
   laborRatePaintCents?: number | null;
   laborRateDiagnosticCents?: number | null;
   partsPriceBasis?: 'list' | 'net';
+  /** PARTNER-014 Faza C — tarife merge din overlay client. */
+  pricingOverlayActive?: boolean;
   menuItems?: Array<{
     id: string;
     supplierId: string;
@@ -917,6 +919,27 @@ export class WorkOrdersService {
     );
     const hasQuoteCost = row.quotes.some((q) => q.status === 'approved' && !!q.costEntryId);
 
+    const allocationOverlay = row.supplier
+      ? await this.prisma.clientSupplierAllocation.findUnique({
+          where: {
+            clientId_supplierId: {
+              clientId: row.vehicle.clientId,
+              supplierId: row.supplier.id,
+            },
+          },
+          select: {
+            partsDiscountPercent: true,
+            laborDiscountPercent: true,
+            laborRateMechanicalCents: true,
+            laborRateBodyCents: true,
+            laborRatePaintCents: true,
+            laborRateDiagnosticCents: true,
+            partsPriceBasis: true,
+            pricingNotes: true,
+          },
+        })
+      : null;
+
     return {
       ...list,
       notes: row.notes,
@@ -966,10 +989,19 @@ export class WorkOrdersService {
       },
       supplier: row.supplier
         ? (() => {
-            const eff = effectiveSupplierDiscountDefaults(
-              row.supplier.category,
-              row.supplier.partsDiscountPercent,
-              row.supplier.laborDiscountPercent,
+            const merged = mergeClientSupplierRateOverlay(
+              {
+                category: row.supplier.category,
+                partsDiscountPercent: row.supplier.partsDiscountPercent,
+                laborDiscountPercent: row.supplier.laborDiscountPercent,
+                laborRateMechanicalCents: row.supplier.laborRateMechanicalCents,
+                laborRateBodyCents: row.supplier.laborRateBodyCents,
+                laborRatePaintCents: row.supplier.laborRatePaintCents,
+                laborRateDiagnosticCents: row.supplier.laborRateDiagnosticCents,
+                partsPriceBasis: row.supplier.partsPriceBasis,
+                pricingNotes: null,
+              },
+              allocationOverlay,
             );
             return {
               legalName: row.supplier.legalName,
@@ -979,13 +1011,14 @@ export class WorkOrdersService {
               contactPhone: row.supplier.contactPhone,
               contactEmail: row.supplier.contactEmail,
               category: row.supplier.category,
-              partsDiscountPercent: eff.partsDiscountPercent,
-              laborDiscountPercent: eff.laborDiscountPercent,
-              laborRateMechanicalCents: row.supplier.laborRateMechanicalCents ?? null,
-              laborRateBodyCents: row.supplier.laborRateBodyCents ?? null,
-              laborRatePaintCents: row.supplier.laborRatePaintCents ?? null,
-              laborRateDiagnosticCents: row.supplier.laborRateDiagnosticCents ?? null,
-              partsPriceBasis: row.supplier.partsPriceBasis === 'net' ? 'net' : 'list',
+              partsDiscountPercent: merged.partsDiscountPercent,
+              laborDiscountPercent: merged.laborDiscountPercent,
+              laborRateMechanicalCents: merged.laborRateMechanicalCents,
+              laborRateBodyCents: merged.laborRateBodyCents,
+              laborRatePaintCents: merged.laborRatePaintCents,
+              laborRateDiagnosticCents: merged.laborRateDiagnosticCents,
+              partsPriceBasis: merged.partsPriceBasis,
+              pricingOverlayActive: merged.overlayActive,
               menuItems: row.supplier.menuItems.map((item) => ({
                 id: item.id,
                 supplierId: item.supplierId,

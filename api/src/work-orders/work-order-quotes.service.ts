@@ -38,7 +38,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PartnerNotificationService } from '../partner/partner-notification.service';
 import { providerLabelForSupplier } from '../suppliers/supplier-resolve';
-import { effectiveSupplierDiscountDefaults } from '../suppliers/supplier-discount-eligibility';
+import { mergeClientSupplierRateOverlay } from '../suppliers/supplier-rate-card';
 import { RemindersService } from '../ops/reminders.service';
 import {
   reminderMenuSyncEnabledForCreate,
@@ -739,7 +739,10 @@ export class WorkOrderQuotesService {
     }
 
     const settings = parseWorkOrderSettings(tenant.workOrderSettings);
-    const supplierDefaults = await this.loadSupplierDiscountDefaults(wo.supplierId);
+    const supplierDefaults = await this.loadSupplierDiscountDefaults(
+      wo.supplierId,
+      wo.vehicle.clientId,
+    );
     const lines = this.normalizeLines(dto.lines ?? [], settings, supplierDefaults);
     const { totalNetCents, totalVatCents } = computeQuoteTotals(lines);
     const maxVersion = await this.prisma.workOrderQuote.aggregate({
@@ -882,7 +885,10 @@ export class WorkOrderQuotesService {
     }
 
     const settings = parseWorkOrderSettings(tenant.workOrderSettings);
-    const supplierDefaults = await this.loadSupplierDiscountDefaults(wo.supplierId);
+    const supplierDefaults = await this.loadSupplierDiscountDefaults(
+      wo.supplierId,
+      wo.vehicle.clientId,
+    );
     const lines = this.normalizeLines(dto.lines ?? [], settings, supplierDefaults);
     const { totalNetCents, totalVatCents } = computeQuoteTotals(lines);
 
@@ -2106,6 +2112,7 @@ export class WorkOrderQuotesService {
 
   private async loadSupplierDiscountDefaults(
     supplierId: string | null,
+    clientId?: string | null,
   ): Promise<SupplierQuoteDiscountDefaults | null> {
     if (!supplierId) return null;
     const row = await this.prisma.supplier.findFirst({
@@ -2114,18 +2121,39 @@ export class WorkOrderQuotesService {
         category: true,
         partsDiscountPercent: true,
         laborDiscountPercent: true,
+        partsPriceBasis: true,
+        laborRateMechanicalCents: true,
+        laborRateBodyCents: true,
+        laborRatePaintCents: true,
+        laborRateDiagnosticCents: true,
       },
     });
     if (!row) return null;
-    const eff = effectiveSupplierDiscountDefaults(
-      row.category,
-      row.partsDiscountPercent,
-      row.laborDiscountPercent,
-    );
+
+    const overlay =
+      clientId != null && clientId !== ''
+        ? await this.prisma.clientSupplierAllocation.findUnique({
+            where: {
+              clientId_supplierId: { clientId, supplierId },
+            },
+            select: {
+              partsDiscountPercent: true,
+              laborDiscountPercent: true,
+              laborRateMechanicalCents: true,
+              laborRateBodyCents: true,
+              laborRatePaintCents: true,
+              laborRateDiagnosticCents: true,
+              partsPriceBasis: true,
+              pricingNotes: true,
+            },
+          })
+        : null;
+
+    const merged = mergeClientSupplierRateOverlay(row, overlay);
     return {
       category: row.category,
-      partsDiscountPercent: eff.partsDiscountPercent,
-      laborDiscountPercent: eff.laborDiscountPercent,
+      partsDiscountPercent: merged.partsDiscountPercent,
+      laborDiscountPercent: merged.laborDiscountPercent,
     };
   }
 

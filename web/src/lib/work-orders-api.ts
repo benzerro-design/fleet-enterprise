@@ -45,6 +45,8 @@ export type WorkOrderSupplierSnapshot = {
   laborRatePaintCents?: number | null;
   laborRateDiagnosticCents?: number | null;
   partsPriceBasis?: "list" | "net";
+  /** PARTNER-014 Faza C — tarife din overlay client. */
+  pricingOverlayActive?: boolean;
   menuItems?: Array<{
     id: string;
     supplierId: string;

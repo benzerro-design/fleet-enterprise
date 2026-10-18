@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { SheetListGrid, type SheetCol } from "@/components/fleet/SheetListGrid";
+import { ClientSupplierPricingOverlayEditor } from "@/components/fleet/ClientSupplierPricingOverlayEditor";
 import { clientsBrowserBase, type ClientSupplierAllocationItem } from "@/lib/clients-api";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
+import { supplierSupportsQuoteDiscountDefaults } from "@/lib/supplier-discount-eligibility";
 import {
   suppliersBrowserBase,
   supplierCategoryLabel,
@@ -157,7 +159,9 @@ export function ClientSupplierAllocationsEditor({ clientId, canWrite }: Props) {
         <h3 className="text-sm font-semibold text-zinc-100">Furnizori alocați</h3>
         <p className="mt-1 text-xs text-zinc-500">
           Locul canonic de alocare (SUPP-042). Managerul clientului (L1) vede în costuri / mentenanță /
-          WO doar furnizorii bifați aici. Pe fișa furnizorului lista e doar vizualizare.
+          WO doar furnizorii bifați aici. Pe fișa furnizorului lista e doar vizualizare. Pentru
+          Service auto / Anvelope poți seta prețuri client (PARTNER-014) — overlay peste catalogul
+          furnizorului, folosit la prefill pe WO / deviz.
         </p>
       </div>
 
@@ -165,35 +169,33 @@ export function ClientSupplierAllocationsEditor({ clientId, canWrite }: Props) {
       {saved ? <p className="text-sm text-emerald-400">Alocare salvată.</p> : null}
 
       {canWrite ? (
-        <>
-          <SheetListGrid
-            storageKey="fleet-client-suppliers-grid-v1"
-            pickerTitle="Coloane furnizori"
-            columns={WRITE_COLUMNS}
-            rows={catalog}
-            rowKey={(s) => s.id}
-            searchPlaceholder="Denumire, cod, CUI…"
-            searchText={(s) => `${s.legalName} ${s.code} ${s.taxId ?? ""}`}
-            statusOptions={[
-              { value: "active", label: "Activ" },
-              { value: "inactive", label: "Inactiv" },
-              { value: "blocked", label: "Blocat" },
-            ]}
-            rowStatus={(s) => s.status}
-            toolbarEnd={
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void save()}
-                className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
-              >
-                {pending ? "Se salvează…" : "Salvează alocarea"}
-              </button>
-            }
-            empty={<p>Niciun furnizor pentru filtrele curente.</p>}
-            renderCell={(key, s) => renderSupplierCell(key, s, true)}
-          />
-        </>
+        <SheetListGrid
+          storageKey="fleet-client-suppliers-grid-v1"
+          pickerTitle="Coloane furnizori"
+          columns={WRITE_COLUMNS}
+          rows={catalog}
+          rowKey={(s) => s.id}
+          searchPlaceholder="Denumire, cod, CUI…"
+          searchText={(s) => `${s.legalName} ${s.code} ${s.taxId ?? ""}`}
+          statusOptions={[
+            { value: "active", label: "Activ" },
+            { value: "inactive", label: "Inactiv" },
+            { value: "blocked", label: "Blocat" },
+          ]}
+          rowStatus={(s) => s.status}
+          toolbarEnd={
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void save()}
+              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400 disabled:opacity-50"
+            >
+              {pending ? "Se salvează…" : "Salvează alocarea"}
+            </button>
+          }
+          empty={<p>Niciun furnizor pentru filtrele curente.</p>}
+          renderCell={(key, s) => renderSupplierCell(key, s, true)}
+        />
       ) : (
         <SheetListGrid
           storageKey="fleet-client-suppliers-readonly-grid-v1"
@@ -214,6 +216,32 @@ export function ClientSupplierAllocationsEditor({ clientId, canWrite }: Props) {
           renderCell={(key, s) => renderSupplierCell(key, s, false)}
         />
       )}
+
+      {allocated.some((a) => supplierSupportsQuoteDiscountDefaults(a.category)) ? (
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-sm font-semibold text-zinc-100">Prețuri pe client (overlay)</h4>
+            <p className="mt-1 text-xs text-zinc-500">
+              Doar furnizorii alocați de tip Service auto / Anvelope. Gol = catalog furnizor.
+            </p>
+          </div>
+          {allocated
+            .filter((a) => supplierSupportsQuoteDiscountDefaults(a.category))
+            .map((a) => (
+              <ClientSupplierPricingOverlayEditor
+                key={a.supplierId}
+                clientId={clientId}
+                item={a}
+                canWrite={canWrite}
+                onSaved={(next) => {
+                  setAllocated((prev) =>
+                    prev.map((row) => (row.supplierId === next.supplierId ? next : row)),
+                  );
+                }}
+              />
+            ))}
+        </div>
+      ) : null}
     </div>
   );
 }

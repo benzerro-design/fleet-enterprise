@@ -2,6 +2,7 @@ import {
   centsToRonNumber,
   defaultLaborUnitCents,
   effectivePartsDiscountForBasis,
+  mergeClientSupplierRateOverlay,
   parseOptionalRonToCents,
   parsePartsPriceBasis,
 } from './supplier-rate-card';
@@ -135,6 +136,78 @@ describe('supplier-rate-card', () => {
     it('list cu valoare invalidă cade pe 0', () => {
       expect(effectivePartsDiscountForBasis('list', Number.NaN)).toBe(0);
       expect(effectivePartsDiscountForBasis('list', 0)).toBe(0);
+    });
+  });
+
+  describe('mergeClientSupplierRateOverlay', () => {
+    const catalog = {
+      category: 'service_auto',
+      partsDiscountPercent: 10,
+      laborDiscountPercent: 5,
+      laborRateMechanicalCents: 18000,
+      laborRateBodyCents: 20000,
+      laborRatePaintCents: null as number | null,
+      laborRateDiagnosticCents: null as number | null,
+      partsPriceBasis: 'list',
+      pricingNotes: 'catalog',
+    };
+
+    it('fără overlay moștenește catalogul', () => {
+      const m = mergeClientSupplierRateOverlay(catalog, null);
+      expect(m.partsDiscountPercent).toBe(10);
+      expect(m.laborDiscountPercent).toBe(5);
+      expect(m.laborRateMechanicalCents).toBe(18000);
+      expect(m.partsPriceBasis).toBe('list');
+      expect(m.overlayActive).toBe(false);
+    });
+
+    it('overlay discount și tarif au prioritate; null moștenește', () => {
+      const m = mergeClientSupplierRateOverlay(catalog, {
+        partsDiscountPercent: 20,
+        laborDiscountPercent: null,
+        laborRateMechanicalCents: 15000,
+        laborRateBodyCents: null,
+        laborRatePaintCents: null,
+        laborRateDiagnosticCents: null,
+        partsPriceBasis: null,
+        pricingNotes: null,
+      });
+      expect(m.partsDiscountPercent).toBe(20);
+      expect(m.laborDiscountPercent).toBe(5);
+      expect(m.laborRateMechanicalCents).toBe(15000);
+      expect(m.laborRateBodyCents).toBe(20000);
+      expect(m.overlayActive).toBe(true);
+    });
+
+    it('bază net pe overlay forțează discount piese 0', () => {
+      const m = mergeClientSupplierRateOverlay(catalog, {
+        partsDiscountPercent: 25,
+        laborDiscountPercent: null,
+        laborRateMechanicalCents: null,
+        laborRateBodyCents: null,
+        laborRatePaintCents: null,
+        laborRateDiagnosticCents: null,
+        partsPriceBasis: 'net',
+        pricingNotes: null,
+      });
+      expect(m.partsPriceBasis).toBe('net');
+      expect(m.partsDiscountPercent).toBe(0);
+    });
+
+    it('0 pe overlay e override valid', () => {
+      const m = mergeClientSupplierRateOverlay(catalog, {
+        partsDiscountPercent: 0,
+        laborDiscountPercent: 0,
+        laborRateMechanicalCents: null,
+        laborRateBodyCents: null,
+        laborRatePaintCents: null,
+        laborRateDiagnosticCents: null,
+        partsPriceBasis: null,
+        pricingNotes: null,
+      });
+      expect(m.partsDiscountPercent).toBe(0);
+      expect(m.laborDiscountPercent).toBe(0);
+      expect(m.overlayActive).toBe(true);
     });
   });
 });

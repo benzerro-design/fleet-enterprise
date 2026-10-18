@@ -42,6 +42,13 @@ import {
   parseClientSlaSettingsPatch,
   type ClientSlaSettings,
 } from './client-sla-settings';
+import {
+  mergeClientSupplierRateOverlay,
+  parseClientSupplierOverlayPatch,
+  type ClientSupplierOverlayPatchInput,
+  type ClientSupplierRateOverlay,
+  type MergedSupplierRates,
+} from '../suppliers/supplier-rate-card';
 
 export type {
   ClientSubscriptionRow,
@@ -788,18 +795,90 @@ export class ClientsService {
     return next;
   }
 
+  private mapSupplierAllocationItem(a: {
+    supplierId: string;
+    partsDiscountPercent: number | null;
+    laborDiscountPercent: number | null;
+    laborRateMechanicalCents: number | null;
+    laborRateBodyCents: number | null;
+    laborRatePaintCents: number | null;
+    laborRateDiagnosticCents: number | null;
+    partsPriceBasis: string | null;
+    pricingNotes: string | null;
+    supplier: {
+      code: string;
+      legalName: string;
+      category: string;
+      status: string;
+      partsDiscountPercent: number;
+      laborDiscountPercent: number;
+      laborRateMechanicalCents: number | null;
+      laborRateBodyCents: number | null;
+      laborRatePaintCents: number | null;
+      laborRateDiagnosticCents: number | null;
+      partsPriceBasis: string;
+      pricingNotes: string | null;
+    };
+  }): {
+    supplierId: string;
+    code: string;
+    legalName: string;
+    category: string;
+    status: string;
+    catalog: {
+      partsDiscountPercent: number;
+      laborDiscountPercent: number;
+      laborRateMechanicalCents: number | null;
+      laborRateBodyCents: number | null;
+      laborRatePaintCents: number | null;
+      laborRateDiagnosticCents: number | null;
+      partsPriceBasis: 'list' | 'net';
+      pricingNotes: string | null;
+    };
+    overlay: ClientSupplierRateOverlay;
+    effective: MergedSupplierRates;
+  } {
+    const overlay: ClientSupplierRateOverlay = {
+      partsDiscountPercent: a.partsDiscountPercent,
+      laborDiscountPercent: a.laborDiscountPercent,
+      laborRateMechanicalCents: a.laborRateMechanicalCents,
+      laborRateBodyCents: a.laborRateBodyCents,
+      laborRatePaintCents: a.laborRatePaintCents,
+      laborRateDiagnosticCents: a.laborRateDiagnosticCents,
+      partsPriceBasis: a.partsPriceBasis,
+      pricingNotes: a.pricingNotes,
+    };
+    const catalog = {
+      partsDiscountPercent: a.supplier.partsDiscountPercent,
+      laborDiscountPercent: a.supplier.laborDiscountPercent,
+      laborRateMechanicalCents: a.supplier.laborRateMechanicalCents,
+      laborRateBodyCents: a.supplier.laborRateBodyCents,
+      laborRatePaintCents: a.supplier.laborRatePaintCents,
+      laborRateDiagnosticCents: a.supplier.laborRateDiagnosticCents,
+      partsPriceBasis: (a.supplier.partsPriceBasis === 'net' ? 'net' : 'list') as 'list' | 'net',
+      pricingNotes: a.supplier.pricingNotes,
+    };
+    return {
+      supplierId: a.supplierId,
+      code: a.supplier.code,
+      legalName: a.supplier.legalName,
+      category: a.supplier.category,
+      status: a.supplier.status,
+      catalog,
+      overlay,
+      effective: mergeClientSupplierRateOverlay(
+        { ...catalog, category: a.supplier.category },
+        overlay,
+      ),
+    };
+  }
+
   async listSupplierAllocations(
     tenantSlug: string,
     clientId: string,
     access?: AccessContext,
   ): Promise<{
-    items: Array<{
-      supplierId: string;
-      code: string;
-      legalName: string;
-      category: string;
-      status: string;
-    }>;
+    items: Array<ReturnType<ClientsService['mapSupplierAllocationItem']>>;
   }> {
     const row = await this.findRow(tenantSlug, clientId);
     if (access && !access.isTenantWide && !access.allowedClientIds.includes(row.id)) {
@@ -807,18 +886,138 @@ export class ClientsService {
     }
     const rows = await this.prisma.clientSupplierAllocation.findMany({
       where: { clientId: row.id },
-      include: { supplier: true },
+      include: {
+        supplier: {
+          select: {
+            code: true,
+            legalName: true,
+            category: true,
+            status: true,
+            partsDiscountPercent: true,
+            laborDiscountPercent: true,
+            laborRateMechanicalCents: true,
+            laborRateBodyCents: true,
+            laborRatePaintCents: true,
+            laborRateDiagnosticCents: true,
+            partsPriceBasis: true,
+            pricingNotes: true,
+          },
+        },
+      },
       orderBy: { supplier: { legalName: 'asc' } },
     });
     return {
-      items: rows.map((a) => ({
-        supplierId: a.supplierId,
-        code: a.supplier.code,
-        legalName: a.supplier.legalName,
-        category: a.supplier.category,
-        status: a.supplier.status,
-      })),
+      items: rows.map((a) => this.mapSupplierAllocationItem(a)),
     };
+  }
+
+  async patchSupplierAllocationPricing(
+    tenantSlug: string,
+    clientId: string,
+    supplierId: string,
+    dto: ClientSupplierOverlayPatchInput,
+    actorUserId?: string,
+    access?: AccessContext,
+  ): Promise<ReturnType<ClientsService['mapSupplierAllocationItem']>> {
+    if (access && !access.isTenantWide) {
+      throw new ForbiddenException('Only tenant admin can edit client supplier pricing');
+    }
+    const row = await this.findRow(tenantSlug, clientId);
+    const allocation = await this.prisma.clientSupplierAllocation.findFirst({
+      where: {
+        clientId: row.id,
+        supplierId,
+        tenantId: row.tenantId,
+      },
+      include: {
+        supplier: {
+          select: {
+            code: true,
+            legalName: true,
+            category: true,
+            status: true,
+            partsDiscountPercent: true,
+            laborDiscountPercent: true,
+            laborRateMechanicalCents: true,
+            laborRateBodyCents: true,
+            laborRatePaintCents: true,
+            laborRateDiagnosticCents: true,
+            partsPriceBasis: true,
+            pricingNotes: true,
+          },
+        },
+      },
+    });
+    if (!allocation) {
+      throw new NotFoundException('Supplier is not allocated to this client');
+    }
+
+    let patch: ReturnType<typeof parseClientSupplierOverlayPatch>;
+    try {
+      patch = parseClientSupplierOverlayPatch(dto ?? {});
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid pricing overlay');
+    }
+
+    // Bază net pe overlay → forțează discount piese overlay la 0 (sau clear dacă baza e ștearsă).
+    if (patch.partsPriceBasis === 'net') {
+      patch.partsDiscountPercent = 0;
+    }
+
+    const updated = await this.prisma.clientSupplierAllocation.update({
+      where: { id: allocation.id },
+      data: {
+        ...(patch.laborRateMechanicalCents !== undefined
+          ? { laborRateMechanicalCents: patch.laborRateMechanicalCents }
+          : {}),
+        ...(patch.laborRateBodyCents !== undefined
+          ? { laborRateBodyCents: patch.laborRateBodyCents }
+          : {}),
+        ...(patch.laborRatePaintCents !== undefined
+          ? { laborRatePaintCents: patch.laborRatePaintCents }
+          : {}),
+        ...(patch.laborRateDiagnosticCents !== undefined
+          ? { laborRateDiagnosticCents: patch.laborRateDiagnosticCents }
+          : {}),
+        ...(patch.partsPriceBasis !== undefined ? { partsPriceBasis: patch.partsPriceBasis } : {}),
+        ...(patch.partsDiscountPercent !== undefined
+          ? { partsDiscountPercent: patch.partsDiscountPercent }
+          : {}),
+        ...(patch.laborDiscountPercent !== undefined
+          ? { laborDiscountPercent: patch.laborDiscountPercent }
+          : {}),
+        ...(patch.pricingNotes !== undefined ? { pricingNotes: patch.pricingNotes } : {}),
+      },
+      include: {
+        supplier: {
+          select: {
+            code: true,
+            legalName: true,
+            category: true,
+            status: true,
+            partsDiscountPercent: true,
+            laborDiscountPercent: true,
+            laborRateMechanicalCents: true,
+            laborRateBodyCents: true,
+            laborRatePaintCents: true,
+            laborRateDiagnosticCents: true,
+            partsPriceBasis: true,
+            pricingNotes: true,
+          },
+        },
+      },
+    });
+
+    await this.audit.log({
+      tenantId: row.tenantId,
+      actorUserId,
+      action: 'client.supplier_allocation_pricing_update',
+      entityType: 'client',
+      entityId: row.id,
+      meta: { supplierId, patch },
+    });
+
+    return this.mapSupplierAllocationItem(updated);
   }
 
   async replaceSupplierAllocations(
@@ -828,13 +1027,7 @@ export class ClientsService {
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<{
-    items: Array<{
-      supplierId: string;
-      code: string;
-      legalName: string;
-      category: string;
-      status: string;
-    }>;
+    items: Array<ReturnType<ClientsService['mapSupplierAllocationItem']>>;
   }> {
     if (access && !access.isTenantWide) {
       throw new ForbiddenException('Only tenant admin can allocate suppliers');

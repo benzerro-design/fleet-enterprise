@@ -1493,12 +1493,25 @@ model SupplierMenuItem {
 }
 
 /// Alocare L* : furnizor vizibil pentru un Client (L1).
+/// Overlay prețuri (PARTNER-014 Faza C): null pe câmp = moștenește catalogul furnizorului.
 model ClientSupplierAllocation {
   id         String   @id @default(cuid())
   tenantId   String
   clientId   String
   supplierId String
+  /// Discount piese client-specific (0–100). Null = catalog furnizor.
+  partsDiscountPercent Float?
+  /// Discount manoperă client-specific (0–100). Null = catalog furnizor.
+  laborDiscountPercent Float?
+  laborRateMechanicalCents Int?
+  laborRateBodyCents       Int?
+  laborRatePaintCents      Int?
+  laborRateDiagnosticCents Int?
+  /// list | net. Null = catalog furnizor.
+  partsPriceBasis String?
+  pricingNotes    String?
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)

@@ -1,4 +1,6 @@
-/** PARTNER-014 — fișă tarifară atelier (Faza A). */
+/** PARTNER-014 — fișă tarifară atelier (Faza A / C). */
+
+import { effectiveSupplierDiscountDefaults } from './supplier-discount-eligibility';
 
 export type PartsPriceBasis = 'list' | 'net';
 
@@ -196,4 +198,203 @@ export function resolveSupplierCreateDiscounts(input: {
       'laborDiscountPercent',
     ),
   };
+}
+
+/** Overlay pe alocare Client↔Furnizor (PARTNER-014 Faza C). Null = moștenește catalogul. */
+export type ClientSupplierRateOverlay = {
+  partsDiscountPercent: number | null;
+  laborDiscountPercent: number | null;
+  laborRateMechanicalCents: number | null;
+  laborRateBodyCents: number | null;
+  laborRatePaintCents: number | null;
+  laborRateDiagnosticCents: number | null;
+  partsPriceBasis: string | null;
+  pricingNotes: string | null;
+};
+
+export type MergedSupplierRates = {
+  partsDiscountPercent: number;
+  laborDiscountPercent: number;
+  laborRateMechanicalCents: number | null;
+  laborRateBodyCents: number | null;
+  laborRatePaintCents: number | null;
+  laborRateDiagnosticCents: number | null;
+  partsPriceBasis: PartsPriceBasis;
+  pricingNotes: string | null;
+  /** True dacă cel puțin un câmp overlay e setat. */
+  overlayActive: boolean;
+};
+
+export type SupplierCatalogRates = {
+  category?: string | null;
+  partsDiscountPercent: number | null | undefined;
+  laborDiscountPercent: number | null | undefined;
+  laborRateMechanicalCents?: number | null;
+  laborRateBodyCents?: number | null;
+  laborRatePaintCents?: number | null;
+  laborRateDiagnosticCents?: number | null;
+  partsPriceBasis?: unknown;
+  pricingNotes?: string | null;
+};
+
+function overlayFieldActive(raw: unknown): boolean {
+  return raw !== undefined && raw !== null && raw !== '';
+}
+
+export function isClientSupplierOverlayActive(
+  overlay: Partial<ClientSupplierRateOverlay> | null | undefined,
+): boolean {
+  if (!overlay) return false;
+  return (
+    overlayFieldActive(overlay.partsDiscountPercent) ||
+    overlayFieldActive(overlay.laborDiscountPercent) ||
+    overlayFieldActive(overlay.laborRateMechanicalCents) ||
+    overlayFieldActive(overlay.laborRateBodyCents) ||
+    overlayFieldActive(overlay.laborRatePaintCents) ||
+    overlayFieldActive(overlay.laborRateDiagnosticCents) ||
+    overlayFieldActive(overlay.partsPriceBasis) ||
+    (overlay.pricingNotes != null && String(overlay.pricingNotes).trim() !== '')
+  );
+}
+
+/**
+ * Overlay înaintea catalogului furnizor.
+ * Null pe câmp overlay = moștenește; 0 e override valid.
+ * Bază net → discount piese efectiv 0.
+ */
+export function mergeClientSupplierRateOverlay(
+  catalog: SupplierCatalogRates,
+  overlay?: Partial<ClientSupplierRateOverlay> | null,
+): MergedSupplierRates {
+  const partsPriceBasis = overlayFieldActive(overlay?.partsPriceBasis)
+    ? parsePartsPriceBasis(overlay!.partsPriceBasis)
+    : parsePartsPriceBasis(catalog.partsPriceBasis);
+
+  const partsRaw =
+    overlay?.partsDiscountPercent != null
+      ? overlay.partsDiscountPercent
+      : catalog.partsDiscountPercent;
+  const laborRaw =
+    overlay?.laborDiscountPercent != null
+      ? overlay.laborDiscountPercent
+      : catalog.laborDiscountPercent;
+
+  const disc = effectiveSupplierDiscountDefaults(catalog.category, partsRaw, laborRaw);
+  const partsDiscountPercent = effectivePartsDiscountForBasis(
+    partsPriceBasis,
+    disc.partsDiscountPercent,
+  );
+  const laborDiscountPercent = disc.laborDiscountPercent;
+
+  return {
+    partsDiscountPercent,
+    laborDiscountPercent,
+    laborRateMechanicalCents:
+      overlay?.laborRateMechanicalCents != null
+        ? overlay.laborRateMechanicalCents
+        : (catalog.laborRateMechanicalCents ?? null),
+    laborRateBodyCents:
+      overlay?.laborRateBodyCents != null
+        ? overlay.laborRateBodyCents
+        : (catalog.laborRateBodyCents ?? null),
+    laborRatePaintCents:
+      overlay?.laborRatePaintCents != null
+        ? overlay.laborRatePaintCents
+        : (catalog.laborRatePaintCents ?? null),
+    laborRateDiagnosticCents:
+      overlay?.laborRateDiagnosticCents != null
+        ? overlay.laborRateDiagnosticCents
+        : (catalog.laborRateDiagnosticCents ?? null),
+    partsPriceBasis,
+    pricingNotes:
+      overlay?.pricingNotes != null
+        ? overlay.pricingNotes.trim() || null
+        : (catalog.pricingNotes ?? null),
+    overlayActive: isClientSupplierOverlayActive(overlay),
+  };
+}
+
+/** Optional discount %: undefined = absent, null/gol = șterge overlay, număr = set. */
+export function parseOptionalDiscountPercent(
+  raw: unknown,
+  field: string,
+): number | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  return parseDiscountPercent(raw, field);
+}
+
+/** Optional bază: undefined = absent, null/gol = șterge overlay, altfel list|net. */
+export function parseOptionalPartsPriceBasis(
+  raw: unknown,
+): PartsPriceBasis | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  return parsePartsPriceBasis(raw);
+}
+
+export type ClientSupplierOverlayPatchInput = {
+  laborRateMechanicalRon?: number | string | null;
+  laborRateBodyRon?: number | string | null;
+  laborRatePaintRon?: number | string | null;
+  laborRateDiagnosticRon?: number | string | null;
+  partsPriceBasis?: PartsPriceBasis | string | null;
+  partsDiscountPercent?: number | string | null;
+  laborDiscountPercent?: number | string | null;
+  pricingNotes?: string | null;
+};
+
+export type ClientSupplierOverlayCentsPatch = {
+  laborRateMechanicalCents?: number | null;
+  laborRateBodyCents?: number | null;
+  laborRatePaintCents?: number | null;
+  laborRateDiagnosticCents?: number | null;
+  partsPriceBasis?: string | null;
+  partsDiscountPercent?: number | null;
+  laborDiscountPercent?: number | null;
+  pricingNotes?: string | null;
+};
+
+/** Patch overlay: câmp absent = neschimbat; null/gol = moștenește din nou catalogul. */
+export function parseClientSupplierOverlayPatch(
+  dto: ClientSupplierOverlayPatchInput,
+): ClientSupplierOverlayCentsPatch {
+  const data: ClientSupplierOverlayCentsPatch = {};
+  if (dto.laborRateMechanicalRon !== undefined) {
+    data.laborRateMechanicalCents = parseOptionalRonToCents(
+      dto.laborRateMechanicalRon,
+      'laborRateMechanicalRon',
+    );
+  }
+  if (dto.laborRateBodyRon !== undefined) {
+    data.laborRateBodyCents = parseOptionalRonToCents(dto.laborRateBodyRon, 'laborRateBodyRon');
+  }
+  if (dto.laborRatePaintRon !== undefined) {
+    data.laborRatePaintCents = parseOptionalRonToCents(dto.laborRatePaintRon, 'laborRatePaintRon');
+  }
+  if (dto.laborRateDiagnosticRon !== undefined) {
+    data.laborRateDiagnosticCents = parseOptionalRonToCents(
+      dto.laborRateDiagnosticRon,
+      'laborRateDiagnosticRon',
+    );
+  }
+  if (dto.partsPriceBasis !== undefined) {
+    data.partsPriceBasis = parseOptionalPartsPriceBasis(dto.partsPriceBasis) ?? null;
+  }
+  if (dto.partsDiscountPercent !== undefined) {
+    data.partsDiscountPercent = parseOptionalDiscountPercent(
+      dto.partsDiscountPercent,
+      'partsDiscountPercent',
+    );
+  }
+  if (dto.laborDiscountPercent !== undefined) {
+    data.laborDiscountPercent = parseOptionalDiscountPercent(
+      dto.laborDiscountPercent,
+      'laborDiscountPercent',
+    );
+  }
+  if (dto.pricingNotes !== undefined) {
+    data.pricingNotes = dto.pricingNotes?.trim() || null;
+  }
+  return data;
 }

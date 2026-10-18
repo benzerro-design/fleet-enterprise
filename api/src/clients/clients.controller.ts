@@ -296,6 +296,37 @@ export class ClientsController {
     );
   }
 
+  /** PARTNER-014 Faza C — overlay prețuri pe alocarea client↔furnizor. */
+  @Patch(':id/supplier-allocations/:supplierId')
+  @Roles(MembershipRole.tenant_admin)
+  patchSupplierAllocationPricing(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Param('supplierId') supplierId: string,
+    @Body()
+    body: {
+      laborRateMechanicalRon?: number | string | null;
+      laborRateBodyRon?: number | string | null;
+      laborRatePaintRon?: number | string | null;
+      laborRateDiagnosticRon?: number | string | null;
+      partsPriceBasis?: string | null;
+      partsDiscountPercent?: number | string | null;
+      laborDiscountPercent?: number | string | null;
+      pricingNotes?: string | null;
+    },
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.clients.patchSupplierAllocationPricing(
+      tenantSlug,
+      id,
+      supplierId,
+      body ?? {},
+      actorUserId,
+      access,
+    );
+  }
+
   @Get(':id')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   get(
