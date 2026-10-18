@@ -337,7 +337,7 @@ export function TripForm(props: Props) {
             </OpsFormField>
           </div>
         </OpsFormPrimaryBand>
-        <OpsFormSection number={3} title={tripForm("sections.route")}>
+        <OpsFormSection number={2} title={tripForm("sections.route")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpsFormField label={tripForm("fields.origin")}>
               <input value={originLabel} onChange={(e) => setOriginLabel(e.target.value)} className={OPS_INPUT_CLASS} />
@@ -376,7 +376,7 @@ export function TripForm(props: Props) {
             </label>
           </div>
         </OpsFormSection>
-        <OpsFormSection number={4} title={tripForm("sections.odometerDriver")}>
+        <OpsFormSection number={3} title={tripForm("sections.odometerDriver")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpsFormField label={tripForm("fields.odometerStart")}>
               <input type="number" min={0} step={1} value={odometerStartKm} onChange={(e) => setOdometerStartKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />

@@ -16,7 +16,7 @@ const ro = {
       reset: "Resetează",
       save: "Salvează",
       saveChanges: "Salvează modificările",
-      saving: "Salvez...",
+      saving: "Se salvează…",
     },
     filters: {
       all: "Toate",

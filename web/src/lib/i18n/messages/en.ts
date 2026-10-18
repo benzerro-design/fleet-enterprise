@@ -16,7 +16,7 @@ const en = {
       reset: "Reset",
       save: "Save",
       saveChanges: "Save changes",
-      saving: "Saving...",
+      saving: "Saving…",
     },
     filters: {
       all: "All",

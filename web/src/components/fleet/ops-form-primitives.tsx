@@ -75,15 +75,26 @@ export function OpsFormPrimaryBand({
   module,
   title,
   children,
+  step = 1,
 }: {
   module: OpsFormModuleKey;
   title: string;
   children: ReactNode;
+  /** Pas vizibil în formular (implicit 1 — câmpuri obligatorii). */
+  step?: number;
 }) {
   const band = PRIMARY_BAND[module];
   return (
     <div className={`rounded-xl border px-4 py-3.5 ${band.border} ${band.bg}`}>
-      <p className={`mb-3 text-xs font-semibold ${band.title}`}>{title}</p>
+      <p className={`mb-3 flex items-center gap-2 text-xs font-semibold ${band.title}`}>
+        <span
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-current/40 bg-zinc-950/40 text-[11px] font-bold tabular-nums"
+          aria-hidden
+        >
+          {step}
+        </span>
+        <span>{title}</span>
+      </p>
       {children}
     </div>
   );
@@ -100,8 +111,14 @@ export function OpsFormSection({
 }) {
   return (
     <section className="border-l-[3px] border-zinc-700 pl-3.5">
-      <h3 className="mb-3 text-sm font-semibold text-zinc-200">
-        {number}. {title}
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-200">
+        <span
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900 text-[11px] font-bold tabular-nums text-zinc-300"
+          aria-hidden
+        >
+          {number}
+        </span>
+        <span>{title}</span>
       </h3>
       {children}
     </section>
@@ -145,6 +162,25 @@ export function OpsFormCollapsible({
   );
 }
 
+function OpsFormPendingSpinner() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 20 20"
+      fill="none"
+      className="h-4 w-4 shrink-0 animate-spin"
+    >
+      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2.5" />
+      <path
+        d="M17 10a7 7 0 00-7-7"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function OpsFormStickyActions({
   submitLabel,
   pendingLabel,
@@ -166,16 +202,33 @@ export function OpsFormStickyActions({
       <button
         type="submit"
         disabled={pending || disabled}
-        className={submitClassName}
+        aria-busy={pending || undefined}
+        className={`inline-flex min-h-[40px] items-center justify-center gap-2 ${submitClassName}`}
       >
-        {pending ? pendingLabel : submitLabel}
+        {pending ? (
+          <>
+            <OpsFormPendingSpinner />
+            <span>{pendingLabel}</span>
+          </>
+        ) : (
+          submitLabel
+        )}
       </button>
-      <Link
-        href={cancelHref}
-        className="inline-flex items-center rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
-      >
-        {tx("common.actions.cancel")}
-      </Link>
+      {pending ? (
+        <span
+          className="inline-flex cursor-not-allowed items-center rounded-lg border border-zinc-800 px-4 py-2 text-sm text-zinc-600 opacity-60"
+          aria-disabled
+        >
+          {tx("common.actions.cancel")}
+        </span>
+      ) : (
+        <Link
+          href={cancelHref}
+          className="inline-flex items-center rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+        >
+          {tx("common.actions.cancel")}
+        </Link>
+      )}
     </div>
   );
 }

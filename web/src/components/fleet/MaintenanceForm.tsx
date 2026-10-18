@@ -447,7 +447,7 @@ export function MaintenanceForm(props: Props) {
             </div>
           ) : null}
         </OpsFormPrimaryBand>
-        <OpsFormSection number={3} title="Detalii operaționale">
+        <OpsFormSection number={2} title="Detalii operaționale">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpsFormField label="Odometru km">
               <input type="number" min={0} step={1} value={odometerKm} onChange={(e) => setOdometerKm(e.target.value)} className={OPS_INPUT_MONO_CLASS} />
@@ -503,7 +503,7 @@ export function MaintenanceForm(props: Props) {
             </div>
           </div>
         </OpsFormSection>
-        <OpsFormSection number={4} title="Financiar & atașamente">
+        <OpsFormSection number={3} title="Financiar & atașamente">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpsFormField label="Furnizor">
               <SupplierCombobox
@@ -526,7 +526,7 @@ export function MaintenanceForm(props: Props) {
             </OpsFormField>
           </div>
         </OpsFormSection>
-        <OpsFormCollapsible title="5. Termene & remindere (pliable)">
+        <OpsFormCollapsible title="4. Termene & remindere (pliable)">
           {reminderBlock}
           <OpsFormField label="Notițe">
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={OPS_INPUT_CLASS} />
@@ -534,7 +534,7 @@ export function MaintenanceForm(props: Props) {
         </OpsFormCollapsible>
         <OpsFormStickyActions
           submitLabel={isEdit ? "Salvează modificările" : "Creează intervenția"}
-          pendingLabel="Salvez..."
+          pendingLabel="Se salvează…"
           cancelHref="/fleet/maintenance"
           pending={pending}
         />

@@ -25,8 +25,8 @@ type FleetListPageLayoutProps = {
 };
 
 /**
- * Filtre pe mobil: închise implicit + max-height cu scroll intern când sunt deschise,
- * ca să nu blocheze viewport-ul. Pe lg+ rămân mereu vizibile (comportament desktop).
+ * Filtre pe mobil: închise implicit + max-height redusă cu scroll intern când sunt deschise,
+ * ca lista să rămână vizibilă. Pe lg+ rămân mereu vizibile (comportament desktop).
  */
 function FleetListFiltersSlot({ children }: { children: ReactNode }) {
   const tx = useT();
@@ -45,7 +45,7 @@ function FleetListFiltersSlot({ children }: { children: ReactNode }) {
       <div className="flex items-center justify-between gap-3 lg:hidden">
         <button
           type="button"
-          className="inline-flex min-h-[44px] flex-1 touch-manipulation items-center justify-between gap-3 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-900"
+          className="inline-flex min-h-[40px] flex-1 touch-manipulation items-center justify-between gap-3 rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-900"
           aria-expanded={open}
           aria-controls={panelId}
           onClick={() => setOpen((v) => !v)}
@@ -58,7 +58,7 @@ function FleetListFiltersSlot({ children }: { children: ReactNode }) {
       </div>
       <div
         id={panelId}
-        className={`${open ? "mt-2 block" : "hidden"} max-h-[min(40vh,18rem)] overflow-y-auto overscroll-contain lg:mt-0 lg:block lg:max-h-none lg:overflow-visible`}
+        className={`${open ? "mt-1.5 block" : "hidden"} max-h-[min(28vh,12rem)] overflow-y-auto overscroll-contain rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2 lg:mt-0 lg:block lg:max-h-none lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0`}
       >
         {children}
       </div>

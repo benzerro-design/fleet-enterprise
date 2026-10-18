@@ -271,7 +271,7 @@ export function ReminderForm(props: Props) {
             </OpsFormField>
           </div>
         </OpsFormPrimaryBand>
-        <OpsFormSection number={3} title="Legături & șabloane">
+        <OpsFormSection number={2} title="Legături & șabloane">
           {sourceType === "document" ? (
             <OpsFormField label="Document legat">
               <select value={vehicleDocumentId} disabled={!ctx?.documents.length} onChange={(e) => applyDocumentLink(e.target.value)} className={OPS_INPUT_CLASS}>
@@ -317,7 +317,7 @@ export function ReminderForm(props: Props) {
             </div>
           ) : null}
         </OpsFormSection>
-        <OpsFormCollapsible title="5. Scadență & remindere (pliable)">
+        <OpsFormCollapsible title="3. Scadență & remindere (pliable)">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpsFormField label="Interval zile">
               <input type="number" min={0} value={intervalDays} onChange={(e) => setIntervalDays(e.target.value)} className={OPS_INPUT_CLASS} />

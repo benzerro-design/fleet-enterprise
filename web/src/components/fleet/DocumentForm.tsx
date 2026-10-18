@@ -518,7 +518,7 @@ export function DocumentForm(props: Props) {
             />
           </div>
         </OpsFormPrimaryBand>
-        <OpsFormSection number={4} title={showCivDualUpload ? "Scan CIV (față + verso)" : "Fișier document"}>
+        <OpsFormSection number={2} title={showCivDualUpload ? "Scan CIV (față + verso)" : "Fișier document"}>
           {showCivDualUpload ? (
             renderCivDualUpload()
           ) : (
@@ -537,9 +537,9 @@ export function DocumentForm(props: Props) {
           )}
           {uploading && showCivDualUpload ? <p className="mt-2 text-xs text-zinc-400">Se încarcă fișierul…</p> : null}
         </OpsFormSection>
-        {!isCivCreate ? <OpsFormCollapsible title="5. Termene & remindere (pliable)">{reminderBlock}</OpsFormCollapsible> : null}
+        {!isCivCreate ? <OpsFormCollapsible title="3. Termene & remindere (pliable)">{reminderBlock}</OpsFormCollapsible> : null}
         {!isEdit && !isCivCreate ? (
-          <OpsFormCollapsible title="6. Adaugă și un cost (opțional)">
+          <OpsFormCollapsible title="4. Adaugă și un cost (opțional)">
             <DocumentLinkedCostFields
               enabled={alsoCreateCost}
               onEnabledChange={setAlsoCreateCost}

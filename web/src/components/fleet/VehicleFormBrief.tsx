@@ -298,6 +298,16 @@ export function VehicleFormBrief({
   const [payload, setPayload] = useState<VehicleFormBriefPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  /** Mobil: istoric închis implicit ca formularul să fie prim-plan; desktop (lg+): deschis. */
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setHistoryOpen(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const load = useCallback(async (vid: string) => {
     if (!vid) {
@@ -379,90 +389,111 @@ export function VehicleFormBrief({
         )}
       </div>
 
-      {loading ? <p className="text-[11px] text-zinc-500">Se încarcă contextul vehiculului…</p> : null}
-      {error ? <p className="text-[11px] text-amber-400">Nu am putut încărca istoricul vehiculului.</p> : null}
-
-      {displayPayload ? (
-        <>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 text-[11px]">
-            <p className="text-sm font-semibold text-zinc-100">{displayPayload.vehicle.registrationNumber}</p>
-            <dl className="mt-2 space-y-1">
-              {[
-                ...(driverPortal
-                  ? []
-                  : ([["Client", displayPayload.vehicle.clientLegalName ?? displayPayload.vehicle.clientId]] as const)),
-                ["Km", displayPayload.vehicle.odometerKm.toLocaleString("ro-RO")],
-                ["ITP", fmtDateRo(displayPayload.vehicle.itpExpiresOn)],
-                ["Model", modelLabel],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-2">
-                  <dt className="text-zinc-500">{k}</dt>
-                  <dd className={`text-zinc-200 ${k === "Km" ? "font-mono" : ""}`}>{v}</dd>
-                </div>
-              ))}
-            </dl>
-            {!driverPortal && displayPayload.lastPeriodicRevision ? (
-              <>
-                <hr className="my-2 border-zinc-800" />
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Ultima revizie periodică</p>
-                <div className="mt-1 flex justify-between gap-2">
-                  <span className="text-zinc-400">{displayPayload.lastPeriodicRevision.title}</span>
-                  <span className="text-right text-zinc-200">
-                    <span className="block">{fmtDateRo(displayPayload.lastPeriodicRevision.performedOn)}</span>
-                    {displayPayload.lastPeriodicRevision.odometerKm != null ? (
-                      <span className="font-mono text-[10px]">
-                        {displayPayload.lastPeriodicRevision.odometerKm.toLocaleString("ro-RO")} km
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-              </>
+      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/30">
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((v) => !v)}
+          aria-expanded={historyOpen}
+          className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-zinc-900/50"
+        >
+          <BriefChevron open={historyOpen} />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] font-semibold text-zinc-200">
+              {driverPortal ? "Istoric vehicul — modulele tale" : "Istoric vehicul"}
+            </span>
+            <span className="mt-0.5 block text-[10px] text-zinc-500">
+              {historyOpen
+                ? "Ascunde contextul (curse, documente, km)"
+                : "Consultă doar dacă ai nevoie de context"}
+            </span>
+          </span>
+        </button>
+        {historyOpen ? (
+          <div className="space-y-3 border-t border-zinc-800 px-3 py-3">
+            {loading ? <p className="text-[11px] text-zinc-500">Se încarcă contextul vehiculului…</p> : null}
+            {error ? <p className="text-[11px] text-amber-400">Nu am putut încărca istoricul vehiculului.</p> : null}
+            {!vehicleId && !loading ? (
+              <p className="text-[11px] text-zinc-500">Selectează un vehicul pentru a vedea istoricul.</p>
             ) : null}
-            {!driverPortal ? (
+            {displayPayload ? (
               <>
-                <hr className="my-2 border-zinc-800" />
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Documente obligatorii</p>
-                <ul className="mt-1 space-y-1">
-                  {(
-                    [
-                      ["RCA", displayPayload.compliance.rca],
-                      ["CASCO", displayPayload.compliance.casco],
-                      ["Vignetă", displayPayload.compliance.vignette],
-                    ] as const
-                  ).map(([label, item]) => (
-                    <li key={label} className="flex items-center justify-between gap-2">
-                      <span className="text-zinc-500">{label}</span>
-                      <span className="flex items-center gap-2">
-                        {item.status === "valid" && item.expiresOn ? (
-                          <span className="text-[10px] text-zinc-600">{fmtDateRo(item.expiresOn)}</span>
-                        ) : null}
-                        <CompliancePill status={item.status} />
-                      </span>
-                    </li>
+                <div className="text-[11px]">
+                  <p className="text-sm font-semibold text-zinc-100">{displayPayload.vehicle.registrationNumber}</p>
+                  <dl className="mt-2 space-y-1">
+                    {[
+                      ...(driverPortal
+                        ? []
+                        : ([["Client", displayPayload.vehicle.clientLegalName ?? displayPayload.vehicle.clientId]] as const)),
+                      ["Km", displayPayload.vehicle.odometerKm.toLocaleString("ro-RO")],
+                      ["ITP", fmtDateRo(displayPayload.vehicle.itpExpiresOn)],
+                      ["Model", modelLabel],
+                    ].map(([k, v]) => (
+                      <div key={k} className="flex justify-between gap-2">
+                        <dt className="text-zinc-500">{k}</dt>
+                        <dd className={`text-zinc-200 ${k === "Km" ? "font-mono" : ""}`}>{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {!driverPortal && displayPayload.lastPeriodicRevision ? (
+                    <>
+                      <hr className="my-2 border-zinc-800" />
+                      <p className="text-[10px] uppercase tracking-wide text-zinc-500">Ultima revizie periodică</p>
+                      <div className="mt-1 flex justify-between gap-2">
+                        <span className="text-zinc-400">{displayPayload.lastPeriodicRevision.title}</span>
+                        <span className="text-right text-zinc-200">
+                          <span className="block">{fmtDateRo(displayPayload.lastPeriodicRevision.performedOn)}</span>
+                          {displayPayload.lastPeriodicRevision.odometerKm != null ? (
+                            <span className="font-mono text-[10px]">
+                              {displayPayload.lastPeriodicRevision.odometerKm.toLocaleString("ro-RO")} km
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                    </>
+                  ) : null}
+                  {!driverPortal ? (
+                    <>
+                      <hr className="my-2 border-zinc-800" />
+                      <p className="text-[10px] uppercase tracking-wide text-zinc-500">Documente obligatorii</p>
+                      <ul className="mt-1 space-y-1">
+                        {(
+                          [
+                            ["RCA", displayPayload.compliance.rca],
+                            ["CASCO", displayPayload.compliance.casco],
+                            ["Vignetă", displayPayload.compliance.vignette],
+                          ] as const
+                        ).map(([label, item]) => (
+                          <li key={label} className="flex items-center justify-between gap-2">
+                            <span className="text-zinc-500">{label}</span>
+                            <span className="flex items-center gap-2">
+                              {item.status === "valid" && item.expiresOn ? (
+                                <span className="text-[10px] text-zinc-600">{fmtDateRo(item.expiresOn)}</span>
+                              ) : null}
+                              <CompliancePill status={item.status} />
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/40">
+                  {moduleOrder.map((moduleKey, index) => (
+                    <BriefAccordionSection
+                      key={moduleKey}
+                      moduleKey={moduleKey}
+                      isActive={moduleKey === activeModule}
+                      payload={displayPayload}
+                      isLast={index === moduleOrder.length - 1}
+                    />
                   ))}
-                </ul>
+                </div>
               </>
             ) : null}
           </div>
-
-          <div>
-            <p className="mb-2 text-[11px] font-semibold text-zinc-300">
-              {driverPortal ? "Istoric vehicul — modulele tale" : "Istoric vehicul — toate modulele"}
-            </p>
-            <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/30">
-              {moduleOrder.map((moduleKey, index) => (
-                <BriefAccordionSection
-                  key={moduleKey}
-                  moduleKey={moduleKey}
-                  isActive={moduleKey === activeModule}
-                  payload={displayPayload}
-                  isLast={index === moduleOrder.length - 1}
-                />
-              ))}
-            </div>
-          </div>
-        </>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }
