@@ -69,12 +69,12 @@ export function UserStrategyRights() {
       <p className="text-xs font-medium uppercase tracking-widest text-emerald-400">Drepturi</p>
       <h2 className="mt-1 text-lg font-semibold text-zinc-50">Ce poate face fiecare profil</h2>
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
-        Rolul stabilește nivelul: abonat, client, șofer sau partener. Profilul F, T, G sau Full împarte munca în
-        interiorul nivelului. Se alocă pe rândul omului, în{" "}
+        Rolul stabilește nivelul: abonat, client, șofer sau partener. Profilul F, T, G sau Full (IAM-003) împarte
+        munca în interiorul nivelului. Se alocă pe rândul omului, în{" "}
         <Link href="/fleet/members" className="text-emerald-400 hover:underline">
           Membri & invitații
         </Link>
-        . Harta de deasupra ține structura. Rubrica de aici este ce aplică aplicația.
+        . Tab-ul Hartă ține structura; aici e ce aplică aplicația.
       </p>
 
       <div className="mt-5 overflow-x-auto">
@@ -142,6 +142,16 @@ export function UserStrategyRights() {
         </li>
         <li>Cardurile F, T și G sunt încă marcate planificat. Restricția rulează deja la login.</li>
       </ul>
+
+      <div className="mt-8 rounded-lg border border-zinc-800 bg-zinc-950/50 p-4 text-sm leading-relaxed text-zinc-400">
+        <p className="font-medium text-zinc-200">Legătură cu IAM-012</p>
+        <p className="mt-1">
+          Tab-ul ăsta documentează profilele F/T/G (cine aprobă, editează, programează).{" "}
+          <span className="text-zinc-300">IAM-012</span> e altceva: bifă pe client ca managerul L1 să gestioneze
+          userii echipei (invită, elimină, reset parolă, schimbă roluri sub el), cu limite setate de L*. Nu înlocuiește
+          matricea de aici; vine ca setări pe client, stil IAM-008.
+        </p>
+      </div>
     </section>
   );
 }

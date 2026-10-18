@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserStrategyEditor } from "@/components/fleet/admin/UserStrategyEditor";
+import { UserStrategyHub, parseUserStrategyTab } from "@/components/fleet/admin/UserStrategyHub";
+import { UserStrategyRights } from "@/components/fleet/admin/UserStrategyRights";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
+import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
 import type { IamStrategyResponse } from "@/lib/iam-strategy/types";
 
 async function loadStrategy(): Promise<IamStrategyResponse | null> {
@@ -16,13 +19,17 @@ async function loadStrategy(): Promise<IamStrategyResponse | null> {
   }
 }
 
-export default async function UserStrategyPage() {
+type PageProps = { searchParams: Promise<{ tab?: string }> };
+
+export default async function UserStrategyPage({ searchParams }: PageProps) {
   const auth = await getAuthMeResult();
   if (!canManageFleet(auth)) {
     redirect("/fleet/vehicles");
   }
 
-  const initial = await loadStrategy();
+  const sp = (await searchParams) ?? {};
+  const tab = parseUserStrategyTab(sp.tab);
+  const initial = tab === "map" ? await loadStrategy() : null;
 
   return (
     <FleetPageMain fill className="min-h-0">
@@ -31,8 +38,7 @@ export default async function UserStrategyPage() {
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Administrare</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Strategie useri</h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-            Hartă ierarhică L** / L* / L1 / L0 / R și rubrica de drepturi F/T/G. Harta se editează per tenant.
-            Canonic:{" "}
+            Hartă ierarhică L** / L* / L1 / L0 / R și drepturile F/T/G (IAM-003). Canonic:{" "}
             <code className="text-zinc-300">docs/identity-access-model.md</code> §3.5.
           </p>
         </div>
@@ -44,14 +50,20 @@ export default async function UserStrategyPage() {
         </Link>
       </div>
 
-      {!initial ? (
-        <p className="text-amber-400">
-          Nu am putut încărca harta. Verifică API-ul și migrarea{" "}
-          <code className="font-mono text-zinc-400">20260703120000_tenant_iam_strategy_map</code>.
-        </p>
-      ) : (
-        <UserStrategyEditor initial={initial} />
-      )}
+      <UserStrategyHub active={tab}>
+        {tab === "rights" ? (
+          <div className={`min-h-0 flex-1 overflow-y-auto ${fleetScrollPaneClass}`}>
+            <UserStrategyRights />
+          </div>
+        ) : !initial ? (
+          <p className="text-amber-400">
+            Nu am putut încărca harta. Verifică API-ul și migrarea{" "}
+            <code className="font-mono text-zinc-400">20260703120000_tenant_iam_strategy_map</code>.
+          </p>
+        ) : (
+          <UserStrategyEditor initial={initial} />
+        )}
+      </UserStrategyHub>
     </FleetPageMain>
   );
 }
