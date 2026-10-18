@@ -118,7 +118,10 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const cookieStore = await cookies();
   const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
-  const auth = await getAuthMeResult();
+  // Pornește lista în paralel cu auth — path Costuri → Vehicule (admin/L*).
+  const authPromise = getAuthMeResult();
+  const adminListPromise = getVehiclesList(sp);
+  const auth = await authPromise;
   const write = canWriteFleetOps(auth);
   const driverPortal = isClientDriverPortal(auth);
 
@@ -156,7 +159,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
     );
   }
 
-  const list = await getVehiclesList(sp);
+  const list = await adminListPromise;
 
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const pageSize = 20;

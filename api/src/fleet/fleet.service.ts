@@ -81,17 +81,15 @@ function itpReminderOffsetsForDb(
   return n ?? Prisma.DbNull;
 }
 
-const vehicleInclude = {
-  documents: true,
+const vehicleClientTenantActors = {
   client: { select: { id: true, code: true, legalName: true } },
   tenant: { select: { slug: true } },
   createdBy: { select: { email: true } },
   updatedBy: { select: { email: true } },
-  photos: {
-    select: { fileUrl: true, kind: true, sortOrder: true, isHero: true },
-    orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
-  },
-  /** Alocare activă (șofer / utilizator curent pe vehicul). */
+} satisfies Prisma.VehicleInclude;
+
+/** Alocare activă (șofer / utilizator curent pe vehicul). */
+const vehicleActiveAssignmentInclude = {
   driverAssignments: {
     where: { unassignedAt: null },
     take: 1,
@@ -103,7 +101,36 @@ const vehicleInclude = {
   },
 } satisfies Prisma.VehicleInclude;
 
+/**
+ * Listă paginată: fără documents + doar câteva poze (hero întâi).
+ * Detaliul rămâne pe vehicleInclude complet.
+ */
+const vehicleListInclude = {
+  ...vehicleClientTenantActors,
+  ...vehicleActiveAssignmentInclude,
+  photos: {
+    select: { fileUrl: true, kind: true, sortOrder: true, isHero: true },
+    orderBy: [
+      { isHero: 'desc' as const },
+      { sortOrder: 'asc' as const },
+      { createdAt: 'asc' as const },
+    ],
+    take: 3,
+  },
+} satisfies Prisma.VehicleInclude;
+
+const vehicleInclude = {
+  ...vehicleClientTenantActors,
+  ...vehicleActiveAssignmentInclude,
+  documents: true,
+  photos: {
+    select: { fileUrl: true, kind: true, sortOrder: true, isHero: true },
+    orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+  },
+} satisfies Prisma.VehicleInclude;
+
 type VehicleRow = Prisma.VehicleGetPayload<{ include: typeof vehicleInclude }>;
+type VehicleListRow = Prisma.VehicleGetPayload<{ include: typeof vehicleListInclude }>;
 
 function normalizeVinForCompare(v: string | null | undefined): string | null {
   if (v == null) return null;
@@ -253,7 +280,7 @@ export class FleetService {
       this.prisma.vehicle.count({ where }),
       this.prisma.vehicle.findMany({
         where,
-        include: vehicleInclude,
+        include: vehicleListInclude,
         orderBy: { createdAt: 'desc' },
         skip,
         take: pageSize,
@@ -261,7 +288,7 @@ export class FleetService {
     ]);
 
     return {
-      items: rows.map((r) => this.toRecord(r)),
+      items: rows.map((r) => this.toListRecord(r)),
       total,
       page,
       pageSize,
@@ -1855,7 +1882,21 @@ export class FleetService {
     };
   }
 
+  private toListRecord(row: VehicleListRow): VehicleRecord {
+    return this.toRecordFromIncludes(row, []);
+  }
+
   private toRecord(row: VehicleRow): VehicleRecord {
+    return this.toRecordFromIncludes(
+      row,
+      row.documents.map((d) => this.toDocument(d)),
+    );
+  }
+
+  private toRecordFromIncludes(
+    row: VehicleListRow | VehicleRow,
+    documents: VehicleRecord['documents'],
+  ): VehicleRecord {
     const photos = row.photos ?? [];
     const hero = photos.find((p) => p.isHero && p.fileUrl);
     const exterior = photos.find((p) => p.kind === 'exterior' && p.fileUrl);
@@ -1892,7 +1933,7 @@ export class FleetService {
       heroPhotoUrl: hero?.fileUrl ?? exterior?.fileUrl ?? anyPhoto?.fileUrl ?? null,
       assignedDriverId: activeAssignment?.driverId ?? activeAssignment?.driver?.id ?? null,
       assignedDriverName: activeAssignment?.driver?.fullName?.trim() || null,
-      documents: row.documents.map((d) => this.toDocument(d)),
+      documents,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       createdByUserId: row.createdByUserId,
