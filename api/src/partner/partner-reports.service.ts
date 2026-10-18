@@ -8,6 +8,11 @@ import {
 } from '../iam/partner-access';
 import { escapeCsvCell, MAX_EXPORT_ROWS } from '../ops/ops-csv';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  parsePartnerReportFields,
+  partnerReportFieldsCatalog,
+  PARTNER_REPORT_FIELDS,
+} from './partner-report-fields';
 
 export type PartnerMonthlyReportMeta = {
   year: number;
@@ -25,9 +30,22 @@ export type PartnerMonthlyReportMeta = {
   valueApprovedCents: number;
 };
 
+function centsToRon(cents: number | null | undefined): string {
+  if (cents == null || !Number.isFinite(cents)) return '';
+  return String(Math.round(cents) / 100);
+}
+
+function iso(d: Date | null | undefined): string {
+  return d ? d.toISOString() : '';
+}
+
 @Injectable()
 export class PartnerReportsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  fieldsCatalog() {
+    return partnerReportFieldsCatalog();
+  }
 
   private periodBounds(year: number, month: number): { from: Date; to: Date } {
     if (!Number.isFinite(year) || year < 2000 || year > 2100) {
@@ -169,8 +187,13 @@ export class PartnerReportsService {
       month?: number;
       supplierId?: string;
       suppliers?: string;
+      fields?: string;
     },
   ): Promise<{ filename: string; csv: string }> {
+    const fieldIds = parsePartnerReportFields(opts.fields);
+    const includeSummary = fieldIds.includes('summaryFooter');
+    const rowFieldIds = fieldIds.filter((id) => id !== 'summaryFooter');
+
     const summary = await this.monthlySummary(tenantSlug, access, opts);
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -195,24 +218,60 @@ export class PartnerReportsService {
         displayNumber: true,
         title: true,
         status: true,
+        serviceOrderType: true,
+        workshopStatusCode: true,
+        notes: true,
+        repairPathNote: true,
         createdAt: true,
+        plannedAt: true,
         inServiceAt: true,
+        outServiceAt: true,
         readyAt: true,
         completedAt: true,
+        estimatedRepairAt: true,
+        supplementRepairAt: true,
+        odometerKmIn: true,
+        odometerKmOut: true,
         supplier: { select: { code: true, legalName: true } },
-        vehicle: { select: { registrationNumber: true } },
+        vehicle: {
+          select: {
+            registrationNumber: true,
+            brand: true,
+            model: true,
+            vin: true,
+          },
+        },
+        serviceCase: {
+          select: {
+            id: true,
+            status: true,
+            currentStage: true,
+            appointments: {
+              orderBy: { scheduledAt: 'desc' },
+              take: 1,
+              select: { scheduledAt: true, status: true },
+            },
+          },
+        },
+        _count: { select: { photos: true } },
         quotes: {
-          where: { status: WorkOrderQuoteStatus.approved },
           orderBy: { version: 'desc' },
           take: 1,
           select: {
             version: true,
+            status: true,
+            title: true,
+            currency: true,
             totalNetCents: true,
             totalVatCents: true,
             approvedNetCents: true,
             approvedVatCents: true,
             invoiceGrossCents: true,
+            invoiceMismatch: true,
+            submittedAt: true,
+            approvedAt: true,
             invoicedAt: true,
+            _count: { select: { lines: true } },
           },
         },
       },
@@ -220,76 +279,93 @@ export class PartnerReportsService {
       take: MAX_EXPORT_ROWS,
     });
 
-    const header = [
-      'workOrderId',
-      'displayNumber',
-      'title',
-      'status',
-      'supplierCode',
-      'supplierName',
-      'vehicle',
-      'createdAt',
-      'inServiceAt',
-      'readyAt',
-      'completedAt',
-      'quoteVersion',
-      'approvedGrossRon',
-      'invoiceGrossRon',
-      'invoicedAt',
-    ];
+    const labelById = new Map(PARTNER_REPORT_FIELDS.map((f) => [f.id, f.label]));
+    const header = rowFieldIds.map((id) => labelById.get(id) ?? id);
+    const lines = [header.map((h) => escapeCsvCell(h)).join(',')];
 
-    const lines = [header.join(',')];
     for (const r of rows) {
       const q = r.quotes[0];
+      const approvedNet =
+        q?.approvedNetCents != null ? q.approvedNetCents : (q?.totalNetCents ?? null);
+      const approvedVat =
+        q?.approvedVatCents != null ? q.approvedVatCents : (q?.totalVatCents ?? null);
       const approvedGross =
-        q == null
-          ? ''
-          : q.approvedNetCents != null && q.approvedVatCents != null
-            ? (q.approvedNetCents + q.approvedVatCents) / 100
-            : (q.totalNetCents + q.totalVatCents) / 100;
-      const invoiceGross = q?.invoiceGrossCents != null ? q.invoiceGrossCents / 100 : '';
+        approvedNet != null && approvedVat != null ? approvedNet + approvedVat : null;
+      const appt = r.serviceCase.appointments[0];
+
+      const cell: Record<string, string> = {
+        workOrderId: r.id,
+        displayNumber: r.displayNumber ?? '',
+        title: r.title,
+        status: r.status,
+        serviceOrderType: r.serviceOrderType,
+        workshopStatusCode: r.workshopStatusCode ?? '',
+        notes: r.notes ?? '',
+        repairPathNote: r.repairPathNote ?? '',
+        supplierCode: r.supplier?.code ?? '',
+        supplierName: r.supplier?.legalName ?? '',
+        photoCount: String(r._count.photos),
+        vehiclePlate: r.vehicle?.registrationNumber ?? '',
+        vehicleBrand: r.vehicle?.brand ?? '',
+        vehicleModel: r.vehicle?.model ?? '',
+        vehicleVin: r.vehicle?.vin ?? '',
+        odometerKmIn: r.odometerKmIn != null ? String(r.odometerKmIn) : '',
+        odometerKmOut: r.odometerKmOut != null ? String(r.odometerKmOut) : '',
+        createdAt: iso(r.createdAt),
+        plannedAt: iso(r.plannedAt),
+        inServiceAt: iso(r.inServiceAt),
+        outServiceAt: iso(r.outServiceAt),
+        readyAt: iso(r.readyAt),
+        completedAt: iso(r.completedAt),
+        estimatedRepairAt: iso(r.estimatedRepairAt),
+        supplementRepairAt: iso(r.supplementRepairAt),
+        quoteVersion: q?.version != null ? String(q.version) : '',
+        quoteStatus: q?.status ?? '',
+        quoteTitle: q?.title ?? '',
+        currency: q?.currency ?? '',
+        approvedNetRon: centsToRon(approvedNet),
+        approvedVatRon: centsToRon(approvedVat),
+        approvedGrossRon: centsToRon(approvedGross),
+        invoiceGrossRon: centsToRon(q?.invoiceGrossCents),
+        invoiceMismatch: q ? (q.invoiceMismatch ? 'yes' : 'no') : '',
+        submittedAt: iso(q?.submittedAt),
+        approvedAt: iso(q?.approvedAt),
+        invoicedAt: iso(q?.invoicedAt),
+        quoteLineCount: q?._count.lines != null ? String(q._count.lines) : '',
+        serviceCaseId: r.serviceCase.id,
+        serviceCaseStage: r.serviceCase.currentStage ?? '',
+        serviceCaseStatus: r.serviceCase.status ?? '',
+        appointmentScheduledAt: iso(appt?.scheduledAt),
+        appointmentStatus: appt?.status ?? '',
+      };
+
       lines.push(
-        [
-          r.id,
-          r.displayNumber ?? '',
-          r.title,
-          r.status,
-          r.supplier?.code ?? '',
-          r.supplier?.legalName ?? '',
-          r.vehicle?.registrationNumber ?? '',
-          r.createdAt.toISOString(),
-          r.inServiceAt?.toISOString() ?? '',
-          r.readyAt?.toISOString() ?? '',
-          r.completedAt?.toISOString() ?? '',
-          q?.version ?? '',
-          approvedGross === '' ? '' : String(approvedGross),
-          invoiceGross === '' ? '' : String(invoiceGross),
-          q?.invoicedAt?.toISOString() ?? '',
-        ]
-          .map((c) => escapeCsvCell(String(c)))
+        rowFieldIds
+          .map((id) => escapeCsvCell(cell[id] ?? ''))
           .join(','),
       );
     }
 
-    // Summary footer as comment-like second sheet substitute
-    lines.push('');
-    lines.push(
-      [
-        'SUMMARY',
-        `year=${summary.year}`,
-        `month=${summary.month}`,
-        `woCreated=${summary.workOrderCount}`,
-        `ready=${summary.readyCount}`,
-        `completed=${summary.completedCount}`,
-        `apptCompleted=${summary.appointmentCompletedCount}`,
-        `quotesApproved=${summary.quoteApprovedCount}`,
-        `quotesInvoiced=${summary.quoteInvoicedCount}`,
-        `valueApprovedRon=${(summary.valueApprovedCents / 100).toFixed(2)}`,
-        `valueInvoicedRon=${(summary.valueInvoicedCents / 100).toFixed(2)}`,
-      ]
-        .map((c) => escapeCsvCell(c))
-        .join(','),
-    );
+    if (includeSummary) {
+      lines.push('');
+      lines.push(
+        [
+          'SUMMARY',
+          `year=${summary.year}`,
+          `month=${summary.month}`,
+          `woCreated=${summary.workOrderCount}`,
+          `ready=${summary.readyCount}`,
+          `completed=${summary.completedCount}`,
+          `apptCompleted=${summary.appointmentCompletedCount}`,
+          `quotesApproved=${summary.quoteApprovedCount}`,
+          `quotesInvoiced=${summary.quoteInvoicedCount}`,
+          `valueApprovedRon=${(summary.valueApprovedCents / 100).toFixed(2)}`,
+          `valueInvoicedRon=${(summary.valueInvoicedCents / 100).toFixed(2)}`,
+        ]
+          .map((c) => escapeCsvCell(c))
+          .join(','),
+      );
+    }
 
     const filename = `partner-report-${summary.year}-${String(summary.month).padStart(2, '0')}.csv`;
     return { filename, csv: lines.join('\r\n') + '\r\n' };

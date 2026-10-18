@@ -13,6 +13,13 @@ import { PartnerReportsService } from './partner-reports.service';
 export class PartnerReportsController {
   constructor(private readonly reports: PartnerReportsService) {}
 
+  /** PARTNER-016 — catalog câmpuri export (bifabile). */
+  @Get('fields')
+  @Roles(...FLEET_READ_ROLES)
+  fields() {
+    return this.reports.fieldsCatalog();
+  }
+
   /** PARTNER-016 — sumar lunar JSON. */
   @Get('monthly')
   @Roles(...FLEET_READ_ROLES)
@@ -32,7 +39,7 @@ export class PartnerReportsController {
     });
   }
 
-  /** PARTNER-016 — export CSV pe lună (volum / valoare pe WO). */
+  /** PARTNER-016 — export CSV pe lună; `fields` = id-uri separate prin virgulă. */
   @Get('monthly.csv')
   @Roles(...FLEET_READ_ROLES)
   @Header('Content-Type', 'text/csv; charset=utf-8')
@@ -43,12 +50,14 @@ export class PartnerReportsController {
     @Query('month') month?: string,
     @Query('supplierId') supplierId?: string,
     @Query('suppliers') suppliers?: string,
+    @Query('fields') fields?: string,
   ): Promise<StreamableFile> {
     const { filename, csv } = await this.reports.monthlyCsv(tenantSlug, access, {
       year: year ? Number(year) : undefined,
       month: month ? Number(month) : undefined,
       supplierId,
       suppliers,
+      fields,
     });
     return new StreamableFile(Buffer.from(csv, 'utf8'), {
       type: 'text/csv; charset=utf-8',
