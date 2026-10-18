@@ -30,7 +30,7 @@ model Tenant {
   fleetSettings      Json?
   /// Setup → Importuri: entități, șabloane, drepturi bulk.
   importSettings     Json?
-  /// CRM-020 — plafoane de aprobare deviz (user + sumă). Nu se aplică încă pe fluxul de aprobare.
+  /// CRM-020 — plafoane de aprobare deviz (client + user + sumă). Verificate la Aprobă.
   quoteApprovalSettings Json?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt

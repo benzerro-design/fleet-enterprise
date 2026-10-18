@@ -66,6 +66,10 @@ export class QuoteApprovalSettingsController {
     @CurrentUserId() actorUserId?: string,
   ) {
     if (!actorUserId) throw new BadRequestException('Missing actor');
+    const o = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+    if (o && typeof o.clientId === 'string' && o.clientId.trim()) {
+      return this.settings.setForClient(tenantSlug, body, actorUserId);
+    }
     return this.settings.set(tenantSlug, body, actorUserId);
   }
 }

@@ -38,7 +38,7 @@ export const SETUP_PILLARS: SetupPillar[] = [
     id: "quote-thresholds",
     href: "/fleet/setup/quote-thresholds",
     label: "Plafoane deviz",
-    blurb: "Useri și sume maxime de aprobare. Nu se aplică încă pe deviz.",
+    blurb: "Pe client: sumă maximă de aprobare pe user. Se verifică la Aprobă pe comandă.",
     status: "live",
     activePrefixes: ["/fleet/setup/quote-thresholds"],
   },

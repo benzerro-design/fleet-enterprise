@@ -50,6 +50,10 @@ import { parseClientPricingSettings } from '../clients/client-pricing-settings';
 import { parseTenantIntegrationsSettings, interCarsHasCredentials } from '../tenant/integrations-settings';
 import { InterCarsClient } from '../tenant/intercars-client.service';
 import { parseWorkOrderSettings, type WorkOrderSettings } from '../tenant/work-order-settings';
+import {
+  parseQuoteApprovalSettings,
+  ruleForApprover,
+} from '../tenant/quote-approval-settings';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { loadWebUploadBytes, WebUploadLoadError } from '../storage/web-upload-storage';
 import { costCategoryForWorkflow } from './work-order-cost.utils';
@@ -1285,6 +1289,7 @@ export class WorkOrderQuotesService {
       include: {
         workOrder: {
           include: {
+            vehicle: { select: { clientId: true } },
             serviceCase: {
               select: {
                 id: true,
@@ -1324,6 +1329,37 @@ export class WorkOrderQuotesService {
       throw new BadRequestException('Trebuie aprobată cel puțin o linie din deviz');
     }
     const approvedTotals = computeApprovedTotals(decidedLines);
+
+    if (actorUserId) {
+      const settings = parseQuoteApprovalSettings(tenant.quoteApprovalSettings);
+      const rule = ruleForApprover(settings, existing.workOrder.vehicle.clientId, actorUserId);
+      if (rule) {
+        const amountCents =
+          settings.basis === 'net'
+            ? approvedTotals.totalNetCents
+            : approvedTotals.totalNetCents + approvedTotals.totalVatCents;
+        if (amountCents > rule.maxAmountCents) {
+          const basisLabel = settings.basis === 'net' ? 'net' : 'brut';
+          await this.audit.log({
+            tenantId: tenant.id,
+            actorUserId,
+            action: 'work_order_quote.approve_blocked_threshold',
+            entityType: 'work_order_quote',
+            entityId: quoteId,
+            meta: {
+              workOrderId,
+              clientId: existing.workOrder.vehicle.clientId,
+              amountCents,
+              maxAmountCents: rule.maxAmountCents,
+              basis: settings.basis,
+            },
+          });
+          throw new ForbiddenException(
+            `Devizul (${formatMoney(amountCents)} ${basisLabel}) depășește plafonul tău de aprobare (${formatMoney(rule.maxAmountCents)}).`,
+          );
+        }
+      }
+    }
 
     const quote = await this.prisma.$transaction(async (tx) => {
       for (const line of decidedLines) {
