@@ -6,6 +6,7 @@ import { LogoutButton } from "@/app/fleet/logout-button";
 import { openFleetCommandPalette } from "@/components/fleet/FleetCommandPalette";
 import { PartnerNotificationBell } from "@/components/fleet/partner/PartnerNotificationBell";
 import { PartnerPendingActionsList } from "@/components/fleet/partner/PartnerPendingActionsList";
+import { PartnerTenantSwitcher } from "@/components/fleet/partner/PartnerTenantSwitcher";
 import {
   PartnerSupplierSelector,
   type PartnerSupplierOption,
@@ -117,6 +118,8 @@ export function PartnerTopBar({ ctx }: Props) {
           <span>{tx("shell.searchShort")}</span>
           <kbd className="rounded border border-zinc-700 px-1 font-mono text-[9px] text-zinc-600">⌘K</kbd>
         </button>
+
+        <PartnerTenantSwitcher currentSlug={ctx.tenantSlug} />
 
         <span
           className="font-mono text-[9px] text-zinc-500"

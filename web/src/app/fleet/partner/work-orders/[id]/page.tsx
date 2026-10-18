@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { PartnerMobileQuickActions } from "@/components/fleet/partner/PartnerMobileQuickActions";
 import { WorkOrderSheetShell } from "@/components/fleet/work-orders/WorkOrderSheetShell";
 import { canWritePartnerOps, getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch, fleetServerFetch } from "@/lib/fleet-server";
@@ -82,6 +83,13 @@ export default async function PartnerWorkOrderDetailPage({ params, searchParams 
       </Link>
 
       <div className="mt-4">
+        <PartnerMobileQuickActions
+          workOrderId={wo.id}
+          canWrite={canWrite}
+          status={wo.status}
+          hasInService={Boolean(wo.inServiceAt)}
+          hasReady={Boolean(wo.readyAt)}
+        />
         <WorkOrderSheetShell
           wo={wo}
           canWrite={canWrite}

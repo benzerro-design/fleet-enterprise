@@ -25,17 +25,31 @@ export async function POST(req: Request) {
     });
   }
 
-  let accessToken: string;
+  let parsed: {
+    accessToken?: string;
+    requiresTenant?: boolean;
+    tenants?: Array<{ slug: string; name: string; role: string }>;
+  };
   try {
-    const j = JSON.parse(text) as { accessToken?: string };
-    if (!j.accessToken) throw new Error("missing token");
-    accessToken = j.accessToken;
+    parsed = JSON.parse(text) as typeof parsed;
   } catch {
     return NextResponse.json({ message: "Invalid upstream response" }, { status: 502 });
   }
 
+  // PARTNER-018 — multi-abonat: UI alege tenant după parolă.
+  if (parsed.requiresTenant && Array.isArray(parsed.tenants)) {
+    return NextResponse.json({
+      requiresTenant: true,
+      tenants: parsed.tenants,
+    });
+  }
+
+  if (!parsed.accessToken) {
+    return NextResponse.json({ message: "Invalid upstream response" }, { status: 502 });
+  }
+
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(COOKIE, accessToken, {
+  res.cookies.set(COOKIE, parsed.accessToken, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",

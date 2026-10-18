@@ -6,14 +6,21 @@ import { appendPartnerSupplierQuery, parsePartnerSupplierQuery } from "@/lib/par
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FleetCommandPalette, type FleetCommandItem } from "@/components/fleet/FleetCommandPalette";
 import { PartnerNavLinks } from "@/components/fleet/partner/PartnerNavLinks";
+import { PartnerPwaRegister } from "@/components/fleet/partner/PartnerPwaRegister";
 import { PartnerTopBar, type PartnerTopBarContext } from "@/components/fleet/partner/PartnerTopBar";
-import { PARTNER_NAV_ITEMS, partnerNavActive } from "@/lib/partner-nav";
+import {
+  PARTNER_MOBILE_TAB_ITEMS,
+  PARTNER_NAV_ITEMS,
+  partnerNavActive,
+} from "@/lib/partner-nav";
 import { useT } from "@/lib/i18n/useT";
 
 const PARTNER_PAGE_TITLES: Record<string, string> = {
   "/fleet/partner": "Dashboard",
   "/fleet/partner/work-orders": "Devize & comenzi",
   "/fleet/partner/appointments": "Programator",
+  "/fleet/partner/scorecard": "Scorecard",
+  "/fleet/partner/reports": "Rapoarte",
   "/fleet/partner/profile": "Profil firmă",
 };
 
@@ -99,6 +106,7 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
 
   return (
     <div data-fleet-shell className="flex h-dvh overflow-hidden bg-zinc-950">
+      <PartnerPwaRegister />
       <FleetCommandPalette items={commandItems} />
       <aside className="hidden h-full w-[220px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex">
         {sidebar}
@@ -132,7 +140,7 @@ export function PartnerShell({ children, topBar, supplierFooter, authBanner }: P
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
           aria-label={tx("nav.aria.quick")}
         >
-          <PartnerNavLinks items={PARTNER_NAV_ITEMS} className="grid-cols-4" />
+          <PartnerNavLinks items={PARTNER_MOBILE_TAB_ITEMS} className="grid-cols-4" />
         </nav>
       </div>
 

@@ -18,6 +18,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Fleet enterprise",
   description: "Fleet management MVP (Next.js + NestJS)",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Fleet Partner",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: "/partner-icon.svg",
+    apple: "/partner-icon.svg",
+  },
 };
 
 /** App-like mobile: prevent accidental pinch/zoom-out from overflow. */

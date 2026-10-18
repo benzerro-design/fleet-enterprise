@@ -1,0 +1,19 @@
+{
+  "name": "Fleet Partner",
+  "short_name": "Partner",
+  "description": "Portal partener — programări, comenzi, status rapid",
+  "start_url": "/fleet/partner",
+  "scope": "/fleet/partner",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#7c3aed",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/partner-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

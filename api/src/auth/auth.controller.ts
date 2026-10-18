@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { CurrentUserId } from '../common/decorators/current-user.decorator';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -53,6 +54,26 @@ export class AuthController {
         : undefined,
       partnerPortal: u.partnerPortal,
     };
+  }
+
+  /** PARTNER-018 — abonați disponibili pentru userul curent. */
+  @Get('tenants')
+  @UseGuards(JwtAuthGuard)
+  listTenants(@CurrentUserId() userId: string | undefined) {
+    if (!userId) throw new UnauthorizedException();
+    return this.auth.listTenantsForUser(userId);
+  }
+
+  /** PARTNER-018 — schimbă abonatul fără re-login. */
+  @Post('switch-tenant')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  switchTenant(
+    @CurrentUserId() userId: string | undefined,
+    @Body() body: { tenantSlug?: string },
+  ) {
+    if (!userId) throw new UnauthorizedException();
+    return this.auth.switchTenant(userId, body?.tenantSlug ?? '');
   }
 
   @Post('login')
