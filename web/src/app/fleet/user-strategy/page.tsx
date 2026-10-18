@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserStrategyEditor } from "@/components/fleet/admin/UserStrategyEditor";
-import { UserStrategyHub, parseUserStrategyTab } from "@/components/fleet/admin/UserStrategyHub";
+import { UserStrategyHub } from "@/components/fleet/admin/UserStrategyHub";
 import { UserStrategyRights } from "@/components/fleet/admin/UserStrategyRights";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
 import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
 import type { IamStrategyResponse } from "@/lib/iam-strategy/types";
+import { parseUserStrategyTab } from "@/lib/user-strategy-tabs";
 
 async function loadStrategy(): Promise<IamStrategyResponse | null> {
   try {

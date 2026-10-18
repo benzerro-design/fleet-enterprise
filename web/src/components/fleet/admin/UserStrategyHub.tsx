@@ -3,18 +3,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { fleetSheetTabClass } from "@/components/fleet/ops-form-primitives";
-
-export const USER_STRATEGY_TABS = [
-  { id: "map", label: "Hartă ierarhică", href: "/fleet/user-strategy" },
-  { id: "rights", label: "Drepturi F/T/G", href: "/fleet/user-strategy?tab=rights" },
-] as const;
-
-export type UserStrategyTabId = (typeof USER_STRATEGY_TABS)[number]["id"];
-
-export function parseUserStrategyTab(raw?: string | null): UserStrategyTabId {
-  if (raw === "rights") return "rights";
-  return "map";
-}
+import {
+  USER_STRATEGY_TABS,
+  type UserStrategyTabId,
+} from "@/lib/user-strategy-tabs";
 
 type Props = {
   active: UserStrategyTabId;
