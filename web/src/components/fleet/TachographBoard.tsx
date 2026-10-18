@@ -74,6 +74,9 @@ export function TachographBoard({
   const [notes, setNotes] = useState("");
   const [slip, setSlip] = useState<{ url: string; name: string } | null>(null);
   const [day, setDay] = useState(initial.to);
+  /** UI: filtre / formular pliate ca lista să fie prim-plan. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
     if (lockedDriverId || !vehicleId) {
@@ -197,110 +200,252 @@ export function TachographBoard({
     await load();
   }
 
+  const dayList = (
+    <ul className="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800">
+      {(data?.items ?? []).map((row) => (
+        <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 bg-zinc-950/40 px-4 py-3 text-sm">
+          <div className="min-w-0">
+            <p className="font-medium text-zinc-100">
+              {row.day} · {row.registrationNumber} · {row.driverName}
+            </p>
+            <p className="text-xs text-zinc-500">
+              Condus {hours(row.drivingMinutes)} · Muncă {hours(row.otherWorkMinutes)} · Disp.{" "}
+              {hours(row.availabilityMinutes)} · Odihnă {hours(row.restMinutes)}
+              {row.slipFileUrl ? (
+                <>
+                  {" · "}
+                  <a href={row.slipFileUrl} target="_blank" rel="noreferrer" className="text-emerald-300 hover:underline">
+                    {row.slipFileName || "Bon"}
+                  </a>
+                </>
+              ) : null}
+            </p>
+          </div>
+          {canWrite && !summaryOnly ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void remove(row.id)}
+              className="text-xs text-zinc-400 hover:text-red-300"
+            >
+              Șterge
+            </button>
+          ) : null}
+        </li>
+      ))}
+      {data && data.items.length === 0 ? (
+        <li className="px-4 py-6 text-sm text-zinc-500">Nicio zi în perioada aleasă.</li>
+      ) : null}
+    </ul>
+  );
+
   return (
-    <section className="min-w-0 space-y-4 overflow-x-hidden">
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-        <p className="text-xs font-medium uppercase tracking-widest text-emerald-400/90">Lângă FAZ</p>
-        <h2 className="mt-1 text-lg font-semibold text-zinc-100">Rezumat activitate zilnică</h2>
-        <p className="mt-1 text-sm text-zinc-400">
-          Minute introduse manual, cu bonul de tahograf atașat la zi. Când apare importul de card, aceleași zile se completează automat.
-        </p>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+    <section className="min-w-0 space-y-3 overflow-x-hidden">
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold text-zinc-100">Rezumat activitate zilnică</h2>
+          <p className="text-[10px] uppercase tracking-wide text-emerald-400/80">Lângă FAZ</p>
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-5">
           {(summary ?? []).map(([label, value]) => (
-            <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>
-              <p className="mt-0.5 text-sm font-medium text-zinc-100">{value}</p>
+            <div key={label} className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1.5">
+              <p className="text-[9px] uppercase tracking-wide text-zinc-500">{label}</p>
+              <p className="text-xs font-medium text-zinc-100">{value}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {summaryOnly ? null : (
+      {summaryOnly ? (
+        dayList
+      ) : (
         <>
-          <form
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void load();
-            }}
-          >
-            <label className="text-xs text-zinc-500">
-              De la
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100" />
-            </label>
-            <label className="text-xs text-zinc-500">
-              Până la
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100" />
-            </label>
-            <label className="text-xs text-zinc-500">
-              Vehicul
-              <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100">
-                <option value="">Toate</option>
-                {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>{v.registrationNumber}</option>
-                ))}
-              </select>
-            </label>
-            {lockedDriverId ? null : (
-              <label className="text-xs text-zinc-500">
-                Conducător
-                <select value={filterDriverId} onChange={(e) => setFilterDriverId(e.target.value)} disabled={!vehicleId} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100">
-                  <option value="">{vehicleId ? "Șoferii alocați" : "Alege vehiculul"}</option>
-                  {assignedDrivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.fullName}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </form>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="inline-flex min-h-[40px] flex-1 items-center justify-between gap-2 rounded-md border border-zinc-700/80 bg-zinc-950 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-900 sm:flex-none"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((v) => !v)}
+            >
+              <span>Filtre</span>
+              <span className="text-xs font-normal text-zinc-500">{filtersOpen ? "Ascunde" : "Arată"}</span>
+            </button>
+            {canWrite ? (
+              <button
+                type="button"
+                className="inline-flex min-h-[40px] flex-1 items-center justify-between gap-2 rounded-md border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-950/50 sm:flex-none"
+                aria-expanded={addOpen}
+                onClick={() => setAddOpen((v) => !v)}
+              >
+                <span>Adaugă zi</span>
+                <span className="text-xs font-normal text-emerald-400/70">{addOpen ? "Ascunde" : "Deschide"}</span>
+              </button>
+            ) : null}
+          </div>
 
-          {canWrite ? (
-            <form onSubmit={(e) => void save(e)} className="grid gap-3 rounded-xl border border-zinc-800 p-4 sm:grid-cols-2 lg:grid-cols-4">
-              <label className="text-xs text-zinc-500">
-                Zi
-                <input type="date" required value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
+          {filtersOpen ? (
+            <form
+              className="grid max-h-[min(28vh,12rem)] gap-2 overflow-y-auto rounded-md border border-zinc-800/80 bg-zinc-950/40 p-2 sm:grid-cols-2 lg:grid-cols-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void load();
+              }}
+            >
+              <label className="text-[10px] text-zinc-500">
+                De la
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100"
+                />
               </label>
-              <label className="text-xs text-zinc-500">
+              <label className="text-[10px] text-zinc-500">
+                Până la
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100"
+                />
+              </label>
+              <label className="text-[10px] text-zinc-500">
                 Vehicul
-                <select required value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm">
-                  <option value="">Alege</option>
+                <select
+                  value={vehicleId}
+                  onChange={(e) => setVehicleId(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100"
+                >
+                  <option value="">Toate</option>
                   {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>{v.registrationNumber}</option>
+                    <option key={v.id} value={v.id}>
+                      {v.registrationNumber}
+                    </option>
                   ))}
                 </select>
               </label>
               {lockedDriverId ? null : (
-                <label className="text-xs text-zinc-500">
+                <label className="text-[10px] text-zinc-500">
                   Conducător
-                  <select required value={formDriverId} onChange={(e) => setFormDriverId(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm">
-                    <option value="">{assignedDrivers.length ? "Alege" : "Niciun șofer alocat"}</option>
+                  <select
+                    value={filterDriverId}
+                    onChange={(e) => setFilterDriverId(e.target.value)}
+                    disabled={!vehicleId}
+                    className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100"
+                  >
+                    <option value="">{vehicleId ? "Șoferii alocați" : "Alege vehiculul"}</option>
                     {assignedDrivers.map((d) => (
-                      <option key={d.id} value={d.id}>{d.fullName}</option>
+                      <option key={d.id} value={d.id}>
+                        {d.fullName}
+                      </option>
                     ))}
                   </select>
                 </label>
               )}
-              <label className="text-xs text-zinc-500">
+              <div className="flex items-end sm:col-span-2 lg:col-span-4">
+                <button type="submit" className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100">
+                  Aplică
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {dayList}
+
+          {canWrite && addOpen ? (
+            <form
+              onSubmit={(e) => void save(e)}
+              className="grid max-h-[min(50vh,22rem)] gap-2 overflow-y-auto rounded-md border border-zinc-800 p-3 sm:grid-cols-2 lg:grid-cols-4"
+            >
+              <label className="text-[10px] text-zinc-500">
+                Zi
+                <input
+                  type="date"
+                  required
+                  value={day}
+                  onChange={(e) => setDay(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
+                />
+              </label>
+              <label className="text-[10px] text-zinc-500">
+                Vehicul
+                <select
+                  required
+                  value={vehicleId}
+                  onChange={(e) => setVehicleId(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
+                >
+                  <option value="">Alege</option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.registrationNumber}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {lockedDriverId ? null : (
+                <label className="text-[10px] text-zinc-500">
+                  Conducător
+                  <select
+                    required
+                    value={formDriverId}
+                    onChange={(e) => setFormDriverId(e.target.value)}
+                    className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
+                  >
+                    <option value="">{assignedDrivers.length ? "Alege" : "Niciun șofer alocat"}</option>
+                    {assignedDrivers.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.fullName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label className="text-[10px] text-zinc-500">
                 Condus (min)
-                <input inputMode="numeric" value={driving} onChange={(e) => setDriving(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
+                <input
+                  inputMode="numeric"
+                  value={driving}
+                  onChange={(e) => setDriving(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
+                />
               </label>
-              <label className="text-xs text-zinc-500">
+              <label className="text-[10px] text-zinc-500">
                 Altă muncă (min)
-                <input inputMode="numeric" value={otherWork} onChange={(e) => setOtherWork(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
+                <input
+                  inputMode="numeric"
+                  value={otherWork}
+                  onChange={(e) => setOtherWork(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
+                />
               </label>
-              <label className="text-xs text-zinc-500">
+              <label className="text-[10px] text-zinc-500">
                 Disponibilitate (min)
-                <input inputMode="numeric" value={availability} onChange={(e) => setAvailability(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
+                <input
+                  inputMode="numeric"
+                  value={availability}
+                  onChange={(e) => setAvailability(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
+                />
               </label>
-              <label className="text-xs text-zinc-500">
+              <label className="text-[10px] text-zinc-500">
                 Odihnă (min)
-                <input inputMode="numeric" value={rest} onChange={(e) => setRest(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
+                <input
+                  inputMode="numeric"
+                  value={rest}
+                  onChange={(e) => setRest(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
+                />
               </label>
-              <label className="text-xs text-zinc-500 sm:col-span-2">
+              <label className="text-[10px] text-zinc-500 sm:col-span-2">
                 Note
-                <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm" />
+                <input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="mt-0.5 block w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
+                />
               </label>
-              <label className="text-xs text-zinc-500 sm:col-span-2">
+              <label className="text-[10px] text-zinc-500 sm:col-span-2">
                 Bon tahograf (PDF sau poză)
                 <input
                   type="file"
@@ -309,48 +454,21 @@ export function TachographBoard({
                     const file = e.target.files?.[0];
                     if (file) void uploadSlip(file);
                   }}
-                  className="mt-1 block w-full text-sm text-zinc-300"
+                  className="mt-0.5 block w-full text-sm text-zinc-300"
                 />
                 {slip ? <span className="mt-1 block text-zinc-400">{slip.name}</span> : null}
               </label>
               <div className="flex items-end">
-                <button type="submit" disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 disabled:opacity-50">
-                  Salvează ziua
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="inline-flex items-center gap-2 rounded-md bg-emerald-500 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
+                >
+                  {pending ? "Se salvează…" : "Salvează ziua"}
                 </button>
               </div>
             </form>
           ) : null}
-
-          <ul className="divide-y divide-zinc-800 overflow-hidden rounded-xl border border-zinc-800">
-            {(data?.items ?? []).map((row) => (
-              <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 bg-zinc-950/40 px-4 py-3 text-sm">
-                <div className="min-w-0">
-                  <p className="font-medium text-zinc-100">
-                    {row.day} · {row.registrationNumber} · {row.driverName}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    Condus {hours(row.drivingMinutes)} · Muncă {hours(row.otherWorkMinutes)} · Disp. {hours(row.availabilityMinutes)} · Odihnă {hours(row.restMinutes)}
-                    {row.slipFileUrl ? (
-                      <>
-                        {" · "}
-                        <a href={row.slipFileUrl} target="_blank" rel="noreferrer" className="text-emerald-300 hover:underline">
-                          {row.slipFileName || "Bon"}
-                        </a>
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-                {canWrite ? (
-                  <button type="button" disabled={pending} onClick={() => void remove(row.id)} className="text-xs text-zinc-400 hover:text-red-300">
-                    Șterge
-                  </button>
-                ) : null}
-              </li>
-            ))}
-            {data && data.items.length === 0 ? (
-              <li className="px-4 py-6 text-sm text-zinc-500">Nicio zi în perioada aleasă.</li>
-            ) : null}
-          </ul>
         </>
       )}
       {error ? <p className="text-sm text-amber-300">{error}</p> : null}

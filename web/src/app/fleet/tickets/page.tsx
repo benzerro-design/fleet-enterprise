@@ -6,6 +6,7 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { DriverPager, DriverRecordList, DriverStatusBand } from "@/components/fleet/DriverPortalList";
 import { DriverViewportSplit } from "@/components/fleet/DriverViewportSplit";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { FleetPendingLink } from "@/components/fleet/FleetPendingLink";
 import { TicketBoardView } from "@/components/fleet/TicketBoardView";
 import { TicketDataGrid } from "@/components/fleet/tickets/TicketDataGrid";
 import { TicketFocusView } from "@/components/fleet/TicketFocusView";
@@ -232,12 +233,13 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
               </p>
             </div>
             {write ? (
-              <Link
+              <FleetPendingLink
                 href="/fleet/tickets/new"
                 className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                pendingLabel="Se deschide…"
               >
                 {t(locale, "pages.tickets.newRequest")}
-              </Link>
+              </FleetPendingLink>
             ) : null}
           </div>
         }
@@ -460,9 +462,13 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.tickets")}</h1>
         {write ? (
-          <Link href="/fleet/tickets/new" className="text-sm font-medium text-emerald-400">
+          <FleetPendingLink
+            href="/fleet/tickets/new"
+            className="text-sm font-medium text-emerald-400"
+            pendingLabel="Se deschide…"
+          >
             {t(locale, "driver.home.newTicket")}
-          </Link>
+          </FleetPendingLink>
         ) : null}
       </div>
       <DriverStatusBand

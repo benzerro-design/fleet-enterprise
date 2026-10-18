@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { FleetPendingLink } from "@/components/fleet/FleetPendingLink";
 import { TripSheetDocumentsList } from "@/components/fleet/TripSheetDocumentsList";
 import { TripSheetWizard } from "@/components/fleet/TripSheetWizard";
 import { ConsumptionFilterForm } from "@/components/fleet/ConsumptionFilterForm";
@@ -23,6 +24,7 @@ import { LOCALE_COOKIE_NAME, parseLocale } from "@/lib/i18n/types";
 import type { ConsumptionPayload } from "@/lib/consumption-types";
 import type { DriverRecord } from "@/lib/drivers-api";
 import { parseFuelTypesCsv } from "@/lib/fuel-types";
+import { fleetListTabClass } from "@/lib/fleet-list-chrome";
 import { TRIP_SHEET_DOC_TYPES } from "@/lib/trip-ops";
 
 type Search = {
@@ -110,14 +112,6 @@ function defaultConsumptionPeriod(): { from: string; to: string } {
 function parseSelectedVehicleIds(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
   return raw.split(",").map((id) => id.trim()).filter(Boolean);
-}
-
-function tabLinkClass(active: boolean): string {
-  return `rounded-t-lg border px-4 py-2 text-sm transition-colors ${
-    active
-      ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
-      : "border-transparent text-zinc-500 hover:text-zinc-200"
-  }`;
 }
 
 const tripActionBtn =
@@ -303,9 +297,9 @@ export default async function TripsPage({ searchParams }: Props) {
               <div className="flex shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
                 {write ? (
                   <>
-                    <Link href="/fleet/trips/new" className={tripActionBtnPrimary}>
+                    <FleetPendingLink href="/fleet/trips/new" className={tripActionBtnPrimary} pendingLabel="Se deschide…">
                       {t(locale, "pages.trips.newTrip")}
-                    </Link>
+                    </FleetPendingLink>
                     <TripSheetWizard
                       vehicles={vehicles}
                       triggerClassName={tripActionBtnEmeraldOutline}
@@ -325,17 +319,17 @@ export default async function TripsPage({ searchParams }: Props) {
             </div>
 
             <nav className="border-b border-zinc-800 pt-1">
-              <div className="flex flex-wrap gap-2">
-              <Link href="/fleet/trips" className={tabLinkClass(showTrips)}>
+              <div className="flex flex-wrap gap-1">
+              <Link href="/fleet/trips" className={fleetListTabClass(showTrips)}>
                 {t(locale, "pages.trips.tabsList")}
               </Link>
-              <Link href="/fleet/trips?view=documents" className={tabLinkClass(showDocuments)}>
+              <Link href="/fleet/trips?view=documents" className={fleetListTabClass(showDocuments)}>
                 {t(locale, "pages.trips.tabsDocuments")}
               </Link>
-              <Link href="/fleet/trips?view=consumption" className={tabLinkClass(showConsumption)}>
+              <Link href="/fleet/trips?view=consumption" className={fleetListTabClass(showConsumption)}>
                 {t(locale, "pages.trips.tabsConsumption")}
               </Link>
-              <Link href="/fleet/trips?view=tachograph" className={tabLinkClass(showTachograph)}>
+              <Link href="/fleet/trips?view=tachograph" className={fleetListTabClass(showTachograph)}>
                 {t(locale, "pages.trips.tabsTachograph")}
               </Link>
               </div>
@@ -361,43 +355,43 @@ export default async function TripsPage({ searchParams }: Props) {
               key={`docs-${filterFormKey(sp)}`}
               action="/fleet/trips"
               method="get"
-              className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:flex-row sm:flex-wrap sm:items-end"
+              className="flex flex-col gap-2 rounded-md border border-zinc-800/80 bg-zinc-900/30 p-2 sm:flex-row sm:flex-wrap sm:items-end"
             >
               <input type="hidden" name="view" value="documents" />
               <input type="hidden" name="page" value="1" />
-              <div className="flex min-w-[10rem] flex-1 flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">{t(locale, "common.filters.registrationNumber")}</label>
+              <div className="flex min-w-[9rem] flex-1 flex-col gap-0.5">
+                <label className="text-[10px] font-medium text-zinc-500">{t(locale, "common.filters.registrationNumber")}</label>
                 <input
                   name="registrationNumber"
                   defaultValue={sp.registrationNumber ?? ""}
                   placeholder="ex. B 123 ABC"
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
                 />
               </div>
-              <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">{t(locale, "common.filters.client")}</label>
+              <div className="flex min-w-[9rem] flex-1 flex-col gap-0.5">
+                <label className="text-[10px] font-medium text-zinc-500">{t(locale, "common.filters.client")}</label>
                 <input
                   name="clientId"
                   defaultValue={sp.clientId ?? ""}
                   placeholder="ex. Client A"
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
                 />
               </div>
-              <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">{t(locale, "common.filters.searchText")}</label>
+              <div className="flex min-w-[9rem] flex-1 flex-col gap-0.5">
+                <label className="text-[10px] font-medium text-zinc-500">{t(locale, "common.filters.searchText")}</label>
                 <input
                   name="q"
                   defaultValue={sp.q ?? ""}
                   placeholder={t(locale, "pages.trips.docsSearchPlaceholder")}
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
                 />
               </div>
-              <div className="flex min-w-[10rem] flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.trips.documentType")}</label>
+              <div className="flex min-w-[8rem] flex-col gap-0.5">
+                <label className="text-[10px] font-medium text-zinc-500">{t(locale, "pages.trips.documentType")}</label>
                 <select
                   name="docType"
                   defaultValue={sp.docType ?? ""}
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
                 >
                   <option value="">{t(locale, "common.filters.all")}</option>
                   {TRIP_SHEET_DOC_TYPES.map((o) => (
@@ -407,43 +401,43 @@ export default async function TripsPage({ searchParams }: Props) {
                   ))}
                 </select>
               </div>
-              <div className="flex min-w-[9rem] flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.trips.periodFrom")}</label>
+              <div className="flex min-w-[8rem] flex-col gap-0.5">
+                <label className="text-[10px] font-medium text-zinc-500">{t(locale, "pages.trips.periodFrom")}</label>
                 <input
                   name="periodFrom"
                   type="date"
                   defaultValue={sp.periodFrom ?? ""}
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
                 />
               </div>
-              <div className="flex min-w-[9rem] flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.trips.periodTo")}</label>
+              <div className="flex min-w-[8rem] flex-col gap-0.5">
+                <label className="text-[10px] font-medium text-zinc-500">{t(locale, "pages.trips.periodTo")}</label>
                 <input
                   name="periodTo"
                   type="date"
                   defaultValue={sp.periodTo ?? ""}
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
                 />
               </div>
-              <div className="flex min-w-[9rem] flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.trips.generatedFrom")}</label>
+              <div className="flex min-w-[8rem] flex-col gap-0.5">
+                <label className="text-[10px] font-medium text-zinc-500">{t(locale, "pages.trips.generatedFrom")}</label>
                 <input
                   name="createdFrom"
                   type="date"
                   defaultValue={sp.createdFrom ?? ""}
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
                 />
               </div>
-              <div className="flex min-w-[9rem] flex-col gap-1">
-                <label className="text-xs font-medium text-zinc-500">{t(locale, "pages.trips.generatedTo")}</label>
+              <div className="flex min-w-[8rem] flex-col gap-0.5">
+                <label className="text-[10px] font-medium text-zinc-500">{t(locale, "pages.trips.generatedTo")}</label>
                 <input
                   name="createdTo"
                   type="date"
                   defaultValue={sp.createdTo ?? ""}
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm"
                 />
               </div>
-              <button type="submit" className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
+              <button type="submit" className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm">
                 {t(locale, "common.actions.apply")}
               </button>
               <FilterResetLink href="/fleet/trips?view=documents" />
@@ -665,9 +659,9 @@ export default async function TripsPage({ searchParams }: Props) {
               : t(locale, "driverLists.trips")}
         </h1>
         {showTrips && write ? (
-          <Link href="/fleet/trips/new" className={mobileCta}>
+          <FleetPendingLink href="/fleet/trips/new" className={mobileCta} pendingLabel="Se deschide…">
             {t(locale, "driver.home.startTrip")}
-          </Link>
+          </FleetPendingLink>
         ) : null}
         {showDocuments && write ? (
           <TripSheetWizard

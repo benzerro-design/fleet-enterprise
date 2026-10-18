@@ -6,6 +6,7 @@ import { DriverViewportSplit } from "@/components/fleet/DriverViewportSplit";
 import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { FleetPendingLink } from "@/components/fleet/FleetPendingLink";
 import { canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { costsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
@@ -122,12 +123,13 @@ export default async function CostsPage({ searchParams }: Props) {
             </div>
             <div className="flex flex-wrap gap-2">
               {write ? (
-                <Link
+                <FleetPendingLink
                   href="/fleet/costs/new"
                   className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
+                  pendingLabel="Se deschide…"
                 >
                   {t(locale, "pages.costs.newCost")}
-                </Link>
+                </FleetPendingLink>
               ) : null}
               <a
                 href={exportHref}
@@ -279,12 +281,13 @@ export default async function CostsPage({ searchParams }: Props) {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{t(locale, "driverLists.costs")}</h1>
         {write ? (
-          <Link
+          <FleetPendingLink
             href={`/fleet/costs/new?category=${encodeURIComponent(FUEL_COST_CATEGORY)}`}
             className="inline-flex h-10 items-center rounded-full bg-emerald-500 px-4 text-sm font-medium text-zinc-950 touch-manipulation"
+            pendingLabel="Se deschide…"
           >
             {t(locale, "pages.costs.newCost")}
-          </Link>
+          </FleetPendingLink>
         ) : null}
       </div>
       <DriverStatusBand
