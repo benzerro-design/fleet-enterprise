@@ -68,7 +68,7 @@ export default function PartnerReportsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 pb-16">
       <div>
         <h1 className="text-lg font-semibold text-zinc-100">Raport lunar</h1>
         <p className="mt-1 text-xs text-zinc-500">

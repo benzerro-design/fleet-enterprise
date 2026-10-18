@@ -174,29 +174,41 @@ function MonthBars({
   const values = monthly.map((m) => m[field]).filter((v): v is number => v != null);
   const max = values.length ? Math.max(...values.map((v) => Math.abs(v)), 0.01) : 1;
   return (
-    <div className="mt-3 space-y-1.5">
-      {monthly.map((m) => {
-        const v = m[field];
-        const width = v == null ? 0 : Math.min(100, (Math.abs(v) / max) * 100);
-        const label =
-          field === "priceDeviationMedianPercent" ? fmtPct(v) : fmtHours(v);
-        return (
-          <div key={m.month} className="flex items-center gap-2 text-[11px]">
-            <span className="w-14 shrink-0 font-mono text-zinc-500">{m.month}</span>
-            <div className="h-2 flex-1 overflow-hidden rounded bg-zinc-900">
-              <div
-                className={`h-full rounded ${
-                  field === "priceDeviationMedianPercent" && v != null && v > 0
-                    ? "bg-amber-500/70"
-                    : "bg-violet-500/70"
-                }`}
-                style={{ width: `${width}%` }}
-              />
+    <div className="mt-4 border-t border-zinc-800/80 pt-3">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+        Evoluție lunară (mediană)
+      </p>
+      {!values.length ? (
+        <p className="mt-2 text-[11px] text-zinc-600">
+          Nicio valoare pe luni în interval — barele goale = fără eșantion în luna respectivă.
+        </p>
+      ) : null}
+      <div className="mt-2 space-y-1.5">
+        {monthly.map((m) => {
+          const v = m[field];
+          const width = v == null ? 0 : Math.min(100, (Math.abs(v) / max) * 100);
+          const label =
+            field === "priceDeviationMedianPercent" ? fmtPct(v) : fmtHours(v);
+          return (
+            <div key={m.month} className="flex items-center gap-2 text-[11px]">
+              <span className="w-14 shrink-0 font-mono text-zinc-500">{m.month}</span>
+              <div className="h-2 flex-1 overflow-hidden rounded bg-zinc-900">
+                <div
+                  className={`h-full rounded ${
+                    field === "priceDeviationMedianPercent" && v != null && v > 0
+                      ? "bg-amber-500/70"
+                      : "bg-violet-500/70"
+                  }`}
+                  style={{ width: `${width}%` }}
+                />
+              </div>
+              <span className="w-16 shrink-0 text-right text-zinc-400">
+                {v == null ? "—" : label}
+              </span>
             </div>
-            <span className="w-16 shrink-0 text-right text-zinc-400">{label}</span>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -259,12 +271,13 @@ export default function PartnerScorecardPage() {
   const woBase = "/fleet/partner/work-orders";
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 pb-16">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-zinc-100">Scorecard KPI</h1>
           <p className="mt-1 text-xs text-zinc-500">
             Performanță atelier pe răspuns, ciclu reparație și aliniere preț factură ↔ deviz.
+            Derulează în jos pentru top validări / reparații / abateri preț.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
