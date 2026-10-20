@@ -82,6 +82,10 @@ import {
 } from '../appointments/appointment-status.utils';
 import { assertSupplierSlotCapacity } from '../appointments/appointment-supplier-capacity.utils';
 import {
+  assertSupplierOffersServiceType,
+  resolveServiceCaseServiceTypeCode,
+} from '../suppliers/supplier-service-offering';
+import {
   effectiveAppointmentProposeFleetFirst,
   effectiveDriverCanNegotiate,
   effectiveRequireDriverAck,
@@ -386,6 +390,8 @@ export type ServiceCaseRecord = {
   clientRequireDriverAck: boolean;
   /** Șoferul acceptă / propune data în paralel cu managerul. */
   clientDriverCanNegotiateAppointment: boolean;
+  serviceTypeId: string | null;
+  serviceTypeCode: string | null;
   workOrders: WorkOrderRecord[];
   appointments: ServiceAppointmentRecord[];
 };
@@ -2405,7 +2411,15 @@ export class ServiceCasesService {
 
     const serviceCase = await this.prisma.serviceCase.findFirst({
       where: { id: caseId, tenantId: tenant.id },
-      include: { sourceTicket: true },
+      include: {
+        serviceType: { select: { code: true } },
+        sourceTicket: {
+          select: {
+            serviceTypeId: true,
+            serviceType: { select: { code: true } },
+          },
+        },
+      },
     });
     if (!serviceCase) throw new NotFoundException('Service case not found');
     if (!serviceCase.vehicleId) {
@@ -2450,6 +2464,20 @@ export class ServiceCasesService {
         scheduledAt,
         durationMin,
       });
+    }
+
+    const schedulingServiceTypeCode = await resolveServiceCaseServiceTypeCode(
+      this.prisma,
+      tenant.id,
+      serviceCase,
+    );
+    if (supplierId && schedulingServiceTypeCode) {
+      await assertSupplierOffersServiceType(
+        this.prisma,
+        tenant.id,
+        supplierId,
+        schedulingServiceTypeCode,
+      );
     }
 
     const initialStatus =
@@ -3843,6 +3871,7 @@ export class ServiceCasesService {
     return {
       client: { select: { iamSettings: true } },
       supplier: { select: { legalName: true } },
+      serviceType: { select: { code: true } },
       workOrders: {
         orderBy: { createdAt: 'asc' as const },
         include: {
@@ -4222,6 +4251,8 @@ export class ServiceCasesService {
       workflowType: ServiceCaseWorkflowType;
       sourceType: ServiceCaseSourceType;
       sourceTicketId: string | null;
+      serviceTypeId?: string | null;
+      serviceType?: { code: string } | null;
       currentStage: ServiceCaseStage;
       status: ServiceCaseStatus;
       supplierId: string | null;
@@ -4422,6 +4453,8 @@ export class ServiceCasesService {
       updatedAt: row.updatedAt.toISOString(),
       clientRequireDriverAck,
       clientDriverCanNegotiateAppointment,
+      serviceTypeId: row.serviceTypeId ?? null,
+      serviceTypeCode: row.serviceType?.code ?? null,
       workOrders: (row.workOrders ?? []).map((wo) => {
         const quotes = wo.quotes ?? [];
         const approvedList = quotes.filter((q) => q.status === WorkOrderQuoteStatus.approved);

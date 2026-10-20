@@ -58,6 +58,7 @@ type Props = {
   initialVehicleLabel?: string;
   initialServiceCaseId?: string;
   initialSupplierId?: string;
+  initialServiceTypeCode?: string;
   initialCreate?: boolean;
   /** Deep-link din tichet «Propune altă dată/oră» — click pe slot nu deschide programare nouă. */
   initialReschedule?: boolean;
@@ -140,6 +141,7 @@ export function SchedulerShell({
   initialVehicleLabel,
   initialServiceCaseId,
   initialSupplierId,
+  initialServiceTypeCode,
   initialCreate = false,
   initialReschedule = false,
   returnToTicket = false,
@@ -160,7 +162,7 @@ export function SchedulerShell({
   const [stats, setStats] = useState<AppointmentStats | null>(initialStats);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectId ?? null);
   const [supplierFilter, setSupplierFilter] = useState<string[]>(() => suppliers.map((s) => s.id));
-  const [serviceTypeCode, setServiceTypeCode] = useState("");
+  const [serviceTypeCode, setServiceTypeCode] = useState(initialServiceTypeCode?.trim() ?? "");
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -197,7 +199,10 @@ export function SchedulerShell({
 
   const visibleSuppliers = useMemo(() => {
     if (!serviceTypeCode) return suppliers;
-    return suppliers.filter((s) => s.services?.includes(serviceTypeCode));
+    return suppliers.filter((s) => {
+      if (!s.services) return true;
+      return s.services.includes(serviceTypeCode);
+    });
   }, [suppliers, serviceTypeCode]);
 
   const keepCaseLink = !!(linkTicketId || linkVehicleId || linkServiceCaseId);
@@ -254,6 +259,7 @@ export function SchedulerShell({
         vehicle: opts.clearTicketLink && !returnTicketId ? undefined : linkVehicleId ?? undefined,
         reg: opts.clearTicketLink && !returnTicketId ? undefined : linkVehicleLabel ?? undefined,
         case: opts.clearTicketLink && !returnTicketId ? undefined : linkServiceCaseId ?? undefined,
+        serviceTypeCode: serviceTypeCode || undefined,
         create:
           !inReschedulePick &&
           !opts.clearTicketLink &&
@@ -280,6 +286,7 @@ export function SchedulerShell({
       returnTicketId,
       selectedId,
       rescheduleEditing,
+      serviceTypeCode,
     ],
   );
 

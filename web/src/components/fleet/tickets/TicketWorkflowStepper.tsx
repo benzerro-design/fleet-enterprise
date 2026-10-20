@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import {
   appointmentFleetCanCounterPropose,
@@ -41,10 +41,12 @@ import { roadsideBrowserBase, type RoadsideInterventionRecord } from "@/lib/road
 import { fleetJsonHeaders as ticketFleetHeaders, ticketsBrowserBase, type TicketLinkRecord } from "@/lib/tickets-api";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
+import { resolveSchedulingServiceTypeCode } from "@/lib/scheduling-service-type";
 
 type Props = {
   ticketId: string;
   vehicleId?: string | null;
+  ticketServiceTypeCode?: string | null;
   ticketCreatedAt?: string;
   canOperate: boolean;
   /** Validare în locul furnizorului — doar tenant_admin. */
@@ -71,6 +73,7 @@ type Props = {
 export function TicketWorkflowStepper({
   ticketId,
   vehicleId,
+  ticketServiceTypeCode,
   ticketCreatedAt,
   canOperate,
   canSupplierValidate = false,
@@ -109,6 +112,11 @@ export function TicketWorkflowStepper({
   /** Manager / admin — nu șofer. Gate din setarea pe client (sau admin L*). */
   const showProposalHistoryTabs =
     showProposalHistoryTabsProp && (canConfirmAppointment || canOperate);
+
+  const schedulingServiceTypeCode = useMemo(
+    () => resolveSchedulingServiceTypeCode(serviceCase, ticketServiceTypeCode),
+    [serviceCase, ticketServiceTypeCode],
+  );
 
   const loadMobility = useCallback(async (workOrderId: string) => {
     try {
@@ -1130,6 +1138,7 @@ export function TicketWorkflowStepper({
                       ticket: ticketId,
                       vehicle: vehicleId,
                       supplier: supplierId || undefined,
+                      serviceTypeCode: schedulingServiceTypeCode,
                       create: true,
                       week: scheduledAt ? new Date(scheduledAt) : undefined,
                     })}
@@ -1158,6 +1167,7 @@ export function TicketWorkflowStepper({
                     value={supplierId}
                     onChange={(id) => setSupplierId(id)}
                     category={serviceCase.workflowType === "itp" ? "itp" : "service_auto"}
+                    serviceTypeCode={schedulingServiceTypeCode}
                   />
                 </div>
               </div>

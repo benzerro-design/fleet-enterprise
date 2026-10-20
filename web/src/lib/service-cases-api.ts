@@ -523,6 +523,8 @@ export type ServiceCaseRecord = {
   updatedAt: string;
   clientRequireDriverAck?: boolean;
   clientDriverCanNegotiateAppointment?: boolean;
+  serviceTypeId?: string | null;
+  serviceTypeCode?: string | null;
   workOrders: WorkOrderRecord[];
   appointments: ServiceAppointmentRecord[];
 };

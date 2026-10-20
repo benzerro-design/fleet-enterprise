@@ -31,6 +31,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { resolveServiceCaseWorkflow } from '../service-cases/service-case-workflow.utils';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
+import {
+  assertSupplierOffersServiceType,
+  resolveServiceCaseServiceTypeCode,
+} from '../suppliers/supplier-service-offering';
 import { assertSupplierSlotCapacity } from './appointment-supplier-capacity.utils';
 import { effectiveDriverCanNegotiate, effectiveRequireDriverAck, parseClientIamSettings } from '../iam/client-iam-settings';
 import {
@@ -675,6 +679,7 @@ export class AppointmentsService {
         }
       } else if (!serviceCase) {
         let workflowType: ServiceCaseWorkflowType = ServiceCaseWorkflowType.repair;
+        let sourceTicketServiceTypeId: string | null = null;
         if (dto.workflowType === 'itp' || dto.workflowType === ServiceCaseWorkflowType.itp) {
           workflowType = ServiceCaseWorkflowType.itp;
         } else if (dto.workflowType === 'tires' || dto.workflowType === ServiceCaseWorkflowType.tires) {
@@ -684,6 +689,7 @@ export class AppointmentsService {
             where: { id: dto.sourceTicketId, tenantId: tenant.id },
             select: { ticketType: true, serviceTypeId: true },
           });
+          sourceTicketServiceTypeId = ticket?.serviceTypeId ?? null;
           let serviceTypeCode: string | null = null;
           if (ticket?.serviceTypeId) {
             const st = await tx.tenantServiceType.findFirst({
@@ -703,6 +709,7 @@ export class AppointmentsService {
             clientId: vehicle.clientId,
             vehicleId: vehicle.id,
             workflowType,
+            serviceTypeId: sourceTicketServiceTypeId,
             sourceType: dto.sourceTicketId ? ServiceCaseSourceType.ticket : ServiceCaseSourceType.direct,
             sourceTicketId: dto.sourceTicketId ?? null,
             currentStage: ServiceCaseStage.intake,
@@ -715,6 +722,39 @@ export class AppointmentsService {
 
       if (!serviceCase) {
         throw new NotFoundException('Service case not found');
+      }
+
+      const effectiveSupplierId = supplierId ?? serviceCase.supplierId;
+      if (effectiveSupplierId) {
+        const serviceCaseForType = await tx.serviceCase.findFirst({
+          where: { id: serviceCase.id, tenantId: tenant.id },
+          select: {
+            workflowType: true,
+            serviceTypeId: true,
+            serviceType: { select: { code: true } },
+            sourceTicket: {
+              select: {
+                serviceTypeId: true,
+                serviceType: { select: { code: true } },
+              },
+            },
+          },
+        });
+        if (serviceCaseForType) {
+          const schedulingServiceTypeCode = await resolveServiceCaseServiceTypeCode(
+            tx,
+            tenant.id,
+            serviceCaseForType,
+          );
+          if (schedulingServiceTypeCode) {
+            await assertSupplierOffersServiceType(
+              tx,
+              tenant.id,
+              effectiveSupplierId,
+              schedulingServiceTypeCode,
+            );
+          }
+        }
       }
 
       const title = dto.title?.trim() || serviceCase.title;

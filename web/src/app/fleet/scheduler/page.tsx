@@ -62,6 +62,7 @@ type PageProps = {
     case?: string;
     supplier?: string;
     workflow?: string;
+    serviceTypeCode?: string;
   }>;
 };
 
@@ -145,6 +146,7 @@ export default async function SchedulerPage({ searchParams }: PageProps) {
               initialVehicleLabel={sp.reg?.trim()}
               initialServiceCaseId={sp.case?.trim()}
               initialSupplierId={sp.supplier?.trim()}
+              initialServiceTypeCode={sp.serviceTypeCode?.trim()}
               initialCreate={parseSchedulerFlagParam(sp.create)}
               initialReschedule={parseSchedulerFlagParam(sp.reschedule)}
               returnToTicket={parseSchedulerFlagParam(sp.return) && !!sp.ticket?.trim()}

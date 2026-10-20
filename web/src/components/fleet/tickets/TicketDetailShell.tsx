@@ -134,6 +134,7 @@ export function TicketDetailShell({
             <TicketWorkflowStepper
               ticketId={ticket.id}
               vehicleId={ticket.vehicleId}
+              ticketServiceTypeCode={ticket.serviceTypeCode}
               ticketCreatedAt={ticket.createdAt}
               canOperate={canOperate}
               canSupplierValidate={canSupplierValidate}

@@ -27,6 +27,8 @@ export function schedulerHref(opts?: {
   supplier?: string;
   /** FLEET-009: filtru tip dosar pe calendar (ex. itp). */
   workflow?: string;
+  /** Catalog tenant — filtrează furnizorii cu acest serviciu (ex. tire_service). */
+  serviceTypeCode?: string;
   /** După reprogramare / repropunere, UI poate întoarce userul la tichet. */
   returnToTicket?: boolean;
   extraSearch?: string;
@@ -59,6 +61,9 @@ export function schedulerHref(opts?: {
   }
   if (opts?.workflow?.trim()) {
     params.set("workflow", opts.workflow.trim());
+  }
+  if (opts?.serviceTypeCode?.trim()) {
+    params.set("serviceTypeCode", opts.serviceTypeCode.trim());
   }
   const pick = schedulerDeepLinkPickMode({
     create: opts?.create,
