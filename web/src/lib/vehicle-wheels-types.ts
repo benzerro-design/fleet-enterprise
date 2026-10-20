@@ -138,9 +138,31 @@ export type VehicleWheelFitmentRecord = {
   updatedAt: string;
 };
 
+export type TireMountedAs = "on_rim" | "tyre_only";
+
+export type TireSetHotelBadge = {
+  atSupplierHotel: boolean;
+  supplierName?: string | null;
+  locationCode?: string | null;
+  checkInAt?: string | null;
+};
+
+export type TireSetSummary = {
+  id: string;
+  season: VehicleTireSeason;
+  name: string | null;
+  mountedAs: TireMountedAs;
+  archivedAt: string | null;
+  itemCount: number;
+  isMounted: boolean;
+  hotel?: TireSetHotelBadge | null;
+  qrPayload?: string;
+};
+
 export type VehicleWheelsPayload = {
   wheelLayout?: VehicleWheelLayout;
   items: VehicleWheelFitmentRecord[];
+  sets?: TireSetSummary[];
 };
 
 export type WheelSpecDraft = {

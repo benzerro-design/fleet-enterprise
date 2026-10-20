@@ -73,6 +73,7 @@ const ro = {
       "/fleet/documents": "Documente flotă",
       "/fleet/reminders": "Remindere",
       "/fleet/maintenance": "Mentenanță",
+      "/fleet/tires": "Anvelope",
       "/fleet/costs": "Costuri operaționale",
       "/fleet/roadside": "Asistență rutieră",
       "/fleet/clients": "Clienți (organizații)",

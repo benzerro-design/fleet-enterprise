@@ -8,6 +8,8 @@ import type {
 import type { AccessContext } from '../iam/access-context.types';
 import { assertVehicleOpsRead, assertVehicleOpsWrite } from '../ops/ops-write-access';
 import { PrismaService } from '../prisma/prisma.service';
+import { TireDomainService } from './tires/tire-domain.service';
+import type { FitmentSyncFields, TireSetSummary } from './tires/tire-domain.types';
 
 export type VehicleWheelFitmentRecord = {
   id: string;
@@ -32,6 +34,7 @@ export type VehicleWheelFitmentRecord = {
 export type VehicleWheelsPayload = {
   wheelLayout: VehicleWheelLayout;
   items: VehicleWheelFitmentRecord[];
+  sets: TireSetSummary[];
 };
 
 const ALL_POSITIONS: VehicleWheelPosition[] = [
@@ -129,9 +132,59 @@ export type UpsertWheelDto = {
   notes?: string | null;
 };
 
+function fitmentFieldsFromDto(dto: UpsertWheelDto, season: VehicleTireSeason): FitmentSyncFields {
+  return {
+    size: dto.size === undefined ? undefined : dto.size,
+    brand: dto.brand === undefined ? undefined : dto.brand,
+    model: dto.model === undefined ? undefined : dto.model,
+    season,
+    speedIndex: dto.speedIndex === undefined ? undefined : dto.speedIndex,
+    loadIndex: dto.loadIndex === undefined ? undefined : dto.loadIndex,
+    commercialC: dto.commercialC,
+    dot: dto.dot === undefined ? undefined : dto.dot,
+    treadMm: dto.treadMm === undefined ? undefined : dto.treadMm,
+    rimSize: dto.rimSize === undefined ? undefined : dto.rimSize,
+    rimMaterial: dto.rimMaterial === undefined ? undefined : dto.rimMaterial,
+    lugNutCount: dto.lugNutCount === undefined ? undefined : dto.lugNutCount,
+  };
+}
+
+function fitmentFieldsFromRow(row: {
+  size: string | null;
+  brand: string | null;
+  model: string | null;
+  season: VehicleTireSeason;
+  speedIndex: string | null;
+  loadIndex: string | null;
+  commercialC: boolean;
+  dot: string | null;
+  treadMm: number | null;
+  rimSize: string | null;
+  rimMaterial: VehicleRimMaterial | null;
+  lugNutCount: number | null;
+}): FitmentSyncFields {
+  return {
+    size: row.size,
+    brand: row.brand,
+    model: row.model,
+    season: row.season,
+    speedIndex: row.speedIndex,
+    loadIndex: row.loadIndex,
+    commercialC: row.commercialC,
+    dot: row.dot,
+    treadMm: row.treadMm,
+    rimSize: row.rimSize,
+    rimMaterial: row.rimMaterial,
+    lugNutCount: row.lugNutCount,
+  };
+}
+
 @Injectable()
 export class VehicleWheelsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tires: TireDomainService,
+  ) {}
 
   async list(
     tenantSlug: string,
@@ -145,12 +198,16 @@ export class VehicleWheelsService {
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
+    await this.tires.ensureMountedSetFromFitment(tenantSlug, vehicleId, access);
+    const sets = await this.tires.listSetsForVehicle(tenantSlug, vehicleId, access);
+
     const rows = await this.prisma.vehicleWheelFitment.findMany({
       where: { vehicleId },
     });
     return {
       wheelLayout: vehicle.wheelLayout,
       items: sortItems(rows.map(toRecord)),
+      sets,
     };
   }
 
@@ -167,7 +224,7 @@ export class VehicleWheelsService {
 
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      select: { id: true, tenantId: true, wheelLayout: true },
+      select: { id: true, tenantId: true, clientId: true, wheelLayout: true },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
@@ -187,7 +244,7 @@ export class VehicleWheelsService {
           const targets: VehicleWheelPosition[] =
             row.position === 'rl' ? ['rlo', 'rli'] : ['rro', 'rri'];
           for (const position of targets) {
-            await tx.vehicleWheelFitment.upsert({
+            const upserted = await tx.vehicleWheelFitment.upsert({
               where: { vehicleId_position: { vehicleId, position } },
               create: {
                 tenantId: vehicle.tenantId,
@@ -221,6 +278,14 @@ export class VehicleWheelsService {
                 lugNutCount: row.lugNutCount,
               },
             });
+            await this.tires.syncFromFitmentUpsert(
+              tx,
+              vehicle.tenantId,
+              vehicleId,
+              vehicle.clientId,
+              position,
+              fitmentFieldsFromRow(upserted),
+            );
           }
         }
       }
@@ -253,7 +318,7 @@ export class VehicleWheelsService {
 
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      select: { id: true, tenantId: true, wheelLayout: true },
+      select: { id: true, tenantId: true, clientId: true, wheelLayout: true },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
@@ -303,41 +368,54 @@ export class VehicleWheelsService {
       notes: dto.notes === undefined ? undefined : dto.notes?.trim() || null,
     };
 
-    const row = await this.prisma.vehicleWheelFitment.upsert({
-      where: { vehicleId_position: { vehicleId, position: dto.position } },
-      create: {
-        tenantId: vehicle.tenantId,
+    const row = await this.prisma.$transaction(async (tx) => {
+      const upserted = await tx.vehicleWheelFitment.upsert({
+        where: { vehicleId_position: { vehicleId, position: dto.position } },
+        create: {
+          tenantId: vehicle.tenantId,
+          vehicleId,
+          position: dto.position,
+          size: data.size ?? null,
+          brand: data.brand ?? null,
+          model: data.model ?? null,
+          season,
+          speedIndex: data.speedIndex ?? null,
+          loadIndex: data.loadIndex ?? null,
+          commercialC: data.commercialC ?? false,
+          dot: data.dot ?? null,
+          treadMm: treadMm === undefined ? null : treadMm,
+          rimSize: data.rimSize ?? null,
+          rimMaterial: data.rimMaterial ?? null,
+          lugNutCount: lugNutCount === undefined ? null : lugNutCount,
+          notes: data.notes ?? null,
+        },
+        update: {
+          ...(data.size !== undefined ? { size: data.size } : {}),
+          ...(data.brand !== undefined ? { brand: data.brand } : {}),
+          ...(data.model !== undefined ? { model: data.model } : {}),
+          ...(dto.season !== undefined ? { season } : {}),
+          ...(data.speedIndex !== undefined ? { speedIndex: data.speedIndex } : {}),
+          ...(data.loadIndex !== undefined ? { loadIndex: data.loadIndex } : {}),
+          ...(data.commercialC !== undefined ? { commercialC: data.commercialC } : {}),
+          ...(data.dot !== undefined ? { dot: data.dot } : {}),
+          ...(treadMm !== undefined ? { treadMm } : {}),
+          ...(data.rimSize !== undefined ? { rimSize: data.rimSize } : {}),
+          ...(data.rimMaterial !== undefined ? { rimMaterial: data.rimMaterial } : {}),
+          ...(lugNutCount !== undefined ? { lugNutCount } : {}),
+          ...(data.notes !== undefined ? { notes: data.notes } : {}),
+        },
+      });
+
+      await this.tires.syncFromFitmentUpsert(
+        tx,
+        vehicle.tenantId,
         vehicleId,
-        position: dto.position,
-        size: data.size ?? null,
-        brand: data.brand ?? null,
-        model: data.model ?? null,
-        season,
-        speedIndex: data.speedIndex ?? null,
-        loadIndex: data.loadIndex ?? null,
-        commercialC: data.commercialC ?? false,
-        dot: data.dot ?? null,
-        treadMm: treadMm === undefined ? null : treadMm,
-        rimSize: data.rimSize ?? null,
-        rimMaterial: data.rimMaterial ?? null,
-        lugNutCount: lugNutCount === undefined ? null : lugNutCount,
-        notes: data.notes ?? null,
-      },
-      update: {
-        ...(data.size !== undefined ? { size: data.size } : {}),
-        ...(data.brand !== undefined ? { brand: data.brand } : {}),
-        ...(data.model !== undefined ? { model: data.model } : {}),
-        ...(dto.season !== undefined ? { season } : {}),
-        ...(data.speedIndex !== undefined ? { speedIndex: data.speedIndex } : {}),
-        ...(data.loadIndex !== undefined ? { loadIndex: data.loadIndex } : {}),
-        ...(data.commercialC !== undefined ? { commercialC: data.commercialC } : {}),
-        ...(data.dot !== undefined ? { dot: data.dot } : {}),
-        ...(treadMm !== undefined ? { treadMm } : {}),
-        ...(data.rimSize !== undefined ? { rimSize: data.rimSize } : {}),
-        ...(data.rimMaterial !== undefined ? { rimMaterial: data.rimMaterial } : {}),
-        ...(lugNutCount !== undefined ? { lugNutCount } : {}),
-        ...(data.notes !== undefined ? { notes: data.notes } : {}),
-      },
+        vehicle.clientId,
+        dto.position,
+        fitmentFieldsFromRow(upserted),
+      );
+
+      return upserted;
     });
 
     return toRecord(row);
@@ -365,8 +443,17 @@ export class VehicleWheelsService {
     if (!ALL_POSITIONS.includes(position)) {
       throw new BadRequestException('Invalid wheel position');
     }
-    await this.prisma.vehicleWheelFitment.deleteMany({
-      where: { vehicleId, position, vehicle: { tenant: { slug: tenantSlug } } },
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { tenantId: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.tires.syncAfterFitmentClear(tx, vehicle.tenantId, vehicleId, position);
+      await tx.vehicleWheelFitment.deleteMany({
+        where: { vehicleId, position },
+      });
     });
   }
 }

@@ -15,6 +15,7 @@ import { WorkOrderWarrantyController } from './work-order-warranty.controller';
 import { WorkOrderWarrantyService } from './work-order-warranty.service';
 import { WorkOrdersController } from './work-orders.controller';
 import { WorkOrdersService } from './work-orders.service';
+import { WorkOrderTyreCloseService } from './work-order-tyre-close.service';
 
 @Module({
   imports: [AuthModule, AuditModule, OpsModule, PartnerModule, FleetModule, TenantModule],
@@ -31,6 +32,7 @@ import { WorkOrdersService } from './work-orders.service';
     WorkOrderWarrantyService,
     WorkOrderMessagesService,
     WorkOrderPhotosService,
+    WorkOrderTyreCloseService,
   ],
   exports: [
     WorkOrdersService,

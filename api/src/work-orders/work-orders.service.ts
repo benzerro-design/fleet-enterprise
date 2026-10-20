@@ -190,6 +190,8 @@ export type WorkOrderTicketSettlement = {
 
 export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
+  tyreWorkIntent: string | null;
+  tyreCloseAppliedAt: string | null;
   serviceCaseTitle: string;
   serviceCaseStatus: string;
   awaitingPostApproval: boolean;
@@ -349,7 +351,7 @@ export class WorkOrdersService {
     private readonly audit: AuditService,
   ) {}
 
-  private assertWorkOrderWrite(
+  assertWorkOrderWrite(
     access: AccessContext,
     wo: { supplierId: string | null; vehicle: { clientId: string } },
   ): void {
@@ -441,7 +443,7 @@ export class WorkOrdersService {
     }
   }
 
-  private assertWorkOrderRead(
+  assertWorkOrderRead(
     access: AccessContext,
     wo: { supplierId: string | null; vehicle: { clientId: string } },
   ): void {
@@ -943,6 +945,9 @@ export class WorkOrdersService {
     return {
       ...list,
       notes: row.notes,
+      tyreWorkIntent: (row as { tyreWorkIntent?: string | null }).tyreWorkIntent ?? null,
+      tyreCloseAppliedAt:
+        (row as { tyreCloseAppliedAt?: Date | null }).tyreCloseAppliedAt?.toISOString() ?? null,
       serviceCaseTitle: row.serviceCase.title,
       serviceCaseStatus: row.serviceCase.status,
       awaitingPostApproval: row.serviceCase.awaitingPostApproval ?? false,
@@ -2217,6 +2222,12 @@ export class WorkOrdersService {
       } catch {
         throw new ForbiddenException('Cannot complete work order');
       }
+    }
+
+    if (wo.serviceOrderType === ServiceOrderType.R && !wo.tyreCloseAppliedAt) {
+      throw new BadRequestException(
+        'Comenzile tip R necesită închidere anvelope (tyre-close) înainte de finalizare.',
+      );
     }
 
     const partner = !!(access && isPartnerUser(access));

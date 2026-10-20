@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { FleetModule } from '../fleet/fleet.module';
 import { PartnerAdminController } from './partner-admin.controller';
 import { PartnerAdminService } from './partner-admin.service';
 import { PartnerMailService } from './partner-mail.service';
@@ -11,15 +12,18 @@ import { PartnerReportsController } from './partner-reports.controller';
 import { PartnerReportsService } from './partner-reports.service';
 import { PartnerScorecardController } from './partner-scorecard.controller';
 import { PartnerScorecardService } from './partner-scorecard.service';
+import { PartnerTireHotelController } from './partner-tire-hotel.controller';
+import { PartnerTireHotelService } from './partner-tire-hotel.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, FleetModule],
   controllers: [
     PartnerAdminController,
     PartnerNotificationsController,
     PartnerPendingActionsController,
     PartnerScorecardController,
     PartnerReportsController,
+    PartnerTireHotelController,
   ],
   providers: [
     PartnerAdminService,
@@ -28,6 +32,7 @@ import { PartnerScorecardService } from './partner-scorecard.service';
     PartnerNotificationProcessor,
     PartnerScorecardService,
     PartnerReportsService,
+    PartnerTireHotelService,
   ],
   exports: [PartnerAdminService, PartnerNotificationService, PartnerMailService],
 })

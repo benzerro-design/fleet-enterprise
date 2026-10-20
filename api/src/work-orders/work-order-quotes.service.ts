@@ -46,6 +46,12 @@ import {
 } from '../ops/reminder-sync';
 import { normalizeReminderOffsets } from '../ops/document-reminders';
 import { normalizeReminderOffsetsKm } from '../ops/reminder-status';
+import {
+  allowsTireCostLinks,
+  attachTireLinksToWorkOrderCosts,
+  inferTireCostLinksFromTyreClose,
+  resolveTireCostLinksForVehicle,
+} from '../ops/cost-tire-links';
 import { parseClientPricingSettings } from '../clients/client-pricing-settings';
 import { parseTenantIntegrationsSettings, interCarsHasCredentials } from '../tenant/integrations-settings';
 import { InterCarsClient } from '../tenant/intercars-client.service';
@@ -99,6 +105,9 @@ export type PostCostInput = {
   dueOdometerKm?: number | null;
   reminderOffsetsKm?: number[] | null;
   syncReminderAction?: boolean;
+  tireAssetId?: string | null;
+  tireSetId?: string | null;
+  tireStorageStayId?: string | null;
 };
 
 export type ApproveQuoteInput = {
@@ -1843,6 +1852,31 @@ export class WorkOrderQuotesService {
       .filter(Boolean)
       .join('\n');
 
+    const woType = existing.workOrder.serviceOrderType;
+    const tireLinksAllowed = allowsTireCostLinks(category, woType);
+    let tireLinks = await resolveTireCostLinksForVehicle(
+      this.prisma,
+      tenant.id,
+      existing.workOrder.vehicleId,
+      dto,
+      { allowLinks: tireLinksAllowed },
+    );
+    if (
+      tireLinksAllowed &&
+      !dto.tireAssetId &&
+      !dto.tireSetId &&
+      !dto.tireStorageStayId &&
+      existing.workOrder.tyreCloseAppliedAt
+    ) {
+      const inferred = await inferTireCostLinksFromTyreClose(
+        this.prisma,
+        tenant.id,
+        existing.workOrder.vehicleId,
+        workOrderId,
+      );
+      if (inferred) tireLinks = inferred;
+    }
+
     const quote = await this.prisma.$transaction(async (tx) => {
       const cost = await tx.costEntry.create({
         data: {
@@ -1864,6 +1898,11 @@ export class WorkOrderQuotesService {
           dueOdometerKm: dto.dueOdometerKm ?? null,
           reminderOffsetsKm: reminderOffsetsKmForDb(dto.reminderOffsetsKm),
           reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
+          ...(tireLinks?.tireAssetId !== undefined ? { tireAssetId: tireLinks.tireAssetId } : {}),
+          ...(tireLinks?.tireSetId !== undefined ? { tireSetId: tireLinks.tireSetId } : {}),
+          ...(tireLinks?.tireStorageStayId !== undefined
+            ? { tireStorageStayId: tireLinks.tireStorageStayId }
+            : {}),
         },
       });
 

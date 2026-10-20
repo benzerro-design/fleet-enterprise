@@ -1,12 +1,13 @@
 import type { WorkOrderDetail } from "@/lib/work-orders-api";
 
-export type ServiceOrderTypeCode = "M" | "E" | "D" | "TV";
+export type ServiceOrderTypeCode = "M" | "E" | "D" | "TV" | "R";
 
 export const SERVICE_ORDER_TYPES: { code: ServiceOrderTypeCode; label: string }[] = [
   { code: "M", label: "Mecanică" },
   { code: "E", label: "Electrică" },
   { code: "D", label: "Daună" },
   { code: "TV", label: "Tinichigerie-Vopsitorie" },
+  { code: "R", label: "Anvelope / roți" },
 ];
 
 export function serviceOrderTypeLabel(code: string): string {

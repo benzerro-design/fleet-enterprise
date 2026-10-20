@@ -11,6 +11,9 @@ import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
 import { VehicleEquipmentService } from './vehicle-equipment.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
+import { TireDomainService } from './tires/tire-domain.service';
+import { TireHubService } from './tires/tire-hub.service';
+import { TireHotelService } from './tires/tire-hotel.service';
 import { VehicleWheelsService } from './vehicle-wheels.service';
 
 @Module({
@@ -20,11 +23,14 @@ import { VehicleWheelsService } from './vehicle-wheels.service';
     FleetService,
     MaintenancePlanService,
     VehicleEquipmentService,
+    TireDomainService,
+    TireHubService,
+    TireHotelService,
     VehicleWheelsService,
     DashboardService,
     VehicleFormBriefService,
     CivOcrService,
   ],
-  exports: [CivOcrService],
+  exports: [CivOcrService, TireDomainService, TireHotelService],
 })
 export class FleetModule {}

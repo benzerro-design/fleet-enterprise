@@ -45,6 +45,12 @@ model Tenant {
   vehicles           Vehicle[]
   vehicleEquipment   VehicleEquipment[]
   vehicleWheelFitments VehicleWheelFitment[]
+  rimAssets            RimAsset[]
+  tireAssets           TireAsset[]
+  tireSets             TireSet[]
+  tirePlacements       TirePlacement[]
+  tireEvents           TireEvent[]
+  tireStorageStays     TireStorageStay[]
   clients            Client[]
   clientContacts     ClientContact[]
   clientDocuments    ClientDocument[]
@@ -129,6 +135,9 @@ model Client {
   roadsideInterventions RoadsideIntervention[]
   supplierAllocations ClientSupplierAllocation[]
   userInvites         UserInvite[]
+  rimAssets           RimAsset[]
+  tireAssets          TireAsset[]
+  tireSets            TireSet[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -344,6 +353,7 @@ model User {
   workOrderMessages        WorkOrderMessage[]
   botPopulationSessions    BotPopulationSession[]    @relation("BotSessionActor")
   importJobs               ImportJob[]               @relation("ImportJobActor")
+  tireEvents               TireEvent[]               @relation("TireEventActor")
 }
 
 enum BotSessionStatus {
@@ -581,6 +591,9 @@ model Vehicle {
   photos             VehiclePhoto[]
   equipment          VehicleEquipment[]
   wheelFitments      VehicleWheelFitment[]
+  tireSets           TireSet[]
+  tirePlacements     TirePlacement[]
+  tireEvents         TireEvent[]
   /** Layout roți: 4 / 6 dual spate (8 ulterior). */
   wheelLayout        VehicleWheelLayout @default(four)
   driverAssignments  DriverVehicleAssignment[]
@@ -739,6 +752,243 @@ model VehicleWheelFitment {
   @@unique([vehicleId, position])
   @@index([tenantId])
   @@index([vehicleId])
+}
+
+/// FLEET-007 — proprietate anvelopă / jantă.
+enum TireOwnershipType {
+  client
+  fleet
+  supplier_stock
+}
+
+enum TireMountedAs {
+  on_rim
+  tyre_only
+}
+
+enum TirePlacementKind {
+  on_vehicle
+  at_client
+  at_supplier_hotel
+  in_transit
+  scrap
+  quarantine
+}
+
+enum TireEventType {
+  purchase
+  mount
+  demount
+  rotate
+  inspect
+  repair
+  store
+  release
+  scrap
+  transfer
+}
+
+enum TireAssetProvenance {
+  verified
+  inferred
+  unknown
+}
+
+model RimAsset {
+  id              String              @id @default(cuid())
+  tenantId        String
+  clientId        String?
+  size            String?
+  material        VehicleRimMaterial?
+  lugNutCount     Int?
+  notes           String?
+  ownershipType   TireOwnershipType   @default(client)
+  ownerClientId   String?
+  provenance      TireAssetProvenance   @default(inferred)
+  externalId      String?
+  sourceSystem    String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client          Client?             @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  tireAssets      TireAsset[]
+  tireEvents      TireEvent[]
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+model TireAsset {
+  id                 String              @id @default(cuid())
+  tenantId           String
+  clientId           String?
+  size               String?
+  brand              String?
+  model              String?
+  season             VehicleTireSeason   @default(unknown)
+  speedIndex         String?
+  loadIndex          String?
+  commercialC        Boolean             @default(false)
+  runFlat            Boolean             @default(false)
+  xl                 Boolean             @default(false)
+  seal               Boolean             @default(false)
+  foam               Boolean             @default(false)
+  dot                String?
+  treadMm            Float?
+  serialOrQr         String?
+  ownershipType      TireOwnershipType   @default(client)
+  ownerClientId      String?
+  ownerSupplierId    String?
+  provenance         TireAssetProvenance   @default(inferred)
+  recommendedReplace Boolean             @default(false)
+  tpmsSensorPresent  Boolean             @default(false)
+  valveType          String?
+  rimAssetId         String?
+  attrs              Json?
+  externalId         String?
+  sourceSystem       String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client             Client?             @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ownerSupplier      Supplier?           @relation("TireAssetOwnerSupplier", fields: [ownerSupplierId], references: [id], onDelete: SetNull)
+  rimAsset           RimAsset?             @relation(fields: [rimAssetId], references: [id], onDelete: SetNull)
+  setItems           TireSetItem[]
+  placements         TirePlacement[]
+  tireEvents         TireEvent[]
+  costEntries        CostEntry[]
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([rimAssetId])
+  @@index([ownerSupplierId])
+}
+
+model TireSet {
+  id           String           @id @default(cuid())
+  tenantId     String
+  clientId     String
+  vehicleId    String
+  season       VehicleTireSeason
+  name         String?
+  mountedAs    TireMountedAs    @default(on_rim)
+  archivedAt   DateTime?
+  externalId   String?
+  sourceSystem String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client       Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  items        TireSetItem[]
+  placements   TirePlacement[]
+  tireEvents   TireEvent[]
+  storageStays TireStorageStay[]
+  costEntries  CostEntry[]
+
+  @@index([tenantId])
+  @@index([vehicleId])
+  @@index([clientId])
+}
+
+model TireSetItem {
+  id        String    @id @default(cuid())
+  setId     String
+  assetId   String
+  sortOrder Int       @default(0)
+  set       TireSet   @relation(fields: [setId], references: [id], onDelete: Cascade)
+  asset     TireAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([setId, assetId])
+  @@index([assetId])
+}
+
+model TirePlacement {
+  id           String              @id @default(cuid())
+  tenantId     String
+  assetId      String
+  kind         TirePlacementKind
+  vehicleId    String?
+  position     VehicleWheelPosition?
+  supplierId   String?
+  locationCode String?
+  setId        String?
+  validFrom    DateTime            @default(now())
+  validTo      DateTime?
+  createdAt    DateTime            @default(now())
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  asset        TireAsset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle?            @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  supplier     Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  set          TireSet?            @relation(fields: [setId], references: [id], onDelete: SetNull)
+
+  @@index([assetId, validTo])
+  @@index([tenantId])
+  @@index([vehicleId])
+  /// DB enforces one active row per asset: partial unique index
+  /// TirePlacement_asset_active_uidx ON ("assetId") WHERE "validTo" IS NULL (see migration).
+  /// DB enforces one active on-vehicle row per wheel position: partial unique index
+  /// TirePlacement_vehicle_position_active_uidx ON ("vehicleId", "position")
+  /// WHERE kind = 'on_vehicle' AND "validTo" IS NULL AND "vehicleId" IS NOT NULL AND "position" IS NOT NULL.
+}
+
+model TireEvent {
+  id            String           @id @default(cuid())
+  tenantId      String
+  type          TireEventType
+  assetId       String?
+  setId         String?
+  rimAssetId    String?
+  vehicleId     String?
+  workOrderId   String?
+  payload       Json?
+  odometerKm    Int?
+  actorUserId   String?
+  externalId    String?
+  sourceSystem  String?
+  createdAt     DateTime         @default(now())
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  asset         TireAsset?       @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  set           TireSet?         @relation(fields: [setId], references: [id], onDelete: SetNull)
+  rimAsset      RimAsset?        @relation(fields: [rimAssetId], references: [id], onDelete: SetNull)
+  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  workOrder     MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  actor         User?            @relation("TireEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([assetId])
+  @@index([vehicleId])
+  @@index([setId])
+  @@index([workOrderId])
+}
+
+/// FLEET-007 — sejur hotel anvelope (single-tenant, per furnizor).
+model TireStorageStay {
+  id               String    @id @default(cuid())
+  tenantId         String
+  setId            String
+  supplierId       String
+  locationCode     String?
+  checkInAt        DateTime  @default(now())
+  checkOutAt       DateTime?
+  intakePhotos     Json?
+  intakeTreadNotes String?
+  feeCents         Int?
+  contractRef      String?
+  externalId       String?
+  sourceSystem     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  set              TireSet   @relation(fields: [setId], references: [id], onDelete: Cascade)
+  supplier         Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  costEntries      CostEntry[]
+
+  @@index([tenantId])
+  @@index([supplierId, checkOutAt])
+  @@index([setId, checkOutAt])
+  /// DB enforces one open stay per set: partial unique index
+  /// TireStorageStay_set_open_uidx ON ("setId") WHERE "checkOutAt" IS NULL (see migration).
 }
 
 enum TripPurpose {
@@ -946,12 +1196,19 @@ model CostEntry {
   vehicleDocumentId    String?   @unique
   /** FLEET-027: legătură opțională la o echipare montată (vs autovehicul). */
   vehicleEquipmentId   String?
+  /** FLEET-007: legături opționale cost ↔ anvelope (montaj, set, depozit hotel). */
+  tireAssetId          String?
+  tireSetId            String?
+  tireStorageStayId    String?
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle              Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   supplier             Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   trip                 Trip?     @relation(fields: [tripId], references: [id], onDelete: SetNull)
   vehicleDocument      VehicleDocument? @relation(fields: [vehicleDocumentId], references: [id], onDelete: SetNull)
   vehicleEquipment     VehicleEquipment? @relation(fields: [vehicleEquipmentId], references: [id], onDelete: SetNull)
+  tireAsset            TireAsset?        @relation(fields: [tireAssetId], references: [id], onDelete: SetNull)
+  tireSet              TireSet?          @relation(fields: [tireSetId], references: [id], onDelete: SetNull)
+  tireStorageStay      TireStorageStay?  @relation(fields: [tireStorageStayId], references: [id], onDelete: SetNull)
   reminderAction       ReminderAction?
   workOrderQuote       WorkOrderQuote?
   maintenanceEntry     MaintenanceEntry?
@@ -961,6 +1218,9 @@ model CostEntry {
   @@index([supplierId])
   @@index([tripId])
   @@index([vehicleEquipmentId])
+  @@index([tireAssetId])
+  @@index([tireSetId])
+  @@index([tireStorageStayId])
 }
 
 model AuditLog {
@@ -1379,6 +1639,7 @@ enum SupplierServiceKind {
   damage_repair
   itp
   tire_service
+  tire_storage
   periodic_maintenance
   ac_climate
   diagnostics
@@ -1437,6 +1698,9 @@ model Supplier {
   clientAllocations    ClientSupplierAllocation[]
   documents            SupplierDocument[]
   menuItems            SupplierMenuItem[]
+  tirePlacements       TirePlacement[]
+  ownedTireAssets      TireAsset[]          @relation("TireAssetOwnerSupplier")
+  tireStorageStays     TireStorageStay[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1722,12 +1986,13 @@ enum MaintenanceWorkOrderStatus {
   cancelled
 }
 
-/// Tip comandă service (M mecanică · E electrică · D daună · TV tinichigerie-vopsitorie).
+/// Tip comandă service (M mecanică · E electrică · D daună · TV tinichigerie-vopsitorie · R anvelope/roți).
 enum ServiceOrderType {
   M
   E
   D
   TV
+  R
 }
 
 /// Dosar operațional — orchestrator flux tichet → programare → WO → deviz → cost.
@@ -1851,6 +2116,10 @@ model MaintenanceWorkOrder {
   /// Snapshot: `readyAt` al Lucrării #1 la deschiderea Lucrării #2 (Tila L1 înghețat).
   lucrare1ReadyAt DateTime?
   serviceOrderType ServiceOrderType       @default(M)
+  /// Intent operațiune anvelope (FLEET-007): purchase | roadside_puncture | seasonal_changeover | …
+  tyreWorkIntent   String?
+  /// Idempotency — închidere anvelope aplicată atomic (evenimente + placements + fitment).
+  tyreCloseAppliedAt DateTime?
   readyAt          DateTime?
   /// Dată estimativă finalizare reparație — obligatorie înainte de trimitere deviz spre aprobare (partener).
   estimatedRepairAt DateTime?
@@ -1871,6 +2140,7 @@ model MaintenanceWorkOrder {
   roadsideInterventions RoadsideIntervention[]
   messages      WorkOrderMessage[]
   photos        WorkOrderPhoto[]
+  tireEvents    TireEvent[]
 
   @@unique([tenantId, displayNumber])
   @@index([tenantId])

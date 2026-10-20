@@ -42,6 +42,11 @@ import { FleetService } from './fleet.service';
 import { MaintenancePlanService } from './maintenance-plan.service';
 import { VehicleEquipmentService } from './vehicle-equipment.service';
 import {
+  assertCreateTireSetDto,
+  TireDomainService,
+} from './tires/tire-domain.service';
+import { TireHubService } from './tires/tire-hub.service';
+import {
   assertUpsertWheelBulkDto,
   assertUpsertWheelDto,
   assertWheelLayout,
@@ -62,6 +67,8 @@ export class FleetController {
     private readonly maintenancePlan: MaintenancePlanService,
     private readonly equipment: VehicleEquipmentService,
     private readonly wheels: VehicleWheelsService,
+    private readonly tireDomain: TireDomainService,
+    private readonly tireHub: TireHubService,
     private readonly dashboard: DashboardService,
     private readonly formBrief: VehicleFormBriefService,
     private readonly drivers: DriversService,
@@ -560,6 +567,19 @@ export class FleetController {
     return this.equipment.delete(tenantId, vehicleId, itemId, actorUserId, access);
   }
 
+  @Get('tires/hub')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  getTiresHub(@TenantId() tenantId: string, @CurrentAccess() access: AccessContext) {
+    return this.tireHub.getHub(tenantId, access);
+  }
+
+  @Post('tires/sync-season-reminders')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(200)
+  syncTiresSeasonReminders(@TenantId() tenantId: string, @CurrentAccess() access: AccessContext) {
+    return this.tireHub.syncSeasonReminders(tenantId, access);
+  }
+
   @Get('vehicles/:vehicleId/wheels')
   @Roles(...FLEET_READ_ROLES)
   listVehicleWheels(
@@ -568,6 +588,18 @@ export class FleetController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.wheels.list(tenantId, vehicleId, access);
+  }
+
+  @Post('vehicles/:vehicleId/tire-sets')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(201)
+  createVehicleTireSet(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireDomain.createSet(tenantId, vehicleId, assertCreateTireSetDto(body), access);
   }
 
   @Put('vehicles/:vehicleId/wheels/layout')

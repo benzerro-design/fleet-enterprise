@@ -22,6 +22,7 @@ import {
   visibleCostColumns,
   writeCostGridLayout,
 } from "@/lib/cost-grid-columns";
+import { costHasTireLink } from "@/lib/cost-tire-links";
 import { formatRonFromCents } from "@/lib/money";
 
 export type CostGridRow = {
@@ -39,6 +40,10 @@ export type CostGridRow = {
   incurredOn: string;
   linkedDocumentId?: string | null;
   vehicleEquipmentLabel?: string | null;
+  tireAssetId?: string | null;
+  tireSetId?: string | null;
+  tireStorageStayId?: string | null;
+  hasTireCostLink?: boolean;
 };
 
 type Props = {
@@ -93,6 +98,16 @@ export function CostsDataGrid({ items, canWrite }: Props) {
             aria-label={tx("ops.grids.costs.linkedDocument")}
           >
             <span className="text-[10px] font-semibold">{tx("ops.grids.costs.docShort")}</span>
+          </Link>
+        ) : null}
+        {costHasTireLink(row) ? (
+          <Link
+            href={`/fleet/vehicles/${row.vehicleId}?tab=wheels`}
+            className={`${listGridIconBtnClass} text-violet-400/90 hover:text-violet-300`}
+            title="Cost legat de anvelope"
+            aria-label="Cost legat de anvelope"
+          >
+            <span className="text-[10px] font-semibold">Anv</span>
           </Link>
         ) : null}
       </div>

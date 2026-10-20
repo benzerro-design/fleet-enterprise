@@ -23,6 +23,7 @@ export function serviceTypeCodeToTicketType(code: string): CrmTicketType {
       'diagnostics',
       'ac_climate',
       'tire_service',
+      'tire_storage',
       'bodywork_painting',
       'glass_repair',
     ].includes(code)

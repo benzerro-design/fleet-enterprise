@@ -11,7 +11,7 @@ export type WorkOrderStatus =
   | "done"
   | "cancelled";
 
-export type ServiceOrderType = "M" | "E" | "D" | "TV";
+export type ServiceOrderType = "M" | "E" | "D" | "TV" | "R";
 
 export type WorkOrderVehicleSnapshot = {
   registrationNumber: string;
@@ -122,6 +122,8 @@ export type WorkOrderExtraVisit = {
 
 export type WorkOrderDetail = WorkOrderListRow & {
   notes: string | null;
+  tyreWorkIntent?: string | null;
+  tyreCloseAppliedAt?: string | null;
   serviceCaseTitle: string;
   linkedAppointmentId: string | null;
   linkedAppointmentScheduledAt: string | null;

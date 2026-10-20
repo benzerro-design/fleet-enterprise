@@ -6,6 +6,7 @@ export type SupplierServiceKind =
   | "damage_repair"
   | "itp"
   | "tire_service"
+  | "tire_storage"
   | "periodic_maintenance"
   | "ac_climate"
   | "diagnostics"
@@ -27,6 +28,7 @@ export const SUPPLIER_SERVICE_KINDS: SupplierServiceKind[] = [
   "damage_repair",
   "itp",
   "tire_service",
+  "tire_storage",
   "periodic_maintenance",
   "ac_climate",
   "diagnostics",
@@ -42,6 +44,7 @@ export function supplierServiceLabel(kind: string): string {
     damage_repair: "Daune / constatare",
     itp: "ITP",
     tire_service: "Vulcanizare / anvelope",
+    tire_storage: "Depozitare anvelope (hotel)",
     periodic_maintenance: "Revizie periodică",
     ac_climate: "Climatizare",
     diagnostics: "Diagnoză",
@@ -59,6 +62,7 @@ export function supplierServiceDescription(kind: string): string {
     damage_repair: "Daune RCA/CASCO",
     itp: "Stație ITP autorizată",
     tire_service: "Montaj, echilibrare, vulcanizare",
+    tire_storage: "Depozit sezonier anvelope",
     periodic_maintenance: "Revizii planificate",
     ac_climate: "Service climatizare",
     diagnostics: "Tester OBD",

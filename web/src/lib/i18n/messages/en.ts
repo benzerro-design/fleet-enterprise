@@ -73,6 +73,7 @@ const en = {
       "/fleet/documents": "Fleet documents",
       "/fleet/reminders": "Reminders",
       "/fleet/maintenance": "Maintenance",
+      "/fleet/tires": "Tires",
       "/fleet/costs": "Operating costs",
       "/fleet/roadside": "Roadside assistance",
       "/fleet/clients": "Clients (organizations)",

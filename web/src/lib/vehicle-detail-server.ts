@@ -350,7 +350,7 @@ export async function loadVehicleDetail(id: string): Promise<VehicleDetailData |
     acquisitionPayload: acquisition ?? EMPTY_ACQUISITION,
     photosPayload: photos ?? { items: [] },
     equipmentPayload: equipment ?? { items: [] },
-    wheelsPayload: wheels ?? { wheelLayout: "four", items: [] },
+    wheelsPayload: wheels ?? { wheelLayout: "four", items: [], sets: [] },
     legislativeKitPayload: legislativeKit ?? {
       kit: EMPTY_LEGISLATIVE_KIT,
       spareWheelPresent: false,

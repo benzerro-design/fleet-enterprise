@@ -19,6 +19,7 @@ const PARTNER_PAGE_TITLES: Record<string, string> = {
   "/fleet/partner": "Dashboard",
   "/fleet/partner/work-orders": "Devize & comenzi",
   "/fleet/partner/appointments": "Programator",
+  "/fleet/partner/tire-hotel": "Hotel anvelope",
   "/fleet/partner/scorecard": "Scorecard",
   "/fleet/partner/reports": "Rapoarte",
   "/fleet/partner/profile": "Profil firmă",

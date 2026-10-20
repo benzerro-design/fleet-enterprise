@@ -26,7 +26,7 @@ export type ServiceTypeSettings = {
   workshopStatuses: WorkshopStatusSetting[];
 };
 
-export type ServiceTypeSettingsKey = 'M' | 'E' | 'TV';
+export type ServiceTypeSettingsKey = 'M' | 'E' | 'TV' | 'R';
 
 export const DEFAULT_DAMAGE_PIPELINE_STEPS: DamagePipelineStepSetting[] = [
   { code: 'docs_pending', label: '1. Documente', enabled: true, system: true, isFinal: false, requiresPdf: false },
@@ -79,6 +79,14 @@ export const DEFAULT_SERVICE_TYPE_SETTINGS: Record<ServiceTypeSettingsKey, Servi
     defaultPartsWarrantyKm: null,
     defaultLaborWarrantyMonths: null,
     workshopStatuses: DEFAULT_TV_WORKSHOP_STATUSES.map((s) => ({ ...s })),
+  },
+  R: {
+    requirePhotosIn: false,
+    requirePhotosOut: false,
+    defaultPartsWarrantyMonths: null,
+    defaultPartsWarrantyKm: null,
+    defaultLaborWarrantyMonths: null,
+    workshopStatuses: [],
   },
 };
 
@@ -168,6 +176,7 @@ export function normalizeServiceTypeSettings(
     M: parseOneServiceType(o.M, DEFAULT_SERVICE_TYPE_SETTINGS.M),
     E: parseOneServiceType(o.E, DEFAULT_SERVICE_TYPE_SETTINGS.E),
     TV: parseOneServiceType(o.TV, DEFAULT_SERVICE_TYPE_SETTINGS.TV),
+    R: parseOneServiceType(o.R, DEFAULT_SERVICE_TYPE_SETTINGS.R),
   };
 }
 
@@ -257,7 +266,7 @@ export type WorkOrderSettings = {
   quoteInvoiceMode: 'per_work_order' | 'per_quote';
   /** Pași pipeline asigurător pe daună (ordine, etichete, custom). */
   damagePipelineSteps: DamagePipelineStepSetting[];
-  /** Setări pe tip de comandă M / E / TV. */
+  /** Setări pe tip de comandă M / E / TV / R. */
   serviceTypeSettings: Record<ServiceTypeSettingsKey, ServiceTypeSettings>;
 };
 
@@ -287,6 +296,10 @@ export const DEFAULT_WORK_ORDER_SETTINGS: WorkOrderSettings = {
     TV: {
       ...DEFAULT_SERVICE_TYPE_SETTINGS.TV,
       workshopStatuses: DEFAULT_TV_WORKSHOP_STATUSES.map((s) => ({ ...s })),
+    },
+    R: {
+      ...DEFAULT_SERVICE_TYPE_SETTINGS.R,
+      workshopStatuses: [],
     },
   },
 };

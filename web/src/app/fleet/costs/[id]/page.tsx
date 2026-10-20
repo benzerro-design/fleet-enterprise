@@ -7,6 +7,7 @@ import { OpsAssetScopeBadge } from "@/components/fleet/OpsAssetScopeBadge";
 import { canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { isDriverWritableCostCategory } from "@/lib/cost-categories";
 import { fleetServerFetch } from "@/lib/fleet-server";
+import { costHasTireLink } from "@/lib/cost-tire-links";
 import { formatRonFromCents } from "@/lib/money";
 
 type CostRow = {
@@ -28,6 +29,10 @@ type CostRow = {
   tripReference?: string | null;
   vehicleEquipmentId?: string | null;
   vehicleEquipmentLabel?: string | null;
+  tireAssetId?: string | null;
+  tireSetId?: string | null;
+  tireStorageStayId?: string | null;
+  hasTireCostLink?: boolean;
 };
 
 async function getEntry(id: string): Promise<CostRow | null> {
@@ -174,6 +179,25 @@ export default async function CostDetailPage({ params }: { params: Promise<{ id:
           <dt className="text-xs uppercase text-zinc-500">Notițe</dt>
           <dd className="mt-1 text-zinc-200">{row.notes ?? "—"}</dd>
         </div>
+        {costHasTireLink(row) ? (
+          <div className="sm:col-span-2">
+            <dt className="text-xs uppercase text-zinc-500">Legătură anvelope</dt>
+            <dd className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+              <Link
+                href={`/fleet/vehicles/${row.vehicleId}?tab=wheels`}
+                className="rounded-md border border-violet-900/50 bg-violet-950/30 px-2 py-0.5 text-violet-200 hover:bg-violet-950/50"
+              >
+                Roti vehicul
+              </Link>
+              {row.tireSetId ? (
+                <span className="font-mono text-xs text-zinc-500">set: {row.tireSetId}</span>
+              ) : null}
+              {row.tireStorageStayId ? (
+                <span className="font-mono text-xs text-zinc-500">hotel: {row.tireStorageStayId}</span>
+              ) : null}
+            </dd>
+          </div>
+        ) : null}
       </dl>
     </FleetPageMain>
   );

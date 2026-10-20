@@ -91,6 +91,13 @@ export function ServiceOrderTypeGlyph({ type }: { type: ServiceOrderType | strin
           <path d="M2 11 H14 M4 11 V7 H12 V11 M6 7 V4 H10 V7" fill="none" stroke="currentColor" strokeWidth="1.1" />
         </Svg>
       );
+    case "R":
+      return (
+        <Svg className="text-emerald-300">
+          <circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+        </Svg>
+      );
     default:
       return (
         <Svg className="text-zinc-500">
@@ -211,7 +218,7 @@ export const WORK_ORDER_GLYPH_LEGEND = [
   },
   {
     group: "Tip comandă",
-    items: (["M", "E", "D", "TV"] as const).map((t) => ({
+    items: (["M", "E", "D", "TV", "R"] as const).map((t) => ({
       label: serviceOrderTypeLabel(t),
       glyph: <ServiceOrderTypeGlyph type={t} />,
     })),

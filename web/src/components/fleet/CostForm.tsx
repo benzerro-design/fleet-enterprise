@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { COST_CATEGORY_VALUES, DRIVER_WRITABLE_COST_CATEGORIES, isKnownCostCategory } from "@/lib/cost-categories";
+import { isTireCostCategory } from "@/lib/cost-tire-links";
 import { DOCUMENT_TYPE_OPTIONS } from "@/lib/document-types";
 import { defaultDocumentTypeForCost } from "@/lib/document-cost-link";
 import { OpsReminderFields } from "@/components/fleet/OpsReminderFields";
@@ -63,6 +64,9 @@ type CostRecord = {
   linkedDocumentId?: string | null;
   vehicleEquipmentId?: string | null;
   vehicleEquipmentLabel?: string | null;
+  tireAssetId?: string | null;
+  tireSetId?: string | null;
+  tireStorageStayId?: string | null;
 };
 
 type VehicleOption = {
@@ -156,6 +160,9 @@ export function CostForm(props: Props) {
         dueOdometerKm: null as number | null,
         reminderOffsetsKm: [] as number[],
         vehicleEquipmentId: props.defaultEquipmentId ?? "",
+        tireAssetId: "",
+        tireSetId: "",
+        tireStorageStayId: "",
       };
     }
     const r = props.initial;
@@ -179,6 +186,9 @@ export function CostForm(props: Props) {
       dueOdometerKm: r.dueOdometerKm ?? null,
       reminderOffsetsKm: r.reminderOffsetsKm?.length ? [...r.reminderOffsetsKm] : [],
       vehicleEquipmentId: r.vehicleEquipmentId ?? "",
+      tireAssetId: r.tireAssetId ?? "",
+      tireSetId: r.tireSetId ?? "",
+      tireStorageStayId: r.tireStorageStayId ?? "",
     };
   }, [props]);
 
@@ -208,6 +218,9 @@ export function CostForm(props: Props) {
   const [dueOdometerKm, setDueOdometerKm] = useState<number | null>(initial.dueOdometerKm);
   const [reminderOffsetsKm, setReminderOffsetsKm] = useState<number[]>(initial.reminderOffsetsKm);
   const [vehicleEquipmentId, setVehicleEquipmentId] = useState(initial.vehicleEquipmentId);
+  const [tireAssetId, setTireAssetId] = useState(initial.tireAssetId);
+  const [tireSetId, setTireSetId] = useState(initial.tireSetId);
+  const [tireStorageStayId, setTireStorageStayId] = useState(initial.tireStorageStayId);
   const [constraintMode, setConstraintMode] = useState<ReminderConstraintMode>(() =>
     inferReminderConstraintMode({ dueDate: initial.nextDueOn, dueOdometerKm: initial.dueOdometerKm }),
   );
@@ -373,6 +386,13 @@ export function CostForm(props: Props) {
       reminderOffsetsKm: kmOffsets,
       syncReminderAction: configured ? syncReminderAction : false,
       vehicleEquipmentId: vehicleEquipmentId.trim() || null,
+      ...(isTireCostCategory(category.trim())
+        ? {
+            tireAssetId: tireAssetId.trim() || null,
+            tireSetId: tireSetId.trim() || null,
+            tireStorageStayId: tireStorageStayId.trim() || null,
+          }
+        : {}),
       ...(alsoCreateDocument && !isEdit && !driverPortal
         ? {
             linkedDocument: {
@@ -692,6 +712,40 @@ export function CostForm(props: Props) {
             </OpsFormField>
           </div>
         </OpsFormSection>
+
+        {isTireCostCategory(category.trim()) && !driverPortal ? (
+          <OpsFormCollapsible title="Legături anvelope (avansat)">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <OpsFormField label="Set anvelope (ID)">
+                <input
+                  className={OPS_INPUT_MONO_CLASS}
+                  value={tireSetId}
+                  onChange={(e) => setTireSetId(e.target.value)}
+                  placeholder="Opțional"
+                />
+              </OpsFormField>
+              <OpsFormField label="Anvelopă (asset ID)">
+                <input
+                  className={OPS_INPUT_MONO_CLASS}
+                  value={tireAssetId}
+                  onChange={(e) => setTireAssetId(e.target.value)}
+                  placeholder="Opțional"
+                />
+              </OpsFormField>
+              <OpsFormField label="Sejur hotel (stay ID)">
+                <input
+                  className={OPS_INPUT_MONO_CLASS}
+                  value={tireStorageStayId}
+                  onChange={(e) => setTireStorageStayId(e.target.value)}
+                  placeholder="Opțional"
+                />
+              </OpsFormField>
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              La cost din deviz WO tip R, legăturile se pot completa automat după închidere anvelope.
+            </p>
+          </OpsFormCollapsible>
+        ) : null}
 
         <OpsFormCollapsible title={costForm("sections.dueRemindersCollapsible")}>
           {reminderBlock}

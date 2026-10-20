@@ -169,6 +169,10 @@ function assertCreateCostDto(body: unknown): CreateCostInput {
     supplierId: 'supplierId' in body ? optionalNullableString(body.supplierId) : undefined,
     vehicleEquipmentId:
       'vehicleEquipmentId' in body ? optionalNullableString(body.vehicleEquipmentId) : undefined,
+    tireAssetId: 'tireAssetId' in body ? optionalNullableString(body.tireAssetId) : undefined,
+    tireSetId: 'tireSetId' in body ? optionalNullableString(body.tireSetId) : undefined,
+    tireStorageStayId:
+      'tireStorageStayId' in body ? optionalNullableString(body.tireStorageStayId) : undefined,
   };
 }
 
@@ -233,6 +237,11 @@ function assertPatchCostDto(body: unknown): PatchCostInput {
   }
   if ('vehicleEquipmentId' in body) {
     dto.vehicleEquipmentId = optionalNullableString(body.vehicleEquipmentId);
+  }
+  if ('tireAssetId' in body) dto.tireAssetId = optionalNullableString(body.tireAssetId);
+  if ('tireSetId' in body) dto.tireSetId = optionalNullableString(body.tireSetId);
+  if ('tireStorageStayId' in body) {
+    dto.tireStorageStayId = optionalNullableString(body.tireStorageStayId);
   }
 
   if (Object.keys(dto).length === 0) {

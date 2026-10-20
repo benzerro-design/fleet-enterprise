@@ -28,6 +28,7 @@ import {
   isPartnerUser,
 } from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveServiceCaseWorkflow } from '../service-cases/service-case-workflow.utils';
 import { SERVICE_CASE_STAGE_ORDER } from '../service-cases/service-cases.service';
 import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import { assertSupplierSlotCapacity } from './appointment-supplier-capacity.utils';
@@ -676,14 +677,25 @@ export class AppointmentsService {
         let workflowType: ServiceCaseWorkflowType = ServiceCaseWorkflowType.repair;
         if (dto.workflowType === 'itp' || dto.workflowType === ServiceCaseWorkflowType.itp) {
           workflowType = ServiceCaseWorkflowType.itp;
+        } else if (dto.workflowType === 'tires' || dto.workflowType === ServiceCaseWorkflowType.tires) {
+          workflowType = ServiceCaseWorkflowType.tires;
         } else if (dto.sourceTicketId) {
           const ticket = await tx.crmTicket.findFirst({
             where: { id: dto.sourceTicketId, tenantId: tenant.id },
-            select: { ticketType: true },
+            select: { ticketType: true, serviceTypeId: true },
           });
-          if (ticket?.ticketType === 'itp') {
-            workflowType = ServiceCaseWorkflowType.itp;
+          let serviceTypeCode: string | null = null;
+          if (ticket?.serviceTypeId) {
+            const st = await tx.tenantServiceType.findFirst({
+              where: { id: ticket.serviceTypeId, tenantId: tenant.id },
+              select: { code: true },
+            });
+            serviceTypeCode = st?.code ?? null;
           }
+          workflowType = resolveServiceCaseWorkflow({
+            ticketType: ticket?.ticketType,
+            serviceTypeCode,
+          });
         }
         serviceCase = await tx.serviceCase.create({
           data: {

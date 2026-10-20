@@ -31,8 +31,10 @@ import {
   type VehicleWheelPosition,
   type VehicleWheelLayout,
   type VehicleWheelsPayload,
+  type TireSetSummary,
   type WheelDraft,
 } from "@/lib/vehicle-wheels-types";
+import { fitmentAttention, fitmentAttentionLabel } from "@/lib/tire-alert-rules";
 
 type Props = {
   vehicleId: string;
@@ -131,6 +133,9 @@ export function VehicleWheelsTab({
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [sets, setSets] = useState<TireSetSummary[]>(initial.sets ?? []);
+  const [newSetSeason, setNewSetSeason] = useState<VehicleTireSeason>("winter");
+  const [seedFromMountedSpecs, setSeedFromMountedSpecs] = useState(true);
 
   const groups = useMemo(() => axleGroups(layout), [layout]);
 
@@ -194,6 +199,7 @@ export function VehicleWheelsTab({
       }
       const payload = (await res.json()) as VehicleWheelsPayload;
       setLayout(payload.wheelLayout ?? next);
+      setSets(payload.sets ?? []);
       const byPos = new Map(payload.items.map((i) => [i.position, i]));
       setDrafts((prev) => {
         const out = { ...prev };
@@ -208,6 +214,35 @@ export function VehicleWheelsTab({
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Schimbare layout eșuată");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function addTireSet() {
+    if (!write) return;
+    setPending("add-set");
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch(`${fleetBrowserBase}/vehicles/${vehicleId}/tire-sets`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({
+          season: newSetSeason,
+          seedFrom: seedFromMountedSpecs ? "mounted_specs" : "empty",
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      const created = (await res.json()) as TireSetSummary;
+      setSets((prev) => [...prev, created]);
+      setInfo(`Set ${vehicleTireSeasonLabel(created.season)} adăugat (depozit client).`);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Adăugare set eșuată");
     } finally {
       setPending(null);
     }
@@ -253,6 +288,8 @@ export function VehicleWheelsTab({
         const j = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(j.message ?? `HTTP ${res.status}`);
       }
+      const payload = (await res.json()) as VehicleWheelsPayload;
+      setSets(payload.sets ?? []);
       setInfo("Toate pozițiile au fost salvate.");
       router.refresh();
     } catch (e) {
@@ -353,6 +390,84 @@ export function VehicleWheelsTab({
           completezi poziția Spare, verifică și kitul.
         </p>
       ) : null}
+
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-zinc-200">Seturi pe acest vehicul</h3>
+          {write ? (
+            <div className="flex flex-col items-end gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={seedFromMountedSpecs}
+                  disabled={pending === "add-set"}
+                  onChange={(e) => setSeedFromMountedSpecs(e.target.checked)}
+                  className="rounded border-zinc-600 bg-zinc-900"
+                />
+                Copiază specificații de pe montat
+              </label>
+              <select
+                value={newSetSeason}
+                disabled={pending === "add-set"}
+                onChange={(e) => setNewSetSeason(e.target.value as VehicleTireSeason)}
+                className={OPS_INPUT_CLASS}
+              >
+                <option value="summer">Vară</option>
+                <option value="winter">Iarnă</option>
+                <option value="all_season">All-season</option>
+              </select>
+              <button
+                type="button"
+                disabled={pending === "add-set"}
+                onClick={() => void addTireSet()}
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+              >
+                Adaugă set
+              </button>
+            </div>
+          ) : null}
+        </div>
+        {write && seedFromMountedSpecs ? (
+          <p className="text-xs text-zinc-500">
+            DOT și uzura nu se copiază — completează după recepție.
+          </p>
+        ) : null}
+        {sets.length === 0 ? (
+          <p className="text-xs text-zinc-500">
+            Niciun set încă. La prima vizită pe tab, fitmentul existent devine set «Montat» (inferit).
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {sets.map((s) => (
+              <li
+                key={s.id}
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-xs"
+              >
+                <span className="font-medium text-zinc-200">
+                  {s.name?.trim() || vehicleTireSeasonLabel(s.season)}
+                </span>
+                <span className="text-zinc-500">{vehicleTireSeasonLabel(s.season)}</span>
+                <span className="text-zinc-500">{s.itemCount} anvelope</span>
+                {s.isMounted ? (
+                  <span className="rounded bg-emerald-900/60 px-2 py-0.5 text-emerald-200">Montat</span>
+                ) : (
+                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-zinc-400">Depozit</span>
+                )}
+                {s.hotel?.atSupplierHotel ? (
+                  <span
+                    className="rounded bg-violet-900/50 px-2 py-0.5 text-violet-200"
+                    title={s.hotel.locationCode ?? undefined}
+                  >
+                    Hotel
+                    {s.hotel.supplierName ? ` · ${s.hotel.supplierName}` : ""}
+                    {s.hotel.locationCode ? ` · ${s.hotel.locationCode}` : ""}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {write ? (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
@@ -485,6 +600,12 @@ export function VehicleWheelsTab({
           <div className="grid gap-4 lg:grid-cols-2">
             {group.positions.map((position) => {
               const d = getDraft(position);
+              const saved = initial.items.find((i) => i.position === position);
+              const attention = fitmentAttention(
+                saved?.treadMm ?? (d.treadMm.trim() ? Number(d.treadMm.replace(",", ".")) : null),
+                saved?.dot ?? (d.dot.trim() || null),
+                d.season,
+              );
               const sizeListId = `tire-size-${position}`;
               const speedListId = `speed-idx-${position}`;
               const loadListId = `load-idx-${position}`;
@@ -497,9 +618,19 @@ export function VehicleWheelsTab({
                   key={position}
                   className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-2"
                 >
-                  <h4 className="text-sm font-medium text-zinc-100">
-                    {vehicleWheelPositionLabel(position)}
-                  </h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-sm font-medium text-zinc-100">
+                      {vehicleWheelPositionLabel(position)}
+                    </h4>
+                    {attention ? (
+                      <span
+                        className="rounded bg-amber-900/50 px-2 py-0.5 text-xs text-amber-200"
+                        title={fitmentAttentionLabel(attention)}
+                      >
+                        {fitmentAttentionLabel(attention)}
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <label className="text-xs text-zinc-500 sm:col-span-2">
                       Dimensiune

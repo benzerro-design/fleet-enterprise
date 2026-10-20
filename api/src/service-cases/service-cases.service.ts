@@ -56,6 +56,10 @@ import { resolveSupplierInTenant } from '../suppliers/supplier-resolve';
 import { assertSupplierDocumentsAllowOrders } from '../suppliers/supplier-document-compliance';
 import { assertDamageReadyForRepair } from '../work-orders/damage-repair-gates';
 import {
+  resolveServiceCaseWorkflow,
+  resolveServiceOrderType,
+} from './service-case-workflow.utils';
+import {
   damagePipelineCodeSet,
   isDamagePipelineFinal,
   parseWorkOrderSettings,
@@ -493,22 +497,6 @@ export type AdvanceServiceCaseInput = {
   notes?: string | null;
 };
 
-function workflowTypeForTicket(ticketType: CrmTicketType): ServiceCaseWorkflowType {
-  switch (ticketType) {
-    case CrmTicketType.damage:
-      return ServiceCaseWorkflowType.damage;
-    case CrmTicketType.itp:
-      return ServiceCaseWorkflowType.itp;
-    case CrmTicketType.maintenance:
-    case CrmTicketType.technical:
-      return ServiceCaseWorkflowType.repair;
-    case CrmTicketType.document:
-      return ServiceCaseWorkflowType.insurance_rca;
-    default:
-      return ServiceCaseWorkflowType.repair;
-  }
-}
-
 function stageLabel(stage: ServiceCaseStage): string {
   const labels: Record<ServiceCaseStage, string> = {
     intake: 'Intake',
@@ -580,7 +568,18 @@ export class ServiceCasesService {
     });
     if (existing) return this.toRecord(existing);
 
-    const workflowType = workflowTypeForTicket(ticket.ticketType);
+    let serviceTypeCode: string | null = null;
+    if (ticket.serviceTypeId) {
+      const st = await this.prisma.tenantServiceType.findFirst({
+        where: { id: ticket.serviceTypeId, tenantId: tenant.id },
+        select: { code: true },
+      });
+      serviceTypeCode = st?.code ?? null;
+    }
+    const workflowType = resolveServiceCaseWorkflow({
+      ticketType: ticket.ticketType,
+      serviceTypeCode,
+    });
     const row = await this.prisma.$transaction(async (tx) => {
       const created = await tx.serviceCase.create({
         data: {
@@ -3705,7 +3704,10 @@ export class ServiceCasesService {
 
     const serviceCase = await tx.serviceCase.findFirst({
       where: { id: appt.serviceCaseId },
-      include: { client: { select: { iamSettings: true } } },
+      include: {
+        client: { select: { iamSettings: true } },
+        serviceType: { select: { code: true } },
+      },
     });
     if (!serviceCase?.vehicleId) return { created: false, workOrderId: null };
 
@@ -3773,6 +3775,7 @@ export class ServiceCasesService {
       title: string;
       sourceTicketId: string | null;
       workflowType: ServiceCaseWorkflowType;
+      serviceType?: { code: string } | null;
     },
     supplierId: string | null,
     actorUserId?: string,
@@ -3795,10 +3798,10 @@ export class ServiceCasesService {
     }
 
     const displayNumber = await nextWorkOrderDisplayNumber(tx, tenantId, new Date());
-    const serviceOrderType =
-      serviceCase.workflowType === ServiceCaseWorkflowType.damage
-        ? ServiceOrderType.D
-        : ServiceOrderType.M;
+    const serviceOrderType = resolveServiceOrderType({
+      workflowType: serviceCase.workflowType,
+      serviceTypeCode: serviceCase.serviceType?.code,
+    });
 
     const wo = await tx.maintenanceWorkOrder.create({
       data: {

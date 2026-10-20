@@ -20,6 +20,10 @@ import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { resolvePartnerSupplierIdsFilter, parseSupplierIdsQuery } from '../iam/partner-access';
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { WorkOrdersService, type WorkOrderInbox } from './work-orders.service';
+import {
+  WorkOrderTyreCloseService,
+  assertTyreCloseDto,
+} from './work-order-tyre-close.service';
 
 function parseStatus(raw?: string): MaintenanceWorkOrderStatus | undefined {
   if (!raw?.trim()) return undefined;
@@ -75,14 +79,17 @@ function parseServiceCaseStage(raw?: string): ServiceCaseStage | undefined {
 function parseServiceOrderType(raw?: string): ServiceOrderType | undefined {
   if (!raw?.trim()) return undefined;
   const v = raw.trim() as ServiceOrderType;
-  if (v === 'M' || v === 'E' || v === 'D' || v === 'TV') return v;
+  if (v === 'M' || v === 'E' || v === 'D' || v === 'TV' || v === 'R') return v;
   throw new BadRequestException('Invalid service order type');
 }
 
 @Controller('work-orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WorkOrdersController {
-  constructor(private readonly workOrders: WorkOrdersService) {}
+  constructor(
+    private readonly workOrders: WorkOrdersService,
+    private readonly tyreClose: WorkOrderTyreCloseService,
+  ) {}
 
   @Get()
   @Roles(...FLEET_READ_ROLES)
@@ -165,7 +172,7 @@ export class WorkOrdersController {
     @Param('id') id: string,
     @Body()
     body: {
-      serviceOrderType?: 'M' | 'E' | 'D' | 'TV';
+      serviceOrderType?: 'M' | 'E' | 'D' | 'TV' | 'R';
       estimatedRepairAt?: string | null;
       status?: MaintenanceWorkOrderStatus;
       workshopStatusCode?: string | null;
@@ -233,5 +240,30 @@ export class WorkOrdersController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.workOrders.complete(tenantSlug, id, actorUserId, access);
+  }
+
+  /** FLEET-007 — seturi anvelope pentru UI tyre-close (inclusiv partner portal). */
+  @Get(':id/tire-sets')
+  @Roles(...FLEET_READ_ROLES)
+  tyreCloseTireSets(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tyreClose.listTireSetsForWorkOrder(tenantSlug, id, access);
+  }
+
+  /** FLEET-007 — închidere atomică anvelope (WO tip R). */
+  @Post(':id/tyre-close')
+  @Roles(...FLEET_WRITE_ROLES)
+  applyTyreClose(
+    @TenantId() tenantSlug: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const dto = assertTyreCloseDto(body);
+    return this.tyreClose.applyTyreClose(tenantSlug, id, dto, actorUserId, access);
   }
 }

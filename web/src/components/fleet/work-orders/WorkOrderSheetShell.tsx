@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkOrderCompleteButton } from "@/components/fleet/work-orders/WorkOrderCompleteButton";
+import { TyreClosePanel } from "@/components/fleet/work-orders/TyreClosePanel";
 import { WorkOrderMessageThread } from "@/components/fleet/work-orders/WorkOrderMessageThread";
 import { WorkOrderPhotoGallery } from "@/components/fleet/work-orders/WorkOrderPhotoGallery";
 import { WorkOrderQuotePanel } from "@/components/fleet/work-orders/WorkOrderQuotePanel";
@@ -151,7 +152,7 @@ export function WorkOrderSheetShell({
   const [dosarServiceCase, setDosarServiceCase] = useState<ServiceCaseRecord | null>(null);
   const requireKm = workOrderSettings.requireServiceKm;
   const typeSettingsKey =
-    serviceType === "M" || serviceType === "E" || serviceType === "TV"
+    serviceType === "M" || serviceType === "E" || serviceType === "TV" || serviceType === "R"
       ? (serviceType as ServiceTypeSettingsKey)
       : null;
   const typeSettings = typeSettingsKey
@@ -1092,6 +1093,12 @@ export function WorkOrderSheetShell({
             </p>
           ) : null}
         </div>
+
+        {wo.serviceOrderType === "R" ? (
+          <div className={panelClass()}>
+            <TyreClosePanel wo={wo} canWrite={canWrite} />
+          </div>
+        ) : null}
 
         <div className={panelClass()}>
           <div className="mb-2 flex items-start justify-between gap-2">

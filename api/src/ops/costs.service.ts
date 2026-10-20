@@ -29,6 +29,7 @@ import {
 import { defaultDocumentTypeForCost } from './document-cost-link';
 import { isDocumentTypeCode } from './document-types';
 import { resolveVehicleEquipmentIdForVehicle } from '../fleet/vehicle-equipment-link';
+import { allowsTireCostLinks, resolveTireCostLinksForVehicle } from './cost-tire-links';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -63,6 +64,10 @@ export type CreateCostInput = {
   } | null;
   /** FLEET-027: cost pe echipare (null = autovehicul). */
   vehicleEquipmentId?: string | null;
+  /** FLEET-007: legături opționale anvelope (categoria Anvelope). */
+  tireAssetId?: string | null;
+  tireSetId?: string | null;
+  tireStorageStayId?: string | null;
 };
 
 export type PatchCostInput = Partial<CreateCostInput>;
@@ -261,6 +266,9 @@ function toCostRow(row: {
   vehicleDocumentId?: string | null;
   vehicleEquipmentId?: string | null;
   vehicleEquipment?: { id: string; label: string } | null;
+  tireAssetId?: string | null;
+  tireSetId?: string | null;
+  tireStorageStayId?: string | null;
   vehicle: { registrationNumber: string; client: { code: string } };
   tenant: { slug: string };
   trip?: { id: string; reference: string | null } | null;
@@ -293,6 +301,10 @@ function toCostRow(row: {
     linkedDocumentId: row.vehicleDocumentId ?? null,
     vehicleEquipmentId: row.vehicleEquipmentId ?? row.vehicleEquipment?.id ?? null,
     vehicleEquipmentLabel: row.vehicleEquipment?.label ?? null,
+    tireAssetId: row.tireAssetId ?? null,
+    tireSetId: row.tireSetId ?? null,
+    tireStorageStayId: row.tireStorageStayId ?? null,
+    hasTireCostLink: Boolean(row.tireAssetId || row.tireSetId || row.tireStorageStayId),
   };
 }
 
@@ -441,6 +453,14 @@ export class CostsService {
       dto.vehicleEquipmentId,
     );
 
+    const tireLinks = await resolveTireCostLinksForVehicle(
+      this.prisma,
+      tenant.id,
+      dto.vehicleId,
+      dto,
+      { allowLinks: allowsTireCostLinks(dto.category) },
+    );
+
     const row = await this.prisma.costEntry.create({
       data: {
         tenantId: tenant.id,
@@ -466,6 +486,11 @@ export class CostsService {
         reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
         reminderMenuSyncEnabled: reminderMenuSyncEnabledForCreate(dto.syncReminderAction),
         vehicleEquipmentId: vehicleEquipmentId ?? null,
+        ...(tireLinks?.tireAssetId !== undefined ? { tireAssetId: tireLinks.tireAssetId } : {}),
+        ...(tireLinks?.tireSetId !== undefined ? { tireSetId: tireLinks.tireSetId } : {}),
+        ...(tireLinks?.tireStorageStayId !== undefined
+          ? { tireStorageStayId: tireLinks.tireStorageStayId }
+          : {}),
       },
       include: costRowInclude,
     });
@@ -629,6 +654,15 @@ export class CostsService {
       dto.vehicleEquipmentId,
     );
 
+    const nextCategoryForTire = dto.category !== undefined ? dto.category.trim() : before.category;
+    const tireLinks = await resolveTireCostLinksForVehicle(
+      this.prisma,
+      before.tenantId,
+      before.vehicleId,
+      dto,
+      { allowLinks: allowsTireCostLinks(nextCategoryForTire) },
+    );
+
     const data: Prisma.CostEntryUncheckedUpdateManyInput = {
       category: dto.category !== undefined ? dto.category.trim() : undefined,
       provider: providerPatch !== undefined ? providerPatch : dto.provider,
@@ -655,6 +689,11 @@ export class CostsService {
       reminderOffsetsKm: reminderOffsetsForDb(dto.reminderOffsetsKm),
       reminderMenuSyncEnabled: reminderMenuSyncEnabledPatchValue(dto.syncReminderAction),
       ...(vehicleEquipmentId !== undefined ? { vehicleEquipmentId } : {}),
+      ...(tireLinks?.tireAssetId !== undefined ? { tireAssetId: tireLinks.tireAssetId } : {}),
+      ...(tireLinks?.tireSetId !== undefined ? { tireSetId: tireLinks.tireSetId } : {}),
+      ...(tireLinks?.tireStorageStayId !== undefined
+        ? { tireStorageStayId: tireLinks.tireStorageStayId }
+        : {}),
     };
 
     const r = await this.prisma.costEntry.updateMany({

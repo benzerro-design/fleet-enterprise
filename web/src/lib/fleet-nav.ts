@@ -101,6 +101,13 @@ export const FLEET_NAV_GROUPS: FleetNavGroup[] = [
       },
       {
         kind: "link",
+        label: "Anvelope",
+        href: "/fleet/tires",
+        phase: "live",
+        activePrefixes: ["/fleet/tires"],
+      },
+      {
+        kind: "link",
         label: "Costuri operaționale",
         href: "/fleet/costs",
         phase: "live",
