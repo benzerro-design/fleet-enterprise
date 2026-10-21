@@ -122,7 +122,7 @@ export class SupplierInvitesService {
     return {
       email: row.email,
       role: row.role,
-      tenantSlug: tenant?.slug ?? 'demo',
+      tenantSlug: this.requireTenantSlug(tenant),
       supplierCode: supplier?.code ?? '—',
       supplierLegalName: supplier?.legalName ?? 'Furnizor',
       expiresAt: row.expiresAt.toISOString(),
@@ -229,9 +229,16 @@ export class SupplierInvitesService {
     return {
       ok: true as const,
       supplierId: row.supplierId,
-      tenantSlug: tenant?.slug ?? 'demo',
+      tenantSlug: this.requireTenantSlug(tenant),
       email: row.email,
     };
+  }
+
+  private requireTenantSlug(tenant: { slug: string } | null): string {
+    if (!tenant?.slug?.trim()) {
+      throw new NotFoundException('Tenant not found');
+    }
+    return tenant.slug.trim();
   }
 
   private async findValidInvite(token: string) {

@@ -14,6 +14,8 @@ model Tenant {
   name               String
   /// Hartă ierarhie IAM editabilă (Administrare → Strategie useri). Null = default canonic.
   iamStrategyMap     Json?
+  /// IAM-004 — override matrice drepturi F/T/G/full (capability → boolean). Null = defaults din cod.
+  functionalProfileMatrix Json?
   /// Setări comenzi service (Setup → WO). Null = defaults (km obligatorii + update odometru flotă).
   workOrderSettings  Json?
   /// Setări email outbound (Setup → Email): From display, Reply-To, semnătură, CC membri.
@@ -91,6 +93,7 @@ model Tenant {
   clientSupplierAllocations ClientSupplierAllocation[]
   userInvites               UserInvite[]
   importJobs                ImportJob[]
+  userGridViews             UserGridView[]
 }
 
 enum ClientStatus {
@@ -354,6 +357,24 @@ model User {
   botPopulationSessions    BotPopulationSession[]    @relation("BotSessionActor")
   importJobs               ImportJob[]               @relation("ImportJobActor")
   tireEvents               TireEvent[]               @relation("TireEventActor")
+  userGridViews            UserGridView[]
+}
+
+/// IAM-007 — layout coloane grid (tichete, comenzi) per user.
+model UserGridView {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  gridKey   String
+  name      String   @default("__default__")
+  layout    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gridKey, name])
+  @@index([tenantId, userId])
 }
 
 enum BotSessionStatus {

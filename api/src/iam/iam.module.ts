@@ -18,6 +18,8 @@ import {
   UserInvitesPublicController,
 } from './user-invites.controller';
 import { UserInvitesService } from './user-invites.service';
+import { GridViewsController } from './grid-views.controller';
+import { GridViewsService } from './grid-views.service';
 
 @Module({
   imports: [AuthModule, AuditModule],
@@ -29,9 +31,11 @@ import { UserInvitesService } from './user-invites.service';
     TenantClientInvitesController,
     ClientInvitesController,
     UserInvitesPublicController,
+    GridViewsController,
   ],
   providers: [
     AccessContextService,
+    GridViewsService,
     ClientMembershipsService,
     SupplierMembershipsService,
     UserInvitesService,

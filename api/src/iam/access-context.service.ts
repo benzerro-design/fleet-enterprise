@@ -3,6 +3,7 @@ import { MembershipRole, ClientRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AccessContext, ActorContext } from './access-context.types';
 import { actorRoutingLevel } from './client-access';
+import { mergeFunctionalProfileMatrix, parseStoredFunctionalProfileMatrix } from '../tenant/functional-profile-matrix';
 import {
   DEFAULT_CLIENT_IAM_SETTINGS,
   parseClientIamSettings,
@@ -32,10 +33,18 @@ export class AccessContextService {
   }
 
   async resolve(userId: string, tenantSlug: string): Promise<AccessContext> {
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, functionalProfileMatrix: true },
+    });
     if (!tenant) {
       throw new UnauthorizedException('Tenant not found');
     }
+
+    const matrixOverride = parseStoredFunctionalProfileMatrix(tenant.functionalProfileMatrix);
+    const tenantFunctionalProfileMatrix = matrixOverride
+      ? mergeFunctionalProfileMatrix(matrixOverride)
+      : null;
 
     const membership = await this.prisma.tenantMembership.findUnique({
       where: { userId_tenantId: { userId, tenantId: tenant.id } },
@@ -108,6 +117,7 @@ export class AccessContextService {
       displayName: membership.user.displayName?.trim() || membership.user.email,
       membershipRole: membership.role,
       tenantFunctionalProfile: membership.functionalProfile ?? null,
+      tenantFunctionalProfileMatrix,
       isTenantWide,
       clientMemberships,
       allowedClientIds: clientMemberships.map((m) => m.clientId),

@@ -18,14 +18,19 @@ export class AccessScopeInterceptor implements NestInterceptor {
     const req = context.switchToHttp().getRequest<Request>();
 
     if (process.env.ALLOW_HEADER_TENANT === 'true') {
+      const tenantSlug = req.user?.tenantSlug?.trim();
+      if (!tenantSlug) {
+        throw new UnauthorizedException('Tenant context required');
+      }
       req.accessContext = {
         userId: 'e2e-header-tenant',
         tenantId: 'e2e',
-        tenantSlug: req.user?.tenantSlug ?? 'demo',
+        tenantSlug,
         email: 'e2e@local',
         displayName: 'E2E',
         membershipRole: MembershipRole.tenant_admin,
         tenantFunctionalProfile: null,
+        tenantFunctionalProfileMatrix: null,
         isTenantWide: true,
         clientMemberships: [],
         supplierMemberships: [],

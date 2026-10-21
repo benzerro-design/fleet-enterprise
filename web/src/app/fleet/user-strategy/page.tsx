@@ -7,6 +7,7 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { canManageFleet, getAuthMeResult } from "@/lib/auth-server";
 import { apiServerFetch } from "@/lib/fleet-server";
 import { fleetScrollPaneClass } from "@/lib/fleet-scroll-styles";
+import type { FunctionalProfileMatrixResponse } from "@/lib/functional-profile-matrix/types";
 import type { IamStrategyResponse } from "@/lib/iam-strategy/types";
 import { parseUserStrategyTab } from "@/lib/user-strategy-tabs";
 
@@ -15,6 +16,16 @@ async function loadStrategy(): Promise<IamStrategyResponse | null> {
     const res = await apiServerFetch("/tenant/iam-strategy");
     if (!res?.ok) return null;
     return (await res.json()) as IamStrategyResponse;
+  } catch {
+    return null;
+  }
+}
+
+async function loadFunctionalProfileMatrix(): Promise<FunctionalProfileMatrixResponse | null> {
+  try {
+    const res = await apiServerFetch("/tenant/functional-profile-matrix");
+    if (!res?.ok) return null;
+    return (await res.json()) as FunctionalProfileMatrixResponse;
   } catch {
     return null;
   }
@@ -31,6 +42,7 @@ export default async function UserStrategyPage({ searchParams }: PageProps) {
   const sp = (await searchParams) ?? {};
   const tab = parseUserStrategyTab(sp.tab);
   const initial = tab === "map" ? await loadStrategy() : null;
+  const initialMatrix = tab === "rights" ? await loadFunctionalProfileMatrix() : null;
 
   return (
     <FleetPageMain fill className="min-h-0">
@@ -54,7 +66,7 @@ export default async function UserStrategyPage({ searchParams }: PageProps) {
       <UserStrategyHub active={tab}>
         {tab === "rights" ? (
           <div className={`min-h-0 flex-1 overflow-y-auto ${fleetScrollPaneClass}`}>
-            <UserStrategyRights />
+            <UserStrategyRights initial={initialMatrix} />
           </div>
         ) : !initial ? (
           <p className="text-amber-400">

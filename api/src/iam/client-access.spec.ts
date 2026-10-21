@@ -18,6 +18,7 @@ function baseCtx(partial: Partial<AccessContext> & Pick<AccessContext, 'clientMe
     displayName: 'Șofer',
     membershipRole: MembershipRole.client_user,
     tenantFunctionalProfile: null,
+    tenantFunctionalProfileMatrix: null,
     isTenantWide: false,
     allowedClientIds: partial.clientMemberships.map((m) => m.clientId),
     supplierMemberships: [],

@@ -155,6 +155,30 @@ export class TenantController {
     return this.tenant.resetIamStrategy(tenantSlug, actorUserId);
   }
 
+  @Get('functional-profile-matrix')
+  @Roles(MembershipRole.tenant_admin)
+  getFunctionalProfileMatrix(@TenantId() tenantSlug: string) {
+    return this.tenant.getFunctionalProfileMatrix(tenantSlug);
+  }
+
+  @Put('functional-profile-matrix')
+  @Roles(MembershipRole.tenant_admin)
+  putFunctionalProfileMatrix(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setFunctionalProfileMatrix(tenantSlug, body, actorUserId);
+  }
+
+  @Post('functional-profile-matrix/reset')
+  @Roles(MembershipRole.tenant_admin)
+  resetFunctionalProfileMatrix(@TenantId() tenantSlug: string, @CurrentUserId() actorUserId?: string) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.resetFunctionalProfileMatrix(tenantSlug, actorUserId);
+  }
+
   @Get('work-order-settings')
   @Roles(...FLEET_READ_ROLES)
   getWorkOrderSettings(@TenantId() tenantSlug: string) {

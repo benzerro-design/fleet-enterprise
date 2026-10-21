@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUserId } from '../common/decorators/current-user.decorator';
+import { DEFAULT_FUNCTIONAL_PROFILE_MATRIX } from '../iam/functional-profile';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -44,6 +45,9 @@ export class AuthController {
               iamSettings: m.iamSettings,
             })),
             tenantFunctionalProfile: access.tenantFunctionalProfile,
+            /** IAM-004 — matrice efectivă (defaults sau override tenant). */
+            tenantFunctionalProfileMatrix:
+              access.tenantFunctionalProfileMatrix ?? DEFAULT_FUNCTIONAL_PROFILE_MATRIX,
             supplierMemberships: access.supplierMemberships.map((m) => ({
               supplierId: m.supplierId,
               supplierCode: m.supplierCode,

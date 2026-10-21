@@ -4,7 +4,6 @@ import {
   WORK_ORDER_GRID_COLUMNS,
   type WorkOrderGridColumnKey,
   type WorkOrderGridLayout,
-  writeWorkOrderGridLayout,
 } from "@/lib/work-order-grid-columns";
 
 type Props = {
@@ -24,7 +23,6 @@ export function WorkOrderColumnPicker({ layout, onChange, onClose }: Props) {
     else nextHidden.add(key);
     const next = { ...layout, hidden: [...nextHidden] };
     onChange(next);
-    writeWorkOrderGridLayout(next);
   }
 
   function move(key: WorkOrderGridColumnKey, dir: -1 | 1) {
@@ -36,7 +34,6 @@ export function WorkOrderColumnPicker({ layout, onChange, onClose }: Props) {
     [order[i], order[j]] = [order[j], order[i]];
     const next = { ...layout, order };
     onChange(next);
-    writeWorkOrderGridLayout(next);
   }
 
   function reset() {
@@ -44,7 +41,6 @@ export function WorkOrderColumnPicker({ layout, onChange, onClose }: Props) {
     const hiddenKeys = WORK_ORDER_GRID_COLUMNS.filter((c) => !c.defaultVisible).map((c) => c.key);
     const next = { order, hidden: hiddenKeys };
     onChange(next);
-    writeWorkOrderGridLayout(next);
   }
 
   return (

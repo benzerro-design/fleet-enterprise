@@ -338,12 +338,20 @@ model MaintenanceWorkOrder {
 
 ---
 
-### Punct 14 — Call center (viitor)
+### Punct 14 — Call center / CRM contact layer (viitor)
 
-**Out of scope F5.** Pregătire:
-- Rol `call_center_agent` (tenant sau client scoped)
-- Tichete create telefonic cu `sourceChannel: phone`
-- Integrare CTI (Twist, etc.) — fază separată 2026 Q4+
+**Out of scope F5.** Realitate produs: spine-ul live e **service pe tichete** (dosar → programare → WO), nu un CRM de contact center complet (omnichannel, CTI, Agent Desktop).
+
+**Pregătire / țintă (benchmark: Service Cloud Voice, Genesys, Five9, Zendesk, Talkdesk; media Twilio):**
+- Rol `call_center_agent` + cozi + skills (IAM strat 4)
+- `sourceChannel` + entitate **Activity/Interaction** (phone | email | app) legată de Client ± Ticket/ServiceCase
+- **Agent Desktop**: control media | fir omnichannel | caz | context flotă (vehicule…membri)
+- Canale: **voice in/out**, **SMS in/out**, **WhatsApp in/out**, **email in/out** (+ chat viitor) pe același Interaction
+- Telefonie modernă: ACD, IVR, welcome/hold/queue/OOO prompts, auto-responder, callback, VM, transfer, recording, CSAT
+- CTI Twilio (+ Messaging/WABA); integrări **IN** (SIP, IdP, telematics, CRM extern) și **OUT** (webhooks, API, BI, Slack/Teams)
+- Setup: Telefonie, Call Center, Messaging, Email, Integrări; politică Ticket vs Activity + GDPR/opt-in
+
+**Nu confunda** cu Multivertical architecture **F6** (sub-ledger + portal client) — alt livrabil.
 
 **Notă IAM:** nu contrazice `identity-access-model.md` — strat 4 extins.
 
@@ -438,10 +446,21 @@ F5a ──► F5b ──► F5c ──► F5d ──► F5e ──► F6 (call c
 
 ---
 
-### F6 — Furnizor portal + call center (backlog)
+### F6 — Call center + CRM contact layer (+ portal furnizor)
 
-- Portal furnizor: upload deviz, confirmare programare, factură
-- Rol call center, telefonie — după stabilizare F5
+După stabilizare F5. Portal furnizor rămâne pe pista partener; call center = pistă contact.
+
+| Fază | Scop | Iteme cheie |
+|------|------|-------------|
+| **F6-0** | Fundație CRM contact (fără Twilio) | Activity multi-canal, sourceChannel, rol agent, E.164, politică Ticket vs Activity |
+| **F6-A** | Twilio CTI + Agent Desktop v1 | Webhooks, CallLog, screen-pop, softphone, click-to-call, context flotă |
+| **F6-B** | Telefonie / ACD modernă | Cozi, IVR, welcome/hold/OOO prompts, callback, VM, transfer, recording, CSAT, wallboard |
+| **F6-M** | Messaging | SMS + WhatsApp in/out, templates, opt-in, auto-reply/bot, rich media, broadcast |
+| **F6-E** | Email omnichannel | Inbound + threading pe același Interaction pane, cozi comune |
+| **F6-X** | Integrări bidirecționale | Webhooks out, Contact API, CRM/helpdesk connectors, Slack/Teams, BI, telematics IN |
+| **F6-C** | Avansat | Dialer preview/progressive/power, WFM, QA, STT/AI assist, listen/whisper/barge, web chat |
+
+Ordine: `F6-0 → DID/Twilio → F6-A → F6-B · F6-M · F6-E · F6-X (paralel pe Interaction Core) → F6-C`.
 
 ---
 

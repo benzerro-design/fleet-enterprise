@@ -16,9 +16,6 @@ export const TenantId = createParamDecorator(
       if (trimmed.length > 0) return trimmed;
     }
 
-    if (process.env.NODE_ENV === 'production') {
-      throw new UnauthorizedException('Tenant context required');
-    }
-    return 'default';
+    throw new UnauthorizedException('Tenant context required');
   },
 );

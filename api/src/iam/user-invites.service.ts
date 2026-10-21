@@ -184,7 +184,7 @@ export class UserInvitesService {
       targetRole: row.targetRole,
       clientRole: row.clientRole,
       clientLegalName,
-      tenantSlug: tenant?.slug ?? 'demo',
+      tenantSlug: this.requireTenantSlug(tenant),
       tenantName: tenant?.name ?? 'Flotă',
       expiresAt: row.expiresAt.toISOString(),
       redirectPath: this.redirectPath(row.targetRole, row.clientRole),
@@ -301,10 +301,17 @@ export class UserInvitesService {
 
     return {
       ok: true as const,
-      tenantSlug: tenant?.slug ?? 'demo',
+      tenantSlug: this.requireTenantSlug(tenant),
       email: row.email,
       redirectPath: this.redirectPath(row.targetRole, row.clientRole),
     };
+  }
+
+  private requireTenantSlug(tenant: { slug: string } | null): string {
+    if (!tenant?.slug?.trim()) {
+      throw new NotFoundException('Tenant not found');
+    }
+    return tenant.slug.trim();
   }
 
   private async insertInvite(input: {

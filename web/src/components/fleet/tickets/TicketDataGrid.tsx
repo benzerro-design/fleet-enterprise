@@ -24,6 +24,7 @@ import {
 } from "@/components/fleet/tickets/TicketListGlyphs";
 import { TicketRowActions } from "@/components/fleet/tickets/TicketRowActions";
 import { FleetGlyphTooltip } from "@/components/fleet/FleetGlyphTooltip";
+import { hydrateTicketGridLayout, persistTicketGridLayout } from "@/lib/ticket-grid-prefs";
 import {
   readTicketGridLayout,
   resolveColumnWidthPx,
@@ -32,7 +33,6 @@ import {
   type TicketGridLayout,
   visibleTicketColumns,
   withColumnWidth,
-  writeTicketGridLayout,
 } from "@/lib/ticket-grid-columns";
 import { ticketRoutingLabel, type TicketRecord } from "@/lib/tickets-api";
 import { useT } from "@/lib/i18n/useT";
@@ -82,9 +82,22 @@ export function TicketDataGrid({
     layoutRef.current = layout;
   }, [layout]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateTicketGridLayout().then((next) => {
+      if (!cancelled) {
+        setLayout(next);
+        layoutRef.current = next;
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const persistLayout = useCallback((next: TicketGridLayout) => {
     setLayout(next);
-    writeTicketGridLayout(next);
+    persistTicketGridLayout(next);
   }, []);
 
   const startResize = useCallback(
@@ -106,7 +119,7 @@ export function TicketDataGrid({
         document.body.style.removeProperty("cursor");
         document.body.style.removeProperty("user-select");
         setResizingKey(null);
-        writeTicketGridLayout(layoutRef.current);
+        persistTicketGridLayout(layoutRef.current);
       }
 
       document.body.style.cursor = "col-resize";

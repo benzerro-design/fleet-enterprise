@@ -6,7 +6,6 @@ import {
   TICKET_GRID_COLUMNS,
   type TicketGridColumnKey,
   type TicketGridLayout,
-  writeTicketGridLayout,
 } from "@/lib/ticket-grid-columns";
 import { useT } from "@/lib/i18n/useT";
 
@@ -29,7 +28,6 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
     else nextHidden.add(key);
     const next = { ...layout, hidden: [...nextHidden] };
     onChange(next);
-    writeTicketGridLayout(next);
   }
 
   function move(key: TicketGridColumnKey, dir: -1 | 1) {
@@ -41,19 +39,16 @@ export function TicketColumnPicker({ layout, onChange, onClose }: Props) {
     [order[i], order[j]] = [order[j], order[i]];
     const next = { ...layout, order };
     onChange(next);
-    writeTicketGridLayout(next);
   }
 
   function reset() {
     const next = defaultTicketGridLayout();
     onChange(next);
-    writeTicketGridLayout(next);
   }
 
   function resetWidths() {
     const next = clearColumnWidths(layout);
     onChange(next);
-    writeTicketGridLayout(next);
   }
 
   return (

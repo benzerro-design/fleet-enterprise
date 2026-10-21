@@ -3,6 +3,11 @@ import { MembershipRole, Prisma, SupplierServiceKind, type FunctionalProfile } f
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { cloneDefaultIamStrategyNodes } from './iam-strategy-default';
+import {
+  buildFunctionalProfileMatrixResponse,
+  parseFunctionalProfileMatrixOverride,
+  type FunctionalProfileMatrixOverride,
+} from './functional-profile-matrix';
 import type { IamStrategyPayload } from './iam-strategy.types';
 import { parseIamStrategyPayload, parseStoredIamStrategy } from './iam-strategy.validate';
 import {
@@ -854,6 +859,69 @@ export class TenantService {
     });
 
     return this.getIamStrategy(tenantSlug);
+  }
+
+  async getFunctionalProfileMatrix(tenantSlug: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { functionalProfileMatrix: true, updatedAt: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return buildFunctionalProfileMatrixResponse(tenant.functionalProfileMatrix, tenant.updatedAt);
+  }
+
+  async setFunctionalProfileMatrix(tenantSlug: string, body: unknown, actorUserId: string) {
+    let override: FunctionalProfileMatrixOverride | null;
+    try {
+      override = parseFunctionalProfileMatrixOverride(
+        typeof body === 'object' && body != null && !Array.isArray(body) && 'override' in body
+          ? (body as { override: unknown }).override
+          : body,
+      );
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid functional profile matrix');
+    }
+    if (override == null) {
+      throw new BadRequestException('override must contain at least one profile capability');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { functionalProfileMatrix: override as Prisma.InputJsonValue },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'functional_profile_matrix_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+    });
+
+    return this.getFunctionalProfileMatrix(tenantSlug);
+  }
+
+  async resetFunctionalProfileMatrix(tenantSlug: string, actorUserId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { functionalProfileMatrix: Prisma.DbNull },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'functional_profile_matrix_reset',
+      entityType: 'tenant',
+      entityId: tenant.id,
+    });
+
+    return this.getFunctionalProfileMatrix(tenantSlug);
   }
 
   private async resolveTenant(tenantSlug: string) {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FleetGlyphTooltip } from "@/components/fleet/FleetGlyphTooltip";
 import {
   FleetDataTable,
@@ -24,6 +24,7 @@ import {
   WorkOrderTicketGlyph,
 } from "@/components/fleet/work-orders/WorkOrderListGlyphs";
 import { formatDateRo } from "@/lib/datetime-local";
+import { hydrateWorkOrderGridLayout, persistWorkOrderGridLayout } from "@/lib/work-order-grid-prefs";
 import {
   readWorkOrderGridLayout,
   type WorkOrderGridColumnKey,
@@ -64,6 +65,21 @@ export function WorkOrderDataGrid({
 }: Props) {
   const [layout, setLayout] = useState<WorkOrderGridLayout>(() => readWorkOrderGridLayout());
   const [showColumns, setShowColumns] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateWorkOrderGridLayout().then((next) => {
+      if (!cancelled) setLayout(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function updateLayout(next: WorkOrderGridLayout) {
+    setLayout(next);
+    persistWorkOrderGridLayout(next);
+  }
   const [showLegend, setShowLegend] = useState(false);
   const columns = useMemo(() => visibleWorkOrderColumns(layout), [layout]);
 
@@ -243,7 +259,7 @@ export function WorkOrderDataGrid({
       </div>
 
       {showColumns ? (
-        <WorkOrderColumnPicker layout={layout} onChange={setLayout} onClose={() => setShowColumns(false)} />
+        <WorkOrderColumnPicker layout={layout} onChange={updateLayout} onClose={() => setShowColumns(false)} />
       ) : null}
       {showLegend ? <WorkOrderGlyphLegendPanel onClose={() => setShowLegend(false)} /> : null}
 

@@ -1,4 +1,5 @@
 import type { ClientRole, CrmTicketRoutingLevel, FunctionalProfile, MembershipRole, SupplierRole } from '@prisma/client';
+import type { FunctionalProfileMatrixEffective } from './functional-profile';
 
 export type ClientMembershipContext = {
   clientId: string;
@@ -35,6 +36,8 @@ export type AccessContext = {
   membershipRole: MembershipRole;
   /** IAM-003 pe L* TenantMembership. */
   tenantFunctionalProfile: FunctionalProfile | null;
+  /** IAM-004 — matrice efectivă tenant (null = defaults din cod). */
+  tenantFunctionalProfileMatrix: FunctionalProfileMatrixEffective | null;
   /** tenant_admin sau tenant_viewer fără ClientMembership — vede tot tenant-ul. */
   isTenantWide: boolean;
   clientMemberships: ClientMembershipContext[];

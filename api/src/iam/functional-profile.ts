@@ -8,12 +8,40 @@ export type FunctionalCapability =
   | 'scheduler.write'
   | 'fleet.write';
 
+export const ALL_FUNCTIONAL_CAPABILITIES: FunctionalCapability[] = [
+  'quote.edit',
+  'quote.approve',
+  'quote.postCost',
+  'scheduler.write',
+  'fleet.write',
+];
+
+export type FunctionalProfileMatrixEffective = Record<
+  FunctionalProfile,
+  Record<FunctionalCapability, boolean>
+>;
+
 /** Default IAM-003: F = financiar, T = tehnic, G = gestiune, full = tot. */
 const PROFILE_CAPS: Record<FunctionalProfile, ReadonlySet<FunctionalCapability>> = {
   F: new Set(['quote.approve', 'quote.postCost']),
   T: new Set(['quote.edit', 'fleet.write']),
   G: new Set(['scheduler.write', 'fleet.write']),
   full: new Set(['quote.edit', 'quote.approve', 'quote.postCost', 'scheduler.write', 'fleet.write']),
+};
+
+function matrixRowFromSet(caps: ReadonlySet<FunctionalCapability>): Record<FunctionalCapability, boolean> {
+  const row = {} as Record<FunctionalCapability, boolean>;
+  for (const cap of ALL_FUNCTIONAL_CAPABILITIES) {
+    row[cap] = caps.has(cap);
+  }
+  return row;
+}
+
+export const DEFAULT_FUNCTIONAL_PROFILE_MATRIX: FunctionalProfileMatrixEffective = {
+  F: matrixRowFromSet(PROFILE_CAPS.F),
+  T: matrixRowFromSet(PROFILE_CAPS.T),
+  G: matrixRowFromSet(PROFILE_CAPS.G),
+  full: matrixRowFromSet(PROFILE_CAPS.full),
 };
 
 export function parseFunctionalProfile(raw: unknown): FunctionalProfile | null {
@@ -57,8 +85,12 @@ export function effectiveFunctionalProfile(
 export function profileAllows(
   profile: FunctionalProfile | null,
   cap: FunctionalCapability,
+  matrix?: FunctionalProfileMatrixEffective | null,
 ): boolean {
   if (profile == null) return true; // legacy = fără restricție pe axa F/T/G
+  if (matrix) {
+    return matrix[profile][cap] === true;
+  }
   return PROFILE_CAPS[profile].has(cap);
 }
 
@@ -67,5 +99,9 @@ export function accessAllowsCapability(
   cap: FunctionalCapability,
   clientId?: string,
 ): boolean {
-  return profileAllows(effectiveFunctionalProfile(ctx, clientId), cap);
+  return profileAllows(
+    effectiveFunctionalProfile(ctx, clientId),
+    cap,
+    ctx.tenantFunctionalProfileMatrix,
+  );
 }

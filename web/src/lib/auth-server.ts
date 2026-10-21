@@ -30,6 +30,10 @@ export type SupplierMembershipMe = {
   role: "supplier_manager" | "supplier_staff" | "supplier_accountant";
 };
 
+type FunctionalCap = "quote.edit" | "quote.approve" | "quote.postCost" | "scheduler.write" | "fleet.write";
+type FunctionalProfileName = "F" | "T" | "G" | "full";
+export type FunctionalProfileMatrix = Record<FunctionalProfileName, Record<FunctionalCap, boolean>>;
+
 export type AuthMe = {
   userId?: string;
   email?: string;
@@ -44,6 +48,8 @@ export type AuthMe = {
     assignedVehicleIds?: string[];
     /** IAM-003 pe L* */
     tenantFunctionalProfile?: "F" | "T" | "G" | "full" | null;
+    /** IAM-004 — matrice efectivă tenant (defaults sau override). */
+    tenantFunctionalProfileMatrix?: FunctionalProfileMatrix | null;
     clientMemberships: ClientMembershipMe[];
     supplierMemberships: SupplierMembershipMe[];
   };
@@ -83,9 +89,6 @@ export function canUseBot(auth: AuthMeResult): boolean {
   return auth.ok && auth.me.role === "tenant_admin" && auth.me.tenantSlug === "demo";
 }
 
-type FunctionalCap = "quote.edit" | "quote.approve" | "quote.postCost" | "scheduler.write" | "fleet.write";
-type FunctionalProfileName = "F" | "T" | "G" | "full";
-
 const PROFILE_CAPS: Record<FunctionalProfileName, readonly FunctionalCap[]> = {
   F: ["quote.approve", "quote.postCost"],
   T: ["quote.edit", "fleet.write"],
@@ -93,25 +96,34 @@ const PROFILE_CAPS: Record<FunctionalProfileName, readonly FunctionalCap[]> = {
   full: ["quote.edit", "quote.approve", "quote.postCost", "scheduler.write", "fleet.write"],
 };
 
-/** null / lipsă = legacy, fără restricție F/T/G. */
+/** null / lipsă = legacy, fără restricție F/T/G. Matrix = IAM-004 override pe tenant. */
 function profileAllows(
   profile: FunctionalProfileName | null | undefined,
   cap: FunctionalCap,
+  matrix?: FunctionalProfileMatrix | null,
 ): boolean {
   if (profile == null) return true;
+  if (matrix) {
+    return matrix[profile]?.[cap] === true;
+  }
   return PROFILE_CAPS[profile].includes(cap);
+}
+
+function matrixFrom(auth: AuthMe): FunctionalProfileMatrix | null | undefined {
+  return auth.access?.tenantFunctionalProfileMatrix;
 }
 
 export function canWriteClientFleet(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
+  const matrix = matrixFrom(auth.me);
   if (auth.me.role === "tenant_admin") {
-    return profileAllows(auth.me.access?.tenantFunctionalProfile, "fleet.write");
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "fleet.write", matrix);
   }
   if (auth.me.role === "client_user") {
     return (auth.me.access?.clientMemberships ?? []).some(
       (m) =>
         (m.role === "client_admin" || m.role === "client_dispatcher") &&
-        profileAllows(m.functionalProfile, "fleet.write"),
+        profileAllows(m.functionalProfile, "fleet.write", matrix),
     );
   }
   return false;
@@ -143,14 +155,15 @@ export function canWriteTickets(auth: AuthMeResult): boolean {
 /** Dosar lucrare / programator — G, full sau legacy. T editează devizul, nu programatorul. */
 export function canOperateServiceCase(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
+  const matrix = matrixFrom(auth.me);
   if (auth.me.role === "tenant_admin") {
-    return profileAllows(auth.me.access?.tenantFunctionalProfile, "scheduler.write");
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "scheduler.write", matrix);
   }
   if (auth.me.role !== "client_user") return false;
   return (auth.me.access?.clientMemberships ?? []).some(
     (m) =>
       (m.role === "client_admin" || m.role === "client_dispatcher") &&
-      profileAllows(m.functionalProfile, "scheduler.write"),
+      profileAllows(m.functionalProfile, "scheduler.write", matrix),
   );
 }
 
@@ -195,37 +208,40 @@ export function canUseAppointmentProposalHistory(
 /** Aprobare deviz — F / full / legacy. T și G nu aprobă. */
 export function canApproveQuotes(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
+  const matrix = matrixFrom(auth.me);
   if (auth.me.role === "tenant_admin") {
-    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.approve");
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.approve", matrix);
   }
   return (auth.me.access?.clientMemberships ?? []).some(
-    (m) => m.role === "client_admin" && profileAllows(m.functionalProfile, "quote.approve"),
+    (m) => m.role === "client_admin" && profileAllows(m.functionalProfile, "quote.approve", matrix),
   );
 }
 
 /** Editare deviz — T / full / legacy. F aprobă, nu editează liniile. */
 export function canEditQuotes(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
+  const matrix = matrixFrom(auth.me);
   if (auth.me.role === "tenant_admin") {
-    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.edit");
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.edit", matrix);
   }
   return (auth.me.access?.clientMemberships ?? []).some(
     (m) =>
       (m.role === "client_admin" || m.role === "client_dispatcher") &&
-      profileAllows(m.functionalProfile, "quote.edit"),
+      profileAllows(m.functionalProfile, "quote.edit", matrix),
   );
 }
 
 /** Post-cost din deviz — F / full / legacy. */
 export function canPostCostQuotes(auth: AuthMeResult): boolean {
   if (!auth.ok) return false;
+  const matrix = matrixFrom(auth.me);
   if (auth.me.role === "tenant_admin") {
-    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.postCost");
+    return profileAllows(auth.me.access?.tenantFunctionalProfile, "quote.postCost", matrix);
   }
   return (auth.me.access?.clientMemberships ?? []).some(
     (m) =>
       (m.role === "client_admin" || m.role === "client_dispatcher") &&
-      profileAllows(m.functionalProfile, "quote.postCost"),
+      profileAllows(m.functionalProfile, "quote.postCost", matrix),
   );
 }
 
