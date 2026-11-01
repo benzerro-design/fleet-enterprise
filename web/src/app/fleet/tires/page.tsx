@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { TireHubInventory } from "@/components/fleet/TireHubInventory";
+import { TireSeasonReminderSyncButton } from "@/components/fleet/TireSeasonReminderSyncButton";
 import { getAuthMeResult } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { TireHubAlert, TireHubPayload } from "@/lib/tire-hub-api";
 import { tireHubAlertKindLabel } from "@/lib/tire-hub-api";
-import { TireSeasonReminderSyncButton } from "@/components/fleet/TireSeasonReminderSyncButton";
 import { vehicleTireSeasonLabel } from "@/lib/vehicle-wheels-types";
 
 async function loadHub(): Promise<TireHubPayload | null> {
@@ -45,8 +46,8 @@ export default async function FleetTiresHubPage() {
             <p className="text-sm font-medium uppercase tracking-widest text-violet-400">FLEET-007</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Hub anvelope</h1>
             <p className="mt-3 max-w-2xl text-sm text-zinc-400">
-              Seturi montate, depozit hotel / client și alerte uzură, DOT și sezon — pe flota ta
-              (scope AccessContext).
+              Inventar pe flotă: seturi montate / hotel / client, furnizor & raft, uzură/DOT și alerte
+              sezon — drill-down pe tab Roți. Scope AccessContext.
             </p>
             {hub ? (
               <p className="mt-2 text-xs text-zinc-600">
@@ -82,6 +83,71 @@ export default async function FleetTiresHubPage() {
               <StatCard label="Recomandat înlocuire" value={hub.summary.assetsRecommendedReplace} />
             </div>
 
+            {(hub.changeoverQueue?.length ?? 0) > 0 ? (
+              <section>
+                <h2 className="text-lg font-medium text-zinc-100">Coadă schimb sezon</h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Vehicule cu set greșit pentru sezonul curent — leagă de WO tip R dacă există.
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {hub.changeoverQueue!.map((c) => (
+                    <li
+                      key={c.vehicleId}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3"
+                    >
+                      <div>
+                        <p className="font-medium text-zinc-100">
+                          {c.plate}{" "}
+                          <span className="text-xs font-normal text-zinc-500">· {c.clientCode}</span>
+                        </p>
+                        <p className="text-xs text-amber-100/80">
+                          Montat {vehicleTireSeasonLabel(c.mountedSeason)} — recomandat{" "}
+                          {c.recommendedSeason === "winter" ? "iarnă" : "vară"}
+                          {c.hasOppositeSeasonStored ? " · set opus disponibil" : " · lipsă set opus"}
+                          {c.openWorkOrderStatus
+                            ? ` · WO R: ${c.openWorkOrderStatus}`
+                            : " · fără WO R deschis"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Link
+                          href={c.hrefWheels}
+                          className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-100 hover:bg-zinc-800"
+                        >
+                          Roți
+                        </Link>
+                        {c.hrefWorkOrder ? (
+                          <Link
+                            href={c.hrefWorkOrder}
+                            className="rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-950/50"
+                          >
+                            Deschide WO
+                          </Link>
+                        ) : (
+                          <Link
+                            href={c.hrefCreateTicket}
+                            className="rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-950/50"
+                          >
+                            Tichet sezon
+                          </Link>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            <section>
+              <h2 className="text-lg font-medium text-zinc-100">Inventar seturi</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Control tower pe flotă. Detaliile pe poziție rămân pe vehicul → Roți.
+              </p>
+              <div className="mt-4">
+                <TireHubInventory hub={hub} />
+              </div>
+            </section>
+
             <section>
               <h2 className="text-lg font-medium text-zinc-100">Alerte</h2>
               {hub.alerts.length === 0 ? (
@@ -116,7 +182,7 @@ export default async function FleetTiresHubPage() {
                               href={row.href}
                               className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:bg-zinc-800"
                             >
-                              Roti
+                              Roți
                             </Link>
                           </td>
                         </tr>
@@ -149,10 +215,10 @@ export default async function FleetTiresHubPage() {
                         </p>
                       </div>
                       <Link
-                        href={`/fleet/vehicles/${s.vehicleId}?tab=wheels`}
+                        href={`/fleet/vehicles/${s.vehicleId}?tab=wheels&setId=${encodeURIComponent(s.setId)}`}
                         className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:bg-zinc-800"
                       >
-                        Deschide Roti
+                        Deschide Roți
                       </Link>
                     </li>
                   ))}

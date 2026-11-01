@@ -7,7 +7,8 @@ import { FilterResetLink } from "@/components/fleet/FilterResetLink";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { FleetPendingLink } from "@/components/fleet/FleetPendingLink";
-import { canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
+import { ListImportCsvLink } from "@/components/fleet/ListImportCsvLink";
+import { canManageFleet, canWriteCosts, getAuthMeResult, isClientDriverPortal } from "@/lib/auth-server";
 import { costsBrowserBase } from "@/lib/fleet-api";
 import { filterFormKey } from "@/lib/filter-form-key";
 import { FUEL_COST_CATEGORY } from "@/lib/fuel-ops";
@@ -89,6 +90,7 @@ export default async function CostsPage({ searchParams }: Props) {
   const locale = parseLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
   const [data, auth] = await Promise.all([fetchRows(sp), getAuthMeResult()]);
   const write = canWriteCosts(auth);
+  const canImport = canManageFleet(auth);
   const driverPortal = isClientDriverPortal(auth);
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / 20));
@@ -131,6 +133,7 @@ export default async function CostsPage({ searchParams }: Props) {
                   {t(locale, "pages.costs.newCost")}
                 </FleetPendingLink>
               ) : null}
+              {canImport ? <ListImportCsvLink entity="costs" /> : null}
               <a
                 href={exportHref}
                 className="rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"

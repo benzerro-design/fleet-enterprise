@@ -17,9 +17,12 @@ async function loadSettings(): Promise<ImportSettings> {
   }
 }
 
-export default async function SetupImportsPage() {
+type PageProps = { searchParams: Promise<{ entity?: string }> };
+
+export default async function SetupImportsPage({ searchParams }: PageProps) {
   const auth = await getAuthMeResult();
   if (!canManageFleet(auth)) redirect("/fleet/vehicles");
+  const sp = await searchParams;
   const settings = await loadSettings();
 
   return (
@@ -29,7 +32,7 @@ export default async function SetupImportsPage() {
         description="Entități importabile, șabloane CSV, motor upload/dry-run/scriere și istoric job-uri. Conectorii API rămân în Integrări."
       >
         <div className="space-y-8">
-          <ImportCsvRunner settings={settings} />
+          <ImportCsvRunner settings={settings} initialEntity={sp.entity} />
           <ImportSettingsEditor initial={settings} />
         </div>
       </SetupShell>

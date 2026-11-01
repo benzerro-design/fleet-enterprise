@@ -10,12 +10,17 @@ import {
   treadLowThresholdMm,
   TIRE_DOT_MAX_AGE_YEARS,
 } from './tire-thresholds';
+import type { TireOwnershipType, VehicleTireSeason } from '@prisma/client';
 import type {
   TireHubAlert,
   TireHubAlertKind,
   TireHubAlertSeverity,
   TireHubAttentionSet,
+  TireHubChangeoverItem,
+  TireHubInventoryLocation,
+  TireHubInventorySet,
   TireHubPayload,
+  TireHubRecentEvent,
 } from './tire-hub.types';
 import {
   syncSeasonTireRemindersForTenant,
@@ -38,8 +43,33 @@ const SEVERITY_RANK: Record<TireHubAlertSeverity, number> = {
   info: 2,
 };
 
-function vehicleWheelsHref(vehicleId: string): string {
-  return `/fleet/vehicles/${vehicleId}?tab=wheels`;
+function vehicleWheelsHref(vehicleId: string, setId?: string): string {
+  const base = `/fleet/vehicles/${vehicleId}?tab=wheels`;
+  return setId ? `${base}&setId=${encodeURIComponent(setId)}` : base;
+}
+
+function createSeasonTicketHref(vehicleId: string, plate: string): string {
+  const subject = `Schimb sezon anvelope ${plate}`;
+  return `/fleet/tickets/new?vehicleId=${encodeURIComponent(vehicleId)}&subject=${encodeURIComponent(subject)}`;
+}
+
+function intakePhotoCount(raw: unknown): number {
+  return Array.isArray(raw) ? raw.length : 0;
+}
+
+function oppositeSeason(season: VehicleTireSeason): VehicleTireSeason | null {
+  if (season === 'summer') return 'winter';
+  if (season === 'winter') return 'summer';
+  return null;
+}
+
+function rollupOwnership(
+  types: TireOwnershipType[],
+): TireOwnershipType | 'mixed' | null {
+  if (types.length === 0) return null;
+  const uniq = new Set(types);
+  if (uniq.size === 1) return types[0]!;
+  return 'mixed';
 }
 
 function alertSeverity(kind: TireHubAlertKind, treadMm?: number | null): TireHubAlertSeverity {
@@ -100,10 +130,25 @@ export class TireHubService {
     const clientVehicleScope = access ? vehicleClientScope(access) : {};
     const vehicles = await this.prisma.vehicle.findMany({
       where: { tenantId: tenant.id, ...clientVehicleScope },
-      select: { id: true, registrationNumber: true },
+      select: {
+        id: true,
+        registrationNumber: true,
+        clientId: true,
+        client: { select: { code: true, legalName: true } },
+      },
     });
     const vehicleIds = vehicles.map((v) => v.id);
     const plateById = new Map(vehicles.map((v) => [v.id, v.registrationNumber]));
+    const vehicleMeta = new Map(
+      vehicles.map((v) => [
+        v.id,
+        {
+          clientId: v.clientId,
+          clientCode: v.client.code,
+          clientName: v.client.legalName,
+        },
+      ]),
+    );
 
     if (vehicleIds.length === 0) {
       return emptyHub(now);
@@ -122,7 +167,11 @@ export class TireHubService {
       where: { tenantId: tenant.id, vehicleId: { in: vehicleIds }, archivedAt: null },
       include: {
         placements: { where: { validTo: null } },
-        storageStays: { where: { checkOutAt: null }, take: 1 },
+        storageStays: {
+          where: { checkOutAt: null },
+          take: 1,
+          include: { supplier: { select: { id: true, legalName: true } } },
+        },
         items: {
           include: {
             asset: {
@@ -132,6 +181,7 @@ export class TireHubService {
                 treadMm: true,
                 season: true,
                 recommendedReplace: true,
+                ownershipType: true,
               },
             },
           },
@@ -148,14 +198,27 @@ export class TireHubService {
               kind: 'at_supplier_hotel',
               validTo: null,
             },
-            select: { setId: true },
+            include: { supplier: { select: { id: true, legalName: true } } },
+            orderBy: { validFrom: 'desc' },
           });
     const hotelSetIds = new Set<string>();
+    const hotelPlacementBySet = new Map<string, (typeof hotelPlacements)[number]>();
     for (const s of sets) {
       if (s.storageStays.length > 0) hotelSetIds.add(s.id);
     }
     for (const pl of hotelPlacements) {
-      if (pl.setId) hotelSetIds.add(pl.setId);
+      if (pl.setId) {
+        hotelSetIds.add(pl.setId);
+        if (!hotelPlacementBySet.has(pl.setId)) hotelPlacementBySet.set(pl.setId, pl);
+      }
+    }
+
+    /** Sezoane disponibile pe vehicul (pentru set opus). */
+    const seasonsByVehicle = new Map<string, Set<VehicleTireSeason>>();
+    for (const set of sets) {
+      const bag = seasonsByVehicle.get(set.vehicleId) ?? new Set<VehicleTireSeason>();
+      bag.add(set.season);
+      seasonsByVehicle.set(set.vehicleId, bag);
     }
 
     let setsMounted = 0;
@@ -232,7 +295,7 @@ export class TireHubService {
 
     for (const set of sets) {
       const plate = plateById.get(set.vehicleId) ?? '—';
-      const href = vehicleWheelsHref(set.vehicleId);
+      const href = vehicleWheelsHref(set.vehicleId, set.id);
       const mounted = isSetMounted(set);
 
       if (isSeasonMismatch(set.season, mounted, now)) {
@@ -351,6 +414,243 @@ export class TireHubService {
       if (isDotAged(f.dot, now)) fitmentDotAgedPositions.add(key);
     }
 
+    const inventorySets: TireHubInventorySet[] = [];
+    for (const set of sets) {
+      const mounted = isSetMounted(set);
+      const atHotel = hotelSetIds.has(set.id);
+      const stay = set.storageStays[0];
+      const hotelPl = hotelPlacementBySet.get(set.id);
+      const meta = vehicleMeta.get(set.vehicleId);
+      const plate = plateById.get(set.vehicleId) ?? '—';
+
+      let location: TireHubInventoryLocation;
+      if (mounted) location = 'on_vehicle';
+      else if (atHotel) location = 'at_supplier_hotel';
+      else if (set.placements.some((p) => p.kind === 'at_client')) location = 'at_client';
+      else location = 'at_client';
+
+      const treadValues = set.items
+        .map((i) => i.asset.treadMm)
+        .filter((v): v is number => v != null && Number.isFinite(v));
+      const minTreadMm = treadValues.length ? Math.min(...treadValues) : null;
+      const agedDots = set.items
+        .filter((i) => isDotAged(i.asset.dot, now))
+        .map((i) => i.asset.dot?.trim())
+        .filter((d): d is string => !!d);
+      const worstDot = agedDots[0] ?? set.items.map((i) => i.asset.dot?.trim()).find((d) => !!d) ?? null;
+
+      const opp = oppositeSeason(set.season);
+      const vehicleSeasons = seasonsByVehicle.get(set.vehicleId) ?? new Set();
+      const hasOppositeSeasonStored = opp != null && vehicleSeasons.has(opp);
+
+      const setAssetIds = assetIdsBySetId.get(set.id) ?? new Set<string>();
+      const kinds = new Set<TireHubAlertKind>(
+        trimmedAlerts
+          .filter((a) => {
+            if (a.setId === set.id) return true;
+            if (a.assetId != null && setAssetIds.has(a.assetId)) return true;
+            if (
+              a.vehicleId === set.vehicleId &&
+              a.setId == null &&
+              a.assetId == null &&
+              mounted
+            ) {
+              return true;
+            }
+            return false;
+          })
+          .map((a) => a.kind),
+      );
+
+      inventorySets.push({
+        setId: set.id,
+        vehicleId: set.vehicleId,
+        plate,
+        clientId: meta?.clientId ?? set.clientId,
+        clientCode: meta?.clientCode ?? '—',
+        clientName: meta?.clientName ?? '—',
+        setName: set.name,
+        season: set.season,
+        mountedAs: set.mountedAs,
+        itemCount: set.items.length,
+        location,
+        isMounted: mounted,
+        atHotel,
+        stayId: stay?.id ?? null,
+        supplierId: stay?.supplierId ?? hotelPl?.supplierId ?? null,
+        supplierName: stay?.supplier.legalName ?? hotelPl?.supplier?.legalName ?? null,
+        locationCode: stay?.locationCode ?? hotelPl?.locationCode ?? null,
+        checkInAt: stay?.checkInAt.toISOString() ?? hotelPl?.validFrom.toISOString() ?? null,
+        feeCents: stay?.feeCents ?? null,
+        contractRef: stay?.contractRef ?? null,
+        intakeTreadNotes: stay?.intakeTreadNotes ?? null,
+        photoCount: intakePhotoCount(stay?.intakePhotos),
+        minTreadMm,
+        worstDot,
+        assetsRecommendedReplace: set.items.filter((i) => i.asset.recommendedReplace).length,
+        hasOppositeSeasonStored,
+        ownershipType: rollupOwnership(set.items.map((i) => i.asset.ownershipType)),
+        alertKinds: [...kinds],
+        hrefWheels: vehicleWheelsHref(set.vehicleId, set.id),
+        hrefCreateTicket: createSeasonTicketHref(set.vehicleId, plate),
+        costCentsTotal: 0,
+        costCount: 0,
+        lastMountKm: null,
+        lastDemountKm: null,
+        recentEvents: [],
+      });
+    }
+
+    const setIds = inventorySets.map((s) => s.setId);
+    if (setIds.length > 0) {
+      const [costGroups, recentRaw, lastMountRows, lastDemountRows] = await Promise.all([
+        this.prisma.costEntry.groupBy({
+          by: ['tireSetId'],
+          where: { tenantId: tenant.id, tireSetId: { in: setIds } },
+          _sum: { amountCents: true },
+          _count: { _all: true },
+        }),
+        this.prisma.tireEvent.findMany({
+          where: { tenantId: tenant.id, setId: { in: setIds } },
+          orderBy: { createdAt: 'desc' },
+          take: Math.min(800, setIds.length * 8),
+          select: {
+            id: true,
+            setId: true,
+            type: true,
+            createdAt: true,
+            odometerKm: true,
+            workOrderId: true,
+          },
+        }),
+        this.prisma.tireEvent.findMany({
+          where: {
+            tenantId: tenant.id,
+            setId: { in: setIds },
+            type: 'mount',
+            odometerKm: { not: null },
+          },
+          orderBy: { createdAt: 'desc' },
+          distinct: ['setId'],
+          select: { setId: true, odometerKm: true },
+        }),
+        this.prisma.tireEvent.findMany({
+          where: {
+            tenantId: tenant.id,
+            setId: { in: setIds },
+            type: 'demount',
+            odometerKm: { not: null },
+          },
+          orderBy: { createdAt: 'desc' },
+          distinct: ['setId'],
+          select: { setId: true, odometerKm: true },
+        }),
+      ]);
+
+      const costBySet = new Map(
+        costGroups
+          .filter((g) => g.tireSetId)
+          .map((g) => [
+            g.tireSetId!,
+            { total: g._sum.amountCents ?? 0, count: g._count._all },
+          ]),
+      );
+
+      const eventsBySet = new Map<string, TireHubRecentEvent[]>();
+      for (const ev of recentRaw) {
+        if (!ev.setId) continue;
+        const list = eventsBySet.get(ev.setId) ?? [];
+        if (list.length >= 5) continue;
+        list.push({
+          id: ev.id,
+          type: ev.type,
+          createdAt: ev.createdAt.toISOString(),
+          odometerKm: ev.odometerKm,
+          workOrderId: ev.workOrderId,
+        });
+        eventsBySet.set(ev.setId, list);
+      }
+
+      const mountKmBySet = new Map(
+        lastMountRows.filter((r) => r.setId).map((r) => [r.setId!, r.odometerKm]),
+      );
+      const demountKmBySet = new Map(
+        lastDemountRows.filter((r) => r.setId).map((r) => [r.setId!, r.odometerKm]),
+      );
+
+      for (const row of inventorySets) {
+        const cost = costBySet.get(row.setId);
+        if (cost) {
+          row.costCentsTotal = cost.total;
+          row.costCount = cost.count;
+        }
+        row.recentEvents = eventsBySet.get(row.setId) ?? [];
+        row.lastMountKm = mountKmBySet.get(row.setId) ?? null;
+        row.lastDemountKm = demountKmBySet.get(row.setId) ?? null;
+      }
+    }
+
+    inventorySets.sort((a, b) => {
+      if (a.isMounted !== b.isMounted) return a.isMounted ? -1 : 1;
+      return a.plate.localeCompare(b.plate, 'ro') || a.season.localeCompare(b.season);
+    });
+
+    const recommendedSeason: 'summer' | 'winter' = isWinterDrivingSeason(now)
+      ? 'winter'
+      : 'summer';
+    /** Direct din set montat + isSeasonMismatch — nu din alerts truncate. */
+    const mismatchMounted = inventorySets.filter(
+      (s) => s.isMounted && isSeasonMismatch(s.season, true, now),
+    );
+    const mismatchVehicleIds = [...new Set(mismatchMounted.map((s) => s.vehicleId))];
+
+    const openWoByVehicle = new Map<string, { id: string; status: string }>();
+    if (mismatchVehicleIds.length > 0) {
+      const openWos = await this.prisma.maintenanceWorkOrder.findMany({
+        where: {
+          tenantId: tenant.id,
+          vehicleId: { in: mismatchVehicleIds },
+          serviceOrderType: 'R',
+          status: { notIn: ['done', 'cancelled'] },
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true, vehicleId: true, status: true, tyreWorkIntent: true },
+      });
+      const seasonalFirst = [
+        ...openWos.filter((w) => w.tyreWorkIntent === 'seasonal_changeover'),
+        ...openWos.filter((w) => w.tyreWorkIntent !== 'seasonal_changeover'),
+      ];
+      for (const wo of seasonalFirst) {
+        if (!openWoByVehicle.has(wo.vehicleId)) {
+          openWoByVehicle.set(wo.vehicleId, { id: wo.id, status: wo.status });
+        }
+      }
+    }
+
+    const changeoverQueue: TireHubChangeoverItem[] = [];
+    const seenChangeover = new Set<string>();
+    for (const row of mismatchMounted) {
+      if (seenChangeover.has(row.vehicleId)) continue;
+      seenChangeover.add(row.vehicleId);
+      const wo = openWoByVehicle.get(row.vehicleId);
+      const meta = vehicleMeta.get(row.vehicleId);
+      changeoverQueue.push({
+        vehicleId: row.vehicleId,
+        plate: row.plate,
+        clientCode: meta?.clientCode ?? row.clientCode,
+        mountedSetId: row.setId,
+        mountedSeason: row.season,
+        hasOppositeSeasonStored: row.hasOppositeSeasonStored,
+        recommendedSeason,
+        openWorkOrderId: wo?.id ?? null,
+        openWorkOrderStatus: wo?.status ?? null,
+        hrefWheels: row.hrefWheels,
+        hrefCreateTicket: row.hrefCreateTicket,
+        hrefWorkOrder: wo ? `/fleet/work-orders/${wo.id}` : null,
+      });
+    }
+    changeoverQueue.sort((a, b) => a.plate.localeCompare(b.plate, 'ro'));
+
     return {
       generatedAt: now.toISOString(),
       summary: {
@@ -363,6 +663,8 @@ export class TireHubService {
       },
       alerts: trimmedAlerts,
       attentionSets: attentionSets.slice(0, ATTENTION_LIMIT),
+      inventorySets,
+      changeoverQueue,
       ...(seasonRemindersSynced ? { seasonRemindersSynced } : {}),
     };
   }
@@ -381,5 +683,7 @@ function emptyHub(now: Date): TireHubPayload {
     },
     alerts: [],
     attentionSets: [],
+    inventorySets: [],
+    changeoverQueue: [],
   };
 }

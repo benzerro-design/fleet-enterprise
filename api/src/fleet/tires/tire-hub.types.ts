@@ -1,4 +1,4 @@
-import type { VehicleTireSeason } from '@prisma/client';
+import type { TireOwnershipType, VehicleTireSeason } from '@prisma/client';
 
 export type TireHubAlertKind =
   | 'tread_low'
@@ -45,10 +45,85 @@ export type SeasonReminderSyncSummary = {
   deactivated: number;
 };
 
+/** Locatie operațională a setului pe hub (control tower). */
+export type TireHubInventoryLocation =
+  | 'on_vehicle'
+  | 'at_supplier_hotel'
+  | 'at_client'
+  | 'other';
+
+export type TireHubInventorySet = {
+  setId: string;
+  vehicleId: string;
+  plate: string;
+  clientId: string;
+  clientCode: string;
+  clientName: string;
+  setName: string | null;
+  season: VehicleTireSeason;
+  mountedAs: string;
+  itemCount: number;
+  location: TireHubInventoryLocation;
+  isMounted: boolean;
+  atHotel: boolean;
+  stayId: string | null;
+  supplierId: string | null;
+  supplierName: string | null;
+  locationCode: string | null;
+  checkInAt: string | null;
+  feeCents: number | null;
+  contractRef: string | null;
+  intakeTreadNotes: string | null;
+  photoCount: number;
+  minTreadMm: number | null;
+  worstDot: string | null;
+  assetsRecommendedReplace: number;
+  hasOppositeSeasonStored: boolean;
+  ownershipType: TireOwnershipType | 'mixed' | null;
+  alertKinds: TireHubAlertKind[];
+  hrefWheels: string;
+  hrefCreateTicket: string;
+  /** Sumă CostEntry legate de set (cents). */
+  costCentsTotal: number;
+  costCount: number;
+  lastMountKm: number | null;
+  lastDemountKm: number | null;
+  recentEvents: TireHubRecentEvent[];
+};
+
+/** Ultimele evenimente pe set (mount/demount/store/…). */
+export type TireHubRecentEvent = {
+  id: string;
+  type: string;
+  createdAt: string;
+  odometerKm: number | null;
+  workOrderId: string | null;
+};
+
+/** Coadă schimb sezon — mismatch + eventual WO tip R deschis. */
+export type TireHubChangeoverItem = {
+  vehicleId: string;
+  plate: string;
+  clientCode: string;
+  mountedSetId: string;
+  mountedSeason: VehicleTireSeason;
+  hasOppositeSeasonStored: boolean;
+  recommendedSeason: 'summer' | 'winter';
+  openWorkOrderId: string | null;
+  openWorkOrderStatus: string | null;
+  hrefWheels: string;
+  hrefCreateTicket: string;
+  hrefWorkOrder: string | null;
+};
+
 export type TireHubPayload = {
   generatedAt: string;
   summary: TireHubSummary;
   alerts: TireHubAlert[];
   attentionSets: TireHubAttentionSet[];
+  /** Inventar flotă — o linie = un TireSet în scope. */
+  inventorySets: TireHubInventorySet[];
+  /** Vehicule cu sezon greșit montat (control tower changeover). */
+  changeoverQueue: TireHubChangeoverItem[];
   seasonRemindersSynced?: SeasonReminderSyncSummary;
 };

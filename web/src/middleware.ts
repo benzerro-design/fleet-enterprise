@@ -26,6 +26,7 @@ const CLIENT_FLEET_PREFIXES = [
   "/fleet/documents",
   "/fleet/reminders",
   "/fleet/maintenance",
+  "/fleet/tires",
   "/fleet/costs",
   "/fleet/drivers",
   "/fleet/clients",

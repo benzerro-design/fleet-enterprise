@@ -5,7 +5,9 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { DriverHomeView, type DriverHomeTrip } from "@/components/fleet/DriverHomeView";
 import { VehiclesDataGrid } from "@/components/fleet/VehiclesDataGrid";
+import { ListImportCsvLink } from "@/components/fleet/ListImportCsvLink";
 import {
+  canManageFleet,
   canWriteFleetOps,
   driverIdFromAuth,
   driverNameFromAuth,
@@ -123,6 +125,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
   const adminListPromise = getVehiclesList(sp);
   const auth = await authPromise;
   const write = canWriteFleetOps(auth);
+  const canImport = canManageFleet(auth);
   const driverPortal = isClientDriverPortal(auth);
 
   if (driverPortal) {
@@ -218,6 +221,7 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
                   </Link>
                 </>
               ) : null}
+              {canImport ? <ListImportCsvLink entity="vehicles" /> : null}
               {!driverPortal ? (
                 <a
                   href={exportHref}

@@ -19,21 +19,29 @@ type ImportJob = {
   createdAt: string;
 };
 
-type Props = { settings: ImportSettings };
+type Props = {
+  settings: ImportSettings;
+  /** SETUP-017/018/020 — preselectare din link pe listă (?entity=). */
+  initialEntity?: string;
+};
 
 const IMPORTS_BASE = "/api/imports";
+const RUNNABLE = ["vehicles", "drivers", "suppliers", "costs", "documents"] as const;
 
-export function ImportCsvRunner({ settings }: Props) {
+export function ImportCsvRunner({ settings, initialEntity }: Props) {
   const enabledEntities = useMemo(
     () =>
       settings.entities.filter(
-        (e) =>
-          e.enabled &&
-          ["vehicles", "drivers", "suppliers", "costs", "documents"].includes(e.code),
+        (e) => e.enabled && (RUNNABLE as readonly string[]).includes(e.code),
       ),
     [settings.entities],
   );
-  const [entity, setEntity] = useState(enabledEntities[0]?.code ?? "vehicles");
+  const defaultEntity = useMemo(() => {
+    const wanted = initialEntity?.trim();
+    if (wanted && enabledEntities.some((e) => e.code === wanted)) return wanted;
+    return enabledEntities[0]?.code ?? "vehicles";
+  }, [enabledEntities, initialEntity]);
+  const [entity, setEntity] = useState(defaultEntity);
   const templates = useMemo(
     () => settings.templates.filter((t) => t.enabled && t.entity === entity),
     [settings.templates, entity],
@@ -45,6 +53,10 @@ export function ImportCsvRunner({ settings }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [lastJob, setLastJob] = useState<ImportJob | null>(null);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+
+  useEffect(() => {
+    setEntity(defaultEntity);
+  }, [defaultEntity]);
 
   useEffect(() => {
     setTemplateId(templates[0]?.id ?? "");
