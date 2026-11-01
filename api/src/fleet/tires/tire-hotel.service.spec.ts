@@ -63,3 +63,34 @@ describe('TireHotelService.checkInTx', () => {
     expect(tx.tireStorageStay.create).not.toHaveBeenCalled();
   });
 });
+
+describe('TireHotelService.recordStayAfterStoreTx', () => {
+  const service = new TireHotelService({} as never, {} as never);
+
+  it('stores intakeTreadNotes from seasonal close', async () => {
+    const tx = {
+      tireStorageStay: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn(),
+      },
+    };
+
+    await service.recordStayAfterStoreTx(tx as never, {
+      tenantId: 't1',
+      supplierId: 'sup-1',
+      setId: 'set-1',
+      intakeTreadNotes: 'FL 4.2mm; FR 4.0mm',
+      sourceSystem: 'tyre_close_seasonal',
+    });
+
+    expect(tx.tireStorageStay.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          intakeTreadNotes: 'FL 4.2mm; FR 4.0mm',
+          sourceSystem: 'tyre_close_seasonal',
+        }),
+      }),
+    );
+  });
+});

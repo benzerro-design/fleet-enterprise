@@ -61,6 +61,40 @@ describe('assertTyreCloseDto', () => {
   it('requires seasonalSwap or outcomes', () => {
     expect(() => assertTyreCloseDto({ intent: 'purchase' })).toThrow(BadRequestException);
   });
+
+  it('rejects replaced without newAsset.dot', () => {
+    expect(() =>
+      assertTyreCloseDto({
+        intent: 'roadside_puncture',
+        odometerKm: 10,
+        outcomes: [
+          {
+            position: 'fl',
+            outcome: 'replaced',
+            treadMm: 7,
+            newAsset: { treadMm: 7 },
+          },
+        ],
+      }),
+    ).toThrow(/dot/i);
+  });
+
+  it('accepts seasonalSwap with demountReadings', () => {
+    const dto = assertTyreCloseDto({
+      intent: 'seasonal_changeover',
+      odometerKm: 50000,
+      seasonalSwap: {
+        demountSetId: 'set-a',
+        mountSetId: 'set-b',
+        storeAt: 'at_supplier_hotel',
+        demountReadings: [
+          { position: 'fl', treadMm: 4.2 },
+          { position: 'fr', treadMm: 4.0, dot: '2218' },
+        ],
+      },
+    });
+    expect(dto.seasonalSwap?.demountReadings).toHaveLength(2);
+  });
 });
 
 describe('WorkOrderTyreCloseService.applyTyreClose claim', () => {

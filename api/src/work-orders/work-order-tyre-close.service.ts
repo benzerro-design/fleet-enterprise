@@ -508,12 +508,20 @@ export class WorkOrderTyreCloseService {
     }
 
     if (storeKind === 'at_supplier_hotel' && ctx.supplierId) {
+      const intakeTreadNotes = (ctx.swap.demountReadings ?? [])
+        .map((r) => {
+          const pos = r.position.toUpperCase();
+          const dot = r.dot?.trim() ? ` DOT ${r.dot.trim()}` : '';
+          return `${pos} ${r.treadMm.toFixed(1)}mm${dot}`;
+        })
+        .join('; ');
       await this.tireHotel.recordStayAfterStoreTx(tx, {
         tenantId: ctx.tenantId,
         supplierId: ctx.supplierId,
         setId: ctx.swap.demountSetId,
         workOrderId: ctx.workOrderId,
         sourceSystem: 'tyre_close_seasonal',
+        intakeTreadNotes: intakeTreadNotes || undefined,
       });
     }
 

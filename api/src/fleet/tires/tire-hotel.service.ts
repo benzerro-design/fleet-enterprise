@@ -180,9 +180,12 @@ export class TireHotelService {
       locationCode?: string | null;
       workOrderId?: string | null;
       sourceSystem?: string | null;
+      /** Profiluri demontate din tyre-close (text pentru partener hotel). */
+      intakeTreadNotes?: string | null;
     },
   ): Promise<void> {
     const locationCode = params.locationCode?.trim() || undefined;
+    const intakeTreadNotes = params.intakeTreadNotes?.trim() || undefined;
 
     const openStay = await tx.tireStorageStay.findFirst({
       where: {
@@ -194,6 +197,7 @@ export class TireHotelService {
         id: true,
         supplierId: true,
         locationCode: true,
+        intakeTreadNotes: true,
         supplier: { select: { legalName: true } },
       },
     });
@@ -202,10 +206,17 @@ export class TireHotelService {
         const hotelName = openStay.supplier.legalName?.trim() || openStay.supplierId;
         throw new BadRequestException(`Tire set is already in storage at ${hotelName}`);
       }
+      const patch: { locationCode?: string; intakeTreadNotes?: string } = {};
       if (locationCode && openStay.locationCode !== locationCode) {
+        patch.locationCode = locationCode;
+      }
+      if (intakeTreadNotes && !openStay.intakeTreadNotes?.trim()) {
+        patch.intakeTreadNotes = intakeTreadNotes;
+      }
+      if (Object.keys(patch).length > 0) {
         await tx.tireStorageStay.update({
           where: { id: openStay.id },
-          data: { locationCode },
+          data: patch,
         });
       }
       return;
@@ -217,6 +228,7 @@ export class TireHotelService {
         setId: params.setId,
         supplierId: params.supplierId,
         locationCode,
+        intakeTreadNotes,
         sourceSystem: params.sourceSystem?.trim() || 'tyre_close_seasonal',
         checkInAt: new Date(),
       },
