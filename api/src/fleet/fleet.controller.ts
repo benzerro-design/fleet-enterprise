@@ -573,6 +573,18 @@ export class FleetController {
     return this.tireHub.getHub(tenantId, access);
   }
 
+  @Get('tires/hub/export')
+  @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="fleet-tires-inventory.csv"')
+  async exportTiresHubInventory(
+    @TenantId() tenantId: string,
+    @CurrentAccess() access: AccessContext,
+  ): Promise<StreamableFile> {
+    const csv = await this.tireHub.exportInventoryCsv(tenantId, access);
+    return new StreamableFile(Buffer.from(csv, 'utf8'));
+  }
+
   @Post('tires/sync-season-reminders')
   @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(200)

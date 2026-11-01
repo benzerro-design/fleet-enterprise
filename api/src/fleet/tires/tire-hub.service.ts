@@ -710,6 +710,80 @@ export class TireHubService {
       ...(seasonRemindersSynced ? { seasonRemindersSynced } : {}),
     };
   }
+
+  /** CSV inventar — o linie per anvelopă (sau set fără items). */
+  async exportInventoryCsv(tenantSlug: string, access?: AccessContext): Promise<string> {
+    const hub = await this.getHub(tenantSlug, access);
+    const header = [
+      'plate',
+      'clientCode',
+      'clientName',
+      'setId',
+      'setName',
+      'season',
+      'location',
+      'supplierName',
+      'locationCode',
+      'minTreadMm',
+      'worstDot',
+      'lastMountKm',
+      'lastDemountKm',
+      'costCentsTotal',
+      'hasOppositeSeason',
+      'assetId',
+      'position',
+      'brand',
+      'model',
+      'size',
+      'dot',
+      'treadMm',
+      'serialOrQr',
+      'recommendedReplace',
+    ].join(',');
+
+    const lines: string[] = [header];
+    for (const set of hub.inventorySets) {
+      const items = set.items?.length ? set.items : [null];
+      for (const it of items) {
+        lines.push(
+          [
+            set.plate,
+            set.clientCode,
+            set.clientName,
+            set.setId,
+            set.setName ?? '',
+            set.season,
+            set.location,
+            set.supplierName ?? '',
+            set.locationCode ?? '',
+            set.minTreadMm != null ? String(set.minTreadMm) : '',
+            set.worstDot ?? '',
+            set.lastMountKm != null ? String(set.lastMountKm) : '',
+            set.lastDemountKm != null ? String(set.lastDemountKm) : '',
+            String(set.costCentsTotal ?? 0),
+            set.hasOppositeSeasonStored ? 'yes' : 'no',
+            it?.assetId ?? '',
+            it?.position ?? '',
+            it?.brand ?? '',
+            it?.model ?? '',
+            it?.size ?? '',
+            it?.dot ?? '',
+            it?.treadMm != null ? String(it.treadMm) : '',
+            it?.serialOrQr ?? '',
+            it?.recommendedReplace ? 'yes' : it ? 'no' : '',
+          ]
+            .map(escapeHubCsvCell)
+            .join(','),
+        );
+      }
+    }
+    return `\uFEFF${lines.join('\n')}\n`;
+  }
+}
+
+function escapeHubCsvCell(v: string): string {
+  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+  return v;
 }
 
 function emptyHub(now: Date): TireHubPayload {

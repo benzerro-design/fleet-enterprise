@@ -8,6 +8,7 @@ import {
   getAuthMeResult,
   isClientDriverPortal,
 } from "@/lib/auth-server";
+import { fleetBrowserBase } from "@/lib/fleet-api";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { TireHubAlert, TireHubPayload } from "@/lib/tire-hub-api";
 import { tireHubAlertKindLabel } from "@/lib/tire-hub-api";
@@ -122,10 +123,22 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
           </p>
         ) : tab === "inventar" ? (
           <section className="space-y-3">
-            <h2 className="text-lg font-medium text-zinc-100">Inventar seturi</h2>
-            <p className="text-xs text-zinc-500">
-              Catalog operațional: locație, hotel/raft, uzură/DOT, km/cost, anvelope pe poziție.
-            </p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-medium text-zinc-100">Inventar seturi</h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Catalog operațional: locație, hotel/raft, uzură/DOT, km/cost, anvelope pe poziție.
+                </p>
+              </div>
+              {!driverPortal ? (
+                <a
+                  href={`${fleetBrowserBase}/tires/hub/export`}
+                  className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:bg-zinc-800"
+                >
+                  Export CSV
+                </a>
+              ) : null}
+            </div>
             <TireHubInventory hub={hub} />
           </section>
         ) : (

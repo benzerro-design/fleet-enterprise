@@ -41,6 +41,20 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
   const [puncturePos, setPuncturePos] = useState<(typeof POSITIONS)[number]>("fl");
   const [newDot, setNewDot] = useState("");
   const [newTread, setNewTread] = useState("");
+  const [odometerKm, setOdometerKm] = useState(
+    wo.odometerKmOut != null
+      ? String(wo.odometerKmOut)
+      : wo.odometerKmIn != null
+        ? String(wo.odometerKmIn)
+        : "",
+  );
+  const [demountTreads, setDemountTreads] = useState<Record<(typeof POSITIONS)[number], string>>({
+    fl: "",
+    fr: "",
+    rl: "",
+    rr: "",
+  });
+  const [inspectTread, setInspectTread] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,25 +94,51 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
     setPending(true);
     setError(null);
     try {
-      const body: Record<string, unknown> = { intent };
+      const km = Number(odometerKm);
+      if (!Number.isFinite(km) || km < 0) {
+        throw new Error("Odometrul (km) este obligatoriu");
+      }
+      const body: Record<string, unknown> = { intent, odometerKm: Math.round(km) };
       if (isSeasonal) {
         if (!demountSetId || !mountSetId) {
           throw new Error("Selectează set demontat și set montat");
         }
-        body.seasonalSwap = { demountSetId, mountSetId, storeAt };
+        const demountReadings = POSITIONS.map((position) => {
+          const raw = demountTreads[position].trim();
+          if (!raw) return null;
+          const treadMm = Number(raw);
+          if (!Number.isFinite(treadMm)) {
+            throw new Error(`Profil invalid pe ${position.toUpperCase()}`);
+          }
+          return { position, treadMm };
+        }).filter((r): r is { position: (typeof POSITIONS)[number]; treadMm: number } => r != null);
+        if (demountReadings.length === 0) {
+          throw new Error("Completează profilul (mm) pe pozițiile demontate");
+        }
+        body.seasonalSwap = { demountSetId, mountSetId, storeAt, demountReadings };
       } else if (isPuncture) {
+        if (!newDot.trim()) throw new Error("DOT anvelopă nouă este obligatoriu");
+        if (!newTread.trim() || !Number.isFinite(Number(newTread))) {
+          throw new Error("Profil mm anvelopă nouă este obligatoriu");
+        }
         body.outcomes = [
           {
             position: puncturePos,
             outcome: "replaced",
+            treadMm: Number(newTread),
             newAsset: {
-              dot: newDot.trim() || null,
-              treadMm: newTread.trim() ? Number(newTread) : null,
+              dot: newDot.trim(),
+              treadMm: Number(newTread),
             },
           },
         ];
       } else {
-        body.outcomes = [{ position: "fl", outcome: "inspected_ok" }];
+        if (!inspectTread.trim() || !Number.isFinite(Number(inspectTread))) {
+          throw new Error("Profil mm măsurat este obligatoriu");
+        }
+        body.outcomes = [
+          { position: "fl", outcome: "inspected_ok", treadMm: Number(inspectTread) },
+        ];
       }
       const res = await fetch(`${workOrdersBrowserBase}/${wo.id}/tyre-close`, {
         method: "POST",
@@ -106,8 +146,9 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? `HTTP ${res.status}`);
+        const j = (await res.json().catch(() => ({}))) as { message?: string | string[] };
+        const msg = Array.isArray(j.message) ? j.message.join(", ") : j.message;
+        throw new Error(msg ?? `HTTP ${res.status}`);
       }
       router.refresh();
     } catch (e) {
@@ -148,6 +189,17 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="block text-zinc-400">
+            Odometru (km) <span className="text-amber-400">*</span>
+            <input
+              value={odometerKm}
+              disabled={!canWrite || pending}
+              onChange={(e) => setOdometerKm(e.target.value)}
+              inputMode="numeric"
+              className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-100"
+            />
           </label>
 
           {isSeasonal ? (
@@ -195,9 +247,32 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                   className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
                 >
                   <option value="at_client">La client</option>
-                  <option value="at_supplier_hotel">Hotel furnizor (înregistrare automată la închidere)</option>
+                  <option value="at_supplier_hotel">
+                    Hotel furnizor (înregistrare automată la închidere)
+                  </option>
                 </select>
               </label>
+              <div className="sm:col-span-2">
+                <p className="mb-1 text-zinc-400">
+                  Profil demontat (mm) pe poziție <span className="text-amber-400">*</span>
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {POSITIONS.map((p) => (
+                    <label key={p} className="text-zinc-500">
+                      {p.toUpperCase()}
+                      <input
+                        value={demountTreads[p]}
+                        disabled={!canWrite || pending}
+                        onChange={(e) =>
+                          setDemountTreads((prev) => ({ ...prev, [p]: e.target.value }))
+                        }
+                        inputMode="decimal"
+                        className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-100"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -219,7 +294,7 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                 </select>
               </label>
               <label className="text-zinc-400">
-                DOT nou
+                DOT nou <span className="text-amber-400">*</span>
                 <input
                   value={newDot}
                   disabled={!canWrite || pending}
@@ -228,7 +303,7 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                 />
               </label>
               <label className="text-zinc-400">
-                Profil mm
+                Profil mm <span className="text-amber-400">*</span>
                 <input
                   value={newTread}
                   disabled={!canWrite || pending}
@@ -237,6 +312,19 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                 />
               </label>
             </div>
+          ) : null}
+
+          {!isSeasonal && !isPuncture ? (
+            <label className="block text-zinc-400">
+              Profil măsurat FL (mm) <span className="text-amber-400">*</span>
+              <input
+                value={inspectTread}
+                disabled={!canWrite || pending}
+                onChange={(e) => setInspectTread(e.target.value)}
+                inputMode="decimal"
+                className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-100"
+              />
+            </label>
           ) : null}
 
           {error ? <p className="text-amber-300">{error}</p> : null}

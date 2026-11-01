@@ -66,7 +66,46 @@ export function assertTyreCloseDto(body: unknown): TyreCloseDto {
     if (storeAt !== 'at_supplier_hotel' && storeAt !== 'at_client') {
       throw new BadRequestException('seasonalSwap.storeAt must be at_supplier_hotel or at_client');
     }
-    seasonalSwap = { demountSetId, mountSetId, storeAt };
+    let demountReadings: NonNullable<TyreCloseDto['seasonalSwap']>['demountReadings'];
+    if (s.demountReadings !== undefined && s.demountReadings !== null) {
+      if (!Array.isArray(s.demountReadings)) {
+        throw new BadRequestException('seasonalSwap.demountReadings must be an array');
+      }
+      demountReadings = s.demountReadings.map((row, idx) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) {
+          throw new BadRequestException(`seasonalSwap.demountReadings[${idx}] invalid`);
+        }
+        const r = row as Record<string, unknown>;
+        const position = r.position;
+        if (typeof position !== 'string' || !ALL_POSITIONS.has(position)) {
+          throw new BadRequestException(`seasonalSwap.demountReadings[${idx}].position invalid`);
+        }
+        if (r.treadMm === undefined || r.treadMm === null || !Number.isFinite(Number(r.treadMm))) {
+          throw new BadRequestException(
+            `seasonalSwap.demountReadings[${idx}].treadMm is required`,
+          );
+        }
+        const treadMm = Number(r.treadMm);
+        if (treadMm < 0 || treadMm > 30) {
+          throw new BadRequestException(
+            `seasonalSwap.demountReadings[${idx}].treadMm out of range`,
+          );
+        }
+        const dot =
+          r.dot === undefined || r.dot === null ? undefined : String(r.dot).trim() || null;
+        return {
+          position: position as VehicleWheelPosition,
+          treadMm,
+          dot,
+        };
+      });
+    }
+    if (!demountReadings || demountReadings.length === 0) {
+      throw new BadRequestException(
+        'seasonalSwap.demountReadings required (treadMm per demounted position)',
+      );
+    }
+    seasonalSwap = { demountSetId, mountSetId, storeAt, demountReadings };
   }
 
   let outcomes: TyreClosePositionOutcome[] | undefined;
@@ -135,6 +174,32 @@ export function assertTyreCloseDto(body: unknown): TyreCloseDto {
         };
       }
       const disposeAs = r.disposeAs === 'quarantine' ? 'quarantine' : r.disposeAs === 'scrap' ? 'scrap' : undefined;
+
+      if (outcome !== 'deferred') {
+        if (outcome === 'replaced') {
+          const naTread = newAsset?.treadMm;
+          const effectiveTread =
+            treadMm !== undefined && treadMm !== null
+              ? treadMm
+              : naTread !== undefined && naTread !== null
+                ? naTread
+                : null;
+          if (effectiveTread === null || !Number.isFinite(effectiveTread)) {
+            throw new BadRequestException(
+              `outcomes[${idx}].treadMm (or newAsset.treadMm) is required for replaced`,
+            );
+          }
+          const naDot = newAsset?.dot?.trim();
+          if (!naDot) {
+            throw new BadRequestException(`outcomes[${idx}].newAsset.dot is required for replaced`);
+          }
+        } else if (treadMm === undefined || treadMm === null || !Number.isFinite(treadMm)) {
+          throw new BadRequestException(
+            `outcomes[${idx}].treadMm is required for ${String(outcome)}`,
+          );
+        }
+      }
+
       return {
         position: position as VehicleWheelPosition,
         outcome: outcome as TyreClosePositionOutcome['outcome'],
@@ -232,6 +297,11 @@ export class WorkOrderTyreCloseService {
     const clientId = wo.vehicle.clientId;
     const supplierId = wo.supplierId;
     const odometerKm = dto.odometerKm ?? wo.odometerKmOut ?? wo.odometerKmIn ?? null;
+    if (odometerKm == null) {
+      throw new BadRequestException(
+        'odometerKm is required for tyre close (body or work order km in/out)',
+      );
+    }
 
     await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.maintenanceWorkOrder.updateMany({
@@ -377,9 +447,25 @@ export class WorkOrderTyreCloseService {
     }
 
     const freedPositions: VehicleWheelPosition[] = [];
+    const readingByPos = new Map(
+      (ctx.swap.demountReadings ?? []).map((r) => [r.position, r] as const),
+    );
 
     for (const pl of onVehicleDemount) {
       if (!pl.position) continue;
+
+      const reading = readingByPos.get(pl.position);
+      if (!reading) {
+        throw new BadRequestException(
+          `seasonalSwap.demountReadings missing tread for position ${pl.position}`,
+        );
+      }
+
+      const assetPatch: Prisma.TireAssetUpdateInput = { treadMm: reading.treadMm };
+      if (reading.dot !== undefined && reading.dot !== null && reading.dot.trim()) {
+        assetPatch.dot = reading.dot.trim();
+      }
+      await tx.tireAsset.update({ where: { id: pl.assetId }, data: assetPatch });
 
       const now = new Date();
       await tx.tirePlacement.update({
@@ -396,7 +482,12 @@ export class WorkOrderTyreCloseService {
           workOrderId: ctx.workOrderId,
           odometerKm: ctx.odometerKm,
           actorUserId: ctx.actorUserId ?? undefined,
-          payload: { source: 'tyre_close_seasonal', position: pl.position },
+          payload: {
+            source: 'tyre_close_seasonal',
+            position: pl.position,
+            treadMm: reading.treadMm,
+            dot: reading.dot ?? null,
+          },
         },
       });
 
@@ -489,6 +580,16 @@ export class WorkOrderTyreCloseService {
     }
 
     if (outcome.outcome === 'inspected_ok') {
+      if (active?.assetId) {
+        const data: Prisma.TireAssetUpdateInput = {};
+        if (outcome.treadMm !== undefined && outcome.treadMm !== null) data.treadMm = outcome.treadMm;
+        if (outcome.dot !== undefined && outcome.dot !== null && String(outcome.dot).trim()) {
+          data.dot = String(outcome.dot).trim();
+        }
+        if (Object.keys(data).length > 0) {
+          await tx.tireAsset.update({ where: { id: active.assetId }, data });
+        }
+      }
       await tx.tireEvent.create({
         data: {
           tenantId: ctx.tenantId,
@@ -498,7 +599,13 @@ export class WorkOrderTyreCloseService {
           workOrderId: ctx.workOrderId,
           odometerKm: ctx.odometerKm,
           actorUserId: ctx.actorUserId ?? undefined,
-          payload: { source: 'tyre_close', position: outcome.position, result: 'ok' },
+          payload: {
+            source: 'tyre_close',
+            position: outcome.position,
+            result: 'ok',
+            treadMm: outcome.treadMm ?? null,
+            dot: outcome.dot ?? null,
+          },
         },
       });
       return;

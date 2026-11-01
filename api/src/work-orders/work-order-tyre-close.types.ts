@@ -45,10 +45,17 @@ export type TyreCloseSeasonalSwap = {
   demountSetId: string;
   mountSetId: string;
   storeAt: 'at_supplier_hotel' | 'at_client';
+  /** Uzură/DOT pe pozițiile demontate — obligatoriu la close sezon. */
+  demountReadings?: Array<{
+    position: VehicleWheelPosition;
+    treadMm: number;
+    dot?: string | null;
+  }>;
 };
 
 export type TyreCloseDto = {
   intent: TyreWorkIntent;
+  /** Obligatoriu la close (sau pe WO odometerKmOut/In). */
   odometerKm?: number | null;
   seasonalSwap?: TyreCloseSeasonalSwap;
   outcomes?: TyreClosePositionOutcome[];

@@ -26,13 +26,36 @@ describe('rejectIfTyreCloseAlreadyClaimed', () => {
 });
 
 describe('assertTyreCloseDto', () => {
-  it('accepts minimal inspected_ok outcome', () => {
+  it('accepts inspected_ok with treadMm', () => {
     const dto = assertTyreCloseDto({
-      intent: 'purchase',
-      outcomes: [{ position: 'fl', outcome: 'inspected_ok' }],
+      intent: 'diagnostic_wheel',
+      odometerKm: 1000,
+      outcomes: [{ position: 'fl', outcome: 'inspected_ok', treadMm: 5.2 }],
     });
-    expect(dto.intent).toBe('purchase');
+    expect(dto.intent).toBe('diagnostic_wheel');
     expect(dto.outcomes).toHaveLength(1);
+  });
+
+  it('rejects inspected_ok without treadMm', () => {
+    expect(() =>
+      assertTyreCloseDto({
+        intent: 'diagnostic_wheel',
+        outcomes: [{ position: 'fl', outcome: 'inspected_ok' }],
+      }),
+    ).toThrow(/treadMm/i);
+  });
+
+  it('requires demountReadings on seasonalSwap', () => {
+    expect(() =>
+      assertTyreCloseDto({
+        intent: 'seasonal_changeover',
+        seasonalSwap: {
+          demountSetId: 'a',
+          mountSetId: 'b',
+          storeAt: 'at_client',
+        },
+      }),
+    ).toThrow(/demountReadings/i);
   });
 
   it('requires seasonalSwap or outcomes', () => {
@@ -76,7 +99,8 @@ describe('WorkOrderTyreCloseService.applyTyreClose claim', () => {
     await expect(
       service.applyTyreClose('demo', 'wo-1', {
         intent: 'purchase',
-        outcomes: [{ position: 'fl', outcome: 'inspected_ok' }],
+        odometerKm: 12000,
+        outcomes: [{ position: 'fl', outcome: 'inspected_ok', treadMm: 4 }],
       }),
     ).rejects.toThrow(/already applied/i);
 
@@ -121,6 +145,7 @@ describe('WorkOrderTyreCloseService.applyTyreClose claim', () => {
 
     await service.applyTyreClose('demo', 'wo-1', {
       intent: 'purchase',
+      odometerKm: 12000,
       outcomes: [{ position: 'fl', outcome: 'deferred' }],
     });
 
