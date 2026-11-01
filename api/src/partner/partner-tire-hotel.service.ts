@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertSupplierReadById } from '../suppliers/supplier-access';
 import {
   assertSupplierTireStorage,
+  ensureTireStorageServiceType,
   supplierHasTireStorage,
 } from '../suppliers/supplier-tire-capability';
 
@@ -41,6 +42,23 @@ export class PartnerTireHotelService {
     }
     await assertSupplierReadById(this.prisma, tenantSlug, sid, access);
     const hasTireStorage = await supplierHasTireStorage(this.prisma, tenant.id, sid);
+    if (hasTireStorage) {
+      // Normalize: ensure canonical tire_storage offering for fee/UI consumers.
+      const canonical = await ensureTireStorageServiceType(this.prisma, tenant.id);
+      const linked = await this.prisma.supplierService.findFirst({
+        where: { tenantId: tenant.id, supplierId: sid, serviceTypeId: canonical.id },
+        select: { id: true },
+      });
+      if (!linked) {
+        await this.prisma.supplierService.create({
+          data: {
+            tenantId: tenant.id,
+            supplierId: sid,
+            serviceTypeId: canonical.id,
+          },
+        });
+      }
+    }
     const supplier = await this.prisma.supplier.findFirst({
       where: { id: sid, tenantId: tenant.id },
       select: { legalName: true },

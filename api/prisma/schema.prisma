@@ -1697,6 +1697,12 @@ model Supplier {
   laborRateBodyCents       Int?
   laborRatePaintCents      Int?
   laborRateDiagnosticCents Int?
+  /// Tarif hotel default: depozitare set anvelope (fără jante) — bani RON / sezon.
+  tireStorageFeeTyreOnlyCents Int?
+  /// Tarif hotel default: depozitare set roți complete (pe jantă) — bani RON / sezon.
+  tireStorageFeeOnRimCents Int?
+  /// Grilă hotel pe diametru jantă: [{ maxRimInch, tyreOnlyCents, onRimCents }, ...]
+  tireStorageFeeBands Json?
   /// list = discount pe preț listă; net = preț unitar deja negociat (discount default 0).
   partsPriceBasis String  @default("list")
   pricingNotes    String?

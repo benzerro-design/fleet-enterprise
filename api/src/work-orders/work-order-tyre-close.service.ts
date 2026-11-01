@@ -9,6 +9,7 @@ import type { AccessContext } from '../iam/access-context.types';
 import { TireDomainService } from '../fleet/tires/tire-domain.service';
 import { TireHotelService } from '../fleet/tires/tire-hotel.service';
 import { POSITION_SORT_ORDER } from '../fleet/tires/tire-domain.types';
+import { assertSupplierTireStorage } from '../suppliers/supplier-tire-capability';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   TYRE_WORK_INTENTS,
@@ -105,7 +106,26 @@ export function assertTyreCloseDto(body: unknown): TyreCloseDto {
         'seasonalSwap.demountReadings required (treadMm per demounted position)',
       );
     }
-    seasonalSwap = { demountSetId, mountSetId, storeAt, demountReadings };
+    const hotelSupplierId =
+      s.hotelSupplierId === undefined || s.hotelSupplierId === null
+        ? undefined
+        : typeof s.hotelSupplierId === 'string'
+          ? s.hotelSupplierId.trim() || null
+          : (() => {
+              throw new BadRequestException('seasonalSwap.hotelSupplierId invalid');
+            })();
+    if (storeAt === 'at_client' && hotelSupplierId) {
+      throw new BadRequestException(
+        'seasonalSwap.hotelSupplierId is only valid when storeAt is at_supplier_hotel',
+      );
+    }
+    seasonalSwap = {
+      demountSetId,
+      mountSetId,
+      storeAt,
+      demountReadings,
+      ...(hotelSupplierId ? { hotelSupplierId } : {}),
+    };
   }
 
   let outcomes: TyreClosePositionOutcome[] | undefined;
@@ -376,10 +396,24 @@ export class WorkOrderTyreCloseService {
     },
   ): Promise<void> {
     const storeKind: TirePlacementKind = ctx.swap.storeAt;
-    if (storeKind === 'at_supplier_hotel' && !ctx.supplierId) {
+    const hotelSupplierId =
+      storeKind === 'at_supplier_hotel'
+        ? (ctx.swap.hotelSupplierId?.trim() || ctx.supplierId || null)
+        : null;
+    if (storeKind === 'at_supplier_hotel' && !hotelSupplierId) {
       throw new BadRequestException(
-        'seasonalSwap.storeAt at_supplier_hotel requires work order supplierId',
+        'seasonalSwap.storeAt at_supplier_hotel requires hotelSupplierId or work order supplierId',
       );
+    }
+    if (hotelSupplierId) {
+      const hotel = await tx.supplier.findFirst({
+        where: { id: hotelSupplierId, tenantId: ctx.tenantId },
+        select: { id: true },
+      });
+      if (!hotel) {
+        throw new BadRequestException('seasonalSwap.hotelSupplierId not found');
+      }
+      await assertSupplierTireStorage(tx, ctx.tenantId, hotelSupplierId);
     }
     if (ctx.swap.demountSetId === ctx.swap.mountSetId) {
       throw new BadRequestException('seasonalSwap demountSetId and mountSetId must differ');
@@ -495,19 +529,24 @@ export class WorkOrderTyreCloseService {
         tenantId: ctx.tenantId,
         assetId: pl.assetId,
         kind: storeKind,
-        supplierId: storeKind === 'at_supplier_hotel' ? ctx.supplierId : undefined,
+        supplierId: storeKind === 'at_supplier_hotel' ? hotelSupplierId : undefined,
         setId: pl.setId ?? ctx.swap.demountSetId,
         eventType: 'store',
         vehicleIdForEvent: ctx.vehicleId,
         workOrderId: ctx.workOrderId,
         actorUserId: ctx.actorUserId,
-        payload: { source: 'tyre_close_seasonal', demountSetId: ctx.swap.demountSetId },
+        payload: {
+          source: 'tyre_close_seasonal',
+          demountSetId: ctx.swap.demountSetId,
+          hotelSupplierId: hotelSupplierId ?? null,
+          workOrderSupplierId: ctx.supplierId,
+        },
       });
 
       freedPositions.push(pl.position);
     }
 
-    if (storeKind === 'at_supplier_hotel' && ctx.supplierId) {
+    if (storeKind === 'at_supplier_hotel' && hotelSupplierId) {
       const intakeTreadNotes = (ctx.swap.demountReadings ?? [])
         .map((r) => {
           const pos = r.position.toUpperCase();
@@ -517,7 +556,7 @@ export class WorkOrderTyreCloseService {
         .join('; ');
       await this.tireHotel.recordStayAfterStoreTx(tx, {
         tenantId: ctx.tenantId,
-        supplierId: ctx.supplierId,
+        supplierId: hotelSupplierId,
         setId: ctx.swap.demountSetId,
         workOrderId: ctx.workOrderId,
         sourceSystem: 'tyre_close_seasonal',

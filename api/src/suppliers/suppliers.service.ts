@@ -35,11 +35,17 @@ import {
   parseDiscountPercent as parseDiscountPercentValue,
   parsePartsPriceBasis,
   parseOptionalRonToCents,
+  mapTireStorageFeeBands,
   parseSupplierRatePatch,
   resolveSupplierCreateDiscounts,
   resolveSupplierDiscountPatch,
   type PartsPriceBasis,
+  type TireStorageFeeBand,
 } from './supplier-rate-card';
+import {
+  ensureTireStorageServiceType,
+  expandTireHotelServiceCodes,
+} from './supplier-tire-capability';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -84,6 +90,9 @@ export type SupplierRecord = {
   laborRateBodyCents: number | null;
   laborRatePaintCents: number | null;
   laborRateDiagnosticCents: number | null;
+  tireStorageFeeTyreOnlyCents: number | null;
+  tireStorageFeeOnRimCents: number | null;
+  tireStorageFeeBands: TireStorageFeeBand[];
   partsPriceBasis: PartsPriceBasis;
   pricingNotes: string | null;
   integrationEnabled: boolean;
@@ -140,6 +149,9 @@ export type CreateSupplierInput = {
   laborRateBodyRon?: number | string | null;
   laborRatePaintRon?: number | string | null;
   laborRateDiagnosticRon?: number | string | null;
+  tireStorageFeeTyreOnlyRon?: number | string | null;
+  tireStorageFeeOnRimRon?: number | string | null;
+  tireStorageFeeBands?: unknown;
   partsPriceBasis?: PartsPriceBasis | string | null;
   pricingNotes?: string | null;
   integrationEnabled?: boolean;
@@ -274,6 +286,9 @@ export class SuppliersService {
       laborRateBodyCents?: number | null;
       laborRatePaintCents?: number | null;
       laborRateDiagnosticCents?: number | null;
+      tireStorageFeeTyreOnlyCents?: number | null;
+      tireStorageFeeOnRimCents?: number | null;
+      tireStorageFeeBands?: Prisma.JsonValue | null;
       partsPriceBasis?: string | null;
       pricingNotes?: string | null;
       integrationEnabled?: boolean;
@@ -306,6 +321,9 @@ export class SuppliersService {
       laborRateBodyCents: row.laborRateBodyCents ?? null,
       laborRatePaintCents: row.laborRatePaintCents ?? null,
       laborRateDiagnosticCents: row.laborRateDiagnosticCents ?? null,
+      tireStorageFeeTyreOnlyCents: row.tireStorageFeeTyreOnlyCents ?? null,
+      tireStorageFeeOnRimCents: row.tireStorageFeeOnRimCents ?? null,
+      tireStorageFeeBands: mapTireStorageFeeBands(row.tireStorageFeeBands),
       partsPriceBasis: parsePartsPriceBasis(row.partsPriceBasis),
       pricingNotes: row.pricingNotes?.trim() || null,
       integrationEnabled: row.integrationEnabled === true,
@@ -346,7 +364,16 @@ export class SuppliersService {
 
   private parseRatePatch(dto: PatchSupplierInput): Prisma.SupplierUpdateInput {
     try {
-      return parseSupplierRatePatch(dto);
+      const patch = parseSupplierRatePatch(dto);
+      const { tireStorageFeeBands, ...rest } = patch;
+      const data: Prisma.SupplierUpdateInput = { ...rest };
+      if (tireStorageFeeBands !== undefined) {
+        data.tireStorageFeeBands =
+          tireStorageFeeBands === null
+            ? Prisma.JsonNull
+            : (tireStorageFeeBands as Prisma.InputJsonValue);
+      }
+      return data;
     } catch (e) {
       throw new BadRequestException(e instanceof Error ? e.message : 'Invalid labor rate');
     }
@@ -355,6 +382,8 @@ export class SuppliersService {
   async getServiceCatalog(tenantSlug: string) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return supplierServiceCatalog();
+
+    await ensureTireStorageServiceType(this.prisma, tenant.id);
 
     const rows = await this.prisma.tenantServiceType.findMany({
       where: { tenantId: tenant.id, active: true },
@@ -502,12 +531,13 @@ export class SuppliersService {
     actorUserId?: string,
     access?: AccessContext,
   ): Promise<SupplierRecord> {
-    const codes = parseSupplierServiceCodes(rawServices);
+    let codes = parseSupplierServiceCodes(rawServices);
     if (access && isPartnerUser(access)) {
       assertPartnerSupplierId(access, id);
       assertPartnerWrite(access);
     }
     const row = await this.findRow(tenantSlug, id);
+    codes = await expandTireHotelServiceCodes(this.prisma, row.tenantId, codes);
     const types = await this.resolveServiceTypeIds(row.tenantId, codes);
 
     await this.prisma.$transaction(async (tx) => {
@@ -599,6 +629,13 @@ export class SuppliersService {
               laborRatePaintCents: (rates.laborRatePaintCents as number | null | undefined) ?? null,
               laborRateDiagnosticCents:
                 (rates.laborRateDiagnosticCents as number | null | undefined) ?? null,
+              tireStorageFeeTyreOnlyCents:
+                (rates.tireStorageFeeTyreOnlyCents as number | null | undefined) ?? null,
+              tireStorageFeeOnRimCents:
+                (rates.tireStorageFeeOnRimCents as number | null | undefined) ?? null,
+              ...(rates.tireStorageFeeBands !== undefined
+                ? { tireStorageFeeBands: rates.tireStorageFeeBands }
+                : {}),
               partsPriceBasis,
               pricingNotes: dto.pricingNotes?.trim() || null,
             };
@@ -609,7 +646,11 @@ export class SuppliersService {
         },
       });
       if (dto.services?.length) {
-        const codes = parseSupplierServiceCodes(dto.services);
+        const codes = await expandTireHotelServiceCodes(
+          this.prisma,
+          tenant.id,
+          parseSupplierServiceCodes(dto.services),
+        );
         const types = await this.resolveServiceTypeIds(tenant.id, codes);
         if (types.length > 0) {
           await this.prisma.supplierService.createMany({
@@ -727,7 +768,13 @@ export class SuppliersService {
     }
 
     const serviceCodes =
-      dto.services !== undefined ? parseSupplierServiceCodes(dto.services) : undefined;
+      dto.services !== undefined
+        ? await expandTireHotelServiceCodes(
+            this.prisma,
+            before.tenantId,
+            parseSupplierServiceCodes(dto.services),
+          )
+        : undefined;
 
     try {
       if (Object.keys(data).length > 0) {

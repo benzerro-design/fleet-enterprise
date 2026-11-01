@@ -37,6 +37,13 @@ export type SupplierRecord = {
   laborRateBodyCents?: number | null;
   laborRatePaintCents?: number | null;
   laborRateDiagnosticCents?: number | null;
+  tireStorageFeeTyreOnlyCents?: number | null;
+  tireStorageFeeOnRimCents?: number | null;
+  tireStorageFeeBands?: Array<{
+    maxRimInch: number;
+    tyreOnlyCents: number | null;
+    onRimCents: number | null;
+  }>;
   partsPriceBasis?: "list" | "net";
   pricingNotes?: string | null;
   services: string[];

@@ -3,6 +3,10 @@ import type { Prisma, VehicleTireSeason } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TireDomainService } from './tire-domain.service';
 import { tireSetQrPayload } from './tire-domain.types';
+import {
+  dominantRimInchFromSizes,
+  resolveTireStorageFeeCents,
+} from './tire-storage-fee';
 
 export { tireSetQrPayload };
 
@@ -126,6 +130,16 @@ export class TireHotelService {
 
     const now = new Date();
 
+    let feeCents = params.feeCents;
+    if (feeCents === undefined) {
+      feeCents = await this.resolveFeeCentsForSetTx(tx, {
+        tenantId: params.tenantId,
+        supplierId: params.supplierId,
+        mountedAs: set.mountedAs,
+        sizes: set.items.map((i) => i.asset.size),
+      });
+    }
+
     const stay = await tx.tireStorageStay.create({
       data: {
         tenantId: params.tenantId,
@@ -135,7 +149,7 @@ export class TireHotelService {
         checkInAt: now,
         intakePhotos: params.intakePhotos ?? undefined,
         intakeTreadNotes: params.intakeTreadNotes?.trim() || undefined,
-        feeCents: params.feeCents ?? undefined,
+        feeCents: feeCents ?? undefined,
         contractRef: params.contractRef?.trim() || undefined,
         externalId: params.externalId?.trim() || undefined,
         sourceSystem: params.sourceSystem?.trim() || undefined,
@@ -182,6 +196,7 @@ export class TireHotelService {
       sourceSystem?: string | null;
       /** Profiluri demontate din tyre-close (text pentru partener hotel). */
       intakeTreadNotes?: string | null;
+      feeCents?: number | null;
     },
   ): Promise<void> {
     const locationCode = params.locationCode?.trim() || undefined;
@@ -198,6 +213,7 @@ export class TireHotelService {
         supplierId: true,
         locationCode: true,
         intakeTreadNotes: true,
+        feeCents: true,
         supplier: { select: { legalName: true } },
       },
     });
@@ -206,12 +222,15 @@ export class TireHotelService {
         const hotelName = openStay.supplier.legalName?.trim() || openStay.supplierId;
         throw new BadRequestException(`Tire set is already in storage at ${hotelName}`);
       }
-      const patch: { locationCode?: string; intakeTreadNotes?: string } = {};
+      const patch: { locationCode?: string; intakeTreadNotes?: string; feeCents?: number } = {};
       if (locationCode && openStay.locationCode !== locationCode) {
         patch.locationCode = locationCode;
       }
       if (intakeTreadNotes && !openStay.intakeTreadNotes?.trim()) {
         patch.intakeTreadNotes = intakeTreadNotes;
+      }
+      if (params.feeCents != null && openStay.feeCents == null) {
+        patch.feeCents = params.feeCents;
       }
       if (Object.keys(patch).length > 0) {
         await tx.tireStorageStay.update({
@@ -222,6 +241,25 @@ export class TireHotelService {
       return;
     }
 
+    let feeCents = params.feeCents;
+    if (feeCents === undefined) {
+      const set = await tx.tireSet.findFirst({
+        where: { id: params.setId, tenantId: params.tenantId },
+        select: {
+          mountedAs: true,
+          items: { select: { asset: { select: { size: true } } } },
+        },
+      });
+      if (set) {
+        feeCents = await this.resolveFeeCentsForSetTx(tx, {
+          tenantId: params.tenantId,
+          supplierId: params.supplierId,
+          mountedAs: set.mountedAs,
+          sizes: set.items.map((i) => i.asset.size),
+        });
+      }
+    }
+
     await tx.tireStorageStay.create({
       data: {
         tenantId: params.tenantId,
@@ -229,9 +267,39 @@ export class TireHotelService {
         supplierId: params.supplierId,
         locationCode,
         intakeTreadNotes,
+        feeCents: feeCents ?? undefined,
         sourceSystem: params.sourceSystem?.trim() || 'tyre_close_seasonal',
         checkInAt: new Date(),
       },
+    });
+  }
+
+  private async resolveFeeCentsForSetTx(
+    tx: Prisma.TransactionClient,
+    params: {
+      tenantId: string;
+      supplierId: string;
+      mountedAs: string | null;
+      sizes: Array<string | null | undefined>;
+    },
+  ): Promise<number | null> {
+    const supplier = await tx.supplier.findFirst({
+      where: { id: params.supplierId, tenantId: params.tenantId },
+      select: {
+        tireStorageFeeTyreOnlyCents: true,
+        tireStorageFeeOnRimCents: true,
+        tireStorageFeeBands: true,
+      },
+    });
+    if (!supplier) return null;
+    return resolveTireStorageFeeCents({
+      catalog: {
+        tireStorageFeeTyreOnlyCents: supplier.tireStorageFeeTyreOnlyCents,
+        tireStorageFeeOnRimCents: supplier.tireStorageFeeOnRimCents,
+        tireStorageFeeBands: supplier.tireStorageFeeBands,
+      },
+      mountedAs: params.mountedAs,
+      rimInch: dominantRimInchFromSizes(params.sizes),
     });
   }
 

@@ -1,14 +1,25 @@
 /** PARTNER-014 — fișă tarifară atelier (Faza A / C). */
 
 import { effectiveSupplierDiscountDefaults } from './supplier-discount-eligibility';
+import {
+  parseTireStorageFeeBands,
+  parseTireStorageFeeBandsInput,
+  type TireStorageFeeBand,
+} from '../fleet/tires/tire-storage-fee';
 
 export type PartsPriceBasis = 'list' | 'net';
+export type { TireStorageFeeBand };
 
 export type SupplierRateCard = {
   laborRateMechanicalCents: number | null;
   laborRateBodyCents: number | null;
   laborRatePaintCents: number | null;
   laborRateDiagnosticCents: number | null;
+  /** Hotel: depozitare set anvelope (fără jante), RON/sezon → cenți. */
+  tireStorageFeeTyreOnlyCents?: number | null;
+  /** Hotel: depozitare set pe jantă, RON/sezon → cenți. */
+  tireStorageFeeOnRimCents?: number | null;
+  tireStorageFeeBands?: TireStorageFeeBand[];
   partsPriceBasis: PartsPriceBasis;
   pricingNotes: string | null;
 };
@@ -78,6 +89,10 @@ export type SupplierRatePatchInput = {
   laborRateBodyRon?: number | string | null;
   laborRatePaintRon?: number | string | null;
   laborRateDiagnosticRon?: number | string | null;
+  tireStorageFeeTyreOnlyRon?: number | string | null;
+  tireStorageFeeOnRimRon?: number | string | null;
+  /** null = șterge grila; array = înlocuiește. */
+  tireStorageFeeBands?: unknown;
   partsPriceBasis?: PartsPriceBasis | string | null;
   pricingNotes?: string | null;
 };
@@ -87,6 +102,9 @@ export type SupplierRateCentsPatch = {
   laborRateBodyCents?: number | null;
   laborRatePaintCents?: number | null;
   laborRateDiagnosticCents?: number | null;
+  tireStorageFeeTyreOnlyCents?: number | null;
+  tireStorageFeeOnRimCents?: number | null;
+  tireStorageFeeBands?: TireStorageFeeBand[] | null;
   partsPriceBasis?: PartsPriceBasis;
   pricingNotes?: string | null;
 };
@@ -112,6 +130,22 @@ export function parseSupplierRatePatch(dto: SupplierRatePatchInput): SupplierRat
       'laborRateDiagnosticRon',
     );
   }
+  if (dto.tireStorageFeeTyreOnlyRon !== undefined) {
+    data.tireStorageFeeTyreOnlyCents = parseOptionalRonToCents(
+      dto.tireStorageFeeTyreOnlyRon,
+      'tireStorageFeeTyreOnlyRon',
+    );
+  }
+  if (dto.tireStorageFeeOnRimRon !== undefined) {
+    data.tireStorageFeeOnRimCents = parseOptionalRonToCents(
+      dto.tireStorageFeeOnRimRon,
+      'tireStorageFeeOnRimRon',
+    );
+  }
+  if (dto.tireStorageFeeBands !== undefined) {
+    const bands = parseTireStorageFeeBandsInput(dto.tireStorageFeeBands);
+    data.tireStorageFeeBands = bands === undefined ? undefined : bands.length ? bands : null;
+  }
   if (dto.partsPriceBasis !== undefined && dto.partsPriceBasis !== null) {
     data.partsPriceBasis = parsePartsPriceBasis(dto.partsPriceBasis);
   }
@@ -119,6 +153,10 @@ export function parseSupplierRatePatch(dto: SupplierRatePatchInput): SupplierRat
     data.pricingNotes = dto.pricingNotes?.trim() || null;
   }
   return data;
+}
+
+export function mapTireStorageFeeBands(raw: unknown): TireStorageFeeBand[] {
+  return parseTireStorageFeeBands(raw);
 }
 
 /** 0–100. `null`/gol = 0. Aruncă `Error` (apelantul mapează la 400). */

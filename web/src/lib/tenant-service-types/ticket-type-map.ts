@@ -13,6 +13,7 @@ export function serviceTypeCodeToTicketType(code: string): TicketType {
       "diagnostics",
       "ac_climate",
       "tire_service",
+      // hotel: tichet maintenance opțional; workflow WO R doar pentru tire_service
       "tire_storage",
       "bodywork_painting",
       "glass_repair",

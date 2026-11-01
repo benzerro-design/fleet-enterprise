@@ -218,8 +218,8 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6 text-center">
         <p className="text-sm text-zinc-300">Hotel anvelope</p>
         <p className="mt-2 text-xs text-zinc-500">
-          Furnizorul nu are activă capacitatea «Depozitare anvelope (hotel)». Contactează administratorul
-          flotei pentru a o activa în profilul furnizorului.
+          Furnizorul nu are activă capacitatea «Hotel anvelope». În Tip & servicii bifează «Hotel
+          anvelope», apasă Salvează servicii, apoi reîncarcă pagina.
         </p>
       </div>
     );

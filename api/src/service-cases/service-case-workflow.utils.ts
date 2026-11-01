@@ -1,9 +1,17 @@
 import { CrmTicketType, ServiceCaseWorkflowType, ServiceOrderType } from '@prisma/client';
 
-export const TIRE_SERVICE_TYPE_CODES = new Set(['tire_service', 'tire_storage']);
+/** Catalog codes that drive atelier anvelope → workflow tires / WO tip R. */
+export const TIRE_SERVICE_TYPE_CODES = new Set(['tire_service']);
+
+/** Hotel/depozitare — capacitate logistică, nu forțează WO R. */
+export const TIRE_STORAGE_SERVICE_TYPE_CODES = new Set(['tire_storage']);
 
 export function isTireServiceTypeCode(code: string | null | undefined): boolean {
   return !!code && TIRE_SERVICE_TYPE_CODES.has(code);
+}
+
+export function isTireStorageTypeCode(code: string | null | undefined): boolean {
+  return !!code && TIRE_STORAGE_SERVICE_TYPE_CODES.has(code);
 }
 
 export function workflowTypeForTicketType(ticketType: CrmTicketType): ServiceCaseWorkflowType {

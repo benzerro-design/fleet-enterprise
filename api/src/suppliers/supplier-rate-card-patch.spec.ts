@@ -70,6 +70,24 @@ describe('supplier rate patch', () => {
       expect(parseSupplierRatePatch({ pricingNotes: '   ' })).toEqual({
         pricingNotes: null,
       });
+      expect(
+        parseSupplierRatePatch({
+          tireStorageFeeTyreOnlyRon: '120',
+          tireStorageFeeOnRimRon: '180,5',
+        }),
+      ).toEqual({
+        tireStorageFeeTyreOnlyCents: 12000,
+        tireStorageFeeOnRimCents: 18050,
+      });
+      expect(
+        parseSupplierRatePatch({
+          tireStorageFeeTyreOnlyRon: null,
+          tireStorageFeeOnRimRon: '',
+        }),
+      ).toEqual({
+        tireStorageFeeTyreOnlyCents: null,
+        tireStorageFeeOnRimCents: null,
+      });
       expect(parseSupplierRatePatch({ pricingNotes: null })).toEqual({
         pricingNotes: null,
       });

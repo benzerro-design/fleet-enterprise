@@ -38,6 +38,8 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
   const [demountSetId, setDemountSetId] = useState("");
   const [mountSetId, setMountSetId] = useState("");
   const [storeAt, setStoreAt] = useState<"at_supplier_hotel" | "at_client">("at_client");
+  const [hotelSupplierId, setHotelSupplierId] = useState(wo.supplierId ?? "");
+  const [hotelSuppliers, setHotelSuppliers] = useState<Array<{ id: string; label: string }>>([]);
   const [puncturePos, setPuncturePos] = useState<(typeof POSITIONS)[number]>("fl");
   const [newDot, setNewDot] = useState("");
   const [newTread, setNewTread] = useState("");
@@ -82,6 +84,39 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
     };
   }, [wo.id]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/suppliers?serviceTypeCode=tire_storage&pageSize=100&status=active`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          items?: Array<{ id: string; code?: string; legalName?: string }>;
+        };
+        if (cancelled) return;
+        const items = (data.items ?? []).map((s) => ({
+          id: s.id,
+          label: `${s.code ? `${s.code} — ` : ""}${s.legalName ?? s.id}`,
+        }));
+        setHotelSuppliers(items);
+        if (!hotelSupplierId && wo.supplierId) {
+          setHotelSupplierId(wo.supplierId);
+        } else if (!hotelSupplierId && items[0]) {
+          setHotelSupplierId(items[0].id);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed hotel once from WO
+  }, [wo.id, wo.supplierId]);
+
   const mountedSet = useMemo(() => sets.find((s) => s.isMounted), [sets]);
   const storageSets = useMemo(() => sets.filter((s) => !s.isMounted), [sets]);
 
@@ -115,7 +150,15 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
         if (demountReadings.length === 0) {
           throw new Error("Completează profilul (mm) pe pozițiile demontate");
         }
-        body.seasonalSwap = { demountSetId, mountSetId, storeAt, demountReadings };
+        body.seasonalSwap = {
+          demountSetId,
+          mountSetId,
+          storeAt,
+          demountReadings,
+          ...(storeAt === "at_supplier_hotel" && hotelSupplierId
+            ? { hotelSupplierId }
+            : {}),
+        };
       } else if (isPuncture) {
         if (!newDot.trim()) throw new Error("DOT anvelopă nouă este obligatoriu");
         if (!newTread.trim() || !Number.isFinite(Number(newTread))) {
@@ -248,10 +291,33 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                 >
                   <option value="at_client">La client</option>
                   <option value="at_supplier_hotel">
-                    Hotel furnizor (înregistrare automată la închidere)
+                    Hotel anvelope (check-in automat la închidere)
                   </option>
                 </select>
               </label>
+              {storeAt === "at_supplier_hotel" ? (
+                <label className="text-zinc-400 sm:col-span-2">
+                  Depozitar (poate fi ≠ service-ul de pe comandă)
+                  <select
+                    value={hotelSupplierId}
+                    disabled={!canWrite || pending}
+                    onChange={(e) => setHotelSupplierId(e.target.value)}
+                    className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+                  >
+                    {wo.supplierId &&
+                    !hotelSuppliers.some((s) => s.id === wo.supplierId) ? (
+                      <option value={wo.supplierId}>
+                        Furnizor comandă (verifică capacitate hotel)
+                      </option>
+                    ) : null}
+                    {hotelSuppliers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <div className="sm:col-span-2">
                 <p className="mb-1 text-zinc-400">
                   Profil demontat (mm) pe poziție <span className="text-amber-400">*</span>

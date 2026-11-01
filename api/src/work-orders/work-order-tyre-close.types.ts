@@ -45,6 +45,11 @@ export type TyreCloseSeasonalSwap = {
   demountSetId: string;
   mountSetId: string;
   storeAt: 'at_supplier_hotel' | 'at_client';
+  /**
+   * Hotel/depozitar — poate fi ≠ furnizorul WO (service).
+   * Dacă lipsește la storeAt=hotel → se folosește supplierId-ul comenzii.
+   */
+  hotelSupplierId?: string | null;
   /** Uzură/DOT pe pozițiile demontate — obligatoriu la close sezon. */
   demountReadings?: Array<{
     position: VehicleWheelPosition;

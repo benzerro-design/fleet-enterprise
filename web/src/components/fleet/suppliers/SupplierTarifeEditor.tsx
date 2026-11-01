@@ -58,6 +58,19 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
   const [body, setBody] = useState(centsToRonInput(supplier.laborRateBodyCents));
   const [paint, setPaint] = useState(centsToRonInput(supplier.laborRatePaintCents));
   const [diagnostic, setDiagnostic] = useState(centsToRonInput(supplier.laborRateDiagnosticCents));
+  const [storageTyreOnly, setStorageTyreOnly] = useState(
+    centsToRonInput(supplier.tireStorageFeeTyreOnlyCents),
+  );
+  const [storageOnRim, setStorageOnRim] = useState(centsToRonInput(supplier.tireStorageFeeOnRimCents));
+  const [feeBands, setFeeBands] = useState<
+    Array<{ maxRimInch: string; tyreOnlyRon: string; onRimRon: string }>
+  >(() =>
+    (supplier.tireStorageFeeBands ?? []).map((b) => ({
+      maxRimInch: String(b.maxRimInch),
+      tyreOnlyRon: centsToRonInput(b.tyreOnlyCents),
+      onRimRon: centsToRonInput(b.onRimCents),
+    })),
+  );
   const [basis, setBasis] = useState<PartsPriceBasis>(supplier.partsPriceBasis === "net" ? "net" : "list");
   const [parts, setParts] = useState(String(supplier.partsDiscountPercent ?? 0));
   const [labor, setLabor] = useState(String(supplier.laborDiscountPercent ?? 0));
@@ -113,6 +126,15 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
           laborRateBodyRon: body.trim() === "" ? null : body,
           laborRatePaintRon: paint.trim() === "" ? null : paint,
           laborRateDiagnosticRon: diagnostic.trim() === "" ? null : diagnostic,
+          tireStorageFeeTyreOnlyRon: storageTyreOnly.trim() === "" ? null : storageTyreOnly,
+          tireStorageFeeOnRimRon: storageOnRim.trim() === "" ? null : storageOnRim,
+          tireStorageFeeBands: feeBands
+            .filter((b) => b.maxRimInch.trim() !== "")
+            .map((b) => ({
+              maxRimInch: Number(b.maxRimInch),
+              tyreOnlyRon: b.tyreOnlyRon.trim() === "" ? null : b.tyreOnlyRon,
+              onRimRon: b.onRimRon.trim() === "" ? null : b.onRimRon,
+            })),
           partsPriceBasis: basis,
           partsDiscountPercent: basis === "net" ? 0 : Number.parseFloat(parts.replace(",", ".")) || 0,
           laborDiscountPercent: Number.parseFloat(labor.replace(",", ".")) || 0,
@@ -208,6 +230,38 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
           </dl>
         </section>
         <section className="space-y-2">
+          <h3 className="text-sm font-medium text-zinc-200">1b. Hotel anvelope — depozitare</h3>
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-zinc-500">Default anvelope (fără jante)</dt>
+              <dd className="mt-1 text-sm text-zinc-200">
+                {supplier.tireStorageFeeTyreOnlyCents != null
+                  ? `${centsToRonInput(supplier.tireStorageFeeTyreOnlyCents)} RON/sezon`
+                  : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">Default roți complete (pe jantă)</dt>
+              <dd className="mt-1 text-sm text-zinc-200">
+                {supplier.tireStorageFeeOnRimCents != null
+                  ? `${centsToRonInput(supplier.tireStorageFeeOnRimCents)} RON/sezon`
+                  : "—"}
+              </dd>
+            </div>
+          </dl>
+          {(supplier.tireStorageFeeBands ?? []).length > 0 ? (
+            <ul className="mt-2 space-y-1 text-xs text-zinc-400">
+              {(supplier.tireStorageFeeBands ?? []).map((b) => (
+                <li key={b.maxRimInch}>
+                  ≤ {b.maxRimInch}″ — fără jante{" "}
+                  {b.tyreOnlyCents != null ? `${centsToRonInput(b.tyreOnlyCents)} RON` : "—"} / pe
+                  jantă {b.onRimCents != null ? `${centsToRonInput(b.onRimCents)} RON` : "—"}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+        <section className="space-y-2">
           <h3 className="text-sm font-medium text-zinc-200">2. Piese — bază + negociere</h3>
           <p className="text-sm text-zinc-300">
             Bază: {supplier.partsPriceBasis === "net" ? "preț net (deja negociat)" : "preț de listă"}
@@ -261,6 +315,99 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
           <RateField label="Tinichigerie (RON/oră)" value={body} onChange={setBody} />
           <RateField label="Vopsitorie (RON/oră)" value={paint} onChange={setPaint} />
           <RateField label="Diagnoză (RON/oră)" value={diagnostic} onChange={setDiagnostic} />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-medium text-zinc-200">1b. Hotel anvelope — depozitare</h3>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+            Tarif pe sezon. Default-urile se folosesc dacă dimensiunea lipsește; grila pe diametru
+            jantă (inch) are prioritate la check-in.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <RateField
+            label="Default anvelope fără jante (RON/sezon)"
+            hint="Set tyre_only"
+            value={storageTyreOnly}
+            onChange={setStorageTyreOnly}
+          />
+          <RateField
+            label="Default roți complete pe jantă (RON/sezon)"
+            hint="Set on_rim"
+            value={storageOnRim}
+            onChange={setStorageOnRim}
+          />
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-zinc-400">Grilă pe diametru jantă (≤ inch)</p>
+          {feeBands.map((band, idx) => (
+            <div
+              key={idx}
+              className="grid gap-2 rounded-lg border border-zinc-800 bg-zinc-950/40 p-2 sm:grid-cols-[5rem_1fr_1fr_auto] sm:items-end"
+            >
+              <label className="text-xs text-zinc-500">
+                ≤ ″
+                <input
+                  value={band.maxRimInch}
+                  onChange={(e) =>
+                    setFeeBands((rows) =>
+                      rows.map((r, i) => (i === idx ? { ...r, maxRimInch: e.target.value } : r)),
+                    )
+                  }
+                  className={`${OPS_INPUT_CLASS} mt-1`}
+                  inputMode="numeric"
+                  placeholder="16"
+                />
+              </label>
+              <label className="text-xs text-zinc-500">
+                Fără jante (RON)
+                <input
+                  value={band.tyreOnlyRon}
+                  onChange={(e) =>
+                    setFeeBands((rows) =>
+                      rows.map((r, i) => (i === idx ? { ...r, tyreOnlyRon: e.target.value } : r)),
+                    )
+                  }
+                  className={`${OPS_INPUT_CLASS} mt-1`}
+                  inputMode="decimal"
+                />
+              </label>
+              <label className="text-xs text-zinc-500">
+                Pe jantă (RON)
+                <input
+                  value={band.onRimRon}
+                  onChange={(e) =>
+                    setFeeBands((rows) =>
+                      rows.map((r, i) => (i === idx ? { ...r, onRimRon: e.target.value } : r)),
+                    )
+                  }
+                  className={`${OPS_INPUT_CLASS} mt-1`}
+                  inputMode="decimal"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setFeeBands((rows) => rows.filter((_, i) => i !== idx))}
+                className="rounded-lg border border-zinc-700 px-2 py-2 text-xs text-zinc-400 hover:bg-zinc-900"
+              >
+                Șterge
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              setFeeBands((rows) => [
+                ...rows,
+                { maxRimInch: rows.length ? "18" : "16", tyreOnlyRon: "", onRimRon: "" },
+              ])
+            }
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
+          >
+            Adaugă bandă dimensiune
+          </button>
         </div>
       </section>
 
