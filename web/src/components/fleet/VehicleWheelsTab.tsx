@@ -25,6 +25,8 @@ import {
   vehicleWheelPositionLabel,
   vehicleTireSeasonLabel,
   vehicleRimMaterialLabel,
+  tireMountedAsLabel,
+  tireMountedAsHint,
   type VehicleTireSeason,
   type VehicleRimMaterial,
   type VehicleWheelFitmentRecord,
@@ -32,6 +34,7 @@ import {
   type VehicleWheelLayout,
   type VehicleWheelsPayload,
   type TireSetSummary,
+  type TireMountedAs,
   type WheelDraft,
 } from "@/lib/vehicle-wheels-types";
 import { fitmentAttention, fitmentAttentionLabel } from "@/lib/tire-alert-rules";
@@ -135,6 +138,7 @@ export function VehicleWheelsTab({
   const [info, setInfo] = useState<string | null>(null);
   const [sets, setSets] = useState<TireSetSummary[]>(initial.sets ?? []);
   const [newSetSeason, setNewSetSeason] = useState<VehicleTireSeason>("winter");
+  const [newSetMountedAs, setNewSetMountedAs] = useState<TireMountedAs>("on_rim");
   const [seedFromMountedSpecs, setSeedFromMountedSpecs] = useState(true);
 
   const groups = useMemo(() => axleGroups(layout), [layout]);
@@ -230,6 +234,7 @@ export function VehicleWheelsTab({
         headers: fleetJsonHeaders(),
         body: JSON.stringify({
           season: newSetSeason,
+          mountedAs: newSetMountedAs,
           seedFrom: seedFromMountedSpecs ? "mounted_specs" : "empty",
         }),
       });
@@ -239,10 +244,50 @@ export function VehicleWheelsTab({
       }
       const created = (await res.json()) as TireSetSummary;
       setSets((prev) => [...prev, created]);
-      setInfo(`Set ${vehicleTireSeasonLabel(created.season)} adăugat (depozit client).`);
+      setInfo(
+        `Set de schimb ${vehicleTireSeasonLabel(created.season)} (${tireMountedAsLabel(created.mountedAs)}) adăugat în depozit.`,
+      );
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Adăugare set eșuată");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function scrapTireSet(setId: string) {
+    if (!write) return;
+    const set = sets.find((s) => s.id === setId);
+    if (!set) return;
+    if (set.isMounted) {
+      setError("Nu poți casa setul montat — demontează / schimbă sezon mai întâi.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Casezi setul ${set.name?.trim() || vehicleTireSeasonLabel(set.season)} (${tireMountedAsLabel(set.mountedAs)})?`,
+      )
+    ) {
+      return;
+    }
+    setPending(`scrap-${setId}`);
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch(`${fleetBrowserBase}/tires/sets/${encodeURIComponent(setId)}/scrap`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      setSets((prev) => prev.filter((s) => s.id !== setId));
+      setInfo("Set casat / arhivat.");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Casare eșuată");
     } finally {
       setPending(null);
     }
@@ -393,7 +438,12 @@ export function VehicleWheelsTab({
 
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-medium text-zinc-200">Seturi pe acest vehicul</h3>
+          <div>
+            <h3 className="text-sm font-medium text-zinc-200">Seturi pe acest vehicul</h3>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              Set de schimb sezon (depozit) — alege tipul: roți complete sau doar anvelope.
+            </p>
+          </div>
           {write ? (
             <div className="flex flex-col items-end gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
@@ -411,18 +461,30 @@ export function VehicleWheelsTab({
                 disabled={pending === "add-set"}
                 onChange={(e) => setNewSetSeason(e.target.value as VehicleTireSeason)}
                 className={OPS_INPUT_CLASS}
+                aria-label="Sezon set"
               >
                 <option value="summer">Vară</option>
                 <option value="winter">Iarnă</option>
                 <option value="all_season">All-season</option>
               </select>
+              <select
+                value={newSetMountedAs}
+                disabled={pending === "add-set"}
+                onChange={(e) => setNewSetMountedAs(e.target.value as TireMountedAs)}
+                className={OPS_INPUT_CLASS}
+                title={tireMountedAsHint(newSetMountedAs)}
+                aria-label="Tip set"
+              >
+                <option value="on_rim">Set roți (pe jantă)</option>
+                <option value="tyre_only">Set anvelope (fără jantă)</option>
+              </select>
               <button
                 type="button"
                 disabled={pending === "add-set"}
                 onClick={() => void addTireSet()}
-                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+                className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/50 disabled:opacity-50"
               >
-                Adaugă set
+                Adaugă set de schimb
               </button>
             </div>
           ) : null}
@@ -430,6 +492,9 @@ export function VehicleWheelsTab({
         {write && seedFromMountedSpecs ? (
           <p className="text-xs text-zinc-500">
             DOT și uzura nu se copiază — completează după recepție.
+            {newSetMountedAs === "tyre_only"
+              ? " Set anvelope: jantele nu se clonează."
+              : " Set roți: se clonează și jantele din specificațiile montate."}
           </p>
         ) : null}
         {sets.length === 0 ? (
@@ -447,7 +512,13 @@ export function VehicleWheelsTab({
                   {s.name?.trim() || vehicleTireSeasonLabel(s.season)}
                 </span>
                 <span className="text-zinc-500">{vehicleTireSeasonLabel(s.season)}</span>
-                <span className="text-zinc-500">{s.itemCount} anvelope</span>
+                <span
+                  className="rounded bg-sky-950/50 px-2 py-0.5 text-sky-200"
+                  title={tireMountedAsHint(s.mountedAs)}
+                >
+                  {tireMountedAsLabel(s.mountedAs)}
+                </span>
+                <span className="text-zinc-500">{s.itemCount} buc</span>
                 {s.isMounted ? (
                   <span className="rounded bg-emerald-900/60 px-2 py-0.5 text-emerald-200">Montat</span>
                 ) : (
@@ -462,6 +533,16 @@ export function VehicleWheelsTab({
                     {s.hotel.supplierName ? ` · ${s.hotel.supplierName}` : ""}
                     {s.hotel.locationCode ? ` · ${s.hotel.locationCode}` : ""}
                   </span>
+                ) : null}
+                {write && !s.isMounted ? (
+                  <button
+                    type="button"
+                    disabled={pending === `scrap-${s.id}`}
+                    onClick={() => void scrapTireSet(s.id)}
+                    className="ml-auto rounded border border-red-900/50 px-2 py-0.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                  >
+                    Casare
+                  </button>
                 ) : null}
               </li>
             ))}

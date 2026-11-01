@@ -17,7 +17,8 @@ import {
   parseTireSetSearchInput,
   readIntakePhotoFilesAsDataUrls,
 } from "@/lib/tire-set-search";
-import { vehicleTireSeasonLabel } from "@/lib/vehicle-wheels-types";
+import { tireMountedAsLabel, vehicleTireSeasonLabel } from "@/lib/vehicle-wheels-types";
+import type { TireMountedAs } from "@/lib/vehicle-wheels-types";
 import { TireHotelIntakePhotos } from "@/components/fleet/partner/TireHotelIntakePhotos";
 import { TireHotelQrPayload } from "@/components/fleet/partner/TireHotelQrPayload";
 import { TireHotelReceiptPanel } from "@/components/fleet/partner/TireHotelReceiptPanel";
@@ -400,6 +401,13 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                     {s.setName?.trim() || vehicleTireSeasonLabel(s.season)}
                     {s.itemCount != null ? ` · ${s.itemCount} buc` : ""}
                   </span>
+                  {s.mountedAs ? (
+                    <span className="rounded bg-sky-950/50 px-2 py-0.5 text-[10px] text-sky-200">
+                      {tireMountedAsLabel(
+                        (s.mountedAs as TireMountedAs) === "tyre_only" ? "tyre_only" : "on_rim",
+                      )}
+                    </span>
+                  ) : null}
                   {s.locationCode ? (
                     <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
                       Raft {s.locationCode}

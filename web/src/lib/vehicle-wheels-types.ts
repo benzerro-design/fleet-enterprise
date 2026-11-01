@@ -249,6 +249,25 @@ export function vehicleTireSeasonLabel(s: VehicleTireSeason): string {
   }
 }
 
+/** Set roți complete (pe jantă) vs doar anvelope. */
+export function tireMountedAsLabel(m: TireMountedAs): string {
+  switch (m) {
+    case "on_rim":
+      return "Roți";
+    case "tyre_only":
+      return "Anvelope";
+  }
+}
+
+export function tireMountedAsHint(m: TireMountedAs): string {
+  switch (m) {
+    case "on_rim":
+      return "Anvelope pe jante (kompletträder)";
+    case "tyre_only":
+      return "Doar cauciucuri (fără jante)";
+  }
+}
+
 export function vehicleRimMaterialLabel(m: VehicleRimMaterial): string {
   switch (m) {
     case "steel":

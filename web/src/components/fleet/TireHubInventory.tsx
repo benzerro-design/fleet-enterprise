@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { fleetBrowserBase, fleetJsonHeaders } from "@/lib/fleet-api";
 import {
   tireEventTypeLabel,
   tireHubAlertKindLabel,
@@ -10,25 +12,74 @@ import {
   type TireHubInventorySet,
   type TireHubPayload,
 } from "@/lib/tire-hub-api";
-import { vehicleTireSeasonLabel } from "@/lib/vehicle-wheels-types";
+import {
+  tireMountedAsHint,
+  tireMountedAsLabel,
+  vehicleTireSeasonLabel,
+  type TireMountedAs,
+  type VehicleTireSeason,
+} from "@/lib/vehicle-wheels-types";
 
 type LocFilter = "all" | TireHubInventoryLocation;
 
-type Props = { hub: TireHubPayload };
+type Props = { hub: TireHubPayload; canWrite?: boolean };
+
+type VehicleOpt = { id: string; registrationNumber: string };
 
 function formatRon(cents: number | null): string {
   if (cents == null) return "—";
   return `${(cents / 100).toLocaleString("ro-RO", { minimumFractionDigits: 0 })} lei`;
 }
 
-export function TireHubInventory({ hub }: Props) {
-  const rows = hub.inventorySets ?? [];
+export function TireHubInventory({ hub, canWrite = false }: Props) {
+  const router = useRouter();
+  const [rows, setRows] = useState(hub.inventorySets ?? []);
   const [loc, setLoc] = useState<LocFilter>("all");
   const [season, setSeason] = useState<string>("all");
   const [clientId, setClientId] = useState<string>("all");
   const [supplierId, setSupplierId] = useState<string>("all");
   const [q, setQ] = useState("");
   const [drawer, setDrawer] = useState<TireHubInventorySet | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [vehicles, setVehicles] = useState<VehicleOpt[]>([]);
+  const [addVehicleId, setAddVehicleId] = useState("");
+  const [addSeason, setAddSeason] = useState<VehicleTireSeason>("winter");
+  const [addMountedAs, setAddMountedAs] = useState<TireMountedAs>("on_rim");
+  const [addSeed, setAddSeed] = useState(true);
+  const [pending, setPending] = useState<string | null>(null);
+  const [opError, setOpError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRows(hub.inventorySets ?? []);
+  }, [hub.inventorySets]);
+
+  useEffect(() => {
+    if (!addOpen || !canWrite) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${fleetBrowserBase}/vehicles?page=1&pageSize=200`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          items?: Array<{ id: string; registrationNumber: string }>;
+        };
+        if (cancelled) return;
+        const list = (data.items ?? []).map((v) => ({
+          id: v.id,
+          registrationNumber: v.registrationNumber,
+        }));
+        setVehicles(list);
+        if (list[0] && !addVehicleId) setAddVehicleId(list[0].id);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [addOpen, canWrite, addVehicleId]);
 
   const clients = useMemo(() => {
     const map = new Map<string, string>();
@@ -71,8 +122,100 @@ export function TireHubInventory({ hub }: Props) {
     setLoc(next);
   }
 
+  async function submitAddSet() {
+    if (!canWrite || !addVehicleId) return;
+    setPending("add");
+    setOpError(null);
+    try {
+      const res = await fetch(`${fleetBrowserBase}/vehicles/${addVehicleId}/tire-sets`, {
+        method: "POST",
+        headers: fleetJsonHeaders(),
+        body: JSON.stringify({
+          season: addSeason,
+          mountedAs: addMountedAs,
+          seedFrom: addSeed ? "mounted_specs" : "empty",
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      setAddOpen(false);
+      router.refresh();
+    } catch (e) {
+      setOpError(e instanceof Error ? e.message : "Adăugare eșuată");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function scrapSet(row: TireHubInventorySet) {
+    if (!canWrite) return;
+    if (row.isMounted) {
+      setOpError("Nu poți casa setul montat — demontează / schimbă sezon mai întâi.");
+      return;
+    }
+    if (row.atHotel) {
+      setOpError("Nu poți casa un set cu sejur hotel deschis — check-out mai întâi.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Casezi setul ${row.setName ?? vehicleTireSeasonLabel(row.season)} pe ${row.plate}?`,
+      )
+    ) {
+      return;
+    }
+    setPending(`scrap-${row.setId}`);
+    setOpError(null);
+    try {
+      const res = await fetch(
+        `${fleetBrowserBase}/tires/sets/${encodeURIComponent(row.setId)}/scrap`,
+        {
+          method: "POST",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({}),
+        },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      setRows((prev) => prev.filter((r) => r.setId !== row.setId));
+      if (drawer?.setId === row.setId) setDrawer(null);
+      router.refresh();
+    } catch (e) {
+      setOpError(e instanceof Error ? e.message : "Casare eșuată");
+    } finally {
+      setPending(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
+      {canWrite ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500">
+            Operații set (admin/manager): adăugare set de schimb și casare din inventar.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setOpError(null);
+              setAddOpen(true);
+            }}
+            className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/50"
+          >
+            Adaugă set
+          </button>
+        </div>
+      ) : null}
+      {opError ? (
+        <p className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+          {opError}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -194,7 +337,19 @@ export function TireHubInventory({ hub }: Props) {
                     </p>
                   </td>
                   <td className="px-3 py-2 text-zinc-300">
-                    <p>{r.setName ?? "—"}</p>
+                    <p className="flex flex-wrap items-center gap-1.5">
+                      <span>{r.setName ?? "—"}</span>
+                      <span
+                        className="rounded bg-sky-950/50 px-1.5 py-0.5 text-[10px] text-sky-200"
+                        title={tireMountedAsHint(
+                          (r.mountedAs as TireMountedAs) === "tyre_only" ? "tyre_only" : "on_rim",
+                        )}
+                      >
+                        {tireMountedAsLabel(
+                          (r.mountedAs as TireMountedAs) === "tyre_only" ? "tyre_only" : "on_rim",
+                        )}
+                      </span>
+                    </p>
                     <p className="text-[11px] text-zinc-500">
                       {vehicleTireSeasonLabel(r.season)} · {r.itemCount} buc
                       {r.dominantBrand ? ` · ${r.dominantBrand}` : ""}
@@ -269,6 +424,16 @@ export function TireHubInventory({ hub }: Props) {
                       >
                         Tichet sezon
                       </Link>
+                      {canWrite && !r.isMounted && !r.atHotel ? (
+                        <button
+                          type="button"
+                          disabled={pending === `scrap-${r.setId}`}
+                          onClick={() => void scrapSet(r)}
+                          className="rounded-lg border border-red-900/50 px-2.5 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                        >
+                          Casare
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -277,6 +442,84 @@ export function TireHubInventory({ hub }: Props) {
           </table>
         </div>
       )}
+
+      {addOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal>
+          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-zinc-100">Adaugă set de schimb</h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              Același flux ca pe tab Roți: sezon + tip (roți / anvelope) pe un vehicul din scope.
+            </p>
+            <div className="mt-4 space-y-3 text-sm">
+              <label className="block text-xs text-zinc-500">
+                Vehicul
+                <select
+                  value={addVehicleId}
+                  onChange={(e) => setAddVehicleId(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
+                >
+                  {vehicles.length === 0 ? <option value="">Se încarcă…</option> : null}
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.registrationNumber}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-zinc-500">
+                Sezon
+                <select
+                  value={addSeason}
+                  onChange={(e) => setAddSeason(e.target.value as VehicleTireSeason)}
+                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
+                >
+                  <option value="summer">Vară</option>
+                  <option value="winter">Iarnă</option>
+                  <option value="all_season">All-season</option>
+                </select>
+              </label>
+              <label className="block text-xs text-zinc-500">
+                Tip set
+                <select
+                  value={addMountedAs}
+                  onChange={(e) => setAddMountedAs(e.target.value as TireMountedAs)}
+                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
+                  title={tireMountedAsHint(addMountedAs)}
+                >
+                  <option value="on_rim">Set roți (pe jantă)</option>
+                  <option value="tyre_only">Set anvelope (fără jantă)</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={addSeed}
+                  onChange={(e) => setAddSeed(e.target.checked)}
+                  className="rounded border-zinc-600 bg-zinc-900"
+                />
+                Copiază specificații de pe setul montat (fără DOT/uzură)
+              </label>
+            </div>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAddOpen(false)}
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900"
+              >
+                Anulează
+              </button>
+              <button
+                type="button"
+                disabled={pending === "add" || !addVehicleId}
+                onClick={() => void submitAddSet()}
+                className="rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-3 py-1.5 text-xs text-emerald-100 disabled:opacity-50"
+              >
+                {pending === "add" ? "Se adaugă…" : "Salvează set"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {drawer ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/50" role="dialog" aria-modal>
@@ -295,7 +538,11 @@ export function TireHubInventory({ hub }: Props) {
                   {drawer.setName ? ` · ${drawer.setName}` : ""}
                 </h3>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {vehicleTireSeasonLabel(drawer.season)} · {tireHubLocationLabel(drawer.location)}
+                  {vehicleTireSeasonLabel(drawer.season)} ·{" "}
+                  {tireMountedAsLabel(
+                    (drawer.mountedAs as TireMountedAs) === "tyre_only" ? "tyre_only" : "on_rim",
+                  )}{" "}
+                  · {tireHubLocationLabel(drawer.location)}
                 </p>
               </div>
               <button

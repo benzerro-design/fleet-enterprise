@@ -614,6 +614,34 @@ export class FleetController {
     return this.tireDomain.createSet(tenantId, vehicleId, assertCreateTireSetDto(body), access);
   }
 
+  @Post('tires/sets/:setId/scrap')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(200)
+  scrapTireSet(
+    @TenantId() tenantId: string,
+    @Param('setId') setId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    const o =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const reason =
+      typeof o.reason === 'string' ? o.reason : o.reason === null ? null : undefined;
+    const odometerKm =
+      o.odometerKm === undefined || o.odometerKm === null
+        ? undefined
+        : Number.isFinite(Number(o.odometerKm))
+          ? Number(o.odometerKm)
+          : undefined;
+    return this.tireDomain.scrapSet(tenantId, setId, access, actorUserId, {
+      reason: reason ?? null,
+      odometerKm: odometerKm ?? null,
+    });
+  }
+
   @Put('vehicles/:vehicleId/wheels/layout')
   @Roles(...FLEET_WRITE_ROLES)
   setVehicleWheelLayout(

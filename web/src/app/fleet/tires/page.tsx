@@ -5,6 +5,7 @@ import { TireHubInventory } from "@/components/fleet/TireHubInventory";
 import { TireSeasonReminderSyncButton } from "@/components/fleet/TireSeasonReminderSyncButton";
 import {
   canManageFleet,
+  canWriteFleetOps,
   getAuthMeResult,
   isClientDriverPortal,
 } from "@/lib/auth-server";
@@ -51,6 +52,7 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
   const auth = await getAuthMeResult();
   const driverPortal = isClientDriverPortal(auth);
   const canSync = canManageFleet(auth);
+  const canWriteTires = canWriteFleetOps(auth) && !driverPortal;
   const sp = searchParams instanceof Promise ? await searchParams : searchParams;
   const rawTab = typeof sp?.tab === "string" ? sp.tab : Array.isArray(sp?.tab) ? sp.tab[0] : undefined;
   const tab: "hub" | "inventar" =
@@ -139,7 +141,7 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
                 </a>
               ) : null}
             </div>
-            <TireHubInventory hub={hub} />
+            <TireHubInventory hub={hub} canWrite={canWriteTires} />
           </section>
         ) : (
           <div className="space-y-8">

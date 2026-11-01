@@ -447,6 +447,95 @@ export class TireDomainService {
     });
   }
 
+  /**
+   * Casare / arhivare set de depozit — nu pe set montat, nu cu sejur hotel deschis.
+   * Assets → placement scrap + TireEvent scrap; set.archivedAt.
+   */
+  async scrapSet(
+    tenantSlug: string,
+    setId: string,
+    access?: AccessContext,
+    actorUserId?: string,
+    opts?: { reason?: string | null; odometerKm?: number | null },
+  ): Promise<{ id: string; archivedAt: string }> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const set = await this.prisma.tireSet.findFirst({
+      where: { id: setId, tenantId: tenant.id, archivedAt: null },
+      include: {
+        items: { select: { assetId: true } },
+        storageStays: { where: { checkOutAt: null }, select: { id: true }, take: 1 },
+        placements: {
+          where: { validTo: null, kind: 'on_vehicle' },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+    if (!set) throw new NotFoundException('Tire set not found');
+
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, set.vehicleId, access);
+
+    if (set.placements.length > 0) {
+      throw new BadRequestException(
+        'Cannot scrap a mounted set — demount / seasonal swap first',
+      );
+    }
+    if (set.storageStays.length > 0) {
+      throw new BadRequestException(
+        'Cannot scrap a set with an open hotel stay — check out first',
+      );
+    }
+
+    const reason = opts?.reason?.trim() || null;
+    const odometerKm =
+      opts?.odometerKm != null && Number.isFinite(opts.odometerKm)
+        ? Math.round(opts.odometerKm)
+        : null;
+
+    const archivedAt = await this.prisma.$transaction(async (tx) => {
+      for (const item of set.items) {
+        await this.placeAssetTx(tx, {
+          tenantId: tenant.id,
+          assetId: item.assetId,
+          kind: 'scrap',
+          setId: set.id,
+          eventType: 'scrap',
+          vehicleIdForEvent: set.vehicleId,
+          actorUserId: actorUserId ?? undefined,
+          odometerKm: odometerKm ?? undefined,
+          payload: {
+            source: 'tire_set_scrap',
+            setId: set.id,
+            reason,
+          },
+        });
+      }
+
+      await tx.tireEvent.create({
+        data: {
+          tenantId: tenant.id,
+          type: 'scrap',
+          setId: set.id,
+          vehicleId: set.vehicleId,
+          odometerKm: odometerKm ?? undefined,
+          actorUserId: actorUserId ?? undefined,
+          payload: { source: 'tire_set_scrap', reason, itemCount: set.items.length },
+        },
+      });
+
+      const updated = await tx.tireSet.update({
+        where: { id: set.id },
+        data: { archivedAt: new Date() },
+        select: { archivedAt: true },
+      });
+      return updated.archivedAt!;
+    });
+
+    return { id: set.id, archivedAt: archivedAt.toISOString() };
+  }
+
   private async collectMountedSpecSourcesTx(
     tx: Prisma.TransactionClient,
     vehicleId: string,
