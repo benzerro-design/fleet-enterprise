@@ -102,6 +102,22 @@ export class PartnerTireHotelService {
         set: {
           include: {
             vehicle: { select: { id: true, registrationNumber: true } },
+            items: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                asset: {
+                  select: {
+                    id: true,
+                    brand: true,
+                    model: true,
+                    size: true,
+                    dot: true,
+                    treadMm: true,
+                    serialOrQr: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -112,7 +128,9 @@ export class PartnerTireHotelService {
         this.hotel.stayToDto(s, {
           season: s.set.season,
           name: s.set.name,
+          mountedAs: s.set.mountedAs,
           vehicle: s.set.vehicle,
+          items: s.set.items,
         }),
       ),
     };

@@ -44,6 +44,21 @@ export type TireHubRecentEvent = {
   workOrderId: string | null;
 };
 
+export type TireHubInventoryItem = {
+  assetId: string;
+  position: string | null;
+  brand: string | null;
+  model: string | null;
+  size: string | null;
+  dot: string | null;
+  treadMm: number | null;
+  serialOrQr: string | null;
+  recommendedReplace: boolean;
+  ownershipType: "client" | "fleet" | "supplier_stock";
+  runFlat: boolean;
+  tpmsSensorPresent: boolean;
+};
+
 export type TireHubInventorySet = {
   setId: string;
   vehicleId: string;
@@ -69,6 +84,8 @@ export type TireHubInventorySet = {
   photoCount: number;
   minTreadMm: number | null;
   worstDot: string | null;
+  dominantBrand?: string | null;
+  dominantSize?: string | null;
   assetsRecommendedReplace: number;
   hasOppositeSeasonStored: boolean;
   ownershipType: "client" | "fleet" | "supplier_stock" | "mixed" | null;
@@ -80,6 +97,7 @@ export type TireHubInventorySet = {
   lastMountKm?: number | null;
   lastDemountKm?: number | null;
   recentEvents?: TireHubRecentEvent[];
+  items?: TireHubInventoryItem[];
 };
 
 export type TireHubChangeoverItem = {

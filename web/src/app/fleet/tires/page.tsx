@@ -3,11 +3,19 @@ import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { TireHubInventory } from "@/components/fleet/TireHubInventory";
 import { TireSeasonReminderSyncButton } from "@/components/fleet/TireSeasonReminderSyncButton";
-import { getAuthMeResult } from "@/lib/auth-server";
+import {
+  canManageFleet,
+  getAuthMeResult,
+  isClientDriverPortal,
+} from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import type { TireHubAlert, TireHubPayload } from "@/lib/tire-hub-api";
 import { tireHubAlertKindLabel } from "@/lib/tire-hub-api";
 import { vehicleTireSeasonLabel } from "@/lib/vehicle-wheels-types";
+
+type PageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+};
 
 async function loadHub(): Promise<TireHubPayload | null> {
   try {
@@ -34,8 +42,23 @@ function StatCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-export default async function FleetTiresHubPage() {
-  await getAuthMeResult();
+function tabHref(tab: "hub" | "inventar") {
+  return tab === "hub" ? "/fleet/tires?tab=hub" : "/fleet/tires?tab=inventar";
+}
+
+export default async function FleetTiresHubPage({ searchParams }: PageProps) {
+  const auth = await getAuthMeResult();
+  const driverPortal = isClientDriverPortal(auth);
+  const canSync = canManageFleet(auth);
+  const sp = searchParams instanceof Promise ? await searchParams : searchParams;
+  const rawTab = typeof sp?.tab === "string" ? sp.tab : Array.isArray(sp?.tab) ? sp.tab[0] : undefined;
+  const tab: "hub" | "inventar" =
+    rawTab === "hub" || rawTab === "inventar"
+      ? rawTab
+      : driverPortal
+        ? "inventar"
+        : "hub";
+
   const hub = await loadHub();
 
   return (
@@ -46,8 +69,9 @@ export default async function FleetTiresHubPage() {
             <p className="text-sm font-medium uppercase tracking-widest text-violet-400">FLEET-007</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Hub anvelope</h1>
             <p className="mt-3 max-w-2xl text-sm text-zinc-400">
-              Inventar pe flotă: seturi montate / hotel / client, furnizor & raft, uzură/DOT și alerte
-              sezon — drill-down pe tab Roți. Scope AccessContext.
+              Control tower (alerte, sezon) și inventar detaliat pe set / anvelopă. Drill-down pe tab
+              Roți. Scope AccessContext
+              {driverPortal ? " — vehiculul tău asignat" : ""}.
             </p>
             {hub ? (
               <p className="mt-2 text-xs text-zinc-600">
@@ -61,9 +85,33 @@ export default async function FleetTiresHubPage() {
                 ) : null}
               </p>
             ) : null}
-            <div className="mt-4">
-              <TireSeasonReminderSyncButton />
-            </div>
+            {canSync && !driverPortal ? (
+              <div className="mt-4">
+                <TireSeasonReminderSyncButton />
+              </div>
+            ) : null}
+            <nav className="mt-6 flex gap-4 border-b border-zinc-800 text-sm" aria-label="Secțiuni anvelope">
+              <Link
+                href={tabHref("hub")}
+                className={
+                  tab === "hub"
+                    ? "border-b-2 border-emerald-500 pb-2 font-medium text-zinc-100"
+                    : "pb-2 text-zinc-500 hover:text-zinc-300"
+                }
+              >
+                Hub
+              </Link>
+              <Link
+                href={tabHref("inventar")}
+                className={
+                  tab === "inventar"
+                    ? "border-b-2 border-emerald-500 pb-2 font-medium text-zinc-100"
+                    : "pb-2 text-zinc-500 hover:text-zinc-300"
+                }
+              >
+                Inventar
+              </Link>
+            </nav>
           </div>
         }
       >
@@ -72,6 +120,14 @@ export default async function FleetTiresHubPage() {
             Nu s-au putut încărca datele hub. Verifică API-ul{" "}
             <code className="rounded bg-zinc-950 px-1 text-xs">GET /fleet/tires/hub</code>.
           </p>
+        ) : tab === "inventar" ? (
+          <section className="space-y-3">
+            <h2 className="text-lg font-medium text-zinc-100">Inventar seturi</h2>
+            <p className="text-xs text-zinc-500">
+              Catalog operațional: locație, hotel/raft, uzură/DOT, km/cost, anvelope pe poziție.
+            </p>
+            <TireHubInventory hub={hub} />
+          </section>
         ) : (
           <div className="space-y-8">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -137,16 +193,6 @@ export default async function FleetTiresHubPage() {
                 </ul>
               </section>
             ) : null}
-
-            <section>
-              <h2 className="text-lg font-medium text-zinc-100">Inventar seturi</h2>
-              <p className="mt-1 text-xs text-zinc-500">
-                Control tower pe flotă. Detaliile pe poziție rămân pe vehicul → Roți.
-              </p>
-              <div className="mt-4">
-                <TireHubInventory hub={hub} />
-              </div>
-            </section>
 
             <section>
               <h2 className="text-lg font-medium text-zinc-100">Alerte</h2>
@@ -225,6 +271,14 @@ export default async function FleetTiresHubPage() {
                 </ul>
               </section>
             ) : null}
+
+            <p className="text-xs text-zinc-600">
+              Inventarul detaliat e pe tab-ul{" "}
+              <Link href={tabHref("inventar")} className="text-sky-400 hover:underline">
+                Inventar
+              </Link>
+              .
+            </p>
           </div>
         )}
       </FleetListPageLayout>

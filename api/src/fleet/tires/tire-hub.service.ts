@@ -17,6 +17,7 @@ import type {
   TireHubAlertSeverity,
   TireHubAttentionSet,
   TireHubChangeoverItem,
+  TireHubInventoryItem,
   TireHubInventoryLocation,
   TireHubInventorySet,
   TireHubPayload,
@@ -70,6 +71,13 @@ function rollupOwnership(
   const uniq = new Set(types);
   if (uniq.size === 1) return types[0]!;
   return 'mixed';
+}
+
+function dominantString(values: Array<string | null | undefined>): string | null {
+  const cleaned = values.map((v) => v?.trim()).filter((v): v is string => !!v);
+  if (cleaned.length === 0) return null;
+  const uniq = new Set(cleaned);
+  return uniq.size === 1 ? cleaned[0]! : null;
 }
 
 function alertSeverity(kind: TireHubAlertKind, treadMm?: number | null): TireHubAlertSeverity {
@@ -173,6 +181,7 @@ export class TireHubService {
           include: { supplier: { select: { id: true, legalName: true } } },
         },
         items: {
+          orderBy: { sortOrder: 'asc' },
           include: {
             asset: {
               select: {
@@ -182,6 +191,12 @@ export class TireHubService {
                 season: true,
                 recommendedReplace: true,
                 ownershipType: true,
+                brand: true,
+                model: true,
+                size: true,
+                serialOrQr: true,
+                runFlat: true,
+                tpmsSensorPresent: true,
               },
             },
           },
@@ -462,6 +477,30 @@ export class TireHubService {
           .map((a) => a.kind),
       );
 
+      const placementByAsset = new Map(
+        set.placements
+          .filter((p) => p.assetId)
+          .map((p) => [p.assetId, p] as const),
+      );
+
+      const items: TireHubInventoryItem[] = set.items.map((i) => {
+        const pl = placementByAsset.get(i.asset.id);
+        return {
+          assetId: i.asset.id,
+          position: pl?.position ?? null,
+          brand: i.asset.brand,
+          model: i.asset.model,
+          size: i.asset.size,
+          dot: i.asset.dot,
+          treadMm: i.asset.treadMm,
+          serialOrQr: i.asset.serialOrQr,
+          recommendedReplace: i.asset.recommendedReplace,
+          ownershipType: i.asset.ownershipType,
+          runFlat: i.asset.runFlat,
+          tpmsSensorPresent: i.asset.tpmsSensorPresent,
+        };
+      });
+
       inventorySets.push({
         setId: set.id,
         vehicleId: set.vehicleId,
@@ -487,6 +526,8 @@ export class TireHubService {
         photoCount: intakePhotoCount(stay?.intakePhotos),
         minTreadMm,
         worstDot,
+        dominantBrand: dominantString(set.items.map((i) => i.asset.brand)),
+        dominantSize: dominantString(set.items.map((i) => i.asset.size)),
         assetsRecommendedReplace: set.items.filter((i) => i.asset.recommendedReplace).length,
         hasOppositeSeasonStored,
         ownershipType: rollupOwnership(set.items.map((i) => i.asset.ownershipType)),
@@ -498,6 +539,7 @@ export class TireHubService {
         lastMountKm: null,
         lastDemountKm: null,
         recentEvents: [],
+        items,
       });
     }
 

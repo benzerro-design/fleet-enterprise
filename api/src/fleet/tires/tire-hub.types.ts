@@ -52,6 +52,22 @@ export type TireHubInventoryLocation =
   | 'at_client'
   | 'other';
 
+/** Anvelopă individuală în set — inventar avansat. */
+export type TireHubInventoryItem = {
+  assetId: string;
+  position: string | null;
+  brand: string | null;
+  model: string | null;
+  size: string | null;
+  dot: string | null;
+  treadMm: number | null;
+  serialOrQr: string | null;
+  recommendedReplace: boolean;
+  ownershipType: TireOwnershipType;
+  runFlat: boolean;
+  tpmsSensorPresent: boolean;
+};
+
 export type TireHubInventorySet = {
   setId: string;
   vehicleId: string;
@@ -77,6 +93,10 @@ export type TireHubInventorySet = {
   photoCount: number;
   minTreadMm: number | null;
   worstDot: string | null;
+  /** Brand dominant dacă toate items au același brand. */
+  dominantBrand: string | null;
+  /** Size dominant dacă toate items au același size. */
+  dominantSize: string | null;
   assetsRecommendedReplace: number;
   hasOppositeSeasonStored: boolean;
   ownershipType: TireOwnershipType | 'mixed' | null;
@@ -89,6 +109,7 @@ export type TireHubInventorySet = {
   lastMountKm: number | null;
   lastDemountKm: number | null;
   recentEvents: TireHubRecentEvent[];
+  items: TireHubInventoryItem[];
 };
 
 /** Ultimele evenimente pe set (mount/demount/store/…). */

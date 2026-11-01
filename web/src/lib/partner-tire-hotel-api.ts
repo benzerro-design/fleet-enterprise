@@ -1,5 +1,15 @@
 import type { VehicleTireSeason } from "@/lib/vehicle-wheels-types";
 
+export type TireHotelStayItem = {
+  assetId: string;
+  brand: string | null;
+  model: string | null;
+  size: string | null;
+  dot: string | null;
+  treadMm: number | null;
+  serialOrQr: string | null;
+};
+
 export type TireHotelStay = {
   id: string;
   setId: string;
@@ -11,9 +21,14 @@ export type TireHotelStay = {
   vehicleId: string;
   season: VehicleTireSeason;
   setName: string | null;
+  mountedAs?: string | null;
+  itemCount?: number;
+  items?: TireHotelStayItem[];
   qrPayload: string;
   intakePhotos: string[];
   intakeTreadNotes: string | null;
+  feeCents?: number | null;
+  contractRef?: string | null;
 };
 
 export type TireHotelCapability = {

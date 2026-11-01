@@ -398,14 +398,36 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                   <span className="text-sm font-medium text-zinc-100">{s.plate}</span>
                   <span className="text-xs text-zinc-500">
                     {s.setName?.trim() || vehicleTireSeasonLabel(s.season)}
+                    {s.itemCount != null ? ` · ${s.itemCount} buc` : ""}
                   </span>
                   {s.locationCode ? (
                     <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
-                      {s.locationCode}
+                      Raft {s.locationCode}
                     </span>
                   ) : null}
                 </div>
-                <p className="text-xs text-zinc-500">Check-in {formatCheckIn(s.checkInAt)}</p>
+                <p className="text-xs text-zinc-500">
+                  Check-in {formatCheckIn(s.checkInAt)}
+                  {s.contractRef ? ` · contract ${s.contractRef}` : ""}
+                  {s.feeCents != null
+                    ? ` · ${(s.feeCents / 100).toLocaleString("ro-RO")} lei`
+                    : ""}
+                </p>
+                {(s.items?.length ?? 0) > 0 ? (
+                  <ul className="space-y-1.5 rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2">
+                    {s.items!.map((it) => (
+                      <li key={it.assetId} className="text-xs text-zinc-400">
+                        <span className="text-zinc-200">
+                          {[it.brand, it.model].filter(Boolean).join(" ") || "Anvelopă"}
+                        </span>
+                        {it.size ? ` · ${it.size}` : ""}
+                        {it.treadMm != null ? ` · ${it.treadMm.toFixed(1)} mm` : ""}
+                        {it.dot ? ` · DOT ${it.dot}` : ""}
+                        {it.serialOrQr ? ` · ${it.serialOrQr}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <TireHotelQrPayload payload={s.qrPayload} />
                 {s.intakeTreadNotes?.trim() ? (
                   <p className="whitespace-pre-wrap text-xs text-zinc-400">{s.intakeTreadNotes.trim()}</p>

@@ -197,6 +197,8 @@ export function TireHubInventory({ hub }: Props) {
                     <p>{r.setName ?? "—"}</p>
                     <p className="text-[11px] text-zinc-500">
                       {vehicleTireSeasonLabel(r.season)} · {r.itemCount} buc
+                      {r.dominantBrand ? ` · ${r.dominantBrand}` : ""}
+                      {r.dominantSize ? ` · ${r.dominantSize}` : ""}
                       {r.alertKinds.length
                         ? ` · ${r.alertKinds.map((k) => tireHubAlertKindLabel(k)).join(", ")}`
                         : ""}
@@ -333,6 +335,40 @@ export function TireHubInventory({ hub }: Props) {
                 </dd>
               </div>
             </dl>
+
+            <div className="mt-6">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Anvelope în set
+              </h4>
+              {(drawer.items?.length ?? 0) === 0 ? (
+                <p className="mt-2 text-sm text-zinc-500">Nicio anvelopă legată de set.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {drawer.items!.map((it) => (
+                    <li
+                      key={it.assetId}
+                      className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-sm"
+                    >
+                      <p className="font-medium text-zinc-200">
+                        {it.position ? it.position.toUpperCase() : "—"}
+                        {it.brand || it.model
+                          ? ` · ${[it.brand, it.model].filter(Boolean).join(" ")}`
+                          : ""}
+                      </p>
+                      <p className="text-[11px] text-zinc-500">
+                        {it.size ?? "size ?"}
+                        {it.treadMm != null ? ` · ${it.treadMm.toFixed(1)} mm` : " · uzură —"}
+                        {it.dot ? ` · DOT ${it.dot}` : ""}
+                        {it.serialOrQr ? ` · ${it.serialOrQr}` : ""}
+                        {it.recommendedReplace ? " · înlocuire" : ""}
+                        {it.runFlat ? " · RF" : ""}
+                        {it.tpmsSensorPresent ? " · TPMS" : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             {(drawer.atHotel || drawer.stayId) && (
               <div className="mt-6">

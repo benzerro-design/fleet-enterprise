@@ -50,7 +50,25 @@ export class TireHotelService {
 
     const set = await tx.tireSet.findFirst({
       where: { id: params.setId, tenantId: params.tenantId, archivedAt: null },
-      include: { items: true, vehicle: { select: { id: true, registrationNumber: true } } },
+      include: {
+        vehicle: { select: { id: true, registrationNumber: true } },
+        items: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            asset: {
+              select: {
+                id: true,
+                brand: true,
+                model: true,
+                size: true,
+                dot: true,
+                treadMm: true,
+                serialOrQr: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!set) throw new NotFoundException('Tire set not found');
     if (set.items.length === 0) {
@@ -220,8 +238,23 @@ export class TireHotelService {
       include: {
         set: {
           include: {
-            items: true,
             vehicle: { select: { id: true, registrationNumber: true } },
+            items: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                asset: {
+                  select: {
+                    id: true,
+                    brand: true,
+                    model: true,
+                    size: true,
+                    dot: true,
+                    treadMm: true,
+                    serialOrQr: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -275,9 +308,30 @@ export class TireHotelService {
     set: {
       season: VehicleTireSeason;
       name: string | null;
+      mountedAs?: string | null;
       vehicle: { id: string; registrationNumber: string };
+      items?: Array<{
+        asset: {
+          id: string;
+          brand: string | null;
+          model: string | null;
+          size: string | null;
+          dot: string | null;
+          treadMm: number | null;
+          serialOrQr: string | null;
+        };
+      }>;
     },
   ) {
+    const items = (set.items ?? []).map((i) => ({
+      assetId: i.asset.id,
+      brand: i.asset.brand,
+      model: i.asset.model,
+      size: i.asset.size,
+      dot: i.asset.dot,
+      treadMm: i.asset.treadMm,
+      serialOrQr: i.asset.serialOrQr,
+    }));
     return {
       id: stay.id,
       setId: stay.setId,
@@ -293,6 +347,9 @@ export class TireHotelService {
       vehicleId: set.vehicle.id,
       season: set.season,
       setName: set.name,
+      mountedAs: set.mountedAs ?? null,
+      itemCount: items.length,
+      items,
       qrPayload: tireSetQrPayload(stay.setId),
     };
   }
