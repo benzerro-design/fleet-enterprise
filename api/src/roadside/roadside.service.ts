@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,10 +9,33 @@ import {
   Prisma,
   RoadsideInterventionKind,
   RoadsideInterventionStatus,
+  RsaEnrollmentStatus,
+  RsaEntitlementStatus,
+  RsaMissionStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import type { AccessContext } from '../iam/access-context.types';
+import {
+  assertClientAccess,
+  assertClientFleetWrite,
+  isDriverOnlyClientUser,
+  isTenantWideAccess,
+} from '../iam/client-access';
+import {
+  assertPartnerSupplierId,
+  isPartnerUser,
+} from '../iam/partner-access';
 import { PrismaService } from '../prisma/prisma.service';
 import { nextRoadsideDisplayNumber } from './roadside-display-number';
+import { RsaBrokerService } from './rsa-broker.service';
+import {
+  countsTowardYearlyCap,
+  entitlementEnrollmentInclude,
+  pickActiveEnrollment,
+  resolveEntitlementFromEnrollment,
+  utcYearBounds,
+  type RsaEntitlementResult,
+} from './rsa-entitlement';
 
 const MAX_PAGE_SIZE = 200;
 
@@ -35,6 +59,11 @@ export type RoadsideInterventionRecord = {
   onSiteAt: string | null;
   completedAt: string | null;
   notes: string | null;
+  entitlementStatus: RsaEntitlementStatus;
+  enrollmentId: string | null;
+  entitlementNote: string | null;
+  entitlementIncludedTowKm: number | null;
+  entitlementOveragePerKmCents: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -86,6 +115,7 @@ export class RoadsideService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly broker: RsaBrokerService,
   ) {}
 
   private toRecord(row: InterventionRow): RoadsideInterventionRecord {
@@ -109,9 +139,133 @@ export class RoadsideService {
       onSiteAt: row.onSiteAt?.toISOString() ?? null,
       completedAt: row.completedAt?.toISOString() ?? null,
       notes: row.notes,
+      entitlementStatus: row.entitlementStatus,
+      enrollmentId: row.enrollmentId,
+      entitlementNote: row.entitlementNote,
+      entitlementIncludedTowKm: row.entitlementIncludedTowKm,
+      entitlementOveragePerKmCents: row.entitlementOveragePerKmCents,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  private async countEnrollmentUsageThisYear(
+    tenantId: string,
+    enrollmentId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<number> {
+    const { from, to } = utcYearBounds();
+    return db.roadsideIntervention.count({
+      where: {
+        tenantId,
+        enrollmentId,
+        entitlementStatus: {
+          in: [RsaEntitlementStatus.covered, RsaEntitlementStatus.partial],
+        },
+        status: {
+          notIn: [
+            RoadsideInterventionStatus.draft,
+            RoadsideInterventionStatus.cancelled,
+          ],
+        },
+        OR: [
+          { requestedAt: { gte: from, lt: to } },
+          { requestedAt: null, createdAt: { gte: from, lt: to } },
+        ],
+      },
+    });
+  }
+
+  private async adjustEnrollmentUsage(
+    tx: Prisma.TransactionClient,
+    enrollmentId: string | null | undefined,
+    delta: number,
+  ) {
+    if (!enrollmentId || delta === 0) return;
+    if (delta > 0) {
+      await tx.rsaVehicleEnrollment.update({
+        where: { id: enrollmentId },
+        data: { interventionsUsedCount: { increment: delta } },
+      });
+      return;
+    }
+    const row = await tx.rsaVehicleEnrollment.findUnique({
+      where: { id: enrollmentId },
+      select: { interventionsUsedCount: true },
+    });
+    if (!row) return;
+    const next = Math.max(0, row.interventionsUsedCount + delta);
+    await tx.rsaVehicleEnrollment.update({
+      where: { id: enrollmentId },
+      data: { interventionsUsedCount: next },
+    });
+  }
+
+  async resolveEntitlement(
+    tenantSlug: string,
+    params: {
+      vehicleId?: string | null;
+      kind: RoadsideInterventionKind;
+      supplierId?: string | null;
+      clientId?: string | null;
+    },
+    access?: AccessContext,
+  ): Promise<RsaEntitlementResult> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    if (access && isPartnerUser(access)) {
+      if (params.supplierId?.trim()) {
+        assertPartnerSupplierId(access, params.supplierId);
+      } else if (access.allowedSupplierIds.length === 0) {
+        throw new ForbiddenException('No supplier membership');
+      }
+    } else if (params.clientId && access) {
+      if (!isTenantWideAccess(access)) {
+        assertClientAccess(access, params.clientId);
+      }
+    }
+
+    const vehicleId = params.vehicleId?.trim() || null;
+    if (!vehicleId) {
+      return resolveEntitlementFromEnrollment(params.kind, null);
+    }
+
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenantId: tenant.id },
+      select: { id: true, clientId: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+    if (access && !isPartnerUser(access) && !isTenantWideAccess(access)) {
+      assertClientAccess(access, vehicle.clientId);
+      if (isDriverOnlyClientUser(access)) {
+        const ids = access.assignedVehicleIds ?? [];
+        if (!ids.includes(vehicle.id)) {
+          throw new ForbiddenException('Vehicle access denied');
+        }
+      }
+    }
+
+    const enrollmentWhere: Prisma.RsaVehicleEnrollmentWhereInput = {
+      tenantId: tenant.id,
+      vehicleId: vehicle.id,
+      status: RsaEnrollmentStatus.active,
+    };
+    if (access && isPartnerUser(access)) {
+      enrollmentWhere.supplierId = { in: access.allowedSupplierIds };
+    }
+
+    const rows = await this.prisma.rsaVehicleEnrollment.findMany({
+      where: enrollmentWhere,
+      include: entitlementEnrollmentInclude,
+      orderBy: [{ createdAt: 'desc' }],
+    });
+    const picked = pickActiveEnrollment(rows, params.supplierId);
+    if (!picked) {
+      return resolveEntitlementFromEnrollment(params.kind, null);
+    }
+    const usedThisYear = await this.countEnrollmentUsageThisYear(tenant.id, picked.id);
+    return resolveEntitlementFromEnrollment(params.kind, picked, usedThisYear);
   }
 
   private includeRelations() {
@@ -122,8 +276,64 @@ export class RoadsideService {
     } as const;
   }
 
-  private listWhere(tenantId: string, params: RoadsideListParams): Prisma.RoadsideInterventionWhereInput {
-    const parts: Prisma.RoadsideInterventionWhereInput[] = [{ tenantId }];
+  private accessScope(
+    access: AccessContext | undefined,
+  ): Prisma.RoadsideInterventionWhereInput | null {
+    if (!access) return {};
+    if (isTenantWideAccess(access)) return {};
+    if (isPartnerUser(access)) {
+      const ids = access.allowedSupplierIds;
+      if (ids.length === 0) return null;
+      return { supplierId: { in: ids } };
+    }
+    if (access.allowedClientIds.length === 0) return null;
+    if (isDriverOnlyClientUser(access)) {
+      const ids = access.assignedVehicleIds ?? [];
+      if (ids.length === 0) return null;
+      return { vehicleId: { in: ids } };
+    }
+    return { clientId: { in: access.allowedClientIds } };
+  }
+
+  private assertInterventionRead(
+    access: AccessContext | undefined,
+    row: { clientId: string; supplierId: string | null; vehicleId: string | null },
+  ) {
+    if (!access) return;
+    if (isTenantWideAccess(access)) return;
+    if (isPartnerUser(access)) {
+      assertPartnerSupplierId(access, row.supplierId);
+      return;
+    }
+    assertClientAccess(access, row.clientId);
+    if (isDriverOnlyClientUser(access)) {
+      const ids = access.assignedVehicleIds ?? [];
+      if (!row.vehicleId || !ids.includes(row.vehicleId)) {
+        throw new ForbiddenException('Vehicle access denied');
+      }
+    }
+  }
+
+  private assertInterventionWrite(
+    access: AccessContext | undefined,
+    clientId: string,
+  ) {
+    if (!access) return;
+    // RSA-S0: partnerii nu creează / editează intervenții (queue partner = S3).
+    if (isPartnerUser(access)) {
+      throw new ForbiddenException('Partner cannot mutate roadside interventions in S0');
+    }
+    assertClientFleetWrite(access, clientId);
+  }
+
+  private listWhere(
+    tenantId: string,
+    params: RoadsideListParams,
+    access?: AccessContext,
+  ): Prisma.RoadsideInterventionWhereInput | null {
+    const scope = this.accessScope(access);
+    if (scope === null) return null;
+    const parts: Prisma.RoadsideInterventionWhereInput[] = [{ tenantId }, scope];
     if (params.serviceCaseId) parts.push({ serviceCaseId: params.serviceCaseId });
     if (params.ticketId) parts.push({ sourceTicketId: params.ticketId });
     if (params.workOrderId) parts.push({ workOrderId: params.workOrderId });
@@ -235,7 +445,11 @@ export class RoadsideService {
     return out;
   }
 
-  async listPaged(tenantSlug: string, params: RoadsideListParams) {
+  async listPaged(
+    tenantSlug: string,
+    params: RoadsideListParams,
+    access?: AccessContext,
+  ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) {
       return { items: [], total: 0, page: params.page, pageSize: params.pageSize };
@@ -243,7 +457,10 @@ export class RoadsideService {
     const pageSize = Math.min(Math.max(1, params.pageSize), MAX_PAGE_SIZE);
     const page = Math.max(1, params.page);
     const skip = (page - 1) * pageSize;
-    const where = this.listWhere(tenant.id, params);
+    const where = this.listWhere(tenant.id, params, access);
+    if (!where) {
+      return { items: [], total: 0, page, pageSize };
+    }
 
     const [total, rows] = await Promise.all([
       this.prisma.roadsideIntervention.count({ where }),
@@ -264,7 +481,11 @@ export class RoadsideService {
     };
   }
 
-  async getById(tenantSlug: string, id: string): Promise<RoadsideInterventionRecord> {
+  async getById(
+    tenantSlug: string,
+    id: string,
+    access?: AccessContext,
+  ): Promise<RoadsideInterventionRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Intervention not found');
     const row = await this.prisma.roadsideIntervention.findFirst({
@@ -272,6 +493,7 @@ export class RoadsideService {
       include: this.includeRelations(),
     });
     if (!row) throw new NotFoundException('Intervention not found');
+    this.assertInterventionRead(access, row);
     return this.toRecord(row);
   }
 
@@ -279,6 +501,7 @@ export class RoadsideService {
     tenantSlug: string,
     input: CreateRoadsideInterventionInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<RoadsideInterventionRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -312,6 +535,7 @@ export class RoadsideService {
       },
     });
     if (!serviceCase) throw new NotFoundException('Service case not found');
+    this.assertInterventionWrite(access, serviceCase.clientId);
 
     let workOrderId = input.workOrderId?.trim() || null;
     if (workOrderId) {
@@ -339,6 +563,19 @@ export class RoadsideService {
     const now = new Date();
     const displayNumber = await nextRoadsideDisplayNumber(this.prisma, tenant.id, now);
 
+    const entitlement = await this.resolveEntitlement(
+      tenantSlug,
+      {
+        vehicleId: serviceCase.vehicleId,
+        kind: input.kind,
+        supplierId: input.supplierId,
+        clientId: serviceCase.clientId,
+      },
+      access,
+    );
+
+    // Dacă e ales un furnizor diferit de cel din abonament, rămâne entitlement pe enrollment
+    // dar supplierId pe intervenție e cel ales (dispatch).
     const created = await this.prisma.$transaction(async (tx) => {
       const row = await tx.roadsideIntervention.create({
         data: {
@@ -349,15 +586,24 @@ export class RoadsideService {
           workOrderId,
           clientId: serviceCase.clientId,
           vehicleId: serviceCase.vehicleId,
-          supplierId: input.supplierId ?? null,
+          supplierId: input.supplierId ?? entitlement.supplierId ?? null,
           kind: input.kind,
           status,
           locationText: input.locationText?.trim() || null,
           notes: input.notes?.trim() || null,
+          entitlementStatus: entitlement.status,
+          enrollmentId: entitlement.enrollmentId,
+          entitlementNote: entitlement.note,
+          entitlementIncludedTowKm: entitlement.includedTowKm,
+          entitlementOveragePerKmCents: entitlement.overagePerKmCents,
           ...autoTs,
         },
         include: this.includeRelations(),
       });
+
+      if (countsTowardYearlyCap(status, entitlement.status)) {
+        await this.adjustEnrollmentUsage(tx, entitlement.enrollmentId, 1);
+      }
 
       await this.appendTicketEvent(
         tx,
@@ -381,8 +627,34 @@ export class RoadsideService {
       action: 'roadside_intervention.create',
       entityType: 'roadside_intervention',
       entityId: created.id,
-      meta: { serviceCaseId: serviceCase.id, kind: input.kind, status },
+      meta: {
+        serviceCaseId: serviceCase.id,
+        kind: input.kind,
+        status,
+        entitlementStatus: entitlement.status,
+        enrollmentId: entitlement.enrollmentId,
+      },
     });
+
+    // RSA-S5: auto-dispatch broker dacă e activ pe profil.
+    if (created.supplierId) {
+      const profile = await this.prisma.rsaSupplierProfile.findUnique({
+        where: { supplierId: created.supplierId },
+        select: { brokerAutoDispatch: true, brokerOutboundEnabled: true },
+      });
+      if (profile?.brokerAutoDispatch && profile.brokerOutboundEnabled) {
+        try {
+          await this.broker.dispatchIntervention(
+            tenantSlug,
+            created.id,
+            actorUserId,
+            access,
+          );
+        } catch {
+          /* non-blocking — evenimentul e jurnalizat doar la succes; UI poate reîncerca */
+        }
+      }
+    }
 
     return this.toRecord(created);
   }
@@ -392,6 +664,7 @@ export class RoadsideService {
     id: string,
     input: PatchRoadsideInterventionInput,
     actorUserId?: string,
+    access?: AccessContext,
   ): Promise<RoadsideInterventionRecord> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Intervention not found');
@@ -400,6 +673,7 @@ export class RoadsideService {
       where: { id, tenantId: tenant.id },
     });
     if (!existing) throw new NotFoundException('Intervention not found');
+    this.assertInterventionWrite(access, existing.clientId);
 
     if (input.supplierId) {
       const supplier = await this.prisma.supplier.findFirst({
@@ -452,12 +726,69 @@ export class RoadsideService {
       Object.assign(data, autoTs);
     }
 
+    const nextStatus = input.status ?? existing.status;
+    const wasCounting = countsTowardYearlyCap(
+      existing.status,
+      existing.entitlementStatus,
+    );
+    const willCount = countsTowardYearlyCap(nextStatus, existing.entitlementStatus);
+    const usageDelta = !wasCounting && willCount ? 1 : wasCounting && !willCount ? -1 : 0;
+
+    if (
+      statusChanged &&
+      input.status === RoadsideInterventionStatus.completed
+    ) {
+      const openMission = await this.prisma.rsaTowMission.findFirst({
+        where: {
+          interventionId: id,
+          status: {
+            notIn: [
+              RsaMissionStatus.delivered,
+              RsaMissionStatus.closed,
+              RsaMissionStatus.cancelled,
+            ],
+          },
+        },
+        select: { id: true, status: true },
+      });
+      if (openMission) {
+        throw new BadRequestException(
+          `Cannot complete intervention while tow mission is ${openMission.status} — finalize delivery or cancel the mission first`,
+        );
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.roadsideIntervention.update({
         where: { id },
         data,
         include: this.includeRelations(),
       });
+
+      await this.adjustEnrollmentUsage(tx, existing.enrollmentId, usageDelta);
+
+      if (
+        statusChanged &&
+        input.status === RoadsideInterventionStatus.cancelled
+      ) {
+        await tx.rsaTowMission.updateMany({
+          where: {
+            interventionId: id,
+            status: {
+              notIn: [
+                RsaMissionStatus.delivered,
+                RsaMissionStatus.closed,
+                RsaMissionStatus.cancelled,
+              ],
+            },
+          },
+          data: {
+            status: RsaMissionStatus.cancelled,
+            cancelledAt: new Date(),
+            cancelReason: 'Intervention cancelled',
+          },
+        });
+      }
 
       if (statusChanged || input.kind !== undefined) {
         await this.appendTicketEvent(

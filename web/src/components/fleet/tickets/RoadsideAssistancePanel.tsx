@@ -3,18 +3,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { SupplierCombobox } from "@/components/fleet/SupplierCombobox";
 import { OPS_INPUT_CLASS, OPS_LABEL_CLASS } from "@/components/fleet/ops-form-primitives";
+import { RsaMissionPanel } from "@/components/fleet/rsa/RsaMissionPanel";
 import type { ServiceCaseRecord } from "@/lib/service-cases-api";
 import {
   ROADSIDE_KINDS,
   ROADSIDE_STATUSES,
+  dispatchRsaBroker,
   fleetJsonHeaders,
   isRoadsideActive,
+  loadRsaEntitlement,
   roadsideBrowserBase,
   roadsideKindLabel,
   roadsideStatusLabel,
+  rsaEntitlementLabel,
   type RoadsideInterventionKind,
   type RoadsideInterventionRecord,
   type RoadsideInterventionStatus,
+  type RsaEntitlementResult,
 } from "@/lib/roadside-api";
 
 type Props = {
@@ -33,6 +38,8 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
   const [supplierId, setSupplierId] = useState("");
   const [locationText, setLocationText] = useState("");
   const [notes, setNotes] = useState("");
+  const [entitlement, setEntitlement] = useState<RsaEntitlementResult | null>(null);
+  const [entitlementTick, setEntitlementTick] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,6 +66,30 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const vehicleId = serviceCase?.vehicleId;
+    if (!vehicleId) {
+      setEntitlement(null);
+      return;
+    }
+    let cancelled = false;
+    void loadRsaEntitlement({
+      kind,
+      vehicleId,
+      supplierId: supplierId || null,
+      clientId: serviceCase?.clientId ?? null,
+    })
+      .then((r) => {
+        if (!cancelled) setEntitlement(r);
+      })
+      .catch(() => {
+        if (!cancelled) setEntitlement(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, supplierId, serviceCase?.vehicleId, serviceCase?.clientId, entitlementTick]);
 
   const immovableHint =
     serviceCase?.vehicleMovable === "immovable" ||
@@ -102,6 +133,7 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
       setSupplierId("");
       setKind("tow");
       setStatus("requested");
+      setEntitlementTick((n) => n + 1);
       await load();
     } finally {
       setPending(false);
@@ -128,6 +160,7 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
         setError(msg);
         return;
       }
+      setEntitlementTick((n) => n + 1);
       await load();
     } finally {
       setPending(false);
@@ -182,7 +215,13 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
                     {item.supplierLegalName ?? "Fără furnizor"}
                     {item.locationText ? ` · ${item.locationText}` : ""}
                     {item.vehicleReg ? ` · ${item.vehicleReg}` : ""}
+                    {item.entitlementStatus
+                      ? ` · ${rsaEntitlementLabel(item.entitlementStatus)}`
+                      : ""}
                   </p>
+                  {item.entitlementNote ? (
+                    <p className="mt-1 text-xs text-zinc-400">{item.entitlementNote}</p>
+                  ) : null}
                   {item.notes ? <p className="mt-1 text-xs text-zinc-400">{item.notes}</p> : null}
                 </div>
                 {canWrite && item.status !== "completed" && item.status !== "cancelled" ? (
@@ -225,9 +264,44 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
                     >
                       Anulează
                     </button>
+                    {item.supplierId ? (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        className="rounded border border-sky-800/50 px-2 py-0.5 text-[11px] text-sky-300 hover:bg-sky-950/40"
+                        onClick={() => {
+                          setPending(true);
+                          setError(null);
+                          void dispatchRsaBroker(item.id)
+                            .then((ev) => {
+                              setError(
+                                ev.status === "failed"
+                                  ? ev.errorMessage ?? "Broker dispatch eșuat"
+                                  : null,
+                              );
+                              void load();
+                            })
+                            .catch((e) =>
+                              setError(e instanceof Error ? e.message : "Broker eșuat"),
+                            )
+                            .finally(() => setPending(false));
+                        }}
+                      >
+                        Trimite broker
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
+              {item.supplierId ? (
+                <div className="mt-3">
+                  <RsaMissionPanel
+                    interventionId={item.id}
+                    canWrite={canWrite && item.status !== "cancelled"}
+                    hasSupplier={Boolean(item.supplierId)}
+                  />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -287,6 +361,23 @@ export function RoadsideAssistancePanel({ serviceCase, ticketId, canWrite }: Pro
                   disabled={pending}
                 />
               </div>
+              {entitlement ? (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-xs ${
+                    entitlement.status === "covered"
+                      ? "border-emerald-500/40 bg-emerald-950/20 text-emerald-100"
+                      : entitlement.status === "partial"
+                        ? "border-amber-500/40 bg-amber-950/20 text-amber-100"
+                        : entitlement.status === "out_of_plan"
+                          ? "border-orange-500/40 bg-orange-950/20 text-orange-100"
+                          : "border-zinc-700 bg-zinc-900/50 text-zinc-300"
+                  }`}
+                >
+                  <span className="font-medium">{rsaEntitlementLabel(entitlement.status)}</span>
+                  {entitlement.planCode ? ` · ${entitlement.planCode}` : ""}
+                  <p className="mt-0.5 opacity-90">{entitlement.note}</p>
+                </div>
+              ) : null}
               <label className="block">
                 <span className={OPS_LABEL_CLASS}>Locație</span>
                 <input

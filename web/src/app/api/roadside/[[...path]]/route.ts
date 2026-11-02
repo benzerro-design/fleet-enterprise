@@ -28,6 +28,8 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path?: string[] 
   const outHeaders = new Headers();
   const uct = upstream.headers.get("content-type");
   if (uct) outHeaders.set("Content-Type", uct);
+  const cd = upstream.headers.get("content-disposition");
+  if (cd) outHeaders.set("Content-Disposition", cd);
   const buf = await upstream.arrayBuffer();
   return proxyUpstreamResponse(upstream, buf, outHeaders);
 }
@@ -39,5 +41,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: str
   return proxy(req, ctx);
 }
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  return proxy(req, ctx);
+}
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
   return proxy(req, ctx);
 }

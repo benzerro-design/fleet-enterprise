@@ -5,6 +5,7 @@ import { SupplierServicesEditor } from "@/components/fleet/SupplierServicesEdito
 import { SupplierClientAllocationsEditor } from "@/components/fleet/suppliers/SupplierClientAllocationsEditor";
 import { SupplierDocumentsPanel } from "@/components/fleet/suppliers/SupplierDocumentsPanel";
 import { SupplierProgramEditor } from "@/components/fleet/suppliers/SupplierProgramEditor";
+import { SupplierRsaPanel } from "@/components/fleet/suppliers/SupplierRsaPanel";
 import { SupplierTarifeEditor } from "@/components/fleet/suppliers/SupplierTarifeEditor";
 import { SupplierTeamPanel } from "@/components/fleet/suppliers/SupplierTeamPanel";
 import type { SupplierMembershipMe } from "@/lib/auth-server";
@@ -15,6 +16,7 @@ import { supplierCategoryLabel, supplierStatusLabel } from "@/lib/suppliers-api"
 export const SUPPLIER_PROFILE_TABS = [
   { id: "identitate", label: "Identitate & contact" },
   { id: "tip", label: "Tip & servicii" },
+  { id: "rsa", label: "Asistență rutieră" },
   { id: "tarife", label: "Tarife & prețuri" },
   { id: "documente", label: "Documente firmă" },
   { id: "program", label: "Program & locații" },
@@ -52,9 +54,13 @@ export function SupplierProfileTabs({
   contextLabel,
 }: Props) {
   const [tab, setTab] = useState<SupplierProfileTabId>("identitate");
-  const tabs = canAllocateClients
-    ? SUPPLIER_PROFILE_TABS
-    : SUPPLIER_PROFILE_TABS.filter((t) => t.id !== "clienti");
+  const isRsaSupplier = supplier?.category === "roadside_assistance";
+  const tabs = SUPPLIER_PROFILE_TABS.filter((t) => {
+    if (t.id === "clienti" && !canAllocateClients) return false;
+    if (t.id === "rsa" && !isRsaSupplier) return false;
+    return true;
+  });
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : "identitate";
 
   const canEditProfileFields = Boolean(canWriteServices || canAllocateClients);
 
@@ -71,7 +77,7 @@ export function SupplierProfileTabs({
             type="button"
             onClick={() => setTab(t.id)}
             className={`rounded-lg px-3 py-1.5 text-xs ${
-              tab === t.id
+              activeTab === t.id
                 ? "bg-violet-600 text-white"
                 : "border border-zinc-700 text-zinc-400 hover:bg-zinc-900"
             }`}
@@ -82,7 +88,7 @@ export function SupplierProfileTabs({
       </div>
 
       <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/30 p-6">
-        {tab === "identitate" ? (
+        {activeTab === "identitate" ? (
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
               <dt className="text-xs text-zinc-500">Denumire legală</dt>
@@ -145,7 +151,7 @@ export function SupplierProfileTabs({
           </dl>
         ) : null}
 
-        {tab === "tip" && supplier ? (
+        {activeTab === "tip" && supplier ? (
           <SupplierServicesEditor
             supplierId={supplier.id}
             catalog={serviceCatalog}
@@ -155,44 +161,55 @@ export function SupplierProfileTabs({
           />
         ) : null}
 
-        {tab === "tip" && !supplier ? (
+        {activeTab === "tip" && !supplier ? (
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
-        {tab === "clienti" && supplier ? <SupplierClientAllocationsEditor supplierId={supplier.id} /> : null}
+        {activeTab === "rsa" && supplier ? (
+          <SupplierRsaPanel
+            supplierId={supplier.id}
+            canWrite={Boolean(canWriteServices || canAllocateClients)}
+          />
+        ) : null}
 
-        {tab === "clienti" && !supplier ? (
+        {activeTab === "rsa" && !supplier ? (
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
-        {tab === "documente" && supplier ? (
+        {activeTab === "clienti" && supplier ? <SupplierClientAllocationsEditor supplierId={supplier.id} /> : null}
+
+        {activeTab === "clienti" && !supplier ? (
+          <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
+        ) : null}
+
+        {activeTab === "documente" && supplier ? (
           <SupplierDocumentsPanel
             supplierId={supplier.id}
             canWrite={Boolean(canWriteServices || supplierMembership)}
           />
         ) : null}
 
-        {tab === "documente" && !supplier ? (
+        {activeTab === "documente" && !supplier ? (
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
-        {tab === "tarife" && supplier ? (
+        {activeTab === "tarife" && supplier ? (
           <SupplierTarifeEditor supplier={supplier} canWrite={canEditProfileFields} />
         ) : null}
 
-        {tab === "tarife" && !supplier ? (
+        {activeTab === "tarife" && !supplier ? (
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
-        {tab === "program" && supplier ? (
+        {activeTab === "program" && supplier ? (
           <SupplierProgramEditor supplier={supplier} canWrite={canEditProfileFields} />
         ) : null}
 
-        {tab === "program" && !supplier ? (
+        {activeTab === "program" && !supplier ? (
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
 
-        {tab === "echipa" && supplier ? (
+        {activeTab === "echipa" && supplier ? (
           <SupplierTeamPanel
             supplierId={supplier.id}
             canInvite={canInviteTeam}
@@ -200,7 +217,7 @@ export function SupplierProfileTabs({
           />
         ) : null}
 
-        {tab === "echipa" && !supplier ? (
+        {activeTab === "echipa" && !supplier ? (
           <p className="text-sm text-zinc-500">Nu am putut încărca profilul furnizorului.</p>
         ) : null}
       </div>

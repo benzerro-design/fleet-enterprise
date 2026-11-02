@@ -14,6 +14,7 @@ import { VehicleEquipmentTab } from "@/components/fleet/VehicleEquipmentTab";
 import { VehicleWheelsTab } from "@/components/fleet/VehicleWheelsTab";
 import { VehicleDsrTab } from "@/components/fleet/VehicleDsrTab";
 import { VehicleInsuranceTab } from "@/components/fleet/VehicleInsuranceTab";
+import { VehicleRsaEnrollmentPanel } from "@/components/fleet/VehicleRsaEnrollmentPanel";
 import { VehicleLegislativeKitTab } from "@/components/fleet/VehicleLegislativeKitTab";
 import { VehicleDetailSections } from "@/components/fleet/VehicleDetailSections";
 import { VehicleFuelLevelPanel } from "@/components/fleet/VehicleFuelLevelPanel";
@@ -52,6 +53,7 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "maintenance_plan", label: "Plan Mentenanță" },
   { id: "dsr", label: "DSR" },
   { id: "insurance", label: "Asigurări" },
+  { id: "rsa", label: "Asistență RSA" },
   { id: "drivers", label: "Șoferi" },
   { id: "consumption", label: "Consum" },
 ];
@@ -61,6 +63,7 @@ const DRIVER_HIDDEN_TABS = new Set<VehicleProfileTab>([
   "maintenance_plan",
   "dsr",
   "drivers",
+  "rsa",
 ]);
 
 type Props = {
@@ -160,6 +163,7 @@ export function VehicleProfileTabs({
       t === "maintenance_plan" ||
       t === "dsr" ||
       t === "insurance" ||
+      t === "rsa" ||
       t === "drivers" ||
       t === "consumption"
     ) {
@@ -304,6 +308,9 @@ export function VehicleProfileTabs({
             costs={costsList}
             write={write}
           />
+        ) : null}
+        {active === "rsa" ? (
+          <VehicleRsaEnrollmentPanel vehicleId={vehicle.id} canWrite={write} />
         ) : null}
         {active === "drivers" ? (
           <VehicleDriversPanel

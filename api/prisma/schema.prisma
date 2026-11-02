@@ -89,6 +89,12 @@ model Tenant {
   workOrderPhotos        WorkOrderPhoto[]
   mobilityAssignments    MobilityAssignment[]
   roadsideInterventions  RoadsideIntervention[]
+  rsaSupplierProfiles    RsaSupplierProfile[]
+  rsaPlans               RsaPlan[]
+  rsaVehicleEnrollments  RsaVehicleEnrollment[]
+  rsaTowMissions         RsaTowMission[]
+  rsaBrokerEvents        RsaBrokerEvent[]
+  rsaHandoverProtocols   RsaHandoverProtocol[]
   insurers               Insurer[]
   clientSupplierAllocations ClientSupplierAllocation[]
   userInvites               UserInvite[]
@@ -136,6 +142,7 @@ model Client {
   serviceCases  ServiceCase[]
   mobilityAssignments MobilityAssignment[]
   roadsideInterventions RoadsideIntervention[]
+  rsaVehicleEnrollments RsaVehicleEnrollment[]
   supplierAllocations ClientSupplierAllocation[]
   userInvites         UserInvite[]
   rimAssets           RimAsset[]
@@ -358,6 +365,7 @@ model User {
   importJobs               ImportJob[]               @relation("ImportJobActor")
   tireEvents               TireEvent[]               @relation("TireEventActor")
   userGridViews            UserGridView[]
+  rsaTowMissionsAsDriver   RsaTowMission[]           @relation("RsaMissionDriver")
 }
 
 /// IAM-007 — layout coloane grid (tichete, comenzi) per user.
@@ -624,6 +632,7 @@ model Vehicle {
   serviceAppointments ServiceAppointment[]
   mobilityAssignmentsCovered MobilityAssignment[] @relation("MobilityCoveredVehicle")
   roadsideInterventions      RoadsideIntervention[]
+  rsaVehicleEnrollments      RsaVehicleEnrollment[]
 
   @@unique([tenantId, registrationNumber])
   @@index([tenantId])
@@ -1233,6 +1242,8 @@ model CostEntry {
   reminderAction       ReminderAction?
   workOrderQuote       WorkOrderQuote?
   maintenanceEntry     MaintenanceEntry?
+  /// RSA-S4: misiune decontată prin acest CostEntry (1:1).
+  rsaMissionSettlement RsaTowMission? @relation("RsaMissionSettlement")
 
   @@index([tenantId])
   @@index([vehicleId])
@@ -1722,6 +1733,10 @@ model Supplier {
   serviceAppointments  ServiceAppointment[]
   mobilityAssignments  MobilityAssignment[]
   roadsideInterventions RoadsideIntervention[]
+  rsaSupplierProfile   RsaSupplierProfile?
+  rsaPlans             RsaPlan[]
+  rsaVehicleEnrollments RsaVehicleEnrollment[]
+  rsaTowMissions       RsaTowMission[]
   clientAllocations    ClientSupplierAllocation[]
   documents            SupplierDocument[]
   menuItems            SupplierMenuItem[]
@@ -2551,6 +2566,14 @@ enum RoadsideInterventionStatus {
   cancelled
 }
 
+/// RSA-S1 — rezultat verificare acoperire la creare intervenție.
+enum RsaEntitlementStatus {
+  covered
+  partial
+  out_of_plan
+  pay_per_use
+}
+
 /// Intervenție asistență rutieră (ex. tractare) pe dosar — nu e WO separat.
 model RoadsideIntervention {
   id              String                       @id @default(cuid())
@@ -2570,6 +2593,13 @@ model RoadsideIntervention {
   onSiteAt        DateTime?
   completedAt     DateTime?
   notes           String?
+  /// Snapshot entitlement la creare (S1).
+  entitlementStatus RsaEntitlementStatus       @default(pay_per_use)
+  enrollmentId      String?
+  entitlementNote   String?
+  /// Snapshot plan la creare (S4 remediere — settle nu citește plan live).
+  entitlementIncludedTowKm      Int?
+  entitlementOveragePerKmCents  Int?
   createdAt       DateTime                     @default(now())
   updatedAt       DateTime                     @updatedAt
   tenant          Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2579,6 +2609,8 @@ model RoadsideIntervention {
   client          Client                       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   vehicle         Vehicle?                     @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   supplier        Supplier?                    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  enrollment      RsaVehicleEnrollment?        @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  towMission      RsaTowMission?
 
   @@unique([tenantId, displayNumber])
   @@index([tenantId])
@@ -2586,6 +2618,305 @@ model RoadsideIntervention {
   @@index([sourceTicketId])
   @@index([workOrderId])
   @@index([tenantId, status])
+  @@index([enrollmentId])
+  @@index([tenantId, entitlementStatus])
+}
+
+/// RSA-S0 — profil operațional pe furnizorul de asistență (≠ atelier).
+enum RsaEnrollmentStatus {
+  pending_sync
+  active
+  suspended
+  expired
+  cancelled
+}
+
+model RsaSupplierProfile {
+  id                       String   @id @default(cuid())
+  tenantId                 String
+  supplierId               String   @unique
+  is24x7                   Boolean  @default(true)
+  dispatchPhone24x7        String?
+  dispatchEmail            String?
+  /// Județe acoperite, ex. ["B","IF","PH"] sau ["ALL_RO"].
+  coverageCountiesJson     Json     @default("[]")
+  crossBorderEnabled       Boolean  @default(false)
+  /// Capabilități: tow, jump_start, tire_change, lockout, fuel_delivery, other…
+  supportedKindsJson       Json     @default("[\"tow\",\"jump_start\",\"tire_change\",\"lockout\",\"fuel_delivery\",\"other\"]")
+  slaAckMinutes            Int      @default(10)
+  slaArrivalUrbanMinutes   Int      @default(45)
+  slaArrivalHighwayMinutes Int      @default(60)
+  /// Rate card pay-per-use / out-of-plan (bani RON).
+  baseCalloutOutPlanCents  Int      @default(0)
+  towHookOutPlanCents      Int      @default(0)
+  towPerKmOutPlanCents     Int      @default(0)
+  winchSurchargeCents      Int      @default(0)
+  nightWeekendMultiplierPct Int     @default(0)
+  /// RSA-S5 — broker / 24×7 API.
+  brokerOutboundEnabled    Boolean  @default(false)
+  brokerApiBaseUrl         String?
+  /// AES seal (outbound Bearer) — nu expune UI.
+  brokerApiKeySealed       String?
+  brokerApiKeyLast4        String?
+  brokerInboundEnabled     Boolean  @default(false)
+  brokerInboundSecretHash  String?
+  brokerInboundSecretLast4 String?
+  brokerAutoDispatch       Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  tenant                   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier                 Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  brokerEvents             RsaBrokerEvent[]
+
+  @@index([tenantId])
+}
+
+enum RsaBrokerDirection {
+  outbound
+  inbound
+}
+
+enum RsaBrokerEventStatus {
+  pending
+  sent
+  accepted
+  failed
+  received
+  dry_run
+}
+
+/// RSA-S5 — jurnal evenimente broker (outbound dispatch + inbound webhook).
+model RsaBrokerEvent {
+  id                   String               @id @default(cuid())
+  tenantId             String
+  supplierId           String
+  profileId            String?
+  interventionId       String?
+  missionId            String?
+  direction            RsaBrokerDirection
+  eventType            String
+  status               RsaBrokerEventStatus @default(pending)
+  externalRef          String?
+  requestPayloadJson   Json?
+  responsePayloadJson  Json?
+  errorMessage         String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  profile              RsaSupplierProfile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, supplierId, createdAt])
+  @@index([interventionId])
+  @@index([externalRef])
+}
+
+/// Catalog planuri abonament asistență (per furnizor RSA).
+model RsaPlan {
+  id                        String   @id @default(cuid())
+  tenantId                  String
+  supplierId                String
+  code                      String
+  name                      String
+  description               String?
+  active                    Boolean  @default(true)
+  monthlyFeePerVehicleCents Int      @default(0)
+  /// { tow, jump_start, tire_change, lockout, fuel_delivery, other } → boolean
+  featuresJson              Json     @default("{\"tow\":true,\"jump_start\":true,\"tire_change\":true,\"lockout\":true,\"fuel_delivery\":true,\"other\":false}")
+  includedTowKm             Int      @default(100)
+  maxInterventionsPerYear   Int?
+  overagePerKmCents         Int      @default(0)
+  mobilityIncluded          Boolean  @default(false)
+  mobilityMaxDays           Int?
+  mobilityTriggerHours      Int?     @default(0)
+  mobilityVehicleClass      String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  tenant                    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier                  Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  enrollments               RsaVehicleEnrollment[]
+
+  @@unique([tenantId, supplierId, code])
+  @@index([tenantId, supplierId, active])
+}
+
+/// Înrolare vehicul pe plan RSA (VIN / nr. înmatriculare).
+model RsaVehicleEnrollment {
+  id                     String              @id @default(cuid())
+  tenantId               String
+  clientId               String
+  vehicleId              String
+  planId                 String
+  supplierId             String
+  status                 RsaEnrollmentStatus @default(active)
+  externalSubscriptionNo String?
+  validFrom              DateTime            @db.Date
+  validUntil             DateTime?           @db.Date
+  interventionsUsedCount Int                 @default(0)
+  notes                  String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  tenant                 Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client                 Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  vehicle                Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  plan                   RsaPlan             @relation(fields: [planId], references: [id], onDelete: Restrict)
+  supplier               Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  interventions          RoadsideIntervention[]
+
+  @@index([tenantId, vehicleId, status])
+  @@index([tenantId, clientId, status])
+  @@index([supplierId, status])
+  @@index([planId])
+}
+
+/// RSA-S2 — misiune teren (tractare / transport) pe o intervenție.
+enum RsaMissionStatus {
+  assigned
+  en_route
+  on_scene
+  picked_up
+  in_transit
+  delivered
+  closed
+  cancelled
+}
+
+enum RsaHandoverKind {
+  pickup
+  dropoff
+}
+
+enum RsaHandoverProtocolStatus {
+  draft
+  signed
+  voided
+}
+
+enum RsaHandoverSignerRole {
+  driver
+  customer
+  receiver
+  witness
+}
+
+enum RsaHandoverMediaKind {
+  front
+  rear
+  left
+  right
+  damage
+  interior
+  odometer
+  other
+}
+
+model RsaTowMission {
+  id                   String           @id @default(cuid())
+  tenantId             String
+  interventionId       String           @unique
+  supplierId           String
+  driverUserId         String?
+  driverDisplayName    String?
+  platformPlate        String?
+  status               RsaMissionStatus @default(assigned)
+  pickupLocationText   String?
+  dropoffLocationText  String?
+  etaMinutes           Int?
+  /// Km tractați (input settlement S4).
+  distanceKm           Int?
+  /// CostEntry creat la settle (idempotent).
+  settlementCostEntryId String?         @unique
+  settledAt            DateTime?
+  settlementAmountCents Int?
+  /// Snapshot calculator: lines, mode, entitlement, rate card.
+  settlementBreakdownJson Json?
+  /// Rate card furnizor înghețat la crearea misiunii (S4 remediere).
+  rateCardSnapshotJson Json?
+  assignedAt           DateTime         @default(now())
+  enRouteAt            DateTime?
+  onSceneAt            DateTime?
+  pickedUpAt           DateTime?
+  inTransitAt          DateTime?
+  deliveredAt          DateTime?
+  closedAt             DateTime?
+  cancelledAt          DateTime?
+  cancelReason         String?
+  notes                String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  intervention         RoadsideIntervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  supplier             Supplier         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  driverUser           User?            @relation("RsaMissionDriver", fields: [driverUserId], references: [id], onDelete: SetNull)
+  settlementCostEntry  CostEntry?       @relation("RsaMissionSettlement", fields: [settlementCostEntryId], references: [id], onDelete: SetNull)
+  protocols            RsaHandoverProtocol[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, supplierId, status])
+  @@index([driverUserId])
+}
+
+/// RSA-S2b — proces-verbal digital (preluare sau predare).
+model RsaHandoverProtocol {
+  id                   String                    @id @default(cuid())
+  tenantId             String
+  missionId            String
+  kind                 RsaHandoverKind
+  status               RsaHandoverProtocolStatus @default(draft)
+  locationText         String?
+  odometerKm           Int?
+  fuelLevelPct         Int?
+  damageNotes          String?
+  inventoryNotes       String?
+  checklistJson        Json                      @default("{}")
+  counterpartyName     String?
+  counterpartyRoleNote String?
+  signedAt             DateTime?
+  voidedAt             DateTime?
+  voidReason           String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  tenant               Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mission              RsaTowMission             @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  signatures           RsaHandoverSignature[]
+  media                RsaHandoverMedia[]
+
+  @@unique([missionId, kind])
+  @@index([tenantId, missionId])
+  @@index([tenantId, status])
+}
+
+model RsaHandoverSignature {
+  id              String                @id @default(cuid())
+  tenantId        String
+  protocolId      String
+  role            RsaHandoverSignerRole
+  displayName     String
+  signedAt        DateTime              @default(now())
+  signaturePngUrl String
+  strokePathJson  Json?
+  deviceMetaJson  Json?
+  createdAt       DateTime              @default(now())
+  protocol        RsaHandoverProtocol   @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  @@unique([protocolId, role])
+  @@index([tenantId, protocolId])
+}
+
+model RsaHandoverMedia {
+  id         String               @id @default(cuid())
+  tenantId   String
+  protocolId String
+  kind       RsaHandoverMediaKind @default(other)
+  fileUrl    String
+  fileName   String?
+  caption    String?
+  capturedAt DateTime             @default(now())
+  createdAt  DateTime             @default(now())
+  protocol   RsaHandoverProtocol  @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  @@index([protocolId])
+  @@index([tenantId, protocolId])
 }
 
 enum ImportJobStatus {

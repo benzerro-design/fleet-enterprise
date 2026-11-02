@@ -122,6 +122,7 @@ export type VehicleProfileTab =
   | "maintenance_plan"
   | "dsr"
   | "insurance"
+  | "rsa"
   | "drivers"
   | "consumption";
 
