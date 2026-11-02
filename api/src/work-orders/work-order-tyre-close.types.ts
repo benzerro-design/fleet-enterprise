@@ -58,10 +58,25 @@ export type TyreCloseSeasonalSwap = {
   }>;
 };
 
+/** Doar depozitare: demont (dacă e pe vehicul) + store hotel/client, fără montaj alt set. */
+export type TyreCloseStorageOnly = {
+  setId: string;
+  storeAt: 'at_supplier_hotel' | 'at_client';
+  hotelSupplierId?: string | null;
+  locationCode?: string | null;
+  /** Obligatoriu dacă setul e încă pe vehicul. */
+  demountReadings?: Array<{
+    position: VehicleWheelPosition;
+    treadMm: number;
+    dot?: string | null;
+  }>;
+};
+
 export type TyreCloseDto = {
   intent: TyreWorkIntent;
   /** Obligatoriu la close (sau pe WO odometerKmOut/In). */
   odometerKm?: number | null;
   seasonalSwap?: TyreCloseSeasonalSwap;
+  storageOnly?: TyreCloseStorageOnly;
   outcomes?: TyreClosePositionOutcome[];
 };

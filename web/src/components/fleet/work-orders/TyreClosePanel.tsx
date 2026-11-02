@@ -40,6 +40,8 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
   const [storeAt, setStoreAt] = useState<"at_supplier_hotel" | "at_client">("at_client");
   const [hotelSupplierId, setHotelSupplierId] = useState(wo.supplierId ?? "");
   const [hotelSuppliers, setHotelSuppliers] = useState<Array<{ id: string; label: string }>>([]);
+  const [locationCode, setLocationCode] = useState("");
+  const [storageSetId, setStorageSetId] = useState("");
   const [puncturePos, setPuncturePos] = useState<(typeof POSITIONS)[number]>("fl");
   const [newDot, setNewDot] = useState("");
   const [newTread, setNewTread] = useState("");
@@ -62,8 +64,10 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
 
   const applied = !!wo.tyreCloseAppliedAt;
   const isSeasonal = intent === "seasonal_changeover";
+  const isStorageOnly = intent === "storage_only";
   const isPuncture =
     intent === "roadside_puncture" || intent === "eol_replace" || intent === "purchase";
+  const isInspect = !isSeasonal && !isPuncture && !isStorageOnly;
 
   useEffect(() => {
     let cancelled = false;
@@ -123,7 +127,28 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
   useEffect(() => {
     if (mountedSet && !demountSetId) setDemountSetId(mountedSet.id);
     if (storageSets[0] && !mountSetId) setMountSetId(storageSets[0].id);
-  }, [mountedSet, storageSets, demountSetId, mountSetId]);
+    if (!storageSetId) {
+      if (mountedSet) setStorageSetId(mountedSet.id);
+      else if (storageSets[0]) setStorageSetId(storageSets[0].id);
+    }
+  }, [mountedSet, storageSets, demountSetId, mountSetId, storageSetId]);
+
+  useEffect(() => {
+    if (isStorageOnly) setStoreAt("at_supplier_hotel");
+  }, [isStorageOnly]);
+
+  function buildDemountReadings() {
+    const demountReadings = POSITIONS.map((position) => {
+      const raw = demountTreads[position].trim();
+      if (!raw) return null;
+      const treadMm = Number(raw);
+      if (!Number.isFinite(treadMm)) {
+        throw new Error(`Profil invalid pe ${position.toUpperCase()}`);
+      }
+      return { position, treadMm };
+    }).filter((r): r is { position: (typeof POSITIONS)[number]; treadMm: number } => r != null);
+    return demountReadings;
+  }
 
   async function submit() {
     setPending(true);
@@ -138,15 +163,7 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
         if (!demountSetId || !mountSetId) {
           throw new Error("Selectează set demontat și set montat");
         }
-        const demountReadings = POSITIONS.map((position) => {
-          const raw = demountTreads[position].trim();
-          if (!raw) return null;
-          const treadMm = Number(raw);
-          if (!Number.isFinite(treadMm)) {
-            throw new Error(`Profil invalid pe ${position.toUpperCase()}`);
-          }
-          return { position, treadMm };
-        }).filter((r): r is { position: (typeof POSITIONS)[number]; treadMm: number } => r != null);
+        const demountReadings = buildDemountReadings();
         if (demountReadings.length === 0) {
           throw new Error("Completează profilul (mm) pe pozițiile demontate");
         }
@@ -158,6 +175,23 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
           ...(storeAt === "at_supplier_hotel" && hotelSupplierId
             ? { hotelSupplierId }
             : {}),
+        };
+      } else if (isStorageOnly) {
+        if (!storageSetId) throw new Error("Selectează setul de depozitat");
+        if (storeAt === "at_supplier_hotel" && !hotelSupplierId) {
+          throw new Error("Selectează depozitarul hotel");
+        }
+        const selected = sets.find((s) => s.id === storageSetId);
+        const demountReadings = buildDemountReadings();
+        if (selected?.isMounted && demountReadings.length === 0) {
+          throw new Error("Setul e pe vehicul — completează profilul pe pozițiile demontate");
+        }
+        body.storageOnly = {
+          setId: storageSetId,
+          storeAt,
+          ...(demountReadings.length ? { demountReadings } : {}),
+          ...(storeAt === "at_supplier_hotel" && hotelSupplierId ? { hotelSupplierId } : {}),
+          ...(locationCode.trim() ? { locationCode: locationCode.trim().toUpperCase() } : {}),
         };
       } else if (isPuncture) {
         if (!newDot.trim()) throw new Error("DOT anvelopă nouă este obligatoriu");
@@ -342,6 +376,105 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
             </div>
           ) : null}
 
+          {isStorageOnly ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <p className="sm:col-span-2 text-zinc-500">
+                Demontează setul (dacă e pe vehicul) și îl depozitează — fără montaj alt set.
+              </p>
+              <label className="text-zinc-400 sm:col-span-2">
+                Set de depozitat
+                <select
+                  value={storageSetId}
+                  disabled={!canWrite || pending}
+                  onChange={(e) => setStorageSetId(e.target.value)}
+                  className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+                >
+                  <option value="">—</option>
+                  {sets.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {(s.name ?? s.season) + (s.isMounted ? " (montat)" : "")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-zinc-400 sm:col-span-2">
+                Destinație
+                <select
+                  value={storeAt}
+                  disabled={!canWrite || pending}
+                  onChange={(e) =>
+                    setStoreAt(e.target.value as "at_supplier_hotel" | "at_client")
+                  }
+                  className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+                >
+                  <option value="at_supplier_hotel">Hotel anvelope</option>
+                  <option value="at_client">La client</option>
+                </select>
+              </label>
+              {storeAt === "at_supplier_hotel" ? (
+                <>
+                  <label className="text-zinc-400 sm:col-span-2">
+                    Depozitar
+                    <select
+                      value={hotelSupplierId}
+                      disabled={!canWrite || pending}
+                      onChange={(e) => setHotelSupplierId(e.target.value)}
+                      className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+                    >
+                      {wo.supplierId &&
+                      !hotelSuppliers.some((s) => s.id === wo.supplierId) ? (
+                        <option value={wo.supplierId}>
+                          Furnizor comandă (verifică capacitate hotel)
+                        </option>
+                      ) : null}
+                      {hotelSuppliers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-zinc-400 sm:col-span-2">
+                    Cod locație raft (opțional)
+                    <input
+                      value={locationCode}
+                      disabled={!canWrite || pending}
+                      onChange={(e) => setLocationCode(e.target.value.toUpperCase())}
+                      className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+                      placeholder="ex. A-12"
+                    />
+                  </label>
+                </>
+              ) : null}
+              <div className="sm:col-span-2">
+                <p className="mb-1 text-zinc-400">
+                  Profil demontat (mm){" "}
+                  {sets.find((s) => s.id === storageSetId)?.isMounted ? (
+                    <span className="text-amber-400">*</span>
+                  ) : (
+                    <span className="text-zinc-600">(dacă e pe vehicul)</span>
+                  )}
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {POSITIONS.map((p) => (
+                    <label key={p} className="text-zinc-500">
+                      {p.toUpperCase()}
+                      <input
+                        value={demountTreads[p]}
+                        disabled={!canWrite || pending}
+                        onChange={(e) =>
+                          setDemountTreads((prev) => ({ ...prev, [p]: e.target.value }))
+                        }
+                        inputMode="decimal"
+                        className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-100"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {isPuncture ? (
             <div className="grid gap-2 sm:grid-cols-3">
               <label className="text-zinc-400">
@@ -380,7 +513,7 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
             </div>
           ) : null}
 
-          {!isSeasonal && !isPuncture ? (
+          {isInspect ? (
             <label className="block text-zinc-400">
               Profil măsurat FL (mm) <span className="text-amber-400">*</span>
               <input

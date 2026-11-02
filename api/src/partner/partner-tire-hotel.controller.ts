@@ -54,6 +54,20 @@ export class PartnerTireHotelController {
     });
   }
 
+  @Get('quote-fee')
+  @Roles(...FLEET_READ_ROLES)
+  quoteFee(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('supplierId') supplierId?: string,
+    @Query('setId') setId?: string,
+  ) {
+    return this.hotel.quoteFee(tenantSlug, access, {
+      supplierId: supplierId?.trim(),
+      setId: setId ?? '',
+    });
+  }
+
   @Post('check-in')
   @Roles(...FLEET_WRITE_ROLES)
   checkIn(

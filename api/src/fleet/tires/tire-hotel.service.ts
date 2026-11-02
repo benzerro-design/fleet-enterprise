@@ -275,7 +275,7 @@ export class TireHotelService {
   }
 
   private async resolveFeeCentsForSetTx(
-    tx: Prisma.TransactionClient,
+    tx: { supplier: Prisma.TransactionClient['supplier'] },
     params: {
       tenantId: string;
       supplierId: string;
@@ -301,6 +301,60 @@ export class TireHotelService {
       mountedAs: params.mountedAs,
       rimInch: dominantRimInchFromSizes(params.sizes),
     });
+  }
+
+  /** Quote storage fee for a set at a hotel supplier (preview before check-in). */
+  async quoteFeeForSet(params: {
+    tenantId: string;
+    supplierId: string;
+    setId: string;
+  }): Promise<{
+    setId: string;
+    supplierId: string;
+    feeCents: number | null;
+    rimInch: number | null;
+    mountedAs: string | null;
+    dominantSize: string | null;
+  }> {
+    const set = await this.prisma.tireSet.findFirst({
+      where: { id: params.setId, tenantId: params.tenantId, archivedAt: null },
+      select: {
+        id: true,
+        mountedAs: true,
+        items: { select: { asset: { select: { size: true } } } },
+      },
+    });
+    if (!set) throw new NotFoundException('Tire set not found');
+    const sizes = set.items.map((i) => i.asset.size);
+    const rimInch = dominantRimInchFromSizes(sizes);
+    const feeCents = await this.resolveFeeCentsForSetTx(this.prisma, {
+      tenantId: params.tenantId,
+      supplierId: params.supplierId,
+      mountedAs: set.mountedAs,
+      sizes,
+    });
+    const sizeCounts = new Map<string, number>();
+    for (const size of sizes) {
+      const key = size?.trim();
+      if (!key) continue;
+      sizeCounts.set(key, (sizeCounts.get(key) ?? 0) + 1);
+    }
+    let dominantSize: string | null = null;
+    let best = -1;
+    for (const [size, count] of sizeCounts) {
+      if (count > best) {
+        dominantSize = size;
+        best = count;
+      }
+    }
+    return {
+      setId: set.id,
+      supplierId: params.supplierId,
+      feeCents,
+      rimInch,
+      mountedAs: set.mountedAs,
+      dominantSize,
+    };
   }
 
   async checkOut(params: TireHotelCheckOutParams) {

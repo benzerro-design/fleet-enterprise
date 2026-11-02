@@ -15,6 +15,7 @@ import {
   TYRE_WORK_INTENTS,
   type TyreCloseDto,
   type TyreClosePositionOutcome,
+  type TyreCloseStorageOnly,
   type TyreWorkIntent,
 } from './work-order-tyre-close.types';
 import { WorkOrdersService } from './work-orders.service';
@@ -128,6 +129,80 @@ export function assertTyreCloseDto(body: unknown): TyreCloseDto {
     };
   }
 
+  let storageOnly: TyreCloseStorageOnly | undefined;
+  if (o.storageOnly !== undefined && o.storageOnly !== null) {
+    if (typeof o.storageOnly !== 'object' || Array.isArray(o.storageOnly)) {
+      throw new BadRequestException('storageOnly must be an object');
+    }
+    const s = o.storageOnly as Record<string, unknown>;
+    const setId = typeof s.setId === 'string' ? s.setId.trim() : '';
+    const storeAt = s.storeAt;
+    if (!setId) throw new BadRequestException('storageOnly.setId is required');
+    if (storeAt !== 'at_supplier_hotel' && storeAt !== 'at_client') {
+      throw new BadRequestException('storageOnly.storeAt must be at_supplier_hotel or at_client');
+    }
+    const hotelSupplierId =
+      s.hotelSupplierId === undefined || s.hotelSupplierId === null
+        ? undefined
+        : typeof s.hotelSupplierId === 'string'
+          ? s.hotelSupplierId.trim() || null
+          : (() => {
+              throw new BadRequestException('storageOnly.hotelSupplierId invalid');
+            })();
+    if (storeAt === 'at_client' && hotelSupplierId) {
+      throw new BadRequestException(
+        'storageOnly.hotelSupplierId is only valid when storeAt is at_supplier_hotel',
+      );
+    }
+    let demountReadings: TyreCloseStorageOnly['demountReadings'];
+    if (s.demountReadings !== undefined && s.demountReadings !== null) {
+      if (!Array.isArray(s.demountReadings)) {
+        throw new BadRequestException('storageOnly.demountReadings must be an array');
+      }
+      demountReadings = s.demountReadings.map((row, idx) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) {
+          throw new BadRequestException(`storageOnly.demountReadings[${idx}] invalid`);
+        }
+        const r = row as Record<string, unknown>;
+        const position = r.position;
+        if (typeof position !== 'string' || !ALL_POSITIONS.has(position)) {
+          throw new BadRequestException(`storageOnly.demountReadings[${idx}].position invalid`);
+        }
+        if (r.treadMm === undefined || r.treadMm === null || !Number.isFinite(Number(r.treadMm))) {
+          throw new BadRequestException(
+            `storageOnly.demountReadings[${idx}].treadMm is required`,
+          );
+        }
+        const treadMm = Number(r.treadMm);
+        if (treadMm < 0 || treadMm > 30) {
+          throw new BadRequestException(
+            `storageOnly.demountReadings[${idx}].treadMm out of range`,
+          );
+        }
+        const dot =
+          r.dot === undefined || r.dot === null ? undefined : String(r.dot).trim() || null;
+        return {
+          position: position as VehicleWheelPosition,
+          treadMm,
+          dot,
+        };
+      });
+    }
+    const locationCode =
+      s.locationCode === undefined || s.locationCode === null
+        ? undefined
+        : typeof s.locationCode === 'string'
+          ? s.locationCode.trim() || null
+          : undefined;
+    storageOnly = {
+      setId,
+      storeAt,
+      demountReadings,
+      locationCode,
+      ...(hotelSupplierId ? { hotelSupplierId } : {}),
+    };
+  }
+
   let outcomes: TyreClosePositionOutcome[] | undefined;
   if (o.outcomes !== undefined && o.outcomes !== null) {
     if (!Array.isArray(o.outcomes)) throw new BadRequestException('outcomes must be an array');
@@ -231,11 +306,24 @@ export function assertTyreCloseDto(body: unknown): TyreCloseDto {
     });
   }
 
-  if (!seasonalSwap && (!outcomes || outcomes.length === 0)) {
-    throw new BadRequestException('Provide seasonalSwap or at least one position outcome');
+  if (intent === 'storage_only') {
+    if (!storageOnly) {
+      throw new BadRequestException('storage_only intent requires storageOnly payload');
+    }
+    if (seasonalSwap) {
+      throw new BadRequestException('storage_only cannot combine with seasonalSwap');
+    }
+  } else if (storageOnly) {
+    throw new BadRequestException('storageOnly is only valid for storage_only intent');
   }
 
-  return { intent, odometerKm, seasonalSwap, outcomes };
+  if (!seasonalSwap && !storageOnly && (!outcomes || outcomes.length === 0)) {
+    throw new BadRequestException(
+      'Provide seasonalSwap, storageOnly, or at least one position outcome',
+    );
+  }
+
+  return { intent, odometerKm, seasonalSwap, storageOnly, outcomes };
 }
 
 @Injectable()
@@ -343,6 +431,18 @@ export class WorkOrderTyreCloseService {
           actorUserId,
           odometerKm,
           swap: dto.seasonalSwap,
+        });
+      }
+
+      if (dto.storageOnly) {
+        await this.applyStorageOnlyTx(tx, {
+          tenantId,
+          vehicleId,
+          workOrderId,
+          supplierId,
+          actorUserId,
+          odometerKm,
+          storage: dto.storageOnly,
         });
       }
 
@@ -588,6 +688,178 @@ export class WorkOrderTyreCloseService {
         workOrderId: ctx.workOrderId,
         actorUserId: ctx.actorUserId,
         payload: { source: 'tyre_close_seasonal', mountSetId: ctx.swap.mountSetId, position },
+      });
+    }
+  }
+
+  private async applyStorageOnlyTx(
+    tx: Prisma.TransactionClient,
+    ctx: {
+      tenantId: string;
+      vehicleId: string;
+      workOrderId: string;
+      supplierId: string | null;
+      actorUserId?: string;
+      odometerKm: number | null;
+      storage: TyreCloseStorageOnly;
+    },
+  ): Promise<void> {
+    const storeKind: TirePlacementKind = ctx.storage.storeAt;
+    const hotelSupplierId =
+      storeKind === 'at_supplier_hotel'
+        ? (ctx.storage.hotelSupplierId?.trim() || ctx.supplierId || null)
+        : null;
+    if (storeKind === 'at_supplier_hotel' && !hotelSupplierId) {
+      throw new BadRequestException(
+        'storageOnly.storeAt at_supplier_hotel requires hotelSupplierId or work order supplierId',
+      );
+    }
+    if (hotelSupplierId) {
+      const hotel = await tx.supplier.findFirst({
+        where: { id: hotelSupplierId, tenantId: ctx.tenantId },
+        select: { id: true },
+      });
+      if (!hotel) throw new BadRequestException('storageOnly.hotelSupplierId not found');
+      await assertSupplierTireStorage(tx, ctx.tenantId, hotelSupplierId);
+    }
+
+    const set = await tx.tireSet.findFirst({
+      where: {
+        id: ctx.storage.setId,
+        tenantId: ctx.tenantId,
+        vehicleId: ctx.vehicleId,
+        archivedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!set) {
+      throw new BadRequestException('storageOnly.setId not found for this vehicle/tenant');
+    }
+
+    const setItems = await tx.tireSetItem.findMany({
+      where: { setId: ctx.storage.setId },
+      select: { assetId: true },
+    });
+    if (setItems.length === 0) {
+      throw new BadRequestException('storageOnly set has no tyre assets');
+    }
+    const assetIds = setItems.map((i) => i.assetId);
+
+    const onVehicle = await tx.tirePlacement.findMany({
+      where: {
+        vehicleId: ctx.vehicleId,
+        kind: 'on_vehicle',
+        validTo: null,
+        OR: [{ setId: ctx.storage.setId }, { assetId: { in: assetIds } }],
+      },
+      orderBy: { position: 'asc' },
+    });
+
+    const readingByPos = new Map(
+      (ctx.storage.demountReadings ?? []).map((r) => [r.position, r] as const),
+    );
+
+    if (onVehicle.length > 0) {
+      if (!ctx.storage.demountReadings?.length) {
+        throw new BadRequestException(
+          'storageOnly.demountReadings required when set is currently on vehicle',
+        );
+      }
+      for (const pl of onVehicle) {
+        if (!pl.position) continue;
+        const reading = readingByPos.get(pl.position);
+        if (!reading) {
+          throw new BadRequestException(
+            `storageOnly.demountReadings missing tread for position ${pl.position}`,
+          );
+        }
+        const assetPatch: Prisma.TireAssetUpdateInput = { treadMm: reading.treadMm };
+        if (reading.dot !== undefined && reading.dot !== null && reading.dot.trim()) {
+          assetPatch.dot = reading.dot.trim();
+        }
+        await tx.tireAsset.update({ where: { id: pl.assetId }, data: assetPatch });
+
+        const now = new Date();
+        await tx.tirePlacement.update({
+          where: { id: pl.id },
+          data: { validTo: now },
+        });
+        await tx.tireEvent.create({
+          data: {
+            tenantId: ctx.tenantId,
+            type: 'demount',
+            assetId: pl.assetId,
+            setId: pl.setId ?? ctx.storage.setId,
+            vehicleId: ctx.vehicleId,
+            workOrderId: ctx.workOrderId,
+            odometerKm: ctx.odometerKm,
+            actorUserId: ctx.actorUserId ?? undefined,
+            payload: {
+              source: 'tyre_close_storage_only',
+              position: pl.position,
+              treadMm: reading.treadMm,
+              dot: reading.dot ?? null,
+            },
+          },
+        });
+
+        await this.tires.placeAssetTx(tx, {
+          tenantId: ctx.tenantId,
+          assetId: pl.assetId,
+          kind: storeKind,
+          supplierId: storeKind === 'at_supplier_hotel' ? hotelSupplierId : undefined,
+          locationCode: ctx.storage.locationCode ?? undefined,
+          setId: pl.setId ?? ctx.storage.setId,
+          eventType: 'store',
+          vehicleIdForEvent: ctx.vehicleId,
+          workOrderId: ctx.workOrderId,
+          actorUserId: ctx.actorUserId,
+          payload: {
+            source: 'tyre_close_storage_only',
+            setId: ctx.storage.setId,
+            hotelSupplierId: hotelSupplierId ?? null,
+          },
+        });
+      }
+    } else {
+      // Already off-vehicle — place all set assets at hotel/client.
+      for (const item of setItems) {
+        await this.tires.placeAssetTx(tx, {
+          tenantId: ctx.tenantId,
+          assetId: item.assetId,
+          kind: storeKind,
+          supplierId: storeKind === 'at_supplier_hotel' ? hotelSupplierId : undefined,
+          locationCode: ctx.storage.locationCode ?? undefined,
+          setId: ctx.storage.setId,
+          eventType: 'store',
+          vehicleIdForEvent: ctx.vehicleId,
+          workOrderId: ctx.workOrderId,
+          actorUserId: ctx.actorUserId,
+          payload: {
+            source: 'tyre_close_storage_only',
+            setId: ctx.storage.setId,
+            hotelSupplierId: hotelSupplierId ?? null,
+          },
+        });
+      }
+    }
+
+    if (storeKind === 'at_supplier_hotel' && hotelSupplierId) {
+      const intakeTreadNotes = (ctx.storage.demountReadings ?? [])
+        .map((r) => {
+          const pos = r.position.toUpperCase();
+          const dot = r.dot?.trim() ? ` DOT ${r.dot.trim()}` : '';
+          return `${pos} ${r.treadMm.toFixed(1)}mm${dot}`;
+        })
+        .join('; ');
+      await this.tireHotel.recordStayAfterStoreTx(tx, {
+        tenantId: ctx.tenantId,
+        supplierId: hotelSupplierId,
+        setId: ctx.storage.setId,
+        locationCode: ctx.storage.locationCode,
+        workOrderId: ctx.workOrderId,
+        sourceSystem: 'tyre_close_storage_only',
+        intakeTreadNotes: intakeTreadNotes || undefined,
       });
     }
   }

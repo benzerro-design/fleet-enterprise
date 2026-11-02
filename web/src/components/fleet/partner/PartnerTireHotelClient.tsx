@@ -60,6 +60,12 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
   const [searchHits, setSearchHits] = useState<TireHotelSearchVehicle[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [selectedFeeQuote, setSelectedFeeQuote] = useState<{
+    feeCents: number | null;
+    rimInch: number | null;
+    mountedAs: string | null;
+    dominantSize: string | null;
+  } | null>(null);
   const [locationCode, setLocationCode] = useState("");
   const [intakePhotoUrlsInput, setIntakePhotoUrlsInput] = useState("");
   const [intakePhotoFileUrls, setIntakePhotoFileUrls] = useState<string[]>([]);
@@ -123,11 +129,32 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       setSearchHits(data.vehicles ?? []);
       setSelectedSetId(null);
       setSelectedVehicleId(null);
+      setSelectedFeeQuote(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
     } finally {
       setBusy(null);
     }
+  }
+
+  function selectSetForCheckIn(
+    vehicleId: string,
+    set: {
+      id: string;
+      suggestedFeeCents?: number | null;
+      rimInch?: number | null;
+      mountedAs?: string | null;
+      dominantSize?: string | null;
+    },
+  ) {
+    setSelectedSetId(set.id);
+    setSelectedVehicleId(vehicleId);
+    setSelectedFeeQuote({
+      feeCents: set.suggestedFeeCents ?? null,
+      rimInch: set.rimInch ?? null,
+      mountedAs: set.mountedAs ?? null,
+      dominantSize: set.dominantSize ?? null,
+    });
   }
 
   async function checkIn() {
@@ -169,6 +196,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       setSearchHits([]);
       setSelectedSetId(null);
       setSelectedVehicleId(null);
+      setSelectedFeeQuote(null);
       setLocationCode("");
       setIntakePhotoUrlsInput("");
       setIntakePhotoFileUrls([]);
@@ -276,10 +304,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                   <button
                     type="button"
                     disabled={!canWrite || s.hasActiveStayHere}
-                    onClick={() => {
-                      setSelectedSetId(s.id);
-                      setSelectedVehicleId(v.id);
-                    }}
+                    onClick={() => selectSetForCheckIn(v.id, s)}
                     className={`flex w-full flex-col gap-1 rounded-xl border px-4 py-3 text-left transition-colors ${
                       selectedSetId === s.id
                         ? "border-violet-500 bg-violet-950/40"
@@ -291,6 +316,14 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                     </span>
                     <span className="text-xs text-zinc-500">
                       {vehicleTireSeasonLabel(s.season)} · {s.itemCount} anvelope
+                      {s.mountedAs
+                        ? ` · ${tireMountedAsLabel(
+                            s.mountedAs === "tyre_only" ? "tyre_only" : "on_rim",
+                          )}`
+                        : ""}
+                      {s.suggestedFeeCents != null
+                        ? ` · ${(s.suggestedFeeCents / 100).toLocaleString("ro-RO")} lei/sezon`
+                        : ""}
                       {s.hasActiveStayHere ? " · deja la hotel" : ""}
                     </span>
                   </button>
@@ -303,6 +336,30 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
 
         {selectedSetId ? (
           <div className="space-y-3 border-t border-zinc-800/80 pt-3">
+            {selectedFeeQuote ? (
+              <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-100/90">
+                <p className="font-medium text-emerald-200">Tarif estimat la check-in</p>
+                <p className="mt-1">
+                  {selectedFeeQuote.feeCents != null
+                    ? `${(selectedFeeQuote.feeCents / 100).toLocaleString("ro-RO")} lei / sezon`
+                    : "Nesetat pe fișa tarifară a furnizorului"}
+                  {selectedFeeQuote.dominantSize
+                    ? ` · ${selectedFeeQuote.dominantSize}`
+                    : selectedFeeQuote.rimInch != null
+                      ? ` · R${selectedFeeQuote.rimInch}`
+                      : ""}
+                  {selectedFeeQuote.mountedAs
+                    ? ` · ${tireMountedAsLabel(
+                        selectedFeeQuote.mountedAs === "tyre_only" ? "tyre_only" : "on_rim",
+                      )}`
+                    : ""}
+                </p>
+                <p className="mt-1 text-[11px] text-emerald-200/60">
+                  Se aplică automat din grila pe diametru / default hotel. Poți confirma fără a
+                  introduce manual prețul.
+                </p>
+              </div>
+            ) : null}
             <input
               value={locationCode}
               onChange={(e) => setLocationCode(e.target.value.toUpperCase())}

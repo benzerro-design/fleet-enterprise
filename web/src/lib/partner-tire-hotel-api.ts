@@ -44,6 +44,19 @@ export type TireHotelSearchSet = {
   itemCount: number;
   qrPayload: string;
   hasActiveStayHere: boolean;
+  mountedAs?: string | null;
+  suggestedFeeCents?: number | null;
+  rimInch?: number | null;
+  dominantSize?: string | null;
+};
+
+export type TireHotelFeeQuote = {
+  setId: string;
+  supplierId: string;
+  feeCents: number | null;
+  rimInch: number | null;
+  mountedAs: string | null;
+  dominantSize: string | null;
 };
 
 export type TireHotelSearchVehicle = {

@@ -198,27 +198,72 @@ export class PartnerTireHotelService {
       orderBy: [{ createdAt: 'asc' }],
     });
 
-    const byVehicle = new Map<string, typeof sets>();
+    const mapped: Array<{
+      vehicleId: string;
+      set: {
+        id: string;
+        season: (typeof sets)[number]['season'];
+        name: string | null;
+        itemCount: number;
+        qrPayload: string;
+        hasActiveStayHere: boolean;
+        mountedAs: string | null;
+        suggestedFeeCents: number | null;
+        rimInch: number | null;
+        dominantSize: string | null;
+      };
+    }> = [];
     for (const s of sets) {
-      const list = byVehicle.get(s.vehicleId) ?? [];
-      list.push(s);
-      byVehicle.set(s.vehicleId, list);
-    }
-
-    return {
-      vehicles: vehicles.map((v) => ({
-        id: v.id,
-        registrationNumber: v.registrationNumber,
-        sets: (byVehicle.get(v.id) ?? []).map((s) => ({
+      const quote = await this.hotel.quoteFeeForSet({
+        tenantId,
+        supplierId,
+        setId: s.id,
+      });
+      mapped.push({
+        vehicleId: s.vehicleId,
+        set: {
           id: s.id,
           season: s.season,
           name: s.name,
           itemCount: s._count.items,
           qrPayload: tireSetQrPayload(s.id),
           hasActiveStayHere: s.storageStays.length > 0,
-        })),
+          mountedAs: quote.mountedAs,
+          suggestedFeeCents: quote.feeCents,
+          rimInch: quote.rimInch,
+          dominantSize: quote.dominantSize,
+        },
+      });
+    }
+    const setsByVehicle = new Map<string, (typeof mapped)[number]['set'][]>();
+    for (const row of mapped) {
+      const list = setsByVehicle.get(row.vehicleId) ?? [];
+      list.push(row.set);
+      setsByVehicle.set(row.vehicleId, list);
+    }
+
+    return {
+      vehicles: vehicles.map((v) => ({
+        id: v.id,
+        registrationNumber: v.registrationNumber,
+        sets: setsByVehicle.get(v.id) ?? [],
       })),
     };
+  }
+
+  async quoteFee(
+    tenantSlug: string,
+    access: AccessContext,
+    opts: { supplierId?: string; setId: string },
+  ) {
+    const { tenantId, supplierId } = await this.resolveSupplier(
+      tenantSlug,
+      access,
+      opts.supplierId,
+    );
+    const setId = opts.setId?.trim();
+    if (!setId) throw new BadRequestException('setId is required');
+    return this.hotel.quoteFeeForSet({ tenantId, supplierId, setId });
   }
 
   async checkIn(
@@ -276,6 +321,11 @@ export class PartnerTireHotelService {
     if (!set) {
       return { vehicles: [] as { id: string; registrationNumber: string; sets: unknown[] }[] };
     }
+    const quote = await this.hotel.quoteFeeForSet({
+      tenantId,
+      supplierId,
+      setId: set.id,
+    });
     return {
       vehicles: [
         {
@@ -289,6 +339,10 @@ export class PartnerTireHotelService {
               itemCount: set._count.items,
               qrPayload: tireSetQrPayload(set.id),
               hasActiveStayHere: set.storageStays.length > 0,
+              mountedAs: quote.mountedAs,
+              suggestedFeeCents: quote.feeCents,
+              rimInch: quote.rimInch,
+              dominantSize: quote.dominantSize,
             },
           ],
         },
