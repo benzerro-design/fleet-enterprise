@@ -5,16 +5,23 @@ import { TireDomainService } from './tire-domain.service';
 import { tireSetQrPayload } from './tire-domain.types';
 import {
   dominantRimInchFromSizes,
+  mergeTireStorageFeeCatalog,
   resolveTireStorageFeeCents,
+  type TireStorageFeeCatalog,
 } from './tire-storage-fee';
+import { resolveStayLocationInput, parseStayLocation } from './tire-stay-location';
 
 export { tireSetQrPayload };
+
+export type TireHotelReleaseKind = 'at_client' | 'in_transit' | 'scrap' | 'quarantine';
 
 export type TireHotelCheckInParams = {
   tenantId: string;
   supplierId: string;
   setId: string;
-  locationCode: string;
+  locationCode?: string | null;
+  bayCode?: string | null;
+  binCode?: string | null;
   intakePhotos?: Prisma.InputJsonValue;
   intakeTreadNotes?: string | null;
   feeCents?: number | null;
@@ -31,8 +38,18 @@ export type TireHotelCheckOutParams = {
   supplierId: string;
   stayId: string;
   actorUserId?: string | null;
-  /** Default at_client on the set's vehicle context. */
-  releaseKind?: 'at_client';
+  /** Default at_client. */
+  releaseKind?: TireHotelReleaseKind;
+};
+
+export type TireHotelRelocateParams = {
+  tenantId: string;
+  supplierId: string;
+  stayId: string;
+  locationCode?: string | null;
+  bayCode?: string | null;
+  binCode?: string | null;
+  actorUserId?: string | null;
 };
 
 @Injectable()
@@ -47,15 +64,20 @@ export class TireHotelService {
   }
 
   async checkInTx(tx: Prisma.TransactionClient, params: TireHotelCheckInParams) {
-    const locationCode = params.locationCode?.trim();
+    const loc = resolveStayLocationInput({
+      locationCode: params.locationCode,
+      bayCode: params.bayCode,
+      binCode: params.binCode,
+    });
+    const locationCode = loc.locationCode;
     if (!locationCode) {
-      throw new BadRequestException('locationCode is required');
+      throw new BadRequestException('locationCode or bayCode is required');
     }
 
     const set = await tx.tireSet.findFirst({
       where: { id: params.setId, tenantId: params.tenantId, archivedAt: null },
       include: {
-        vehicle: { select: { id: true, registrationNumber: true } },
+        vehicle: { select: { id: true, registrationNumber: true, clientId: true } },
         items: {
           orderBy: { sortOrder: 'asc' },
           include: {
@@ -135,6 +157,7 @@ export class TireHotelService {
       feeCents = await this.resolveFeeCentsForSetTx(tx, {
         tenantId: params.tenantId,
         supplierId: params.supplierId,
+        clientId: set.vehicle.clientId,
         mountedAs: set.mountedAs,
         sizes: set.items.map((i) => i.asset.size),
       });
@@ -247,6 +270,7 @@ export class TireHotelService {
         where: { id: params.setId, tenantId: params.tenantId },
         select: {
           mountedAs: true,
+          vehicle: { select: { clientId: true } },
           items: { select: { asset: { select: { size: true } } } },
         },
       });
@@ -254,6 +278,7 @@ export class TireHotelService {
         feeCents = await this.resolveFeeCentsForSetTx(tx, {
           tenantId: params.tenantId,
           supplierId: params.supplierId,
+          clientId: set.vehicle.clientId,
           mountedAs: set.mountedAs,
           sizes: set.items.map((i) => i.asset.size),
         });
@@ -275,10 +300,14 @@ export class TireHotelService {
   }
 
   private async resolveFeeCentsForSetTx(
-    tx: { supplier: Prisma.TransactionClient['supplier'] },
+    tx: {
+      supplier: Prisma.TransactionClient['supplier'];
+      clientSupplierAllocation: Prisma.TransactionClient['clientSupplierAllocation'];
+    },
     params: {
       tenantId: string;
       supplierId: string;
+      clientId?: string | null;
       mountedAs: string | null;
       sizes: Array<string | null | undefined>;
     },
@@ -292,12 +321,34 @@ export class TireHotelService {
       },
     });
     if (!supplier) return null;
+    let catalog: TireStorageFeeCatalog = {
+      tireStorageFeeTyreOnlyCents: supplier.tireStorageFeeTyreOnlyCents,
+      tireStorageFeeOnRimCents: supplier.tireStorageFeeOnRimCents,
+      tireStorageFeeBands: supplier.tireStorageFeeBands,
+    };
+    if (params.clientId) {
+      const alloc = await tx.clientSupplierAllocation.findFirst({
+        where: {
+          tenantId: params.tenantId,
+          clientId: params.clientId,
+          supplierId: params.supplierId,
+        },
+        select: {
+          tireStorageFeeTyreOnlyCents: true,
+          tireStorageFeeOnRimCents: true,
+          tireStorageFeeBands: true,
+        },
+      });
+      if (alloc) {
+        catalog = mergeTireStorageFeeCatalog(catalog, {
+          tireStorageFeeTyreOnlyCents: alloc.tireStorageFeeTyreOnlyCents,
+          tireStorageFeeOnRimCents: alloc.tireStorageFeeOnRimCents,
+          tireStorageFeeBands: alloc.tireStorageFeeBands,
+        });
+      }
+    }
     return resolveTireStorageFeeCents({
-      catalog: {
-        tireStorageFeeTyreOnlyCents: supplier.tireStorageFeeTyreOnlyCents,
-        tireStorageFeeOnRimCents: supplier.tireStorageFeeOnRimCents,
-        tireStorageFeeBands: supplier.tireStorageFeeBands,
-      },
+      catalog,
       mountedAs: params.mountedAs,
       rimInch: dominantRimInchFromSizes(params.sizes),
     });
@@ -321,6 +372,7 @@ export class TireHotelService {
       select: {
         id: true,
         mountedAs: true,
+        vehicle: { select: { clientId: true } },
         items: { select: { asset: { select: { size: true } } } },
       },
     });
@@ -330,6 +382,7 @@ export class TireHotelService {
     const feeCents = await this.resolveFeeCentsForSetTx(this.prisma, {
       tenantId: params.tenantId,
       supplierId: params.supplierId,
+      clientId: set.vehicle.clientId,
       mountedAs: set.mountedAs,
       sizes,
     });
@@ -357,11 +410,92 @@ export class TireHotelService {
     };
   }
 
+  async relocate(params: TireHotelRelocateParams) {
+    return this.prisma.$transaction(async (tx) => this.relocateTx(tx, params));
+  }
+
+  async relocateTx(tx: Prisma.TransactionClient, params: TireHotelRelocateParams) {
+    const loc = resolveStayLocationInput({
+      locationCode: params.locationCode,
+      bayCode: params.bayCode,
+      binCode: params.binCode,
+    });
+    if (!loc.locationCode) {
+      throw new BadRequestException('locationCode or bayCode is required');
+    }
+
+    const stay = await tx.tireStorageStay.findFirst({
+      where: {
+        id: params.stayId,
+        tenantId: params.tenantId,
+        supplierId: params.supplierId,
+        checkOutAt: null,
+      },
+      include: {
+        set: {
+          include: {
+            vehicle: { select: { id: true, registrationNumber: true } },
+            items: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                asset: {
+                  select: {
+                    id: true,
+                    brand: true,
+                    model: true,
+                    size: true,
+                    dot: true,
+                    treadMm: true,
+                    serialOrQr: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!stay) throw new NotFoundException('Active storage stay not found');
+
+    const fromCode = stay.locationCode;
+    const updated = await tx.tireStorageStay.update({
+      where: { id: stay.id },
+      data: { locationCode: loc.locationCode },
+    });
+
+    for (const item of stay.set.items) {
+      await this.tires.placeAssetTx(tx, {
+        tenantId: params.tenantId,
+        assetId: item.assetId,
+        kind: 'at_supplier_hotel',
+        supplierId: params.supplierId,
+        locationCode: loc.locationCode,
+        setId: stay.setId,
+        eventType: 'transfer',
+        vehicleIdForEvent: stay.set.vehicleId,
+        actorUserId: params.actorUserId ?? undefined,
+        payload: {
+          source: 'tire_hotel_relocate',
+          storageStayId: stay.id,
+          fromLocationCode: fromCode,
+          toLocationCode: loc.locationCode,
+        },
+      });
+    }
+
+    return this.stayToDto(updated, stay.set);
+  }
+
   async checkOut(params: TireHotelCheckOutParams) {
     return this.prisma.$transaction(async (tx) => this.checkOutTx(tx, params));
   }
 
   async checkOutTx(tx: Prisma.TransactionClient, params: TireHotelCheckOutParams) {
+    const releaseKind: TireHotelReleaseKind = params.releaseKind ?? 'at_client';
+    if (!['at_client', 'in_transit', 'scrap', 'quarantine'].includes(releaseKind)) {
+      throw new BadRequestException('releaseKind invalid');
+    }
+
     const stay = await tx.tireStorageStay.findFirst({
       where: {
         id: params.stayId,
@@ -397,19 +531,22 @@ export class TireHotelService {
 
     const now = new Date();
     const vehicleId = stay.set.vehicleId;
+    const eventType =
+      releaseKind === 'scrap' ? ('scrap' as const) : ('release' as const);
 
     for (const item of stay.set.items) {
       await this.tires.placeAssetTx(tx, {
         tenantId: params.tenantId,
         assetId: item.assetId,
-        kind: 'at_client',
+        kind: releaseKind,
         setId: stay.setId,
-        eventType: 'release',
+        eventType,
         vehicleIdForEvent: vehicleId,
         actorUserId: params.actorUserId ?? undefined,
         payload: {
           source: 'tire_hotel_check_out',
           storageStayId: stay.id,
+          releaseKind,
         },
       });
     }
@@ -466,11 +603,14 @@ export class TireHotelService {
       treadMm: i.asset.treadMm,
       serialOrQr: i.asset.serialOrQr,
     }));
+    const loc = parseStayLocation(stay.locationCode);
     return {
       id: stay.id,
       setId: stay.setId,
       supplierId: stay.supplierId,
       locationCode: stay.locationCode,
+      bayCode: loc.bayCode,
+      binCode: loc.binCode,
       checkInAt: stay.checkInAt.toISOString(),
       checkOutAt: stay.checkOutAt ? stay.checkOutAt.toISOString() : null,
       intakePhotos: normalizeIntakePhotoUrls(stay.intakePhotos),

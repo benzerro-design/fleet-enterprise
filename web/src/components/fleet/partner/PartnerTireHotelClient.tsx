@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { parsePartnerSupplierQuery } from "@/lib/partner-context";
 import type {
   TireHotelCapability,
+  TireHotelReleaseKind,
   TireHotelSearchVehicle,
   TireHotelStay,
 } from "@/lib/partner-tire-hotel-api";
@@ -55,6 +56,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
 
   const [capability, setCapability] = useState<TireHotelCapability | null>(null);
   const [stays, setStays] = useState<TireHotelStay[]>([]);
+  const [staysStatus, setStaysStatus] = useState<"active" | "closed" | "all">("active");
   const [filterPlate, setFilterPlate] = useState("");
   const [searchPlate, setSearchPlate] = useState("");
   const [searchHits, setSearchHits] = useState<TireHotelSearchVehicle[]>([]);
@@ -66,13 +68,18 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
     mountedAs: string | null;
     dominantSize: string | null;
   } | null>(null);
-  const [locationCode, setLocationCode] = useState("");
+  const [bayCode, setBayCode] = useState("");
+  const [binCode, setBinCode] = useState("");
   const [intakePhotoUrlsInput, setIntakePhotoUrlsInput] = useState("");
   const [intakePhotoFileUrls, setIntakePhotoFileUrls] = useState<string[]>([]);
   const [intakePhotoPreviewUrls, setIntakePhotoPreviewUrls] = useState<string[]>([]);
   const [intakeTreadNotes, setIntakeTreadNotes] = useState("");
   const [receiptStay, setReceiptStay] = useState<TireHotelStay | null>(null);
   const [expandedReceiptStayId, setExpandedReceiptStayId] = useState<string | null>(null);
+  const [relocateStayId, setRelocateStayId] = useState<string | null>(null);
+  const [relocateBay, setRelocateBay] = useState("");
+  const [relocateBin, setRelocateBin] = useState("");
+  const [releaseKind, setReleaseKind] = useState<TireHotelReleaseKind>("at_client");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,8 +87,15 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
 
   const loadStays = useCallback(async () => {
     const fp = filterPlate.trim();
-    const url = `/api/partner/tire-hotel/stays?${qs}${fp ? `&plate=${encodeURIComponent(fp)}` : ""}`;
-    const res = await fetch(url, { cache: "no-store" });
+    const p = new URLSearchParams();
+    if (qs) {
+      for (const [k, v] of new URLSearchParams(qs)) p.set(k, v);
+    }
+    p.set("status", staysStatus);
+    if (fp) p.set("plate", fp);
+    const res = await fetch(`/api/partner/tire-hotel/stays?${p.toString()}`, {
+      cache: "no-store",
+    });
     if (!res.ok) throw new Error("Nu am putut încărca sejururile");
     const data = (await res.json()) as { items?: TireHotelStay[] };
     setStays(
@@ -90,7 +104,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
         intakePhotos: normalizeIntakePhotoUrls(s.intakePhotos),
       })),
     );
-  }, [filterPlate, qs]);
+  }, [filterPlate, qs, staysStatus]);
 
   const loadCapability = useCallback(async () => {
     const res = await fetch(`/api/partner/tire-hotel/capability?${qs}`, { cache: "no-store" });
@@ -158,8 +172,8 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
   }
 
   async function checkIn() {
-    if (!selectedSetId || !locationCode.trim()) {
-      setError("Alege setul și locația (raft/cod)");
+    if (!selectedSetId || !bayCode.trim()) {
+      setError("Alege setul și zona (bay)");
       return;
     }
     const intakePhotos = mergeIntakePhotoUrls(
@@ -176,7 +190,8 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
           supplierId: supplierId ?? supplierQ.supplierId,
           setId: selectedSetId,
           vehicleId: selectedVehicleId ?? undefined,
-          locationCode: locationCode.trim(),
+          bayCode: bayCode.trim(),
+          binCode: binCode.trim() || undefined,
           intakePhotos: intakePhotos.length ? intakePhotos : undefined,
           intakeTreadNotes: intakeTreadNotes.trim() || undefined,
         }),
@@ -197,7 +212,8 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       setSelectedSetId(null);
       setSelectedVehicleId(null);
       setSelectedFeeQuote(null);
-      setLocationCode("");
+      setBayCode("");
+      setBinCode("");
       setIntakePhotoUrlsInput("");
       setIntakePhotoFileUrls([]);
       setIntakePhotoPreviewUrls([]);
@@ -225,6 +241,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
         body: JSON.stringify({
           supplierId: supplierId ?? supplierQ.supplierId,
           stayId,
+          releaseKind,
         }),
       });
       if (!res.ok) {
@@ -233,6 +250,39 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       }
       if (receiptStay?.id === stayId) setReceiptStay(null);
       if (expandedReceiptStayId === stayId) setExpandedReceiptStayId(null);
+      await loadStays();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function relocateStay(stayId: string) {
+    if (!canWrite || !relocateBay.trim()) {
+      setError("Zona (bay) e obligatorie la mutare");
+      return;
+    }
+    setBusy(`relocate-${stayId}`);
+    setError(null);
+    try {
+      const res = await fetch("/api/partner/tire-hotel/relocate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierId: supplierId ?? supplierQ.supplierId,
+          stayId,
+          bayCode: relocateBay.trim(),
+          binCode: relocateBin.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? "Mutare eșuată");
+      }
+      setRelocateStayId(null);
+      setRelocateBay("");
+      setRelocateBin("");
       await loadStays();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
@@ -360,12 +410,24 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                 </p>
               </div>
             ) : null}
-            <input
-              value={locationCode}
-              onChange={(e) => setLocationCode(e.target.value.toUpperCase())}
-              placeholder="Cod locație (ex. A-12)"
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-base text-zinc-100"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={bayCode}
+                onChange={(e) => setBayCode(e.target.value.toUpperCase())}
+                placeholder="Zonă / bay (ex. A)"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-base text-zinc-100"
+              />
+              <input
+                value={binCode}
+                onChange={(e) => setBinCode(e.target.value.toUpperCase())}
+                placeholder="Bin (ex. 12)"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-base text-zinc-100"
+              />
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Locația se salvează ca {bayCode.trim() || "BAY"}
+              {binCode.trim() ? `/${binCode.trim()}` : ""}
+            </p>
             <div className="space-y-1.5">
               <label className="text-xs text-zinc-500" htmlFor="tire-hotel-intake-photos">
                 Foto recepție — max {INTAKE_PHOTO_MAX_COUNT} imagini (~400KB/fișier), URL sau fișiere
@@ -434,17 +496,47 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
 
       <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
-          <h2 className="text-base font-medium text-zinc-100">Seturi în hotel</h2>
-          <input
-            value={filterPlate}
-            onChange={(e) => setFilterPlate(formatTireSetSearchFieldOnChange(e.target.value))}
-            onBlur={() => void loadStays().catch(() => undefined)}
-            placeholder="Filtru nr. / QR"
-            className="w-36 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200"
-          />
+          <h2 className="text-base font-medium text-zinc-100">Inventar hotel</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={staysStatus}
+              onChange={(e) =>
+                setStaysStatus(e.target.value as "active" | "closed" | "all")
+              }
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200"
+            >
+              <option value="active">Active</option>
+              <option value="closed">Istoric</option>
+              <option value="all">Toate</option>
+            </select>
+            <input
+              value={filterPlate}
+              onChange={(e) => setFilterPlate(formatTireSetSearchFieldOnChange(e.target.value))}
+              onBlur={() => void loadStays().catch(() => undefined)}
+              placeholder="Filtru nr. / QR"
+              className="w-36 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200"
+            />
+          </div>
         </div>
+        {canWrite && staysStatus !== "closed" ? (
+          <label className="block text-xs text-zinc-500">
+            Destinație la eliberare
+            <select
+              value={releaseKind}
+              onChange={(e) => setReleaseKind(e.target.value as TireHotelReleaseKind)}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+            >
+              <option value="at_client">La client</option>
+              <option value="in_transit">În tranzit</option>
+              <option value="scrap">Casare</option>
+              <option value="quarantine">Carantină</option>
+            </select>
+          </label>
+        ) : null}
         {stays.length === 0 ? (
-          <p className="text-xs text-zinc-500">Niciun set activ în depozit.</p>
+          <p className="text-xs text-zinc-500">
+            {staysStatus === "closed" ? "Niciun sejur închis." : "Niciun set activ în depozit."}
+          </p>
         ) : (
           <ul className="space-y-2">
             {stays.map((s) => (
@@ -458,6 +550,11 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                     {s.setName?.trim() || vehicleTireSeasonLabel(s.season)}
                     {s.itemCount != null ? ` · ${s.itemCount} buc` : ""}
                   </span>
+                  {s.checkOutAt ? (
+                    <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">
+                      eliberat
+                    </span>
+                  ) : null}
                   {s.mountedAs ? (
                     <span className="rounded bg-sky-950/50 px-2 py-0.5 text-[10px] text-sky-200">
                       {tireMountedAsLabel(
@@ -467,12 +564,15 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                   ) : null}
                   {s.locationCode ? (
                     <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
-                      Raft {s.locationCode}
+                      {s.bayCode && s.binCode
+                        ? `Bay ${s.bayCode} · Bin ${s.binCode}`
+                        : `Raft ${s.locationCode}`}
                     </span>
                   ) : null}
                 </div>
                 <p className="text-xs text-zinc-500">
                   Check-in {formatCheckIn(s.checkInAt)}
+                  {s.checkOutAt ? ` · out ${formatCheckIn(s.checkOutAt)}` : ""}
                   {s.contractRef ? ` · contract ${s.contractRef}` : ""}
                   {s.feeCents != null
                     ? ` · ${(s.feeCents / 100).toLocaleString("ro-RO")} lei`
@@ -498,7 +598,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                   <p className="whitespace-pre-wrap text-xs text-zinc-400">{s.intakeTreadNotes.trim()}</p>
                 ) : null}
                 <TireHotelIntakePhotos urls={s.intakePhotos} />
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <button
                     type="button"
                     onClick={() =>
@@ -508,17 +608,54 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                   >
                     {expandedReceiptStayId === s.id ? "Ascunde bonul" : "Bon / print"}
                   </button>
-                  {canWrite ? (
-                    <button
-                      type="button"
-                      disabled={busy === s.id}
-                      onClick={() => void checkOut(s.id)}
-                      className="rounded-xl border border-zinc-600 py-3 text-sm font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-                    >
-                      Eliberează (check-out)
-                    </button>
+                  {canWrite && !s.checkOutAt ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRelocateStayId(s.id);
+                          setRelocateBay(s.bayCode ?? "");
+                          setRelocateBin(s.binCode ?? "");
+                        }}
+                        className="rounded-xl border border-zinc-600 py-3 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
+                      >
+                        Mută raft
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === s.id}
+                        onClick={() => void checkOut(s.id)}
+                        className="rounded-xl border border-zinc-600 py-3 text-sm font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                      >
+                        Eliberează ({releaseKind === "at_client" ? "client" : releaseKind})
+                      </button>
+                    </>
                   ) : null}
                 </div>
+                {relocateStayId === s.id && !s.checkOutAt ? (
+                  <div className="grid gap-2 rounded-lg border border-zinc-700 bg-zinc-950/50 p-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <input
+                      value={relocateBay}
+                      onChange={(e) => setRelocateBay(e.target.value.toUpperCase())}
+                      placeholder="Bay"
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
+                    />
+                    <input
+                      value={relocateBin}
+                      onChange={(e) => setRelocateBin(e.target.value.toUpperCase())}
+                      placeholder="Bin"
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
+                    />
+                    <button
+                      type="button"
+                      disabled={busy === `relocate-${s.id}`}
+                      onClick={() => void relocateStay(s.id)}
+                      className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      Salvează
+                    </button>
+                  </div>
+                ) : null}
                 {expandedReceiptStayId === s.id ? (
                   <TireHotelReceiptPanel stay={s} supplierName={supplierName} />
                 ) : null}

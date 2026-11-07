@@ -43,12 +43,32 @@ import {
   type ClientSlaSettings,
 } from './client-sla-settings';
 import {
+  mapTireStorageFeeBands,
   mergeClientSupplierRateOverlay,
   parseClientSupplierOverlayPatch,
   type ClientSupplierOverlayPatchInput,
   type ClientSupplierRateOverlay,
   type MergedSupplierRates,
+  type TireStorageFeeBand,
 } from '../suppliers/supplier-rate-card';
+
+const ALLOCATION_SUPPLIER_SELECT = {
+  code: true,
+  legalName: true,
+  category: true,
+  status: true,
+  partsDiscountPercent: true,
+  laborDiscountPercent: true,
+  laborRateMechanicalCents: true,
+  laborRateBodyCents: true,
+  laborRatePaintCents: true,
+  laborRateDiagnosticCents: true,
+  tireStorageFeeTyreOnlyCents: true,
+  tireStorageFeeOnRimCents: true,
+  tireStorageFeeBands: true,
+  partsPriceBasis: true,
+  pricingNotes: true,
+} as const;
 
 export type {
   ClientSubscriptionRow,
@@ -803,6 +823,9 @@ export class ClientsService {
     laborRateBodyCents: number | null;
     laborRatePaintCents: number | null;
     laborRateDiagnosticCents: number | null;
+    tireStorageFeeTyreOnlyCents: number | null;
+    tireStorageFeeOnRimCents: number | null;
+    tireStorageFeeBands: Prisma.JsonValue | null;
     partsPriceBasis: string | null;
     pricingNotes: string | null;
     supplier: {
@@ -816,6 +839,9 @@ export class ClientsService {
       laborRateBodyCents: number | null;
       laborRatePaintCents: number | null;
       laborRateDiagnosticCents: number | null;
+      tireStorageFeeTyreOnlyCents: number | null;
+      tireStorageFeeOnRimCents: number | null;
+      tireStorageFeeBands: Prisma.JsonValue | null;
       partsPriceBasis: string;
       pricingNotes: string | null;
     };
@@ -832,12 +858,16 @@ export class ClientsService {
       laborRateBodyCents: number | null;
       laborRatePaintCents: number | null;
       laborRateDiagnosticCents: number | null;
+      tireStorageFeeTyreOnlyCents: number | null;
+      tireStorageFeeOnRimCents: number | null;
+      tireStorageFeeBands: TireStorageFeeBand[];
       partsPriceBasis: 'list' | 'net';
       pricingNotes: string | null;
     };
     overlay: ClientSupplierRateOverlay;
     effective: MergedSupplierRates;
   } {
+    const overlayBands = mapTireStorageFeeBands(a.tireStorageFeeBands);
     const overlay: ClientSupplierRateOverlay = {
       partsDiscountPercent: a.partsDiscountPercent,
       laborDiscountPercent: a.laborDiscountPercent,
@@ -845,6 +875,9 @@ export class ClientsService {
       laborRateBodyCents: a.laborRateBodyCents,
       laborRatePaintCents: a.laborRatePaintCents,
       laborRateDiagnosticCents: a.laborRateDiagnosticCents,
+      tireStorageFeeTyreOnlyCents: a.tireStorageFeeTyreOnlyCents,
+      tireStorageFeeOnRimCents: a.tireStorageFeeOnRimCents,
+      tireStorageFeeBands: a.tireStorageFeeBands == null ? null : overlayBands,
       partsPriceBasis: a.partsPriceBasis,
       pricingNotes: a.pricingNotes,
     };
@@ -855,6 +888,9 @@ export class ClientsService {
       laborRateBodyCents: a.supplier.laborRateBodyCents,
       laborRatePaintCents: a.supplier.laborRatePaintCents,
       laborRateDiagnosticCents: a.supplier.laborRateDiagnosticCents,
+      tireStorageFeeTyreOnlyCents: a.supplier.tireStorageFeeTyreOnlyCents,
+      tireStorageFeeOnRimCents: a.supplier.tireStorageFeeOnRimCents,
+      tireStorageFeeBands: mapTireStorageFeeBands(a.supplier.tireStorageFeeBands),
       partsPriceBasis: (a.supplier.partsPriceBasis === 'net' ? 'net' : 'list') as 'list' | 'net',
       pricingNotes: a.supplier.pricingNotes,
     };
@@ -888,20 +924,7 @@ export class ClientsService {
       where: { clientId: row.id },
       include: {
         supplier: {
-          select: {
-            code: true,
-            legalName: true,
-            category: true,
-            status: true,
-            partsDiscountPercent: true,
-            laborDiscountPercent: true,
-            laborRateMechanicalCents: true,
-            laborRateBodyCents: true,
-            laborRatePaintCents: true,
-            laborRateDiagnosticCents: true,
-            partsPriceBasis: true,
-            pricingNotes: true,
-          },
+          select: ALLOCATION_SUPPLIER_SELECT,
         },
       },
       orderBy: { supplier: { legalName: 'asc' } },
@@ -931,20 +954,7 @@ export class ClientsService {
       },
       include: {
         supplier: {
-          select: {
-            code: true,
-            legalName: true,
-            category: true,
-            status: true,
-            partsDiscountPercent: true,
-            laborDiscountPercent: true,
-            laborRateMechanicalCents: true,
-            laborRateBodyCents: true,
-            laborRatePaintCents: true,
-            laborRateDiagnosticCents: true,
-            partsPriceBasis: true,
-            pricingNotes: true,
-          },
+          select: ALLOCATION_SUPPLIER_SELECT,
         },
       },
     });
@@ -979,6 +989,20 @@ export class ClientsService {
         ...(patch.laborRateDiagnosticCents !== undefined
           ? { laborRateDiagnosticCents: patch.laborRateDiagnosticCents }
           : {}),
+        ...(patch.tireStorageFeeTyreOnlyCents !== undefined
+          ? { tireStorageFeeTyreOnlyCents: patch.tireStorageFeeTyreOnlyCents }
+          : {}),
+        ...(patch.tireStorageFeeOnRimCents !== undefined
+          ? { tireStorageFeeOnRimCents: patch.tireStorageFeeOnRimCents }
+          : {}),
+        ...(patch.tireStorageFeeBands !== undefined
+          ? {
+              tireStorageFeeBands:
+                patch.tireStorageFeeBands === null
+                  ? Prisma.JsonNull
+                  : (patch.tireStorageFeeBands as Prisma.InputJsonValue),
+            }
+          : {}),
         ...(patch.partsPriceBasis !== undefined ? { partsPriceBasis: patch.partsPriceBasis } : {}),
         ...(patch.partsDiscountPercent !== undefined
           ? { partsDiscountPercent: patch.partsDiscountPercent }
@@ -990,20 +1014,7 @@ export class ClientsService {
       },
       include: {
         supplier: {
-          select: {
-            code: true,
-            legalName: true,
-            category: true,
-            status: true,
-            partsDiscountPercent: true,
-            laborDiscountPercent: true,
-            laborRateMechanicalCents: true,
-            laborRateBodyCents: true,
-            laborRatePaintCents: true,
-            laborRateDiagnosticCents: true,
-            partsPriceBasis: true,
-            pricingNotes: true,
-          },
+          select: ALLOCATION_SUPPLIER_SELECT,
         },
       },
     });

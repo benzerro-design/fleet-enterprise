@@ -87,7 +87,13 @@ export class PartnerTireHotelService {
   async listActiveStays(
     tenantSlug: string,
     access: AccessContext,
-    opts: { supplierId?: string; plate?: string },
+    opts: {
+      supplierId?: string;
+      plate?: string;
+      /** active (default) | closed | all */
+      status?: string;
+      take?: number;
+    },
   ) {
     const { tenantId, supplierId } = await this.resolveSupplier(
       tenantSlug,
@@ -98,12 +104,20 @@ export class PartnerTireHotelService {
     const parsed = searchRaw ? parseTireSetSearchInput(searchRaw) : null;
     const plate = parsed?.kind === 'plate' ? normalizePlate(parsed.plate) : undefined;
     const setId = parsed?.kind === 'setId' ? parsed.setId : undefined;
+    const status = (opts.status ?? 'active').trim().toLowerCase();
+    const checkOutFilter =
+      status === 'closed'
+        ? { checkOutAt: { not: null } }
+        : status === 'all'
+          ? {}
+          : { checkOutAt: null };
+    const take = Math.min(Math.max(opts.take ?? (status === 'active' ? 200 : 100), 1), 500);
 
     const stays = await this.prisma.tireStorageStay.findMany({
       where: {
         tenantId,
         supplierId,
-        checkOutAt: null,
+        ...checkOutFilter,
         ...(setId ? { setId } : {}),
         ...(plate && !setId
           ? {
@@ -116,6 +130,7 @@ export class PartnerTireHotelService {
           : {}),
       },
       orderBy: [{ checkInAt: 'desc' }],
+      take,
       include: {
         set: {
           include: {
@@ -142,6 +157,7 @@ export class PartnerTireHotelService {
     });
 
     return {
+      status: status === 'closed' || status === 'all' ? status : 'active',
       items: stays.map((s) =>
         this.hotel.stayToDto(s, {
           season: s.set.season,
@@ -152,6 +168,31 @@ export class PartnerTireHotelService {
         }),
       ),
     };
+  }
+
+  async relocate(
+    tenantSlug: string,
+    access: AccessContext,
+    body: unknown,
+    actorUserId?: string,
+  ) {
+    assertPartnerWrite(access);
+    const dto = assertRelocateBody(body);
+    const { tenantId, supplierId } = await this.resolveSupplier(
+      tenantSlug,
+      access,
+      dto.supplierId,
+    );
+    const stay = await this.hotel.relocate({
+      tenantId,
+      supplierId,
+      stayId: dto.stayId,
+      locationCode: dto.locationCode,
+      bayCode: dto.bayCode,
+      binCode: dto.binCode,
+      actorUserId: actorUserId ?? null,
+    });
+    return { stay };
   }
 
   async searchSetsForCheckIn(
@@ -293,6 +334,8 @@ export class PartnerTireHotelService {
       supplierId,
       setId: dto.setId,
       locationCode: dto.locationCode,
+      bayCode: dto.bayCode,
+      binCode: dto.binCode,
       intakePhotos: dto.intakePhotos,
       intakeTreadNotes: dto.intakeTreadNotes,
       feeCents: dto.feeCents,
@@ -369,6 +412,7 @@ export class PartnerTireHotelService {
       supplierId,
       stayId: dto.stayId,
       actorUserId: actorUserId ?? null,
+      releaseKind: dto.releaseKind,
     });
 
     return { stay };
@@ -379,7 +423,9 @@ function assertCheckInBody(body: unknown): {
   supplierId?: string;
   setId: string;
   vehicleId?: string;
-  locationCode: string;
+  locationCode?: string;
+  bayCode?: string;
+  binCode?: string;
   intakePhotos?: Prisma.InputJsonValue;
   intakeTreadNotes?: string;
   feeCents?: number;
@@ -390,9 +436,28 @@ function assertCheckInBody(body: unknown): {
   }
   const o = body as Record<string, unknown>;
   const setId = typeof o.setId === 'string' ? o.setId.trim() : '';
-  const locationCode = typeof o.locationCode === 'string' ? o.locationCode.trim() : '';
   if (!setId) throw new BadRequestException('setId is required');
-  if (!locationCode) throw new BadRequestException('locationCode is required');
+  const locationCode =
+    o.locationCode === undefined || o.locationCode === null
+      ? undefined
+      : typeof o.locationCode === 'string'
+        ? o.locationCode.trim()
+        : undefined;
+  const bayCode =
+    o.bayCode === undefined || o.bayCode === null
+      ? undefined
+      : typeof o.bayCode === 'string'
+        ? o.bayCode.trim()
+        : undefined;
+  const binCode =
+    o.binCode === undefined || o.binCode === null
+      ? undefined
+      : typeof o.binCode === 'string'
+        ? o.binCode.trim()
+        : undefined;
+  if (!locationCode && !bayCode) {
+    throw new BadRequestException('locationCode or bayCode is required');
+  }
 
   const vehicleId =
     o.vehicleId === undefined || o.vehicleId === null
@@ -423,6 +488,8 @@ function assertCheckInBody(body: unknown): {
     setId,
     vehicleId,
     locationCode,
+    bayCode,
+    binCode,
     intakePhotos,
     intakeTreadNotes:
       o.intakeTreadNotes === undefined || o.intakeTreadNotes === null
@@ -434,7 +501,11 @@ function assertCheckInBody(body: unknown): {
   };
 }
 
-function assertCheckOutBody(body: unknown): { supplierId?: string; stayId: string } {
+function assertCheckOutBody(body: unknown): {
+  supplierId?: string;
+  stayId: string;
+  releaseKind?: 'at_client' | 'in_transit' | 'scrap' | 'quarantine';
+} {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new BadRequestException('Body must be an object');
   }
@@ -447,7 +518,58 @@ function assertCheckOutBody(body: unknown): { supplierId?: string; stayId: strin
       : typeof o.supplierId === 'string'
         ? o.supplierId.trim()
         : undefined;
-  return { supplierId, stayId };
+  let releaseKind: 'at_client' | 'in_transit' | 'scrap' | 'quarantine' | undefined;
+  if (o.releaseKind !== undefined && o.releaseKind !== null) {
+    const raw = String(o.releaseKind).trim();
+    if (!['at_client', 'in_transit', 'scrap', 'quarantine'].includes(raw)) {
+      throw new BadRequestException('releaseKind invalid');
+    }
+    releaseKind = raw as 'at_client' | 'in_transit' | 'scrap' | 'quarantine';
+  }
+  return { supplierId, stayId, releaseKind };
+}
+
+function assertRelocateBody(body: unknown): {
+  supplierId?: string;
+  stayId: string;
+  locationCode?: string;
+  bayCode?: string;
+  binCode?: string;
+} {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestException('Body must be an object');
+  }
+  const o = body as Record<string, unknown>;
+  const stayId = typeof o.stayId === 'string' ? o.stayId.trim() : '';
+  if (!stayId) throw new BadRequestException('stayId is required');
+  const supplierId =
+    o.supplierId === undefined || o.supplierId === null
+      ? undefined
+      : typeof o.supplierId === 'string'
+        ? o.supplierId.trim()
+        : undefined;
+  const locationCode =
+    o.locationCode === undefined || o.locationCode === null
+      ? undefined
+      : typeof o.locationCode === 'string'
+        ? o.locationCode.trim()
+        : undefined;
+  const bayCode =
+    o.bayCode === undefined || o.bayCode === null
+      ? undefined
+      : typeof o.bayCode === 'string'
+        ? o.bayCode.trim()
+        : undefined;
+  const binCode =
+    o.binCode === undefined || o.binCode === null
+      ? undefined
+      : typeof o.binCode === 'string'
+        ? o.binCode.trim()
+        : undefined;
+  if (!locationCode && !bayCode) {
+    throw new BadRequestException('locationCode or bayCode is required');
+  }
+  return { supplierId, stayId, locationCode, bayCode, binCode };
 }
 
 function normalizeIntakePhotosBody(value: unknown): Prisma.InputJsonValue | undefined {

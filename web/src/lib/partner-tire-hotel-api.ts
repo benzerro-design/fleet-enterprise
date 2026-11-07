@@ -15,6 +15,8 @@ export type TireHotelStay = {
   setId: string;
   supplierId: string;
   locationCode: string | null;
+  bayCode?: string | null;
+  binCode?: string | null;
   checkInAt: string;
   checkOutAt: string | null;
   plate: string;
@@ -30,6 +32,8 @@ export type TireHotelStay = {
   feeCents?: number | null;
   contractRef?: string | null;
 };
+
+export type TireHotelReleaseKind = "at_client" | "in_transit" | "scrap" | "quarantine";
 
 export type TireHotelCapability = {
   hasTireStorage: boolean;

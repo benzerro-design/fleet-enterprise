@@ -56,6 +56,12 @@ export function ClientSupplierPricingOverlayEditor({
     overlay?.laborDiscountPercent != null ? String(overlay.laborDiscountPercent) : "",
   );
   const [notes, setNotes] = useState(overlay?.pricingNotes ?? "");
+  const [storageTyreOnly, setStorageTyreOnly] = useState(
+    centsToRonInput(overlay?.tireStorageFeeTyreOnlyCents),
+  );
+  const [storageOnRim, setStorageOnRim] = useState(
+    centsToRonInput(overlay?.tireStorageFeeOnRimCents),
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -81,6 +87,8 @@ export function ClientSupplierPricingOverlayEditor({
         : "",
     );
     setNotes(item.overlay?.pricingNotes ?? "");
+    setStorageTyreOnly(centsToRonInput(item.overlay?.tireStorageFeeTyreOnlyCents));
+    setStorageOnRim(centsToRonInput(item.overlay?.tireStorageFeeOnRimCents));
     setSaved(false);
     setError(null);
   }, [item]);
@@ -106,6 +114,8 @@ export function ClientSupplierPricingOverlayEditor({
             partsPriceBasis: basis === "" ? null : basis,
             partsDiscountPercent: parts.trim() === "" ? null : parts,
             laborDiscountPercent: labor.trim() === "" ? null : labor,
+            tireStorageFeeTyreOnlyRon: storageTyreOnly.trim() === "" ? null : storageTyreOnly,
+            tireStorageFeeOnRimRon: storageOnRim.trim() === "" ? null : storageOnRim,
             pricingNotes: notes.trim() || null,
           }),
         },
@@ -268,6 +278,39 @@ export function ClientSupplierPricingOverlayEditor({
                 catalog ? `${catalog.laborDiscountPercent}%` : "",
               )}
             </label>
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/50 p-3">
+            <p className="text-xs font-medium text-zinc-300">Hotel anvelope — overlay client</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={OPS_LABEL_CLASS}>
+                Default fără jante (RON/sezon)
+                <input
+                  value={storageTyreOnly}
+                  onChange={(e) => setStorageTyreOnly(e.target.value)}
+                  disabled={!canWrite || pending}
+                  className={`${OPS_INPUT_CLASS} mt-1`}
+                  inputMode="decimal"
+                  placeholder="moștenește"
+                />
+                {catalogHint(
+                  "catalog",
+                  centsToRonInput(catalog?.tireStorageFeeTyreOnlyCents),
+                )}
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Default pe jantă (RON/sezon)
+                <input
+                  value={storageOnRim}
+                  onChange={(e) => setStorageOnRim(e.target.value)}
+                  disabled={!canWrite || pending}
+                  className={`${OPS_INPUT_CLASS} mt-1`}
+                  inputMode="decimal"
+                  placeholder="moștenește"
+                />
+                {catalogHint("catalog", centsToRonInput(catalog?.tireStorageFeeOnRimCents))}
+              </label>
+            </div>
           </div>
 
           <label className={OPS_LABEL_CLASS}>

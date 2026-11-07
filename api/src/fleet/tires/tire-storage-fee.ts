@@ -126,6 +126,31 @@ function requireCents(raw: unknown, field: string): number | null {
 }
 
 /**
+ * Overlay wins when field is present (including null = clear to no flat fee).
+ * Undefined on overlay → inherit catalog.
+ */
+export function mergeTireStorageFeeCatalog(
+  catalog: TireStorageFeeCatalog,
+  overlay?: TireStorageFeeCatalog | null,
+): TireStorageFeeCatalog {
+  if (!overlay) return catalog;
+  return {
+    tireStorageFeeTyreOnlyCents:
+      overlay.tireStorageFeeTyreOnlyCents !== undefined
+        ? overlay.tireStorageFeeTyreOnlyCents
+        : (catalog.tireStorageFeeTyreOnlyCents ?? null),
+    tireStorageFeeOnRimCents:
+      overlay.tireStorageFeeOnRimCents !== undefined
+        ? overlay.tireStorageFeeOnRimCents
+        : (catalog.tireStorageFeeOnRimCents ?? null),
+    tireStorageFeeBands:
+      overlay.tireStorageFeeBands !== undefined
+        ? overlay.tireStorageFeeBands
+        : catalog.tireStorageFeeBands,
+  };
+}
+
+/**
  * Pick fee: first band with maxRimInch >= rim; else last band if rim larger; else flat default.
  */
 export function resolveTireStorageFeeCents(input: {

@@ -94,6 +94,12 @@ export type ClientProfileTab =
   | "iam"
   | "suppliers";
 
+export type ClientSupplierTireStorageBand = {
+  maxRimInch: number;
+  tyreOnlyCents: number | null;
+  onRimCents: number | null;
+};
+
 export type ClientSupplierRateOverlay = {
   partsDiscountPercent: number | null;
   laborDiscountPercent: number | null;
@@ -101,6 +107,9 @@ export type ClientSupplierRateOverlay = {
   laborRateBodyCents: number | null;
   laborRatePaintCents: number | null;
   laborRateDiagnosticCents: number | null;
+  tireStorageFeeTyreOnlyCents?: number | null;
+  tireStorageFeeOnRimCents?: number | null;
+  tireStorageFeeBands?: ClientSupplierTireStorageBand[] | null;
   partsPriceBasis: string | null;
   pricingNotes: string | null;
 };
@@ -112,6 +121,9 @@ export type ClientSupplierCatalogRates = {
   laborRateBodyCents: number | null;
   laborRatePaintCents: number | null;
   laborRateDiagnosticCents: number | null;
+  tireStorageFeeTyreOnlyCents?: number | null;
+  tireStorageFeeOnRimCents?: number | null;
+  tireStorageFeeBands?: ClientSupplierTireStorageBand[];
   partsPriceBasis: "list" | "net";
   pricingNotes: string | null;
 };

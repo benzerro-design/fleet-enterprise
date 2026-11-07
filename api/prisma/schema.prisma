@@ -1813,6 +1813,10 @@ model ClientSupplierAllocation {
   laborRateBodyCents       Int?
   laborRatePaintCents      Int?
   laborRateDiagnosticCents Int?
+  /// Hotel storage overlay — null = catalog furnizor.
+  tireStorageFeeTyreOnlyCents Int?
+  tireStorageFeeOnRimCents    Int?
+  tireStorageFeeBands         Json?
   /// list | net. Null = catalog furnizor.
   partsPriceBasis String?
   pricingNotes    String?

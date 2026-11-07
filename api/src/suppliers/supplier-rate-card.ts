@@ -246,6 +246,9 @@ export type ClientSupplierRateOverlay = {
   laborRateBodyCents: number | null;
   laborRatePaintCents: number | null;
   laborRateDiagnosticCents: number | null;
+  tireStorageFeeTyreOnlyCents: number | null;
+  tireStorageFeeOnRimCents: number | null;
+  tireStorageFeeBands: TireStorageFeeBand[] | null;
   partsPriceBasis: string | null;
   pricingNotes: string | null;
 };
@@ -257,6 +260,9 @@ export type MergedSupplierRates = {
   laborRateBodyCents: number | null;
   laborRatePaintCents: number | null;
   laborRateDiagnosticCents: number | null;
+  tireStorageFeeTyreOnlyCents: number | null;
+  tireStorageFeeOnRimCents: number | null;
+  tireStorageFeeBands: TireStorageFeeBand[];
   partsPriceBasis: PartsPriceBasis;
   pricingNotes: string | null;
   /** True dacă cel puțin un câmp overlay e setat. */
@@ -271,6 +277,9 @@ export type SupplierCatalogRates = {
   laborRateBodyCents?: number | null;
   laborRatePaintCents?: number | null;
   laborRateDiagnosticCents?: number | null;
+  tireStorageFeeTyreOnlyCents?: number | null;
+  tireStorageFeeOnRimCents?: number | null;
+  tireStorageFeeBands?: unknown;
   partsPriceBasis?: unknown;
   pricingNotes?: string | null;
 };
@@ -290,6 +299,9 @@ export function isClientSupplierOverlayActive(
     overlayFieldActive(overlay.laborRateBodyCents) ||
     overlayFieldActive(overlay.laborRatePaintCents) ||
     overlayFieldActive(overlay.laborRateDiagnosticCents) ||
+    overlayFieldActive(overlay.tireStorageFeeTyreOnlyCents) ||
+    overlayFieldActive(overlay.tireStorageFeeOnRimCents) ||
+    (Array.isArray(overlay.tireStorageFeeBands) && overlay.tireStorageFeeBands.length > 0) ||
     overlayFieldActive(overlay.partsPriceBasis) ||
     (overlay.pricingNotes != null && String(overlay.pricingNotes).trim() !== '')
   );
@@ -324,6 +336,12 @@ export function mergeClientSupplierRateOverlay(
   );
   const laborDiscountPercent = disc.laborDiscountPercent;
 
+  const catalogBands = parseTireStorageFeeBands(catalog.tireStorageFeeBands);
+  const overlayBands =
+    overlay?.tireStorageFeeBands !== undefined && overlay?.tireStorageFeeBands !== null
+      ? overlay.tireStorageFeeBands
+      : null;
+
   return {
     partsDiscountPercent,
     laborDiscountPercent,
@@ -343,6 +361,15 @@ export function mergeClientSupplierRateOverlay(
       overlay?.laborRateDiagnosticCents != null
         ? overlay.laborRateDiagnosticCents
         : (catalog.laborRateDiagnosticCents ?? null),
+    tireStorageFeeTyreOnlyCents:
+      overlay?.tireStorageFeeTyreOnlyCents != null
+        ? overlay.tireStorageFeeTyreOnlyCents
+        : (catalog.tireStorageFeeTyreOnlyCents ?? null),
+    tireStorageFeeOnRimCents:
+      overlay?.tireStorageFeeOnRimCents != null
+        ? overlay.tireStorageFeeOnRimCents
+        : (catalog.tireStorageFeeOnRimCents ?? null),
+    tireStorageFeeBands: overlayBands ?? catalogBands,
     partsPriceBasis,
     pricingNotes:
       overlay?.pricingNotes != null
@@ -376,6 +403,9 @@ export type ClientSupplierOverlayPatchInput = {
   laborRateBodyRon?: number | string | null;
   laborRatePaintRon?: number | string | null;
   laborRateDiagnosticRon?: number | string | null;
+  tireStorageFeeTyreOnlyRon?: number | string | null;
+  tireStorageFeeOnRimRon?: number | string | null;
+  tireStorageFeeBands?: unknown;
   partsPriceBasis?: PartsPriceBasis | string | null;
   partsDiscountPercent?: number | string | null;
   laborDiscountPercent?: number | string | null;
@@ -387,6 +417,9 @@ export type ClientSupplierOverlayCentsPatch = {
   laborRateBodyCents?: number | null;
   laborRatePaintCents?: number | null;
   laborRateDiagnosticCents?: number | null;
+  tireStorageFeeTyreOnlyCents?: number | null;
+  tireStorageFeeOnRimCents?: number | null;
+  tireStorageFeeBands?: TireStorageFeeBand[] | null;
   partsPriceBasis?: string | null;
   partsDiscountPercent?: number | null;
   laborDiscountPercent?: number | null;
@@ -415,6 +448,22 @@ export function parseClientSupplierOverlayPatch(
       dto.laborRateDiagnosticRon,
       'laborRateDiagnosticRon',
     );
+  }
+  if (dto.tireStorageFeeTyreOnlyRon !== undefined) {
+    data.tireStorageFeeTyreOnlyCents = parseOptionalRonToCents(
+      dto.tireStorageFeeTyreOnlyRon,
+      'tireStorageFeeTyreOnlyRon',
+    );
+  }
+  if (dto.tireStorageFeeOnRimRon !== undefined) {
+    data.tireStorageFeeOnRimCents = parseOptionalRonToCents(
+      dto.tireStorageFeeOnRimRon,
+      'tireStorageFeeOnRimRon',
+    );
+  }
+  if (dto.tireStorageFeeBands !== undefined) {
+    const bands = parseTireStorageFeeBandsInput(dto.tireStorageFeeBands);
+    data.tireStorageFeeBands = bands === undefined ? undefined : bands.length ? bands : null;
   }
   if (dto.partsPriceBasis !== undefined) {
     data.partsPriceBasis = parseOptionalPartsPriceBasis(dto.partsPriceBasis) ?? null;

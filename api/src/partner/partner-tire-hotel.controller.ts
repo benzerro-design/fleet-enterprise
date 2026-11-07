@@ -33,10 +33,15 @@ export class PartnerTireHotelController {
     @CurrentAccess() access: AccessContext,
     @Query('supplierId') supplierId?: string,
     @Query('plate') plate?: string,
+    @Query('status') status?: string,
+    @Query('take') take?: string,
   ) {
+    const takeN = take != null && take !== '' ? Number(take) : undefined;
     return this.hotel.listActiveStays(tenantSlug, access, {
       supplierId: supplierId?.trim(),
       plate: plate?.trim(),
+      status: status?.trim(),
+      take: Number.isFinite(takeN) ? takeN : undefined,
     });
   }
 
@@ -88,5 +93,16 @@ export class PartnerTireHotelController {
     @Req() req: AuthedRequest,
   ) {
     return this.hotel.checkOut(tenantSlug, access, body, req.user?.id);
+  }
+
+  @Post('relocate')
+  @Roles(...FLEET_WRITE_ROLES)
+  relocate(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Body() body: unknown,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.hotel.relocate(tenantSlug, access, body, req.user?.id);
   }
 }
