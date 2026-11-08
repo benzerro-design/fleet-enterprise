@@ -11,7 +11,7 @@ import type { AccessContext } from '../../iam/access-context.types';
 import { assertVehicleOpsRead, assertVehicleOpsWrite } from '../../ops/ops-write-access';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateTireSetDto, FitmentSyncFields, PlaceAssetParams, TireSetSummary } from './tire-domain.types';
-import { tireSetQrPayload } from './tire-domain.types';
+import { pickSetSeason, tireSetQrPayload } from './tire-domain.types';
 import { positionSortIndex } from './tire-domain.types';
 
 type Db = PrismaService | Prisma.TransactionClient;
@@ -23,6 +23,7 @@ type SeedSpecSource = {
   size: string | null;
   brand: string | null;
   model: string | null;
+  season: VehicleTireSeason;
   speedIndex: string | null;
   loadIndex: string | null;
   commercialC: boolean;
@@ -65,11 +66,20 @@ function assetDataFromFitment(fields: FitmentSyncFields): Prisma.TireAssetUnchec
   };
 }
 
-function pickSetSeason(seasons: VehicleTireSeason[]): VehicleTireSeason {
-  const known = seasons.filter((s) => s !== 'unknown');
-  if (known.length === 0) return 'unknown';
-  const first = known[0];
-  return known.every((s) => s === first) ? first : 'unknown';
+/** Seed opposite-season spare sets with size/rim only — avoid cloning summer brands into a winter set. */
+function seedBrandModelForSeason(
+  source: Pick<SeedSpecSource, 'brand' | 'model' | 'season'>,
+  targetSeason: VehicleTireSeason,
+): { brand: string | null; model: string | null } {
+  const srcSeason = source.season;
+  if (
+    srcSeason !== 'unknown' &&
+    targetSeason !== 'unknown' &&
+    srcSeason !== targetSeason
+  ) {
+    return { brand: null, model: null };
+  }
+  return { brand: source.brand, model: source.model };
 }
 
 @Injectable()
@@ -101,6 +111,7 @@ export class TireDomainService {
       orderBy: [{ createdAt: 'asc' }],
       include: {
         _count: { select: { items: true } },
+        items: { select: { asset: { select: { season: true } } } },
         placements: {
           where: { validTo: null, kind: 'on_vehicle', vehicleId },
           select: { id: true },
@@ -148,6 +159,9 @@ export class TireDomainService {
               checkInAt: stay?.checkInAt.toISOString() ?? pl?.validFrom.toISOString() ?? null,
             }
           : null;
+      const itemsSeason = pickSetSeason(s.items.map((i) => i.asset.season));
+      const seasonMismatch =
+        itemsSeason !== 'unknown' && s.season !== 'unknown' && itemsSeason !== s.season;
 
       return {
         id: s.id,
@@ -159,6 +173,8 @@ export class TireDomainService {
         isMounted: s.placements.length > 0,
         hotel,
         qrPayload: tireSetQrPayload(s.id),
+        itemsSeason,
+        seasonMismatch,
       };
     });
   }
@@ -390,6 +406,7 @@ export class TireDomainService {
           );
         }
 
+        const brandModel = seedBrandModelForSeason(src, dto.season);
         const asset = await tx.tireAsset.create({
           data: {
             tenantId: vehicle.tenantId,
@@ -399,8 +416,8 @@ export class TireDomainService {
             provenance: 'inferred',
             rimAssetId: rimAssetId ?? undefined,
             size: src.size,
-            brand: src.brand,
-            model: src.model,
+            brand: brandModel.brand,
+            model: brandModel.model,
             season: dto.season,
             speedIndex: src.speedIndex,
             loadIndex: src.loadIndex,
@@ -562,6 +579,7 @@ export class TireDomainService {
           size: a.size,
           brand: a.brand,
           model: a.model,
+          season: a.season,
           speedIndex: a.speedIndex,
           loadIndex: a.loadIndex,
           commercialC: a.commercialC,
@@ -593,6 +611,7 @@ export class TireDomainService {
         size: f.size,
         brand: f.brand,
         model: f.model,
+        season: f.season,
         speedIndex: f.speedIndex,
         loadIndex: f.loadIndex,
         commercialC: f.commercialC,
@@ -662,6 +681,9 @@ export class TireDomainService {
           rimAssetId: rimAssetId ?? activeAtPosition.asset.rimAssetId,
         },
       });
+      if (activeAtPosition.setId) {
+        await this.reconcileTireSetSeasonFromItemsTx(tx, activeAtPosition.setId);
+      }
       return;
     }
 
@@ -701,6 +723,122 @@ export class TireDomainService {
       vehicleIdForEvent: vehicleId,
       payload: { source: 'fitment_sync', position },
     });
+    await this.reconcileTireSetSeasonFromItemsTx(tx, mountedSetId);
+  }
+
+  /**
+   * Keep TireSet.season aligned with its tire assets (fitment edits used to update only assets).
+   */
+  async reconcileTireSetSeasonFromItemsTx(
+    tx: Prisma.TransactionClient,
+    setId: string,
+  ): Promise<VehicleTireSeason | null> {
+    const set = await tx.tireSet.findUnique({
+      where: { id: setId },
+      select: { id: true, season: true },
+    });
+    if (!set) return null;
+
+    const items = await tx.tireSetItem.findMany({
+      where: { setId },
+      select: { asset: { select: { season: true } } },
+    });
+    if (items.length === 0) return set.season;
+
+    const next = pickSetSeason(items.map((i) => i.asset.season));
+    if (next !== 'unknown' && next !== set.season) {
+      await tx.tireSet.update({ where: { id: setId }, data: { season: next } });
+      return next;
+    }
+    return set.season;
+  }
+
+  /** Align all non-archived sets on a vehicle: set.season ← majority of asset seasons. */
+  async reconcileVehicleSetSeasons(
+    tenantSlug: string,
+    vehicleId: string,
+    access?: AccessContext,
+  ): Promise<TireSetSummary[]> {
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      const sets = await tx.tireSet.findMany({
+        where: { vehicleId, archivedAt: null },
+        select: { id: true },
+      });
+      for (const s of sets) {
+        await this.reconcileTireSetSeasonFromItemsTx(tx, s.id);
+      }
+    });
+
+    return this.listSetsForVehicleInternal(tenantSlug, vehicleId);
+  }
+
+  /**
+   * Correct set season (and optionally stamp all assets in the set).
+   * Use when brands are right but set/asset seasons were swapped (e.g. Dunlop summer labeled winter).
+   */
+  async patchSetSeason(
+    tenantSlug: string,
+    setId: string,
+    season: VehicleTireSeason,
+    opts?: { propagateToAssets?: boolean },
+    access?: AccessContext,
+  ): Promise<TireSetSummary> {
+    if (!CREATE_SET_SEASONS.includes(season)) {
+      throw new BadRequestException('season must be summer, winter, or all_season');
+    }
+    const set = await this.prisma.tireSet.findFirst({
+      where: { id: setId, archivedAt: null, vehicle: { tenant: { slug: tenantSlug } } },
+      select: { id: true, vehicleId: true },
+    });
+    if (!set) throw new NotFoundException('Tire set not found');
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, set.vehicleId, access);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tireSet.update({ where: { id: setId }, data: { season } });
+      if (opts?.propagateToAssets) {
+        const items = await tx.tireSetItem.findMany({
+          where: { setId },
+          select: { assetId: true },
+        });
+        if (items.length) {
+          await tx.tireAsset.updateMany({
+            where: { id: { in: items.map((i) => i.assetId) } },
+            data: { season },
+          });
+        }
+        // Mounted fitments mirror assets for on-vehicle positions.
+        if (items.length) {
+          const placements = await tx.tirePlacement.findMany({
+            where: {
+              setId,
+              kind: 'on_vehicle',
+              validTo: null,
+              position: { not: null },
+            },
+            select: { position: true, vehicleId: true },
+          });
+          for (const pl of placements) {
+            if (!pl.position || !pl.vehicleId) continue;
+            await tx.vehicleWheelFitment.updateMany({
+              where: { vehicleId: pl.vehicleId, position: pl.position },
+              data: { season },
+            });
+          }
+        }
+      }
+    });
+
+    const rows = await this.listSetsForVehicleInternal(tenantSlug, set.vehicleId);
+    const row = rows.find((r) => r.id === setId);
+    if (!row) throw new NotFoundException('Tire set not found after update');
+    return row;
   }
 
   async syncAfterFitmentClear(

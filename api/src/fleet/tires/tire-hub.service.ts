@@ -31,6 +31,7 @@ import {
   applyRecommendedReplaceFlags,
   tireHubAccessScopeSignature,
 } from './tire-recommended-replace';
+import { pickSetSeason } from './tire-domain.types';
 
 const ALERT_LIMIT = 200;
 const ATTENTION_LIMIT = 50;
@@ -528,6 +529,18 @@ export class TireHubService {
         worstDot,
         dominantBrand: dominantString(set.items.map((i) => i.asset.brand)),
         dominantSize: dominantString(set.items.map((i) => i.asset.size)),
+        itemsSeason: (() => {
+          const s = pickSetSeason(set.items.map((i) => i.asset.season));
+          return s === 'unknown' ? null : s;
+        })(),
+        seasonLabelMismatch: (() => {
+          const itemsSeason = pickSetSeason(set.items.map((i) => i.asset.season));
+          return (
+            itemsSeason !== 'unknown' &&
+            set.season !== 'unknown' &&
+            itemsSeason !== set.season
+          );
+        })(),
         assetsRecommendedReplace: set.items.filter((i) => i.asset.recommendedReplace).length,
         hasOppositeSeasonStored,
         ownershipType: rollupOwnership(set.items.map((i) => i.asset.ownershipType)),

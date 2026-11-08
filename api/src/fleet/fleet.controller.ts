@@ -614,6 +614,40 @@ export class FleetController {
     return this.tireDomain.createSet(tenantId, vehicleId, assertCreateTireSetDto(body), access);
   }
 
+  @Post('vehicles/:vehicleId/tire-sets/reconcile-seasons')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(200)
+  reconcileVehicleTireSetSeasons(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireDomain.reconcileVehicleSetSeasons(tenantId, vehicleId, access);
+  }
+
+  @Patch('tires/sets/:setId/season')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchTireSetSeason(
+    @TenantId() tenantId: string,
+    @Param('setId') setId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const o =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const season = typeof o.season === 'string' ? o.season : '';
+    const propagateToAssets = o.propagateToAssets === true;
+    return this.tireDomain.patchSetSeason(
+      tenantId,
+      setId,
+      season as 'summer' | 'winter' | 'all_season',
+      { propagateToAssets },
+      access,
+    );
+  }
+
   @Post('tires/sets/:setId/scrap')
   @Roles(...FLEET_WRITE_ROLES)
   @HttpCode(200)

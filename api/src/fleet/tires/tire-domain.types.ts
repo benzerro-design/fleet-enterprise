@@ -11,6 +11,14 @@ export function tireSetQrPayload(setId: string): string {
   return `${TIRE_SET_QR_PREFIX}${setId}`;
 }
 
+/** Majority season for a set — unknown if mixed or empty. */
+export function pickSetSeason(seasons: VehicleTireSeason[]): VehicleTireSeason {
+  const known = seasons.filter((s) => s !== 'unknown');
+  if (known.length === 0) return 'unknown';
+  const first = known[0]!;
+  return known.every((s) => s === first) ? first : 'unknown';
+}
+
 /** Plate search field may contain FE:tire-set:{id} or a raw set id (cuid). */
 export function parseTireSetSearchInput(raw: string): { kind: 'setId'; setId: string } | { kind: 'plate'; plate: string } {
   const trimmed = raw.trim();
@@ -70,6 +78,10 @@ export type TireSetSummary = {
   isMounted: boolean;
   hotel?: TireSetHotelBadge | null;
   qrPayload?: string;
+  /** Majority season of tire assets in the set (may differ from set.season). */
+  itemsSeason?: VehicleTireSeason | null;
+  /** True when set.season disagrees with unanimous non-unknown asset seasons. */
+  seasonMismatch?: boolean;
 };
 
 export type TireSetSeedFrom = 'mounted_specs' | 'empty';

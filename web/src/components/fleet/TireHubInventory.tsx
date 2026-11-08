@@ -12,6 +12,7 @@ import {
   type TireHubInventorySet,
   type TireHubPayload,
 } from "@/lib/tire-hub-api";
+import { formatClientDisplay } from "@/lib/client-display";
 import {
   tireMountedAsHint,
   tireMountedAsLabel,
@@ -111,7 +112,7 @@ export function TireHubInventory({
 
   const clients = useMemo(() => {
     const map = new Map<string, string>();
-    for (const r of rows) map.set(r.clientId, `${r.clientCode} — ${r.clientName}`);
+    for (const r of rows) map.set(r.clientId, formatClientDisplay(r.clientCode, r.clientName));
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "ro"));
   }, [rows]);
 
@@ -383,7 +384,7 @@ export function TireHubInventory({
                   <td className="px-3 py-2">
                     <p className="font-medium text-zinc-100">{r.plate}</p>
                     <p className="text-[11px] text-zinc-500">
-                      {r.clientCode} · {r.clientName}
+                      {formatClientDisplay(r.clientCode, r.clientName)}
                     </p>
                   </td>
                   <td className="px-3 py-2 text-zinc-300">
@@ -399,6 +400,14 @@ export function TireHubInventory({
                           (r.mountedAs as TireMountedAs) === "tyre_only" ? "tyre_only" : "on_rim",
                         )}
                       </span>
+                      {r.seasonLabelMismatch ? (
+                        <span
+                          className="rounded bg-amber-950/50 px-1.5 py-0.5 text-[10px] text-amber-200"
+                          title={`Etichetă set: ${vehicleTireSeasonLabel(r.season)}; anvelope: ${vehicleTireSeasonLabel(r.itemsSeason ?? "unknown")}`}
+                        >
+                          Sezon nealiniat
+                        </span>
+                      ) : null}
                     </p>
                     <p className="text-[11px] text-zinc-500">
                       {vehicleTireSeasonLabel(r.season)} · {r.itemCount} buc

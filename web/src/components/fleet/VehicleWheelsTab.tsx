@@ -294,6 +294,68 @@ export function VehicleWheelsTab({
     }
   }
 
+  async function reconcileSetSeasons() {
+    if (!write) return;
+    setPending("reconcile-seasons");
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch(
+        `${fleetBrowserBase}/vehicles/${vehicleId}/tire-sets/reconcile-seasons`,
+        { method: "POST", headers: fleetJsonHeaders(), body: "{}" },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      const next = (await res.json()) as TireSetSummary[];
+      setSets(next);
+      setInfo("Sezoanele seturilor au fost aliniate la anvelopele din fiecare set.");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Aliniere sezoane eșuată");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function patchSetSeason(
+    setId: string,
+    season: VehicleTireSeason,
+    propagateToAssets: boolean,
+  ) {
+    if (!write) return;
+    setPending(`season-${setId}`);
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch(
+        `${fleetBrowserBase}/tires/sets/${encodeURIComponent(setId)}/season`,
+        {
+          method: "PATCH",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify({ season, propagateToAssets }),
+        },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      const row = (await res.json()) as TireSetSummary;
+      setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, ...row } : s)));
+      setInfo(
+        propagateToAssets
+          ? `Sezon set + anvelope → ${vehicleTireSeasonLabel(season)}.`
+          : `Etichetă set → ${vehicleTireSeasonLabel(season)}.`,
+      );
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Actualizare sezon eșuată");
+    } finally {
+      setPending(null);
+    }
+  }
+
   async function save(position: VehicleWheelPosition) {
     if (!write) return;
     setPending(position);
@@ -426,6 +488,7 @@ export function VehicleWheelsTab({
   const inventarHref = `/fleet/tires?tab=inventar&vehicleId=${encodeURIComponent(vehicleId)}`;
   const storedSets = sets.filter((s) => !s.isMounted);
   const mountedSets = sets.filter((s) => s.isMounted);
+  const hasSeasonMismatch = sets.some((s) => s.seasonMismatch);
 
   return (
     <div className="space-y-4">
@@ -441,13 +504,34 @@ export function VehicleWheelsTab({
             check-in la hotel din WO. Locația exactă e pe badge-ul Hotel / Depozit.
           </p>
         </div>
-        <Link
-          href={inventarHref}
-          className="shrink-0 rounded-lg border border-violet-700/50 bg-violet-950/30 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/50"
-        >
-          Inventar anvelope →
-        </Link>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <Link
+            href={inventarHref}
+            className="rounded-lg border border-violet-700/50 bg-violet-950/30 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/50"
+          >
+            Inventar anvelope →
+          </Link>
+          {write && hasSeasonMismatch ? (
+            <button
+              type="button"
+              disabled={pending === "reconcile-seasons"}
+              onClick={() => void reconcileSetSeasons()}
+              className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
+            >
+              Aliniază sezoane seturi
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {hasSeasonMismatch ? (
+        <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
+          Eticheta de sezon a unui set nu corespunde sezonului anvelopelor din set (ex. set
+          „Vară” cu Nokian WR+ / Iarnă). Folosește „Aliniază sezoane seturi” sau schimbă sezonul pe
+          rând. Dacă brandurile sunt pe setul greșit, corectează brandul pe poziții / inventar sau
+          fă swap sezonier din WO.
+        </p>
+      ) : null}
 
       {punctureKitPresent ? (
         <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
@@ -534,7 +618,45 @@ export function VehicleWheelsTab({
                 <span className="font-medium text-zinc-200">
                   {s.name?.trim() || vehicleTireSeasonLabel(s.season)}
                 </span>
-                <span className="text-zinc-500">{vehicleTireSeasonLabel(s.season)}</span>
+                {write ? (
+                  <select
+                    value={s.season === "unknown" ? "summer" : s.season}
+                    disabled={pending === `season-${s.id}`}
+                    onChange={(e) => {
+                      const next = e.target.value as VehicleTireSeason;
+                      if (next === s.season) return;
+                      if (
+                        !window.confirm(
+                          `Setezi sezonul acestui set la ${vehicleTireSeasonLabel(next)}?`,
+                        )
+                      ) {
+                        e.target.value = s.season === "unknown" ? "summer" : s.season;
+                        return;
+                      }
+                      const propagate = window.confirm(
+                        "Actualizezi și anvelopele (și fitmentul montat) din set la același sezon?",
+                      );
+                      void patchSetSeason(s.id, next, propagate);
+                    }}
+                    className={`${OPS_INPUT_CLASS} !py-0.5 !text-xs`}
+                    aria-label="Sezon set"
+                  >
+                    <option value="summer">Vară</option>
+                    <option value="winter">Iarnă</option>
+                    <option value="all_season">All-season</option>
+                  </select>
+                ) : (
+                  <span className="text-zinc-500">{vehicleTireSeasonLabel(s.season)}</span>
+                )}
+                {s.seasonMismatch ? (
+                  <span
+                    className="rounded bg-amber-950/50 px-2 py-0.5 text-amber-200"
+                    title={`Anvelopele din set: ${vehicleTireSeasonLabel(s.itemsSeason ?? "unknown")}`}
+                  >
+                    Nealiniat
+                    {s.itemsSeason ? ` → ${vehicleTireSeasonLabel(s.itemsSeason)}` : ""}
+                  </span>
+                ) : null}
                 <span
                   className="rounded bg-sky-950/50 px-2 py-0.5 text-sky-200"
                   title={tireMountedAsHint(s.mountedAs)}

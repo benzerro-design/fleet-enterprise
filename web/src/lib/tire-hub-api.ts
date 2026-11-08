@@ -86,6 +86,8 @@ export type TireHubInventorySet = {
   worstDot: string | null;
   dominantBrand?: string | null;
   dominantSize?: string | null;
+  itemsSeason?: VehicleTireSeason | null;
+  seasonLabelMismatch?: boolean;
   assetsRecommendedReplace: number;
   hasOppositeSeasonStored: boolean;
   ownershipType: "client" | "fleet" | "supplier_stock" | "mixed" | null;

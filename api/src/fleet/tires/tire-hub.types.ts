@@ -97,6 +97,10 @@ export type TireHubInventorySet = {
   dominantBrand: string | null;
   /** Size dominant dacă toate items au același size. */
   dominantSize: string | null;
+  /** Majority asset season — may differ from set.season after fitment edits. */
+  itemsSeason: VehicleTireSeason | null;
+  /** set.season disagrees with unanimous asset seasons. */
+  seasonLabelMismatch: boolean;
   assetsRecommendedReplace: number;
   hasOppositeSeasonStored: boolean;
   ownershipType: TireOwnershipType | 'mixed' | null;

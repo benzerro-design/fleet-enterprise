@@ -157,6 +157,8 @@ export type TireSetSummary = {
   isMounted: boolean;
   hotel?: TireSetHotelBadge | null;
   qrPayload?: string;
+  itemsSeason?: VehicleTireSeason | null;
+  seasonMismatch?: boolean;
 };
 
 export type VehicleWheelsPayload = {
