@@ -61,8 +61,8 @@ const NAV_TABS: { id: NavTabId; label: string }[] = [
 ];
 
 const INFOS_SUBTABS: { id: Extract<VehicleProfileTab, "basic" | "advanced">; label: string }[] = [
-  { id: "basic", label: "Basic Info" },
-  { id: "advanced", label: "Advanced Infos" },
+  { id: "basic", label: "Basic" },
+  { id: "advanced", label: "Advanced" },
 ];
 
 const DRIVER_HIDDEN_TABS = new Set<VehicleProfileTab>([
@@ -224,13 +224,6 @@ export function VehicleProfileTabs({
         : "border-transparent text-zinc-500 hover:text-zinc-200"
     }`;
 
-  const subTabBtnClass = (selected: boolean) =>
-    `rounded-lg px-3 py-1.5 text-sm transition-colors ${
-      selected
-        ? "bg-zinc-800 text-emerald-300"
-        : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
-    }`;
-
   return (
     <section className={`rounded-xl border border-zinc-800 bg-zinc-900/50 ${driverPortal ? "min-w-0 overflow-x-hidden" : ""}`}>
       <div className="border-b border-zinc-800 px-3 pt-3 sm:px-4 sm:pt-4">
@@ -274,24 +267,31 @@ export function VehicleProfileTabs({
 
       <div className={driverPortal ? "p-4 sm:p-6" : "p-6"}>
         {isInfosContentTab(active) ? (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div
-              className="inline-flex flex-wrap gap-1 rounded-xl border border-zinc-800 bg-zinc-950/50 p-1"
+              className="-mx-1 flex gap-5 border-b border-zinc-800 px-1"
               role="tablist"
               aria-label="Infos"
             >
-              {INFOS_SUBTABS.map((sub) => (
-                <button
-                  key={sub.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active === sub.id}
-                  onClick={() => setTab(sub.id)}
-                  className={subTabBtnClass(active === sub.id)}
-                >
-                  {sub.label}
-                </button>
-              ))}
+              {INFOS_SUBTABS.map((sub) => {
+                const selected = active === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setTab(sub.id)}
+                    className={`-mb-px border-b-2 pb-2.5 text-sm transition-colors ${
+                      selected
+                        ? "border-emerald-400 font-medium text-zinc-100"
+                        : "border-transparent text-zinc-500 hover:text-zinc-200"
+                    }`}
+                  >
+                    {sub.label}
+                  </button>
+                );
+              })}
             </div>
             {active === "basic" ? (
               <>
