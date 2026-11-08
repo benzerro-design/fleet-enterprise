@@ -40,7 +40,7 @@ export const viewport: Viewport = {
 };
 
 /** Anti-FOUC: aplică data-theme + lang din localStorage înainte de paint. */
-const appearanceBootScript = `(function(){try{var k='fleet-appearance-v1';var raw=localStorage.getItem(k);var p=raw?JSON.parse(raw):{};var t=p.theme||'dark';if(t==='system'){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}var root=document.documentElement;var l=p.locale==='en'||p.locale==='ro'?p.locale:(root.lang==='en'?'en':'ro');root.lang=l;root.setAttribute('data-theme',t);root.setAttribute('data-density',p.density==='compact'?'compact':'comfortable');if(p.reduceMotion)root.setAttribute('data-reduce-motion','1');root.style.colorScheme=t;}catch(e){}})();`;
+const appearanceBootScript = `(function(){try{var k='fleet-appearance-v1';var raw=localStorage.getItem(k);var p=raw?JSON.parse(raw):{};var t=p.theme||'dark';if(t==='system'){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}var root=document.documentElement;var l=p.locale==='en'||p.locale==='ro'?p.locale:(root.lang==='en'?'en':'ro');root.lang=l;root.setAttribute('data-theme',t);root.setAttribute('data-density',p.density==='compact'?'compact':'comfortable');root.setAttribute('data-profile-nav',p.profileNav==='segmented'?'segmented':'classic');if(p.reduceMotion)root.setAttribute('data-reduce-motion','1');root.style.colorScheme=t;}catch(e){}})();`;
 
 export default async function RootLayout({
   children,

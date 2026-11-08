@@ -3,6 +3,8 @@ import { DEFAULT_LOCALE, LOCALE_COOKIE_NAME, parseLocale, type Locale } from "@/
 export type AppearanceTheme = "dark" | "light" | "system";
 export type AppearanceDensity = "comfortable" | "compact";
 export type AppearanceDateFormat = "ro" | "iso" | "numeric";
+/** Vehicle profile top strip chrome (Infos + sibling tabs). */
+export type AppearanceProfileNav = "classic" | "segmented";
 
 export type AppearancePrefs = {
   theme: AppearanceTheme;
@@ -10,6 +12,7 @@ export type AppearancePrefs = {
   reduceMotion: boolean;
   dateFormat: AppearanceDateFormat;
   locale: Locale;
+  profileNav: AppearanceProfileNav;
 };
 
 export const APPEARANCE_STORAGE_KEY = "fleet-appearance-v1";
@@ -20,6 +23,7 @@ export const DEFAULT_APPEARANCE_PREFS: AppearancePrefs = {
   reduceMotion: false,
   dateFormat: "ro",
   locale: DEFAULT_LOCALE,
+  profileNav: "classic",
 };
 
 export function parseAppearancePrefs(raw: unknown): AppearancePrefs {
@@ -32,6 +36,8 @@ export function parseAppearancePrefs(raw: unknown): AppearancePrefs {
     o.dateFormat === "iso" || o.dateFormat === "numeric" || o.dateFormat === "ro"
       ? o.dateFormat
       : "ro";
+  const profileNav: AppearanceProfileNav =
+    o.profileNav === "segmented" ? "segmented" : "classic";
   const locale = parseLocale(o.locale);
   return {
     theme,
@@ -39,6 +45,7 @@ export function parseAppearancePrefs(raw: unknown): AppearancePrefs {
     reduceMotion: o.reduceMotion === true,
     dateFormat,
     locale,
+    profileNav,
   };
 }
 
@@ -92,6 +99,7 @@ export function applyAppearanceToDocument(prefs: AppearancePrefs): void {
   const resolved = resolveTheme(prefs.theme);
   root.setAttribute("data-theme", resolved);
   root.setAttribute("data-density", prefs.density);
+  root.setAttribute("data-profile-nav", prefs.profileNav);
   root.lang = prefs.locale;
   if (prefs.reduceMotion) root.setAttribute("data-reduce-motion", "1");
   else root.removeAttribute("data-reduce-motion");

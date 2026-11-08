@@ -336,6 +336,14 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
       adminOnly: true,
       activePrefixes: ["/fleet/setup/imports"],
     },
+    {
+      kind: "link",
+      label: "Design",
+      href: "/fleet/setup/design",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/setup/design"],
+    },
   ],
 };
 

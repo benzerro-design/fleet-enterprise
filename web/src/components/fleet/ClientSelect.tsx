@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { clientsBrowserBase, type ClientListPayload } from "@/lib/clients-api";
+import { formatClientDisplay } from "@/lib/client-display";
 
 type Props = {
   value: string;
@@ -62,7 +63,7 @@ export function ClientSelect({ value, onChange, disabled, required, hideLabel }:
         <option value="">{loading ? "Se încarcă…" : "Selectează client"}</option>
         {options.map((c) => (
           <option key={c.code} value={c.code}>
-            {c.code} — {c.legalName}
+            {formatClientDisplay(c.code, c.legalName)}
           </option>
         ))}
       </select>

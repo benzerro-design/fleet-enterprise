@@ -7,6 +7,7 @@ import { VehicleVisual } from "@/components/fleet/VehicleVisual";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
 import type { VehicleRecord } from "@/lib/fleet-api";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
+import { formatClientHeaderParts } from "@/lib/client-display";
 
 type Props = {
   vehicle: VehicleRecord;
@@ -81,6 +82,7 @@ export function VehicleDetailHeader({
   const activeDriver = driverAssignments.find((a) => !a.unassignedAt) ?? null;
   const photo = heroPhotoUrl ?? vehicle.heroPhotoUrl ?? null;
   const driverName = activeDriver?.driverFullName?.trim() || "—";
+  const clientParts = formatClientHeaderParts(vehicle.clientId, vehicle.clientLegalName);
 
   if (driverPortal) {
     return (
@@ -177,11 +179,11 @@ export function VehicleDetailHeader({
           </Suspense>
           <p className="mt-2 flex flex-wrap items-center gap-x-0 gap-y-1 text-sm text-zinc-400">
             <span>
-              Client <span className="font-mono text-zinc-300">{vehicle.clientId}</span>
-              {vehicle.clientLegalName ? (
+              Client <span className="font-mono text-zinc-300">{clientParts.primary}</span>
+              {clientParts.secondary ? (
                 <>
                   {" "}
-                  <span className="text-zinc-500">({vehicle.clientLegalName})</span>
+                  <span className="text-zinc-500">({clientParts.secondary})</span>
                 </>
               ) : null}
             </span>

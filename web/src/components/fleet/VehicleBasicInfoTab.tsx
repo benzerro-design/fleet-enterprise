@@ -20,6 +20,7 @@ import {
   fuelCardStatusLabel,
   type FuelCardStatusValue,
 } from "@/lib/fuel-card-providers";
+import { formatClientDisplay } from "@/lib/client-display";
 
 type Props = {
   vehicle: VehicleRecord;
@@ -119,7 +120,7 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
       <dl className="grid gap-4 sm:grid-cols-2">
         <Field
           label="Client"
-          value={`${vehicle.clientId}${vehicle.clientLegalName ? ` — ${vehicle.clientLegalName}` : ""}`}
+          value={formatClientDisplay(vehicle.clientId, vehicle.clientLegalName)}
           mono
         />
         <Field label="Nr. înmatriculare" value={vehicle.registrationNumber} mono />
@@ -173,7 +174,7 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
           {lockClient ? (
             <Field
               label="Client"
-              value={`${vehicle.clientId}${vehicle.clientLegalName ? ` — ${vehicle.clientLegalName}` : ""}`}
+              value={formatClientDisplay(vehicle.clientId, vehicle.clientLegalName)}
               mono
             />
           ) : (

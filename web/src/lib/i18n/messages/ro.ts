@@ -98,6 +98,7 @@ const ro = {
       "/fleet/setup/suppliers": "Furnizori",
       "/fleet/setup/fleet": "Flotă & vehicule",
       "/fleet/setup/imports": "Importuri",
+      "/fleet/setup/design": "Design",
       "/fleet/members": "Membri abonat",
       "/fleet/user-strategy": "Strategie useri",
       "/fleet/audit": "Audit",
@@ -155,9 +156,28 @@ const ro = {
       eyebrow: "Cont",
       title: "Preferințe",
       description:
-        "Doar aspect personal pe acest dispozitiv: temă, densitate, mișcare redusă, format dată. Nu e hub de setări produs — navigarea rapidă e Ctrl/Cmd+K din shell.",
+        "Preferințe pe acest dispozitiv: limbă, temă, densitate, mișcare, format dată. Pattern-urile de chrome UI sunt în Setări → Design.",
+    },
+    personal: {
+      title: "Preferințe personale",
+      description:
+        "Limbă, temă dark/light, densitate, mișcare, format dată — setări pe acest browser, nu branding de flotă.",
+    },
+    design: {
+      title: "Design",
+      description:
+        "Pattern-uri de interfață curate. Modulul trăiește în Setări → Design.",
     },
     loading: "Se încarcă preferințele…",
+    profileNav: {
+      title: "Taburi profil vehicul",
+      description:
+        "Stilul benzii Infos / Date achiziție / … Sub-taburile Infos (Basic / Advanced) rămân underline.",
+      classic: "Clasic",
+      classicHint: "Taburi individuale cu chenar pe activ",
+      segmented: "Segmentat",
+      segmentedHint: "Pistă + card ridicat pe activ",
+    },
     locale: {
       title: "Limbă",
       description: "Schimbă limba pentru chrome, navigare și preferințe. Acoperirea completă vine în slice-uri următoare.",
@@ -1071,6 +1091,14 @@ const ro = {
         imports: {
           label: "Importuri",
           blurb: "Șabloane CSV/XLSX, mapări și cine poate importa în masă.",
+        },
+        design: {
+          label: "Design",
+          blurb: "Pattern-uri de chrome UI (taburi profil, …). Opțiuni curate, adăugate pe parcurs.",
+        },
+        "quote-thresholds": {
+          label: "Plafoane deviz",
+          blurb: "Pe client: sumă maximă de aprobare pe user. Se verifică la Aprobă pe comandă.",
         },
       },
     },

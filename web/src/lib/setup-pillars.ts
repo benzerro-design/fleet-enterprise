@@ -82,6 +82,14 @@ export const SETUP_PILLARS: SetupPillar[] = [
     status: "live",
     activePrefixes: ["/fleet/setup/imports"],
   },
+  {
+    id: "design",
+    href: "/fleet/setup/design",
+    label: "Design",
+    blurb: "Pattern-uri de chrome UI (taburi profil, …). Opțiuni curate, adăugate pe parcurs.",
+    status: "live",
+    activePrefixes: ["/fleet/setup/design"],
+  },
 ];
 
 export function setupPillarForPath(pathname: string): SetupPillar | null {

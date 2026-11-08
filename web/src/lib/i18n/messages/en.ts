@@ -98,6 +98,7 @@ const en = {
       "/fleet/setup/suppliers": "Suppliers",
       "/fleet/setup/fleet": "Fleet & vehicles",
       "/fleet/setup/imports": "Imports",
+      "/fleet/setup/design": "Design",
       "/fleet/members": "Tenant members",
       "/fleet/user-strategy": "User strategy",
       "/fleet/audit": "Audit",
@@ -155,9 +156,27 @@ const en = {
       eyebrow: "Account",
       title: "Preferences",
       description:
-        "Personal display settings on this device only: theme, density, reduced motion, and date format. This is not a product settings hub — quick navigation is Ctrl/Cmd+K from the shell.",
+        "Device preferences: language, theme, density, motion, date format. UI chrome patterns live under Settings → Design.",
+    },
+    personal: {
+      title: "Personal preferences",
+      description:
+        "Language, dark/light theme, density, motion, date format — browser-local settings, not fleet branding.",
+    },
+    design: {
+      title: "Design",
+      description: "Curated UI patterns. This module lives under Settings → Design.",
     },
     loading: "Loading preferences…",
+    profileNav: {
+      title: "Vehicle profile tabs",
+      description:
+        "Chrome for the Infos / Acquisition / … strip. Infos sub-tabs (Basic / Advanced) stay underline.",
+      classic: "Classic",
+      classicHint: "Individual tabs with border on active",
+      segmented: "Segmented",
+      segmentedHint: "Track + raised active card",
+    },
     locale: {
       title: "Language",
       description: "Changes language for chrome, navigation, and preferences. Full coverage will come in later slices.",
@@ -1069,6 +1088,14 @@ const en = {
         imports: {
           label: "Imports",
           blurb: "CSV/XLSX templates, mappings, and who can bulk import.",
+        },
+        design: {
+          label: "Design",
+          blurb: "UI chrome patterns (vehicle profile tabs, …). Curated options, added as we go.",
+        },
+        "quote-thresholds": {
+          label: "Quote thresholds",
+          blurb: "Per client: max approval amount per user. Checked on Approve for a work order.",
         },
       },
     },

@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
+import { useAppearancePrefs } from "@/components/fleet/AppearanceProvider";
 import { DriverMobileTabStrip } from "@/components/fleet/DriverMobileTabStrip";
 import { VehicleAcquisitionTab } from "@/components/fleet/VehicleAcquisitionTab";
 import { VehicleAdvancedCivTab } from "@/components/fleet/VehicleAdvancedCivTab";
@@ -152,6 +153,8 @@ export function VehicleProfileTabs({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { prefs } = useAppearancePrefs();
+  const segmented = prefs.profileNav === "segmented";
   const visibleNavTabs = useMemo(
     () =>
       NAV_TABS.filter((tab) => {
@@ -218,15 +221,48 @@ export function VehicleProfileTabs({
   );
 
   const tabBtnClass = (selected: boolean) =>
-    `rounded-t-lg border px-4 py-2 text-sm transition-colors ${
-      selected
-        ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
-        : "border-transparent text-zinc-500 hover:text-zinc-200"
-    }`;
+    segmented
+      ? `rounded-lg px-3.5 py-2 text-sm transition-colors ${
+          selected
+            ? "bg-zinc-900 text-emerald-300 shadow-sm ring-1 ring-zinc-700/80"
+            : "text-zinc-500 hover:bg-zinc-900/40 hover:text-zinc-200"
+        }`
+      : `rounded-t-lg border px-4 py-2 text-sm transition-colors ${
+          selected
+            ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
+            : "border-transparent text-zinc-500 hover:text-zinc-200"
+        }`;
+
+  const navStrip = (
+    <div
+      className={
+        segmented
+          ? "flex flex-wrap gap-1 rounded-xl bg-zinc-800/55 p-1"
+          : "flex flex-wrap gap-2"
+      }
+    >
+      {visibleNavTabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => selectNav(tab.id)}
+          className={tabBtnClass(activeNav === tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <section className={`rounded-xl border border-zinc-800 bg-zinc-900/50 ${driverPortal ? "min-w-0 overflow-x-hidden" : ""}`}>
-      <div className="border-b border-zinc-800 px-3 pt-3 sm:px-4 sm:pt-4">
+      <div
+        className={
+          segmented
+            ? "border-b border-zinc-800 px-3 py-3 sm:px-4"
+            : "border-b border-zinc-800 px-3 pt-3 sm:px-4 sm:pt-4"
+        }
+      >
         {driverPortal ? (
           <>
             <div className="lg:hidden">
@@ -236,32 +272,10 @@ export function VehicleProfileTabs({
                 onSelect={(id) => selectNav(id as NavTabId)}
               />
             </div>
-            <div className="hidden flex-wrap gap-2 lg:flex">
-              {visibleNavTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => selectNav(tab.id)}
-                  className={tabBtnClass(activeNav === tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            <div className="hidden lg:block">{navStrip}</div>
           </>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {visibleNavTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => selectNav(tab.id)}
-                className={tabBtnClass(activeNav === tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          navStrip
         )}
       </div>
 
