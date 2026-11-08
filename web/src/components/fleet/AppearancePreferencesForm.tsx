@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useAppearancePrefs } from "@/components/fleet/AppearanceProvider";
 import type {
   AppearanceDateFormat,
@@ -57,6 +58,7 @@ function ChoiceButton({
   accent,
   title,
   hint,
+  preview,
 }: {
   active: boolean;
   disabled: boolean;
@@ -64,6 +66,7 @@ function ChoiceButton({
   accent: "violet" | "emerald" | "sky" | "amber";
   title: string;
   hint?: string;
+  preview?: ReactNode;
 }) {
   const activeCls =
     accent === "violet"
@@ -82,9 +85,55 @@ function ChoiceButton({
         active ? activeCls : "border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:bg-zinc-900"
       }`}
     >
+      {preview ? (
+        <div className="mb-2.5 rounded-md border border-zinc-800/80 bg-zinc-950/70 p-2" aria-hidden>
+          {preview}
+        </div>
+      ) : null}
       <span className="block text-sm font-medium">{title}</span>
       {hint ? <span className="mt-0.5 block text-[11px] text-zinc-500">{hint}</span> : null}
     </button>
+  );
+}
+
+/** Mini chrome preview — mirrors VehicleProfileTabs classic vs segmented. */
+function ProfileNavPreview({ variant }: { variant: AppearanceProfileNav }) {
+  const labels = ["Infos", "Photos", "Wheels"];
+  if (variant === "segmented") {
+    return (
+      <div className="flex gap-0.5 rounded-lg bg-zinc-800/70 p-0.5">
+        {labels.map((label, i) => (
+          <span
+            key={label}
+            className={
+              i === 0
+                ? "rounded-md bg-zinc-900 px-2 py-1 text-[9px] font-medium text-emerald-300 shadow-sm ring-1 ring-zinc-700/80"
+                : "rounded-md px-2 py-1 text-[9px] text-zinc-500"
+            }
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="border-b border-zinc-800">
+      <div className="flex gap-1">
+        {labels.map((label, i) => (
+          <span
+            key={label}
+            className={
+              i === 0
+                ? "-mb-px rounded-t-md border border-zinc-700 border-b-zinc-950 bg-zinc-900 px-2 py-1 text-[9px] font-medium text-emerald-300"
+                : "rounded-t-md border border-transparent px-2 py-1 text-[9px] text-zinc-500"
+            }
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -230,6 +279,7 @@ export function DesignPreferencesForm() {
               accent="emerald"
               title={tx(opt.labelKey)}
               hint={tx(opt.hintKey)}
+              preview={<ProfileNavPreview variant={opt.value} />}
             />
           ))}
         </div>
