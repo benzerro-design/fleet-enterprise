@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fleetBrowserBase, fleetJsonHeaders } from "@/lib/fleet-api";
 import {
   tireEventTypeLabel,
@@ -53,10 +53,13 @@ export function TireHubInventory({
   const [supplierId, setSupplierId] = useState<string>("all");
   const [vehicleFilter, setVehicleFilter] = useState<string>(initialVehicleId?.trim() || "all");
   const [q, setQ] = useState("");
+  const deepLinkConsumed = useRef(false);
   const [drawer, setDrawer] = useState<TireHubInventorySet | null>(() => {
     const sid = initialSetId?.trim();
     if (!sid) return null;
-    return (hub.inventorySets ?? []).find((r) => r.setId === sid) ?? null;
+    const row = (hub.inventorySets ?? []).find((r) => r.setId === sid) ?? null;
+    if (row) deepLinkConsumed.current = true;
+    return row;
   });
   const [addOpen, setAddOpen] = useState(false);
   const [vehicles, setVehicles] = useState<VehicleOpt[]>([]);
@@ -76,10 +79,13 @@ export function TireHubInventory({
   }, [initialVehicleId]);
 
   useEffect(() => {
+    if (deepLinkConsumed.current) return;
     const sid = initialSetId?.trim();
     if (!sid) return;
     const row = (hub.inventorySets ?? []).find((r) => r.setId === sid);
-    if (row) setDrawer(row);
+    if (!row) return;
+    deepLinkConsumed.current = true;
+    setDrawer(row);
   }, [initialSetId, hub.inventorySets]);
 
   useEffect(() => {
@@ -229,6 +235,13 @@ export function TireHubInventory({
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-xs text-zinc-400">
+        <p className="text-zinc-200">Privire de ansamblu — toate seturile din flota vizibilă.</p>
+        <p className="mt-1">
+          Filtrează după unde sunt (montat / hotel / la client), cine e clientul sau furnizorul de
+          hotel, ce sezon e pe etichetă, apoi deschide fișa pe Roți pentru ce / cum / când.
+        </p>
+      </div>
       {canWrite ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-zinc-500">
@@ -273,6 +286,13 @@ export function TireHubInventory({
           className={`rounded-lg border px-3 py-1.5 text-xs ${loc === "at_client" ? "border-emerald-600 bg-emerald-950/40 text-emerald-200" : "border-zinc-700 text-zinc-300 hover:bg-zinc-900"}`}
         >
           La client ({hub.summary.setsAtClient})
+        </button>
+        <button
+          type="button"
+          onClick={() => applyKpiFilter("other")}
+          className={`rounded-lg border px-3 py-1.5 text-xs ${loc === "other" ? "border-emerald-600 bg-emerald-950/40 text-emerald-200" : "border-zinc-700 text-zinc-300 hover:bg-zinc-900"}`}
+        >
+          Altele ({rows.filter((r) => r.location === "other").length})
         </button>
         <button
           type="button"

@@ -66,6 +66,20 @@ export type TireSetHotelBadge = {
   supplierName?: string | null;
   locationCode?: string | null;
   checkInAt?: string | null;
+  stayId?: string | null;
+};
+
+export type TireSetLocation = 'on_vehicle' | 'at_supplier_hotel' | 'at_client' | 'other';
+
+export type TireSetItemPreview = {
+  assetId: string;
+  position: string | null;
+  brand: string | null;
+  model: string | null;
+  size: string | null;
+  season: VehicleTireSeason;
+  treadMm: number | null;
+  dot: string | null;
 };
 
 export type TireSetSummary = {
@@ -76,12 +90,22 @@ export type TireSetSummary = {
   archivedAt: string | null;
   itemCount: number;
   isMounted: boolean;
+  location: TireSetLocation;
   hotel?: TireSetHotelBadge | null;
   qrPayload?: string;
   /** Majority season of tire assets in the set (may differ from set.season). */
   itemsSeason?: VehicleTireSeason | null;
   /** True when set.season disagrees with unanimous non-unknown asset seasons. */
   seasonMismatch?: boolean;
+  dominantBrand?: string | null;
+  dominantModel?: string | null;
+  dominantSize?: string | null;
+  photoUrls?: string[];
+  photoCount?: number;
+  hrefInventar?: string;
+  hrefSeasonTicket?: string;
+  hrefHotelTicket?: string;
+  items?: TireSetItemPreview[];
 };
 
 export type TireSetSeedFrom = 'mounted_specs' | 'empty';

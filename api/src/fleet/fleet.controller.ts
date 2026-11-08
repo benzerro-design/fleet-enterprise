@@ -58,6 +58,10 @@ import { DriversService } from '../drivers/drivers.service';
 import { assertFuelType, parseFuelType, parseFuelTypesCsv } from '../ops/fuel-types';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TripsService } from '../ops/trips.service';
+import { TireHotelService } from './tires/tire-hotel.service';
+import { assertSupplierTireStorage } from '../suppliers/supplier-tire-capability';
+import { assertVehicleOpsWrite } from '../ops/ops-write-access';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('fleet')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -69,6 +73,8 @@ export class FleetController {
     private readonly wheels: VehicleWheelsService,
     private readonly tireDomain: TireDomainService,
     private readonly tireHub: TireHubService,
+    private readonly tireHotel: TireHotelService,
+    private readonly prisma: PrismaService,
     private readonly dashboard: DashboardService,
     private readonly formBrief: VehicleFormBriefService,
     private readonly drivers: DriversService,
@@ -625,6 +631,31 @@ export class FleetController {
     return this.tireDomain.reconcileVehicleSetSeasons(tenantId, vehicleId, access);
   }
 
+  @Post('vehicles/:vehicleId/tire-sets/swap-seasons')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(200)
+  swapVehicleTireSetSeasons(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const o =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    return this.tireDomain.swapSetSeasons(
+      tenantId,
+      vehicleId,
+      {
+        setIdA: typeof o.setIdA === 'string' ? o.setIdA : undefined,
+        setIdB: typeof o.setIdB === 'string' ? o.setIdB : undefined,
+        winterSetId: typeof o.winterSetId === 'string' ? o.winterSetId : undefined,
+      },
+      access,
+    );
+  }
+
   @Patch('tires/sets/:setId/season')
   @Roles(...FLEET_WRITE_ROLES)
   patchTireSetSeason(
@@ -638,7 +669,7 @@ export class FleetController {
         ? (body as Record<string, unknown>)
         : {};
     const season = typeof o.season === 'string' ? o.season : '';
-    const propagateToAssets = o.propagateToAssets === true;
+    const propagateToAssets = o.propagateToAssets !== false;
     return this.tireDomain.patchSetSeason(
       tenantId,
       setId,
@@ -646,6 +677,96 @@ export class FleetController {
       { propagateToAssets },
       access,
     );
+  }
+
+  /** Manager check-in set depozitat → hotel (când nu e deja la hotel). */
+  @Post('tires/sets/:setId/hotel-check-in')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(200)
+  async fleetTireSetHotelCheckIn(
+    @TenantId() tenantSlug: string,
+    @Param('setId') setId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    const o =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const supplierId = typeof o.supplierId === 'string' ? o.supplierId.trim() : '';
+    const locationCode =
+      typeof o.locationCode === 'string'
+        ? o.locationCode.trim()
+        : typeof o.bayCode === 'string'
+          ? o.bayCode.trim()
+          : '';
+    if (!supplierId) throw new BadRequestException('supplierId required');
+    if (!locationCode) throw new BadRequestException('locationCode or bayCode required');
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new BadRequestException('Tenant not found');
+
+    const set = await this.prisma.tireSet.findFirst({
+      where: { id: setId, tenantId: tenant.id, archivedAt: null },
+      select: { id: true, vehicleId: true },
+    });
+    if (!set) throw new BadRequestException('Tire set not found');
+
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, set.vehicleId, access);
+    await assertSupplierTireStorage(this.prisma, tenant.id, supplierId);
+
+    const intakePhotos = Array.isArray(o.intakePhotos)
+      ? o.intakePhotos.filter((u): u is string => typeof u === 'string' && u.trim().length > 0)
+      : undefined;
+
+    await this.tireHotel.checkIn({
+      tenantId: tenant.id,
+      supplierId,
+      setId,
+      locationCode,
+      bayCode: typeof o.bayCode === 'string' ? o.bayCode : undefined,
+      binCode: typeof o.binCode === 'string' ? o.binCode : undefined,
+      intakePhotos,
+      intakeTreadNotes: typeof o.intakeTreadNotes === 'string' ? o.intakeTreadNotes : undefined,
+      actorUserId,
+      sourceSystem: 'fleet_roti_panel',
+    });
+
+    return this.tireDomain.listSetsForVehicle(tenantSlug, set.vehicleId, access);
+  }
+
+  @Get('vehicles/:vehicleId/tire-hotel-suppliers')
+  @Roles(...FLEET_READ_ROLES)
+  async listTireHotelSuppliersForVehicle(
+    @TenantId() tenantSlug: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    await this.tireDomain.listSetsForVehicle(tenantSlug, vehicleId, access);
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) return { items: [] as Array<{ id: string; legalName: string }> };
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenantId: tenant.id },
+      select: { clientId: true },
+    });
+    if (!vehicle) return { items: [] as Array<{ id: string; legalName: string }> };
+
+    const allocs = await this.prisma.clientSupplierAllocation.findMany({
+      where: { clientId: vehicle.clientId, tenantId: tenant.id },
+      include: { supplier: { select: { id: true, legalName: true } } },
+    });
+    const items: Array<{ id: string; legalName: string }> = [];
+    for (const a of allocs) {
+      try {
+        await assertSupplierTireStorage(this.prisma, tenant.id, a.supplierId);
+        items.push({ id: a.supplier.id, legalName: a.supplier.legalName });
+      } catch {
+        /* skip */
+      }
+    }
+    items.sort((x, y) => x.legalName.localeCompare(y.legalName, 'ro'));
+    return { items };
   }
 
   @Post('tires/sets/:setId/scrap')

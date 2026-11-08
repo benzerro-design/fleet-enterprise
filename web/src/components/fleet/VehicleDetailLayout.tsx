@@ -61,6 +61,8 @@ export function VehicleDetailLayout({
   } = data;
   const regQs = `registrationNumber=${encodeURIComponent(vehicle.registrationNumber)}`;
   const profileWrite = editable && canWrite;
+  /** Seturi anvelope: operații pe fișă și pe vizualizare (Hub deschide view/edit). */
+  const wheelsSetsWrite = canWrite && !driverPortal;
   const photosWrite = mediaWrite ?? profileWrite;
   const odometerWrite = mediaWrite ?? profileWrite;
   const legislativeKitWrite = mediaWrite ?? profileWrite;
@@ -88,6 +90,7 @@ export function VehicleDetailLayout({
           <VehicleProfileTabs
             vehicle={vehicle}
             write={profileWrite}
+            wheelsSetsWrite={wheelsSetsWrite}
             photosWrite={photosWrite}
             odometerWrite={odometerWrite}
             planWrite={maintenancePlanWrite}

@@ -44,6 +44,8 @@ describe('TireHubService.exportInventoryCsv', () => {
           worstDot: '2319',
           dominantBrand: 'Michelin',
           dominantSize: '205/55R16',
+          itemsSeason: 'summer',
+          seasonLabelMismatch: false,
           assetsRecommendedReplace: 0,
           hasOppositeSeasonStored: false,
           ownershipType: 'client',

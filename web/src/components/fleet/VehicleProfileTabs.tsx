@@ -85,6 +85,8 @@ function navIdForTab(tab: VehicleProfileTab): NavTabId {
 type Props = {
   vehicle: VehicleRecord;
   write: boolean;
+  /** Operații pe fișele de set (inclusiv pe pagina de vizualizare). */
+  wheelsSetsWrite?: boolean;
   photosWrite?: boolean;
   odometerWrite?: boolean;
   planWrite?: boolean;
@@ -126,6 +128,7 @@ type Props = {
 export function VehicleProfileTabs({
   vehicle,
   write,
+  wheelsSetsWrite,
   photosWrite,
   odometerWrite,
   planWrite,
@@ -342,7 +345,10 @@ export function VehicleProfileTabs({
           <VehicleWheelsTab
             vehicleId={vehicle.id}
             write={write}
+            setsWrite={wheelsSetsWrite ?? write}
+            driverPortal={driverPortal}
             initial={wheels}
+            initialSetId={searchParams.get("setId")}
             tyresFront={
               civ.civProfile?.tyresFront != null ? String(civ.civProfile.tyresFront) : null
             }

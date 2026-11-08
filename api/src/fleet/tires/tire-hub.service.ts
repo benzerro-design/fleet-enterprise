@@ -45,8 +45,9 @@ const SEVERITY_RANK: Record<TireHubAlertSeverity, number> = {
   info: 2,
 };
 
+/** Managers land on /edit so set fiche mutations are enabled (view is read-only). */
 function vehicleWheelsHref(vehicleId: string, setId?: string): string {
-  const base = `/fleet/vehicles/${vehicleId}?tab=wheels`;
+  const base = `/fleet/vehicles/${vehicleId}/edit?tab=wheels`;
   return setId ? `${base}&setId=${encodeURIComponent(setId)}` : base;
 }
 
@@ -247,9 +248,10 @@ export class TireHubService {
     for (const set of sets) {
       const mounted = isSetMounted(set);
       const atHotel = hotelSetIds.has(set.id);
+      const atClient = set.placements.some((p) => p.kind === 'at_client');
       if (mounted) setsMounted += 1;
       else if (atHotel) setsAtHotel += 1;
-      else setsAtClient += 1;
+      else if (atClient) setsAtClient += 1;
     }
 
     const fitments = await this.prisma.vehicleWheelFitment.findMany({
@@ -443,7 +445,7 @@ export class TireHubService {
       if (mounted) location = 'on_vehicle';
       else if (atHotel) location = 'at_supplier_hotel';
       else if (set.placements.some((p) => p.kind === 'at_client')) location = 'at_client';
-      else location = 'at_client';
+      else location = 'other';
 
       const treadValues = set.items
         .map((i) => i.asset.treadMm)

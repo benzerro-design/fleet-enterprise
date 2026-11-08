@@ -145,6 +145,20 @@ export type TireSetHotelBadge = {
   supplierName?: string | null;
   locationCode?: string | null;
   checkInAt?: string | null;
+  stayId?: string | null;
+};
+
+export type TireSetLocation = "on_vehicle" | "at_supplier_hotel" | "at_client" | "other";
+
+export type TireSetItemPreview = {
+  assetId: string;
+  position: string | null;
+  brand: string | null;
+  model: string | null;
+  size: string | null;
+  season: VehicleTireSeason;
+  treadMm: number | null;
+  dot: string | null;
 };
 
 export type TireSetSummary = {
@@ -155,11 +169,36 @@ export type TireSetSummary = {
   archivedAt: string | null;
   itemCount: number;
   isMounted: boolean;
+  location: TireSetLocation;
   hotel?: TireSetHotelBadge | null;
   qrPayload?: string;
   itemsSeason?: VehicleTireSeason | null;
   seasonMismatch?: boolean;
+  dominantBrand?: string | null;
+  dominantModel?: string | null;
+  dominantSize?: string | null;
+  photoUrls?: string[];
+  photoCount?: number;
+  hrefInventar?: string;
+  hrefSeasonTicket?: string;
+  hrefHotelTicket?: string;
+  items?: TireSetItemPreview[];
 };
+
+export function tireSetLocationLabel(loc: TireSetLocation | undefined): string {
+  switch (loc) {
+    case "on_vehicle":
+      return "Montat pe mașină";
+    case "at_supplier_hotel":
+      return "La hotel";
+    case "at_client":
+      return "Depozit (la client)";
+    case "other":
+      return "Altele";
+    default:
+      return "—";
+  }
+}
 
 export type VehicleWheelsPayload = {
   wheelLayout?: VehicleWheelLayout;

@@ -10,7 +10,14 @@ import type {
 import type { AccessContext } from '../../iam/access-context.types';
 import { assertVehicleOpsRead, assertVehicleOpsWrite } from '../../ops/ops-write-access';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { CreateTireSetDto, FitmentSyncFields, PlaceAssetParams, TireSetSummary } from './tire-domain.types';
+import type {
+  CreateTireSetDto,
+  FitmentSyncFields,
+  PlaceAssetParams,
+  TireSetItemPreview,
+  TireSetLocation,
+  TireSetSummary,
+} from './tire-domain.types';
 import { pickSetSeason, tireSetQrPayload } from './tire-domain.types';
 import { positionSortIndex } from './tire-domain.types';
 
@@ -82,6 +89,41 @@ function seedBrandModelForSeason(
   return { brand: source.brand, model: source.model };
 }
 
+function dominantString(values: Array<string | null | undefined>): string | null {
+  const cleaned = values.map((v) => v?.trim()).filter((v): v is string => !!v);
+  if (cleaned.length === 0) return null;
+  const first = cleaned[0]!;
+  return cleaned.every((v) => v.toLocaleLowerCase('ro') === first.toLocaleLowerCase('ro'))
+    ? first
+    : null;
+}
+
+function normalizeIntakePhotoUrls(value: Prisma.JsonValue | null | undefined): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((url) => url.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function seasonLabelRo(season: VehicleTireSeason): string {
+  if (season === 'summer') return 'Vară';
+  if (season === 'winter') return 'Iarnă';
+  if (season === 'all_season') return 'All-season';
+  return 'Necunoscut';
+}
+
+function isSeasonOnlyName(name: string | null | undefined, season: VehicleTireSeason): boolean {
+  const n = (name ?? '').trim().toLocaleLowerCase('ro');
+  if (!n) return true;
+  if (n === 'montat') return false;
+  const labels = ['vară', 'vara', 'iarnă', 'iarna', 'all-season', 'all season', 'necunoscut'];
+  return labels.includes(n) || n === seasonLabelRo(season).toLocaleLowerCase('ro');
+}
+
 @Injectable()
 export class TireDomainService {
   constructor(private readonly prisma: PrismaService) {}
@@ -102,20 +144,35 @@ export class TireDomainService {
   ): Promise<TireSetSummary[]> {
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenant: { slug: tenantSlug } },
-      select: { id: true },
+      select: { id: true, registrationNumber: true },
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
+    const plate = vehicle.registrationNumber ?? '';
 
     const sets = await this.prisma.tireSet.findMany({
       where: { vehicleId, archivedAt: null },
       orderBy: [{ createdAt: 'asc' }],
       include: {
         _count: { select: { items: true } },
-        items: { select: { asset: { select: { season: true } } } },
+        items: {
+          orderBy: [{ sortOrder: 'asc' }, { assetId: 'asc' }],
+          select: {
+            asset: {
+              select: {
+                id: true,
+                brand: true,
+                model: true,
+                size: true,
+                season: true,
+                treadMm: true,
+                dot: true,
+              },
+            },
+          },
+        },
         placements: {
-          where: { validTo: null, kind: 'on_vehicle', vehicleId },
-          select: { id: true },
-          take: 1,
+          where: { validTo: null },
+          select: { id: true, kind: true, position: true, assetId: true },
         },
         storageStays: {
           where: { checkOutAt: null },
@@ -149,7 +206,15 @@ export class TireDomainService {
     return sets.map((s) => {
       const stay = s.storageStays[0];
       const pl = placementBySet.get(s.id);
+      const onVehicle = s.placements.some((p) => p.kind === 'on_vehicle');
       const atHotel = Boolean(stay || pl);
+      const atClient = s.placements.some((p) => p.kind === 'at_client');
+      let location: TireSetLocation = 'other';
+      if (onVehicle) location = 'on_vehicle';
+      else if (atHotel) location = 'at_supplier_hotel';
+      else if (atClient) location = 'at_client';
+      else location = 'other';
+
       const hotel =
         atHotel
           ? {
@@ -157,11 +222,28 @@ export class TireDomainService {
               supplierName: stay?.supplier.legalName ?? pl?.supplier?.legalName ?? null,
               locationCode: stay?.locationCode ?? pl?.locationCode ?? null,
               checkInAt: stay?.checkInAt.toISOString() ?? pl?.validFrom.toISOString() ?? null,
+              stayId: stay?.id ?? null,
             }
           : null;
       const itemsSeason = pickSetSeason(s.items.map((i) => i.asset.season));
       const seasonMismatch =
         itemsSeason !== 'unknown' && s.season !== 'unknown' && itemsSeason !== s.season;
+      const photoUrls = normalizeIntakePhotoUrls(stay?.intakePhotos ?? null);
+      const positionByAsset = new Map(
+        s.placements
+          .filter((p) => p.kind === 'on_vehicle' && p.position)
+          .map((p) => [p.assetId, p.position] as const),
+      );
+      const items: TireSetItemPreview[] = s.items.map((i) => ({
+        assetId: i.asset.id,
+        position: positionByAsset.get(i.asset.id) ?? null,
+        brand: i.asset.brand,
+        model: i.asset.model,
+        size: i.asset.size,
+        season: i.asset.season,
+        treadMm: i.asset.treadMm,
+        dot: i.asset.dot,
+      }));
 
       return {
         id: s.id,
@@ -170,11 +252,21 @@ export class TireDomainService {
         mountedAs: s.mountedAs,
         archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,
         itemCount: s._count.items,
-        isMounted: s.placements.length > 0,
+        isMounted: onVehicle,
+        location,
         hotel,
         qrPayload: tireSetQrPayload(s.id),
         itemsSeason,
         seasonMismatch,
+        dominantBrand: dominantString(s.items.map((i) => i.asset.brand)),
+        dominantModel: dominantString(s.items.map((i) => i.asset.model)),
+        dominantSize: dominantString(s.items.map((i) => i.asset.size)),
+        photoUrls,
+        photoCount: photoUrls.length,
+        hrefInventar: `/fleet/tires?tab=inventar&vehicleId=${encodeURIComponent(vehicleId)}&setId=${encodeURIComponent(s.id)}`,
+        hrefSeasonTicket: `/fleet/tickets/new?vehicleId=${encodeURIComponent(vehicleId)}&subject=${encodeURIComponent(`Schimb sezon anvelope ${plate}`)}`,
+        hrefHotelTicket: `/fleet/tickets/new?vehicleId=${encodeURIComponent(vehicleId)}&subject=${encodeURIComponent(`Hotel anvelope ${plate} · ${seasonLabelRo(s.season)}`)}`,
+        items,
       };
     });
   }
@@ -364,18 +456,13 @@ export class TireDomainService {
         },
       });
 
-      return {
-        id: set.id,
-        season: set.season,
-        name: set.name,
-        mountedAs: set.mountedAs,
-        archivedAt: null,
-        itemCount: set._count.items,
-        isMounted: false,
-      };
+      const rows = await this.listSetsForVehicleInternal(tenantSlug, vehicleId);
+      const row = rows.find((r) => r.id === set.id);
+      if (!row) throw new NotFoundException('Tire set not found after create');
+      return row;
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const createdId = await this.prisma.$transaction(async (tx) => {
       const sources = await this.collectMountedSpecSourcesTx(tx, vehicleId);
       if (sources.length === 0) {
         throw new BadRequestException(
@@ -452,16 +539,13 @@ export class TireDomainService {
         });
       }
 
-      return {
-        id: set.id,
-        season: set.season,
-        name: set.name,
-        mountedAs: set.mountedAs,
-        archivedAt: null,
-        itemCount: assetIds.length,
-        isMounted: false,
-      };
+      return set.id;
     });
+
+    const rows = await this.listSetsForVehicleInternal(tenantSlug, vehicleId);
+    const row = rows.find((r) => r.id === createdId);
+    if (!row) throw new NotFoundException('Tire set not found after create');
+    return row;
   }
 
   /**
@@ -795,43 +879,21 @@ export class TireDomainService {
     }
     const set = await this.prisma.tireSet.findFirst({
       where: { id: setId, archivedAt: null, vehicle: { tenant: { slug: tenantSlug } } },
-      select: { id: true, vehicleId: true },
+      select: { id: true, vehicleId: true, name: true, season: true },
     });
     if (!set) throw new NotFoundException('Tire set not found');
     await assertVehicleOpsWrite(this.prisma, tenantSlug, set.vehicleId, access);
 
+    const propagate = opts?.propagateToAssets !== false;
+    const nextName = isSeasonOnlyName(set.name, set.season) ? null : set.name;
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.tireSet.update({ where: { id: setId }, data: { season } });
-      if (opts?.propagateToAssets) {
-        const items = await tx.tireSetItem.findMany({
-          where: { setId },
-          select: { assetId: true },
-        });
-        if (items.length) {
-          await tx.tireAsset.updateMany({
-            where: { id: { in: items.map((i) => i.assetId) } },
-            data: { season },
-          });
-        }
-        // Mounted fitments mirror assets for on-vehicle positions.
-        if (items.length) {
-          const placements = await tx.tirePlacement.findMany({
-            where: {
-              setId,
-              kind: 'on_vehicle',
-              validTo: null,
-              position: { not: null },
-            },
-            select: { position: true, vehicleId: true },
-          });
-          for (const pl of placements) {
-            if (!pl.position || !pl.vehicleId) continue;
-            await tx.vehicleWheelFitment.updateMany({
-              where: { vehicleId: pl.vehicleId, position: pl.position },
-              data: { season },
-            });
-          }
-        }
+      await tx.tireSet.update({
+        where: { id: setId },
+        data: { season, ...(nextName !== set.name ? { name: nextName } : {}) },
+      });
+      if (propagate) {
+        await this.applySeasonToSetAssetsAndFitmentsTx(tx, setId, season);
       }
     });
 
@@ -839,6 +901,129 @@ export class TireDomainService {
     const row = rows.find((r) => r.id === setId);
     if (!row) throw new NotFoundException('Tire set not found after update');
     return row;
+  }
+
+  private async applySeasonToSetAssetsAndFitmentsTx(
+    tx: Prisma.TransactionClient,
+    setId: string,
+    season: VehicleTireSeason,
+  ): Promise<void> {
+    const items = await tx.tireSetItem.findMany({
+      where: { setId },
+      select: { assetId: true },
+    });
+    if (!items.length) return;
+    await tx.tireAsset.updateMany({
+      where: { id: { in: items.map((i) => i.assetId) } },
+      data: { season },
+    });
+    const placements = await tx.tirePlacement.findMany({
+      where: {
+        setId,
+        kind: 'on_vehicle',
+        validTo: null,
+        position: { not: null },
+      },
+      select: { position: true, vehicleId: true },
+    });
+    for (const pl of placements) {
+      if (!pl.position || !pl.vehicleId) continue;
+      await tx.vehicleWheelFitment.updateMany({
+        where: { vehicleId: pl.vehicleId, position: pl.position },
+        data: { season },
+      });
+    }
+  }
+
+  /**
+   * Atomic season swap between two active sets on a vehicle (reclasificare, nu montaj fizic).
+   * Body may omit set ids — uses the only two active sets.
+   */
+  async swapSetSeasons(
+    tenantSlug: string,
+    vehicleId: string,
+    opts?: { setIdA?: string; setIdB?: string; winterSetId?: string },
+    access?: AccessContext,
+  ): Promise<TireSetSummary[]> {
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenant: { slug: tenantSlug } },
+      select: { id: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      const sets = await tx.tireSet.findMany({
+        where: { vehicleId, archivedAt: null },
+        select: { id: true, season: true, name: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (sets.length !== 2) {
+        throw new BadRequestException('Inversează sezoanele necesită exact 2 seturi active');
+      }
+
+      let a = sets[0]!;
+      let b = sets[1]!;
+      if (opts?.setIdA && opts?.setIdB) {
+        if (opts.setIdA === opts.setIdB) {
+          throw new BadRequestException('setIdA and setIdB must be different');
+        }
+        const foundA = sets.find((s) => s.id === opts.setIdA);
+        const foundB = sets.find((s) => s.id === opts.setIdB);
+        if (!foundA || !foundB) {
+          throw new BadRequestException('setIdA/setIdB must be the two active sets');
+        }
+        a = foundA;
+        b = foundB;
+      }
+
+      let seasonA: VehicleTireSeason;
+      let seasonB: VehicleTireSeason;
+
+      const pairIsSummerWinter =
+        (a.season === 'summer' && b.season === 'winter') ||
+        (a.season === 'winter' && b.season === 'summer');
+      const pairSameSummerOrWinter =
+        a.season === b.season && (a.season === 'summer' || a.season === 'winter');
+
+      if (opts?.winterSetId) {
+        if (!pairSameSummerOrWinter && !pairIsSummerWinter) {
+          throw new BadRequestException(
+            'Inversează sezoanele suportă Vară↔Iarnă. Editează sezoanele pe card dacă e all-season.',
+          );
+        }
+        if (opts.winterSetId !== a.id && opts.winterSetId !== b.id) {
+          throw new BadRequestException('winterSetId must be one of the two active sets');
+        }
+        seasonA = opts.winterSetId === a.id ? 'winter' : 'summer';
+        seasonB = opts.winterSetId === b.id ? 'winter' : 'summer';
+      } else if (pairIsSummerWinter) {
+        seasonA = a.season === 'summer' ? 'winter' : 'summer';
+        seasonB = b.season === 'summer' ? 'winter' : 'summer';
+      } else if (pairSameSummerOrWinter) {
+        throw new BadRequestException(
+          'Ambele seturi au același sezon — trimite winterSetId (care set e de iarnă)',
+        );
+      } else {
+        throw new BadRequestException(
+          'Inversează sezoanele suportă Vară↔Iarnă. Editează sezoanele pe card dacă e all-season.',
+        );
+      }
+
+      for (const row of [
+        { set: a, season: seasonA },
+        { set: b, season: seasonB },
+      ]) {
+        const nextName = isSeasonOnlyName(row.set.name, row.set.season) ? null : row.set.name;
+        await tx.tireSet.update({
+          where: { id: row.set.id },
+          data: { season: row.season, name: nextName },
+        });
+        await this.applySeasonToSetAssetsAndFitmentsTx(tx, row.set.id, row.season);
+      }
+    });
+
+    return this.listSetsForVehicleInternal(tenantSlug, vehicleId);
   }
 
   async syncAfterFitmentClear(

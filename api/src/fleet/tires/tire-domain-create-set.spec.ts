@@ -17,13 +17,32 @@ describe('TireDomainService.createSet mountedAs', () => {
     });
     const prisma = {
       vehicle: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'veh-1',
-          tenantId: 't1',
-          clientId: 'c1',
-        }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'veh-1',
+            tenantId: 't1',
+            clientId: 'c1',
+          })
+          .mockResolvedValueOnce({ id: 'veh-1', registrationNumber: 'B108VDF' }),
       },
-      tireSet: { create },
+      tireSet: {
+        create,
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'set-1',
+            season: 'winter',
+            name: null,
+            mountedAs: 'tyre_only',
+            archivedAt: null,
+            _count: { items: 0 },
+            items: [],
+            placements: [],
+            storageStays: [],
+          },
+        ]),
+      },
+      tirePlacement: { findMany: jest.fn().mockResolvedValue([]) },
       tireEvent: { create: jest.fn().mockResolvedValue({}) },
     };
 
@@ -44,6 +63,7 @@ describe('TireDomainService.createSet mountedAs', () => {
     );
     expect(result.mountedAs).toBe('tyre_only');
     expect(result.itemCount).toBe(0);
+    expect(result.location).toBe('at_client');
   });
 
   it('rejects invalid mountedAs via assertCreateTireSetDto path in service', async () => {

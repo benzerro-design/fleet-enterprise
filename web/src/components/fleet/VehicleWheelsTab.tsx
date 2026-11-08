@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { OPS_INPUT_CLASS } from "@/components/fleet/ops-form-primitives";
+import { VehicleTireSetCards } from "@/components/fleet/VehicleTireSetCards";
 import { fleetBrowserBase, fleetJsonHeaders } from "@/lib/fleet-api";
 import {
   LAYOUT_POSITIONS,
@@ -43,12 +44,17 @@ import { fitmentAttention, fitmentAttentionLabel } from "@/lib/tire-alert-rules"
 type Props = {
   vehicleId: string;
   write: boolean;
+  /** Operații pe fișe set (poate fi true și pe vizualizare). */
+  setsWrite?: boolean;
   initial: VehicleWheelsPayload;
   /** Din Advanced Infos (civProfile). */
   tyresFront?: string | null;
   tyresRear?: string | null;
   /** Din Kit legislativ — corelare roată rezervă vs kit pană */
   punctureKitPresent?: boolean;
+  driverPortal?: boolean;
+  /** Deep-link Hub → Roti (?setId=). */
+  initialSetId?: string | null;
 };
 
 function emptyDraft(): WheelDraft {
@@ -113,10 +119,13 @@ type CopyMode = "none" | "all" | "axles";
 export function VehicleWheelsTab({
   vehicleId,
   write,
+  setsWrite,
   initial,
   tyresFront,
   tyresRear,
   punctureKitPresent = false,
+  driverPortal = false,
+  initialSetId = null,
 }: Props) {
   const router = useRouter();
   const [layout, setLayout] = useState<VehicleWheelLayout>(initial.wheelLayout ?? "four");
@@ -224,8 +233,21 @@ export function VehicleWheelsTab({
     }
   }
 
+  async function reloadSets() {
+    try {
+      const res = await fetch(`${fleetBrowserBase}/vehicles/${vehicleId}/wheels`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const payload = (await res.json()) as VehicleWheelsPayload;
+      setSets(payload.sets ?? []);
+    } catch {
+      /* ignore — UI remains on last known sets */
+    }
+  }
+
   async function addTireSet() {
-    if (!write) return;
+    if (!(setsWrite ?? write) || driverPortal) return;
     setPending("add-set");
     setError(null);
     setInfo(null);
@@ -256,46 +278,8 @@ export function VehicleWheelsTab({
     }
   }
 
-  async function scrapTireSet(setId: string) {
-    if (!write) return;
-    const set = sets.find((s) => s.id === setId);
-    if (!set) return;
-    if (set.isMounted) {
-      setError("Nu poți casa setul montat — demontează / schimbă sezon mai întâi.");
-      return;
-    }
-    if (
-      !window.confirm(
-        `Casezi setul ${set.name?.trim() || vehicleTireSeasonLabel(set.season)} (${tireMountedAsLabel(set.mountedAs)})?`,
-      )
-    ) {
-      return;
-    }
-    setPending(`scrap-${setId}`);
-    setError(null);
-    setInfo(null);
-    try {
-      const res = await fetch(`${fleetBrowserBase}/tires/sets/${encodeURIComponent(setId)}/scrap`, {
-        method: "POST",
-        headers: fleetJsonHeaders(),
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? `HTTP ${res.status}`);
-      }
-      setSets((prev) => prev.filter((s) => s.id !== setId));
-      setInfo("Set casat / arhivat.");
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Casare eșuată");
-    } finally {
-      setPending(null);
-    }
-  }
-
   async function reconcileSetSeasons() {
-    if (!write) return;
+    if (!(setsWrite ?? write) || driverPortal) return;
     setPending("reconcile-seasons");
     setError(null);
     setInfo(null);
@@ -319,43 +303,6 @@ export function VehicleWheelsTab({
     }
   }
 
-  async function patchSetSeason(
-    setId: string,
-    season: VehicleTireSeason,
-    propagateToAssets: boolean,
-  ) {
-    if (!write) return;
-    setPending(`season-${setId}`);
-    setError(null);
-    setInfo(null);
-    try {
-      const res = await fetch(
-        `${fleetBrowserBase}/tires/sets/${encodeURIComponent(setId)}/season`,
-        {
-          method: "PATCH",
-          headers: fleetJsonHeaders(),
-          body: JSON.stringify({ season, propagateToAssets }),
-        },
-      );
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? `HTTP ${res.status}`);
-      }
-      const row = (await res.json()) as TireSetSummary;
-      setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, ...row } : s)));
-      setInfo(
-        propagateToAssets
-          ? `Sezon set + anvelope → ${vehicleTireSeasonLabel(season)}.`
-          : `Etichetă set → ${vehicleTireSeasonLabel(season)}.`,
-      );
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Actualizare sezon eșuată");
-    } finally {
-      setPending(null);
-    }
-  }
-
   async function save(position: VehicleWheelPosition) {
     if (!write) return;
     setPending(position);
@@ -370,6 +317,7 @@ export function VehicleWheelsTab({
         const j = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(j.message ?? `HTTP ${res.status}`);
       }
+      await reloadSets();
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Salvare eșuată");
@@ -420,6 +368,7 @@ export function VehicleWheelsTab({
         throw new Error(`HTTP ${res.status}`);
       }
       setDrafts((prev) => ({ ...prev, [position]: emptyDraft() }));
+      await reloadSets();
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ștergere eșuată");
@@ -486,22 +435,21 @@ export function VehicleWheelsTab({
   );
 
   const inventarHref = `/fleet/tires?tab=inventar&vehicleId=${encodeURIComponent(vehicleId)}`;
-  const storedSets = sets.filter((s) => !s.isMounted);
-  const mountedSets = sets.filter((s) => s.isMounted);
+  const canMutateSets = (setsWrite ?? write) && !driverPortal;
   const hasSeasonMismatch = sets.some((s) => s.seasonMismatch);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-sm text-zinc-400">
-            Aici vezi <span className="text-zinc-200">ce e montat pe mașină</span> (poziții mai jos) și{" "}
-            <span className="text-zinc-200">seturile de schimb</span> (depozit / hotel) pentru același
-            vehicul.
+          <p className="text-sm text-zinc-200">
+            Anvelope pe acest vehicul: <span className="font-medium">seturi</span> (ce ai alocat —
+            sezon, unde sunt, brand) + <span className="font-medium">poziții</span> (doar setul
+            montat, pe axe).
           </p>
           <p className="text-xs text-zinc-500">
-            Al doilea set (ex. iarnă când e vară pe mașină) apare la „Adaugă set de schimb” sau după
-            check-in la hotel din WO. Locația exactă e pe badge-ul Hotel / Depozit.
+            Inventarul din Anvelope arată aceleași seturi (același ID). Hotel / casare / sezon se
+            gestionează din fișa setului. Pozițiile de mai jos = detalii pe roata montată.
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
@@ -511,7 +459,7 @@ export function VehicleWheelsTab({
           >
             Inventar anvelope →
           </Link>
-          {write && hasSeasonMismatch ? (
+          {canMutateSets && hasSeasonMismatch ? (
             <button
               type="button"
               disabled={pending === "reconcile-seasons"}
@@ -524,15 +472,6 @@ export function VehicleWheelsTab({
         </div>
       </div>
 
-      {hasSeasonMismatch ? (
-        <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
-          Eticheta de sezon a unui set nu corespunde sezonului anvelopelor din set (ex. set
-          „Vară” cu Nokian WR+ / Iarnă). Folosește „Aliniază sezoane seturi” sau schimbă sezonul pe
-          rând. Dacă brandurile sunt pe setul greșit, corectează brandul pe poziții / inventar sau
-          fă swap sezonier din WO.
-        </p>
-      ) : null}
-
       {punctureKitPresent ? (
         <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
           Pe tab-ul Kit legislativ e bifat kitul de pană — de obicei în loc de roată de rezervă. Dacă
@@ -543,13 +482,12 @@ export function VehicleWheelsTab({
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-medium text-zinc-200">Seturi pe acest vehicul</h3>
+            <h3 className="text-sm font-medium text-zinc-200">Seturi alocate</h3>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              {mountedSets.length} montat · {storedSets.length} depozit/hotel — tip: roți complete sau
-              doar anvelope.
+              Deschide fișa unui set pentru sezon, locație, poze, hotel, casare.
             </p>
           </div>
-          {write ? (
+          {canMutateSets ? (
             <div className="flex flex-col items-end gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
                 <input
@@ -589,123 +527,33 @@ export function VehicleWheelsTab({
                 onClick={() => void addTireSet()}
                 className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/50 disabled:opacity-50"
               >
-                Adaugă set de schimb
+                Adaugă set
               </button>
             </div>
           ) : null}
         </div>
-        {write && seedFromMountedSpecs ? (
+        {canMutateSets && seedFromMountedSpecs ? (
           <p className="text-xs text-zinc-500">
-            DOT și uzura nu se copiază — completează după recepție.
-            {newSetMountedAs === "tyre_only"
-              ? " Set anvelope: jantele nu se clonează."
-              : " Set roți: se clonează și jantele din specificațiile montate."}
+            La sezon opus față de montat, brandul/modelul nu se copiază (doar dimensiune/jantă).
           </p>
         ) : null}
-        {sets.length === 0 ? (
-          <p className="text-xs text-zinc-500">
-            Niciun set încă. La prima vizită pe tab, fitmentul existent devine set «Montat» (inferit).
-            Pentru un al doilea set (sezon opus): „Adaugă set de schimb” aici sau check-in hotel din
-            portal partener — apoi vezi locația pe badge.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {sets.map((s) => (
-              <li
-                key={s.id}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2 text-xs"
-              >
-                <span className="font-medium text-zinc-200">
-                  {s.name?.trim() || vehicleTireSeasonLabel(s.season)}
-                </span>
-                {write ? (
-                  <select
-                    value={s.season === "unknown" ? "summer" : s.season}
-                    disabled={pending === `season-${s.id}`}
-                    onChange={(e) => {
-                      const next = e.target.value as VehicleTireSeason;
-                      if (next === s.season) return;
-                      if (
-                        !window.confirm(
-                          `Setezi sezonul acestui set la ${vehicleTireSeasonLabel(next)}?`,
-                        )
-                      ) {
-                        e.target.value = s.season === "unknown" ? "summer" : s.season;
-                        return;
-                      }
-                      const propagate = window.confirm(
-                        "Actualizezi și anvelopele (și fitmentul montat) din set la același sezon?",
-                      );
-                      void patchSetSeason(s.id, next, propagate);
-                    }}
-                    className={`${OPS_INPUT_CLASS} !py-0.5 !text-xs`}
-                    aria-label="Sezon set"
-                  >
-                    <option value="summer">Vară</option>
-                    <option value="winter">Iarnă</option>
-                    <option value="all_season">All-season</option>
-                  </select>
-                ) : (
-                  <span className="text-zinc-500">{vehicleTireSeasonLabel(s.season)}</span>
-                )}
-                {s.seasonMismatch ? (
-                  <span
-                    className="rounded bg-amber-950/50 px-2 py-0.5 text-amber-200"
-                    title={`Anvelopele din set: ${vehicleTireSeasonLabel(s.itemsSeason ?? "unknown")}`}
-                  >
-                    Nealiniat
-                    {s.itemsSeason ? ` → ${vehicleTireSeasonLabel(s.itemsSeason)}` : ""}
-                  </span>
-                ) : null}
-                <span
-                  className="rounded bg-sky-950/50 px-2 py-0.5 text-sky-200"
-                  title={tireMountedAsHint(s.mountedAs)}
-                >
-                  {tireMountedAsLabel(s.mountedAs)}
-                </span>
-                <span className="text-zinc-500">{s.itemCount} buc</span>
-                {s.isMounted ? (
-                  <span className="rounded bg-emerald-900/60 px-2 py-0.5 text-emerald-200">
-                    Montat pe mașină
-                  </span>
-                ) : s.hotel?.atSupplierHotel ? (
-                  <span
-                    className="rounded bg-violet-900/50 px-2 py-0.5 text-violet-200"
-                    title={
-                      s.hotel.checkInAt
-                        ? `Check-in ${new Date(s.hotel.checkInAt).toLocaleDateString("ro-RO")}`
-                        : undefined
-                    }
-                  >
-                    La hotel
-                    {s.hotel.supplierName ? ` · ${s.hotel.supplierName}` : ""}
-                    {s.hotel.locationCode ? ` · raft ${s.hotel.locationCode}` : ""}
-                  </span>
-                ) : (
-                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-zinc-400">
-                    Depozit (nu la hotel)
-                  </span>
-                )}
-                <Link
-                  href={`${inventarHref}&setId=${encodeURIComponent(s.id)}`}
-                  className="text-violet-300 hover:underline"
-                >
-                  Detalii inventar
-                </Link>
-                {write && !s.isMounted ? (
-                  <button
-                    type="button"
-                    disabled={pending === `scrap-${s.id}`}
-                    onClick={() => void scrapTireSet(s.id)}
-                    className="ml-auto rounded border border-red-900/50 px-2 py-0.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50"
-                  >
-                    Casare
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
+        <VehicleTireSetCards
+          vehicleId={vehicleId}
+          write={canMutateSets}
+          driverPortal={driverPortal}
+          initialSetId={initialSetId}
+          sets={sets}
+          onSetsChange={setSets}
+          onInfo={setInfo}
+          onError={setError}
+        />
+      </div>
+
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2">
+        <h3 className="text-sm font-medium text-zinc-200">Poziții montate pe mașină</h3>
+        <p className="mt-0.5 text-[11px] text-zinc-500">
+          Editezi DOT / uzură / dimensiune pe axe — sincron cu setul montat din inventar.
+        </p>
       </div>
 
       {write ? (

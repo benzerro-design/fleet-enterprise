@@ -150,6 +150,21 @@ export class TireHotelService {
       );
     }
 
+    const atClientPlacement = await tx.tirePlacement.findFirst({
+      where: {
+        tenantId: params.tenantId,
+        setId: params.setId,
+        kind: 'at_client',
+        validTo: null,
+      },
+      select: { id: true },
+    });
+    if (!atClientPlacement) {
+      throw new BadRequestException(
+        'Check-in hotel doar pentru seturi în depozit (la client), nu montate/hotel/neplasate',
+      );
+    }
+
     const now = new Date();
 
     let feeCents = params.feeCents;
