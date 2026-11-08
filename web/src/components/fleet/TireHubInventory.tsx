@@ -22,7 +22,14 @@ import {
 
 type LocFilter = "all" | TireHubInventoryLocation;
 
-type Props = { hub: TireHubPayload; canWrite?: boolean };
+type Props = {
+  hub: TireHubPayload;
+  canWrite?: boolean;
+  /** Pre-filtrează inventarul pe vehicul (din Roti → Inventar). */
+  initialVehicleId?: string | null;
+  /** Deschide drawer pe set dacă există în inventar. */
+  initialSetId?: string | null;
+};
 
 type VehicleOpt = { id: string; registrationNumber: string };
 
@@ -31,15 +38,25 @@ function formatRon(cents: number | null): string {
   return `${(cents / 100).toLocaleString("ro-RO", { minimumFractionDigits: 0 })} lei`;
 }
 
-export function TireHubInventory({ hub, canWrite = false }: Props) {
+export function TireHubInventory({
+  hub,
+  canWrite = false,
+  initialVehicleId = null,
+  initialSetId = null,
+}: Props) {
   const router = useRouter();
   const [rows, setRows] = useState(hub.inventorySets ?? []);
   const [loc, setLoc] = useState<LocFilter>("all");
   const [season, setSeason] = useState<string>("all");
   const [clientId, setClientId] = useState<string>("all");
   const [supplierId, setSupplierId] = useState<string>("all");
+  const [vehicleFilter, setVehicleFilter] = useState<string>(initialVehicleId?.trim() || "all");
   const [q, setQ] = useState("");
-  const [drawer, setDrawer] = useState<TireHubInventorySet | null>(null);
+  const [drawer, setDrawer] = useState<TireHubInventorySet | null>(() => {
+    const sid = initialSetId?.trim();
+    if (!sid) return null;
+    return (hub.inventorySets ?? []).find((r) => r.setId === sid) ?? null;
+  });
   const [addOpen, setAddOpen] = useState(false);
   const [vehicles, setVehicles] = useState<VehicleOpt[]>([]);
   const [addVehicleId, setAddVehicleId] = useState("");
@@ -52,6 +69,17 @@ export function TireHubInventory({ hub, canWrite = false }: Props) {
   useEffect(() => {
     setRows(hub.inventorySets ?? []);
   }, [hub.inventorySets]);
+
+  useEffect(() => {
+    if (initialVehicleId?.trim()) setVehicleFilter(initialVehicleId.trim());
+  }, [initialVehicleId]);
+
+  useEffect(() => {
+    const sid = initialSetId?.trim();
+    if (!sid) return;
+    const row = (hub.inventorySets ?? []).find((r) => r.setId === sid);
+    if (row) setDrawer(row);
+  }, [initialSetId, hub.inventorySets]);
 
   useEffect(() => {
     if (!addOpen || !canWrite) return;
@@ -95,9 +123,16 @@ export function TireHubInventory({ hub, canWrite = false }: Props) {
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "ro"));
   }, [rows]);
 
+  const vehicleOpts = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) map.set(r.vehicleId, r.plate);
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "ro"));
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
+      if (vehicleFilter !== "all" && r.vehicleId !== vehicleFilter) return false;
       if (loc !== "all" && r.location !== loc) return false;
       if (season !== "all" && r.season !== season) return false;
       if (clientId !== "all" && r.clientId !== clientId) return false;
@@ -111,7 +146,7 @@ export function TireHubInventory({ hub, canWrite = false }: Props) {
         (r.locationCode?.toLowerCase().includes(needle) ?? false)
       );
     });
-  }, [rows, loc, season, clientId, supplierId, q]);
+  }, [rows, vehicleFilter, loc, season, clientId, supplierId, q]);
 
   function applyKpiFilter(next: LocFilter | "tread" | "dot" | "replace") {
     if (next === "tread" || next === "dot" || next === "replace") {
@@ -256,6 +291,21 @@ export function TireHubInventory({ hub, canWrite = false }: Props) {
             placeholder="placă, set, furnizor, raft"
             className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
           />
+        </label>
+        <label className="flex min-w-[9rem] flex-col gap-1 text-xs text-zinc-500">
+          Vehicul
+          <select
+            value={vehicleFilter}
+            onChange={(e) => setVehicleFilter(e.target.value)}
+            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+          >
+            <option value="all">Toate</option>
+            {vehicleOpts.map(([id, plate]) => (
+              <option key={id} value={id}>
+                {plate}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="flex min-w-[8rem] flex-col gap-1 text-xs text-zinc-500">
           Sezon

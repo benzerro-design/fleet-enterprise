@@ -1,4 +1,8 @@
-import { formatClientDisplay, formatClientHeaderParts } from "./client-display";
+import {
+  clientLabelNeedsPrefix,
+  formatClientDisplay,
+  formatClientHeaderParts,
+} from "./client-display";
 
 describe("formatClientDisplay", () => {
   it("dedupes when code equals legal name", () => {
@@ -27,5 +31,17 @@ describe("formatClientHeaderParts", () => {
       primary: "ALPHA",
       secondary: "Client Alpha",
     });
+  });
+});
+
+describe("clientLabelNeedsPrefix", () => {
+  it("skips prefix when name already starts with Client", () => {
+    expect(clientLabelNeedsPrefix("Client Alpha")).toBe(false);
+    expect(clientLabelNeedsPrefix("client alpha srl")).toBe(false);
+  });
+
+  it("keeps prefix for short codes", () => {
+    expect(clientLabelNeedsPrefix("ALPHA")).toBe(true);
+    expect(clientLabelNeedsPrefix("ACME")).toBe(true);
   });
 });

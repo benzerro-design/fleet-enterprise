@@ -7,7 +7,7 @@ import { VehicleVisual } from "@/components/fleet/VehicleVisual";
 import type { OpsVehicleOption } from "@/lib/ops-form-context";
 import type { VehicleRecord } from "@/lib/fleet-api";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
-import { formatClientHeaderParts } from "@/lib/client-display";
+import { clientLabelNeedsPrefix, formatClientHeaderParts } from "@/lib/client-display";
 
 type Props = {
   vehicle: VehicleRecord;
@@ -178,13 +178,20 @@ export function VehicleDetailHeader({
             <VehicleSwitcherSlot vehicle={vehicle} vehicles={vehicles} mode={mode} />
           </Suspense>
           <p className="mt-2 flex flex-wrap items-center gap-x-0 gap-y-1 text-sm text-zinc-400">
-            <span>
-              Client <span className="font-mono text-zinc-300">{clientParts.primary}</span>
+            <span className="inline-flex flex-wrap items-center gap-x-1">
+              {clientLabelNeedsPrefix(clientParts.primary) ? <span>Client</span> : null}
+              {vehicle.clientRefId ? (
+                <Link
+                  href={`/fleet/clients/${vehicle.clientRefId}`}
+                  className="font-mono text-emerald-400 hover:underline"
+                >
+                  {clientParts.primary}
+                </Link>
+              ) : (
+                <span className="font-mono text-zinc-300">{clientParts.primary}</span>
+              )}
               {clientParts.secondary ? (
-                <>
-                  {" "}
-                  <span className="text-zinc-500">({clientParts.secondary})</span>
-                </>
+                <span className="text-zinc-500">({clientParts.secondary})</span>
               ) : null}
             </span>
             <span className="mx-2 text-zinc-600">·</span>

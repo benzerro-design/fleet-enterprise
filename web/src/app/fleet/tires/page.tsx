@@ -55,12 +55,22 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
   const canWriteTires = canWriteFleetOps(auth) && !driverPortal;
   const sp = searchParams instanceof Promise ? await searchParams : searchParams;
   const rawTab = typeof sp?.tab === "string" ? sp.tab : Array.isArray(sp?.tab) ? sp.tab[0] : undefined;
+  const rawVehicleId =
+    typeof sp?.vehicleId === "string"
+      ? sp.vehicleId
+      : Array.isArray(sp?.vehicleId)
+        ? sp.vehicleId[0]
+        : undefined;
+  const rawSetId =
+    typeof sp?.setId === "string" ? sp.setId : Array.isArray(sp?.setId) ? sp.setId[0] : undefined;
   const tab: "hub" | "inventar" =
     rawTab === "hub" || rawTab === "inventar"
       ? rawTab
-      : driverPortal
+      : rawVehicleId || rawSetId
         ? "inventar"
-        : "hub";
+        : driverPortal
+          ? "inventar"
+          : "hub";
 
   const hub = await loadHub();
 
@@ -141,7 +151,12 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
                 </a>
               ) : null}
             </div>
-            <TireHubInventory hub={hub} canWrite={canWriteTires} />
+            <TireHubInventory
+              hub={hub}
+              canWrite={canWriteTires}
+              initialVehicleId={rawVehicleId ?? null}
+              initialSetId={rawSetId ?? null}
+            />
           </section>
         ) : (
           <div className="space-y-8">

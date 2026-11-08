@@ -13,7 +13,7 @@ export function formatClientDisplay(
   return `${c} — ${n}`;
 }
 
-/** Header line: "Client {label}" — omit paren when code === legal name. */
+/** Header line parts — omit paren when code === legal name. */
 export function formatClientHeaderParts(
   code: string | null | undefined,
   legalName?: string | null,
@@ -27,4 +27,14 @@ export function formatClientHeaderParts(
     return { primary: c, secondary: null };
   }
   return { primary: c, secondary: n };
+}
+
+/**
+ * Avoid "Client Client Alpha" when the UI already prefixes with the word Client
+ * and the org code/name starts with the same word.
+ */
+export function clientLabelNeedsPrefix(primary: string | null | undefined): boolean {
+  const p = (primary ?? "").trim();
+  if (!p || p === "—") return false;
+  return !/^client\b/i.test(p);
 }

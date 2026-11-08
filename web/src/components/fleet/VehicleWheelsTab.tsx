@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { OPS_INPUT_CLASS } from "@/components/fleet/ops-form-primitives";
@@ -422,12 +423,31 @@ export function VehicleWheelsTab({
     (tyresFront && String(tyresFront).trim()) || (tyresRear && String(tyresRear).trim()),
   );
 
+  const inventarHref = `/fleet/tires?tab=inventar&vehicleId=${encodeURIComponent(vehicleId)}`;
+  const storedSets = sets.filter((s) => !s.isMounted);
+  const mountedSets = sets.filter((s) => s.isMounted);
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-400">
-        Anvelope / jante montate pe mașină. DOT și uzura rămân per poziție (nu se copiază). Inventar
-        depozit = FLEET-007.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm text-zinc-400">
+            Aici vezi <span className="text-zinc-200">ce e montat pe mașină</span> (poziții mai jos) și{" "}
+            <span className="text-zinc-200">seturile de schimb</span> (depozit / hotel) pentru același
+            vehicul.
+          </p>
+          <p className="text-xs text-zinc-500">
+            Al doilea set (ex. iarnă când e vară pe mașină) apare la „Adaugă set de schimb” sau după
+            check-in la hotel din WO. Locația exactă e pe badge-ul Hotel / Depozit.
+          </p>
+        </div>
+        <Link
+          href={inventarHref}
+          className="shrink-0 rounded-lg border border-violet-700/50 bg-violet-950/30 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/50"
+        >
+          Inventar anvelope →
+        </Link>
+      </div>
 
       {punctureKitPresent ? (
         <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
@@ -441,7 +461,8 @@ export function VehicleWheelsTab({
           <div>
             <h3 className="text-sm font-medium text-zinc-200">Seturi pe acest vehicul</h3>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              Set de schimb sezon (depozit) — alege tipul: roți complete sau doar anvelope.
+              {mountedSets.length} montat · {storedSets.length} depozit/hotel — tip: roți complete sau
+              doar anvelope.
             </p>
           </div>
           {write ? (
@@ -500,6 +521,8 @@ export function VehicleWheelsTab({
         {sets.length === 0 ? (
           <p className="text-xs text-zinc-500">
             Niciun set încă. La prima vizită pe tab, fitmentul existent devine set «Montat» (inferit).
+            Pentru un al doilea set (sezon opus): „Adaugă set de schimb” aici sau check-in hotel din
+            portal partener — apoi vezi locația pe badge.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -520,20 +543,33 @@ export function VehicleWheelsTab({
                 </span>
                 <span className="text-zinc-500">{s.itemCount} buc</span>
                 {s.isMounted ? (
-                  <span className="rounded bg-emerald-900/60 px-2 py-0.5 text-emerald-200">Montat</span>
-                ) : (
-                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-zinc-400">Depozit</span>
-                )}
-                {s.hotel?.atSupplierHotel ? (
+                  <span className="rounded bg-emerald-900/60 px-2 py-0.5 text-emerald-200">
+                    Montat pe mașină
+                  </span>
+                ) : s.hotel?.atSupplierHotel ? (
                   <span
                     className="rounded bg-violet-900/50 px-2 py-0.5 text-violet-200"
-                    title={s.hotel.locationCode ?? undefined}
+                    title={
+                      s.hotel.checkInAt
+                        ? `Check-in ${new Date(s.hotel.checkInAt).toLocaleDateString("ro-RO")}`
+                        : undefined
+                    }
                   >
-                    Hotel
+                    La hotel
                     {s.hotel.supplierName ? ` · ${s.hotel.supplierName}` : ""}
-                    {s.hotel.locationCode ? ` · ${s.hotel.locationCode}` : ""}
+                    {s.hotel.locationCode ? ` · raft ${s.hotel.locationCode}` : ""}
                   </span>
-                ) : null}
+                ) : (
+                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-zinc-400">
+                    Depozit (nu la hotel)
+                  </span>
+                )}
+                <Link
+                  href={`${inventarHref}&setId=${encodeURIComponent(s.id)}`}
+                  className="text-violet-300 hover:underline"
+                >
+                  Detalii inventar
+                </Link>
                 {write && !s.isMounted ? (
                   <button
                     type="button"

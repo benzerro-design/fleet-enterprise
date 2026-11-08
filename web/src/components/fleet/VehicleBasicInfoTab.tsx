@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ClientSelect } from "@/components/fleet/ClientSelect";
@@ -116,13 +117,24 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
   }
 
   if (!write) {
+    const clientLabel = formatClientDisplay(vehicle.clientId, vehicle.clientLegalName);
     return (
       <dl className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="Client"
-          value={formatClientDisplay(vehicle.clientId, vehicle.clientLegalName)}
-          mono
-        />
+        <div>
+          <dt className="text-xs uppercase tracking-wide text-zinc-500">Client</dt>
+          <dd className="mt-1 font-mono text-zinc-200">
+            {vehicle.clientRefId ? (
+              <Link
+                href={`/fleet/clients/${vehicle.clientRefId}`}
+                className="text-emerald-400 hover:underline"
+              >
+                {clientLabel}
+              </Link>
+            ) : (
+              clientLabel
+            )}
+          </dd>
+        </div>
         <Field label="Nr. înmatriculare" value={vehicle.registrationNumber} mono />
         <Field label="Marcă" value={vehicle.brand ?? "—"} />
         <Field label="Model" value={vehicle.model ?? "—"} />
@@ -172,11 +184,21 @@ export function VehicleBasicInfoTab({ vehicle, write, lockClient = false }: Prop
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           {lockClient ? (
-            <Field
-              label="Client"
-              value={formatClientDisplay(vehicle.clientId, vehicle.clientLegalName)}
-              mono
-            />
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-zinc-500">Client</dt>
+              <dd className="mt-1 font-mono text-zinc-200">
+                {vehicle.clientRefId ? (
+                  <Link
+                    href={`/fleet/clients/${vehicle.clientRefId}`}
+                    className="text-emerald-400 hover:underline"
+                  >
+                    {formatClientDisplay(vehicle.clientId, vehicle.clientLegalName)}
+                  </Link>
+                ) : (
+                  formatClientDisplay(vehicle.clientId, vehicle.clientLegalName)
+                )}
+              </dd>
+            </div>
           ) : (
             <ClientSelect value={clientId} onChange={setClientId} required />
           )}
