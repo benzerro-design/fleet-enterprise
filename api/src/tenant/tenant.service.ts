@@ -59,6 +59,11 @@ import {
   type FleetSettings,
 } from './fleet-settings';
 import {
+  parseTireSettings,
+  parseTireSettingsPatch,
+  type TireSettings,
+} from './tire-settings';
+import {
   parseImportSettings,
   parseImportSettingsPatch,
   type ImportSettings,
@@ -467,6 +472,47 @@ export class TenantService {
       tenantId: tenant.id,
       actorUserId,
       action: 'fleet_settings_update',
+      entityType: 'tenant',
+      entityId: tenant.id,
+      meta: next,
+    });
+    return next;
+  }
+
+  async getTireSettings(tenantSlug: string): Promise<TireSettings> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { tireSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    return parseTireSettings(tenant.tireSettings);
+  }
+
+  async setTireSettings(
+    tenantSlug: string,
+    body: unknown,
+    actorUserId: string,
+  ): Promise<TireSettings> {
+    let patch: Partial<TireSettings>;
+    try {
+      patch = parseTireSettingsPatch(body);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid settings');
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true, tireSettings: true },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const next: TireSettings = { ...parseTireSettings(tenant.tireSettings), ...patch };
+    await this.prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { tireSettings: next as Prisma.InputJsonValue },
+    });
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'tire_settings_update',
       entityType: 'tenant',
       entityId: tenant.id,
       meta: next,

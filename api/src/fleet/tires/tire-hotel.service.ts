@@ -4,12 +4,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TireDomainService } from './tire-domain.service';
 import { tireSetQrPayload } from './tire-domain.types';
 import {
+  computeStorageStayFeeCents,
   dominantRimInchFromSizes,
   mergeTireStorageFeeCatalog,
   resolveTireStorageFeeCents,
   type TireStorageFeeCatalog,
 } from './tire-storage-fee';
 import { resolveStayLocationInput, parseStayLocation } from './tire-stay-location';
+import { parseTireSettings } from '../../tenant/tire-settings';
 
 export { tireSetQrPayload };
 
@@ -169,13 +171,23 @@ export class TireHotelService {
 
     let feeCents = params.feeCents;
     if (feeCents === undefined) {
-      feeCents = await this.resolveFeeCentsForSetTx(tx, {
+      const unitMonthly = await this.resolveFeeCentsForSetTx(tx, {
         tenantId: params.tenantId,
         supplierId: params.supplierId,
         clientId: set.vehicle.clientId,
         mountedAs: set.mountedAs,
         sizes: set.items.map((i) => i.asset.size),
       });
+      const minMonths = await this.resolveHotelMinMonthsTx(tx, params.tenantId);
+      // Open stay: bill min N calendar months × pieces (unit = /bucată/lună).
+      feeCents =
+        computeStorageStayFeeCents({
+          unitMonthlyPerPieceCents: unitMonthly,
+          pieceCount: set.items.length,
+          checkInAt: now,
+          billThroughAt: null,
+          minMonths,
+        })?.feeCents ?? null;
     }
 
     const stay = await tx.tireStorageStay.create({
@@ -290,13 +302,23 @@ export class TireHotelService {
         },
       });
       if (set) {
-        feeCents = await this.resolveFeeCentsForSetTx(tx, {
+        const unitMonthly = await this.resolveFeeCentsForSetTx(tx, {
           tenantId: params.tenantId,
           supplierId: params.supplierId,
           clientId: set.vehicle.clientId,
           mountedAs: set.mountedAs,
           sizes: set.items.map((i) => i.asset.size),
         });
+        const now = new Date();
+        const minMonths = await this.resolveHotelMinMonthsTx(tx, params.tenantId);
+        feeCents =
+          computeStorageStayFeeCents({
+            unitMonthlyPerPieceCents: unitMonthly,
+            pieceCount: set.items.length,
+            checkInAt: now,
+            billThroughAt: null,
+            minMonths,
+          })?.feeCents ?? null;
       }
     }
 
@@ -312,6 +334,17 @@ export class TireHotelService {
         checkInAt: new Date(),
       },
     });
+  }
+
+  private async resolveHotelMinMonthsTx(
+    tx: { tenant: Prisma.TransactionClient['tenant'] },
+    tenantId: string,
+  ): Promise<number> {
+    const tenant = await tx.tenant.findUnique({
+      where: { id: tenantId },
+      select: { tireSettings: true },
+    });
+    return parseTireSettings(tenant?.tireSettings).hotelMinBillableMonths;
   }
 
   private async resolveFeeCentsForSetTx(
@@ -374,10 +407,17 @@ export class TireHotelService {
     tenantId: string;
     supplierId: string;
     setId: string;
+    billThroughAt?: Date | null;
   }): Promise<{
     setId: string;
     supplierId: string;
+    /** Total for period (pieces × unit × months). */
     feeCents: number | null;
+    unitMonthlyPerPieceCents: number | null;
+    pieceCount: number;
+    calendarMonths: number;
+    billingUnit: 'piece';
+    billingPeriod: 'calendar_month';
     rimInch: number | null;
     mountedAs: string | null;
     dominantSize: string | null;
@@ -394,12 +434,21 @@ export class TireHotelService {
     if (!set) throw new NotFoundException('Tire set not found');
     const sizes = set.items.map((i) => i.asset.size);
     const rimInch = dominantRimInchFromSizes(sizes);
-    const feeCents = await this.resolveFeeCentsForSetTx(this.prisma, {
+    const unitMonthlyPerPieceCents = await this.resolveFeeCentsForSetTx(this.prisma, {
       tenantId: params.tenantId,
       supplierId: params.supplierId,
       clientId: set.vehicle.clientId,
       mountedAs: set.mountedAs,
       sizes,
+    });
+    const now = new Date();
+    const minMonths = await this.resolveHotelMinMonthsTx(this.prisma, params.tenantId);
+    const breakdown = computeStorageStayFeeCents({
+      unitMonthlyPerPieceCents,
+      pieceCount: set.items.length,
+      checkInAt: now,
+      billThroughAt: params.billThroughAt ?? null,
+      minMonths,
     });
     const sizeCounts = new Map<string, number>();
     for (const size of sizes) {
@@ -418,7 +467,12 @@ export class TireHotelService {
     return {
       setId: set.id,
       supplierId: params.supplierId,
-      feeCents,
+      feeCents: breakdown?.feeCents ?? null,
+      unitMonthlyPerPieceCents,
+      pieceCount: set.items.length,
+      calendarMonths: breakdown?.calendarMonths ?? 1,
+      billingUnit: 'piece',
+      billingPeriod: 'calendar_month',
       rimInch,
       mountedAs: set.mountedAs,
       dominantSize,
@@ -521,7 +575,7 @@ export class TireHotelService {
       include: {
         set: {
           include: {
-            vehicle: { select: { id: true, registrationNumber: true } },
+            vehicle: { select: { id: true, registrationNumber: true, clientId: true } },
             items: {
               orderBy: { sortOrder: 'asc' },
               include: {
@@ -566,9 +620,28 @@ export class TireHotelService {
       });
     }
 
+    // Recalculate stay total: unit(/buc/lună) × pieces × luni calendaristice inclusive.
+    let feeCents = stay.feeCents;
+    const unitMonthly = await this.resolveFeeCentsForSetTx(tx, {
+      tenantId: params.tenantId,
+      supplierId: params.supplierId,
+      clientId: stay.set.vehicle.clientId,
+      mountedAs: stay.set.mountedAs ?? null,
+      sizes: stay.set.items.map((i) => i.asset.size),
+    });
+    const minMonths = await this.resolveHotelMinMonthsTx(tx, params.tenantId);
+    const breakdown = computeStorageStayFeeCents({
+      unitMonthlyPerPieceCents: unitMonthly,
+      pieceCount: stay.set.items.length,
+      checkInAt: stay.checkInAt,
+      billThroughAt: now,
+      minMonths,
+    });
+    if (breakdown) feeCents = breakdown.feeCents;
+
     const updated = await tx.tireStorageStay.update({
       where: { id: stay.id },
-      data: { checkOutAt: now },
+      data: { checkOutAt: now, feeCents: feeCents ?? undefined },
     });
 
     if (vehicleId) {

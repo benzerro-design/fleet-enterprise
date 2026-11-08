@@ -33,6 +33,16 @@ function resolveClientId(
   return v?.clientId?.trim() || "";
 }
 
+function resolveDriverId(
+  vehicles: OpsVehicleOption[],
+  vehicleId: string,
+  fallbackDriverId: string,
+): string {
+  if (fallbackDriverId.trim()) return fallbackDriverId;
+  const v = vehicles.find((x) => x.id === vehicleId);
+  return v?.assignedDriverId?.trim() || "";
+}
+
 export function TicketFormLayout({
   vehicles,
   defaultClientId = "",
@@ -45,7 +55,9 @@ export function TicketFormLayout({
     resolveClientId(vehicles, defaultVehicleId, defaultClientId),
   );
   const [vehicleId, setVehicleId] = useState(defaultVehicleId);
-  const [driverId, setDriverId] = useState(defaultDriverId);
+  const [driverId, setDriverId] = useState(() =>
+    resolveDriverId(vehicles, defaultVehicleId, defaultDriverId),
+  );
 
   const selectedVehicle = useMemo(
     () => vehicles.find((v) => v.id === vehicleId),
@@ -54,9 +66,13 @@ export function TicketFormLayout({
 
   function selectVehicle(id: string) {
     setVehicleId(id);
-    if (!id.trim()) return;
+    if (!id.trim()) {
+      setDriverId("");
+      return;
+    }
     const v = vehicles.find((x) => x.id === id);
     if (v?.clientId) setClientId(v.clientId);
+    setDriverId(v?.assignedDriverId?.trim() || "");
   }
 
   return (

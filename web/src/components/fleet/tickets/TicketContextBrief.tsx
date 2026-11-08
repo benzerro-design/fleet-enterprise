@@ -118,7 +118,15 @@ export function TicketContextBrief({
       </div>
 
       {driverId ? (
-        <p className="text-xs text-zinc-500">Șofer selectat în formular</p>
+        <p className="text-xs text-zinc-400">
+          Șofer:{" "}
+          <span className="text-zinc-200">
+            {selectedVehicle?.assignedDriverId === driverId &&
+            selectedVehicle.assignedDriverName
+              ? selectedVehicle.assignedDriverName
+              : "selectat în formular"}
+          </span>
+        </p>
       ) : (
         <p className="text-xs text-zinc-500">Șofer opțional — selectează în formular</p>
       )}

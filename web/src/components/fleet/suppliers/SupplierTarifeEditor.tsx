@@ -236,7 +236,7 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
               <dt className="text-xs text-zinc-500">Default anvelope (fără jante)</dt>
               <dd className="mt-1 text-sm text-zinc-200">
                 {supplier.tireStorageFeeTyreOnlyCents != null
-                  ? `${centsToRonInput(supplier.tireStorageFeeTyreOnlyCents)} RON/sezon`
+                  ? `${centsToRonInput(supplier.tireStorageFeeTyreOnlyCents)} RON/buc/lună`
                   : "—"}
               </dd>
             </div>
@@ -244,7 +244,7 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
               <dt className="text-xs text-zinc-500">Default roți complete (pe jantă)</dt>
               <dd className="mt-1 text-sm text-zinc-200">
                 {supplier.tireStorageFeeOnRimCents != null
-                  ? `${centsToRonInput(supplier.tireStorageFeeOnRimCents)} RON/sezon`
+                  ? `${centsToRonInput(supplier.tireStorageFeeOnRimCents)} RON/buc/lună`
                   : "—"}
               </dd>
             </div>
@@ -322,20 +322,21 @@ export function SupplierTarifeEditor({ supplier, canWrite }: Props) {
         <div>
           <h3 className="text-sm font-medium text-zinc-200">1b. Hotel anvelope — depozitare</h3>
           <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-            Tarif pe sezon. Default-urile se folosesc dacă dimensiunea lipsește; grila pe diametru
-            jantă (inch) are prioritate la check-in.
+            Tarif pe <strong className="font-medium text-zinc-400">bucată / lună calendaristică</strong>.
+            Default-urile se folosesc dacă dimensiunea lipsește; grila pe diametru jantă (inch) are
+            prioritate la check-in. Total sejur = bucăți × tarif × luni.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <RateField
-            label="Default anvelope fără jante (RON/sezon)"
-            hint="Set tyre_only"
+            label="Default anvelope fără jante (RON/buc/lună)"
+            hint="tyre_only — per anvelopă"
             value={storageTyreOnly}
             onChange={setStorageTyreOnly}
           />
           <RateField
-            label="Default roți complete pe jantă (RON/sezon)"
-            hint="Set on_rim"
+            label="Default roți pe jantă (RON/buc/lună)"
+            hint="on_rim — per roată"
             value={storageOnRim}
             onChange={setStorageOnRim}
           />

@@ -97,6 +97,7 @@ const en = {
       "/fleet/setup/integrations": "Integrations",
       "/fleet/setup/suppliers": "Suppliers",
       "/fleet/setup/fleet": "Fleet & vehicles",
+      "/fleet/setup/tires": "Tires",
       "/fleet/setup/imports": "Imports",
       "/fleet/setup/design": "Design",
       "/fleet/members": "Tenant members",

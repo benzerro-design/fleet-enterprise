@@ -30,6 +30,8 @@ model Tenant {
   supplierSettings   Json?
   /// Setup → Flotă & vehicule: remindere, tipuri document, echipamente.
   fleetSettings      Json?
+  /// Setup → Anvelope: politică hotel (bucată/lună) + default-uri ops.
+  tireSettings       Json?
   /// Setup → Importuri: entități, șabloane, drepturi bulk.
   importSettings     Json?
   /// CRM-020 — plafoane de aprobare deviz (client + user + sumă). Verificate la Aprobă.

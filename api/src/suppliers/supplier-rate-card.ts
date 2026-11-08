@@ -15,9 +15,9 @@ export type SupplierRateCard = {
   laborRateBodyCents: number | null;
   laborRatePaintCents: number | null;
   laborRateDiagnosticCents: number | null;
-  /** Hotel: depozitare set anvelope (fără jante), RON/sezon → cenți. */
+  /** Hotel: tarif /bucată/lună calendaristică — anvelope fără jante → cenți. */
   tireStorageFeeTyreOnlyCents?: number | null;
-  /** Hotel: depozitare set pe jantă, RON/sezon → cenți. */
+  /** Hotel: tarif /bucată/lună calendaristică — roată pe jantă → cenți. */
   tireStorageFeeOnRimCents?: number | null;
   tireStorageFeeBands?: TireStorageFeeBand[];
   partsPriceBasis: PartsPriceBasis;

@@ -97,6 +97,7 @@ const ro = {
       "/fleet/setup/integrations": "Integrări",
       "/fleet/setup/suppliers": "Furnizori",
       "/fleet/setup/fleet": "Flotă & vehicule",
+      "/fleet/setup/tires": "Anvelope",
       "/fleet/setup/imports": "Importuri",
       "/fleet/setup/design": "Design",
       "/fleet/members": "Membri abonat",

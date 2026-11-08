@@ -330,6 +330,14 @@ export const FLEET_NAV_SETUP_GROUP: FleetNavGroup = {
     },
     {
       kind: "link",
+      label: "Anvelope",
+      href: "/fleet/setup/tires",
+      phase: "live",
+      adminOnly: true,
+      activePrefixes: ["/fleet/setup/tires"],
+    },
+    {
+      kind: "link",
       label: "Importuri",
       href: "/fleet/setup/imports",
       phase: "live",

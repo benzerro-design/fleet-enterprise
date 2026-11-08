@@ -75,6 +75,14 @@ export const SETUP_PILLARS: SetupPillar[] = [
     activePrefixes: ["/fleet/setup/fleet"],
   },
   {
+    id: "tires",
+    href: "/fleet/setup/tires",
+    label: "Anvelope",
+    blurb: "Hotel: tarif pe bucată/lună; default-uri ops pe seturi (tichet hotel, schimb sezon).",
+    status: "live",
+    activePrefixes: ["/fleet/setup/tires"],
+  },
+  {
     id: "imports",
     href: "/fleet/setup/imports",
     label: "Importuri",

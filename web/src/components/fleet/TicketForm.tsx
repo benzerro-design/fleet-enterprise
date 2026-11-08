@@ -243,6 +243,7 @@ export function TicketForm({
                   clientCode={ctx.clientId}
                   value={ctx.driverId}
                   onChange={ctx.setDriverId}
+                  selectedLabel={ctx.selectedVehicle?.assignedDriverName ?? undefined}
                   hideLabel
                 />
               )}

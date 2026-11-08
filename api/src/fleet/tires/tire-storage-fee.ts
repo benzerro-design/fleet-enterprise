@@ -151,7 +151,8 @@ export function mergeTireStorageFeeCatalog(
 }
 
 /**
- * Pick fee: first band with maxRimInch >= rim; else last band if rim larger; else flat default.
+ * Catalog rate: **RON-cents per tire piece per calendar month**
+ * (on_rim vs tyre_only, by rim band). Not a flat stay total.
  */
 export function resolveTireStorageFeeCents(input: {
   catalog: TireStorageFeeCatalog;
@@ -172,4 +173,52 @@ export function resolveTireStorageFeeCents(input: {
     ? input.catalog.tireStorageFeeOnRimCents
     : input.catalog.tireStorageFeeTyreOnlyCents;
   return flat != null && Number.isFinite(flat) ? Math.round(flat) : null;
+}
+
+/**
+ * Inclusive calendar months between two dates (UTC month boundaries).
+ * Same day → 1. Check-in 15 Jan, check-out 2 Feb → 2.
+ */
+export function calendarMonthsInclusive(from: Date, to: Date): number {
+  const a = from.getTime() <= to.getTime() ? from : to;
+  const b = from.getTime() <= to.getTime() ? to : from;
+  const months =
+    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth()) + 1;
+  return Math.max(1, months);
+}
+
+export type StorageStayFeeBreakdown = {
+  unitMonthlyPerPieceCents: number;
+  pieceCount: number;
+  calendarMonths: number;
+  feeCents: number;
+  billingUnit: 'piece';
+  billingPeriod: 'calendar_month';
+};
+
+/** Total = unit(monthly/piece) × bucăți × luni calendaristice. */
+export function computeStorageStayFeeCents(input: {
+  unitMonthlyPerPieceCents: number | null;
+  pieceCount: number;
+  checkInAt: Date;
+  billThroughAt?: Date | null;
+  minMonths?: number;
+}): StorageStayFeeBreakdown | null {
+  if (input.unitMonthlyPerPieceCents == null || !Number.isFinite(input.unitMonthlyPerPieceCents)) {
+    return null;
+  }
+  const pieceCount = Math.max(0, Math.floor(input.pieceCount));
+  if (pieceCount < 1) return null;
+  const through = input.billThroughAt ?? input.checkInAt;
+  const minMonths = input.minMonths != null && input.minMonths > 0 ? Math.floor(input.minMonths) : 1;
+  const calendarMonths = Math.max(minMonths, calendarMonthsInclusive(input.checkInAt, through));
+  const unit = Math.round(input.unitMonthlyPerPieceCents);
+  return {
+    unitMonthlyPerPieceCents: unit,
+    pieceCount,
+    calendarMonths,
+    feeCents: unit * pieceCount * calendarMonths,
+    billingUnit: 'piece',
+    billingPeriod: 'calendar_month',
+  };
 }

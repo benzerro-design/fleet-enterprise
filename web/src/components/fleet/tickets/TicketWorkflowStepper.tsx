@@ -42,6 +42,9 @@ import { fleetJsonHeaders as ticketFleetHeaders, ticketsBrowserBase, type Ticket
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
 import { resolveSchedulingServiceTypeCode } from "@/lib/scheduling-service-type";
+import { TicketHotelPanel } from "@/components/fleet/tickets/TicketHotelPanel";
+import { isTireStorageTypeCode } from "@/lib/tire-service-type-codes";
+import { DEFAULT_TIRE_SETTINGS, tireSettingsBrowserBase } from "@/lib/tire-settings";
 
 type Props = {
   ticketId: string;
@@ -95,6 +98,28 @@ export function TicketWorkflowStepper({
   const [serviceCase, setServiceCase] = useState<ServiceCaseRecord | null | undefined>(undefined);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hotelHidesServiceFlow, setHotelHidesServiceFlow] = useState(
+    DEFAULT_TIRE_SETTINGS.hotelTicketHidesServiceFlow,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(tireSettingsBrowserBase, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const j = (await res.json()) as { hotelTicketHidesServiceFlow?: boolean };
+        if (!cancelled && typeof j.hotelTicketHidesServiceFlow === "boolean") {
+          setHotelHidesServiceFlow(j.hotelTicketHidesServiceFlow);
+        }
+      } catch {
+        /* defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [supplierId, setSupplierId] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [appointmentLocation, setAppointmentLocation] = useState("");
@@ -665,24 +690,53 @@ export function TicketWorkflowStepper({
     );
   }
 
+  const isHotelTicket = isTireStorageTypeCode(ticketServiceTypeCode);
+  const hotelPrimary = isHotelTicket && hotelHidesServiceFlow;
+
   if (!serviceCase) {
     return (
       <div className={shell}>
         {errorBlock()}
+        {isHotelTicket && hasVehicle && vehicleId ? (
+          <TicketHotelPanel
+            ticketId={ticketId}
+            vehicleId={vehicleId}
+            canWrite={canOperate && !closed && !driverPortal}
+          />
+        ) : null}
         {!hasVehicle ? (
-          <p className="text-sm text-amber-300">Atașează un vehicul la tichet pentru a porni fluxul service.</p>
+          <p className="text-sm text-amber-300">
+            Atașează un vehicul la tichet pentru a porni fluxul{" "}
+            {isHotelTicket ? "hotel / service" : "service"}.
+          </p>
         ) : canOperate && !closed ? (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => void startCase()}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            Deschide flux service
-          </button>
-        ) : (
+          hotelPrimary ? (
+            <details className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
+              <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
+                Ai nevoie și de atelier (montaj/demontaj)? Deschide flux service
+              </summary>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void startCase()}
+                className="mt-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
+              >
+                Deschide flux service
+              </button>
+            </details>
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void startCase()}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Deschide flux service
+            </button>
+          )
+        ) : !isHotelTicket ? (
           <p className="text-sm text-zinc-500">Dosarul service nu a fost deschis.</p>
-        )}
+        ) : null}
       </div>
     );
   }

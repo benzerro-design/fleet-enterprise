@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fleetJsonHeaders } from "@/lib/fleet-api";
 import { workOrdersBrowserBase } from "@/lib/work-orders-api";
 import type { WorkOrderDetail } from "@/lib/work-orders-api";
+import { DEFAULT_TIRE_SETTINGS, tireSettingsBrowserBase } from "@/lib/tire-settings";
 
 type TireSetSummary = {
   id: string;
@@ -61,9 +62,35 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
   const [inspectTread, setInspectTread] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seasonalSwapEnabled, setSeasonalSwapEnabled] = useState(
+    DEFAULT_TIRE_SETTINGS.seasonalSwapEnabled,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(tireSettingsBrowserBase, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const j = (await res.json()) as { seasonalSwapEnabled?: boolean };
+        if (!cancelled && typeof j.seasonalSwapEnabled === "boolean") {
+          setSeasonalSwapEnabled(j.seasonalSwapEnabled);
+          if (!j.seasonalSwapEnabled && intent === "seasonal_changeover") {
+            setIntent("storage_only");
+          }
+        }
+      } catch {
+        /* defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per WO
+  }, [wo.id]);
 
   const applied = !!wo.tyreCloseAppliedAt;
-  const isSeasonal = intent === "seasonal_changeover";
+  const isSeasonal = intent === "seasonal_changeover" && seasonalSwapEnabled;
   const isStorageOnly = intent === "storage_only";
   const isPuncture =
     intent === "roadside_puncture" || intent === "eol_replace" || intent === "purchase";
@@ -260,11 +287,13 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
               onChange={(e) => setIntent(e.target.value)}
               className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-100"
             >
-              {INTENTS.map((i) => (
+              {INTENTS.filter((i) => seasonalSwapEnabled || i.value !== "seasonal_changeover").map(
+                (i) => (
                 <option key={i.value} value={i.value}>
                   {i.label}
                 </option>
-              ))}
+              ),
+              )}
             </select>
           </label>
 
@@ -281,8 +310,13 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
 
           {isSeasonal ? (
             <div className="grid gap-2 sm:grid-cols-2">
+              <p className="sm:col-span-2 text-[11px] text-zinc-500">
+                Schimb sezon: <strong className="font-medium text-zinc-400">iese</strong> setul de pe
+                mașină (poate la hotel) · <strong className="font-medium text-zinc-400">intră</strong>{" "}
+                setul din hotel/depozit sau unul nou deja în inventar.
+              </p>
               <label className="text-zinc-400">
-                Set demontat
+                Set care iese (demont)
                 <select
                   value={demountSetId}
                   disabled={!canWrite || pending}
@@ -298,7 +332,7 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                 </select>
               </label>
               <label className="text-zinc-400">
-                Set montat
+                Set care intră (mont)
                 <select
                   value={mountSetId}
                   disabled={!canWrite || pending}
@@ -314,7 +348,7 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                 </select>
               </label>
               <label className="text-zinc-400 sm:col-span-2">
-                Depozitare set demontat
+                Unde merge setul care iese?
                 <select
                   value={storeAt}
                   disabled={!canWrite || pending}
@@ -323,7 +357,7 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                   }
                   className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
                 >
-                  <option value="at_client">La client</option>
+                  <option value="at_client">Depozit la client</option>
                   <option value="at_supplier_hotel">
                     Hotel anvelope (check-in automat la închidere)
                   </option>

@@ -284,7 +284,7 @@ export function ClientSupplierPricingOverlayEditor({
             <p className="text-xs font-medium text-zinc-300">Hotel anvelope — overlay client</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className={OPS_LABEL_CLASS}>
-                Default fără jante (RON/sezon)
+                Default fără jante (RON/buc/lună)
                 <input
                   value={storageTyreOnly}
                   onChange={(e) => setStorageTyreOnly(e.target.value)}
@@ -299,7 +299,7 @@ export function ClientSupplierPricingOverlayEditor({
                 )}
               </label>
               <label className={OPS_LABEL_CLASS}>
-                Default pe jantă (RON/sezon)
+                Default pe jantă (RON/buc/lună)
                 <input
                   value={storageOnRim}
                   onChange={(e) => setStorageOnRim(e.target.value)}

@@ -9,6 +9,9 @@ export type OpsVehicleOption = {
   odometerKm?: number;
   fuelType?: string | null;
   civProfile?: Record<string, string | number | null>;
+  /** Șofer alocat activ pe vehicul (din listă fleet). */
+  assignedDriverId?: string | null;
+  assignedDriverName?: string | null;
 };
 
 type OpsFormContextValue = {

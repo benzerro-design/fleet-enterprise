@@ -230,6 +230,23 @@ export class TenantController {
     return this.tenant.setFleetSettings(tenantSlug, body, actorUserId);
   }
 
+  @Get('tire-settings')
+  @Roles(...FLEET_READ_ROLES)
+  getTireSettings(@TenantId() tenantSlug: string) {
+    return this.tenant.getTireSettings(tenantSlug);
+  }
+
+  @Patch('tire-settings')
+  @Roles(MembershipRole.tenant_admin)
+  patchTireSettings(
+    @TenantId() tenantSlug: string,
+    @Body() body: unknown,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    if (!actorUserId) throw new BadRequestException('Missing actor');
+    return this.tenant.setTireSettings(tenantSlug, body, actorUserId);
+  }
+
   @Get('import-settings')
   @Roles(...FLEET_READ_ROLES)
   getImportSettings(@TenantId() tenantSlug: string) {
