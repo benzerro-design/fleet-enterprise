@@ -87,7 +87,7 @@ export function DriverSelect({
       >
         <option value="">
           {!clientCode.trim()
-            ? "Selectează vehicul mai întâi"
+            ? "Selectează client / vehicul mai întâi"
             : loading
               ? "Se încarcă…"
               : onlyUnassigned

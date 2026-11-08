@@ -39,7 +39,11 @@ export default async function NewTicketPage({ searchParams }: { searchParams: Pr
   if (!canWriteTickets(auth)) redirect("/fleet/tickets");
   const vehicles = await getVehicleOptions();
   const serviceTypes = await loadServiceTypes();
-  const defaultClient = sp.client ?? defaultClientCodeForTickets(auth);
+  const vehicleFromQuery = sp.vehicleId?.trim()
+    ? vehicles.find((v) => v.id === sp.vehicleId!.trim())
+    : undefined;
+  const defaultClient =
+    sp.client ?? vehicleFromQuery?.clientId ?? defaultClientCodeForTickets(auth);
   const driverPortal = isClientDriverPortal(auth);
   const lockedDriverId = driverPortal ? driverIdFromAuth(auth) : undefined;
 

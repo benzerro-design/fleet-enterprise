@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ClientSelect } from "@/components/fleet/ClientSelect";
 import { DriverSelect } from "@/components/fleet/DriverSelect";
 import { OpsOdometerKmConfirm, shouldConfirmOdometerKm } from "@/components/fleet/OpsOdometerKmConfirm";
@@ -24,6 +24,29 @@ import {
   activeTenantServiceTypes,
   serviceTypeCodeToTicketType,
 } from "@/lib/tenant-service-types/ticket-type-map";
+
+/** Sync Event km from vehicle fiche until tracking module supplies live odometer. */
+function EventKmFromVehicle({
+  vehicleId,
+  vehicleKm,
+  touched,
+  onAutoFill,
+}: {
+  vehicleId: string;
+  vehicleKm: number;
+  touched: boolean;
+  onAutoFill: (km: string) => void;
+}) {
+  useEffect(() => {
+    if (touched) return;
+    if (!vehicleId.trim()) {
+      onAutoFill("");
+      return;
+    }
+    if (vehicleKm > 0) onAutoFill(String(Math.round(vehicleKm)));
+  }, [vehicleId, vehicleKm, touched, onAutoFill]);
+  return null;
+}
 
 type Props = {
   vehicles: OpsVehicleOption[];
@@ -56,7 +79,10 @@ export function TicketForm({
   const searchParams = useSearchParams();
   const [subject, setSubject] = useState(initial?.subject ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const catalogOptions = serviceTypes ? activeTenantServiceTypes(serviceTypes) : [];
+  const catalogOptions = useMemo(
+    () => (serviceTypes ? activeTenantServiceTypes(serviceTypes) : []),
+    [serviceTypes],
+  );
   const useCatalog = catalogOptions.length > 0;
   const [selectedServiceCode, setSelectedServiceCode] = useState(
     () => catalogOptions[0]?.code ?? "other",
@@ -68,6 +94,7 @@ export function TicketForm({
   const [priority, setPriority] = useState<TicketPriority>("normal");
   const [vehicleMovable, setVehicleMovable] = useState<"movable" | "immovable" | "">("");
   const [odometerKm, setOdometerKm] = useState("");
+  const [odometerTouched, setOdometerTouched] = useState(false);
   const [reminderActionId, setReminderActionId] = useState(initial?.reminderActionId ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,15 +115,23 @@ export function TicketForm({
   useEffect(() => {
     const s = subject.toLowerCase();
     if (useCatalog) {
-      if (s.includes("daun")) setSelectedServiceCode("damage_repair");
-      else if (s.includes("itp")) setSelectedServiceCode("itp");
-      else if (s.includes("menten")) setSelectedServiceCode("periodic_maintenance");
+      const has = (code: string) => catalogOptions.some((t) => t.code === code);
+      if (s.includes("daun") && has("damage_repair")) setSelectedServiceCode("damage_repair");
+      else if (s.includes("itp") && has("itp")) setSelectedServiceCode("itp");
+      else if (s.includes("menten") && has("periodic_maintenance")) {
+        setSelectedServiceCode("periodic_maintenance");
+      } else if (
+        (s.includes("hotel") || s.includes("anvelop") || s.includes("roti") || s.includes("roți")) &&
+        (has("tire_storage") || has("tire_service"))
+      ) {
+        setSelectedServiceCode(has("tire_storage") ? "tire_storage" : "tire_service");
+      } else if (s.includes("tractar") && has("towing")) setSelectedServiceCode("towing");
       return;
     }
     if (s.includes("daun")) setTicketType("damage");
     else if (s.includes("itp")) setTicketType("itp");
     else if (s.includes("menten")) setTicketType("maintenance");
-  }, [subject, useCatalog]);
+  }, [subject, useCatalog, catalogOptions]);
 
   async function submitTicket(
     ctx: {
@@ -255,19 +290,41 @@ export function TicketForm({
                         {catalogOptions.find((t) => t.code === selectedServiceCode)?.clientDescription}
                       </p>
                     ) : null}
+                    <p className="mt-1 text-[10px] text-zinc-600">
+                      Opțiuni din{" "}
+                      <Link
+                        href="/fleet/setup/clients?tab=tip-servicii"
+                        className="text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
+                      >
+                        Setup → Catalog tipuri
+                      </Link>
+                      .
+                    </p>
                   </>
                 ) : (
-                  <select
-                    value={ticketType}
-                    onChange={(e) => setTicketType(e.target.value as TicketType)}
-                    className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-                  >
-                    {TICKET_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {ticketForm(`types.${t.value}`)}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={ticketType}
+                      onChange={(e) => setTicketType(e.target.value as TicketType)}
+                      className="mt-1 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                    >
+                      {TICKET_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {ticketForm(`types.${t.value}`)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-[10px] text-amber-200/80">
+                      Catalogul din Setup e gol —{" "}
+                      <Link
+                        href="/fleet/setup/clients?tab=tip-servicii"
+                        className="underline underline-offset-2 hover:text-amber-100"
+                      >
+                        adaugă tipuri aici
+                      </Link>
+                      .
+                    </p>
+                  </>
                 )}
               </div>
               <div>
@@ -308,15 +365,28 @@ export function TicketForm({
 
             {ctx.vehicleId ? (
               <div>
+                <EventKmFromVehicle
+                  vehicleId={ctx.vehicleId}
+                  vehicleKm={ctx.selectedVehicle?.odometerKm ?? 0}
+                  touched={odometerTouched}
+                  onAutoFill={setOdometerKm}
+                />
                 <label className="text-xs text-zinc-500">{ticketForm("fields.eventKm")}</label>
                 <input
                   type="number"
                   min={0}
                   step={1}
                   value={odometerKm}
-                  onChange={(e) => setOdometerKm(e.target.value)}
+                  onChange={(e) => {
+                    setOdometerTouched(true);
+                    setOdometerKm(e.target.value);
+                  }}
                   className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm"
                 />
+                <p className="mt-1 text-[10px] text-zinc-600">
+                  Prefill din km-ul vehiculului. Când modulul tracking e legat, se vor trage automat
+                  din ultima poziție GPS / odometru live.
+                </p>
                 <div className="mt-2">
                   <OpsOdometerKmHint
                     odometerKm={odometerKm}

@@ -23,6 +23,16 @@ type Props = {
   children: (ctx: TicketFormLayoutContext) => ReactNode;
 };
 
+function resolveClientId(
+  vehicles: OpsVehicleOption[],
+  vehicleId: string,
+  fallbackClientId: string,
+): string {
+  if (fallbackClientId.trim()) return fallbackClientId;
+  const v = vehicles.find((x) => x.id === vehicleId);
+  return v?.clientId?.trim() || "";
+}
+
 export function TicketFormLayout({
   vehicles,
   defaultClientId = "",
@@ -31,7 +41,9 @@ export function TicketFormLayout({
   reminderActionId,
   children,
 }: Props) {
-  const [clientId, setClientId] = useState(defaultClientId);
+  const [clientId, setClientId] = useState(() =>
+    resolveClientId(vehicles, defaultVehicleId, defaultClientId),
+  );
   const [vehicleId, setVehicleId] = useState(defaultVehicleId);
   const [driverId, setDriverId] = useState(defaultDriverId);
 

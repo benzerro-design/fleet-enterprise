@@ -25,6 +25,11 @@ export function serviceTypeCodeToTicketType(code: string): TicketType {
   return "other";
 }
 
-export function activeTenantServiceTypes(items: TenantServiceType[]): TenantServiceType[] {
-  return [...items].filter((i) => i.active).sort((a, b) => a.sortOrder - b.sortOrder);
+/** `/active` may omit `active`; treat missing as true. Full list still filters inactive. */
+export function activeTenantServiceTypes(
+  items: Array<Pick<TenantServiceType, "sortOrder"> & { active?: boolean }>,
+): TenantServiceType[] {
+  return [...items]
+    .filter((i) => i.active !== false)
+    .sort((a, b) => a.sortOrder - b.sortOrder) as TenantServiceType[];
 }

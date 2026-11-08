@@ -987,6 +987,7 @@ export class TenantService {
         label: true,
         clientDescription: true,
         sortOrder: true,
+        active: true,
       },
     });
     return { items: rows };
