@@ -41,9 +41,11 @@ import type {
 import type { VehicleLegislativeKitPayload } from "@/lib/vehicle-legislative-kit";
 import type { DriverAssignmentRecord } from "@/lib/drivers-api";
 
-const TABS: { id: VehicleProfileTab; label: string }[] = [
-  { id: "basic", label: "Basic Info" },
-  { id: "advanced", label: "Advanced Infos" },
+/** Top strip: Basic+Advanced merged under Infos (URL still uses tab=basic|advanced). */
+type NavTabId = "infos" | Exclude<VehicleProfileTab, "basic" | "advanced">;
+
+const NAV_TABS: { id: NavTabId; label: string }[] = [
+  { id: "infos", label: "Infos" },
   { id: "acquisition", label: "Date achiziție" },
   { id: "photos", label: "Fotografii" },
   { id: "equipment", label: "Echipări" },
@@ -58,6 +60,11 @@ const TABS: { id: VehicleProfileTab; label: string }[] = [
   { id: "consumption", label: "Consum" },
 ];
 
+const INFOS_SUBTABS: { id: Extract<VehicleProfileTab, "basic" | "advanced">; label: string }[] = [
+  { id: "basic", label: "Basic Info" },
+  { id: "advanced", label: "Advanced Infos" },
+];
+
 const DRIVER_HIDDEN_TABS = new Set<VehicleProfileTab>([
   "acquisition",
   "maintenance_plan",
@@ -65,6 +72,14 @@ const DRIVER_HIDDEN_TABS = new Set<VehicleProfileTab>([
   "drivers",
   "rsa",
 ]);
+
+function isInfosContentTab(tab: VehicleProfileTab): boolean {
+  return tab === "basic" || tab === "advanced";
+}
+
+function navIdForTab(tab: VehicleProfileTab): NavTabId {
+  return isInfosContentTab(tab) ? "infos" : (tab as NavTabId);
+}
 
 type Props = {
   vehicle: VehicleRecord;
@@ -137,11 +152,17 @@ export function VehicleProfileTabs({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const visibleTabs = useMemo(
+  const visibleNavTabs = useMemo(
     () =>
-      TABS.filter((tab) => {
+      NAV_TABS.filter((tab) => {
         if (tab.id === "acquisition" && !showAcquisition) return false;
-        if (driverPortal && DRIVER_HIDDEN_TABS.has(tab.id)) return false;
+        if (
+          driverPortal &&
+          tab.id !== "infos" &&
+          DRIVER_HIDDEN_TABS.has(tab.id as VehicleProfileTab)
+        ) {
+          return false;
+        }
         return true;
       }),
     [showAcquisition, driverPortal],
@@ -149,6 +170,7 @@ export function VehicleProfileTabs({
 
   const active = useMemo((): VehicleProfileTab => {
     const t = searchParams.get("tab");
+    if (t === "infos") return "basic";
     if (t === "acquisition" && !showAcquisition) return "basic";
     if (driverPortal && t && DRIVER_HIDDEN_TABS.has(t as VehicleProfileTab)) return "basic";
     if (
@@ -172,6 +194,7 @@ export function VehicleProfileTabs({
     return "basic";
   }, [searchParams, showAcquisition, driverPortal]);
 
+  const activeNav = navIdForTab(active);
   const planItemHighlight = searchParams.get("planItem");
 
   const setTab = useCallback(
@@ -183,6 +206,31 @@ export function VehicleProfileTabs({
     [router, searchParams],
   );
 
+  const selectNav = useCallback(
+    (id: NavTabId) => {
+      if (id === "infos") {
+        if (!isInfosContentTab(active)) setTab("basic");
+        return;
+      }
+      setTab(id);
+    },
+    [active, setTab],
+  );
+
+  const tabBtnClass = (selected: boolean) =>
+    `rounded-t-lg border px-4 py-2 text-sm transition-colors ${
+      selected
+        ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
+        : "border-transparent text-zinc-500 hover:text-zinc-200"
+    }`;
+
+  const subTabBtnClass = (selected: boolean) =>
+    `rounded-lg px-3 py-1.5 text-sm transition-colors ${
+      selected
+        ? "bg-zinc-800 text-emerald-300"
+        : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
+    }`;
+
   return (
     <section className={`rounded-xl border border-zinc-800 bg-zinc-900/50 ${driverPortal ? "min-w-0 overflow-x-hidden" : ""}`}>
       <div className="border-b border-zinc-800 px-3 pt-3 sm:px-4 sm:pt-4">
@@ -190,22 +238,18 @@ export function VehicleProfileTabs({
           <>
             <div className="lg:hidden">
               <DriverMobileTabStrip
-                items={visibleTabs.map((tab) => ({ id: tab.id, label: tab.label }))}
-                activeId={active}
-                onSelect={(id) => setTab(id as VehicleProfileTab)}
+                items={visibleNavTabs.map((tab) => ({ id: tab.id, label: tab.label }))}
+                activeId={activeNav}
+                onSelect={(id) => selectNav(id as NavTabId)}
               />
             </div>
             <div className="hidden flex-wrap gap-2 lg:flex">
-              {visibleTabs.map((tab) => (
+              {visibleNavTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setTab(tab.id)}
-                  className={`rounded-t-lg border px-4 py-2 text-sm transition-colors ${
-                    active === tab.id
-                      ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
-                      : "border-transparent text-zinc-500 hover:text-zinc-200"
-                  }`}
+                  onClick={() => selectNav(tab.id)}
+                  className={tabBtnClass(activeNav === tab.id)}
                 >
                   {tab.label}
                 </button>
@@ -214,16 +258,12 @@ export function VehicleProfileTabs({
           </>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {visibleTabs.map((tab) => (
+            {visibleNavTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setTab(tab.id)}
-                className={`rounded-t-lg border px-4 py-2 text-sm transition-colors ${
-                  active === tab.id
-                    ? "border-zinc-700 border-b-zinc-900 bg-zinc-900 text-emerald-300"
-                    : "border-transparent text-zinc-500 hover:text-zinc-200"
-                }`}
+                onClick={() => selectNav(tab.id)}
+                className={tabBtnClass(activeNav === tab.id)}
               >
                 {tab.label}
               </button>
@@ -233,26 +273,47 @@ export function VehicleProfileTabs({
       </div>
 
       <div className={driverPortal ? "p-4 sm:p-6" : "p-6"}>
-        {active === "basic" ? (
-          <>
-            <VehicleBasicInfoTab vehicle={vehicle} write={write} lockClient={lockClient} />
-            {driverPortal && opsSections ? (
-              <VehicleDetailSections
-                vehicleId={opsSections.vehicleId}
-                registrationNumber={opsSections.registrationNumber}
-                write={opsSections.write}
-                driverPortal
-                regQs={opsSections.regQs}
-                maintenance={opsSections.maintenance}
-                costs={opsSections.costs}
-                documents={opsSections.documents}
-                mobility={opsSections.mobility}
-              />
-            ) : null}
-          </>
-        ) : null}
-        {active === "advanced" ? (
-          <VehicleAdvancedCivTab vehicle={vehicle} write={civWrite ?? write} initial={civ} />
+        {isInfosContentTab(active) ? (
+          <div className="space-y-4">
+            <div
+              className="inline-flex flex-wrap gap-1 rounded-xl border border-zinc-800 bg-zinc-950/50 p-1"
+              role="tablist"
+              aria-label="Infos"
+            >
+              {INFOS_SUBTABS.map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active === sub.id}
+                  onClick={() => setTab(sub.id)}
+                  className={subTabBtnClass(active === sub.id)}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+            {active === "basic" ? (
+              <>
+                <VehicleBasicInfoTab vehicle={vehicle} write={write} lockClient={lockClient} />
+                {driverPortal && opsSections ? (
+                  <VehicleDetailSections
+                    vehicleId={opsSections.vehicleId}
+                    registrationNumber={opsSections.registrationNumber}
+                    write={opsSections.write}
+                    driverPortal
+                    regQs={opsSections.regQs}
+                    maintenance={opsSections.maintenance}
+                    costs={opsSections.costs}
+                    documents={opsSections.documents}
+                    mobility={opsSections.mobility}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <VehicleAdvancedCivTab vehicle={vehicle} write={civWrite ?? write} initial={civ} />
+            )}
+          </div>
         ) : null}
         {active === "acquisition" ? (
           <VehicleAcquisitionTab vehicleId={vehicle.id} write={write} initial={acquisition} />
@@ -344,7 +405,7 @@ export function VehicleProfileTabs({
                     : ""}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Editare în tab Basic Info. Import tranzacții — fază ulterioară.
+                  Editare în Infos → Basic Info. Import tranzacții — fază ulterioară.
                 </p>
               </div>
             )}
