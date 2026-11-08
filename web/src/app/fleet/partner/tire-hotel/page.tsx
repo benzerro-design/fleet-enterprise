@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { PartnerTireHotelClient } from "@/components/fleet/partner/PartnerTireHotelClient";
+import { PartnerTireHotelOverview } from "@/components/fleet/partner/PartnerTireHotelOverview";
 import { canWritePartnerOps, getAuthMeResult, isPartnerAdminMode } from "@/lib/auth-server";
 import { parsePartnerSupplierQuery } from "@/lib/partner-context";
 
@@ -25,13 +26,14 @@ export default async function PartnerTireHotelPage({ searchParams }: PageProps) 
           lipi codul în căutare sau copia pentru etichetă.
         </p>
         {adminMode && !supplierQuery.supplierId ? (
-          <p className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
-            Selectează un furnizor din comutator (sus) pentru a gestiona hotelul.
-          </p>
+          <Suspense fallback={<p className="text-xs text-zinc-500">Se încarcă…</p>}>
+            <PartnerTireHotelOverview />
+          </Suspense>
         ) : (
           <Suspense fallback={<p className="text-xs text-zinc-500">Se încarcă…</p>}>
             <PartnerTireHotelClient
               canWrite={canWrite}
+              adminMode={adminMode}
               supplierId={supplierQuery.supplierId}
             />
           </Suspense>

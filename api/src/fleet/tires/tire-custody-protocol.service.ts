@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   StreamableFile,
@@ -14,7 +15,9 @@ import {
 import { createHash } from 'crypto';
 import { AuditService } from '../../audit/audit.service';
 import type { AccessContext } from '../../iam/access-context.types';
+import { isDriverOnlyClientUser } from '../../iam/client-access';
 import { assertPartnerWrite, resolvePartnerSupplierIdsFilter } from '../../iam/partner-access';
+import { assertVehicleOpsRead } from '../../ops/ops-write-access';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertSupplierReadById } from '../../suppliers/supplier-access';
 import { assertSupplierTireStorage } from '../../suppliers/supplier-tire-capability';
@@ -111,6 +114,17 @@ export type TireCustodyProtocolSummary = {
   revision: number;
   signedAt: string | null;
   pdfSha256: string | null;
+};
+
+export type DriverVehicleCustodyPending = {
+  protocolId: string;
+  kind: TireCustodyProtocolKind;
+  stayId: string;
+  supplierName: string;
+  locationText: string | null;
+  setSeason: string | null;
+  hasDriverInvite: boolean;
+  driverInviteExpiresAt: string | null;
 };
 
 @Injectable()
@@ -1161,5 +1175,113 @@ export class TireCustodyProtocolService {
       type: 'application/pdf',
       disposition: `attachment; filename="tire-custody-${row.kind}-${row.id}.pdf"`,
     });
+  }
+
+  /** Draft custody protocols on open hotel stays for this vehicle — driver counterparty pending. */
+  async listDriverPendingForVehicle(
+    tenantSlug: string,
+    vehicleId: string,
+    access: AccessContext,
+  ): Promise<{ items: DriverVehicleCustodyPending[] }> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) return { items: [] };
+
+    const rows = await this.prisma.tireCustodyProtocol.findMany({
+      where: {
+        tenantId: tenant.id,
+        status: TireCustodyProtocolStatus.draft,
+        set: { vehicleId },
+        stay: { checkOutAt: null },
+        NOT: {
+          signatures: { some: { role: TireCustodySignerRole.driver } },
+        },
+      },
+      include: {
+        signatures: { select: { role: true } },
+        supplier: { select: { legalName: true } },
+        set: { select: { season: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const items: DriverVehicleCustodyPending[] = rows.map((row) => ({
+      protocolId: row.id,
+      kind: row.kind,
+      stayId: row.stayId,
+      supplierName: row.supplier.legalName,
+      locationText: row.locationText,
+      setSeason: row.set.season,
+      hasDriverInvite: Boolean(
+        row.driverInviteTokenHash &&
+          row.driverInviteExpiresAt &&
+          row.driverInviteExpiresAt.getTime() > Date.now(),
+      ),
+      driverInviteExpiresAt: row.driverInviteExpiresAt?.toISOString() ?? null,
+    }));
+
+    return { items };
+  }
+
+  /**
+   * Mint driver OTP/link for an open protocol on the driver's vehicle (reuses public sign flow).
+   */
+  async issueVehicleDriverSignLink(
+    tenantSlug: string,
+    vehicleId: string,
+    protocolId: string,
+    access: AccessContext,
+    actorUserId?: string | null,
+  ): Promise<{ url: string; otp: string; expiresAt: string }> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
+    if (!isDriverOnlyClientUser(access)) {
+      throw new ForbiddenException('Driver portal only');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Protocol not found');
+
+    const existing = await this.prisma.tireCustodyProtocol.findFirst({
+      where: {
+        id: protocolId,
+        tenantId: tenant.id,
+        set: { vehicleId },
+        stay: { checkOutAt: null },
+      },
+      include: { signatures: true },
+    });
+    if (!existing) throw new NotFoundException('Protocol not found');
+    if (existing.status !== TireCustodyProtocolStatus.draft) {
+      throw new BadRequestException('Protocol is not open for signing');
+    }
+    if (existing.signatures.some((s) => s.role === TireCustodySignerRole.driver)) {
+      throw new BadRequestException('Driver signature already present');
+    }
+
+    const minted = mintDriverInviteSecrets();
+    await this.prisma.tireCustodyProtocol.update({
+      where: { id: protocolId },
+      data: {
+        driverInviteTokenHash: minted.tokenHash,
+        driverInviteExpiresAt: minted.expiresAt,
+        driverOtpHash: minted.otpHash,
+        driverOtpExpiresAt: minted.expiresAt,
+      },
+    });
+
+    await this.audit.log({
+      tenantId: tenant.id,
+      actorUserId,
+      action: 'tire_custody_protocol.driver_invite',
+      entityType: 'tire_custody_protocol',
+      entityId: protocolId,
+      meta: { expiresAt: minted.expiresAt.toISOString(), source: 'driver_vehicle' },
+    });
+
+    return {
+      url: buildPublicUrl(`/tire-custody/sign/${minted.token}`),
+      otp: minted.otp,
+      expiresAt: minted.expiresAt.toISOString(),
+    };
   }
 }

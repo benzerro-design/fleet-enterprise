@@ -80,6 +80,8 @@ describe('TireHotelService.recordStayAfterStoreTx', () => {
       tenantId: 't1',
       supplierId: 'sup-1',
       setId: 'set-1',
+      workOrderId: 'wo-1',
+      locationCode: 'A1',
       intakeTreadNotes: 'FL 4.2mm; FR 4.0mm',
       sourceSystem: 'tyre_close_seasonal',
     });
@@ -87,8 +89,10 @@ describe('TireHotelService.recordStayAfterStoreTx', () => {
     expect(tx.tireStorageStay.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          intakeTreadNotes: 'FL 4.2mm; FR 4.0mm',
+          intakeTreadNotes: expect.stringContaining('4.2'),
           sourceSystem: 'tyre_close_seasonal',
+          workOrderId: 'wo-1',
+          locationCode: 'A1',
         }),
       }),
     );

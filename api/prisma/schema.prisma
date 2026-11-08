@@ -878,6 +878,8 @@ model TireAsset {
   valveType          String?
   rimAssetId         String?
   attrs              Json?
+  warrantyCertificateUrl String?
+  purchaseDocs       Json?
   externalId         String?
   sourceSystem       String?
   createdAt          DateTime            @default(now())
@@ -906,8 +908,13 @@ model TireSet {
   name         String?
   mountedAs    TireMountedAs    @default(on_rim)
   archivedAt   DateTime?
+  warrantyCertificateUrl String?
+  purchaseDocs       Json?
   externalId   String?
   sourceSystem String?
+  /// Soft ops lock — concurrent hotel/service mutations (TTL ~120s).
+  opsLockUntil     DateTime?
+  opsLockByUserId  String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1009,19 +1016,25 @@ model TireStorageStay {
   intakeTreadNotes String?
   feeCents         Int?
   contractRef      String?
+  /// Notă contabilitate (ex. referință casare / PV).
+  accountingNote   String?
   externalId       String?
   sourceSystem     String?
+  /// Comandă R care a declanșat check-in automat (tyre-close).
+  workOrderId      String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   set              TireSet   @relation(fields: [setId], references: [id], onDelete: Cascade)
   supplier         Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  workOrder        MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   costEntries      CostEntry[]
   custodyProtocols TireCustodyProtocol[]
 
   @@index([tenantId])
   @@index([supplierId, checkOutAt])
   @@index([setId, checkOutAt])
+  @@index([workOrderId])
   /// DB enforces one open stay per set: partial unique index
   /// TireStorageStay_set_open_uidx ON ("setId") WHERE "checkOutAt" IS NULL (see migration).
 }
@@ -1618,6 +1631,7 @@ enum CrmTicketLinkEntityType {
   document
   service_case
   work_order
+  tire_storage_stay
 }
 
 enum CrmTicketType {
@@ -2307,6 +2321,7 @@ model MaintenanceWorkOrder {
   photos        WorkOrderPhoto[]
   tireEvents    TireEvent[]
   tireCustodyProtocols TireCustodyProtocol[]
+  tireStorageStays     TireStorageStay[]
 
   @@unique([tenantId, displayNumber])
   @@index([tenantId])

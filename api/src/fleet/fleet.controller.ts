@@ -46,6 +46,7 @@ import {
   TireDomainService,
 } from './tires/tire-domain.service';
 import { TireHubService } from './tires/tire-hub.service';
+import { TireCustodyProtocolService } from './tires/tire-custody-protocol.service';
 import {
   assertUpsertWheelBulkDto,
   assertUpsertWheelDto,
@@ -59,6 +60,8 @@ import { assertFuelType, parseFuelType, parseFuelTypesCsv } from '../ops/fuel-ty
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { TripsService } from '../ops/trips.service';
 import { TireHotelService } from './tires/tire-hotel.service';
+import { parseIntakeInspectionBody } from './tires/tire-intake-inspection';
+import { TireLedgerService } from './tires/tire-ledger.service';
 import { assertSupplierTireStorage } from '../suppliers/supplier-tire-capability';
 import { assertVehicleOpsWrite } from '../ops/ops-write-access';
 import { PrismaService } from '../prisma/prisma.service';
@@ -74,6 +77,8 @@ export class FleetController {
     private readonly tireDomain: TireDomainService,
     private readonly tireHub: TireHubService,
     private readonly tireHotel: TireHotelService,
+    private readonly tireLedger: TireLedgerService,
+    private readonly tireCustody: TireCustodyProtocolService,
     private readonly prisma: PrismaService,
     private readonly dashboard: DashboardService,
     private readonly formBrief: VehicleFormBriefService,
@@ -579,6 +584,36 @@ export class FleetController {
     return this.tireHub.getHub(tenantId, access);
   }
 
+  @Get('tires/ledger/asset/:assetId')
+  @Roles(...FLEET_READ_ROLES)
+  tireLedgerAsset(
+    @TenantId() tenantSlug: string,
+    @Param('assetId') assetId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireLedger.ledgerForAsset(tenantSlug, assetId.trim(), access);
+  }
+
+  @Get('tires/ledger/vehicle/:vehicleId')
+  @Roles(...FLEET_READ_ROLES)
+  tireLedgerVehicle(
+    @TenantId() tenantSlug: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireLedger.ledgerForVehicle(tenantSlug, vehicleId.trim(), access);
+  }
+
+  @Get('tires/ledger/client/:clientId')
+  @Roles(...FLEET_READ_ROLES)
+  tireLedgerClient(
+    @TenantId() tenantSlug: string,
+    @Param('clientId') clientId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireLedger.ledgerForClient(tenantSlug, clientId.trim(), access);
+  }
+
   @Get('tires/hub/export')
   @Roles(MembershipRole.tenant_admin, MembershipRole.tenant_viewer, MembershipRole.client_user)
   @Header('Content-Type', 'text/csv; charset=utf-8')
@@ -606,6 +641,35 @@ export class FleetController {
     @CurrentAccess() access: AccessContext,
   ) {
     return this.wheels.list(tenantId, vehicleId, access);
+  }
+
+  @Get('vehicles/:vehicleId/tire-custody/driver-pending')
+  @Roles(...FLEET_READ_ROLES)
+  listVehicleDriverCustodyPending(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireCustody.listDriverPendingForVehicle(tenantId, vehicleId, access);
+  }
+
+  @Post('vehicles/:vehicleId/tire-custody/protocols/:protocolId/driver-sign-link')
+  @Roles(MembershipRole.client_user)
+  @HttpCode(200)
+  issueVehicleDriverCustodySignLink(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('protocolId') protocolId: string,
+    @CurrentAccess() access: AccessContext,
+    @CurrentUserId() actorUserId?: string,
+  ) {
+    return this.tireCustody.issueVehicleDriverSignLink(
+      tenantId,
+      vehicleId,
+      protocolId,
+      access,
+      actorUserId,
+    );
   }
 
   @Post('vehicles/:vehicleId/tire-sets')
@@ -720,6 +784,19 @@ export class FleetController {
       ? o.intakePhotos.filter((u): u is string => typeof u === 'string' && u.trim().length > 0)
       : undefined;
 
+    const sourceSystem =
+      typeof o.sourceSystem === 'string' && o.sourceSystem.trim()
+        ? o.sourceSystem.trim()
+        : 'fleet_roti_panel';
+    const ticketId = typeof o.ticketId === 'string' ? o.ticketId.trim() : undefined;
+    const externalId =
+      typeof o.externalId === 'string' && o.externalId.trim()
+        ? o.externalId.trim()
+        : ticketId || undefined;
+
+    const workOrderId =
+      typeof o.workOrderId === 'string' && o.workOrderId.trim() ? o.workOrderId.trim() : undefined;
+
     await this.tireHotel.checkIn({
       tenantId: tenant.id,
       supplierId,
@@ -729,8 +806,12 @@ export class FleetController {
       binCode: typeof o.binCode === 'string' ? o.binCode : undefined,
       intakePhotos,
       intakeTreadNotes: typeof o.intakeTreadNotes === 'string' ? o.intakeTreadNotes : undefined,
+      intakeInspection: parseIntakeInspectionBody(o.intakeInspection),
+      workOrderId,
       actorUserId,
-      sourceSystem: 'fleet_roti_panel',
+      sourceSystem,
+      externalId,
+      ticketId,
     });
 
     return this.tireDomain.listSetsForVehicle(tenantSlug, set.vehicleId, access);
@@ -795,6 +876,75 @@ export class FleetController {
       reason: reason ?? null,
       odometerKm: odometerKm ?? null,
     });
+  }
+
+  @Post('tires/stays/:stayId/transform-stay-to-cost')
+  @Roles(...FLEET_WRITE_ROLES)
+  @HttpCode(200)
+  async fleetTransformStayToCost(
+    @TenantId() tenantSlug: string,
+    @Param('stayId') stayId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new BadRequestException('Tenant not found');
+    const o =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const supplierId = typeof o.supplierId === 'string' ? o.supplierId.trim() : '';
+    if (!supplierId) throw new BadRequestException('supplierId required');
+    await assertSupplierTireStorage(this.prisma, tenant.id, supplierId);
+    return this.prisma.$transaction((tx) =>
+      this.tireHotel.transformStayToCostTx(tx, {
+        tenantId: tenant.id,
+        supplierId,
+        stayId: stayId.trim(),
+      }),
+    );
+  }
+
+  @Patch('tires/assets/:assetId/docs')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchTireAssetDocs(
+    @TenantId() tenantSlug: string,
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const o =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    return this.tireDomain.patchTireAssetDocs(tenantSlug, assetId, {
+      warrantyCertificateUrl:
+        'warrantyCertificateUrl' in o
+          ? (o.warrantyCertificateUrl as string | null)
+          : undefined,
+      purchaseDocs: 'purchaseDocs' in o ? (o.purchaseDocs as never) : undefined,
+    }, access);
+  }
+
+  @Patch('tires/sets/:setId/docs')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchTireSetDocs(
+    @TenantId() tenantSlug: string,
+    @Param('setId') setId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const o =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    return this.tireDomain.patchTireSetDocs(tenantSlug, setId, {
+      warrantyCertificateUrl:
+        'warrantyCertificateUrl' in o
+          ? (o.warrantyCertificateUrl as string | null)
+          : undefined,
+      purchaseDocs: 'purchaseDocs' in o ? (o.purchaseDocs as never) : undefined,
+    }, access);
   }
 
   @Put('vehicles/:vehicleId/wheels/layout')

@@ -6,8 +6,13 @@ import {
   isPartnerUser,
   resolvePartnerSupplierIdsFilter,
 } from '../iam/partner-access';
+import { TireCustodyProtocolKind } from '@prisma/client';
 import { TireCustodyProtocolService } from '../fleet/tires/tire-custody-protocol.service';
+import { TireDomainService } from '../fleet/tires/tire-domain.service';
+import { buildTireStayCostPrintableSummary } from '../fleet/tires/tire-hotel-stay-cost';
 import { TireHotelService, tireSetQrPayload } from '../fleet/tires/tire-hotel.service';
+import { escapeCsvCell } from '../ops/ops-csv';
+import { parseIntakeInspectionBody } from '../fleet/tires/tire-intake-inspection';
 import { parseTireSetSearchInput } from '../fleet/tires/tire-domain.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertSupplierReadById } from '../suppliers/supplier-access';
@@ -15,6 +20,7 @@ import {
   assertSupplierTireStorage,
   ensureTireStorageServiceType,
   supplierHasTireStorage,
+  TIRE_HOTEL_SERVICE_CODE_ALIASES,
 } from '../suppliers/supplier-tire-capability';
 
 function normalizePlate(raw: string | undefined): string | undefined {
@@ -28,6 +34,7 @@ export class PartnerTireHotelService {
     private readonly prisma: PrismaService,
     private readonly hotel: TireHotelService,
     private readonly custody: TireCustodyProtocolService,
+    private readonly tireDomain: TireDomainService,
   ) {}
 
   async capability(tenantSlug: string, access: AccessContext, supplierId?: string) {
@@ -65,7 +72,33 @@ export class PartnerTireHotelService {
       where: { id: sid, tenantId: tenant.id },
       select: { legalName: true },
     });
-    return { hasTireStorage, supplierId: sid, supplierName: supplier?.legalName ?? null };
+    const peerOfferings = await this.prisma.supplierService.findMany({
+      where: {
+        tenantId: tenant.id,
+        supplierId: { not: sid },
+        serviceType: {
+          code: { in: [...TIRE_HOTEL_SERVICE_CODE_ALIASES] },
+        },
+      },
+      select: {
+        supplierId: true,
+        supplier: { select: { id: true, legalName: true } },
+      },
+      distinct: ['supplierId'],
+      take: 100,
+    });
+    const transferTargets = peerOfferings
+      .map((o) => ({
+        id: o.supplier.id,
+        legalName: o.supplier.legalName?.trim() || o.supplierId,
+      }))
+      .sort((a, b) => a.legalName.localeCompare(b.legalName, 'ro'));
+    return {
+      hasTireStorage,
+      supplierId: sid,
+      supplierName: supplier?.legalName ?? null,
+      transferTargets,
+    };
   }
 
   private async resolveSupplier(
@@ -86,6 +119,38 @@ export class PartnerTireHotelService {
     return { tenantId: tenant.id, supplierId: sid };
   }
 
+  /**
+   * Resolve one supplier (write) or many (admin/multi read).
+   * Admin without filter → all tenant suppliers with tire_storage (null supplierIds = unrestricted).
+   */
+  private async resolveSupplierScope(
+    tenantSlug: string,
+    access: AccessContext,
+    supplierId?: string,
+    opts?: { allowTenantWide?: boolean },
+  ): Promise<{ tenantId: string; supplierIds: string[] | null }> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const ids = resolvePartnerSupplierIdsFilter(
+      access,
+      supplierId?.trim() ? [supplierId.trim()] : undefined,
+    );
+    if (ids && ids.length > 0) {
+      for (const sid of ids) {
+        await assertSupplierReadById(this.prisma, tenantSlug, sid, access);
+      }
+      return { tenantId: tenant.id, supplierIds: ids };
+    }
+    if (supplierId?.trim()) {
+      await assertSupplierReadById(this.prisma, tenantSlug, supplierId.trim(), access);
+      return { tenantId: tenant.id, supplierIds: [supplierId.trim()] };
+    }
+    if (opts?.allowTenantWide && !isPartnerUser(access)) {
+      return { tenantId: tenant.id, supplierIds: null };
+    }
+    throw new BadRequestException('supplierId is required');
+  }
+
   async listActiveStays(
     tenantSlug: string,
     access: AccessContext,
@@ -95,13 +160,11 @@ export class PartnerTireHotelService {
       /** active (default) | closed | all */
       status?: string;
       take?: number;
+      skip?: number;
+      /** When true and multiple suppliers in scope, allow aggregated read. */
+      overview?: boolean;
     },
   ) {
-    const { tenantId, supplierId } = await this.resolveSupplier(
-      tenantSlug,
-      access,
-      opts.supplierId,
-    );
     const searchRaw = opts.plate?.trim() ?? '';
     const parsed = searchRaw ? parseTireSetSearchInput(searchRaw) : null;
     const plate = parsed?.kind === 'plate' ? normalizePlate(parsed.plate) : undefined;
@@ -113,27 +176,57 @@ export class PartnerTireHotelService {
         : status === 'all'
           ? {}
           : { checkOutAt: null };
-    const take = Math.min(Math.max(opts.take ?? (status === 'active' ? 200 : 100), 1), 500);
+    const take = Math.min(Math.max(opts.take ?? (status === 'active' ? 50 : 100), 1), 500);
+    const skip = Math.max(opts.skip ?? 0, 0);
 
-    const stays = await this.prisma.tireStorageStay.findMany({
-      where: {
-        tenantId,
-        supplierId,
-        ...checkOutFilter,
-        ...(setId ? { setId } : {}),
-        ...(plate && !setId
-          ? {
-              set: {
-                vehicle: {
-                  registrationNumber: { contains: plate, mode: 'insensitive' as const },
-                },
+    let tenantId: string;
+    let supplierFilter: string | { in: string[] } | undefined;
+    let isOverview = false;
+
+    if (opts.overview) {
+      const scope = await this.resolveSupplierScope(tenantSlug, access, opts.supplierId, {
+        allowTenantWide: true,
+      });
+      tenantId = scope.tenantId;
+      isOverview = true;
+      if (scope.supplierIds == null) {
+        supplierFilter = undefined;
+      } else if (scope.supplierIds.length === 1) {
+        supplierFilter = scope.supplierIds[0];
+      } else {
+        supplierFilter = { in: scope.supplierIds };
+      }
+    } else {
+      const single = await this.resolveSupplier(tenantSlug, access, opts.supplierId);
+      tenantId = single.tenantId;
+      supplierFilter = single.supplierId;
+    }
+
+    const where = {
+      tenantId,
+      ...(supplierFilter ? { supplierId: supplierFilter } : {}),
+      ...checkOutFilter,
+      ...(setId ? { setId } : {}),
+      ...(plate && !setId
+        ? {
+            set: {
+              vehicle: {
+                registrationNumber: { contains: plate, mode: 'insensitive' as const },
               },
-            }
-          : {}),
-      },
-      orderBy: [{ checkInAt: 'desc' }],
-      take,
-      include: {
+            },
+          }
+        : {}),
+    };
+
+    const [total, stays] = await Promise.all([
+      this.prisma.tireStorageStay.count({ where }),
+      this.prisma.tireStorageStay.findMany({
+        where,
+        orderBy: [{ checkInAt: 'desc' }],
+        skip,
+        take,
+        include: {
+        supplier: { select: { id: true, legalName: true } },
         set: {
           include: {
             vehicle: { select: { id: true, registrationNumber: true } },
@@ -156,15 +249,31 @@ export class PartnerTireHotelService {
           },
         },
       },
-    });
+      }),
+    ]);
 
     const protocolMap = await this.custody.summariesForStays(
       tenantId,
       stays.map((s) => s.id),
     );
 
+    const costIds = await this.prisma.costEntry.findMany({
+      where: {
+        tenantId,
+        tireStorageStayId: { in: stays.map((s) => s.id) },
+      },
+      select: { id: true, tireStorageStayId: true, amountCents: true },
+    });
+    const costByStay = new Map(
+      costIds.map((c) => [c.tireStorageStayId!, { id: c.id, amountCents: c.amountCents }]),
+    );
+
     return {
       status: status === 'closed' || status === 'all' ? status : 'active',
+      overview: isOverview,
+      skip,
+      take,
+      total,
       items: stays.map((s) => ({
         ...this.hotel.stayToDto(s, {
           season: s.set.season,
@@ -173,8 +282,152 @@ export class PartnerTireHotelService {
           vehicle: s.set.vehicle,
           items: s.set.items,
         }),
+        supplierName: s.supplier.legalName,
         protocols: protocolMap.get(s.id) ?? [],
+        costEntryId: costByStay.get(s.id)?.id ?? null,
+        costAmountCents: costByStay.get(s.id)?.amountCents ?? null,
       })),
+    };
+  }
+
+  async listTireRequests(
+    tenantSlug: string,
+    access: AccessContext,
+    opts: { supplierId?: string; take?: number },
+  ) {
+    const scope = await this.resolveSupplierScope(tenantSlug, access, opts.supplierId, {
+      allowTenantWide: true,
+    });
+    const take = Math.min(Math.max(opts.take ?? 50, 1), 200);
+    const supplierIds = scope.supplierIds;
+
+    const allocClientIds = await this.prisma.clientSupplierAllocation.findMany({
+      where: {
+        tenantId: scope.tenantId,
+        ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
+      },
+      select: { clientId: true, supplierId: true },
+    });
+    const clientIds = [...new Set(allocClientIds.map((a) => a.clientId))];
+    if (clientIds.length === 0) {
+      return { items: [] as Array<Record<string, unknown>> };
+    }
+
+    const tickets = await this.prisma.crmTicket.findMany({
+      where: {
+        tenantId: scope.tenantId,
+        clientId: { in: clientIds },
+        status: { in: ['open', 'in_progress'] },
+        serviceType: { code: { in: ['tire_storage', 'tire_service'] } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        subject: true,
+        status: true,
+        priority: true,
+        createdAt: true,
+        clientId: true,
+        vehicleId: true,
+        serviceType: { select: { code: true, label: true } },
+        vehicle: { select: { id: true, registrationNumber: true } },
+        client: { select: { id: true, legalName: true } },
+        links: {
+          where: { entityType: 'tire_storage_stay' },
+          select: { entityId: true },
+          take: 3,
+        },
+      },
+    });
+
+    return {
+      items: tickets.map((t) => {
+        const kind =
+          t.serviceType?.code === 'tire_storage'
+            ? 'storage'
+            : t.serviceType?.code === 'tire_service'
+              ? 'service'
+              : 'other';
+        const matchedSupplierId =
+          allocClientIds.find((a) => a.clientId === t.clientId)?.supplierId ??
+          (supplierIds?.[0] ?? null);
+        return {
+          id: t.id,
+          subject: t.subject,
+          status: t.status,
+          priority: t.priority,
+          createdAt: t.createdAt.toISOString(),
+          kind,
+          serviceCode: t.serviceType?.code ?? null,
+          serviceLabel: t.serviceType?.label ?? null,
+          plate: t.vehicle?.registrationNumber ?? null,
+          vehicleId: t.vehicleId,
+          clientName: t.client?.legalName ?? null,
+          supplierId: matchedSupplierId,
+          stayIds: t.links.map((l) => l.entityId),
+          hrefHotel: matchedSupplierId
+            ? `/fleet/partner/tire-hotel?supplierId=${encodeURIComponent(matchedSupplierId)}`
+            : '/fleet/partner/tire-hotel',
+          hrefTicket: `/fleet/tickets/${t.id}`,
+          hrefWorkOrders: matchedSupplierId
+            ? `/fleet/partner/work-orders?supplierId=${encodeURIComponent(matchedSupplierId)}`
+            : '/fleet/partner/work-orders',
+        };
+      }),
+    };
+  }
+
+  async dashboardStats(
+    tenantSlug: string,
+    access: AccessContext,
+    opts: { supplierId?: string },
+  ) {
+    const scope = await this.resolveSupplierScope(tenantSlug, access, opts.supplierId, {
+      allowTenantWide: true,
+    });
+    const supplierIds = scope.supplierIds;
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const supplierWhere = supplierIds ? { supplierId: { in: supplierIds } } : {};
+
+    const [activeStays, draftProtocols, checkInsThisWeek, openRequests] = await Promise.all([
+      this.prisma.tireStorageStay.count({
+        where: { tenantId: scope.tenantId, ...supplierWhere, checkOutAt: null },
+      }),
+      this.prisma.tireCustodyProtocol.count({
+        where: {
+          tenantId: scope.tenantId,
+          ...supplierWhere,
+          status: 'draft',
+        },
+      }),
+      this.prisma.tireStorageStay.count({
+        where: {
+          tenantId: scope.tenantId,
+          ...supplierWhere,
+          checkInAt: { gte: weekAgo },
+        },
+      }),
+      this.prisma.crmTicket.count({
+        where: {
+          tenantId: scope.tenantId,
+          status: { in: ['open', 'in_progress'] },
+          serviceType: { code: { in: ['tire_storage', 'tire_service'] } },
+          client: {
+            supplierAllocations: {
+              some: supplierIds ? { supplierId: { in: supplierIds } } : {},
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      activeStays,
+      draftProtocols,
+      checkInsThisWeek,
+      openRequests,
+      supplierIds,
     };
   }
 
@@ -346,14 +599,166 @@ export class PartnerTireHotelService {
       binCode: dto.binCode,
       intakePhotos: dto.intakePhotos,
       intakeTreadNotes: dto.intakeTreadNotes,
+      intakeInspection: dto.intakeInspection,
       feeCents: dto.feeCents,
       contractRef: dto.contractRef,
       actorUserId: actorUserId ?? null,
       vehicleIdForEvent: dto.vehicleId ?? null,
       sourceSystem: isPartnerUser(access) ? 'partner_portal' : 'fleet_admin',
+      ticketId: dto.ticketId ?? null,
+      externalId: dto.ticketId ?? null,
     });
 
     return { stay };
+  }
+
+  async transferStay(
+    tenantSlug: string,
+    access: AccessContext,
+    body: unknown,
+    actorUserId?: string,
+  ) {
+    return this.transfer(tenantSlug, access, body, actorUserId);
+  }
+
+  async transfer(
+    tenantSlug: string,
+    access: AccessContext,
+    body: unknown,
+    actorUserId?: string,
+  ) {
+    assertPartnerWrite(access);
+    const dto = assertTransferBody(body);
+    const { tenantId, supplierId: fromSupplierId } = await this.resolveSupplier(
+      tenantSlug,
+      access,
+      dto.supplierId,
+    );
+    const toSupplierId = dto.toSupplierId.trim();
+    await assertSupplierReadById(this.prisma, tenantSlug, toSupplierId, access);
+    await assertSupplierTireStorage(this.prisma, tenantId, fromSupplierId);
+
+    const protocol = await this.custody.getOrCreateForStay(
+      tenantSlug,
+      dto.stayId,
+      TireCustodyProtocolKind.transfer,
+      access,
+      fromSupplierId,
+      { actorUserId },
+    );
+
+    const result = await this.hotel.transferBetweenSuppliers({
+      tenantId,
+      fromSupplierId,
+      toSupplierId,
+      stayId: dto.stayId,
+      locationCode: dto.locationCode,
+      bayCode: dto.bayCode,
+      binCode: dto.binCode,
+      handoffOnly: dto.handoffOnly,
+      actorUserId: actorUserId ?? null,
+    });
+
+    return { ...result, protocol };
+  }
+
+  async transformStayToCost(
+    tenantSlug: string,
+    access: AccessContext,
+    body: unknown,
+  ) {
+    assertPartnerWrite(access);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new BadRequestException('Body must be an object');
+    }
+    const o = body as Record<string, unknown>;
+    const stayId = typeof o.stayId === 'string' ? o.stayId.trim() : '';
+    if (!stayId) throw new BadRequestException('stayId is required');
+    const supplierId =
+      typeof o.supplierId === 'string' ? o.supplierId.trim() : undefined;
+    const invoiceNumber =
+      o.invoiceNumber === undefined || o.invoiceNumber === null
+        ? undefined
+        : String(o.invoiceNumber).trim() || null;
+    const invoiceAttachmentUrl =
+      o.invoiceAttachmentUrl === undefined || o.invoiceAttachmentUrl === null
+        ? undefined
+        : String(o.invoiceAttachmentUrl).trim() || null;
+    let invoiceDate: Date | null | undefined = undefined;
+    if (o.invoiceDate !== undefined) {
+      if (o.invoiceDate === null || o.invoiceDate === '') invoiceDate = null;
+      else {
+        const d = new Date(String(o.invoiceDate));
+        if (Number.isNaN(d.getTime())) {
+          throw new BadRequestException('invoiceDate invalid');
+        }
+        invoiceDate = d;
+      }
+    }
+    return this.transformStayToCostById(tenantSlug, access, stayId, supplierId, {
+      invoiceNumber,
+      invoiceDate,
+      invoiceAttachmentUrl,
+    });
+  }
+
+  async transformStayToCostById(
+    tenantSlug: string,
+    access: AccessContext,
+    stayId: string,
+    supplierId?: string,
+    invoice?: {
+      invoiceNumber?: string | null;
+      invoiceDate?: Date | null;
+      invoiceAttachmentUrl?: string | null;
+    },
+  ) {
+    assertPartnerWrite(access);
+    const { tenantId, supplierId: sid } = await this.resolveSupplier(
+      tenantSlug,
+      access,
+      supplierId,
+    );
+    const out = await this.prisma.$transaction((tx) =>
+      this.hotel.transformStayToCostTx(tx, {
+        tenantId,
+        supplierId: sid,
+        stayId,
+        invoiceNumber: invoice?.invoiceNumber,
+        invoiceDate: invoice?.invoiceDate,
+        invoiceAttachmentUrl: invoice?.invoiceAttachmentUrl,
+      }),
+    );
+    const summary =
+      out.costEntryId != null
+        ? await this.stayCostSummary(tenantSlug, access, stayId, supplierId)
+        : null;
+    return { ...out, summary };
+  }
+
+  async importSetsDryRun(
+    tenantSlug: string,
+    access: AccessContext,
+    body: unknown,
+  ): Promise<{ ok: boolean; rows: number; errors: string[] }> {
+    assertPartnerWrite(access);
+    await this.resolveSupplierScope(tenantSlug, access, undefined, { allowTenantWide: true });
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new BadRequestException('Body must be an object with csv string');
+    }
+    const csv = typeof (body as { csv?: unknown }).csv === 'string' ? (body as { csv: string }).csv : '';
+    if (!csv.trim()) throw new BadRequestException('csv is required');
+    const lines = csv
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const errors: string[] = [];
+    if (lines.length < 2) errors.push('CSV needs header + at least one data row');
+    const header = (lines[0] ?? '').toLowerCase();
+    if (!header.includes('vehicle') && !header.includes('plate') && !header.includes('set')) {
+      errors.push('Header should include plate/vehicle and set columns');
+    }
+    return { ok: errors.length === 0, rows: Math.max(0, lines.length - 1), errors };
   }
 
   private async searchSetsBySetId(tenantId: string, supplierId: string, setId: string) {
@@ -423,9 +828,138 @@ export class PartnerTireHotelService {
       stayId: dto.stayId,
       actorUserId: actorUserId ?? null,
       releaseKind: dto.releaseKind,
+      accountingNote: dto.accountingNote,
     });
 
     return { stay };
+  }
+
+  async stayCostSummary(
+    tenantSlug: string,
+    access: AccessContext,
+    stayId: string,
+    supplierId?: string,
+  ) {
+    const { tenantId, supplierId: sid } = await this.resolveSupplier(
+      tenantSlug,
+      access,
+      supplierId,
+    );
+    const stay = await this.prisma.tireStorageStay.findFirst({
+      where: { id: stayId, tenantId, supplierId: sid },
+      include: {
+        set: { select: { vehicle: { select: { registrationNumber: true } } } },
+        supplier: { select: { legalName: true } },
+      },
+    });
+    if (!stay) throw new NotFoundException('Stay not found');
+    const cost = await this.prisma.costEntry.findFirst({
+      where: { tenantId, tireStorageStayId: stayId },
+      orderBy: { incurredOn: 'desc' },
+    });
+    if (!cost) {
+      return { costEntryId: null as string | null, printable: null };
+    }
+    const printable = buildTireStayCostPrintableSummary({
+      costEntryId: cost.id,
+      amountCents: cost.amountCents,
+      category: cost.category,
+      provider: cost.provider ?? stay.supplier.legalName,
+      incurredOn: cost.incurredOn,
+      plate: stay.set.vehicle.registrationNumber,
+      stayId: stay.id,
+      checkInAt: stay.checkInAt,
+      checkOutAt: stay.checkOutAt,
+      feeCents: stay.feeCents,
+    });
+    return { costEntryId: cost.id, printable };
+  }
+
+  async exportStaysCsv(
+    tenantSlug: string,
+    access: AccessContext,
+    opts: { supplierId?: string; status?: string; plate?: string },
+  ): Promise<string> {
+    const data = await this.listActiveStays(tenantSlug, access, {
+      supplierId: opts.supplierId,
+      plate: opts.plate,
+      status: opts.status ?? 'active',
+      take: 500,
+      skip: 0,
+    });
+    const header = [
+      'stayId',
+      'plate',
+      'setId',
+      'supplierId',
+      'locationCode',
+      'checkInAt',
+      'checkOutAt',
+      'feeCents',
+      'costEntryId',
+    ].join(',');
+    const lines = data.items.map((s) =>
+      [
+        s.id,
+        s.plate,
+        s.setId,
+        s.supplierId,
+        s.locationCode ?? '',
+        s.checkInAt,
+        s.checkOutAt ?? '',
+        s.feeCents ?? '',
+        (s as { costEntryId?: string | null }).costEntryId ?? '',
+      ]
+        .map((c) => escapeCsvCell(String(c)))
+        .join(','),
+    );
+    return [header, ...lines].join('\r\n');
+  }
+
+  async importSetsAssetsDryRun(body: unknown) {
+    const csv = extractImportCsv(body);
+    const lines = csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length === 0) {
+      throw new BadRequestException('CSV is empty');
+    }
+    const header = lines[0]!.split(',').map((h) => h.trim().toLowerCase());
+    const errors: string[] = [];
+    const okSets = header.includes('setid') || header.includes('plate');
+    const okAssets = header.includes('assetid');
+    if (!okSets && !okAssets) {
+      errors.push('Missing set columns (setId or plate) and asset columns (assetId)');
+    }
+    const rowCount = Math.max(0, lines.length - 1);
+    return {
+      dryRun: true,
+      rowCount,
+      headers: header,
+      valid: errors.length === 0,
+      errors,
+      hint: 'Import aplicare — stub; folosiți dry-run pentru validare structură.',
+    };
+  }
+
+  async patchTireAssetDocs(
+    tenantSlug: string,
+    access: AccessContext,
+    assetId: string,
+    body: unknown,
+  ) {
+    assertPartnerWrite(access);
+    const o = assertDocPatchBody(body);
+    return this.tireDomain.patchTireAssetDocs(tenantSlug, assetId, o, access);
+  }
+
+  async patchTireSetDocs(
+    tenantSlug: string,
+    access: AccessContext,
+    setId: string,
+    body: unknown,
+  ) {
+    assertPartnerWrite(access);
+    const o = assertDocPatchBody(body);
+    return this.tireDomain.patchTireSetDocs(tenantSlug, setId, o, access);
   }
 }
 
@@ -438,8 +972,10 @@ function assertCheckInBody(body: unknown): {
   binCode?: string;
   intakePhotos?: Prisma.InputJsonValue;
   intakeTreadNotes?: string;
+  intakeInspection?: ReturnType<typeof parseIntakeInspectionBody>;
   feeCents?: number;
   contractRef?: string;
+  ticketId?: string;
 } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new BadRequestException('Body must be an object');
@@ -493,6 +1029,15 @@ function assertCheckInBody(body: unknown): {
 
   const intakePhotos = normalizeIntakePhotosBody(o.intakePhotos);
 
+  const ticketId =
+    o.ticketId === undefined || o.ticketId === null
+      ? undefined
+      : typeof o.ticketId === 'string'
+        ? o.ticketId.trim()
+        : undefined;
+
+  const intakeInspection = parseIntakeInspectionBody(o.intakeInspection);
+
   return {
     supplierId,
     setId,
@@ -505,9 +1050,11 @@ function assertCheckInBody(body: unknown): {
       o.intakeTreadNotes === undefined || o.intakeTreadNotes === null
         ? undefined
         : String(o.intakeTreadNotes),
+    intakeInspection,
     feeCents,
     contractRef:
       o.contractRef === undefined || o.contractRef === null ? undefined : String(o.contractRef),
+    ticketId,
   };
 }
 
@@ -515,6 +1062,7 @@ function assertCheckOutBody(body: unknown): {
   supplierId?: string;
   stayId: string;
   releaseKind?: 'at_client' | 'in_transit' | 'scrap' | 'quarantine';
+  accountingNote?: string;
 } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new BadRequestException('Body must be an object');
@@ -536,7 +1084,101 @@ function assertCheckOutBody(body: unknown): {
     }
     releaseKind = raw as 'at_client' | 'in_transit' | 'scrap' | 'quarantine';
   }
-  return { supplierId, stayId, releaseKind };
+  const accountingNote =
+    o.accountingNote === undefined || o.accountingNote === null
+      ? undefined
+      : String(o.accountingNote).trim() || undefined;
+  return { supplierId, stayId, releaseKind, accountingNote };
+}
+
+function assertTransferBody(body: unknown): {
+  supplierId?: string;
+  stayId: string;
+  toSupplierId: string;
+  locationCode?: string;
+  bayCode?: string;
+  binCode?: string;
+  handoffOnly?: boolean;
+} {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestException('Body must be an object');
+  }
+  const o = body as Record<string, unknown>;
+  const stayId = typeof o.stayId === 'string' ? o.stayId.trim() : '';
+  if (!stayId) throw new BadRequestException('stayId is required');
+  const toSupplierId = typeof o.toSupplierId === 'string' ? o.toSupplierId.trim() : '';
+  if (!toSupplierId) throw new BadRequestException('toSupplierId is required');
+  const supplierId =
+    o.supplierId === undefined || o.supplierId === null
+      ? undefined
+      : typeof o.supplierId === 'string'
+        ? o.supplierId.trim()
+        : undefined;
+  const handoffOnly = o.handoffOnly === true || o.handoffOnly === 'true' || o.handoffOnly === 1;
+  const locationCode =
+    o.locationCode === undefined || o.locationCode === null
+      ? undefined
+      : typeof o.locationCode === 'string'
+        ? o.locationCode.trim()
+        : undefined;
+  const bayCode =
+    o.bayCode === undefined || o.bayCode === null
+      ? undefined
+      : typeof o.bayCode === 'string'
+        ? o.bayCode.trim()
+        : undefined;
+  const binCode =
+    o.binCode === undefined || o.binCode === null
+      ? undefined
+      : typeof o.binCode === 'string'
+        ? o.binCode.trim()
+        : undefined;
+  return { supplierId, stayId, toSupplierId, locationCode, bayCode, binCode, handoffOnly };
+}
+
+function assertDocPatchBody(body: unknown): {
+  warrantyCertificateUrl?: string | null;
+  purchaseDocs?: Prisma.InputJsonValue | null;
+} {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestException('Body must be an object');
+  }
+  const o = body as Record<string, unknown>;
+  const out: {
+    warrantyCertificateUrl?: string | null;
+    purchaseDocs?: Prisma.InputJsonValue | null;
+  } = {};
+  if ('warrantyCertificateUrl' in o) {
+    out.warrantyCertificateUrl =
+      o.warrantyCertificateUrl === null
+        ? null
+        : typeof o.warrantyCertificateUrl === 'string'
+          ? o.warrantyCertificateUrl.trim() || null
+          : (() => {
+              throw new BadRequestException('warrantyCertificateUrl invalid');
+            })();
+  }
+  if ('purchaseDocs' in o) {
+    out.purchaseDocs =
+      o.purchaseDocs === null || o.purchaseDocs === undefined
+        ? null
+        : (o.purchaseDocs as Prisma.InputJsonValue);
+  }
+  if (!('warrantyCertificateUrl' in out) && !('purchaseDocs' in out)) {
+    throw new BadRequestException('warrantyCertificateUrl or purchaseDocs required');
+  }
+  return out;
+}
+
+function extractImportCsv(body: unknown): string {
+  if (typeof body === 'string') return body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestException('Body must include csv text');
+  }
+  const o = body as Record<string, unknown>;
+  if (typeof o.csv === 'string') return o.csv;
+  if (typeof o.content === 'string') return o.content;
+  throw new BadRequestException('csv or content string required');
 }
 
 function assertRelocateBody(body: unknown): {

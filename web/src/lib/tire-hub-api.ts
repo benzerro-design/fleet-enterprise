@@ -77,8 +77,12 @@ export type TireHubInventorySet = {
   supplierId: string | null;
   supplierName: string | null;
   locationCode: string | null;
+  bayCode?: string | null;
+  binCode?: string | null;
   checkInAt: string | null;
   feeCents: number | null;
+  sourceSystem?: string | null;
+  hrefTicket?: string | null;
   contractRef: string | null;
   intakeTreadNotes: string | null;
   photoCount: number;

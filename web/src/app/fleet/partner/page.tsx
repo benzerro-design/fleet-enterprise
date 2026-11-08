@@ -88,6 +88,26 @@ async function loadAppointmentStats(q: ReturnType<typeof parsePartnerSupplierQue
   }
 }
 
+type TireHotelDashStats = {
+  activeStays: number;
+  draftProtocols: number;
+  checkInsThisWeek: number;
+  openRequests: number;
+};
+
+async function loadTireHotelStats(
+  q: ReturnType<typeof parsePartnerSupplierQuery>,
+): Promise<TireHotelDashStats | null> {
+  try {
+    const p = partnerSupplierSearchParams(q);
+    const res = await fleetServerFetch(`/partner/tire-hotel/dashboard-stats?${p.toString()}`);
+    if (!res?.ok) return null;
+    return (await res.json()) as TireHotelDashStats;
+  } catch {
+    return null;
+  }
+}
+
 async function loadPendingAppointments(
   q: ReturnType<typeof parsePartnerSupplierQuery>,
 ): Promise<CalendarAppointment[]> {
@@ -211,14 +231,16 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
     if (overview) return <PartnerAdminOverview overview={overview} />;
   }
 
-  const [stats, apptStats, recent, pendingAppts, awaitingAppts, viewAsSupplier] = await Promise.all([
-    loadStats(supplierQuery),
-    loadAppointmentStats(supplierQuery),
-    loadRecentOrders(supplierQuery),
-    loadPendingAppointments(supplierQuery),
-    loadAwaitingValidationAppointments(supplierQuery),
-    supplierQuery.supplierId ? loadSupplierById(supplierQuery.supplierId) : Promise.resolve(null),
-  ]);
+  const [stats, apptStats, recent, pendingAppts, awaitingAppts, viewAsSupplier, tireHotelStats] =
+    await Promise.all([
+      loadStats(supplierQuery),
+      loadAppointmentStats(supplierQuery),
+      loadRecentOrders(supplierQuery),
+      loadPendingAppointments(supplierQuery),
+      loadAwaitingValidationAppointments(supplierQuery),
+      supplierQuery.supplierId ? loadSupplierById(supplierQuery.supplierId) : Promise.resolve(null),
+      loadTireHotelStats(supplierQuery),
+    ]);
 
   const supplier = auth.ok
     ? viewAsSupplier
@@ -244,6 +266,8 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
 
   const woBase = `/fleet/partner/work-orders${qs}`;
   const apptBase = `/fleet/partner/appointments${qs}`;
+  const tireReqBase = `/fleet/partner/tire-requests${qs}`;
+  const tireHotelBase = `/fleet/partner/tire-hotel${qs}`;
   const pendingSupplier = apptStats?.pendingSupplier ?? 0;
   const needsRepropose = apptStats?.needsRepropose ?? 0;
   const actionItems = [
@@ -277,6 +301,22 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
           label: dt("actionLabels.readyUninvoiced"),
           count: s.readyUninvoiced,
           tone: "sky" as const,
+        }
+      : null,
+    (tireHotelStats?.openRequests ?? 0) > 0
+      ? {
+          href: tireReqBase,
+          label: "Solicitări anvelope",
+          count: tireHotelStats!.openRequests,
+          tone: "violet" as const,
+        }
+      : null,
+    (tireHotelStats?.draftProtocols ?? 0) > 0
+      ? {
+          href: tireHotelBase,
+          label: "PV hotel draft",
+          count: tireHotelStats!.draftProtocols,
+          tone: "amber" as const,
         }
       : null,
   ].filter(Boolean) as { href: string; label: string; count: number; tone: "amber" | "violet" | "sky" }[];
@@ -356,6 +396,37 @@ export default async function PartnerDashboardPage({ searchParams }: PageProps) 
           )}
         </div>
       </div>
+
+      {tireHotelStats ? (
+        <div className="mt-6">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Hotel anvelope
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {kpiCard(tireHotelBase, "Sejururi active", tireHotelStats.activeStays, "În depozit acum")}
+            {kpiCard(
+              tireHotelBase,
+              "PV draft",
+              tireHotelStats.draftProtocols,
+              "Protocoale nesemnate",
+              tireHotelStats.draftProtocols > 0,
+            )}
+            {kpiCard(
+              tireHotelBase,
+              "Check-in 7 zile",
+              tireHotelStats.checkInsThisWeek,
+              "Intrări recente",
+            )}
+            {kpiCard(
+              tireReqBase,
+              "Solicitări deschise",
+              tireHotelStats.openRequests,
+              "Tichete anvelope",
+              tireHotelStats.openRequests > 0,
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {stats ? (
         <div className="mt-8">

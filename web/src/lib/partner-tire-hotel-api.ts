@@ -46,6 +46,9 @@ export type TireHotelStay = {
   intakeTreadNotes: string | null;
   feeCents?: number | null;
   contractRef?: string | null;
+  accountingNote?: string | null;
+  costEntryId?: string | null;
+  costAmountCents?: number | null;
   protocols?: TireHotelProtocolSummary[];
 };
 
@@ -55,6 +58,7 @@ export type TireHotelCapability = {
   hasTireStorage: boolean;
   supplierId: string | null;
   supplierName: string | null;
+  transferTargets?: Array<{ id: string; legalName: string }>;
 };
 
 export type TireHotelSearchSet = {
@@ -74,6 +78,11 @@ export type TireHotelFeeQuote = {
   setId: string;
   supplierId: string;
   feeCents: number | null;
+  unitMonthlyPerPieceCents?: number | null;
+  pieceCount?: number;
+  calendarMonths?: number;
+  billingUnit?: "piece";
+  billingPeriod?: "calendar_month";
   rimInch: number | null;
   mountedAs: string | null;
   dominantSize: string | null;

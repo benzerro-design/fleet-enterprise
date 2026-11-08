@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Tab = "flow" | "actions" | "history" | "details" | "damage" | "roadside";
 
@@ -26,6 +26,24 @@ export function TicketSideTabs({
   defaultTab = "flow",
 }: Props) {
   const [tab, setTab] = useState<Tab>(defaultTab);
+
+  useEffect(() => {
+    const onTab = (ev: Event) => {
+      const detail = (ev as CustomEvent<string>).detail;
+      if (
+        detail === "flow" ||
+        detail === "actions" ||
+        detail === "history" ||
+        detail === "details" ||
+        detail === "damage" ||
+        detail === "roadside"
+      ) {
+        setTab(detail);
+      }
+    };
+    window.addEventListener("fleet-ticket-tab", onTab);
+    return () => window.removeEventListener("fleet-ticket-tab", onTab);
+  }, []);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "flow", label: "Flux operațional" },

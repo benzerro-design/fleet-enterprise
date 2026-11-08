@@ -28,6 +28,7 @@ import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { sendTireCustodySmsOtp } from '../fleet/tires/tire-custody-sms';
 import { PartnerMailService } from './partner-mail.service';
 import { PartnerTireHotelService } from './partner-tire-hotel.service';
+import { TireLedgerService } from '../fleet/tires/tire-ledger.service';
 
 type AuthedRequest = Request & { user?: { id?: string } };
 
@@ -38,6 +39,7 @@ export class PartnerTireHotelController {
     private readonly hotel: PartnerTireHotelService,
     private readonly custody: TireCustodyProtocolService,
     private readonly mail: PartnerMailService,
+    private readonly tireLedger: TireLedgerService,
   ) {}
 
   @Get('capability')
@@ -59,13 +61,75 @@ export class PartnerTireHotelController {
     @Query('plate') plate?: string,
     @Query('status') status?: string,
     @Query('take') take?: string,
+    @Query('skip') skip?: string,
+    @Query('overview') overview?: string,
   ) {
     const takeN = take != null && take !== '' ? Number(take) : undefined;
+    const skipN = skip != null && skip !== '' ? Number(skip) : undefined;
     return this.hotel.listActiveStays(tenantSlug, access, {
       supplierId: supplierId?.trim(),
       plate: plate?.trim(),
       status: status?.trim(),
       take: Number.isFinite(takeN) ? takeN : undefined,
+      skip: Number.isFinite(skipN) ? skipN : undefined,
+      overview: overview === '1' || overview === 'true',
+    });
+  }
+
+  @Get('ledger/vehicle/:vehicleId')
+  @Roles(...FLEET_READ_ROLES)
+  ledgerVehicle(
+    @TenantId() tenantSlug: string,
+    @Param('vehicleId') vehicleId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireLedger.ledgerForVehicle(tenantSlug, vehicleId.trim(), access);
+  }
+
+  @Get('ledger/asset/:assetId')
+  @Roles(...FLEET_READ_ROLES)
+  ledgerAsset(
+    @TenantId() tenantSlug: string,
+    @Param('assetId') assetId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireLedger.ledgerForAsset(tenantSlug, assetId.trim(), access);
+  }
+
+  @Get('ledger/client/:clientId')
+  @Roles(...FLEET_READ_ROLES)
+  ledgerClient(
+    @TenantId() tenantSlug: string,
+    @Param('clientId') clientId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireLedger.ledgerForClient(tenantSlug, clientId.trim(), access);
+  }
+
+  @Get('requests')
+  @Roles(...FLEET_READ_ROLES)
+  listRequests(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('supplierId') supplierId?: string,
+    @Query('take') take?: string,
+  ) {
+    const takeN = take != null && take !== '' ? Number(take) : undefined;
+    return this.hotel.listTireRequests(tenantSlug, access, {
+      supplierId: supplierId?.trim(),
+      take: Number.isFinite(takeN) ? takeN : undefined,
+    });
+  }
+
+  @Get('dashboard-stats')
+  @Roles(...FLEET_READ_ROLES)
+  dashboardStats(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    return this.hotel.dashboardStats(tenantSlug, access, {
+      supplierId: supplierId?.trim(),
     });
   }
 
@@ -128,6 +192,86 @@ export class PartnerTireHotelController {
     @Req() req: AuthedRequest,
   ) {
     return this.hotel.relocate(tenantSlug, access, body, req.user?.id);
+  }
+
+  @Post('transfer')
+  @Roles(...FLEET_WRITE_ROLES)
+  transfer(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Body() body: unknown,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.hotel.transferStay(tenantSlug, access, body, req.user?.id);
+  }
+
+  @Post('transform-stay-to-cost')
+  @Roles(...FLEET_WRITE_ROLES)
+  transformStayToCost(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Body() body: unknown,
+  ) {
+    return this.hotel.transformStayToCost(tenantSlug, access, body);
+  }
+
+  @Get('stays/:stayId/cost-summary')
+  @Roles(...FLEET_READ_ROLES)
+  stayCostSummary(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('stayId') stayId: string,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    return this.hotel.stayCostSummary(tenantSlug, access, stayId, supplierId?.trim());
+  }
+
+  @Patch('assets/:assetId')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchTireAssetDocs(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ) {
+    return this.hotel.patchTireAssetDocs(tenantSlug, access, assetId, body);
+  }
+
+  @Patch('sets/:setId/docs')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchTireSetDocs(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('setId') setId: string,
+    @Body() body: unknown,
+  ) {
+    return this.hotel.patchTireSetDocs(tenantSlug, access, setId, body);
+  }
+
+  @Get('stays.csv')
+  @Roles(...FLEET_READ_ROLES)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="tire-hotel-stays.csv"')
+  async exportStaysCsv(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('supplierId') supplierId?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.hotel.exportStaysCsv(tenantSlug, access, {
+      supplierId: supplierId?.trim(),
+      status: status?.trim(),
+    });
+  }
+
+  @Post('import-sets/dry-run')
+  @Roles(...FLEET_WRITE_ROLES)
+  importSetsDryRun(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Body() body: unknown,
+  ) {
+    return this.hotel.importSetsDryRun(tenantSlug, access, body);
   }
 
   @Get('stays/:stayId/protocols')

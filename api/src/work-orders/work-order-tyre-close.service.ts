@@ -21,6 +21,12 @@ import {
 import { WorkOrdersService } from './work-orders.service';
 import { attachTireLinksToWorkOrderCosts } from '../ops/cost-tire-links';
 import { applyRecommendedReplaceFlags } from '../fleet/tires/tire-recommended-replace';
+import { validateAxleBrandPairs } from '../fleet/tires/tire-axle-brand';
+import {
+  buildIntakeInspectionFromDemountReadings,
+  defaultWoAutoStayLocationCode,
+  parseIntakeInspectionBody,
+} from '../fleet/tires/tire-intake-inspection';
 
 const ALL_POSITIONS = new Set<string>(POSITION_SORT_ORDER);
 
@@ -120,12 +126,28 @@ export function assertTyreCloseDto(body: unknown): TyreCloseDto {
         'seasonalSwap.hotelSupplierId is only valid when storeAt is at_supplier_hotel',
       );
     }
+    const intakeInspection = parseIntakeInspectionBody(s.intakeInspection);
+    const locationCode =
+      s.locationCode === undefined || s.locationCode === null
+        ? undefined
+        : typeof s.locationCode === 'string'
+          ? s.locationCode.trim() || null
+          : (() => {
+              throw new BadRequestException('seasonalSwap.locationCode invalid');
+            })();
+    if (storeAt === 'at_supplier_hotel' && !locationCode) {
+      throw new BadRequestException(
+        'seasonalSwap.locationCode (bay/raft) is required when storeAt is at_supplier_hotel',
+      );
+    }
     seasonalSwap = {
       demountSetId,
       mountSetId,
       storeAt,
       demountReadings,
       ...(hotelSupplierId ? { hotelSupplierId } : {}),
+      ...(locationCode ? { locationCode } : {}),
+      ...(intakeInspection ? { intakeInspection } : {}),
     };
   }
 
@@ -194,14 +216,26 @@ export function assertTyreCloseDto(body: unknown): TyreCloseDto {
         : typeof s.locationCode === 'string'
           ? s.locationCode.trim() || null
           : undefined;
+    if (storeAt === 'at_supplier_hotel' && !locationCode) {
+      throw new BadRequestException(
+        'storageOnly.locationCode (bay/raft) is required when storeAt is at_supplier_hotel',
+      );
+    }
+    const intakeInspection = parseIntakeInspectionBody(s.intakeInspection);
     storageOnly = {
       setId,
       storeAt,
       demountReadings,
       locationCode,
       ...(hotelSupplierId ? { hotelSupplierId } : {}),
+      ...(intakeInspection ? { intakeInspection } : {}),
     };
   }
+
+  const includeRimService =
+    o.includeRimService === undefined || o.includeRimService === null
+      ? undefined
+      : !!o.includeRimService;
 
   let outcomes: TyreClosePositionOutcome[] | undefined;
   if (o.outcomes !== undefined && o.outcomes !== null) {
@@ -323,7 +357,19 @@ export function assertTyreCloseDto(body: unknown): TyreCloseDto {
     );
   }
 
-  return { intent, odometerKm, seasonalSwap, storageOnly, outcomes };
+  return { intent, odometerKm, seasonalSwap, storageOnly, outcomes, includeRimService };
+}
+
+function formatDemountTreadSummary(
+  readings: Array<{ position: string; treadMm: number; dot?: string | null }>,
+): string {
+  return readings
+    .map((r) => {
+      const pos = r.position.toUpperCase();
+      const dot = r.dot?.trim() ? ` DOT ${r.dot.trim()}` : '';
+      return `${pos} ${r.treadMm.toFixed(1)}mm${dot}`;
+    })
+    .join('; ');
 }
 
 @Injectable()
@@ -465,9 +511,20 @@ export class WorkOrderTyreCloseService {
 
       await applyRecommendedReplaceFlags(tx, tenantId, [vehicleId]);
 
+      const notePatch =
+        dto.includeRimService === true
+          ? appendTyreCloseNote(
+              wo.notes,
+              '[tyre-close] includeRimService: yes',
+            )
+          : undefined;
+
       await tx.maintenanceWorkOrder.update({
         where: { id: workOrderId },
-        data: { tyreCloseAppliedAt: new Date() },
+        data: {
+          tyreCloseAppliedAt: new Date(),
+          ...(notePatch !== undefined ? { notes: notePatch } : {}),
+        },
       });
 
       await attachTireLinksToWorkOrderCosts(
@@ -553,6 +610,7 @@ export class WorkOrderTyreCloseService {
     const mountItems = await tx.tireSetItem.findMany({
       where: { setId: ctx.swap.mountSetId },
       orderBy: [{ sortOrder: 'asc' }, { assetId: 'asc' }],
+      include: { asset: { select: { brand: true } } },
     });
     if (mountItems.length === 0) {
       throw new BadRequestException('seasonalSwap mount set has no tyre assets');
@@ -647,20 +705,29 @@ export class WorkOrderTyreCloseService {
     }
 
     if (storeKind === 'at_supplier_hotel' && hotelSupplierId) {
-      const intakeTreadNotes = (ctx.swap.demountReadings ?? [])
-        .map((r) => {
-          const pos = r.position.toUpperCase();
-          const dot = r.dot?.trim() ? ` DOT ${r.dot.trim()}` : '';
-          return `${pos} ${r.treadMm.toFixed(1)}mm${dot}`;
-        })
-        .join('; ');
+      const demountReadings = ctx.swap.demountReadings ?? [];
+      const summary = formatDemountTreadSummary(demountReadings);
+      const intakeInspection = buildIntakeInspectionFromDemountReadings(
+        demountReadings,
+        ctx.swap.intakeInspection,
+      );
+      let locationCode: string;
+      try {
+        locationCode = defaultWoAutoStayLocationCode(ctx.swap.locationCode);
+      } catch {
+        throw new BadRequestException(
+          'Cod locație raft (bay) obligatoriu pentru check-in hotel la schimb sezonier',
+        );
+      }
       await this.tireHotel.recordStayAfterStoreTx(tx, {
         tenantId: ctx.tenantId,
         supplierId: hotelSupplierId,
         setId: ctx.swap.demountSetId,
+        locationCode,
         workOrderId: ctx.workOrderId,
         sourceSystem: 'tyre_close_seasonal',
-        intakeTreadNotes: intakeTreadNotes || undefined,
+        intakeTreadNotes: summary || undefined,
+        intakeInspection,
       });
     }
 
@@ -671,6 +738,15 @@ export class WorkOrderTyreCloseService {
     if (freedPositions.length !== mountItems.length) {
       throw new BadRequestException(
         'seasonalSwap could not resolve wheel positions for all demounted tyres',
+      );
+    }
+
+    if (mountItems.length >= 2) {
+      validateAxleBrandPairs(
+        mountItems.map((item, i) => ({
+          position: freedPositions[i]!,
+          brand: item.asset.brand,
+        })),
       );
     }
 
@@ -845,21 +921,29 @@ export class WorkOrderTyreCloseService {
     }
 
     if (storeKind === 'at_supplier_hotel' && hotelSupplierId) {
-      const intakeTreadNotes = (ctx.storage.demountReadings ?? [])
-        .map((r) => {
-          const pos = r.position.toUpperCase();
-          const dot = r.dot?.trim() ? ` DOT ${r.dot.trim()}` : '';
-          return `${pos} ${r.treadMm.toFixed(1)}mm${dot}`;
-        })
-        .join('; ');
+      const demountReadings = ctx.storage.demountReadings ?? [];
+      const summary = formatDemountTreadSummary(demountReadings);
+      const intakeInspection = buildIntakeInspectionFromDemountReadings(
+        demountReadings,
+        ctx.storage.intakeInspection,
+      );
+      let locationCode: string;
+      try {
+        locationCode = defaultWoAutoStayLocationCode(ctx.storage.locationCode);
+      } catch {
+        throw new BadRequestException(
+          'Cod locație raft (bay) obligatoriu pentru check-in hotel la depozitare',
+        );
+      }
       await this.tireHotel.recordStayAfterStoreTx(tx, {
         tenantId: ctx.tenantId,
         supplierId: hotelSupplierId,
         setId: ctx.storage.setId,
-        locationCode: ctx.storage.locationCode,
+        locationCode,
         workOrderId: ctx.workOrderId,
         sourceSystem: 'tyre_close_storage_only',
-        intakeTreadNotes: intakeTreadNotes || undefined,
+        intakeTreadNotes: summary || undefined,
+        intakeInspection,
       });
     }
   }
@@ -1077,4 +1161,10 @@ export class WorkOrderTyreCloseService {
       });
     }
   }
+}
+
+function appendTyreCloseNote(existing: string | null | undefined, line: string): string {
+  const base = existing?.trim() ?? '';
+  if (base.includes(line)) return base;
+  return base ? `${base}\n${line}` : line;
 }

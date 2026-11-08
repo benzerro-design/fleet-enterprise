@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type {
+import {
   Prisma,
-  TireEventType,
-  TirePlacementKind,
-  VehicleRimMaterial,
-  VehicleTireSeason,
-  VehicleWheelPosition,
+  type TireEventType,
+  type TirePlacementKind,
+  type VehicleRimMaterial,
+  type VehicleTireSeason,
+  type VehicleWheelPosition,
 } from '@prisma/client';
 import type { AccessContext } from '../../iam/access-context.types';
 import { assertVehicleOpsRead, assertVehicleOpsWrite } from '../../ops/ops-write-access';
@@ -1250,6 +1250,96 @@ export class TireDomainService {
       },
     });
     return rim.id;
+  }
+
+  async patchTireAssetDocs(
+    tenantSlug: string,
+    assetId: string,
+    body: { warrantyCertificateUrl?: string | null; purchaseDocs?: Prisma.InputJsonValue | null },
+    access?: AccessContext,
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const asset = await this.prisma.tireAsset.findFirst({
+      where: { id: assetId, tenantId: tenant.id },
+      select: {
+        id: true,
+        setItems: { select: { set: { select: { vehicleId: true } } }, take: 1 },
+        placements: { where: { validTo: null, vehicleId: { not: null } }, select: { vehicleId: true }, take: 1 },
+      },
+    });
+    if (!asset) throw new NotFoundException('Tire asset not found');
+    const vehicleId =
+      asset.placements[0]?.vehicleId ?? asset.setItems[0]?.set.vehicleId ?? null;
+    if (vehicleId) {
+      await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    }
+    const data: Prisma.TireAssetUpdateInput = {};
+    if ('warrantyCertificateUrl' in body) {
+      const raw = body.warrantyCertificateUrl;
+      data.warrantyCertificateUrl =
+        raw === null || raw === undefined ? null : String(raw).trim() || null;
+    }
+    if ('purchaseDocs' in body) {
+      data.purchaseDocs =
+        body.purchaseDocs === undefined
+          ? undefined
+          : body.purchaseDocs === null
+            ? Prisma.JsonNull
+            : body.purchaseDocs;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No document fields to patch');
+    }
+    return this.prisma.tireAsset.update({
+      where: { id: assetId },
+      data,
+      select: {
+        id: true,
+        warrantyCertificateUrl: true,
+        purchaseDocs: true,
+      },
+    });
+  }
+
+  async patchTireSetDocs(
+    tenantSlug: string,
+    setId: string,
+    body: { warrantyCertificateUrl?: string | null; purchaseDocs?: Prisma.InputJsonValue | null },
+    access?: AccessContext,
+  ) {
+    const set = await this.prisma.tireSet.findFirst({
+      where: { id: setId, vehicle: { tenant: { slug: tenantSlug } } },
+      select: { id: true, vehicleId: true },
+    });
+    if (!set) throw new NotFoundException('Tire set not found');
+    await assertVehicleOpsWrite(this.prisma, tenantSlug, set.vehicleId, access);
+    const data: Prisma.TireSetUpdateInput = {};
+    if ('warrantyCertificateUrl' in body) {
+      const raw = body.warrantyCertificateUrl;
+      data.warrantyCertificateUrl =
+        raw === null || raw === undefined ? null : String(raw).trim() || null;
+    }
+    if ('purchaseDocs' in body) {
+      data.purchaseDocs =
+        body.purchaseDocs === undefined
+          ? undefined
+          : body.purchaseDocs === null
+            ? Prisma.JsonNull
+            : body.purchaseDocs;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No document fields to patch');
+    }
+    return this.prisma.tireSet.update({
+      where: { id: setId },
+      data,
+      select: {
+        id: true,
+        warrantyCertificateUrl: true,
+        purchaseDocs: true,
+      },
+    });
   }
 
   private stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {

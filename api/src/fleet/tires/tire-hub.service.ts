@@ -10,7 +10,8 @@ import {
   treadLowThresholdMm,
   TIRE_DOT_MAX_AGE_YEARS,
 } from './tire-thresholds';
-import type { TireOwnershipType, VehicleTireSeason } from '@prisma/client';
+import { CrmTicketLinkEntityType, type TireOwnershipType, type VehicleTireSeason } from '@prisma/client';
+import { parseStayLocation } from './tire-stay-location';
 import type {
   TireHubAlert,
   TireHubAlertKind,
@@ -504,6 +505,8 @@ export class TireHubService {
         };
       });
 
+      const stayLoc = stay?.locationCode ? parseStayLocation(stay.locationCode) : null;
+
       inventorySets.push({
         setId: set.id,
         vehicleId: set.vehicleId,
@@ -522,8 +525,12 @@ export class TireHubService {
         supplierId: stay?.supplierId ?? hotelPl?.supplierId ?? null,
         supplierName: stay?.supplier.legalName ?? hotelPl?.supplier?.legalName ?? null,
         locationCode: stay?.locationCode ?? hotelPl?.locationCode ?? null,
+        bayCode: stayLoc?.bayCode ?? null,
+        binCode: stayLoc?.binCode ?? null,
         checkInAt: stay?.checkInAt.toISOString() ?? hotelPl?.validFrom.toISOString() ?? null,
         feeCents: stay?.feeCents ?? null,
+        sourceSystem: stay?.sourceSystem ?? null,
+        hrefTicket: null,
         contractRef: stay?.contractRef ?? null,
         intakeTreadNotes: stay?.intakeTreadNotes ?? null,
         photoCount: intakePhotoCount(stay?.intakePhotos),
@@ -559,8 +566,12 @@ export class TireHubService {
     }
 
     const setIds = inventorySets.map((s) => s.setId);
+    const openStayIds = inventorySets
+      .map((s) => s.stayId)
+      .filter((id): id is string => id != null);
     if (setIds.length > 0) {
-      const [costGroups, recentRaw, lastMountRows, lastDemountRows] = await Promise.all([
+      const [costGroups, recentRaw, lastMountRows, lastDemountRows, ticketLinks] =
+        await Promise.all([
         this.prisma.costEntry.groupBy({
           by: ['tireSetId'],
           where: { tenantId: tenant.id, tireSetId: { in: setIds } },
@@ -602,7 +613,23 @@ export class TireHubService {
           distinct: ['setId'],
           select: { setId: true, odometerKm: true },
         }),
+        openStayIds.length === 0
+          ? Promise.resolve([] as Array<{ entityId: string; ticketId: string }>)
+          : this.prisma.crmTicketLink.findMany({
+              where: {
+                tenantId: tenant.id,
+                entityType: CrmTicketLinkEntityType.tire_storage_stay,
+                entityId: { in: openStayIds },
+              },
+              select: { entityId: true, ticketId: true },
+              orderBy: { createdAt: 'desc' },
+            }),
       ]);
+
+      const ticketByStay = new Map<string, string>();
+      for (const link of ticketLinks) {
+        if (!ticketByStay.has(link.entityId)) ticketByStay.set(link.entityId, link.ticketId);
+      }
 
       const costBySet = new Map(
         costGroups
@@ -644,6 +671,10 @@ export class TireHubService {
         row.recentEvents = eventsBySet.get(row.setId) ?? [];
         row.lastMountKm = mountKmBySet.get(row.setId) ?? null;
         row.lastDemountKm = demountKmBySet.get(row.setId) ?? null;
+        if (row.stayId) {
+          const ticketId = ticketByStay.get(row.stayId);
+          if (ticketId) row.hrefTicket = `/fleet/tickets/${ticketId}`;
+        }
       }
     }
 

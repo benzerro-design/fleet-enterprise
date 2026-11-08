@@ -29,9 +29,14 @@ import {
   type TireCustodyProtocolKind,
   type TireCustodyProtocolRecord,
 } from "@/lib/tire-custody-api";
+import { TireMovementLedger } from "@/components/fleet/TireMovementLedger";
+
+const STAYS_PAGE_SIZE = 50;
 
 type Props = {
   canWrite: boolean;
+  /** Admin flotă în view-as: read (căutare/inventar) da, mutații nu. */
+  adminMode?: boolean;
   supplierId?: string;
 };
 
@@ -47,7 +52,7 @@ function formatCheckIn(iso: string): string {
   }
 }
 
-export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
+export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId }: Props) {
   const searchParams = useSearchParams();
   const supplierQ = useMemo(
     () => parsePartnerSupplierQuery(Object.fromEntries(searchParams.entries())),
@@ -82,11 +87,27 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
   const [intakeTreadNotes, setIntakeTreadNotes] = useState("");
   const [receiptStay, setReceiptStay] = useState<TireHotelStay | null>(null);
   const [expandedReceiptStayId, setExpandedReceiptStayId] = useState<string | null>(null);
+  const [expandedInventarStayId, setExpandedInventarStayId] = useState<string | null>(null);
+  const [staysSkip, setStaysSkip] = useState(0);
+  const [staysTotal, setStaysTotal] = useState(0);
   const [activeProtocol, setActiveProtocol] = useState<TireCustodyProtocolRecord | null>(null);
   const [relocateStayId, setRelocateStayId] = useState<string | null>(null);
   const [relocateBay, setRelocateBay] = useState("");
   const [relocateBin, setRelocateBin] = useState("");
+  const [transferStayId, setTransferStayId] = useState<string | null>(null);
+  const [transferToSupplierId, setTransferToSupplierId] = useState("");
+  const [transferBay, setTransferBay] = useState("");
+  const [transferBin, setTransferBin] = useState("");
+  const [transferHandoffOnly, setTransferHandoffOnly] = useState(false);
+  const [invoiceStayId, setInvoiceStayId] = useState<string | null>(null);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState("");
+  const [invoiceAttachmentUrl, setInvoiceAttachmentUrl] = useState("");
   const [releaseKind, setReleaseKind] = useState<TireHotelReleaseKind>("at_client");
+  const [scrapAccountingNote, setScrapAccountingNote] = useState("");
+  const [costSummaryByStay, setCostSummaryByStay] = useState<
+    Record<string, { lines: string[]; costEntryId: string }>
+  >({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,19 +120,26 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       for (const [k, v] of new URLSearchParams(qs)) p.set(k, v);
     }
     p.set("status", staysStatus);
+    p.set("take", String(STAYS_PAGE_SIZE));
+    p.set("skip", String(staysSkip));
     if (fp) p.set("plate", fp);
     const res = await fetch(`/api/partner/tire-hotel/stays?${p.toString()}`, {
       cache: "no-store",
     });
     if (!res.ok) throw new Error("Nu am putut încărca sejururile");
-    const data = (await res.json()) as { items?: TireHotelStay[] };
+    const data = (await res.json()) as {
+      items?: TireHotelStay[];
+      total?: number;
+      skip?: number;
+    };
+    setStaysTotal(data.total ?? data.items?.length ?? 0);
     setStays(
       (data.items ?? []).map((s) => ({
         ...s,
         intakePhotos: normalizeIntakePhotoUrls(s.intakePhotos),
       })),
     );
-  }, [filterPlate, qs, staysStatus]);
+  }, [filterPlate, qs, staysSkip, staysStatus]);
 
   const loadCapability = useCallback(async () => {
     const res = await fetch(`/api/partner/tire-hotel/capability?${qs}`, { cache: "no-store" });
@@ -330,6 +358,10 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
           supplierId: supplierId ?? supplierQ.supplierId,
           stayId,
           releaseKind,
+          accountingNote:
+            releaseKind === "scrap" && scrapAccountingNote.trim()
+              ? scrapAccountingNote.trim()
+              : undefined,
         }),
       });
       if (!res.ok) {
@@ -344,6 +376,122 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       setError(e instanceof Error ? e.message : "Eroare");
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function transformStayToCost(stayId: string, withInvoice = false) {
+    if (!canWrite) return;
+    setBusy(`cost-${stayId}`);
+    setError(null);
+    try {
+      const res = await fetch("/api/partner/tire-hotel/transform-stay-to-cost", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierId: supplierId ?? supplierQ.supplierId,
+          stayId,
+          ...(withInvoice
+            ? {
+                invoiceNumber: invoiceNumber.trim() || undefined,
+                invoiceDate: invoiceDate.trim() || undefined,
+                invoiceAttachmentUrl: invoiceAttachmentUrl.trim() || undefined,
+              }
+            : {}),
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? "Cost eșuat");
+      }
+      const data = (await res.json()) as {
+        costEntryId?: string | null;
+        summary?: { printable?: { lines: string[]; costEntryId: string } | null };
+      };
+      if (data.summary?.printable) {
+        setCostSummaryByStay((prev) => ({
+          ...prev,
+          [stayId]: {
+            costEntryId: data.summary!.printable!.costEntryId,
+            lines: data.summary!.printable!.lines,
+          },
+        }));
+      }
+      if (withInvoice) {
+        setInvoiceStayId(null);
+        setInvoiceNumber("");
+        setInvoiceDate("");
+        setInvoiceAttachmentUrl("");
+      }
+      await loadStays();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function transferStay(stayId: string) {
+    if (!canWrite) return;
+    if (!transferToSupplierId.trim()) {
+      setError("Alege furnizorul destinație");
+      return;
+    }
+    if (!transferHandoffOnly && !transferBay.trim()) {
+      setError("Bay obligatoriu la transfer hotel (sau bifează doar predare)");
+      return;
+    }
+    setBusy(`transfer-${stayId}`);
+    setError(null);
+    try {
+      const res = await fetch("/api/partner/tire-hotel/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierId: supplierId ?? supplierQ.supplierId,
+          stayId,
+          toSupplierId: transferToSupplierId.trim(),
+          bayCode: transferBay.trim() || undefined,
+          binCode: transferBin.trim() || undefined,
+          handoffOnly: transferHandoffOnly || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? "Transfer eșuat");
+      }
+      setTransferStayId(null);
+      setTransferToSupplierId("");
+      setTransferBay("");
+      setTransferBin("");
+      setTransferHandoffOnly(false);
+      await loadStays();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function loadCostSummary(stayId: string) {
+    try {
+      const p = new URLSearchParams();
+      const sid = supplierId ?? supplierQ.supplierId;
+      if (sid) p.set("supplierId", sid);
+      const res = await fetch(
+        `/api/partner/tire-hotel/stays/${encodeURIComponent(stayId)}/cost-summary?${p.toString()}`,
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        printable?: { lines: string[]; costEntryId: string } | null;
+      };
+      if (data.printable) {
+        setCostSummaryByStay((prev) => ({
+          ...prev,
+          [stayId]: { costEntryId: data.printable!.costEntryId, lines: data.printable!.lines },
+        }));
+      }
+    } catch {
+      /* ignore */
     }
   }
 
@@ -394,6 +542,12 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
 
   return (
     <div className="mx-auto flex max-w-lg flex-col gap-6 pb-24">
+      {adminMode && !canWrite ? (
+        <p className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
+          Vizualizare admin — căutare și inventar disponibile; check-in, eliberare, relocare și PV
+          blocate.
+        </p>
+      ) : null}
       {error ? (
         <p className="rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
           {error}
@@ -439,7 +593,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
           />
           <button
             type="button"
-            disabled={busy === "search" || !canWrite}
+            disabled={busy === "search"}
             onClick={() => void runSearch()}
             className="shrink-0 rounded-xl bg-violet-600 px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
           >
@@ -476,7 +630,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                           )}`
                         : ""}
                       {s.suggestedFeeCents != null
-                        ? ` · ${(s.suggestedFeeCents / 100).toLocaleString("ro-RO")} lei/sezon`
+                        ? ` · ${(s.suggestedFeeCents / 100).toLocaleString("ro-RO")} lei (buc×lună, min.)`
                         : ""}
                       {s.hasActiveStayHere ? " · deja la hotel" : ""}
                     </span>
@@ -495,7 +649,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                 <p className="font-medium text-emerald-200">Tarif estimat la check-in</p>
                 <p className="mt-1">
                   {selectedFeeQuote.feeCents != null
-                    ? `${(selectedFeeQuote.feeCents / 100).toLocaleString("ro-RO")} lei / sezon`
+                    ? `${(selectedFeeQuote.feeCents / 100).toLocaleString("ro-RO")} lei (bucăți × lună calendaristică, min. facturabil)`
                     : "Nesetat pe fișa tarifară a furnizorului"}
                   {selectedFeeQuote.dominantSize
                     ? ` · ${selectedFeeQuote.dominantSize}`
@@ -509,8 +663,8 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                     : ""}
                 </p>
                 <p className="mt-1 text-[11px] text-emerald-200/60">
-                  Se aplică automat din grila pe diametru / default hotel. Poți confirma fără a
-                  introduce manual prețul.
+                  Unitate: RON/bucată/lună din grila hotel. Total = bucăți × unitate × luni min.
+                  Poți confirma fără preț manual.
                 </p>
               </div>
             ) : null}
@@ -604,9 +758,11 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={staysStatus}
-              onChange={(e) =>
-                setStaysStatus(e.target.value as "active" | "closed" | "all")
-              }
+              onChange={(e) => {
+                setStaysSkip(0);
+                setExpandedInventarStayId(null);
+                setStaysStatus(e.target.value as "active" | "closed" | "all");
+              }}
               className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200"
             >
               <option value="active">Active</option>
@@ -616,7 +772,10 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
             <input
               value={filterPlate}
               onChange={(e) => setFilterPlate(formatTireSetSearchFieldOnChange(e.target.value))}
-              onBlur={() => void loadStays().catch(() => undefined)}
+              onBlur={() => {
+                setStaysSkip(0);
+                void loadStays().catch(() => undefined);
+              }}
               placeholder="Filtru nr. / QR"
               className="w-36 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200"
             />
@@ -637,91 +796,131 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
             </select>
           </label>
         ) : null}
+        {canWrite && releaseKind === "scrap" ? (
+          <input
+            value={scrapAccountingNote}
+            onChange={(e) => setScrapAccountingNote(e.target.value)}
+            placeholder="Notă contabilitate (opțional)"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200"
+          />
+        ) : null}
+        <a
+          href={`/api/partner/tire-hotel/stays.csv?${qs}&status=${encodeURIComponent(staysStatus)}`}
+          className="inline-block text-[11px] text-violet-300 hover:text-violet-200"
+        >
+          Export CSV sejururi
+        </a>
         {stays.length === 0 ? (
           <p className="text-xs text-zinc-500">
             {staysStatus === "closed" ? "Niciun sejur închis." : "Niciun set activ în depozit."}
           </p>
         ) : (
-          <ul className="space-y-2">
-            {stays.map((s) => (
-              <li
-                key={s.id}
-                className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-zinc-100">{s.plate}</span>
-                  <span className="text-xs text-zinc-500">
-                    {s.setName?.trim() || vehicleTireSeasonLabel(s.season)}
-                    {s.itemCount != null ? ` · ${s.itemCount} buc` : ""}
-                  </span>
-                  {s.checkOutAt ? (
-                    <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">
-                      eliberat
-                    </span>
-                  ) : null}
-                  {(
-                    [
-                      "check_in",
-                      "check_out",
-                      "seasonal",
-                      "transfer",
-                      "scrap",
-                      "leasing_return",
-                      "quarantine",
-                    ] as const
-                  ).map((kind) => {
-                    const st = protocolStatus(s, kind);
-                    if (st === "missing") return null;
-                    const label =
-                      kind === "check_in"
-                        ? "PV in"
-                        : kind === "check_out"
-                          ? "PV out"
-                          : kind === "seasonal"
-                            ? "PV sezon"
-                            : kind === "transfer"
-                              ? "PV transfer"
-                              : kind === "scrap"
-                                ? "PV casare"
-                                : kind === "quarantine"
-                                  ? "PV carantină"
-                                  : "PV leasing";
-                    const tone =
-                      st === "signed"
-                        ? "rounded bg-emerald-950/60 px-2 py-0.5 text-[10px] text-emerald-200"
-                        : st === "voided"
-                          ? "rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400"
-                          : "rounded bg-amber-950/50 px-2 py-0.5 text-[10px] text-amber-200";
-                    const suffix = st === "signed" ? "✓" : st;
+          <>
+            <p className="text-[11px] text-zinc-500">
+              {staysTotal > STAYS_PAGE_SIZE
+                ? `Afișate ${staysSkip + 1}–${Math.min(staysSkip + stays.length, staysTotal)} din ${staysTotal}`
+                : `${stays.length} sejururi`}
+            </p>
+            <div className="-mx-1 overflow-x-auto rounded-xl border border-zinc-800">
+              <table className="min-w-full text-left text-xs">
+                <thead className="border-b border-zinc-800 bg-zinc-900/60 text-[10px] uppercase tracking-wide text-zinc-500">
+                  <tr>
+                    <th className="px-2 py-2 font-medium">Nr.</th>
+                    <th className="px-2 py-2 font-medium">Set</th>
+                    <th className="px-2 py-2 font-medium">Locație</th>
+                    <th className="px-2 py-2 font-medium">Check-in</th>
+                    <th className="px-2 py-2 font-medium">Tarif</th>
+                    <th className="px-2 py-2 font-medium">PV</th>
+                    <th className="px-2 py-2 w-8" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/80">
+                  {stays.map((s) => {
+                    const pvIn = protocolStatus(s, "check_in");
+                    const pvSigned =
+                      pvIn === "signed" ||
+                      protocolStatus(s, "check_out") === "signed";
                     return (
-                      <span key={kind} className={tone}>
-                        {label} {suffix}
-                      </span>
+                      <tr
+                        key={s.id}
+                        className={`cursor-pointer hover:bg-zinc-900/50 ${expandedInventarStayId === s.id ? "bg-zinc-900/40" : ""}`}
+                        onClick={() =>
+                          setExpandedInventarStayId((id) => (id === s.id ? null : s.id))
+                        }
+                      >
+                        <td className="px-2 py-2 font-medium text-zinc-100">
+                          {s.plate}
+                          {s.checkOutAt ? (
+                            <span className="ml-1 text-[10px] text-zinc-500">out</span>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-2 text-zinc-400">
+                          {s.setName?.trim() || vehicleTireSeasonLabel(s.season)}
+                          {s.itemCount != null ? ` · ${s.itemCount}b` : ""}
+                        </td>
+                        <td className="px-2 py-2 text-zinc-400">
+                          {s.bayCode
+                            ? `${s.bayCode}${s.binCode ? `/${s.binCode}` : ""}`
+                            : (s.locationCode ?? "—")}
+                        </td>
+                        <td className="px-2 py-2 text-zinc-400">{formatCheckIn(s.checkInAt)}</td>
+                        <td className="px-2 py-2 text-zinc-400">
+                          {s.feeCents != null
+                            ? `${(s.feeCents / 100).toLocaleString("ro-RO")} lei`
+                            : "—"}
+                        </td>
+                        <td className="px-2 py-2">
+                          <span
+                            className={
+                              pvSigned
+                                ? "text-emerald-400"
+                                : pvIn === "missing"
+                                  ? "text-zinc-600"
+                                  : "text-amber-300"
+                            }
+                          >
+                            {pvSigned ? "✓" : pvIn === "missing" ? "—" : "…"}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-zinc-500">
+                          {expandedInventarStayId === s.id ? "▲" : "▼"}
+                        </td>
+                      </tr>
                     );
                   })}
-                  {s.mountedAs ? (
-                    <span className="rounded bg-sky-950/50 px-2 py-0.5 text-[10px] text-sky-200">
-                      {tireMountedAsLabel(
-                        (s.mountedAs as TireMountedAs) === "tyre_only" ? "tyre_only" : "on_rim",
-                      )}
-                    </span>
-                  ) : null}
-                  {s.locationCode ? (
-                    <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
-                      {s.bayCode && s.binCode
-                        ? `Bay ${s.bayCode} · Bin ${s.binCode}`
-                        : `Raft ${s.locationCode}`}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-xs text-zinc-500">
-                  Check-in {formatCheckIn(s.checkInAt)}
-                  {s.checkOutAt ? ` · out ${formatCheckIn(s.checkOutAt)}` : ""}
-                  {s.contractRef ? ` · contract ${s.contractRef}` : ""}
-                  {s.feeCents != null
-                    ? ` · ${(s.feeCents / 100).toLocaleString("ro-RO")} lei`
-                    : ""}
-                </p>
+                </tbody>
+              </table>
+            </div>
+            {staysTotal > STAYS_PAGE_SIZE ? (
+              <div className="flex items-center justify-between gap-2 text-xs text-zinc-400">
+                <button
+                  type="button"
+                  disabled={staysSkip <= 0}
+                  onClick={() => setStaysSkip((v) => Math.max(0, v - STAYS_PAGE_SIZE))}
+                  className="rounded-lg border border-zinc-700 px-3 py-1.5 disabled:opacity-40"
+                >
+                  Înapoi
+                </button>
+                <span>
+                  Pagina {Math.floor(staysSkip / STAYS_PAGE_SIZE) + 1} /{" "}
+                  {Math.max(1, Math.ceil(staysTotal / STAYS_PAGE_SIZE))}
+                </span>
+                <button
+                  type="button"
+                  disabled={staysSkip + STAYS_PAGE_SIZE >= staysTotal}
+                  onClick={() => setStaysSkip((v) => v + STAYS_PAGE_SIZE)}
+                  className="rounded-lg border border-zinc-700 px-3 py-1.5 disabled:opacity-40"
+                >
+                  Înainte
+                </button>
+              </div>
+            ) : null}
+            {stays.map((s) =>
+              expandedInventarStayId !== s.id ? null : (
+                <div
+                  key={s.id}
+                  className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3"
+                >
                 {(s.items?.length ?? 0) > 0 ? (
                   <ul className="space-y-1.5 rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2">
                     {s.items!.map((it) => (
@@ -752,6 +951,34 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                   >
                     {expandedReceiptStayId === s.id ? "Ascunde bonul" : "Bon / print"}
                   </button>
+                  {s.costEntryId || (s.feeCents != null && s.feeCents > 0) ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy === `cost-${s.id}`}
+                        onClick={() => {
+                          if (s.costEntryId) void loadCostSummary(s.id);
+                          else void transformStayToCost(s.id);
+                        }}
+                        className="rounded-xl border border-amber-800/50 py-3 text-sm font-medium text-amber-100 hover:bg-amber-950/30 disabled:opacity-50"
+                      >
+                        {s.costEntryId ? "Sumar cost" : "Generează cost"}
+                      </button>
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInvoiceStayId((id) => (id === s.id ? null : s.id));
+                            setTransferStayId(null);
+                            setRelocateStayId(null);
+                          }}
+                          className="rounded-xl border border-amber-800/50 py-3 text-sm font-medium text-amber-100 hover:bg-amber-950/30"
+                        >
+                          {invoiceStayId === s.id ? "Ascunde factură" : "Factură pe cost"}
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
                   {canWrite ? (
                     <>
                       <button
@@ -820,11 +1047,30 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                           setRelocateStayId(s.id);
                           setRelocateBay(s.bayCode ?? "");
                           setRelocateBin(s.binCode ?? "");
+                          setTransferStayId(null);
+                          setInvoiceStayId(null);
                         }}
                         className="rounded-xl border border-zinc-600 py-3 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
                       >
                         Mută raft
                       </button>
+                      {(capability?.transferTargets?.length ?? 0) > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTransferStayId((id) => (id === s.id ? null : s.id));
+                            setTransferToSupplierId(capability?.transferTargets?.[0]?.id ?? "");
+                            setTransferBay(s.bayCode ?? "");
+                            setTransferBin(s.binCode ?? "");
+                            setTransferHandoffOnly(false);
+                            setRelocateStayId(null);
+                            setInvoiceStayId(null);
+                          }}
+                          className="rounded-xl border border-sky-800/50 py-3 text-sm font-medium text-sky-100 hover:bg-sky-950/30"
+                        >
+                          {transferStayId === s.id ? "Ascunde transfer" : "Transfer partener"}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         disabled={busy === s.id}
@@ -852,6 +1098,41 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                     </>
                   ) : null}
                 </div>
+                {costSummaryByStay[s.id] ? (
+                  <pre className="whitespace-pre-wrap rounded-lg border border-amber-900/40 bg-amber-950/20 p-2 text-[11px] text-amber-100/90">
+                    {costSummaryByStay[s.id]!.lines.join("\n")}
+                  </pre>
+                ) : null}
+                {invoiceStayId === s.id ? (
+                  <div className="grid gap-2 rounded-lg border border-amber-900/40 bg-amber-950/20 p-2 sm:grid-cols-2">
+                    <input
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      placeholder="Nr. factură"
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
+                    />
+                    <input
+                      type="date"
+                      value={invoiceDate}
+                      onChange={(e) => setInvoiceDate(e.target.value)}
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
+                    />
+                    <input
+                      value={invoiceAttachmentUrl}
+                      onChange={(e) => setInvoiceAttachmentUrl(e.target.value)}
+                      placeholder="URL atașament factură (opțional)"
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 sm:col-span-2"
+                    />
+                    <button
+                      type="button"
+                      disabled={busy === `cost-${s.id}`}
+                      onClick={() => void transformStayToCost(s.id, true)}
+                      className="rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 sm:col-span-2"
+                    >
+                      Salvează factură pe cost
+                    </button>
+                  </div>
+                ) : null}
                 {relocateStayId === s.id && !s.checkOutAt ? (
                   <div className="grid gap-2 rounded-lg border border-zinc-700 bg-zinc-950/50 p-2 sm:grid-cols-[1fr_1fr_auto]">
                     <input
@@ -876,12 +1157,64 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                     </button>
                   </div>
                 ) : null}
+                {transferStayId === s.id && !s.checkOutAt ? (
+                  <div className="grid gap-2 rounded-lg border border-sky-900/40 bg-sky-950/20 p-2 sm:grid-cols-2">
+                    <select
+                      value={transferToSupplierId}
+                      onChange={(e) => setTransferToSupplierId(e.target.value)}
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 sm:col-span-2"
+                    >
+                      <option value="">— furnizor destinație —</option>
+                      {(capability?.transferTargets ?? []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.legalName}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={transferBay}
+                      onChange={(e) => setTransferBay(e.target.value.toUpperCase())}
+                      placeholder="Bay destinație"
+                      disabled={transferHandoffOnly}
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                    />
+                    <input
+                      value={transferBin}
+                      onChange={(e) => setTransferBin(e.target.value.toUpperCase())}
+                      placeholder="Bin (opțional)"
+                      disabled={transferHandoffOnly}
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                    />
+                    <label className="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        checked={transferHandoffOnly}
+                        onChange={(e) => setTransferHandoffOnly(e.target.checked)}
+                      />
+                      Doar predare documentată (fără mutare raft la destinație)
+                    </label>
+                    <button
+                      type="button"
+                      disabled={busy === `transfer-${s.id}`}
+                      onClick={() => void transferStay(s.id)}
+                      className="rounded-lg bg-sky-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 sm:col-span-2"
+                    >
+                      Confirmă transfer
+                    </button>
+                  </div>
+                ) : null}
                 {expandedReceiptStayId === s.id ? (
                   <TireHotelReceiptPanel stay={s} supplierName={supplierName} />
                 ) : null}
-              </li>
-            ))}
-          </ul>
+                <TireMovementLedger
+                  apiBase="/api/partner/tire-hotel/ledger"
+                  mode="vehicle"
+                  entityId={s.vehicleId}
+                />
+              </div>
+              ),
+            )}
+          </>
         )}
       </section>
     </div>

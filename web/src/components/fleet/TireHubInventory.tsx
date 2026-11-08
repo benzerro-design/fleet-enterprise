@@ -12,6 +12,7 @@ import {
   type TireHubInventorySet,
   type TireHubPayload,
 } from "@/lib/tire-hub-api";
+import { TireMovementLedger } from "@/components/fleet/TireMovementLedger";
 import { formatClientDisplay } from "@/lib/client-display";
 import {
   tireMountedAsHint,
@@ -242,23 +243,33 @@ export function TireHubInventory({
           hotel, ce sezon e pe etichetă, apoi deschide fișa pe Roți pentru ce / cum / când.
         </p>
       </div>
-      {canWrite ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-zinc-500">
-            Operații set (admin/manager): adăugare set de schimb și casare din inventar.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setOpError(null);
-              setAddOpen(true);
-            }}
-            className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/50"
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-zinc-500">
+          {canWrite
+            ? "Operații set (admin/manager): adăugare set de schimb și casare din inventar."
+            : "Inventar seturi — export CSV pentru raportare / import ulterior."}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={`${fleetBrowserBase}/tires/hub/export`}
+            className="rounded-lg border border-zinc-700 bg-zinc-900/50 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
           >
-            Adaugă set
-          </button>
+            Export CSV
+          </a>
+          {canWrite ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpError(null);
+                setAddOpen(true);
+              }}
+              className="rounded-lg border border-emerald-700/60 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/50"
+            >
+              Adaugă set
+            </button>
+          ) : null}
         </div>
-      ) : null}
+      </div>
       {opError ? (
         <p className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
           {opError}
@@ -444,11 +455,24 @@ export function TireHubInventory({
                       <>
                         <p className="text-zinc-200">{r.supplierName ?? "Furnizor ?"}</p>
                         <p className="text-[11px] text-zinc-500">
-                          {r.locationCode ? `Raft ${r.locationCode}` : "Fără raft"}
-                          {r.checkInAt
-                            ? ` · din ${new Date(r.checkInAt).toLocaleDateString("ro-RO")}`
-                            : ""}
+                          {r.bayCode
+                            ? `Bay ${r.bayCode}${r.binCode ? ` · Bin ${r.binCode}` : ""}`
+                            : r.locationCode
+                              ? `Raft ${r.locationCode}`
+                              : "Fără locație"}
                         </p>
+                        <p className="text-[11px] text-zinc-500">
+                          {r.checkInAt
+                            ? `Check-in ${new Date(r.checkInAt).toLocaleDateString("ro-RO")}`
+                            : "—"}
+                          {r.feeCents != null ? ` · ${formatRon(r.feeCents)}` : ""}
+                          {r.sourceSystem ? ` · ${r.sourceSystem}` : ""}
+                        </p>
+                        {r.hrefTicket ? (
+                          <Link href={r.hrefTicket} className="text-[11px] text-sky-400 hover:underline">
+                            Tichet hotel
+                          </Link>
+                        ) : null}
                       </>
                     ) : (
                       "—"
@@ -708,8 +732,28 @@ export function TireHubInventory({
                   </div>
                   <div>
                     <dt className="text-xs text-zinc-500">Raft / locație</dt>
-                    <dd className="text-zinc-200">{drawer.locationCode ?? "—"}</dd>
+                    <dd className="text-zinc-200">
+                      {drawer.bayCode
+                        ? `Bay ${drawer.bayCode}${drawer.binCode ? ` / ${drawer.binCode}` : ""}`
+                        : (drawer.locationCode ?? "—")}
+                    </dd>
                   </div>
+                  {drawer.sourceSystem ? (
+                    <div>
+                      <dt className="text-xs text-zinc-500">Sursă check-in</dt>
+                      <dd className="text-zinc-200">{drawer.sourceSystem}</dd>
+                    </div>
+                  ) : null}
+                  {drawer.hrefTicket ? (
+                    <div>
+                      <dt className="text-xs text-zinc-500">Tichet</dt>
+                      <dd>
+                        <Link href={drawer.hrefTicket} className="text-sky-400 hover:underline">
+                          Deschide tichet
+                        </Link>
+                      </dd>
+                    </div>
+                  ) : null}
                   <div>
                     <dt className="text-xs text-zinc-500">Check-in</dt>
                     <dd className="text-zinc-200">
@@ -736,6 +780,10 @@ export function TireHubInventory({
             )}
 
             <div className="mt-6">
+              <TireMovementLedger mode="vehicle" entityId={drawer.vehicleId} defaultOpen={false} />
+            </div>
+
+            <div className="mt-4">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 Istoric recent
               </h4>

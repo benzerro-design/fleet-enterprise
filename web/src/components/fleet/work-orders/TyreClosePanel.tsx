@@ -60,6 +60,9 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
     rr: "",
   });
   const [inspectTread, setInspectTread] = useState("");
+  const [wearUniform, setWearUniform] = useState(false);
+  const [intakeCracks, setIntakeCracks] = useState(false);
+  const [includeRimService, setIncludeRimService] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seasonalSwapEnabled, setSeasonalSwapEnabled] = useState(
@@ -164,6 +167,13 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
     if (isStorageOnly) setStoreAt("at_supplier_hotel");
   }, [isStorageOnly]);
 
+  function buildIntakeInspection() {
+    const inspection: Record<string, boolean> = {};
+    if (wearUniform) inspection.wearUniform = true;
+    if (intakeCracks) inspection.cracks = true;
+    return Object.keys(inspection).length ? inspection : undefined;
+  }
+
   function buildDemountReadings() {
     const demountReadings = POSITIONS.map((position) => {
       const raw = demountTreads[position].trim();
@@ -186,6 +196,8 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
         throw new Error("Odometrul (km) este obligatoriu");
       }
       const body: Record<string, unknown> = { intent, odometerKm: Math.round(km) };
+      if (includeRimService) body.includeRimService = true;
+      const intakeInspection = buildIntakeInspection();
       if (isSeasonal) {
         if (!demountSetId || !mountSetId) {
           throw new Error("Selectează set demontat și set montat");
@@ -193,6 +205,9 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
         const demountReadings = buildDemountReadings();
         if (demountReadings.length === 0) {
           throw new Error("Completează profilul (mm) pe pozițiile demontate");
+        }
+        if (storeAt === "at_supplier_hotel" && !locationCode.trim()) {
+          throw new Error("Cod locație raft (bay) e obligatoriu pentru hotel");
         }
         body.seasonalSwap = {
           demountSetId,
@@ -202,11 +217,18 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
           ...(storeAt === "at_supplier_hotel" && hotelSupplierId
             ? { hotelSupplierId }
             : {}),
+          ...(storeAt === "at_supplier_hotel" && locationCode.trim()
+            ? { locationCode: locationCode.trim().toUpperCase() }
+            : {}),
+          ...(intakeInspection ? { intakeInspection } : {}),
         };
       } else if (isStorageOnly) {
         if (!storageSetId) throw new Error("Selectează setul de depozitat");
         if (storeAt === "at_supplier_hotel" && !hotelSupplierId) {
           throw new Error("Selectează depozitarul hotel");
+        }
+        if (storeAt === "at_supplier_hotel" && !locationCode.trim()) {
+          throw new Error("Cod locație raft (bay) e obligatoriu pentru hotel");
         }
         const selected = sets.find((s) => s.id === storageSetId);
         const demountReadings = buildDemountReadings();
@@ -219,6 +241,7 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
           ...(demountReadings.length ? { demountReadings } : {}),
           ...(storeAt === "at_supplier_hotel" && hotelSupplierId ? { hotelSupplierId } : {}),
           ...(locationCode.trim() ? { locationCode: locationCode.trim().toUpperCase() } : {}),
+          ...(intakeInspection ? { intakeInspection } : {}),
         };
       } else if (isPuncture) {
         if (!newDot.trim()) throw new Error("DOT anvelopă nouă este obligatoriu");
@@ -364,27 +387,40 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                 </select>
               </label>
               {storeAt === "at_supplier_hotel" ? (
-                <label className="text-zinc-400 sm:col-span-2">
-                  Depozitar (poate fi ≠ service-ul de pe comandă)
-                  <select
-                    value={hotelSupplierId}
-                    disabled={!canWrite || pending}
-                    onChange={(e) => setHotelSupplierId(e.target.value)}
-                    className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
-                  >
-                    {wo.supplierId &&
-                    !hotelSuppliers.some((s) => s.id === wo.supplierId) ? (
-                      <option value={wo.supplierId}>
-                        Furnizor comandă (verifică capacitate hotel)
-                      </option>
-                    ) : null}
-                    {hotelSuppliers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <>
+                  <label className="text-zinc-400 sm:col-span-2">
+                    Depozitar (poate fi ≠ service-ul de pe comandă)
+                    <select
+                      value={hotelSupplierId}
+                      disabled={!canWrite || pending}
+                      onChange={(e) => setHotelSupplierId(e.target.value)}
+                      className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+                    >
+                      {wo.supplierId &&
+                      !hotelSuppliers.some((s) => s.id === wo.supplierId) ? (
+                        <option value={wo.supplierId}>
+                          Furnizor comandă (verifică capacitate hotel)
+                        </option>
+                      ) : null}
+                      {hotelSuppliers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-zinc-400 sm:col-span-2">
+                    Cod locație raft / bay <span className="text-amber-400">*</span>
+                    <input
+                      value={locationCode}
+                      disabled={!canWrite || pending}
+                      onChange={(e) => setLocationCode(e.target.value.toUpperCase())}
+                      className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+                      placeholder="ex. A-12"
+                      required
+                    />
+                  </label>
+                </>
               ) : null}
               <div className="sm:col-span-2">
                 <p className="mb-1 text-zinc-400">
@@ -469,13 +505,15 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
                     </select>
                   </label>
                   <label className="text-zinc-400 sm:col-span-2">
-                    Cod locație raft (opțional)
+                    Cod locație raft / bay{" "}
+                    <span className="text-amber-400">*</span>
                     <input
                       value={locationCode}
                       disabled={!canWrite || pending}
                       onChange={(e) => setLocationCode(e.target.value.toUpperCase())}
                       className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
                       placeholder="ex. A-12"
+                      required
                     />
                   </label>
                 </>
@@ -559,6 +597,39 @@ export function TyreClosePanel({ wo, canWrite }: Props) {
               />
             </label>
           ) : null}
+
+          {isSeasonal || isStorageOnly ? (
+            <div className="flex flex-wrap gap-4 text-zinc-400">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={wearUniform}
+                  disabled={!canWrite || pending}
+                  onChange={(e) => setWearUniform(e.target.checked)}
+                />
+                Uzură uniformă
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={intakeCracks}
+                  disabled={!canWrite || pending}
+                  onChange={(e) => setIntakeCracks(e.target.checked)}
+                />
+                Fisuri vizibile
+              </label>
+            </div>
+          ) : null}
+
+          <label className="flex items-center gap-2 text-zinc-400">
+            <input
+              type="checkbox"
+              checked={includeRimService}
+              disabled={!canWrite || pending}
+              onChange={(e) => setIncludeRimService(e.target.checked)}
+            />
+            Include service jante (notă pe comandă)
+          </label>
 
           {error ? <p className="text-amber-300">{error}</p> : null}
 

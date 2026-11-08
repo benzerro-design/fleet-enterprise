@@ -22,6 +22,11 @@ export const PARTNER_NAV_ITEMS: PartnerNavItem[] = [
     activePrefixes: ["/fleet/partner/appointments"],
   },
   {
+    label: "Anvelope",
+    href: "/fleet/partner/tire-requests",
+    activePrefixes: ["/fleet/partner/tire-requests"],
+  },
+  {
     label: "Hotel anvelope",
     href: "/fleet/partner/tire-hotel",
     activePrefixes: ["/fleet/partner/tire-hotel"],
@@ -53,7 +58,7 @@ export const PARTNER_MOBILE_TAB_ITEMS: PartnerNavItem[] = [
   PARTNER_NAV_ITEMS[0],
   PARTNER_NAV_ITEMS[1],
   PARTNER_NAV_ITEMS[2],
-  /** Tire Hotel (Build #1 custody) — Scorecard rămâne în sidebar. */
+  /** Solicitări anvelope — Hotel rămâne în sidebar. */
   PARTNER_NAV_ITEMS[3],
 ];
 

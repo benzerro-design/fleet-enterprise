@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { OPS_INPUT_CLASS } from "@/components/fleet/ops-form-primitives";
+import { VehicleDriverTireCustodyPanel } from "@/components/fleet/VehicleDriverTireCustodyPanel";
 import { VehicleTireSetCards } from "@/components/fleet/VehicleTireSetCards";
 import { fleetBrowserBase, fleetJsonHeaders } from "@/lib/fleet-api";
 import {
@@ -440,25 +441,41 @@ export function VehicleWheelsTab({
 
   return (
     <div className="space-y-4">
+      {driverPortal ? <VehicleDriverTireCustodyPanel vehicleId={vehicleId} /> : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm text-zinc-200">
-            Anvelope pe acest vehicul: <span className="font-medium">seturi</span> (ce ai alocat —
-            sezon, unde sunt, brand) + <span className="font-medium">poziții</span> (doar setul
-            montat, pe axe).
+            {driverPortal ? (
+              <>
+                Seturile tale: <span className="font-medium">sezon</span>,{" "}
+                <span className="font-medium">unde sunt</span> și{" "}
+                <span className="font-medium">câte anvelope</span>. Pozițiile montate = ce e pe
+                roți acum.
+              </>
+            ) : (
+              <>
+                Anvelope pe acest vehicul: <span className="font-medium">seturi</span> (ce ai
+                alocat — sezon, unde sunt, brand) + <span className="font-medium">poziții</span>{" "}
+                (doar setul montat, pe axe).
+              </>
+            )}
           </p>
-          <p className="text-xs text-zinc-500">
-            Inventarul din Anvelope arată aceleași seturi (același ID). Hotel / casare / sezon se
-            gestionează din fișa setului. Pozițiile de mai jos = detalii pe roata montată.
-          </p>
+          {!driverPortal ? (
+            <p className="text-xs text-zinc-500">
+              Inventarul din Anvelope arată aceleași seturi (același ID). Hotel / casare / sezon se
+              gestionează din fișa setului. Pozițiile de mai jos = detalii pe roata montată.
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
-          <Link
-            href={inventarHref}
-            className="rounded-lg border border-violet-700/50 bg-violet-950/30 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/50"
-          >
-            Inventar anvelope →
-          </Link>
+          {!driverPortal ? (
+            <Link
+              href={inventarHref}
+              className="rounded-lg border border-violet-700/50 bg-violet-950/30 px-3 py-1.5 text-xs text-violet-100 hover:bg-violet-950/50"
+            >
+              Inventar anvelope →
+            </Link>
+          ) : null}
           {canMutateSets && hasSeasonMismatch ? (
             <button
               type="button"
@@ -484,7 +501,9 @@ export function VehicleWheelsTab({
           <div>
             <h3 className="text-sm font-medium text-zinc-200">Seturi alocate</h3>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              Deschide fișa unui set pentru sezon, locație, poze, hotel, casare.
+              {driverPortal
+                ? "Vizualizare simplă — sezon, locație și număr anvelope."
+                : "Deschide fișa unui set pentru sezon, locație, poze, hotel, casare."}
             </p>
           </div>
           {canMutateSets ? (

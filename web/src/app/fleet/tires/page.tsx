@@ -63,14 +63,13 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
         : undefined;
   const rawSetId =
     typeof sp?.setId === "string" ? sp.setId : Array.isArray(sp?.setId) ? sp.setId[0] : undefined;
-  const tab: "hub" | "inventar" =
-    rawTab === "hub" || rawTab === "inventar"
+  const tab: "hub" | "inventar" = driverPortal
+    ? "inventar"
+    : rawTab === "hub" || rawTab === "inventar"
       ? rawTab
       : rawVehicleId || rawSetId
         ? "inventar"
-        : driverPortal
-          ? "inventar"
-          : "hub";
+        : "hub";
 
   const hub = await loadHub();
 
@@ -104,16 +103,18 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
               </div>
             ) : null}
             <nav className="mt-6 flex gap-4 border-b border-zinc-800 text-sm" aria-label="Secțiuni anvelope">
-              <Link
-                href={tabHref("hub")}
-                className={
-                  tab === "hub"
-                    ? "border-b-2 border-emerald-500 pb-2 font-medium text-zinc-100"
-                    : "pb-2 text-zinc-500 hover:text-zinc-300"
-                }
-              >
-                Hub
-              </Link>
+              {!driverPortal ? (
+                <Link
+                  href={tabHref("hub")}
+                  className={
+                    tab === "hub"
+                      ? "border-b-2 border-emerald-500 pb-2 font-medium text-zinc-100"
+                      : "pb-2 text-zinc-500 hover:text-zinc-300"
+                  }
+                >
+                  Hub
+                </Link>
+              ) : null}
               <Link
                 href={tabHref("inventar")}
                 className={

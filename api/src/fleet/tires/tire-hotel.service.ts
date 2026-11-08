@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma, VehicleTireSeason } from '@prisma/client';
+import {
+  CrmTicketEventKind,
+  CrmTicketLinkEntityType,
+  CrmTicketStatus,
+  type Prisma,
+  type VehicleTireSeason,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TireDomainService } from './tire-domain.service';
 import { tireSetQrPayload } from './tire-domain.types';
@@ -12,6 +18,14 @@ import {
 } from './tire-storage-fee';
 import { resolveStayLocationInput, parseStayLocation } from './tire-stay-location';
 import { parseTireSettings } from '../../tenant/tire-settings';
+import { acquireTireSetOpsLock, releaseTireSetOpsLock } from './tire-ops-lock';
+import { ensureTireStorageStayCostTx } from './tire-hotel-stay-cost';
+import { emitTireStayWebhook } from './tire-hotel-webhooks';
+import { supplierHasTireStorage } from '../../suppliers/supplier-tire-capability';
+import {
+  type TireIntakeInspectionInput,
+  serializeIntakeTreadNotes,
+} from './tire-intake-inspection';
 
 export { tireSetQrPayload };
 
@@ -26,6 +40,7 @@ export type TireHotelCheckInParams = {
   binCode?: string | null;
   intakePhotos?: Prisma.InputJsonValue;
   intakeTreadNotes?: string | null;
+  intakeInspection?: TireIntakeInspectionInput;
   feeCents?: number | null;
   contractRef?: string | null;
   actorUserId?: string | null;
@@ -33,6 +48,8 @@ export type TireHotelCheckInParams = {
   vehicleIdForEvent?: string | null;
   sourceSystem?: string | null;
   externalId?: string | null;
+  /** CRM ticket that initiated hotel check-in (optional). */
+  ticketId?: string | null;
 };
 
 export type TireHotelCheckOutParams = {
@@ -42,6 +59,22 @@ export type TireHotelCheckOutParams = {
   actorUserId?: string | null;
   /** Default at_client. */
   releaseKind?: TireHotelReleaseKind;
+  accountingNote?: string | null;
+  /** When false, skip auto CostEntry (manual transform-stay-to-cost). */
+  createCost?: boolean;
+};
+
+export type TireHotelTransferParams = {
+  tenantId: string;
+  fromSupplierId: string;
+  toSupplierId: string;
+  stayId: string;
+  locationCode?: string | null;
+  bayCode?: string | null;
+  binCode?: string | null;
+  actorUserId?: string | null;
+  /** Document handoff only — do not reassign stay supplierId. */
+  handoffOnly?: boolean;
 };
 
 export type TireHotelRelocateParams = {
@@ -62,7 +95,18 @@ export class TireHotelService {
   ) {}
 
   async checkIn(params: TireHotelCheckInParams) {
-    return this.prisma.$transaction(async (tx) => this.checkInTx(tx, params));
+    const row = await this.prisma.$transaction(async (tx) => this.checkInTx(tx, params));
+    void emitTireStayWebhook({
+      event: 'tire.stay.checked_in',
+      tenantId: params.tenantId,
+      stayId: row.id,
+      setId: row.setId,
+      supplierId: params.supplierId,
+      vehicleId: row.vehicleId ?? null,
+      at: row.checkInAt,
+      feeCents: row.feeCents,
+    });
+    return row;
   }
 
   async checkInTx(tx: Prisma.TransactionClient, params: TireHotelCheckInParams) {
@@ -75,6 +119,12 @@ export class TireHotelService {
     if (!locationCode) {
       throw new BadRequestException('locationCode or bayCode is required');
     }
+
+    await acquireTireSetOpsLock(tx, {
+      tenantId: params.tenantId,
+      setId: params.setId,
+      actorUserId: params.actorUserId,
+    });
 
     const set = await tx.tireSet.findFirst({
       where: { id: params.setId, tenantId: params.tenantId, archivedAt: null },
@@ -190,6 +240,11 @@ export class TireHotelService {
         })?.feeCents ?? null;
     }
 
+    const intakeTreadNotes =
+      serializeIntakeTreadNotes(params.intakeInspection ?? {}, {
+        legacyText: params.intakeTreadNotes,
+      }) ?? (params.intakeTreadNotes?.trim() || undefined);
+
     const stay = await tx.tireStorageStay.create({
       data: {
         tenantId: params.tenantId,
@@ -198,11 +253,12 @@ export class TireHotelService {
         locationCode,
         checkInAt: now,
         intakePhotos: params.intakePhotos ?? undefined,
-        intakeTreadNotes: params.intakeTreadNotes?.trim() || undefined,
+        intakeTreadNotes,
         feeCents: feeCents ?? undefined,
         contractRef: params.contractRef?.trim() || undefined,
         externalId: params.externalId?.trim() || undefined,
         sourceSystem: params.sourceSystem?.trim() || undefined,
+        workOrderId: params.workOrderId?.trim() || undefined,
       },
     });
 
@@ -231,6 +287,59 @@ export class TireHotelService {
       await this.tires.syncFitmentProjectionTx(tx, params.tenantId, vehicleIdForEvent);
     }
 
+    const ticketId = params.ticketId?.trim() || null;
+    if (ticketId) {
+      const ticket = await tx.crmTicket.findFirst({
+        where: { id: ticketId, tenantId: params.tenantId },
+        select: { id: true, status: true },
+      });
+      if (ticket) {
+        const existingLink = await tx.crmTicketLink.findFirst({
+          where: {
+            tenantId: params.tenantId,
+            ticketId: ticket.id,
+            entityType: CrmTicketLinkEntityType.tire_storage_stay,
+            entityId: stay.id,
+          },
+          select: { id: true },
+        });
+        if (!existingLink) {
+          await tx.crmTicketLink.create({
+            data: {
+              tenantId: params.tenantId,
+              ticketId: ticket.id,
+              entityType: CrmTicketLinkEntityType.tire_storage_stay,
+              entityId: stay.id,
+            },
+          });
+        }
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: params.tenantId,
+            ticketId: ticket.id,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Check-in hotel anvelope (stay ${stay.id}).`,
+            payload: {
+              storageStayId: stay.id,
+              setId: params.setId,
+              supplierId: params.supplierId,
+              locationCode,
+              sourceSystem: params.sourceSystem ?? null,
+            },
+            actorUserId: params.actorUserId ?? null,
+          },
+        });
+        if (ticket.status === CrmTicketStatus.open) {
+          await tx.crmTicket.update({
+            where: { id: ticket.id },
+            data: { status: CrmTicketStatus.in_progress },
+          });
+        }
+      }
+    }
+
+    await releaseTireSetOpsLock(tx, { tenantId: params.tenantId, setId: params.setId });
+
     return this.stayToDto(stay, set);
   }
 
@@ -246,11 +355,16 @@ export class TireHotelService {
       sourceSystem?: string | null;
       /** Profiluri demontate din tyre-close (text pentru partener hotel). */
       intakeTreadNotes?: string | null;
+      intakeInspection?: TireIntakeInspectionInput;
       feeCents?: number | null;
     },
   ): Promise<void> {
     const locationCode = params.locationCode?.trim() || undefined;
-    const intakeTreadNotes = params.intakeTreadNotes?.trim() || undefined;
+    const intakeTreadNotes =
+      serializeIntakeTreadNotes(params.intakeInspection ?? {}, {
+        legacyText: params.intakeTreadNotes,
+      }) ?? (params.intakeTreadNotes?.trim() || undefined);
+    const workOrderId = params.workOrderId?.trim() || undefined;
 
     const openStay = await tx.tireStorageStay.findFirst({
       where: {
@@ -272,7 +386,12 @@ export class TireHotelService {
         const hotelName = openStay.supplier.legalName?.trim() || openStay.supplierId;
         throw new BadRequestException(`Tire set is already in storage at ${hotelName}`);
       }
-      const patch: { locationCode?: string; intakeTreadNotes?: string; feeCents?: number } = {};
+      const patch: {
+        locationCode?: string;
+        intakeTreadNotes?: string;
+        feeCents?: number;
+        workOrderId?: string;
+      } = {};
       if (locationCode && openStay.locationCode !== locationCode) {
         patch.locationCode = locationCode;
       }
@@ -281,6 +400,9 @@ export class TireHotelService {
       }
       if (params.feeCents != null && openStay.feeCents == null) {
         patch.feeCents = params.feeCents;
+      }
+      if (workOrderId) {
+        patch.workOrderId = workOrderId;
       }
       if (Object.keys(patch).length > 0) {
         await tx.tireStorageStay.update({
@@ -331,6 +453,7 @@ export class TireHotelService {
         intakeTreadNotes,
         feeCents: feeCents ?? undefined,
         sourceSystem: params.sourceSystem?.trim() || 'tyre_close_seasonal',
+        workOrderId,
         checkInAt: new Date(),
       },
     });
@@ -526,6 +649,12 @@ export class TireHotelService {
     });
     if (!stay) throw new NotFoundException('Active storage stay not found');
 
+    await acquireTireSetOpsLock(tx, {
+      tenantId: params.tenantId,
+      setId: stay.setId,
+      actorUserId: params.actorUserId,
+    });
+
     const fromCode = stay.locationCode;
     const updated = await tx.tireStorageStay.update({
       where: { id: stay.id },
@@ -552,11 +681,26 @@ export class TireHotelService {
       });
     }
 
+    await releaseTireSetOpsLock(tx, { tenantId: params.tenantId, setId: stay.setId });
+
     return this.stayToDto(updated, stay.set);
   }
 
   async checkOut(params: TireHotelCheckOutParams) {
-    return this.prisma.$transaction(async (tx) => this.checkOutTx(tx, params));
+    const row = await this.prisma.$transaction(async (tx) => this.checkOutTx(tx, params));
+    void emitTireStayWebhook({
+      event: 'tire.stay.checked_out',
+      tenantId: params.tenantId,
+      stayId: row.id,
+      setId: row.setId,
+      supplierId: params.supplierId,
+      vehicleId: row.vehicleId ?? null,
+      at: row.checkOutAt ?? new Date().toISOString(),
+      feeCents: row.feeCents,
+      releaseKind: params.releaseKind ?? 'at_client',
+      costEntryId: row.costEntryId ?? null,
+    });
+    return row;
   }
 
   async checkOutTx(tx: Prisma.TransactionClient, params: TireHotelCheckOutParams) {
@@ -597,6 +741,12 @@ export class TireHotelService {
       },
     });
     if (!stay) throw new NotFoundException('Active storage stay not found');
+
+    await acquireTireSetOpsLock(tx, {
+      tenantId: params.tenantId,
+      setId: stay.setId,
+      actorUserId: params.actorUserId,
+    });
 
     const now = new Date();
     const vehicleId = stay.set.vehicleId;
@@ -639,16 +789,216 @@ export class TireHotelService {
     });
     if (breakdown) feeCents = breakdown.feeCents;
 
+    if (releaseKind === 'scrap') {
+      await tx.tireSet.update({
+        where: { id: stay.setId },
+        data: { archivedAt: now },
+      });
+    }
+
+    let costEntryId: string | null = null;
+    if (params.createCost !== false) {
+      costEntryId = await ensureTireStorageStayCostTx(tx, {
+        tenantId: params.tenantId,
+        stayId: stay.id,
+        vehicleId,
+        setId: stay.setId,
+        supplierId: params.supplierId,
+        feeCents,
+        plate: stay.set.vehicle.registrationNumber,
+        checkOutAt: now,
+      });
+    }
+
+    const accountingNote = params.accountingNote?.trim() || undefined;
     const updated = await tx.tireStorageStay.update({
       where: { id: stay.id },
-      data: { checkOutAt: now, feeCents: feeCents ?? undefined },
+      data: {
+        checkOutAt: now,
+        feeCents: feeCents ?? undefined,
+        accountingNote,
+      },
     });
 
     if (vehicleId) {
       await this.tires.syncFitmentProjectionTx(tx, params.tenantId, vehicleId);
     }
 
-    return this.stayToDto(updated, stay.set);
+    await releaseTireSetOpsLock(tx, { tenantId: params.tenantId, setId: stay.setId });
+
+    const dto = this.stayToDto(updated, stay.set);
+    return { ...dto, costEntryId, accountingNote: updated.accountingNote ?? null };
+  }
+
+  async transformStayToCostTx(
+    tx: Prisma.TransactionClient,
+    params: {
+      tenantId: string;
+      supplierId: string;
+      stayId: string;
+      invoiceNumber?: string | null;
+      invoiceDate?: Date | null;
+      invoiceAttachmentUrl?: string | null;
+    },
+  ): Promise<{ costEntryId: string | null; feeCents: number | null }> {
+    const stay = await tx.tireStorageStay.findFirst({
+      where: {
+        id: params.stayId,
+        tenantId: params.tenantId,
+        supplierId: params.supplierId,
+      },
+      include: {
+        set: {
+          select: {
+            id: true,
+            vehicleId: true,
+            mountedAs: true,
+            vehicle: { select: { registrationNumber: true, clientId: true } },
+            items: { select: { asset: { select: { size: true } } } },
+          },
+        },
+      },
+    });
+    if (!stay) throw new NotFoundException('Storage stay not found');
+
+    let feeCents = stay.feeCents;
+    if (stay.checkOutAt) {
+      const unitMonthly = await this.resolveFeeCentsForSetTx(tx, {
+        tenantId: params.tenantId,
+        supplierId: params.supplierId,
+        clientId: stay.set.vehicle.clientId,
+        mountedAs: stay.set.mountedAs ?? null,
+        sizes: stay.set.items.map((i) => i.asset.size),
+      });
+      const minMonths = await this.resolveHotelMinMonthsTx(tx, params.tenantId);
+      const breakdown = computeStorageStayFeeCents({
+        unitMonthlyPerPieceCents: unitMonthly,
+        pieceCount: stay.set.items.length,
+        checkInAt: stay.checkInAt,
+        billThroughAt: stay.checkOutAt,
+        minMonths,
+      });
+      if (breakdown) feeCents = breakdown.feeCents;
+    }
+
+    const costEntryId = await ensureTireStorageStayCostTx(tx, {
+      tenantId: params.tenantId,
+      stayId: stay.id,
+      vehicleId: stay.set.vehicleId,
+      setId: stay.set.id,
+      supplierId: params.supplierId,
+      feeCents,
+      plate: stay.set.vehicle.registrationNumber,
+      checkOutAt: stay.checkOutAt,
+      invoice: {
+        invoiceNumber: params.invoiceNumber,
+        invoiceDate: params.invoiceDate,
+        invoiceAttachmentUrl: params.invoiceAttachmentUrl,
+      },
+    });
+    return { costEntryId, feeCents };
+  }
+
+  async transferBetweenSuppliers(params: TireHotelTransferParams) {
+    return this.prisma.$transaction(async (tx) => this.transferBetweenSuppliersTx(tx, params));
+  }
+
+  async transferBetweenSuppliersTx(
+    tx: Prisma.TransactionClient,
+    params: TireHotelTransferParams,
+  ) {
+    if (params.fromSupplierId === params.toSupplierId) {
+      throw new BadRequestException('fromSupplierId and toSupplierId must differ');
+    }
+
+    const loc = resolveStayLocationInput({
+      locationCode: params.locationCode,
+      bayCode: params.bayCode,
+      binCode: params.binCode,
+    });
+
+    const stay = await tx.tireStorageStay.findFirst({
+      where: {
+        id: params.stayId,
+        tenantId: params.tenantId,
+        supplierId: params.fromSupplierId,
+        checkOutAt: null,
+      },
+      include: {
+        set: {
+          include: {
+            vehicle: { select: { id: true, registrationNumber: true } },
+            items: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                asset: {
+                  select: {
+                    id: true,
+                    brand: true,
+                    model: true,
+                    size: true,
+                    dot: true,
+                    treadMm: true,
+                    serialOrQr: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!stay) throw new NotFoundException('Active storage stay not found at source supplier');
+
+    const targetHasStorage =
+      !params.handoffOnly &&
+      (await supplierHasTireStorage(tx, params.tenantId, params.toSupplierId));
+
+    await acquireTireSetOpsLock(tx, {
+      tenantId: params.tenantId,
+      setId: stay.setId,
+      actorUserId: params.actorUserId,
+    });
+
+    const movedSupplier = targetHasStorage;
+    const nextLocation = loc.locationCode ?? stay.locationCode;
+    const updated = await tx.tireStorageStay.update({
+      where: { id: stay.id },
+      data: {
+        ...(movedSupplier ? { supplierId: params.toSupplierId } : {}),
+        ...(nextLocation ? { locationCode: nextLocation } : {}),
+      },
+    });
+
+    const supplierIdForPlacement = movedSupplier ? params.toSupplierId : params.fromSupplierId;
+    for (const item of stay.set.items) {
+      await this.tires.placeAssetTx(tx, {
+        tenantId: params.tenantId,
+        assetId: item.assetId,
+        kind: 'at_supplier_hotel',
+        supplierId: supplierIdForPlacement,
+        locationCode: nextLocation ?? undefined,
+        setId: stay.setId,
+        eventType: 'transfer',
+        vehicleIdForEvent: stay.set.vehicleId,
+        actorUserId: params.actorUserId ?? undefined,
+        payload: {
+          source: movedSupplier ? 'tire_hotel_supplier_transfer' : 'tire_hotel_handoff_documented',
+          storageStayId: stay.id,
+          fromSupplierId: params.fromSupplierId,
+          toSupplierId: params.toSupplierId,
+          handoffOnly: !movedSupplier,
+        },
+      });
+    }
+
+    await releaseTireSetOpsLock(tx, { tenantId: params.tenantId, setId: stay.setId });
+
+    return {
+      stay: this.stayToDto(updated, stay.set),
+      transferred: movedSupplier,
+      handoffOnly: !movedSupplier,
+    };
   }
 
   stayToDto(
@@ -663,6 +1013,7 @@ export class TireHotelService {
       intakeTreadNotes: string | null;
       feeCents: number | null;
       contractRef: string | null;
+      accountingNote?: string | null;
     },
     set: {
       season: VehicleTireSeason;
@@ -705,6 +1056,7 @@ export class TireHotelService {
       intakeTreadNotes: stay.intakeTreadNotes,
       feeCents: stay.feeCents,
       contractRef: stay.contractRef,
+      accountingNote: stay.accountingNote ?? null,
       plate: set.vehicle.registrationNumber,
       vehicleId: set.vehicle.id,
       season: set.season,

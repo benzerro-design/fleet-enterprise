@@ -19,7 +19,7 @@ type HotelSupplier = { id: string; legalName: string };
 type Props = {
   vehicleId: string;
   write: boolean;
-  /** Șofer / viewer: doar citire + link inventar. */
+  /** Portal șofer: doar sezon / locație / bucăți (fără Hub / hotel). */
   driverPortal?: boolean;
   /** Deep-link din Hub: ?tab=wheels&setId=… */
   initialSetId?: string | null;
@@ -236,6 +236,16 @@ export function VehicleTireSetCards({
     }
   }
 
+  const locForSummary = (s: TireSetSummary) =>
+    tireSetLocationLabel(
+      s.location ??
+        (s.isMounted
+          ? "on_vehicle"
+          : s.hotel?.atSupplierHotel
+            ? "at_supplier_hotel"
+            : "other"),
+    );
+
   async function hotelCheckIn(setId: string) {
     if (!canMutate || !hotelSupplierId || !hotelBay.trim()) return;
     if (!hotelSuppliers.some((h) => h.id === hotelSupplierId)) {
@@ -279,6 +289,35 @@ export function VehicleTireSetCards({
     } finally {
       setPending(null);
     }
+  }
+
+  if (driverPortal) {
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-zinc-500">
+          {sets.length} set{sets.length === 1 ? "" : "uri"} pe vehicul.
+        </p>
+        {sets.length === 0 ? (
+          <p className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-3 text-xs text-zinc-500">
+            Niciun set alocat încă.
+          </p>
+        ) : (
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {sets.map((s) => (
+              <li
+                key={s.id}
+                className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2.5 text-xs"
+              >
+                <p className="font-medium text-zinc-100">{vehicleTireSeasonLabel(s.season)}</p>
+                <p className="mt-1 text-zinc-400">
+                  {locForSummary(s)} · {s.itemCount} buc
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
   }
 
   return (

@@ -123,7 +123,10 @@ export function TicketHotelPanel({ ticketId, vehicleId, canWrite, plate }: Props
         throw new Error(j.message ?? `HTTP ${res.status}`);
       }
       setSets((await res.json()) as TireSetSummary[]);
-      setInfo("Setul a fost cazat la hotel. Poți închide tichetul din Acțiuni când e gata.");
+      setInfo(
+        "Setul a fost cazat la hotel. Tichetul trece în «În lucru». Deschide Acțiuni → Rezolvă când e gata.",
+      );
+      window.dispatchEvent(new CustomEvent("fleet-ticket-tab", { detail: "actions" }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Check-in hotel eșuat");
     } finally {
@@ -229,10 +232,22 @@ export function TicketHotelPanel({ ticketId, vehicleId, canWrite, plate }: Props
           )}
         </div>
       ) : selected?.hotel?.atSupplierHotel ? (
-        <p className="text-xs text-violet-200/90">
-          Setul e deja la hotel
-          {selected.hotel.supplierName ? ` (${selected.hotel.supplierName})` : ""}.
-        </p>
+        <div className="space-y-2">
+          <p className="text-xs text-violet-200/90">
+            Setul e deja la hotel
+            {selected.hotel.supplierName ? ` (${selected.hotel.supplierName})` : ""}
+            {selected.hotel.stayId ? ` · stay ${selected.hotel.stayId.slice(0, 8)}…` : ""}.
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("fleet-ticket-tab", { detail: "actions" }))
+            }
+            className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/50"
+          >
+            Deschide Acțiuni → Rezolvă tichetul
+          </button>
+        </div>
       ) : selected?.isMounted ? (
         <p className="text-xs text-amber-200/90">
           Setul e montat pe mașină — demontează întâi (WO anvelope) sau alege setul din depozit.

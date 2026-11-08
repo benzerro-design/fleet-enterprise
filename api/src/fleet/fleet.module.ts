@@ -16,6 +16,7 @@ import { TireHubService } from './tires/tire-hub.service';
 import { TireCustodyProtocolService } from './tires/tire-custody-protocol.service';
 import { TireCustodyPublicController } from './tires/tire-custody-public.controller';
 import { TireHotelService } from './tires/tire-hotel.service';
+import { TireLedgerService } from './tires/tire-ledger.service';
 import { VehicleWheelsService } from './vehicle-wheels.service';
 
 @Module({
@@ -28,12 +29,19 @@ import { VehicleWheelsService } from './vehicle-wheels.service';
     TireDomainService,
     TireHubService,
     TireHotelService,
+    TireLedgerService,
     TireCustodyProtocolService,
     VehicleWheelsService,
     DashboardService,
     VehicleFormBriefService,
     CivOcrService,
   ],
-  exports: [CivOcrService, TireDomainService, TireHotelService, TireCustodyProtocolService],
+  exports: [
+    CivOcrService,
+    TireDomainService,
+    TireHotelService,
+    TireLedgerService,
+    TireCustodyProtocolService,
+  ],
 })
 export class FleetModule {}

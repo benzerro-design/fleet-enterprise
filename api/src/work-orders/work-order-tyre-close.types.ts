@@ -1,4 +1,5 @@
 import type { VehicleWheelPosition } from '@prisma/client';
+import type { TireIntakeInspectionInput } from '../fleet/tires/tire-intake-inspection';
 
 export const TYRE_WORK_INTENTS = [
   'purchase',
@@ -50,12 +51,15 @@ export type TyreCloseSeasonalSwap = {
    * Dacă lipsește la storeAt=hotel → se folosește supplierId-ul comenzii.
    */
   hotelSupplierId?: string | null;
+  /** Raft/bay la check-in hotel — obligatoriu când storeAt=at_supplier_hotel. */
+  locationCode?: string | null;
   /** Uzură/DOT pe pozițiile demontate — obligatoriu la close sezon. */
   demountReadings?: Array<{
     position: VehicleWheelPosition;
     treadMm: number;
     dot?: string | null;
   }>;
+  intakeInspection?: TireIntakeInspectionInput;
 };
 
 /** Doar depozitare: demont (dacă e pe vehicul) + store hotel/client, fără montaj alt set. */
@@ -70,6 +74,7 @@ export type TyreCloseStorageOnly = {
     treadMm: number;
     dot?: string | null;
   }>;
+  intakeInspection?: TireIntakeInspectionInput;
 };
 
 export type TyreCloseDto = {
@@ -79,4 +84,6 @@ export type TyreCloseDto = {
   seasonalSwap?: TyreCloseSeasonalSwap;
   storageOnly?: TyreCloseStorageOnly;
   outcomes?: TyreClosePositionOutcome[];
+  /** Service jante în aceeași închidere WO (notă în payload). */
+  includeRimService?: boolean;
 };
