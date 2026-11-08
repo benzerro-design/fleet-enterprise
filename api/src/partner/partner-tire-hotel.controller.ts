@@ -121,6 +121,19 @@ export class PartnerTireHotelController {
     });
   }
 
+  @Get('requests/:ticketId')
+  @Roles(...FLEET_READ_ROLES)
+  getRequest(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('ticketId') ticketId: string,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    return this.hotel.getTireRequest(tenantSlug, access, ticketId, {
+      supplierId: supplierId?.trim(),
+    });
+  }
+
   @Get('dashboard-stats')
   @Roles(...FLEET_READ_ROLES)
   dashboardStats(

@@ -369,15 +369,109 @@ export class PartnerTireHotelService {
           clientName: t.client?.legalName ?? null,
           supplierId: matchedSupplierId,
           stayIds: t.links.map((l) => l.entityId),
-          hrefHotel: matchedSupplierId
-            ? `/fleet/partner/tire-hotel?supplierId=${encodeURIComponent(matchedSupplierId)}`
-            : '/fleet/partner/tire-hotel',
-          hrefTicket: `/fleet/tickets/${t.id}`,
+          hrefHotel: buildPartnerHotelCheckInHref({
+            supplierId: matchedSupplierId,
+            plate: t.vehicle?.registrationNumber ?? null,
+            ticketId: t.id,
+          }),
+          hrefTicket: buildPartnerTireRequestHref({
+            ticketId: t.id,
+            supplierId: matchedSupplierId,
+          }),
           hrefWorkOrders: matchedSupplierId
             ? `/fleet/partner/work-orders?supplierId=${encodeURIComponent(matchedSupplierId)}`
             : '/fleet/partner/work-orders',
         };
       }),
+    };
+  }
+
+  async getTireRequest(
+    tenantSlug: string,
+    access: AccessContext,
+    ticketId: string,
+    opts: { supplierId?: string } = {},
+  ) {
+    const id = ticketId.trim();
+    if (!id) throw new BadRequestException('ticketId is required');
+    const scope = await this.resolveSupplierScope(tenantSlug, access, opts.supplierId, {
+      allowTenantWide: true,
+    });
+    const supplierIds = scope.supplierIds;
+    const allocClientIds = await this.prisma.clientSupplierAllocation.findMany({
+      where: {
+        tenantId: scope.tenantId,
+        ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
+      },
+      select: { clientId: true, supplierId: true },
+    });
+    const clientIds = [...new Set(allocClientIds.map((a) => a.clientId))];
+    if (clientIds.length === 0) {
+      throw new NotFoundException('Tire request not found for this partner scope');
+    }
+    const t = await this.prisma.crmTicket.findFirst({
+      where: {
+        id,
+        tenantId: scope.tenantId,
+        clientId: { in: clientIds },
+        serviceType: { code: { in: ['tire_storage', 'tire_service'] } },
+      },
+      select: {
+        id: true,
+        subject: true,
+        status: true,
+        priority: true,
+        createdAt: true,
+        clientId: true,
+        vehicleId: true,
+        serviceType: { select: { code: true, label: true } },
+        vehicle: { select: { id: true, registrationNumber: true } },
+        client: { select: { id: true, legalName: true } },
+        links: {
+          where: { entityType: 'tire_storage_stay' },
+          select: { entityId: true },
+          take: 3,
+        },
+      },
+    });
+    if (!t) throw new NotFoundException('Tire request not found for this partner scope');
+    const kind =
+      t.serviceType?.code === 'tire_storage'
+        ? 'storage'
+        : t.serviceType?.code === 'tire_service'
+          ? 'service'
+          : 'other';
+    const matchedSupplierId =
+      allocClientIds.find((a) => a.clientId === t.clientId)?.supplierId ??
+      (supplierIds?.[0] ?? null);
+    return {
+      item: {
+        id: t.id,
+        subject: t.subject,
+        status: t.status,
+        priority: t.priority,
+        createdAt: t.createdAt.toISOString(),
+        kind,
+        serviceCode: t.serviceType?.code ?? null,
+        serviceLabel: t.serviceType?.label ?? null,
+        plate: t.vehicle?.registrationNumber ?? null,
+        vehicleId: t.vehicleId,
+        clientName: t.client?.legalName ?? null,
+        supplierId: matchedSupplierId,
+        stayIds: t.links.map((l) => l.entityId),
+        hrefHotel: buildPartnerHotelCheckInHref({
+          supplierId: matchedSupplierId,
+          plate: t.vehicle?.registrationNumber ?? null,
+          ticketId: t.id,
+        }),
+        hrefTicket: buildPartnerTireRequestHref({
+          ticketId: t.id,
+          supplierId: matchedSupplierId,
+        }),
+        hrefWorkOrders: matchedSupplierId
+          ? `/fleet/partner/work-orders?supplierId=${encodeURIComponent(matchedSupplierId)}`
+          : '/fleet/partner/work-orders',
+      },
     };
   }
 
@@ -607,7 +701,9 @@ export class PartnerTireHotelService {
       contractRef: dto.contractRef,
       actorUserId: actorUserId ?? null,
       vehicleIdForEvent: dto.vehicleId ?? null,
-      sourceSystem: isPartnerUser(access) ? 'partner_portal' : 'fleet_admin',
+      sourceSystem:
+        dto.sourceSystem?.trim() ||
+        (isPartnerUser(access) ? 'partner_portal' : 'fleet_admin'),
       ticketId: dto.ticketId ?? null,
       externalId: dto.ticketId ?? null,
     });
@@ -1323,6 +1419,7 @@ function assertCheckInBody(body: unknown): {
   feeCents?: number;
   contractRef?: string;
   ticketId?: string;
+  sourceSystem?: string;
 } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new BadRequestException('Body must be an object');
@@ -1384,6 +1481,12 @@ function assertCheckInBody(body: unknown): {
         : undefined;
 
   const intakeInspection = parseIntakeInspectionBody(o.intakeInspection);
+  const sourceSystem =
+    o.sourceSystem === undefined || o.sourceSystem === null
+      ? undefined
+      : typeof o.sourceSystem === 'string'
+        ? o.sourceSystem.trim() || undefined
+        : undefined;
 
   return {
     supplierId,
@@ -1402,6 +1505,7 @@ function assertCheckInBody(body: unknown): {
     contractRef:
       o.contractRef === undefined || o.contractRef === null ? undefined : String(o.contractRef),
     ticketId,
+    sourceSystem,
   };
 }
 
@@ -1566,6 +1670,29 @@ function normalizeImportLocation(raw: string): 'at_client' | 'hotel' | null {
   if (s === 'at_client' || s === 'client' || s === 'la_client') return 'at_client';
   if (s === 'hotel' || s === 'at_hotel' || s === 'at_supplier_hotel') return 'hotel';
   return null;
+}
+
+function buildPartnerTireRequestHref(opts: {
+  ticketId: string;
+  supplierId?: string | null;
+}): string {
+  const p = new URLSearchParams();
+  if (opts.supplierId) p.set('supplierId', opts.supplierId);
+  const qs = p.toString();
+  return `/fleet/partner/tire-requests/${encodeURIComponent(opts.ticketId)}${qs ? `?${qs}` : ''}`;
+}
+
+function buildPartnerHotelCheckInHref(opts: {
+  supplierId?: string | null;
+  plate?: string | null;
+  ticketId: string;
+}): string {
+  const p = new URLSearchParams();
+  if (opts.supplierId) p.set('supplierId', opts.supplierId);
+  if (opts.ticketId) p.set('ticketId', opts.ticketId);
+  if (opts.plate?.trim()) p.set('plate', opts.plate.trim());
+  const qs = p.toString();
+  return `/fleet/partner/tire-hotel/check-in${qs ? `?${qs}` : ''}`;
 }
 
 function assertRelocateBody(body: unknown): {

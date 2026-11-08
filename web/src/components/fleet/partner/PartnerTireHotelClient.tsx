@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { parsePartnerSupplierQuery } from "@/lib/partner-context";
 import type {
   TireHotelCapability,
@@ -49,6 +50,8 @@ type Props = {
   /** Admin flotă în view-as: read (căutare/inventar) da, mutații nu. */
   adminMode?: boolean;
   supplierId?: string;
+  /** inventar = listă tip flotă; check-in = check-in + import (pagină separată). */
+  mode?: "inventar" | "check-in";
 };
 
 function formatCheckIn(iso: string): string {
@@ -110,7 +113,13 @@ function PartnerStayLedgerTabs({ stay }: { stay: TireHotelStay }) {
   );
 }
 
-export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId }: Props) {
+export function PartnerTireHotelClient({
+  canWrite,
+  adminMode = false,
+  supplierId,
+  mode = "inventar",
+}: Props) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const supplierQ = useMemo(
     () => parsePartnerSupplierQuery(Object.fromEntries(searchParams.entries())),
@@ -123,11 +132,30 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
     return p.toString();
   }, [supplierId, supplierQ.supplierId]);
 
+  const contextTicketId = (searchParams.get("ticketId") ?? "").trim() || null;
+  const contextPlate = (searchParams.get("plate") ?? "").trim();
+
+  const inventarHref = useMemo(() => {
+    const p = new URLSearchParams();
+    const sid = supplierId ?? supplierQ.supplierId;
+    if (sid) p.set("supplierId", sid);
+    const s = p.toString();
+    return `/fleet/partner/tire-hotel${s ? `?${s}` : ""}`;
+  }, [supplierId, supplierQ.supplierId]);
+
+  const checkInHref = useMemo(() => {
+    const p = new URLSearchParams();
+    const sid = supplierId ?? supplierQ.supplierId;
+    if (sid) p.set("supplierId", sid);
+    const s = p.toString();
+    return `/fleet/partner/tire-hotel/check-in${s ? `?${s}` : ""}`;
+  }, [supplierId, supplierQ.supplierId]);
+
   const [capability, setCapability] = useState<TireHotelCapability | null>(null);
   const [stays, setStays] = useState<TireHotelStay[]>([]);
   const [staysStatus, setStaysStatus] = useState<"active" | "closed" | "all">("active");
   const [filterPlate, setFilterPlate] = useState("");
-  const [searchPlate, setSearchPlate] = useState("");
+  const [searchPlate, setSearchPlate] = useState(contextPlate);
   const [searchHits, setSearchHits] = useState<TireHotelSearchVehicle[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
@@ -245,8 +273,34 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
 
   useEffect(() => {
     if (!capability?.hasTireStorage) return;
+    if (mode !== "inventar") return;
     void loadStays().catch((e: Error) => setError(e.message));
-  }, [capability?.hasTireStorage, loadStays]);
+  }, [capability?.hasTireStorage, loadStays, mode]);
+
+  useEffect(() => {
+    if (mode !== "check-in") return;
+    if (!contextPlate.trim() || contextPlate.trim().length < 2) return;
+    setSearchPlate(contextPlate);
+    const t = window.setTimeout(() => {
+      void (async () => {
+        setError(null);
+        setBusy("search");
+        try {
+          const res = await fetch(
+            `/api/partner/tire-hotel/search?${qs}&plate=${encodeURIComponent(contextPlate.trim())}`,
+          );
+          if (!res.ok) throw new Error("Căutare eșuată");
+          const data = (await res.json()) as { vehicles?: TireHotelSearchVehicle[] };
+          setSearchHits(data.vehicles ?? []);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Eroare");
+        } finally {
+          setBusy(null);
+        }
+      })();
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [mode, contextPlate, qs]);
 
   async function runSearch() {
     setError(null);
@@ -371,6 +425,8 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
           binCode: binCode.trim() || undefined,
           intakePhotos: intakePhotos.length ? intakePhotos : undefined,
           intakeTreadNotes: intakeTreadNotes.trim() || undefined,
+          ticketId: contextTicketId || undefined,
+          sourceSystem: contextTicketId ? "partner_tire_request" : undefined,
         }),
       });
       if (!res.ok) {
@@ -395,6 +451,10 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
       setIntakePhotoFileUrls([]);
       setIntakePhotoPreviewUrls([]);
       setIntakeTreadNotes("");
+      if (mode === "check-in") {
+        router.push(inventarHref);
+        return;
+      }
       await loadStays();
       if (stay) {
         setReceiptStay(stay);
@@ -683,7 +743,13 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
   }
 
   return (
-    <div className="mx-auto flex max-w-lg flex-col gap-6 pb-24">
+    <div
+      className={
+        mode === "inventar"
+          ? "flex w-full flex-col gap-4 pb-24"
+          : "mx-auto flex max-w-lg flex-col gap-6 pb-24"
+      }
+    >
       {adminMode && !canWrite ? (
         <p className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
           Vizualizare admin — căutare și inventar disponibile; check-in, eliberare, relocare și PV
@@ -695,6 +761,32 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
           {error}
         </p>
       ) : null}
+
+      {mode === "inventar" ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500">
+            Listă sejururi active / istoric — check-in și import sunt pe pagină separată.
+          </p>
+          <Link
+            href={checkInHref}
+            className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-medium text-white hover:bg-violet-600"
+          >
+            Check-in / import →
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Link href={inventarHref} className="text-xs text-sky-400 hover:underline">
+            ← Inventar hotel
+          </Link>
+          {contextTicketId ? (
+            <p className="text-[11px] text-emerald-200/90">
+              Context solicitare · tichet {contextTicketId.slice(0, 10)}…
+              {contextPlate ? ` · ${contextPlate}` : ""}
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {receiptStay ? (
         <TireHotelReceiptPanel
@@ -720,6 +812,8 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
         />
       ) : null}
 
+      {mode === "check-in" ? (
+      <>
       <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
         <h2 className="text-base font-medium text-zinc-100">Check-in set</h2>
         <p className="text-xs text-zinc-500">
@@ -934,7 +1028,10 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
           ) : null}
         </section>
       ) : null}
+      </>
+      ) : null}
 
+      {mode === "inventar" ? (
       <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <h2 className="text-base font-medium text-zinc-100">Inventar hotel</h2>
@@ -1486,6 +1583,7 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
           </>
         )}
       </section>
+      ) : null}
     </div>
   );
 }

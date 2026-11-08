@@ -27,7 +27,7 @@ export const PARTNER_NAV_ITEMS: PartnerNavItem[] = [
     activePrefixes: ["/fleet/partner/tire-requests"],
   },
   {
-    label: "Hotel anvelope",
+    label: "Inventar hotel",
     href: "/fleet/partner/tire-hotel",
     activePrefixes: ["/fleet/partner/tire-hotel"],
   },

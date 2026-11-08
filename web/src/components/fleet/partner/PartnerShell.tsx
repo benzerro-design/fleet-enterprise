@@ -20,7 +20,7 @@ const PARTNER_PAGE_TITLES: Record<string, string> = {
   "/fleet/partner/work-orders": "Devize & comenzi",
   "/fleet/partner/appointments": "Programator",
   "/fleet/partner/tire-requests": "Solicitări anvelope",
-  "/fleet/partner/tire-hotel": "Hotel anvelope",
+  "/fleet/partner/tire-hotel": "Inventar hotel",
   "/fleet/partner/scorecard": "Scorecard",
   "/fleet/partner/reports": "Rapoarte",
   "/fleet/partner/profile": "Profil firmă",
@@ -28,6 +28,8 @@ const PARTNER_PAGE_TITLES: Record<string, string> = {
 
 function partnerPageTitle(pathname: string): string {
   if (pathname.startsWith("/fleet/partner/work-orders/")) return "Comandă service";
+  if (pathname.startsWith("/fleet/partner/tire-requests/")) return "Solicitare anvelope";
+  if (pathname.startsWith("/fleet/partner/tire-hotel/check-in")) return "Check-in hotel";
   for (const [prefix, title] of Object.entries(PARTNER_PAGE_TITLES)) {
     if (partnerNavActive(pathname, [prefix])) return title;
   }
