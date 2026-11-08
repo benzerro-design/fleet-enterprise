@@ -696,7 +696,8 @@ export function TireHubInventory({ hub, canWrite = false }: Props) {
             </div>
 
             <p className="mt-6 text-xs text-zinc-600">
-              Mutările check-in/out rămân în portalul partener / WO tip R. Hubul e read-only.
+              Mutările check-in/out și protocoalele PV semnate (custodie) rămân în portalul
+              partener / WO tip R. Hubul e read-only.
             </p>
           </aside>
         </div>

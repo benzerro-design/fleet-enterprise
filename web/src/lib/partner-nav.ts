@@ -53,7 +53,8 @@ export const PARTNER_MOBILE_TAB_ITEMS: PartnerNavItem[] = [
   PARTNER_NAV_ITEMS[0],
   PARTNER_NAV_ITEMS[1],
   PARTNER_NAV_ITEMS[2],
-  PARTNER_NAV_ITEMS[5],
+  /** Tire Hotel (Build #1 custody) — Scorecard rămâne în sidebar. */
+  PARTNER_NAV_ITEMS[3],
 ];
 
 export function partnerNavActive(pathname: string, prefixes: string[]): boolean {

@@ -22,16 +22,20 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path?: string[] 
     Authorization: `Bearer ${token}`,
   };
   const ct = req.headers.get("content-type");
-  if (ct) headers["Content-Type"] = ct;
+  if (ct && req.method !== "GET" && req.method !== "HEAD") headers["Content-Type"] = ct;
+  const hasBody = req.method === "POST" || req.method === "PATCH" || req.method === "PUT";
+  const body = hasBody ? await req.text() : undefined;
   const upstream = await fetch(url, {
     method: req.method,
     headers,
-    body: req.method === "GET" || req.method === "HEAD" ? undefined : await req.text(),
+    body,
     cache: "no-store",
   });
   const outHeaders = new Headers();
   const uct = upstream.headers.get("content-type");
   if (uct) outHeaders.set("Content-Type", uct);
+  const cd = upstream.headers.get("content-disposition");
+  if (cd) outHeaders.set("Content-Disposition", cd);
   const buf = await upstream.arrayBuffer();
   return proxyUpstreamResponse(upstream, buf, outHeaders);
 }
@@ -41,5 +45,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path?: stri
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  return proxy(req, ctx);
+}
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  return proxy(req, ctx);
+}
+
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
   return proxy(req, ctx);
 }

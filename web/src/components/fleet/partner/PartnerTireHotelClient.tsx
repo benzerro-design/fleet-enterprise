@@ -20,9 +20,15 @@ import {
 } from "@/lib/tire-set-search";
 import { tireMountedAsLabel, vehicleTireSeasonLabel } from "@/lib/vehicle-wheels-types";
 import type { TireMountedAs } from "@/lib/vehicle-wheels-types";
+import { TireCustodyProtocolPanel } from "@/components/fleet/partner/TireCustodyProtocolPanel";
 import { TireHotelIntakePhotos } from "@/components/fleet/partner/TireHotelIntakePhotos";
 import { TireHotelQrPayload } from "@/components/fleet/partner/TireHotelQrPayload";
 import { TireHotelReceiptPanel } from "@/components/fleet/partner/TireHotelReceiptPanel";
+import {
+  openTireCustodyProtocol,
+  type TireCustodyProtocolKind,
+  type TireCustodyProtocolRecord,
+} from "@/lib/tire-custody-api";
 
 type Props = {
   canWrite: boolean;
@@ -76,6 +82,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
   const [intakeTreadNotes, setIntakeTreadNotes] = useState("");
   const [receiptStay, setReceiptStay] = useState<TireHotelStay | null>(null);
   const [expandedReceiptStayId, setExpandedReceiptStayId] = useState<string | null>(null);
+  const [activeProtocol, setActiveProtocol] = useState<TireCustodyProtocolRecord | null>(null);
   const [relocateStayId, setRelocateStayId] = useState<string | null>(null);
   const [relocateBay, setRelocateBay] = useState("");
   const [relocateBin, setRelocateBin] = useState("");
@@ -222,6 +229,16 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       if (stay) {
         setReceiptStay(stay);
         setExpandedReceiptStayId(null);
+        try {
+          const protocol = await openTireCustodyProtocol(
+            stay.id,
+            "check_in",
+            supplierId ?? supplierQ.supplierId,
+          );
+          setActiveProtocol(protocol);
+        } catch {
+          /* bon remains; protocol optional if API lag */
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
@@ -230,8 +247,79 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
     }
   }
 
+  async function openProtocol(stayId: string, kind: TireCustodyProtocolKind) {
+    if (!canWrite && kind) {
+      /* allow open for read via POST getOrCreate — write roles only on server */
+    }
+    setBusy(`protocol-${stayId}-${kind}`);
+    setError(null);
+    try {
+      const protocol = await openTireCustodyProtocol(
+        stayId,
+        kind,
+        supplierId ?? supplierQ.supplierId,
+      );
+      setActiveProtocol(protocol);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Protocol eșuat");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function protocolStatus(
+    stay: TireHotelStay,
+    kind: TireCustodyProtocolKind,
+  ): "signed" | "draft" | "voided" | "missing" {
+    const hit = stay.protocols?.find((p) => p.kind === kind);
+    if (!hit) return "missing";
+    if (hit.status === "voided") return "voided";
+    // Treat as signed only when archive hash is present (matches API gate).
+    if (hit.status === "signed" && hit.pdfSha256) return "signed";
+    if (hit.status === "signed") return "draft";
+    return "draft";
+  }
+
   async function checkOut(stayId: string) {
     if (!canWrite) return;
+    const stay = stays.find((s) => s.id === stayId);
+    if (stay && protocolStatus(stay, "check_in") !== "signed") {
+      setError("Finalizează PV check-in (arhivat) înainte de eliberare — lanț de custodie.");
+      try {
+        const protocol = await openTireCustodyProtocol(
+          stayId,
+          "check_in",
+          supplierId ?? supplierQ.supplierId,
+        );
+        setActiveProtocol(protocol);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Nu am putut deschide PV check-in");
+      }
+      return;
+    }
+    const hasReleasePv =
+      stay &&
+      (protocolStatus(stay, "check_out") === "signed" ||
+        protocolStatus(stay, "scrap") === "signed" ||
+        protocolStatus(stay, "transfer") === "signed" ||
+        protocolStatus(stay, "leasing_return") === "signed" ||
+        protocolStatus(stay, "quarantine") === "signed");
+    if (stay && !hasReleasePv) {
+      setError(
+        "Finalizează un PV de eliberare (check-out / casare / transfer / leasing / carantină) înainte de Eliberează.",
+      );
+      try {
+        const protocol = await openTireCustodyProtocol(
+          stayId,
+          "check_out",
+          supplierId ?? supplierQ.supplierId,
+        );
+        setActiveProtocol(protocol);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Nu am putut deschide PV check-out");
+      }
+      return;
+    }
     setBusy(stayId);
     setError(null);
     try {
@@ -250,6 +338,7 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
       }
       if (receiptStay?.id === stayId) setReceiptStay(null);
       if (expandedReceiptStayId === stayId) setExpandedReceiptStayId(null);
+      setActiveProtocol(null);
       await loadStays();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
@@ -317,6 +406,21 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
           supplierName={supplierName}
           autoFocusPrint
           onClose={() => setReceiptStay(null)}
+        />
+      ) : null}
+
+      {activeProtocol ? (
+        <TireCustodyProtocolPanel
+          protocol={activeProtocol}
+          canWrite={canWrite}
+          supplierId={supplierId ?? supplierQ.supplierId}
+          onUpdated={(p) => {
+            setActiveProtocol(p);
+            if (p.status === "signed" || p.status === "voided") {
+              void loadStays().catch(() => undefined);
+            }
+          }}
+          onClose={() => setActiveProtocol(null)}
         />
       ) : null}
 
@@ -555,6 +659,46 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                       eliberat
                     </span>
                   ) : null}
+                  {(
+                    [
+                      "check_in",
+                      "check_out",
+                      "seasonal",
+                      "transfer",
+                      "scrap",
+                      "leasing_return",
+                      "quarantine",
+                    ] as const
+                  ).map((kind) => {
+                    const st = protocolStatus(s, kind);
+                    if (st === "missing") return null;
+                    const label =
+                      kind === "check_in"
+                        ? "PV in"
+                        : kind === "check_out"
+                          ? "PV out"
+                          : kind === "seasonal"
+                            ? "PV sezon"
+                            : kind === "transfer"
+                              ? "PV transfer"
+                              : kind === "scrap"
+                                ? "PV casare"
+                                : kind === "quarantine"
+                                  ? "PV carantină"
+                                  : "PV leasing";
+                    const tone =
+                      st === "signed"
+                        ? "rounded bg-emerald-950/60 px-2 py-0.5 text-[10px] text-emerald-200"
+                        : st === "voided"
+                          ? "rounded bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400"
+                          : "rounded bg-amber-950/50 px-2 py-0.5 text-[10px] text-amber-200";
+                    const suffix = st === "signed" ? "✓" : st;
+                    return (
+                      <span key={kind} className={tone}>
+                        {label} {suffix}
+                      </span>
+                    );
+                  })}
                   {s.mountedAs ? (
                     <span className="rounded bg-sky-950/50 px-2 py-0.5 text-[10px] text-sky-200">
                       {tireMountedAsLabel(
@@ -608,6 +752,66 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                   >
                     {expandedReceiptStayId === s.id ? "Ascunde bonul" : "Bon / print"}
                   </button>
+                  {canWrite ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy === `protocol-${s.id}-check_in`}
+                        onClick={() => void openProtocol(s.id, "check_in")}
+                        className="rounded-xl border border-emerald-700/60 py-3 text-sm font-medium text-emerald-100 hover:bg-emerald-950/40 disabled:opacity-50"
+                      >
+                        PV check-in
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === `protocol-${s.id}-check_out`}
+                        onClick={() => void openProtocol(s.id, "check_out")}
+                        className="rounded-xl border border-emerald-700/60 py-3 text-sm font-medium text-emerald-100 hover:bg-emerald-950/40 disabled:opacity-50"
+                      >
+                        PV check-out
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === `protocol-${s.id}-seasonal`}
+                        onClick={() => void openProtocol(s.id, "seasonal")}
+                        className="rounded-xl border border-emerald-700/60 py-3 text-sm font-medium text-emerald-100 hover:bg-emerald-950/40 disabled:opacity-50"
+                      >
+                        PV sezonier
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === `protocol-${s.id}-transfer`}
+                        onClick={() => void openProtocol(s.id, "transfer")}
+                        className="rounded-xl border border-emerald-700/60 py-3 text-sm font-medium text-emerald-100 hover:bg-emerald-950/40 disabled:opacity-50"
+                      >
+                        PV transfer
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === `protocol-${s.id}-scrap`}
+                        onClick={() => void openProtocol(s.id, "scrap")}
+                        className="rounded-xl border border-emerald-700/60 py-3 text-sm font-medium text-emerald-100 hover:bg-emerald-950/40 disabled:opacity-50"
+                      >
+                        PV casare
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === `protocol-${s.id}-leasing_return`}
+                        onClick={() => void openProtocol(s.id, "leasing_return")}
+                        className="rounded-xl border border-emerald-700/60 py-3 text-sm font-medium text-emerald-100 hover:bg-emerald-950/40 disabled:opacity-50"
+                      >
+                        PV leasing
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy === `protocol-${s.id}-quarantine`}
+                        onClick={() => void openProtocol(s.id, "quarantine")}
+                        className="rounded-xl border border-emerald-700/60 py-3 text-sm font-medium text-emerald-100 hover:bg-emerald-950/40 disabled:opacity-50"
+                      >
+                        PV carantină
+                      </button>
+                    </>
+                  ) : null}
                   {canWrite && !s.checkOutAt ? (
                     <>
                       <button
@@ -626,8 +830,24 @@ export function PartnerTireHotelClient({ canWrite, supplierId }: Props) {
                         disabled={busy === s.id}
                         onClick={() => void checkOut(s.id)}
                         className="rounded-xl border border-zinc-600 py-3 text-sm font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                        title={
+                          protocolStatus(s, "check_out") === "signed" ||
+                          protocolStatus(s, "scrap") === "signed" ||
+                          protocolStatus(s, "transfer") === "signed" ||
+                          protocolStatus(s, "leasing_return") === "signed" ||
+                          protocolStatus(s, "quarantine") === "signed"
+                            ? "PV eliberare semnat — eliberare permisă"
+                            : "Necesită PV check-out / casare / transfer / leasing / carantină semnat"
+                        }
                       >
-                        Eliberează ({releaseKind === "at_client" ? "client" : releaseKind})
+                        Eliberează
+                        {protocolStatus(s, "check_out") === "signed" ||
+                        protocolStatus(s, "scrap") === "signed" ||
+                        protocolStatus(s, "transfer") === "signed" ||
+                        protocolStatus(s, "leasing_return") === "signed" ||
+                        protocolStatus(s, "quarantine") === "signed"
+                          ? ` (${releaseKind === "at_client" ? "client" : releaseKind})`
+                          : " · după PV eliberare"}
                       </button>
                     </>
                   ) : null}

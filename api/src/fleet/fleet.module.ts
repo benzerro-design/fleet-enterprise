@@ -13,12 +13,14 @@ import { VehicleEquipmentService } from './vehicle-equipment.service';
 import { VehicleFormBriefService } from './vehicle-form-brief.service';
 import { TireDomainService } from './tires/tire-domain.service';
 import { TireHubService } from './tires/tire-hub.service';
+import { TireCustodyProtocolService } from './tires/tire-custody-protocol.service';
+import { TireCustodyPublicController } from './tires/tire-custody-public.controller';
 import { TireHotelService } from './tires/tire-hotel.service';
 import { VehicleWheelsService } from './vehicle-wheels.service';
 
 @Module({
   imports: [AuthModule, AuditModule, ClientsModule, DriversModule, OpsModule],
-  controllers: [FleetController],
+  controllers: [FleetController, TireCustodyPublicController],
   providers: [
     FleetService,
     MaintenancePlanService,
@@ -26,11 +28,12 @@ import { VehicleWheelsService } from './vehicle-wheels.service';
     TireDomainService,
     TireHubService,
     TireHotelService,
+    TireCustodyProtocolService,
     VehicleWheelsService,
     DashboardService,
     VehicleFormBriefService,
     CivOcrService,
   ],
-  exports: [CivOcrService, TireDomainService, TireHotelService],
+  exports: [CivOcrService, TireDomainService, TireHotelService, TireCustodyProtocolService],
 })
 export class FleetModule {}

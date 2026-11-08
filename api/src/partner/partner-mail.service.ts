@@ -66,6 +66,38 @@ export class PartnerMailService {
     return Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim());
   }
 
+  /** Driver OTP/link for tire custody signing (Build #1e). */
+  async sendDriverOtpInvite(input: {
+    to: string;
+    otp: string;
+    url: string;
+    expiresAt: string;
+    plate?: string | null;
+  }): Promise<void> {
+    const plate = input.plate?.trim() || 'vehicul';
+    const expires = (() => {
+      try {
+        return new Date(input.expiresAt).toLocaleString('ro-RO');
+      } catch {
+        return input.expiresAt;
+      }
+    })();
+    await this.send({
+      to: input.to,
+      subject: `OTP semnare PV anvelope — ${plate}`,
+      fromName: 'Fleet Tire Hotel',
+      body: [
+        `Ai fost invitat să semnezi procesul-verbal de custodie anvelope pentru ${plate}.`,
+        '',
+        `OTP: ${input.otp}`,
+        `Link: ${input.url}`,
+        `Expiră: ${expires}`,
+        '',
+        'Nu partaja OTP-ul. Dacă nu ai solicitat acest mesaj, ignoră-l.',
+      ].join('\n'),
+    });
+  }
+
   async send(input: MailSendInput): Promise<void> {
     if (!this.isConfigured()) {
       throw new Error('SMTP not configured (SMTP_HOST, SMTP_FROM)');

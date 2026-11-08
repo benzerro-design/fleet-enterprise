@@ -6,6 +6,7 @@ import {
   isPartnerUser,
   resolvePartnerSupplierIdsFilter,
 } from '../iam/partner-access';
+import { TireCustodyProtocolService } from '../fleet/tires/tire-custody-protocol.service';
 import { TireHotelService, tireSetQrPayload } from '../fleet/tires/tire-hotel.service';
 import { parseTireSetSearchInput } from '../fleet/tires/tire-domain.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,6 +27,7 @@ export class PartnerTireHotelService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly hotel: TireHotelService,
+    private readonly custody: TireCustodyProtocolService,
   ) {}
 
   async capability(tenantSlug: string, access: AccessContext, supplierId?: string) {
@@ -156,17 +158,23 @@ export class PartnerTireHotelService {
       },
     });
 
+    const protocolMap = await this.custody.summariesForStays(
+      tenantId,
+      stays.map((s) => s.id),
+    );
+
     return {
       status: status === 'closed' || status === 'all' ? status : 'active',
-      items: stays.map((s) =>
-        this.hotel.stayToDto(s, {
+      items: stays.map((s) => ({
+        ...this.hotel.stayToDto(s, {
           season: s.set.season,
           name: s.set.name,
           mountedAs: s.set.mountedAs,
           vehicle: s.set.vehicle,
           items: s.set.items,
         }),
-      ),
+        protocols: protocolMap.get(s.id) ?? [],
+      })),
     };
   }
 
@@ -406,6 +414,8 @@ export class PartnerTireHotelService {
       access,
       dto.supplierId,
     );
+
+    await this.custody.assertSignedCheckOutProtocol(tenantId, dto.stayId);
 
     const stay = await this.hotel.checkOut({
       tenantId,

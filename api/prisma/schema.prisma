@@ -53,6 +53,7 @@ model Tenant {
   tirePlacements       TirePlacement[]
   tireEvents           TireEvent[]
   tireStorageStays     TireStorageStay[]
+  tireCustodyProtocols TireCustodyProtocol[]
   clients            Client[]
   clientContacts     ClientContact[]
   clientDocuments    ClientDocument[]
@@ -910,10 +911,11 @@ model TireSet {
   tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client       Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
   vehicle      Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  items        TireSetItem[]
-  placements   TirePlacement[]
-  tireEvents   TireEvent[]
-  storageStays TireStorageStay[]
+  items             TireSetItem[]
+  placements        TirePlacement[]
+  tireEvents        TireEvent[]
+  storageStays      TireStorageStay[]
+  custodyProtocols  TireCustodyProtocol[]
   costEntries  CostEntry[]
 
   @@index([tenantId])
@@ -1013,12 +1015,126 @@ model TireStorageStay {
   set              TireSet   @relation(fields: [setId], references: [id], onDelete: Cascade)
   supplier         Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   costEntries      CostEntry[]
+  custodyProtocols TireCustodyProtocol[]
 
   @@index([tenantId])
   @@index([supplierId, checkOutAt])
   @@index([setId, checkOutAt])
   /// DB enforces one open stay per set: partial unique index
   /// TireStorageStay_set_open_uidx ON ("setId") WHERE "checkOutAt" IS NULL (see migration).
+}
+
+/// FLEET-007 Build #1 — proces-verbal custodie anvelope (clone RSA handover, stay-scoped).
+enum TireCustodyProtocolKind {
+  check_in
+  check_out
+  seasonal
+  transfer
+  scrap
+  leasing_return
+  quarantine
+}
+
+enum TireCustodyProtocolStatus {
+  draft
+  signed
+  voided
+}
+
+enum TireCustodySignerRole {
+  partner
+  customer
+  driver
+  witness
+}
+
+enum TireCustodyMediaKind {
+  intake
+  condition
+  label
+  other
+}
+
+model TireCustodyProtocol {
+  id                   String                     @id @default(cuid())
+  tenantId             String
+  stayId               String
+  setId                String
+  supplierId           String
+  /// Optional link to tyre WO (seasonal / R close).
+  workOrderId          String?
+  kind                 TireCustodyProtocolKind
+  /// Versioned rectification: voided rows keep history; active = max non-voided revision.
+  revision             Int                        @default(1)
+  status               TireCustodyProtocolStatus  @default(draft)
+  locationText         String?
+  conditionNotes       String?
+  inventoryNotes       String?
+  checklistJson        Json                       @default("{}")
+  counterpartyName     String?
+  counterpartyRoleNote String?
+  signedAt             DateTime?
+  voidedAt             DateTime?
+  voidReason           String?
+  /// Immutable archive generated at finalize (sha256 hex of pdfBytes).
+  pdfSha256            String?
+  pdfArchivedAt        DateTime?
+  pdfBytes             Bytes?
+  /// Driver OTP/link invite (sha256 hex of raw token / otp). Cleared after driver signs or expiry.
+  driverInviteTokenHash String?
+  driverInviteExpiresAt DateTime?
+  driverOtpHash         String?
+  driverOtpExpiresAt    DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  tenant               Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stay                 TireStorageStay            @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  set                  TireSet                    @relation(fields: [setId], references: [id], onDelete: Cascade)
+  supplier             Supplier                   @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  workOrder            MaintenanceWorkOrder?      @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  signatures           TireCustodySignature[]
+  media                TireCustodyMedia[]
+
+  @@unique([stayId, kind, revision])
+  @@unique([driverInviteTokenHash])
+  @@index([tenantId, stayId])
+  @@index([tenantId, supplierId, status])
+  @@index([tenantId, setId])
+  @@index([workOrderId])
+  @@index([tenantId, stayId, kind, status])
+}
+
+model TireCustodySignature {
+  id              String                 @id @default(cuid())
+  tenantId        String
+  protocolId      String
+  role            TireCustodySignerRole
+  displayName     String
+  signedAt        DateTime               @default(now())
+  signaturePngUrl String
+  strokePathJson  Json?
+  deviceMetaJson  Json?
+  createdAt       DateTime               @default(now())
+  protocol        TireCustodyProtocol    @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  @@unique([protocolId, role])
+  @@index([tenantId, protocolId])
+}
+
+model TireCustodyMedia {
+  id         String               @id @default(cuid())
+  tenantId   String
+  protocolId String
+  kind       TireCustodyMediaKind @default(other)
+  fileUrl    String
+  fileName   String?
+  caption    String?
+  capturedAt DateTime             @default(now())
+  createdAt  DateTime             @default(now())
+  protocol   TireCustodyProtocol  @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  @@index([protocolId])
+  @@index([tenantId, protocolId])
 }
 
 enum TripPurpose {
@@ -1743,6 +1859,7 @@ model Supplier {
   tirePlacements       TirePlacement[]
   ownedTireAssets      TireAsset[]          @relation("TireAssetOwnerSupplier")
   tireStorageStays     TireStorageStay[]
+  tireCustodyProtocols TireCustodyProtocol[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -2187,6 +2304,7 @@ model MaintenanceWorkOrder {
   messages      WorkOrderMessage[]
   photos        WorkOrderPhoto[]
   tireEvents    TireEvent[]
+  tireCustodyProtocols TireCustodyProtocol[]
 
   @@unique([tenantId, displayNumber])
   @@index([tenantId])

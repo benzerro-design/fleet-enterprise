@@ -10,6 +10,21 @@ export type TireHotelStayItem = {
   serialOrQr: string | null;
 };
 
+export type TireHotelProtocolSummary = {
+  kind:
+    | "check_in"
+    | "check_out"
+    | "seasonal"
+    | "transfer"
+    | "scrap"
+    | "leasing_return"
+    | "quarantine";
+  status: "draft" | "signed" | "voided";
+  revision?: number;
+  signedAt: string | null;
+  pdfSha256: string | null;
+};
+
 export type TireHotelStay = {
   id: string;
   setId: string;
@@ -31,6 +46,7 @@ export type TireHotelStay = {
   intakeTreadNotes: string | null;
   feeCents?: number | null;
   contractRef?: string | null;
+  protocols?: TireHotelProtocolSummary[];
 };
 
 export type TireHotelReleaseKind = "at_client" | "in_transit" | "scrap" | "quarantine";
