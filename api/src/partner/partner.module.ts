@@ -14,6 +14,8 @@ import { PartnerScorecardController } from './partner-scorecard.controller';
 import { PartnerScorecardService } from './partner-scorecard.service';
 import { PartnerTireHotelController } from './partner-tire-hotel.controller';
 import { PartnerTireHotelService } from './partner-tire-hotel.service';
+import { PartnerTireWarehouseController } from './partner-tire-warehouse.controller';
+import { PartnerTireWarehouseService } from './partner-tire-warehouse.service';
 
 @Module({
   imports: [AuthModule, FleetModule],
@@ -24,6 +26,7 @@ import { PartnerTireHotelService } from './partner-tire-hotel.service';
     PartnerScorecardController,
     PartnerReportsController,
     PartnerTireHotelController,
+    PartnerTireWarehouseController,
   ],
   providers: [
     PartnerAdminService,
@@ -33,6 +36,7 @@ import { PartnerTireHotelService } from './partner-tire-hotel.service';
     PartnerScorecardService,
     PartnerReportsService,
     PartnerTireHotelService,
+    PartnerTireWarehouseService,
   ],
   exports: [PartnerAdminService, PartnerNotificationService, PartnerMailService],
 })

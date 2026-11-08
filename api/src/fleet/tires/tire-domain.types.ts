@@ -6,9 +6,14 @@ import type {
 } from '@prisma/client';
 
 export const TIRE_SET_QR_PREFIX = 'FE:tire-set:';
+export const TIRE_SHELF_QR_PREFIX = 'FE:tire-shelf:';
 
 export function tireSetQrPayload(setId: string): string {
   return `${TIRE_SET_QR_PREFIX}${setId}`;
+}
+
+export function tireShelfQrPayload(shelfId: string): string {
+  return `${TIRE_SHELF_QR_PREFIX}${shelfId}`;
 }
 
 /** Majority season for a set — unknown if mixed or empty. */

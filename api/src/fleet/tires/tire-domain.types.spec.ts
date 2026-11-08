@@ -3,6 +3,7 @@ import {
   parseTireSetSearchInput,
   TIRE_SET_QR_PREFIX,
   tireSetQrPayload,
+  tireShelfQrPayload,
 } from './tire-domain.types';
 
 describe('parseTireSetSearchInput', () => {
@@ -52,5 +53,11 @@ describe('formatTireSetSearchFieldOnChange', () => {
 describe('tireSetQrPayload', () => {
   it('builds stable FE prefix payload', () => {
     expect(tireSetQrPayload('abc')).toBe('FE:tire-set:abc');
+  });
+});
+
+describe('tireShelfQrPayload', () => {
+  it('builds stable FE tire-shelf prefix payload', () => {
+    expect(tireShelfQrPayload('shelf123')).toBe('FE:tire-shelf:shelf123');
   });
 });

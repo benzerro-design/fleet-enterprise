@@ -55,6 +55,9 @@ model Tenant {
   tirePlacements       TirePlacement[]
   tireEvents           TireEvent[]
   tireStorageStays     TireStorageStay[]
+  tireWarehouses       TireWarehouse[]
+  tireWarehouseZones   TireWarehouseZone[]
+  tireWarehouseShelves TireWarehouseShelf[]
   tireCustodyProtocols TireCustodyProtocol[]
   clients            Client[]
   clientContacts     ClientContact[]
@@ -1875,12 +1878,71 @@ model Supplier {
   tirePlacements       TirePlacement[]
   ownedTireAssets      TireAsset[]          @relation("TireAssetOwnerSupplier")
   tireStorageStays     TireStorageStay[]
+  tireWarehouses       TireWarehouse[]
   tireCustodyProtocols TireCustodyProtocol[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, category])
+}
+
+/// Depozit partener — master data rafturi hotel anvelope (pachet 1.1).
+model TireWarehouse {
+  id           String   @id @default(cuid())
+  tenantId     String
+  supplierId   String
+  code         String
+  name         String
+  addressLine  String?
+  city         String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier     Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  zones        TireWarehouseZone[]
+
+  @@unique([tenantId, supplierId, code])
+  @@index([tenantId])
+  @@index([supplierId])
+}
+
+model TireWarehouseZone {
+  id          String   @id @default(cuid())
+  tenantId    String
+  warehouseId String
+  code        String
+  name        String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse   TireWarehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  shelves     TireWarehouseShelf[]
+
+  @@unique([warehouseId, code])
+  @@index([tenantId])
+  @@index([warehouseId])
+}
+
+model TireWarehouseShelf {
+  id        String   @id @default(cuid())
+  tenantId  String
+  zoneId    String
+  code      String
+  name      String?
+  qrPayload String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  zone      TireWarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, code])
+  @@index([tenantId])
+  @@index([zoneId])
 }
 
 /// Document firmă furnizor (ONRC, autorizații) — PARTNER-003.
