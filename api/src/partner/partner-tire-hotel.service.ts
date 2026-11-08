@@ -1,12 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, VehicleTireSeason } from '@prisma/client';
+import { TireCustodyProtocolKind } from '@prisma/client';
 import type { AccessContext } from '../iam/access-context.types';
 import {
   assertPartnerWrite,
   isPartnerUser,
   resolvePartnerSupplierIdsFilter,
 } from '../iam/partner-access';
-import { TireCustodyProtocolKind } from '@prisma/client';
+import { parseCsv, rowToObject } from '../imports/csv-parse';
 import { TireCustodyProtocolService } from '../fleet/tires/tire-custody-protocol.service';
 import { TireDomainService } from '../fleet/tires/tire-domain.service';
 import { buildTireStayCostPrintableSummary } from '../fleet/tires/tire-hotel-stay-cost';
@@ -229,7 +230,7 @@ export class PartnerTireHotelService {
         supplier: { select: { id: true, legalName: true } },
         set: {
           include: {
-            vehicle: { select: { id: true, registrationNumber: true } },
+            vehicle: { select: { id: true, registrationNumber: true, clientId: true } },
             items: {
               orderBy: { sortOrder: 'asc' },
               include: {
@@ -279,6 +280,8 @@ export class PartnerTireHotelService {
           season: s.set.season,
           name: s.set.name,
           mountedAs: s.set.mountedAs,
+          warrantyCertificateUrl: s.set.warrantyCertificateUrl,
+          purchaseDocs: s.set.purchaseDocs,
           vehicle: s.set.vehicle,
           items: s.set.items,
         }),
@@ -740,25 +743,369 @@ export class PartnerTireHotelService {
     tenantSlug: string,
     access: AccessContext,
     body: unknown,
-  ): Promise<{ ok: boolean; rows: number; errors: string[] }> {
+  ): Promise<{
+    ok: boolean;
+    dryRun: true;
+    rows: number;
+    validRows: number;
+    errors: string[];
+  }> {
     assertPartnerWrite(access);
-    await this.resolveSupplierScope(tenantSlug, access, undefined, { allowTenantWide: true });
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      throw new BadRequestException('Body must be an object with csv string');
+    const supplierId =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? typeof (body as { supplierId?: unknown }).supplierId === 'string'
+          ? (body as { supplierId: string }).supplierId.trim()
+          : undefined
+        : undefined;
+    const { tenantId, supplierId: sid } = await this.resolveSupplier(
+      tenantSlug,
+      access,
+      supplierId,
+    );
+    const parsed = await this.parseImportSetsCsv(tenantId, extractImportCsv(body), {
+      requireHotelBay: false,
+      supplierId: sid,
+    });
+    return {
+      ok: parsed.errors.length === 0,
+      dryRun: true,
+      rows: parsed.rows.length,
+      validRows: parsed.valid.length,
+      errors: parsed.errors,
+    };
+  }
+
+  /**
+   * Apply CSV import: plate,season,mountedAs,brand,model,size,location(at_client|hotel),bay?
+   * Partner-only write; hotel rows require supplier scope. Skips bad rows (no invented vehicles).
+   */
+  async importSets(
+    tenantSlug: string,
+    access: AccessContext,
+    body: unknown,
+    actorUserId?: string,
+  ): Promise<{
+    ok: boolean;
+    dryRun: false;
+    rows: number;
+    created: number;
+    updated: number;
+    checkedIn: number;
+    skipped: number;
+    errors: string[];
+  }> {
+    assertPartnerWrite(access);
+    const supplierId =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? typeof (body as { supplierId?: unknown }).supplierId === 'string'
+          ? (body as { supplierId: string }).supplierId.trim()
+          : undefined
+        : undefined;
+    const { tenantId, supplierId: sid } = await this.resolveSupplier(
+      tenantSlug,
+      access,
+      supplierId,
+    );
+    const parsed = await this.parseImportSetsCsv(tenantId, extractImportCsv(body), {
+      requireHotelBay: true,
+      supplierId: sid,
+    });
+    let created = 0;
+    let updated = 0;
+    let checkedIn = 0;
+    const errors = [...parsed.errors];
+
+    for (const row of parsed.valid) {
+      try {
+        const result = await this.applyImportSetRow({
+          tenantId,
+          supplierId: sid,
+          row,
+          actorUserId,
+        });
+        if (result.created) created += 1;
+        else updated += 1;
+        if (result.checkedIn) checkedIn += 1;
+      } catch (e) {
+        errors.push(
+          `Linia ${row.line}: ${e instanceof Error ? e.message : 'aplicare eșuată'}`,
+        );
+      }
     }
-    const csv = typeof (body as { csv?: unknown }).csv === 'string' ? (body as { csv: string }).csv : '';
-    if (!csv.trim()) throw new BadRequestException('csv is required');
-    const lines = csv
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
+
+    const skipped = parsed.rows.length - created - updated;
+    return {
+      ok: errors.length === 0,
+      dryRun: false,
+      rows: parsed.rows.length,
+      created,
+      updated,
+      checkedIn,
+      skipped: Math.max(0, skipped),
+      errors,
+    };
+  }
+
+  private async parseImportSetsCsv(
+    tenantId: string,
+    csv: string,
+    opts: { requireHotelBay: boolean; supplierId: string },
+  ): Promise<{
+    rows: number[];
+    valid: ImportSetRow[];
+    errors: string[];
+  }> {
+    void opts.supplierId;
+    const { headers, rows } = parseCsv(csv);
     const errors: string[] = [];
-    if (lines.length < 2) errors.push('CSV needs header + at least one data row');
-    const header = (lines[0] ?? '').toLowerCase();
-    if (!header.includes('vehicle') && !header.includes('plate') && !header.includes('set')) {
-      errors.push('Header should include plate/vehicle and set columns');
+    if (headers.length === 0 || rows.length === 0) {
+      errors.push('CSV needs header + at least one data row');
+      return { rows: [], valid: [], errors };
     }
-    return { ok: errors.length === 0, rows: Math.max(0, lines.length - 1), errors };
+    const headerKeys = headers.map((h) => h.trim().toLowerCase());
+    const hasPlate =
+      headerKeys.includes('plate') ||
+      headerKeys.includes('vehicle') ||
+      headerKeys.includes('nr') ||
+      headerKeys.includes('registration');
+    if (!hasPlate) {
+      errors.push('Header must include plate (or vehicle)');
+    }
+    if (!headerKeys.includes('season')) {
+      errors.push('Header must include season');
+    }
+    if (!headerKeys.includes('location')) {
+      errors.push('Header must include location (at_client|hotel)');
+    }
+
+    const plates = new Set<string>();
+    const draft: Array<{
+      line: number;
+      plate: string;
+      season: VehicleTireSeason;
+      mountedAs: 'on_rim' | 'tyre_only';
+      brand?: string;
+      model?: string;
+      size?: string;
+      location: 'at_client' | 'hotel';
+      bay?: string;
+    }> = [];
+    rows.forEach((cells, idx) => {
+      const line = idx + 2;
+      const obj = rowToObject(headers, cells);
+      const lower: Record<string, string> = {};
+      for (const [k, v] of Object.entries(obj)) lower[k.trim().toLowerCase()] = v;
+      const plateRaw =
+        lower.plate || lower.vehicle || lower.nr || lower.registration || '';
+      const plate = normalizePlate(plateRaw);
+      const seasonRaw = (lower.season || '').trim().toLowerCase();
+      const season = normalizeImportSeason(seasonRaw);
+      const mountedAs = normalizeImportMountedAs(
+        (lower.mountedas || lower.mounted_as || lower['mounted as'] || 'on_rim').trim(),
+      );
+      const location = normalizeImportLocation((lower.location || '').trim());
+      const bay = (lower.bay || lower.baycode || lower.bay_code || '').trim().toUpperCase() || undefined;
+      const brand = (lower.brand || '').trim() || undefined;
+      const model = (lower.model || '').trim() || undefined;
+      const size = (lower.size || '').trim() || undefined;
+
+      if (!plate) {
+        errors.push(`Linia ${line}: lipsă plate`);
+        return;
+      }
+      if (!season) {
+        errors.push(`Linia ${line}: season invalid (${seasonRaw || '—'})`);
+        return;
+      }
+      if (!mountedAs) {
+        errors.push(`Linia ${line}: mountedAs invalid`);
+        return;
+      }
+      if (!location) {
+        errors.push(`Linia ${line}: location must be at_client or hotel`);
+        return;
+      }
+      if (location === 'hotel' && opts.requireHotelBay && !bay) {
+        errors.push(`Linia ${line}: bay required for location=hotel`);
+        return;
+      }
+      plates.add(plate);
+      draft.push({
+        line,
+        plate,
+        season,
+        mountedAs,
+        brand,
+        model,
+        size,
+        location,
+        bay,
+      });
+    });
+
+    const vehicles =
+      plates.size === 0
+        ? []
+        : await this.prisma.vehicle.findMany({
+            where: {
+              tenantId,
+              OR: [...plates].map((p) => ({
+                registrationNumber: { equals: p, mode: 'insensitive' as const },
+              })),
+            },
+            select: {
+              id: true,
+              clientId: true,
+              registrationNumber: true,
+            },
+          });
+    const byPlate = new Map<string, (typeof vehicles)[number]>();
+    for (const v of vehicles) {
+      const key = normalizePlate(v.registrationNumber);
+      if (key) byPlate.set(key, v);
+    }
+
+    const valid: ImportSetRow[] = [];
+    for (const row of draft) {
+      const vehicle = byPlate.get(row.plate);
+      if (!vehicle) {
+        errors.push(`Linia ${row.line}: vehicul inexistent pentru plate ${row.plate}`);
+        continue;
+      }
+      valid.push({
+        line: row.line,
+        plate: row.plate,
+        season: row.season,
+        mountedAs: row.mountedAs,
+        brand: row.brand,
+        model: row.model,
+        size: row.size,
+        location: row.location,
+        bay: row.bay,
+        vehicleId: vehicle.id,
+        clientId: vehicle.clientId,
+      });
+    }
+
+    return { rows: rows.map((_, i) => i), valid, errors };
+  }
+
+  private async applyImportSetRow(params: {
+    tenantId: string;
+    supplierId: string;
+    row: ImportSetRow;
+    actorUserId?: string;
+  }): Promise<{ created: boolean; checkedIn: boolean }> {
+    const { tenantId, row, supplierId, actorUserId } = params;
+    let set = await this.prisma.tireSet.findFirst({
+      where: {
+        tenantId,
+        vehicleId: row.vehicleId,
+        season: row.season,
+        archivedAt: null,
+      },
+      include: {
+        items: { select: { assetId: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    let created = false;
+    if (!set) {
+      set = await this.prisma.tireSet.create({
+        data: {
+          tenantId,
+          clientId: row.clientId,
+          vehicleId: row.vehicleId,
+          season: row.season,
+          mountedAs: row.mountedAs,
+        },
+        include: {
+          items: { select: { assetId: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+        },
+      });
+      created = true;
+      await this.prisma.tireEvent.create({
+        data: {
+          tenantId,
+          type: 'store',
+          setId: set.id,
+          vehicleId: row.vehicleId,
+          payload: { source: 'partner_csv_import', season: row.season },
+        },
+      });
+    } else if (set.mountedAs !== row.mountedAs) {
+      set = await this.prisma.tireSet.update({
+        where: { id: set.id },
+        data: { mountedAs: row.mountedAs },
+        include: {
+          items: { select: { assetId: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+        },
+      });
+    }
+
+    if (set.items.length === 0) {
+      const asset = await this.prisma.tireAsset.create({
+        data: {
+          tenantId,
+          clientId: row.clientId,
+          ownerClientId: row.clientId,
+          ownershipType: 'client',
+          provenance: 'inferred',
+          brand: row.brand ?? null,
+          model: row.model ?? null,
+          size: row.size ?? null,
+          season: row.season,
+        },
+      });
+      await this.prisma.tireSetItem.create({
+        data: { setId: set.id, assetId: asset.id, sortOrder: 0 },
+      });
+      await this.tireDomain.placeAsset({
+        tenantId,
+        assetId: asset.id,
+        kind: 'at_client',
+        vehicleId: row.vehicleId,
+        setId: set.id,
+        eventType: 'store',
+        vehicleIdForEvent: row.vehicleId,
+        payload: { source: 'partner_csv_import' },
+      });
+    } else if (row.brand || row.model || row.size) {
+      const assetId = set.items[0]!.assetId;
+      await this.prisma.tireAsset.update({
+        where: { id: assetId },
+        data: {
+          ...(row.brand !== undefined ? { brand: row.brand } : {}),
+          ...(row.model !== undefined ? { model: row.model } : {}),
+          ...(row.size !== undefined ? { size: row.size } : {}),
+        },
+      });
+    }
+
+    let checkedIn = false;
+    if (row.location === 'hotel') {
+      const open = await this.prisma.tireStorageStay.findFirst({
+        where: { tenantId, setId: set.id, checkOutAt: null },
+        select: { id: true, supplierId: true },
+      });
+      if (!open) {
+        await this.hotel.checkIn({
+          tenantId,
+          supplierId,
+          setId: set.id,
+          bayCode: row.bay,
+          actorUserId: actorUserId ?? null,
+        });
+        checkedIn = true;
+      } else if (open.supplierId !== supplierId) {
+        throw new BadRequestException(
+          `set deja la alt hotel (${open.supplierId})`,
+        );
+      }
+    }
+
+    return { created, checkedIn };
   }
 
   private async searchSetsBySetId(tenantId: string, supplierId: string, setId: string) {
@@ -1179,6 +1526,46 @@ function extractImportCsv(body: unknown): string {
   if (typeof o.csv === 'string') return o.csv;
   if (typeof o.content === 'string') return o.content;
   throw new BadRequestException('csv or content string required');
+}
+
+type ImportSetRow = {
+  line: number;
+  plate: string;
+  season: VehicleTireSeason;
+  mountedAs: 'on_rim' | 'tyre_only';
+  brand?: string;
+  model?: string;
+  size?: string;
+  location: 'at_client' | 'hotel';
+  bay?: string;
+  vehicleId: string;
+  clientId: string;
+};
+
+function normalizeImportSeason(raw: string): VehicleTireSeason | null {
+  const s = raw.trim().toLowerCase();
+  if (s === 'summer' || s === 'vara' || s === 'vară') return 'summer';
+  if (s === 'winter' || s === 'iarna' || s === 'iarnă') return 'winter';
+  if (s === 'all_season' || s === 'all-season' || s === 'allseason' || s === 'all season') {
+    return 'all_season';
+  }
+  return null;
+}
+
+function normalizeImportMountedAs(raw: string): 'on_rim' | 'tyre_only' | null {
+  const s = raw.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!s || s === 'on_rim' || s === 'onrim' || s === 'rim') return 'on_rim';
+  if (s === 'tyre_only' || s === 'tire_only' || s === 'tyreonly' || s === 'tireonly') {
+    return 'tyre_only';
+  }
+  return null;
+}
+
+function normalizeImportLocation(raw: string): 'at_client' | 'hotel' | null {
+  const s = raw.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (s === 'at_client' || s === 'client' || s === 'la_client') return 'at_client';
+  if (s === 'hotel' || s === 'at_hotel' || s === 'at_supplier_hotel') return 'hotel';
+  return null;
 }
 
 function assertRelocateBody(body: unknown): {

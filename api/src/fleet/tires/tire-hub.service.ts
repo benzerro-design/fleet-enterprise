@@ -562,6 +562,8 @@ export class TireHubService {
         lastDemountKm: null,
         recentEvents: [],
         items,
+        warrantyCertificateUrl: set.warrantyCertificateUrl ?? null,
+        purchaseDocs: set.purchaseDocs ?? null,
       });
     }
 

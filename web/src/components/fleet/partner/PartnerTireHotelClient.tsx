@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { parsePartnerSupplierQuery } from "@/lib/partner-context";
 import type {
@@ -30,6 +30,17 @@ import {
   type TireCustodyProtocolRecord,
 } from "@/lib/tire-custody-api";
 import { TireMovementLedger } from "@/components/fleet/TireMovementLedger";
+import { TirePurchaseDocsEditor } from "@/components/fleet/TirePurchaseDocsEditor";
+import { ListColumnPicker } from "@/components/fleet/ListColumnPicker";
+import {
+  defaultPartnerTireHotelInventarLayout,
+  PARTNER_TIRE_HOTEL_INVENTAR_COLUMNS,
+  readPartnerTireHotelInventarLayout,
+  visiblePartnerTireHotelInventarColumns,
+  writePartnerTireHotelInventarLayout,
+  type PartnerTireHotelInventarColumnKey,
+  type PartnerTireHotelInventarLayout,
+} from "@/lib/partner-tire-hotel-inventar-columns";
 
 const STAYS_PAGE_SIZE = 50;
 
@@ -50,6 +61,53 @@ function formatCheckIn(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function PartnerStayLedgerTabs({ stay }: { stay: TireHotelStay }) {
+  const [mode, setMode] = useState<"vehicle" | "asset" | "client">("vehicle");
+  const assetId = stay.items?.[0]?.assetId ?? "";
+  const clientId = stay.clientId?.trim() ?? "";
+  const entityId =
+    mode === "asset" ? assetId : mode === "client" ? clientId : stay.vehicleId;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {(
+          [
+            { mode: "vehicle" as const, label: "Vehicul", enabled: !!stay.vehicleId },
+            { mode: "asset" as const, label: "Anvelopă", enabled: !!assetId },
+            { mode: "client" as const, label: "Client", enabled: !!clientId },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.mode}
+            type="button"
+            disabled={!tab.enabled}
+            onClick={() => setMode(tab.mode)}
+            className={`rounded-md border px-2 py-1 text-[11px] disabled:opacity-40 ${
+              mode === tab.mode
+                ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-200"
+                : "border-zinc-700 text-zinc-400 hover:bg-zinc-900"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <TireMovementLedger
+        apiBase="/api/partner/tire-hotel/ledger"
+        mode={mode}
+        entityId={entityId}
+        title={
+          mode === "asset"
+            ? "Fișă mișcări (anvelopă)"
+            : mode === "client"
+              ? "Fișă mișcări (client)"
+              : "Fișă mișcări (vehicul)"
+        }
+      />
+    </div>
+  );
 }
 
 export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId }: Props) {
@@ -110,6 +168,40 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
   >({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importCsv, setImportCsv] = useState(
+    "plate,season,mountedAs,brand,model,size,location,bay\n",
+  );
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const [inventarLayout, setInventarLayout] = useState<PartnerTireHotelInventarLayout>(() =>
+    defaultPartnerTireHotelInventarLayout(),
+  );
+  const [showInventarColumns, setShowInventarColumns] = useState(false);
+
+  useEffect(() => {
+    setInventarLayout(readPartnerTireHotelInventarLayout());
+  }, []);
+
+  const inventarColumns = useMemo(
+    () => visiblePartnerTireHotelInventarColumns(inventarLayout),
+    [inventarLayout],
+  );
+
+  function persistInventarLayout(next: PartnerTireHotelInventarLayout) {
+    setInventarLayout(next);
+    writePartnerTireHotelInventarLayout(next);
+  }
+
+  const inventarCellPad =
+    inventarLayout.density === "simple" ? "px-2 py-1" : "px-2 py-2";
+  const inventarTableClass = [
+    "min-w-full text-left text-xs",
+    inventarLayout.colLines ? "[&_th]:border-r [&_td]:border-r [&_th]:border-zinc-800/80 [&_td]:border-zinc-800/60" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const inventarBodyClass = inventarLayout.rowLines
+    ? "divide-y divide-zinc-800/80"
+    : "";
 
   const supplierName = capability?.supplierName ?? null;
 
@@ -181,6 +273,56 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
       setSelectedFeeQuote(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function runImport(dryRun: boolean) {
+    setError(null);
+    setImportResult(null);
+    setBusy(dryRun ? "import-dry" : "import-apply");
+    try {
+      const body: Record<string, string> = { csv: importCsv };
+      const sid = supplierId ?? supplierQ.supplierId;
+      if (sid) body.supplierId = sid;
+      const res = await fetch(
+        dryRun
+          ? "/api/partner/tire-hotel/import-sets/dry-run"
+          : "/api/partner/tire-hotel/import-sets",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        ok?: boolean;
+        rows?: number;
+        validRows?: number;
+        created?: number;
+        updated?: number;
+        checkedIn?: number;
+        skipped?: number;
+        errors?: string[];
+      };
+      if (!res.ok) throw new Error(data.message ?? `HTTP ${res.status}`);
+      const lines = [
+        dryRun ? "Dry-run" : "Import aplicat",
+        `Rânduri: ${data.rows ?? 0}`,
+        data.validRows != null ? `Valide: ${data.validRows}` : null,
+        data.created != null ? `Create: ${data.created}` : null,
+        data.updated != null ? `Actualizate: ${data.updated}` : null,
+        data.checkedIn != null ? `Check-in hotel: ${data.checkedIn}` : null,
+        data.skipped != null ? `Omise: ${data.skipped}` : null,
+        data.ok === false ? "Cu erori / omisiuni" : "OK",
+        ...(data.errors?.length ? ["", ...data.errors.slice(0, 40)] : []),
+      ].filter(Boolean);
+      setImportResult(lines.join("\n"));
+      if (!dryRun) await loadStays();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import eșuat");
     } finally {
       setBusy(null);
     }
@@ -752,10 +894,86 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
         ) : null}
       </section>
 
+      {canWrite ? (
+        <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+          <div>
+            <h2 className="text-base font-medium text-zinc-100">Import CSV seturi</h2>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              Coloane: plate, season, mountedAs, brand, model, size, location (at_client|hotel),
+              bay (obligatoriu pentru hotel). Nu creează vehicule noi — plate trebuie să existe.
+            </p>
+          </div>
+          <textarea
+            value={importCsv}
+            onChange={(e) => setImportCsv(e.target.value)}
+            rows={6}
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-100"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy === "import-dry" || busy === "import-apply"}
+              onClick={() => void runImport(true)}
+              className="rounded-lg border border-zinc-600 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+            >
+              Dry-run
+            </button>
+            <button
+              type="button"
+              disabled={busy === "import-dry" || busy === "import-apply"}
+              onClick={() => void runImport(false)}
+              className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50"
+            >
+              Aplică import
+            </button>
+          </div>
+          {importResult ? (
+            <pre className="whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950/50 p-2 text-[11px] text-zinc-300">
+              {importResult}
+            </pre>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <h2 className="text-base font-medium text-zinc-100">Inventar hotel</h2>
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() =>
+                  persistInventarLayout({ ...inventarLayout, density: "detailed" })
+                }
+                className={`rounded-md border px-2 py-1 text-[11px] ${
+                  inventarLayout.density === "detailed"
+                    ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-200"
+                    : "border-zinc-700 text-zinc-400 hover:bg-zinc-900"
+                }`}
+              >
+                Detaliat
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  persistInventarLayout({ ...inventarLayout, density: "simple" })
+                }
+                className={`rounded-md border px-2 py-1 text-[11px] ${
+                  inventarLayout.density === "simple"
+                    ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-200"
+                    : "border-zinc-700 text-zinc-400 hover:bg-zinc-900"
+                }`}
+              >
+                Compact
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowInventarColumns((v) => !v)}
+                className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-900"
+              >
+                {showInventarColumns ? "Închide coloane" : "Coloane"}
+              </button>
+            </div>
             <select
               value={staysStatus}
               onChange={(e) => {
@@ -781,6 +999,24 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
             />
           </div>
         </div>
+        {showInventarColumns ? (
+          <ListColumnPicker
+            title="Coloane inventar hotel"
+            columns={PARTNER_TIRE_HOTEL_INVENTAR_COLUMNS}
+            layout={inventarLayout}
+            onChange={(layout) =>
+              persistInventarLayout({
+                ...inventarLayout,
+                order: layout.order,
+                hidden: layout.hidden,
+                rowLines: layout.rowLines,
+                colLines: layout.colLines,
+              })
+            }
+            onReset={() => persistInventarLayout(defaultPartnerTireHotelInventarLayout())}
+            onClose={() => setShowInventarColumns(false)}
+          />
+        ) : null}
         {canWrite && staysStatus !== "closed" ? (
           <label className="block text-xs text-zinc-500">
             Destinație la eliberare
@@ -822,24 +1058,63 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
                 : `${stays.length} sejururi`}
             </p>
             <div className="-mx-1 overflow-x-auto rounded-xl border border-zinc-800">
-              <table className="min-w-full text-left text-xs">
+              <table className={inventarTableClass}>
                 <thead className="border-b border-zinc-800 bg-zinc-900/60 text-[10px] uppercase tracking-wide text-zinc-500">
                   <tr>
-                    <th className="px-2 py-2 font-medium">Nr.</th>
-                    <th className="px-2 py-2 font-medium">Set</th>
-                    <th className="px-2 py-2 font-medium">Locație</th>
-                    <th className="px-2 py-2 font-medium">Check-in</th>
-                    <th className="px-2 py-2 font-medium">Tarif</th>
-                    <th className="px-2 py-2 font-medium">PV</th>
-                    <th className="px-2 py-2 w-8" />
+                    {inventarColumns.map((col) => (
+                      <th
+                        key={col.key}
+                        className={`${inventarCellPad} font-medium ${col.key === "actions" ? "w-8" : ""}`}
+                      >
+                        {col.key === "actions" ? "" : col.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/80">
+                <tbody className={inventarBodyClass}>
                   {stays.map((s) => {
                     const pvIn = protocolStatus(s, "check_in");
                     const pvSigned =
                       pvIn === "signed" ||
                       protocolStatus(s, "check_out") === "signed";
+                    const cells: Record<PartnerTireHotelInventarColumnKey, ReactNode> = {
+                      plate: (
+                        <>
+                          {s.plate}
+                          {s.checkOutAt ? (
+                            <span className="ml-1 text-[10px] text-zinc-500">out</span>
+                          ) : null}
+                        </>
+                      ),
+                      set: (
+                        <>
+                          {s.setName?.trim() || vehicleTireSeasonLabel(s.season)}
+                          {s.itemCount != null ? ` · ${s.itemCount}b` : ""}
+                        </>
+                      ),
+                      location: s.bayCode
+                        ? `${s.bayCode}${s.binCode ? `/${s.binCode}` : ""}`
+                        : (s.locationCode ?? "—"),
+                      checkIn: formatCheckIn(s.checkInAt),
+                      fee:
+                        s.feeCents != null
+                          ? `${(s.feeCents / 100).toLocaleString("ro-RO")} lei`
+                          : "—",
+                      pv: (
+                        <span
+                          className={
+                            pvSigned
+                              ? "text-emerald-400"
+                              : pvIn === "missing"
+                                ? "text-zinc-600"
+                                : "text-amber-300"
+                          }
+                        >
+                          {pvSigned ? "✓" : pvIn === "missing" ? "—" : "…"}
+                        </span>
+                      ),
+                      actions: expandedInventarStayId === s.id ? "▲" : "▼",
+                    };
                     return (
                       <tr
                         key={s.id}
@@ -848,43 +1123,22 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
                           setExpandedInventarStayId((id) => (id === s.id ? null : s.id))
                         }
                       >
-                        <td className="px-2 py-2 font-medium text-zinc-100">
-                          {s.plate}
-                          {s.checkOutAt ? (
-                            <span className="ml-1 text-[10px] text-zinc-500">out</span>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-2 text-zinc-400">
-                          {s.setName?.trim() || vehicleTireSeasonLabel(s.season)}
-                          {s.itemCount != null ? ` · ${s.itemCount}b` : ""}
-                        </td>
-                        <td className="px-2 py-2 text-zinc-400">
-                          {s.bayCode
-                            ? `${s.bayCode}${s.binCode ? `/${s.binCode}` : ""}`
-                            : (s.locationCode ?? "—")}
-                        </td>
-                        <td className="px-2 py-2 text-zinc-400">{formatCheckIn(s.checkInAt)}</td>
-                        <td className="px-2 py-2 text-zinc-400">
-                          {s.feeCents != null
-                            ? `${(s.feeCents / 100).toLocaleString("ro-RO")} lei`
-                            : "—"}
-                        </td>
-                        <td className="px-2 py-2">
-                          <span
-                            className={
-                              pvSigned
-                                ? "text-emerald-400"
-                                : pvIn === "missing"
-                                  ? "text-zinc-600"
-                                  : "text-amber-300"
-                            }
+                        {inventarColumns.map((col) => (
+                          <td
+                            key={col.key}
+                            className={`${inventarCellPad} ${
+                              col.key === "plate"
+                                ? "font-medium text-zinc-100"
+                                : col.key === "actions"
+                                  ? "text-zinc-500"
+                                  : col.key === "pv"
+                                    ? ""
+                                    : "text-zinc-400"
+                            }`}
                           >
-                            {pvSigned ? "✓" : pvIn === "missing" ? "—" : "…"}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 text-zinc-500">
-                          {expandedInventarStayId === s.id ? "▲" : "▼"}
-                        </td>
+                            {cells[col.key]}
+                          </td>
+                        ))}
                       </tr>
                     );
                   })}
@@ -1206,11 +1460,26 @@ export function PartnerTireHotelClient({ canWrite, adminMode = false, supplierId
                 {expandedReceiptStayId === s.id ? (
                   <TireHotelReceiptPanel stay={s} supplierName={supplierName} />
                 ) : null}
-                <TireMovementLedger
-                  apiBase="/api/partner/tire-hotel/ledger"
-                  mode="vehicle"
-                  entityId={s.vehicleId}
+                <TirePurchaseDocsEditor
+                  saveUrl={`/api/partner/tire-hotel/sets/${encodeURIComponent(s.setId)}/docs`}
+                  initialWarrantyUrl={s.warrantyCertificateUrl}
+                  initialPurchaseDocs={s.purchaseDocs}
+                  canWrite={canWrite}
+                  onSaved={(next) => {
+                    setStays((prev) =>
+                      prev.map((row) =>
+                        row.id === s.id
+                          ? {
+                              ...row,
+                              warrantyCertificateUrl: next.warrantyCertificateUrl,
+                              purchaseDocs: next.purchaseDocs,
+                            }
+                          : row,
+                      ),
+                    );
+                  }}
                 />
+                <PartnerStayLedgerTabs stay={s} />
               </div>
               ),
             )}

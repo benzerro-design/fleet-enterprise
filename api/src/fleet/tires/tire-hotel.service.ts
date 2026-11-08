@@ -96,16 +96,20 @@ export class TireHotelService {
 
   async checkIn(params: TireHotelCheckInParams) {
     const row = await this.prisma.$transaction(async (tx) => this.checkInTx(tx, params));
-    void emitTireStayWebhook({
-      event: 'tire.stay.checked_in',
-      tenantId: params.tenantId,
-      stayId: row.id,
-      setId: row.setId,
-      supplierId: params.supplierId,
-      vehicleId: row.vehicleId ?? null,
-      at: row.checkInAt,
-      feeCents: row.feeCents,
-    });
+    const hook = await this.loadWebhookDeliveryOpts(params.tenantId);
+    void emitTireStayWebhook(
+      {
+        event: 'tire.stay.checked_in',
+        tenantId: params.tenantId,
+        stayId: row.id,
+        setId: row.setId,
+        supplierId: params.supplierId,
+        vehicleId: row.vehicleId ?? null,
+        at: row.checkInAt,
+        feeCents: row.feeCents,
+      },
+      hook,
+    );
     return row;
   }
 
@@ -688,19 +692,35 @@ export class TireHotelService {
 
   async checkOut(params: TireHotelCheckOutParams) {
     const row = await this.prisma.$transaction(async (tx) => this.checkOutTx(tx, params));
-    void emitTireStayWebhook({
-      event: 'tire.stay.checked_out',
-      tenantId: params.tenantId,
-      stayId: row.id,
-      setId: row.setId,
-      supplierId: params.supplierId,
-      vehicleId: row.vehicleId ?? null,
-      at: row.checkOutAt ?? new Date().toISOString(),
-      feeCents: row.feeCents,
-      releaseKind: params.releaseKind ?? 'at_client',
-      costEntryId: row.costEntryId ?? null,
-    });
+    const hook = await this.loadWebhookDeliveryOpts(params.tenantId);
+    void emitTireStayWebhook(
+      {
+        event: 'tire.stay.checked_out',
+        tenantId: params.tenantId,
+        stayId: row.id,
+        setId: row.setId,
+        supplierId: params.supplierId,
+        vehicleId: row.vehicleId ?? null,
+        at: row.checkOutAt ?? new Date().toISOString(),
+        feeCents: row.feeCents,
+        releaseKind: params.releaseKind ?? 'at_client',
+        costEntryId: row.costEntryId ?? null,
+      },
+      hook,
+    );
     return row;
+  }
+
+  private async loadWebhookDeliveryOpts(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { tireSettings: true },
+    });
+    const settings = parseTireSettings(tenant?.tireSettings);
+    return {
+      webhookUrl: settings.webhookUrl ?? null,
+      webhookSecret: settings.webhookSecret ?? null,
+    };
   }
 
   async checkOutTx(tx: Prisma.TransactionClient, params: TireHotelCheckOutParams) {
@@ -1019,7 +1039,9 @@ export class TireHotelService {
       season: VehicleTireSeason;
       name: string | null;
       mountedAs?: string | null;
-      vehicle: { id: string; registrationNumber: string };
+      warrantyCertificateUrl?: string | null;
+      purchaseDocs?: Prisma.JsonValue | null;
+      vehicle: { id: string; registrationNumber: string; clientId?: string };
       items?: Array<{
         asset: {
           id: string;
@@ -1059,12 +1081,15 @@ export class TireHotelService {
       accountingNote: stay.accountingNote ?? null,
       plate: set.vehicle.registrationNumber,
       vehicleId: set.vehicle.id,
+      clientId: set.vehicle.clientId ?? null,
       season: set.season,
       setName: set.name,
       mountedAs: set.mountedAs ?? null,
       itemCount: items.length,
       items,
       qrPayload: tireSetQrPayload(stay.setId),
+      warrantyCertificateUrl: set.warrantyCertificateUrl ?? null,
+      purchaseDocs: set.purchaseDocs ?? null,
     };
   }
 }

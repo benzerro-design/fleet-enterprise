@@ -15,6 +15,15 @@ export type TireSettings = {
   hotelTicketHidesServiceFlow: boolean;
   /** Show seasonal out/in block on WO tip R. */
   seasonalSwapEnabled: boolean;
+  /** Optional tenant webhook for stay check-in/out (product config). */
+  webhookUrl?: string | null;
+  /** HMAC secret for outbound stay webhooks (stored; never returned in GET). */
+  webhookSecret?: string | null;
+};
+
+/** API-facing settings: secret is write-only. */
+export type TireSettingsPublic = Omit<TireSettings, 'webhookSecret'> & {
+  webhookSecretConfigured: boolean;
 };
 
 export const DEFAULT_TIRE_SETTINGS: TireSettings = {
@@ -23,6 +32,8 @@ export const DEFAULT_TIRE_SETTINGS: TireSettings = {
   hotelMinBillableMonths: 1,
   hotelTicketHidesServiceFlow: true,
   seasonalSwapEnabled: true,
+  webhookUrl: null,
+  webhookSecret: null,
 };
 
 export function parseTireSettings(raw: unknown): TireSettings {
@@ -40,7 +51,27 @@ export function parseTireSettings(raw: unknown): TireSettings {
   if (typeof o.seasonalSwapEnabled === 'boolean') {
     base.seasonalSwapEnabled = o.seasonalSwapEnabled;
   }
+  if (o.webhookUrl === null) {
+    base.webhookUrl = null;
+  } else if (typeof o.webhookUrl === 'string') {
+    const u = o.webhookUrl.trim();
+    base.webhookUrl = u || null;
+  }
+  if (o.webhookSecret === null) {
+    base.webhookSecret = null;
+  } else if (typeof o.webhookSecret === 'string') {
+    const s = o.webhookSecret.trim();
+    base.webhookSecret = s || null;
+  }
   return base;
+}
+
+export function toPublicTireSettings(settings: TireSettings): TireSettingsPublic {
+  const { webhookSecret, ...rest } = settings;
+  return {
+    ...rest,
+    webhookSecretConfigured: Boolean(webhookSecret?.trim()),
+  };
 }
 
 export function parseTireSettingsPatch(body: unknown): Partial<TireSettings> {
@@ -77,5 +108,32 @@ export function parseTireSettingsPatch(body: unknown): Partial<TireSettings> {
   }
   if (o.hotelBillingUnit === 'piece') patch.hotelBillingUnit = 'piece';
   if (o.hotelBillingPeriod === 'calendar_month') patch.hotelBillingPeriod = 'calendar_month';
+
+  if ('webhookUrl' in o) {
+    if (o.webhookUrl === null || o.webhookUrl === '') {
+      patch.webhookUrl = null;
+    } else if (typeof o.webhookUrl === 'string') {
+      const u = o.webhookUrl.trim();
+      if (u && !/^https?:\/\//i.test(u)) {
+        throw new Error('webhookUrl must be http(s) URL');
+      }
+      patch.webhookUrl = u || null;
+    } else {
+      throw new Error('webhookUrl must be string or null');
+    }
+  }
+  if ('webhookSecret' in o) {
+    // Empty string = leave unchanged (write-only field UX); null clears.
+    if (o.webhookSecret === null) {
+      patch.webhookSecret = null;
+    } else if (typeof o.webhookSecret === 'string') {
+      if (o.webhookSecret.trim().length > 0) {
+        patch.webhookSecret = o.webhookSecret.trim();
+      }
+      // empty string → omit from patch (keep existing)
+    } else {
+      throw new Error('webhookSecret must be string or null');
+    }
+  }
   return patch;
 }

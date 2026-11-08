@@ -13,6 +13,7 @@ import {
   type TireHubPayload,
 } from "@/lib/tire-hub-api";
 import { TireMovementLedger } from "@/components/fleet/TireMovementLedger";
+import { TirePurchaseDocsEditor } from "@/components/fleet/TirePurchaseDocsEditor";
 import { formatClientDisplay } from "@/lib/client-display";
 import {
   tireMountedAsHint,
@@ -70,10 +71,15 @@ export function TireHubInventory({
   const [addSeed, setAddSeed] = useState(true);
   const [pending, setPending] = useState<string | null>(null);
   const [opError, setOpError] = useState<string | null>(null);
+  const [ledgerMode, setLedgerMode] = useState<"vehicle" | "asset" | "client">("vehicle");
 
   useEffect(() => {
     setRows(hub.inventorySets ?? []);
   }, [hub.inventorySets]);
+
+  useEffect(() => {
+    setLedgerMode("vehicle");
+  }, [drawer?.setId]);
 
   useEffect(() => {
     if (initialVehicleId?.trim()) setVehicleFilter(initialVehicleId.trim());
@@ -780,7 +786,82 @@ export function TireHubInventory({
             )}
 
             <div className="mt-6">
-              <TireMovementLedger mode="vehicle" entityId={drawer.vehicleId} defaultOpen={false} />
+              <TirePurchaseDocsEditor
+                saveUrl={`${fleetBrowserBase}/tires/sets/${encodeURIComponent(drawer.setId)}/docs`}
+                initialWarrantyUrl={drawer.warrantyCertificateUrl}
+                initialPurchaseDocs={drawer.purchaseDocs}
+                canWrite={canWrite}
+                onSaved={(next) => {
+                  setDrawer((d) =>
+                    d
+                      ? {
+                          ...d,
+                          warrantyCertificateUrl: next.warrantyCertificateUrl,
+                          purchaseDocs: next.purchaseDocs,
+                        }
+                      : d,
+                  );
+                  setRows((prev) =>
+                    prev.map((r) =>
+                      r.setId === drawer.setId
+                        ? {
+                            ...r,
+                            warrantyCertificateUrl: next.warrantyCertificateUrl,
+                            purchaseDocs: next.purchaseDocs,
+                          }
+                        : r,
+                    ),
+                  );
+                }}
+              />
+            </div>
+
+            <div className="mt-6 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { mode: "vehicle" as const, label: "Vehicul", id: drawer.vehicleId },
+                    {
+                      mode: "asset" as const,
+                      label: "Anvelopă",
+                      id: drawer.items?.[0]?.assetId ?? "",
+                    },
+                    { mode: "client" as const, label: "Client", id: drawer.clientId },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.mode}
+                    type="button"
+                    disabled={!tab.id}
+                    onClick={() => setLedgerMode(tab.mode)}
+                    className={`rounded-md border px-2 py-1 text-[11px] disabled:opacity-40 ${
+                      ledgerMode === tab.mode
+                        ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-200"
+                        : "border-zinc-700 text-zinc-400 hover:bg-zinc-900"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <TireMovementLedger
+                mode={ledgerMode}
+                entityId={
+                  ledgerMode === "asset"
+                    ? (drawer.items?.[0]?.assetId ?? "")
+                    : ledgerMode === "client"
+                      ? drawer.clientId
+                      : drawer.vehicleId
+                }
+                defaultOpen={false}
+                title={
+                  ledgerMode === "asset"
+                    ? "Fișă mișcări (anvelopă)"
+                    : ledgerMode === "client"
+                      ? "Fișă mișcări (client)"
+                      : "Fișă mișcări (vehicul)"
+                }
+              />
             </div>
 
             <div className="mt-4">

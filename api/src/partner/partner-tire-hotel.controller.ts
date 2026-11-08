@@ -274,6 +274,17 @@ export class PartnerTireHotelController {
     return this.hotel.importSetsDryRun(tenantSlug, access, body);
   }
 
+  @Post('import-sets')
+  @Roles(...FLEET_WRITE_ROLES)
+  importSets(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Req() req: AuthedRequest,
+    @Body() body: unknown,
+  ) {
+    return this.hotel.importSets(tenantSlug, access, body, req.user?.id);
+  }
+
   @Get('stays/:stayId/protocols')
   @Roles(...FLEET_READ_ROLES)
   listProtocols(

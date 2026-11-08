@@ -1,3 +1,4 @@
+import { createHmac } from 'crypto';
 import { Logger } from '@nestjs/common';
 
 const logger = new Logger('TireHotelWebhooks');
@@ -17,24 +18,45 @@ export type TireStayWebhookPayload = {
   costEntryId?: string | null;
 };
 
-/** Optional outbound hook when WEBHOOK_TIRE_URL is set; otherwise logs only. */
-export async function emitTireStayWebhook(payload: TireStayWebhookPayload): Promise<void> {
-  const url = process.env.WEBHOOK_TIRE_URL?.trim();
+export type TireStayWebhookDeliveryOpts = {
+  /** Tenant product config URL (used when env override absent). */
+  webhookUrl?: string | null;
+  /** Tenant HMAC secret. */
+  webhookSecret?: string | null;
+};
+
+/**
+ * Outbound stay hook.
+ * WEBHOOK_TIRE_URL env overrides tenant webhookUrl when set.
+ */
+export async function emitTireStayWebhook(
+  payload: TireStayWebhookPayload,
+  opts?: TireStayWebhookDeliveryOpts,
+): Promise<void> {
+  const envUrl = process.env.WEBHOOK_TIRE_URL?.trim();
+  const url = envUrl || opts?.webhookUrl?.trim() || '';
   if (!url) {
     logger.debug(`${payload.event} stay=${payload.stayId}`);
     return;
   }
+  const body = JSON.stringify(payload);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const secret = opts?.webhookSecret?.trim();
+  if (secret) {
+    const sig = createHmac('sha256', secret).update(body).digest('hex');
+    headers['X-Tire-Signature'] = `sha256=${sig}`;
+  }
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      headers,
+      body,
     });
     if (!res.ok) {
-      logger.warn(`WEBHOOK_TIRE_URL ${res.status} for ${payload.event} stay=${payload.stayId}`);
+      logger.warn(`tire webhook ${res.status} for ${payload.event} stay=${payload.stayId}`);
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    logger.warn(`WEBHOOK_TIRE_URL failed: ${msg}`);
+    logger.warn(`tire webhook failed: ${msg}`);
   }
 }

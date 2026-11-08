@@ -68,6 +68,9 @@ export type TireHubInventoryItem = {
   tpmsSensorPresent: boolean;
 };
 
+/** Docs achiziție / garanție pe set (opțional pe inventar hub). */
+export type TireHubPurchaseDocs = unknown;
+
 export type TireHubInventorySet = {
   setId: string;
   vehicleId: string;
@@ -118,6 +121,8 @@ export type TireHubInventorySet = {
   lastDemountKm: number | null;
   recentEvents: TireHubRecentEvent[];
   items: TireHubInventoryItem[];
+  warrantyCertificateUrl?: string | null;
+  purchaseDocs?: TireHubPurchaseDocs | null;
 };
 
 /** Ultimele evenimente pe set (mount/demount/store/…). */

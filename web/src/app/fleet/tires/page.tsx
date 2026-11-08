@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FleetListPageLayout } from "@/components/fleet/FleetListPageLayout";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
+import { TireHubAnalyticsSnapshot } from "@/components/fleet/TireHubAnalyticsSnapshot";
 import { TireHubInventory } from "@/components/fleet/TireHubInventory";
 import { TireSeasonReminderSyncButton } from "@/components/fleet/TireSeasonReminderSyncButton";
 import {
@@ -169,6 +170,8 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
               <StatCard label="DOT vechi (≥6 ani)" value={hub.summary.assetsDotAged} />
               <StatCard label="Recomandat înlocuire" value={hub.summary.assetsRecommendedReplace} />
             </div>
+
+            <TireHubAnalyticsSnapshot hub={hub} />
 
             {(hub.changeoverQueue?.length ?? 0) > 0 ? (
               <section>

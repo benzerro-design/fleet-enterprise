@@ -61,7 +61,9 @@ import {
 import {
   parseTireSettings,
   parseTireSettingsPatch,
+  toPublicTireSettings,
   type TireSettings,
+  type TireSettingsPublic,
 } from './tire-settings';
 import {
   parseImportSettings,
@@ -479,20 +481,20 @@ export class TenantService {
     return next;
   }
 
-  async getTireSettings(tenantSlug: string): Promise<TireSettings> {
+  async getTireSettings(tenantSlug: string): Promise<TireSettingsPublic> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { slug: tenantSlug },
       select: { tireSettings: true },
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
-    return parseTireSettings(tenant.tireSettings);
+    return toPublicTireSettings(parseTireSettings(tenant.tireSettings));
   }
 
   async setTireSettings(
     tenantSlug: string,
     body: unknown,
     actorUserId: string,
-  ): Promise<TireSettings> {
+  ): Promise<TireSettingsPublic> {
     let patch: Partial<TireSettings>;
     try {
       patch = parseTireSettingsPatch(body);
@@ -509,15 +511,19 @@ export class TenantService {
       where: { id: tenant.id },
       data: { tireSettings: next as Prisma.InputJsonValue },
     });
+    const publicNext = toPublicTireSettings(next);
     await this.audit.log({
       tenantId: tenant.id,
       actorUserId,
       action: 'tire_settings_update',
       entityType: 'tenant',
       entityId: tenant.id,
-      meta: next,
+      meta: {
+        ...publicNext,
+        webhookSecretUpdated: 'webhookSecret' in patch,
+      },
     });
-    return next;
+    return publicNext;
   }
 
   async getImportSettings(tenantSlug: string): Promise<ImportSettings> {

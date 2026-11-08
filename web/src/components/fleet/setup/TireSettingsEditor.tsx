@@ -15,6 +15,8 @@ type Props = {
 
 export function TireSettingsEditor({ initial }: Props) {
   const [settings, setSettings] = useState<TireSettings>(initial ?? DEFAULT_TIRE_SETTINGS);
+  const [webhookSecretDraft, setWebhookSecretDraft] = useState("");
+  const [clearWebhookSecret, setClearWebhookSecret] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -24,16 +26,20 @@ export function TireSettingsEditor({ initial }: Props) {
     setError(null);
     setInfo(null);
     try {
+      const body: Record<string, unknown> = {
+        hotelMinBillableMonths: settings.hotelMinBillableMonths,
+        hotelTicketHidesServiceFlow: settings.hotelTicketHidesServiceFlow,
+        seasonalSwapEnabled: settings.seasonalSwapEnabled,
+        hotelBillingUnit: "piece",
+        hotelBillingPeriod: "calendar_month",
+        webhookUrl: settings.webhookUrl?.trim() || null,
+      };
+      if (clearWebhookSecret) body.webhookSecret = null;
+      else if (webhookSecretDraft.trim()) body.webhookSecret = webhookSecretDraft.trim();
       const res = await fetch(tireSettingsBrowserBase, {
         method: "PATCH",
         headers: fleetJsonHeaders(),
-        body: JSON.stringify({
-          hotelMinBillableMonths: settings.hotelMinBillableMonths,
-          hotelTicketHidesServiceFlow: settings.hotelTicketHidesServiceFlow,
-          seasonalSwapEnabled: settings.seasonalSwapEnabled,
-          hotelBillingUnit: "piece",
-          hotelBillingPeriod: "calendar_month",
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { message?: string };
@@ -41,6 +47,8 @@ export function TireSettingsEditor({ initial }: Props) {
       }
       const next = (await res.json()) as TireSettings;
       setSettings(next);
+      setWebhookSecretDraft("");
+      setClearWebhookSecret(false);
       setInfo("Setările anvelope au fost salvate.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Salvare eșuată");
@@ -132,6 +140,56 @@ export function TireSettingsEditor({ initial }: Props) {
             sau nou).
           </span>
         </label>
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">Webhook sejur hotel</h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Notificări outbound la check-in / check-out.{" "}
+            <code className="text-zinc-400">WEBHOOK_TIRE_URL</code> din mediu are prioritate dacă e
+            setat. Secretul e doar la scriere (HMAC{" "}
+            <code className="text-zinc-400">X-Tire-Signature</code>).
+          </p>
+        </div>
+        <label className="block text-xs text-zinc-500">
+          URL webhook
+          <input
+            value={settings.webhookUrl ?? ""}
+            onChange={(e) => setSettings((s) => ({ ...s, webhookUrl: e.target.value }))}
+            placeholder="https://…"
+            className="mt-1 block w-full max-w-xl rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100"
+          />
+        </label>
+        <label className="block text-xs text-zinc-500">
+          Secret HMAC {settings.webhookSecretConfigured ? "(configurat — lasă gol ca să păstrezi)" : ""}
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={webhookSecretDraft}
+            onChange={(e) => {
+              setWebhookSecretDraft(e.target.value);
+              if (e.target.value.trim()) setClearWebhookSecret(false);
+            }}
+            disabled={clearWebhookSecret}
+            placeholder={settings.webhookSecretConfigured ? "••••••••" : "opțional"}
+            className="mt-1 block w-full max-w-xl rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 disabled:opacity-50"
+          />
+        </label>
+        {settings.webhookSecretConfigured ? (
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
+            <input
+              type="checkbox"
+              checked={clearWebhookSecret}
+              onChange={(e) => {
+                setClearWebhookSecret(e.target.checked);
+                if (e.target.checked) setWebhookSecretDraft("");
+              }}
+              className="rounded border-zinc-600 bg-zinc-900"
+            />
+            Șterge secretul salvat
+          </label>
+        ) : null}
       </section>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}

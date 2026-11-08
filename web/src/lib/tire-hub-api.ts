@@ -104,6 +104,8 @@ export type TireHubInventorySet = {
   lastDemountKm?: number | null;
   recentEvents?: TireHubRecentEvent[];
   items?: TireHubInventoryItem[];
+  warrantyCertificateUrl?: string | null;
+  purchaseDocs?: unknown;
 };
 
 export type TireHubChangeoverItem = {

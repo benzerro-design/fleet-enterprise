@@ -4,6 +4,9 @@ export type TireSettings = {
   hotelMinBillableMonths: number;
   hotelTicketHidesServiceFlow: boolean;
   seasonalSwapEnabled: boolean;
+  webhookUrl?: string | null;
+  /** Never returned from API; UI uses webhookSecretConfigured. */
+  webhookSecretConfigured?: boolean;
 };
 
 export const DEFAULT_TIRE_SETTINGS: TireSettings = {
@@ -12,6 +15,8 @@ export const DEFAULT_TIRE_SETTINGS: TireSettings = {
   hotelMinBillableMonths: 1,
   hotelTicketHidesServiceFlow: true,
   seasonalSwapEnabled: true,
+  webhookUrl: null,
+  webhookSecretConfigured: false,
 };
 
 export const tireSettingsBrowserBase = "/api/tenant/tire-settings";
@@ -28,6 +33,11 @@ export function parseTireSettings(raw: unknown): TireSettings {
   }
   if (typeof o.seasonalSwapEnabled === "boolean") {
     base.seasonalSwapEnabled = o.seasonalSwapEnabled;
+  }
+  if (o.webhookUrl === null) base.webhookUrl = null;
+  else if (typeof o.webhookUrl === "string") base.webhookUrl = o.webhookUrl.trim() || null;
+  if (typeof o.webhookSecretConfigured === "boolean") {
+    base.webhookSecretConfigured = o.webhookSecretConfigured;
   }
   return base;
 }

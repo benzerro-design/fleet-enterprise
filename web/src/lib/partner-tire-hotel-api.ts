@@ -36,6 +36,7 @@ export type TireHotelStay = {
   checkOutAt: string | null;
   plate: string;
   vehicleId: string;
+  clientId?: string | null;
   season: VehicleTireSeason;
   setName: string | null;
   mountedAs?: string | null;
@@ -50,6 +51,8 @@ export type TireHotelStay = {
   costEntryId?: string | null;
   costAmountCents?: number | null;
   protocols?: TireHotelProtocolSummary[];
+  warrantyCertificateUrl?: string | null;
+  purchaseDocs?: unknown;
 };
 
 export type TireHotelReleaseKind = "at_client" | "in_transit" | "scrap" | "quarantine";
