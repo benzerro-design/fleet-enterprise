@@ -57,7 +57,8 @@ model Tenant {
   tireStorageStays     TireStorageStay[]
   tireWarehouses       TireWarehouse[]
   tireWarehouseZones   TireWarehouseZone[]
-  tireWarehouseShelves TireWarehouseShelf[]
+  tireWarehouseRows      TireWarehouseRow[]
+  tireWarehouseLocations TireWarehouseLocation[]
   tireCustodyProtocols TireCustodyProtocol[]
   clients            Client[]
   clientContacts     ClientContact[]
@@ -1887,7 +1888,7 @@ model Supplier {
   @@index([tenantId, category])
 }
 
-/// Depozit partener — master data rafturi hotel anvelope (pachet 1.1).
+/// Depozit partener — master data rânduri / locații hotel anvelope (pachet 1.1b).
 model TireWarehouse {
   id           String   @id @default(cuid())
   tenantId     String
@@ -1920,29 +1921,48 @@ model TireWarehouseZone {
   updatedAt   DateTime @updatedAt
   tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   warehouse   TireWarehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-  shelves     TireWarehouseShelf[]
+  rows        TireWarehouseRow[]
 
   @@unique([warehouseId, code])
   @@index([tenantId])
   @@index([warehouseId])
 }
 
-model TireWarehouseShelf {
+model TireWarehouseRow {
   id        String   @id @default(cuid())
   tenantId  String
   zoneId    String
+  code      String
+  name      String?
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  zone      TireWarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  locations TireWarehouseLocation[]
+
+  @@unique([zoneId, code])
+  @@index([tenantId])
+  @@index([zoneId])
+}
+
+model TireWarehouseLocation {
+  id        String   @id @default(cuid())
+  tenantId  String
+  rowId     String
   code      String
   name      String?
   qrPayload String   @unique
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  zone      TireWarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  row       TireWarehouseRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
 
-  @@unique([zoneId, code])
+  @@unique([rowId, code])
   @@index([tenantId])
-  @@index([zoneId])
+  @@index([rowId])
 }
 
 /// Document firmă furnizor (ONRC, autorizații) — PARTNER-003.

@@ -76,45 +76,77 @@ export class PartnerTireWarehouseController {
     return this.warehouses.patchZone(tenantSlug, access, zoneId, body);
   }
 
-  @Get('zones/:id/shelves')
+  @Get('zones/:id/rows')
   @Roles(...FLEET_READ_ROLES)
-  listShelves(
+  listRows(
     @TenantId() tenantSlug: string,
     @CurrentAccess() access: AccessContext,
     @Param('id') zoneId: string,
   ) {
-    return this.warehouses.listShelves(tenantSlug, access, zoneId);
+    return this.warehouses.listRows(tenantSlug, access, zoneId);
   }
 
-  @Post('zones/:id/shelves')
+  @Post('zones/:id/rows')
   @Roles(...FLEET_WRITE_ROLES)
-  createShelf(
+  createRow(
     @TenantId() tenantSlug: string,
     @CurrentAccess() access: AccessContext,
     @Param('id') zoneId: string,
     @Body() body: unknown,
   ) {
-    return this.warehouses.createShelf(tenantSlug, access, zoneId, body);
+    return this.warehouses.createRow(tenantSlug, access, zoneId, body);
   }
 
-  @Patch('shelves/:id')
+  @Patch('rows/:id')
   @Roles(...FLEET_WRITE_ROLES)
-  patchShelf(
+  patchRow(
     @TenantId() tenantSlug: string,
     @CurrentAccess() access: AccessContext,
-    @Param('id') shelfId: string,
+    @Param('id') rowId: string,
     @Body() body: unknown,
   ) {
-    return this.warehouses.patchShelf(tenantSlug, access, shelfId, body);
+    return this.warehouses.patchRow(tenantSlug, access, rowId, body);
   }
 
-  @Get('shelves/:id/label')
+  @Get('rows/:id/locations')
   @Roles(...FLEET_READ_ROLES)
-  shelfLabel(
+  listLocations(
     @TenantId() tenantSlug: string,
     @CurrentAccess() access: AccessContext,
-    @Param('id') shelfId: string,
+    @Param('id') rowId: string,
   ) {
-    return this.warehouses.shelfLabel(tenantSlug, access, shelfId);
+    return this.warehouses.listLocations(tenantSlug, access, rowId);
+  }
+
+  @Post('rows/:id/locations')
+  @Roles(...FLEET_WRITE_ROLES)
+  createLocation(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('id') rowId: string,
+    @Body() body: unknown,
+  ) {
+    return this.warehouses.createLocation(tenantSlug, access, rowId, body);
+  }
+
+  @Patch('locations/:id')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchLocation(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('id') locationId: string,
+    @Body() body: unknown,
+  ) {
+    return this.warehouses.patchLocation(tenantSlug, access, locationId, body);
+  }
+
+  @Get('locations/:id/label')
+  @Roles(...FLEET_READ_ROLES)
+  locationLabel(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('id') locationId: string,
+  ) {
+    return this.warehouses.locationLabel(tenantSlug, access, locationId);
   }
 }

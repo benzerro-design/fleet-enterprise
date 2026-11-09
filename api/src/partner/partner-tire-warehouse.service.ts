@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import type { AccessContext } from '../iam/access-context.types';
 import { assertPartnerWrite, resolvePartnerSupplierIdsFilter } from '../iam/partner-access';
-import { tireShelfQrPayload } from '../fleet/tires/tire-domain.types';
+import { tireLocationQrPayload } from '../fleet/tires/tire-domain.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertSupplierReadById } from '../suppliers/supplier-access';
 import { assertSupplierTireStorage } from '../suppliers/supplier-tire-capability';
@@ -96,15 +96,31 @@ export class PartnerTireWarehouseService {
     return zone;
   }
 
-  private async getShelfForAccess(tenantSlug: string, access: AccessContext, shelfId: string) {
+  private async getRowForAccess(tenantSlug: string, access: AccessContext, rowId: string) {
     const { tenantId } = await this.resolveTenant(tenantSlug);
-    const shelf = await this.prisma.tireWarehouseShelf.findFirst({
-      where: { id: shelfId.trim(), tenantId },
+    const row = await this.prisma.tireWarehouseRow.findFirst({
+      where: { id: rowId.trim(), tenantId },
       include: { zone: { include: { warehouse: true } } },
     });
-    if (!shelf) throw new NotFoundException('Shelf not found');
-    await this.assertSupplierScope(tenantSlug, tenantId, shelf.zone.warehouse.supplierId, access);
-    return shelf;
+    if (!row) throw new NotFoundException('Row not found');
+    await this.assertSupplierScope(tenantSlug, tenantId, row.zone.warehouse.supplierId, access);
+    return row;
+  }
+
+  private async getLocationForAccess(tenantSlug: string, access: AccessContext, locationId: string) {
+    const { tenantId } = await this.resolveTenant(tenantSlug);
+    const location = await this.prisma.tireWarehouseLocation.findFirst({
+      where: { id: locationId.trim(), tenantId },
+      include: { row: { include: { zone: { include: { warehouse: true } } } } },
+    });
+    if (!location) throw new NotFoundException('Location not found');
+    await this.assertSupplierScope(
+      tenantSlug,
+      tenantId,
+      location.row.zone.warehouse.supplierId,
+      access,
+    );
+    return location;
   }
 
   async listWarehouses(tenantSlug: string, access: AccessContext, supplierId?: string) {
@@ -200,34 +216,80 @@ export class PartnerTireWarehouseService {
     });
   }
 
-  async listShelves(tenantSlug: string, access: AccessContext, zoneId: string) {
+  async listRows(tenantSlug: string, access: AccessContext, zoneId: string) {
     const zone = await this.getZoneForAccess(tenantSlug, access, zoneId);
-    return this.prisma.tireWarehouseShelf.findMany({
+    return this.prisma.tireWarehouseRow.findMany({
       where: { tenantId: zone.tenantId, zoneId: zone.id },
-      orderBy: [{ active: 'desc' }, { code: 'asc' }],
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
     });
   }
 
-  async createShelf(tenantSlug: string, access: AccessContext, zoneId: string, body: unknown) {
+  async createRow(tenantSlug: string, access: AccessContext, zoneId: string, body: unknown) {
     assertPartnerWrite(access);
     const b = body as Record<string, unknown>;
     const zone = await this.getZoneForAccess(tenantSlug, access, zoneId);
     const code = normalizeCode(b.code);
+    const sortOrder =
+      typeof b.sortOrder === 'number' && Number.isFinite(b.sortOrder) ? Math.trunc(b.sortOrder) : 0;
+    try {
+      return await this.prisma.tireWarehouseRow.create({
+        data: {
+          tenantId: zone.tenantId,
+          zoneId: zone.id,
+          code,
+          name: optionalString(b.name),
+          sortOrder,
+        },
+      });
+    } catch (e) {
+      mapPrismaUnique(e);
+    }
+  }
+
+  async patchRow(tenantSlug: string, access: AccessContext, rowId: string, body: unknown) {
+    assertPartnerWrite(access);
+    const b = body as Record<string, unknown>;
+    const row = await this.getRowForAccess(tenantSlug, access, rowId);
+    const sortOrder =
+      typeof b.sortOrder === 'number' && Number.isFinite(b.sortOrder) ? Math.trunc(b.sortOrder) : undefined;
+    return this.prisma.tireWarehouseRow.update({
+      where: { id: row.id },
+      data: {
+        ...(b.name !== undefined ? { name: optionalString(b.name) ?? null } : {}),
+        ...(sortOrder !== undefined ? { sortOrder } : {}),
+        ...(typeof b.active === 'boolean' ? { active: b.active } : {}),
+      },
+    });
+  }
+
+  async listLocations(tenantSlug: string, access: AccessContext, rowId: string) {
+    const row = await this.getRowForAccess(tenantSlug, access, rowId);
+    return this.prisma.tireWarehouseLocation.findMany({
+      where: { tenantId: row.tenantId, rowId: row.id },
+      orderBy: [{ active: 'desc' }, { code: 'asc' }],
+    });
+  }
+
+  async createLocation(tenantSlug: string, access: AccessContext, rowId: string, body: unknown) {
+    assertPartnerWrite(access);
+    const b = body as Record<string, unknown>;
+    const row = await this.getRowForAccess(tenantSlug, access, rowId);
+    const code = normalizeCode(b.code);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const placeholder = `pending:${randomUUID()}`;
-        const created = await tx.tireWarehouseShelf.create({
+        const created = await tx.tireWarehouseLocation.create({
           data: {
-            tenantId: zone.tenantId,
-            zoneId: zone.id,
+            tenantId: row.tenantId,
+            rowId: row.id,
             code,
             name: optionalString(b.name),
             qrPayload: placeholder,
           },
         });
-        return tx.tireWarehouseShelf.update({
+        return tx.tireWarehouseLocation.update({
           where: { id: created.id },
-          data: { qrPayload: tireShelfQrPayload(created.id) },
+          data: { qrPayload: tireLocationQrPayload(created.id) },
         });
       });
     } catch (e) {
@@ -235,12 +297,12 @@ export class PartnerTireWarehouseService {
     }
   }
 
-  async patchShelf(tenantSlug: string, access: AccessContext, shelfId: string, body: unknown) {
+  async patchLocation(tenantSlug: string, access: AccessContext, locationId: string, body: unknown) {
     assertPartnerWrite(access);
     const b = body as Record<string, unknown>;
-    const shelf = await this.getShelfForAccess(tenantSlug, access, shelfId);
-    return this.prisma.tireWarehouseShelf.update({
-      where: { id: shelf.id },
+    const location = await this.getLocationForAccess(tenantSlug, access, locationId);
+    return this.prisma.tireWarehouseLocation.update({
+      where: { id: location.id },
       data: {
         ...(b.name !== undefined ? { name: optionalString(b.name) ?? null } : {}),
         ...(typeof b.active === 'boolean' ? { active: b.active } : {}),
@@ -248,17 +310,20 @@ export class PartnerTireWarehouseService {
     });
   }
 
-  async shelfLabel(tenantSlug: string, access: AccessContext, shelfId: string) {
-    const shelf = await this.getShelfForAccess(tenantSlug, access, shelfId);
-    const wh = shelf.zone.warehouse;
-    const labelText = [wh.name, shelf.zone.code, shelf.code].filter(Boolean).join(' · ');
+  async locationLabel(tenantSlug: string, access: AccessContext, locationId: string) {
+    const location = await this.getLocationForAccess(tenantSlug, access, locationId);
+    const wh = location.row.zone.warehouse;
+    const labelText = [wh.name, location.row.zone.code, location.row.code, location.code]
+      .filter(Boolean)
+      .join(' · ');
     return {
-      shelfId: shelf.id,
-      code: shelf.code,
-      zoneCode: shelf.zone.code,
+      locationId: location.id,
+      code: location.code,
+      rowCode: location.row.code,
+      zoneCode: location.row.zone.code,
       warehouseCode: wh.code,
       warehouseName: wh.name,
-      qrPayload: shelf.qrPayload,
+      qrPayload: location.qrPayload,
       labelText,
     };
   }

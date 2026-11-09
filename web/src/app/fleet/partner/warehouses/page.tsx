@@ -21,7 +21,7 @@ export default async function PartnerWarehousesPage({ searchParams }: PageProps)
         <div className="mb-4">
           <h1 className="text-lg font-semibold text-zinc-100">Depozite</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Structură master: depozit → zonă → raft. Etichete QR pentru scanare viitoare (pachet 1.1).
+            Structură master: depozit → zonă → rând → locație. Etichete QR pe locație (pachet 1.1b).
           </p>
         </div>
         <Suspense fallback={<p className="text-xs text-zinc-500">Se încarcă…</p>}>

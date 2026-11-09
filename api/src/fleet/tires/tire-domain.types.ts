@@ -7,6 +7,7 @@ import type {
 
 export const TIRE_SET_QR_PREFIX = 'FE:tire-set:';
 export const TIRE_SHELF_QR_PREFIX = 'FE:tire-shelf:';
+export const TIRE_LOCATION_QR_PREFIX = 'FE:tire-location:';
 
 export function tireSetQrPayload(setId: string): string {
   return `${TIRE_SET_QR_PREFIX}${setId}`;
@@ -14,6 +15,10 @@ export function tireSetQrPayload(setId: string): string {
 
 export function tireShelfQrPayload(shelfId: string): string {
   return `${TIRE_SHELF_QR_PREFIX}${shelfId}`;
+}
+
+export function tireLocationQrPayload(locationId: string): string {
+  return `${TIRE_LOCATION_QR_PREFIX}${locationId}`;
 }
 
 /** Majority season for a set — unknown if mixed or empty. */

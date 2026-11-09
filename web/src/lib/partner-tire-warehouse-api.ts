@@ -23,10 +23,22 @@ export type TireWarehouseZoneRow = {
   updatedAt: string;
 };
 
-export type TireWarehouseShelfRow = {
+export type TireWarehouseStorageRow = {
   id: string;
   tenantId: string;
   zoneId: string;
+  code: string;
+  name: string | null;
+  sortOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TireWarehouseLocationRow = {
+  id: string;
+  tenantId: string;
+  rowId: string;
   code: string;
   name: string | null;
   qrPayload: string;
@@ -35,9 +47,10 @@ export type TireWarehouseShelfRow = {
   updatedAt: string;
 };
 
-export type TireWarehouseShelfLabel = {
-  shelfId: string;
+export type TireWarehouseLocationLabel = {
+  locationId: string;
   code: string;
+  rowCode: string;
   zoneCode: string;
   warehouseCode: string;
   warehouseName: string;
@@ -107,34 +120,60 @@ export async function createZone(
   return data as TireWarehouseZoneRow;
 }
 
-export async function fetchShelves(zoneId: string): Promise<TireWarehouseShelfRow[]> {
-  const res = await fetch(`/api/partner/tire-warehouse/zones/${encodeURIComponent(zoneId)}/shelves`, {
+export async function fetchRows(zoneId: string): Promise<TireWarehouseStorageRow[]> {
+  const res = await fetch(`/api/partner/tire-warehouse/zones/${encodeURIComponent(zoneId)}/rows`, {
     cache: "no-store",
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(apiMessage(res, data));
-  return data as TireWarehouseShelfRow[];
+  return data as TireWarehouseStorageRow[];
 }
 
-export async function createShelf(
+export async function createRow(
   zoneId: string,
-  body: { code: string; name?: string },
-): Promise<TireWarehouseShelfRow> {
-  const res = await fetch(`/api/partner/tire-warehouse/zones/${encodeURIComponent(zoneId)}/shelves`, {
+  body: { code: string; name?: string; sortOrder?: number },
+): Promise<TireWarehouseStorageRow> {
+  const res = await fetch(`/api/partner/tire-warehouse/zones/${encodeURIComponent(zoneId)}/rows`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(apiMessage(res, data));
-  return data as TireWarehouseShelfRow;
+  return data as TireWarehouseStorageRow;
 }
 
-export async function fetchShelfLabel(shelfId: string): Promise<TireWarehouseShelfLabel> {
-  const res = await fetch(`/api/partner/tire-warehouse/shelves/${encodeURIComponent(shelfId)}/label`, {
+export async function fetchLocations(rowId: string): Promise<TireWarehouseLocationRow[]> {
+  const res = await fetch(`/api/partner/tire-warehouse/rows/${encodeURIComponent(rowId)}/locations`, {
     cache: "no-store",
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(apiMessage(res, data));
-  return data as TireWarehouseShelfLabel;
+  return data as TireWarehouseLocationRow[];
+}
+
+export async function createLocation(
+  rowId: string,
+  body: { code: string; name?: string },
+): Promise<TireWarehouseLocationRow> {
+  const res = await fetch(`/api/partner/tire-warehouse/rows/${encodeURIComponent(rowId)}/locations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(apiMessage(res, data));
+  return data as TireWarehouseLocationRow;
+}
+
+export async function fetchLocationLabel(locationId: string): Promise<TireWarehouseLocationLabel> {
+  const res = await fetch(
+    `/api/partner/tire-warehouse/locations/${encodeURIComponent(locationId)}/label`,
+    {
+      cache: "no-store",
+    },
+  );
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(apiMessage(res, data));
+  return data as TireWarehouseLocationLabel;
 }
