@@ -165,6 +165,45 @@ export class PartnerTireHotelController {
     });
   }
 
+  @Get('requests/:ticketId/cazare')
+  @Roles(...FLEET_READ_ROLES)
+  getCazareStatus(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('ticketId') ticketId: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
+  ) {
+    return this.hotel.getCazareStatus(tenantSlug, access, ticketId, {
+      supplierId: supplierId?.trim(),
+      supplierIds: parseSupplierIdsQuery(supplierId, suppliers),
+    });
+  }
+
+  @Post('requests/:ticketId/complete-cazare')
+  @Roles(...FLEET_WRITE_ROLES)
+  completeCazare(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('ticketId') ticketId: string,
+    @Req() req: AuthedRequest,
+    @Body() body: Record<string, unknown>,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    const o = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+    const sid =
+      (typeof o.supplierId === 'string' && o.supplierId.trim()) ||
+      supplierId?.trim() ||
+      undefined;
+    return this.hotel.completeCazare(
+      tenantSlug,
+      access,
+      ticketId,
+      { supplierId: sid },
+      req.user?.id,
+    );
+  }
+
   @Get('dashboard-stats')
   @Roles(...FLEET_READ_ROLES)
   dashboardStats(

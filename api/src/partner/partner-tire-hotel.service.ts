@@ -307,6 +307,10 @@ export class PartnerTireHotelService {
         ticketId: t.id,
         supplierId: matchedSupplierId,
       }),
+      hrefCazare: buildPartnerCazareHref({
+        ticketId: t.id,
+        supplierId: matchedSupplierId,
+      }),
       hrefWorkOrders: matchedSupplierId
         ? `/fleet/partner/work-orders?supplierId=${encodeURIComponent(matchedSupplierId)}`
         : '/fleet/partner/work-orders',
@@ -744,6 +748,210 @@ export class PartnerTireHotelService {
     ]);
     return {
       item: this.mapTireRequestRow(row, allocByClient, scope.supplierId),
+    };
+  }
+
+  /** Progress for package 1.4 cazare execution wizard. */
+  async getCazareStatus(
+    tenantSlug: string,
+    access: AccessContext,
+    ticketId: string,
+    opts: { supplierId?: string; supplierIds?: string[] } = {},
+  ) {
+    const { item } = await this.getTireRequest(tenantSlug, access, ticketId, opts);
+    const isCazare =
+      item.gestiuneOp === TireGestiuneOp.cazare ||
+      item.kind === 'cazare' ||
+      item.kind === 'storage';
+    if (!isCazare) {
+      throw new BadRequestException('Ticket is not a cazare / storage request');
+    }
+
+    const supplierId =
+      (typeof item.supplierId === 'string' && item.supplierId) ||
+      opts.supplierId?.trim() ||
+      opts.supplierIds?.[0] ||
+      null;
+    if (!supplierId) {
+      throw new BadRequestException('supplierId is required for cazare status');
+    }
+
+    let hasTireStorage = false;
+    let supplierName: string | null =
+      typeof item.supplierName === 'string' ? item.supplierName : null;
+    try {
+      const cap = await this.capability(tenantSlug, access, supplierId);
+      hasTireStorage = Boolean(cap.hasTireStorage);
+      supplierName = cap.supplierName ?? supplierName;
+    } catch {
+      hasTireStorage = false;
+    }
+
+    const stayId =
+      Array.isArray(item.stayIds) && item.stayIds.length > 0
+        ? String(item.stayIds[0])
+        : null;
+
+    let stay: {
+      id: string;
+      locationCode: string | null;
+      warehouseLocationId: string | null;
+      locationLabel: string | null;
+      checkInAt: string;
+    } | null = null;
+    let checkInProtocol: {
+      id: string;
+      status: string;
+      hasArchivedPdf: boolean;
+    } | null = null;
+
+    if (stayId) {
+      const scope = await this.resolveSupplier(tenantSlug, access, supplierId);
+      const row = await this.prisma.tireStorageStay.findFirst({
+        where: { id: stayId, tenantId: scope.tenantId, supplierId: scope.supplierId },
+        select: {
+          id: true,
+          locationCode: true,
+          warehouseLocationId: true,
+          checkInAt: true,
+          warehouseLocation: {
+            select: {
+              code: true,
+              row: {
+                select: {
+                  code: true,
+                  zone: { select: { code: true, warehouse: { select: { code: true } } } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (row) {
+        const loc = row.warehouseLocation;
+        const locationLabel = loc
+          ? `${loc.row.zone.warehouse.code}/${loc.row.zone.code}/${loc.row.code}/${loc.code}`
+          : row.locationCode;
+        stay = {
+          id: row.id,
+          locationCode: row.locationCode,
+          warehouseLocationId: row.warehouseLocationId,
+          locationLabel,
+          checkInAt: row.checkInAt.toISOString(),
+        };
+        const proto = await this.prisma.tireCustodyProtocol.findFirst({
+          where: {
+            tenantId: scope.tenantId,
+            stayId: row.id,
+            kind: TireCustodyProtocolKind.check_in,
+            status: { in: ['draft', 'signed'] },
+          },
+          orderBy: [{ revision: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            id: true,
+            status: true,
+            pdfArchivedAt: true,
+            pdfSha256: true,
+          },
+        });
+        if (proto) {
+          checkInProtocol = {
+            id: proto.id,
+            status: proto.status,
+            hasArchivedPdf: Boolean(proto.pdfArchivedAt && proto.pdfSha256),
+          };
+        }
+      }
+    }
+
+    const hasLocation = Boolean(stay?.warehouseLocationId);
+    const hasSignedPv = Boolean(
+      checkInProtocol?.status === 'signed' && checkInProtocol.hasArchivedPdf,
+    );
+    const canComplete =
+      hasTireStorage && Boolean(stay) && hasSignedPv && hasLocation && item.status !== 'resolved';
+
+    return {
+      item,
+      capability: { hasTireStorage, supplierId, supplierName },
+      stay,
+      checkInProtocol,
+      progress: {
+        hasStay: Boolean(stay),
+        hasSignedPv,
+        hasLocation,
+        canComplete,
+        complete: item.status === 'resolved',
+      },
+    };
+  }
+
+  async completeCazare(
+    tenantSlug: string,
+    access: AccessContext,
+    ticketId: string,
+    opts: { supplierId?: string } = {},
+    actorUserId?: string,
+  ) {
+    assertPartnerWrite(access);
+    const status = await this.getCazareStatus(tenantSlug, access, ticketId, {
+      supplierId: opts.supplierId,
+    });
+    if (!status.capability.hasTireStorage) {
+      throw new ForbiddenException(
+        'Furnizorul nu are activată capacitatea tire_storage — nu poate finaliza cazarea',
+      );
+    }
+    if (!status.progress.canComplete) {
+      const missing: string[] = [];
+      if (!status.progress.hasStay) missing.push('check-in (sejur)');
+      if (!status.progress.hasSignedPv) missing.push('PV check-in semnat');
+      if (!status.progress.hasLocation) missing.push('locație depozit (zonă→rând→locație)');
+      throw new BadRequestException(
+        missing.length
+          ? `Cazarea nu e completă: lipsește ${missing.join(', ')}`
+          : 'Cazarea nu poate fi finalizată',
+      );
+    }
+
+    const scope = await this.resolveSupplier(tenantSlug, access, opts.supplierId);
+    const updated = await this.prisma.crmTicket.updateMany({
+      where: {
+        id: ticketId.trim(),
+        tenantId: scope.tenantId,
+        status: { in: [CrmTicketStatus.open, CrmTicketStatus.in_progress] },
+      },
+      data: {
+        status: CrmTicketStatus.resolved,
+        resolvedAt: new Date(),
+      },
+    });
+    if (updated.count === 0) {
+      throw new BadRequestException('Ticket already resolved or not found');
+    }
+
+    await this.prisma.crmTicketEvent.create({
+      data: {
+        tenantId: scope.tenantId,
+        ticketId: ticketId.trim(),
+        kind: CrmTicketEventKind.workflow_advance,
+        body: 'Cazare finalizată: PV semnat + locație depozit',
+        actorUserId: actorUserId ?? null,
+        payload: {
+          action: 'complete_cazare',
+          stayId: status.stay?.id ?? null,
+          warehouseLocationId: status.stay?.warehouseLocationId ?? null,
+          protocolId: status.checkInProtocol?.id ?? null,
+          status: 'resolved',
+        },
+      },
+    });
+
+    return {
+      ok: true as const,
+      ticketId: ticketId.trim(),
+      status: 'resolved' as const,
+      stayId: status.stay?.id ?? null,
     };
   }
 
@@ -1943,6 +2151,16 @@ function buildPartnerTireRequestHref(opts: {
   if (opts.supplierId) p.set('supplierId', opts.supplierId);
   const qs = p.toString();
   return `/fleet/partner/tire-requests/${encodeURIComponent(opts.ticketId)}${qs ? `?${qs}` : ''}`;
+}
+
+function buildPartnerCazareHref(opts: {
+  ticketId: string;
+  supplierId?: string | null;
+}): string {
+  const p = new URLSearchParams();
+  if (opts.supplierId) p.set('supplierId', opts.supplierId);
+  const qs = p.toString();
+  return `/fleet/partner/tire-requests/${encodeURIComponent(opts.ticketId)}/cazare${qs ? `?${qs}` : ''}`;
 }
 
 function buildPartnerHotelCheckInHref(opts: {

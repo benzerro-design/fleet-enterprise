@@ -30,6 +30,9 @@ const PARTNER_PAGE_TITLES: Record<string, string> = {
 
 function partnerPageTitle(pathname: string): string {
   if (pathname.startsWith("/fleet/partner/work-orders/")) return "Comandă service";
+  if (pathname.includes("/tire-requests/") && pathname.endsWith("/cazare")) {
+    return "Execută cazarea";
+  }
   if (pathname.startsWith("/fleet/partner/tire-requests/")) return "Solicitare anvelope";
   if (pathname.startsWith("/fleet/partner/tire-hotel/check-in")) return "Check-in hotel";
   for (const [prefix, title] of Object.entries(PARTNER_PAGE_TITLES)) {

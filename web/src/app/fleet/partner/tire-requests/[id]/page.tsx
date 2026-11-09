@@ -27,9 +27,11 @@ type TireRequestItem = {
   gestiuneOp?: string | null;
   plate: string | null;
   clientName: string | null;
+  supplierId?: string | null;
   supplierName?: string | null;
   createdAt: string;
   hrefHotel: string;
+  hrefCazare?: string;
   hrefWorkOrders: string;
   stayIds: string[];
 };
@@ -64,6 +66,13 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
 
   const kindLabel =
     item.kindLabel ?? tireRequestKindLabel(item.kind, item.serviceLabel);
+  const isCazare = item.gestiuneOp === "cazare" || item.kind === "cazare" || item.kind === "storage";
+  const cazareHref =
+    item.hrefCazare ??
+    appendPartnerSupplierQuery(`/fleet/partner/tire-requests/${item.id}/cazare`, {
+      ...supplierQuery,
+      supplierId: supplierQuery.supplierId ?? item.supplierId ?? undefined,
+    });
 
   return (
     <FleetPageMain>
@@ -78,8 +87,9 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
           <h1 className="text-lg font-semibold text-zinc-100">{item.subject}</h1>
         </div>
         <p className="mt-1 text-xs text-zinc-500">
-          Fișă solicitare gestiune — fără mișcare stoc în acest pas. PV și check-in vin în
-          pachetele următoare.
+          {isCazare
+            ? "Fișă solicitare cazare — execută fluxul PV + raft din butonul de mai jos."
+            : "Fișă solicitare gestiune. Execuția pe stoc (eliberare / transfer / casare) vine în pachetele următoare."}
         </p>
 
         <dl className="mt-4 grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm sm:grid-cols-2">
@@ -132,12 +142,12 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
           >
             Înapoi la coadă
           </Link>
-          {item.kind === "storage" || item.gestiuneOp === "cazare" ? (
+          {isCazare ? (
             <Link
-              href={item.hrefHotel}
-              className="rounded-lg border border-violet-800/50 bg-violet-950/20 px-4 py-2.5 text-sm text-violet-100"
+              href={cazareHref}
+              className="rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-600"
             >
-              Hotel (pregătire check-in)
+              {item.stayIds?.length ? "Continuă cazarea" : "Execută cazarea"}
             </Link>
           ) : null}
         </div>

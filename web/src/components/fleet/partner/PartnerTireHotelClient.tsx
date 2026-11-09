@@ -451,6 +451,17 @@ export function PartnerTireHotelClient({
       setIntakePhotoFileUrls([]);
       setIntakePhotoPreviewUrls([]);
       setIntakeTreadNotes("");
+      if (mode === "check-in" && contextTicketId && stay) {
+        // 1.4: din solicitare — nu sări PV; întoarce la wizard cazare.
+        const p = new URLSearchParams();
+        const sid = supplierId ?? supplierQ.supplierId;
+        if (sid) p.set("supplierId", sid);
+        p.set("stayId", stay.id);
+        router.push(
+          `/fleet/partner/tire-requests/${encodeURIComponent(contextTicketId)}/cazare?${p.toString()}`,
+        );
+        return;
+      }
       if (mode === "check-in") {
         router.push(inventarHref);
         return;
