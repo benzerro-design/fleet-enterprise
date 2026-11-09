@@ -15,7 +15,7 @@ export type PartnerTireHotelInventarColumnDef = {
 };
 
 export const PARTNER_TIRE_HOTEL_INVENTAR_COLUMNS: PartnerTireHotelInventarColumnDef[] = [
-  { key: "plate", label: "Nr.", defaultVisible: true, canHide: false },
+  { key: "plate", label: "Nr. Înmatriculare", defaultVisible: true, canHide: false },
   { key: "set", label: "Set", defaultVisible: true, canHide: true },
   { key: "location", label: "Locație", defaultVisible: true, canHide: true },
   { key: "checkIn", label: "Check-in", defaultVisible: true, canHide: true },

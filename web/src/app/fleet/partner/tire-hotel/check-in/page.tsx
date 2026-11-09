@@ -58,7 +58,8 @@ export default async function PartnerTireHotelCheckInPage({ searchParams }: Page
                 {sp.plate ? (
                   <>
                     {" "}
-                    · placă <span className="text-zinc-300">{sp.plate}</span>
+                    · Nr. Înmatriculare solicitare:{" "}
+                    <span className="text-zinc-300">{sp.plate}</span>
                   </>
                 ) : null}
               </>

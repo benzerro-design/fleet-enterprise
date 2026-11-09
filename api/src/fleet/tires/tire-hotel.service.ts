@@ -3,7 +3,7 @@ import {
   CrmTicketEventKind,
   CrmTicketLinkEntityType,
   CrmTicketStatus,
-  type Prisma,
+  Prisma,
   type VehicleTireSeason,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -38,6 +38,8 @@ export type TireHotelCheckInParams = {
   locationCode?: string | null;
   bayCode?: string | null;
   binCode?: string | null;
+  /** Locație din master Depozite (zonă→rând→locație). */
+  warehouseLocationId?: string | null;
   intakePhotos?: Prisma.InputJsonValue;
   intakeTreadNotes?: string | null;
   intakeInspection?: TireIntakeInspectionInput;
@@ -249,22 +251,68 @@ export class TireHotelService {
         legacyText: params.intakeTreadNotes,
       }) ?? (params.intakeTreadNotes?.trim() || undefined);
 
-    const stay = await tx.tireStorageStay.create({
-      data: {
-        tenantId: params.tenantId,
-        setId: params.setId,
-        supplierId: params.supplierId,
-        locationCode,
-        checkInAt: now,
-        intakePhotos: params.intakePhotos ?? undefined,
-        intakeTreadNotes,
-        feeCents: feeCents ?? undefined,
-        contractRef: params.contractRef?.trim() || undefined,
-        externalId: params.externalId?.trim() || undefined,
-        sourceSystem: params.sourceSystem?.trim() || undefined,
-        workOrderId: params.workOrderId?.trim() || undefined,
-      },
-    });
+    let warehouseLocationId = params.warehouseLocationId?.trim() || null;
+    if (warehouseLocationId) {
+      const locRow = await tx.tireWarehouseLocation.findFirst({
+        where: {
+          id: warehouseLocationId,
+          tenantId: params.tenantId,
+          active: true,
+          row: {
+            active: true,
+            zone: {
+              active: true,
+              warehouse: { supplierId: params.supplierId, active: true },
+            },
+          },
+        },
+        select: { id: true },
+      });
+      if (!locRow) {
+        throw new BadRequestException('warehouseLocationId not found for this supplier');
+      }
+    }
+
+    const stayData = {
+      tenantId: params.tenantId,
+      setId: params.setId,
+      supplierId: params.supplierId,
+      locationCode,
+      warehouseLocationId: warehouseLocationId ?? undefined,
+      checkInAt: now,
+      intakePhotos: params.intakePhotos ?? undefined,
+      intakeTreadNotes,
+      feeCents: feeCents ?? undefined,
+      contractRef: params.contractRef?.trim() || undefined,
+      externalId: params.externalId?.trim() || undefined,
+      sourceSystem: params.sourceSystem?.trim() || undefined,
+      workOrderId: params.workOrderId?.trim() || undefined,
+    };
+
+    let stay;
+    try {
+      stay = await tx.tireStorageStay.create({ data: stayData });
+    } catch (e) {
+      // If FK/column issue on warehouseLocationId, keep check-in with locationCode only.
+      if (
+        warehouseLocationId &&
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        (e.code === 'P2003' || e.code === 'P2022')
+      ) {
+        warehouseLocationId = null;
+        stay = await tx.tireStorageStay.create({
+          data: { ...stayData, warehouseLocationId: undefined },
+        });
+      } else if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        throw new BadRequestException(
+          e.code === 'P2002'
+            ? 'Setul are deja un sejur deschis (conflict)'
+            : `Check-in eșuat (${e.code})`,
+        );
+      } else {
+        throw e;
+      }
+    }
 
     const vehicleIdForEvent = params.vehicleIdForEvent ?? set.vehicleId;
     for (const item of set.items) {
@@ -295,7 +343,7 @@ export class TireHotelService {
     if (ticketId) {
       const ticket = await tx.crmTicket.findFirst({
         where: { id: ticketId, tenantId: params.tenantId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, vehicleId: true },
       });
       if (ticket) {
         const existingLink = await tx.crmTicketLink.findFirst({
@@ -317,6 +365,14 @@ export class TireHotelService {
             },
           });
         }
+        let actorUserId: string | null = params.actorUserId?.trim() || null;
+        if (actorUserId) {
+          const actor = await tx.user.findFirst({
+            where: { id: actorUserId },
+            select: { id: true },
+          });
+          if (!actor) actorUserId = null;
+        }
         await tx.crmTicketEvent.create({
           data: {
             tenantId: params.tenantId,
@@ -328,15 +384,25 @@ export class TireHotelService {
               setId: params.setId,
               supplierId: params.supplierId,
               locationCode,
+              warehouseLocationId: warehouseLocationId ?? null,
+              plate: set.vehicle.registrationNumber,
               sourceSystem: params.sourceSystem ?? null,
             },
-            actorUserId: params.actorUserId ?? null,
+            actorUserId,
           },
         });
+        const ticketPatch: { status?: CrmTicketStatus; vehicleId?: string } = {};
         if (ticket.status === CrmTicketStatus.open) {
+          ticketPatch.status = CrmTicketStatus.in_progress;
+        }
+        // If check-in is on a different vehicle than the request, retarget the ticket.
+        if (set.vehicleId && ticket.vehicleId !== set.vehicleId) {
+          ticketPatch.vehicleId = set.vehicleId;
+        }
+        if (Object.keys(ticketPatch).length > 0) {
           await tx.crmTicket.update({
             where: { id: ticket.id },
-            data: { status: CrmTicketStatus.in_progress },
+            data: ticketPatch,
           });
         }
       }

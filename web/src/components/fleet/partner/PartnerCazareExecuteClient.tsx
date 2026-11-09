@@ -289,8 +289,9 @@ export function PartnerCazareExecuteClient({ ticketId, canWrite }: Props) {
         ) : capability.hasTireStorage && canWrite ? (
           <div className="mt-3 space-y-2">
             <p className="text-xs text-zinc-500">
-              Cazează setul (placă {item.plate ?? "—"}) cu contextul acestei solicitări. După
-              check-in revii aici pentru PV și locație.
+              Cazează setul (Nr. Înmatriculare {item.plate ?? "—"}) cu contextul acestei solicitări.
+              După check-in revii aici pentru PV și locație. Poți căuta alt Nr. Înmatriculare pe
+              pagina de check-in dacă setul e pe alt vehicul.
             </p>
             <Link
               href={checkInHref}

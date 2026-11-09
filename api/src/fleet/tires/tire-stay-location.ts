@@ -36,14 +36,15 @@ export function formatStayLocation(
   return `${bay}/${bin}`;
 }
 
-/** Accept either composed locationCode or separate bay/bin. */
+/** Accept either composed locationCode or separate bay/bin. Prefer full locationCode when set. */
 export function resolveStayLocationInput(input: {
   locationCode?: string | null;
   bayCode?: string | null;
   binCode?: string | null;
 }): StayLocationParts {
-  if (input.bayCode !== undefined || input.binCode !== undefined) {
-    return parseStayLocation(formatStayLocation(input.bayCode, input.binCode));
+  const composed = input.locationCode?.trim();
+  if (composed) {
+    return parseStayLocation(composed);
   }
-  return parseStayLocation(input.locationCode);
+  return parseStayLocation(formatStayLocation(input.bayCode, input.binCode));
 }

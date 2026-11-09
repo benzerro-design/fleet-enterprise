@@ -1158,13 +1158,57 @@ export class PartnerTireHotelService {
       if (!set) throw new BadRequestException('setId does not match vehicleId');
     }
 
+    let locationCode = dto.locationCode;
+    let bayCode = dto.bayCode;
+    let binCode = dto.binCode;
+    const warehouseLocationId = dto.warehouseLocationId;
+    if (warehouseLocationId) {
+      const loc = await this.prisma.tireWarehouseLocation.findFirst({
+        where: {
+          id: warehouseLocationId,
+          tenantId,
+          active: true,
+          row: {
+            active: true,
+            zone: {
+              active: true,
+              warehouse: { supplierId, active: true },
+            },
+          },
+        },
+        select: {
+          id: true,
+          code: true,
+          row: {
+            select: {
+              code: true,
+              zone: { select: { code: true, warehouse: { select: { code: true } } } },
+            },
+          },
+        },
+      });
+      if (!loc) {
+        throw new BadRequestException('warehouseLocationId not found for this supplier');
+      }
+      // Canonical path for locationCode; do not pass bay/bin (avoid double encoding).
+      locationCode = [
+        loc.row.zone.warehouse.code,
+        loc.row.zone.code,
+        loc.row.code,
+        loc.code,
+      ].join('/');
+      bayCode = undefined;
+      binCode = undefined;
+    }
+
     const stay = await this.hotel.checkIn({
       tenantId,
       supplierId,
       setId: dto.setId,
-      locationCode: dto.locationCode,
-      bayCode: dto.bayCode,
-      binCode: dto.binCode,
+      locationCode,
+      bayCode,
+      binCode,
+      warehouseLocationId,
       intakePhotos: dto.intakePhotos,
       intakeTreadNotes: dto.intakeTreadNotes,
       intakeInspection: dto.intakeInspection,
@@ -1884,6 +1928,7 @@ function assertCheckInBody(body: unknown): {
   locationCode?: string;
   bayCode?: string;
   binCode?: string;
+  warehouseLocationId?: string;
   intakePhotos?: Prisma.InputJsonValue;
   intakeTreadNotes?: string;
   intakeInspection?: ReturnType<typeof parseIntakeInspectionBody>;
@@ -1916,8 +1961,16 @@ function assertCheckInBody(body: unknown): {
       : typeof o.binCode === 'string'
         ? o.binCode.trim()
         : undefined;
-  if (!locationCode && !bayCode) {
-    throw new BadRequestException('locationCode or bayCode is required');
+  const warehouseLocationId =
+    o.warehouseLocationId === undefined || o.warehouseLocationId === null
+      ? undefined
+      : typeof o.warehouseLocationId === 'string'
+        ? o.warehouseLocationId.trim()
+        : undefined;
+  if (!locationCode && !bayCode && !warehouseLocationId) {
+    throw new BadRequestException(
+      'warehouseLocationId, locationCode or bayCode is required',
+    );
   }
 
   const vehicleId =
@@ -1966,6 +2019,7 @@ function assertCheckInBody(body: unknown): {
     locationCode,
     bayCode,
     binCode,
+    warehouseLocationId,
     intakePhotos,
     intakeTreadNotes:
       o.intakeTreadNotes === undefined || o.intakeTreadNotes === null

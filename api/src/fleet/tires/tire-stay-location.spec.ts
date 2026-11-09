@@ -18,5 +18,13 @@ describe('tire-stay-location', () => {
     expect(formatStayLocation('a', '3')).toBe('A/3');
     expect(resolveStayLocationInput({ bayCode: 'b', binCode: '2' }).locationCode).toBe('B/2');
     expect(resolveStayLocationInput({ locationCode: 'c/9' }).bayCode).toBe('C');
+    // Full path wins over bay/bin when both are present (warehouse WH/Z/R/L).
+    expect(
+      resolveStayLocationInput({
+        locationCode: 'WH/Z/R/L',
+        bayCode: 'Z',
+        binCode: 'R/L',
+      }).locationCode,
+    ).toBe('WH/Z/R/L');
   });
 });

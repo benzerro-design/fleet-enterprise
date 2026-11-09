@@ -220,14 +220,14 @@ export function PartnerTireRequestsClient({
                   </select>
                 </label>
                 <label className="block text-xs text-zinc-400 sm:col-span-2">
-                  Vehicul (opțional)
+                  Nr. Înmatriculare (opțional)
                   <select
                     value={vehicleId}
                     onChange={(e) => setVehicleId(e.target.value)}
                     className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
                     disabled={!selectedClient}
                   >
-                    <option value="">— fără vehicul —</option>
+                    <option value="">— fără nr. înmatriculare —</option>
                     {(selectedClient?.vehicles ?? []).map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.plate}

@@ -367,6 +367,7 @@ export class PartnerTireCustodyService {
     if (!location) throw new NotFoundException('Location not found or inactive');
 
     const stayIdNorm = stayId.trim();
+    const locationPath = formatWarehouseLocationPath(location);
     const update = await this.prisma.tireStorageStay.updateMany({
       where: {
         id: stayIdNorm,
@@ -374,7 +375,10 @@ export class PartnerTireCustodyService {
         supplierId: sid,
         checkOutAt: null,
       },
-      data: { warehouseLocationId: location.id },
+      data: {
+        warehouseLocationId: location.id,
+        locationCode: locationPath,
+      },
     });
     if (update.count === 0) {
       throw new NotFoundException('Stay not found or closed');

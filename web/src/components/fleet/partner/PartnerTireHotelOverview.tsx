@@ -66,7 +66,7 @@ export function PartnerTireHotelOverview() {
             <thead className="bg-zinc-900/80 text-[10px] uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-3 py-2">Partener</th>
-                <th className="px-3 py-2">Placă</th>
+                <th className="px-3 py-2">Nr. Înmatriculare</th>
                 <th className="px-3 py-2">Set</th>
                 <th className="px-3 py-2">Raft</th>
                 <th className="px-3 py-2">Check-in</th>

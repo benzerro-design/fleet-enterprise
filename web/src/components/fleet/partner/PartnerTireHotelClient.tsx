@@ -25,6 +25,7 @@ import { TireCustodyProtocolPanel } from "@/components/fleet/partner/TireCustody
 import { TireHotelIntakePhotos } from "@/components/fleet/partner/TireHotelIntakePhotos";
 import { TireHotelQrPayload } from "@/components/fleet/partner/TireHotelQrPayload";
 import { TireHotelReceiptPanel } from "@/components/fleet/partner/TireHotelReceiptPanel";
+import { WarehouseLocationPicker } from "@/components/fleet/partner/WarehouseLocationPicker";
 import {
   openTireCustodyProtocol,
   type TireCustodyProtocolKind,
@@ -159,14 +160,15 @@ export function PartnerTireHotelClient({
   const [searchHits, setSearchHits] = useState<TireHotelSearchVehicle[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [selectedPlate, setSelectedPlate] = useState<string | null>(null);
   const [selectedFeeQuote, setSelectedFeeQuote] = useState<{
     feeCents: number | null;
     rimInch: number | null;
     mountedAs: string | null;
     dominantSize: string | null;
   } | null>(null);
-  const [bayCode, setBayCode] = useState("");
-  const [binCode, setBinCode] = useState("");
+  const [warehouseLocationId, setWarehouseLocationId] = useState<string | null>(null);
+  const [warehouseLocationLabel, setWarehouseLocationLabel] = useState("");
   const [intakePhotoUrlsInput, setIntakePhotoUrlsInput] = useState("");
   const [intakePhotoFileUrls, setIntakePhotoFileUrls] = useState<string[]>([]);
   const [intakePhotoPreviewUrls, setIntakePhotoPreviewUrls] = useState<string[]>([]);
@@ -384,6 +386,7 @@ export function PartnerTireHotelClient({
 
   function selectSetForCheckIn(
     vehicleId: string,
+    plate: string,
     set: {
       id: string;
       suggestedFeeCents?: number | null;
@@ -394,6 +397,7 @@ export function PartnerTireHotelClient({
   ) {
     setSelectedSetId(set.id);
     setSelectedVehicleId(vehicleId);
+    setSelectedPlate(plate.trim() || null);
     setSelectedFeeQuote({
       feeCents: set.suggestedFeeCents ?? null,
       rimInch: set.rimInch ?? null,
@@ -402,9 +406,19 @@ export function PartnerTireHotelClient({
     });
   }
 
+  const activeWorkPlate = (selectedPlate ?? searchPlate).trim();
+  const solicitarePlateMismatch =
+    Boolean(contextTicketId && contextPlate && activeWorkPlate) &&
+    contextPlate.replace(/\s+/g, "").toUpperCase() !==
+      activeWorkPlate.replace(/\s+/g, "").toUpperCase();
+
   async function checkIn() {
-    if (!selectedSetId || !bayCode.trim()) {
-      setError("Alege setul și zona (bay)");
+    if (!selectedSetId) {
+      setError("Alege setul");
+      return;
+    }
+    if (!warehouseLocationId) {
+      setError("Alege locația din Depozite (zonă → rând → locație)");
       return;
     }
     const intakePhotos = mergeIntakePhotoUrls(
@@ -421,8 +435,8 @@ export function PartnerTireHotelClient({
           supplierId: supplierId ?? supplierQ.supplierId,
           setId: selectedSetId,
           vehicleId: selectedVehicleId ?? undefined,
-          bayCode: bayCode.trim(),
-          binCode: binCode.trim() || undefined,
+          warehouseLocationId,
+          locationCode: warehouseLocationLabel.trim() || undefined,
           intakePhotos: intakePhotos.length ? intakePhotos : undefined,
           intakeTreadNotes: intakeTreadNotes.trim() || undefined,
           ticketId: contextTicketId || undefined,
@@ -430,8 +444,13 @@ export function PartnerTireHotelClient({
         }),
       });
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message ?? "Check-in eșuat");
+        const j = (await res.json().catch(() => ({}))) as {
+          message?: string | string[];
+        };
+        const msg = Array.isArray(j.message)
+          ? j.message.join(" · ")
+          : j.message;
+        throw new Error(msg || `Check-in eșuat (${res.status})`);
       }
       const data = (await res.json()) as { stay?: TireHotelStay };
       const stay = data.stay
@@ -444,9 +463,10 @@ export function PartnerTireHotelClient({
       setSearchHits([]);
       setSelectedSetId(null);
       setSelectedVehicleId(null);
+      setSelectedPlate(null);
       setSelectedFeeQuote(null);
-      setBayCode("");
-      setBinCode("");
+      setWarehouseLocationId(null);
+      setWarehouseLocationLabel("");
       setIntakePhotoUrlsInput("");
       setIntakePhotoFileUrls([]);
       setIntakePhotoPreviewUrls([]);
@@ -791,10 +811,19 @@ export function PartnerTireHotelClient({
             ← Inventar hotel
           </Link>
           {contextTicketId ? (
-            <p className="text-[11px] text-emerald-200/90">
-              Context solicitare · tichet {contextTicketId.slice(0, 10)}…
-              {contextPlate ? ` · ${contextPlate}` : ""}
-            </p>
+            <div className="space-y-0.5 text-right text-[11px] text-emerald-200/90">
+              <p>
+                Context solicitare · tichet {contextTicketId.slice(0, 10)}…
+                {contextPlate ? ` · Nr. Înmatriculare solicitare: ${contextPlate}` : ""}
+              </p>
+              {solicitarePlateMismatch ? (
+                <p className="text-amber-200/90">
+                  Check-in pe Nr. Înmatriculare: {activeWorkPlate} (diferit de solicitare)
+                </p>
+              ) : activeWorkPlate ? (
+                <p>Check-in pe Nr. Înmatriculare: {activeWorkPlate}</p>
+              ) : null}
+            </div>
           ) : null}
         </div>
       )}
@@ -828,14 +857,14 @@ export function PartnerTireHotelClient({
       <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
         <h2 className="text-base font-medium text-zinc-100">Check-in set</h2>
         <p className="text-xs text-zinc-500">
-          Caută după număr, lipește codul <span className="font-mono text-zinc-400">FE:tire-set:…</span>{" "}
-          sau ID set.
+          Caută după Nr. Înmatriculare, lipește codul{" "}
+          <span className="font-mono text-zinc-400">FE:tire-set:…</span> sau ID set.
         </p>
         <div className="flex gap-2">
           <input
             value={searchPlate}
             onChange={(e) => setSearchPlate(formatTireSetSearchFieldOnChange(e.target.value))}
-            placeholder="B 123 ABC sau FE:tire-set:…"
+            placeholder="Nr. Înmatriculare sau FE:tire-set:…"
             className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-base text-zinc-100 placeholder:text-zinc-600"
           />
           <button
@@ -859,7 +888,7 @@ export function PartnerTireHotelClient({
                   <button
                     type="button"
                     disabled={!canWrite || s.hasActiveStayHere}
-                    onClick={() => selectSetForCheckIn(v.id, s)}
+                    onClick={() => selectSetForCheckIn(v.id, v.registrationNumber, s)}
                     className={`flex w-full flex-col gap-1 rounded-xl border px-4 py-3 text-left transition-colors ${
                       selectedSetId === s.id
                         ? "border-violet-500 bg-violet-950/40"
@@ -915,23 +944,25 @@ export function PartnerTireHotelClient({
                 </p>
               </div>
             ) : null}
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                value={bayCode}
-                onChange={(e) => setBayCode(e.target.value.toUpperCase())}
-                placeholder="Zonă / bay (ex. A)"
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-base text-zinc-100"
+            {supplierId ?? supplierQ.supplierId ? (
+              <WarehouseLocationPicker
+                supplierId={(supplierId ?? supplierQ.supplierId)!}
+                value={warehouseLocationId}
+                variant="form"
+                onPick={(id, label) => {
+                  setWarehouseLocationId(id);
+                  setWarehouseLocationLabel(label);
+                }}
               />
-              <input
-                value={binCode}
-                onChange={(e) => setBinCode(e.target.value.toUpperCase())}
-                placeholder="Bin (ex. 12)"
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-base text-zinc-100"
-              />
-            </div>
+            ) : (
+              <p className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+                Selectează furnizorul pentru a alege locația din Depozite.
+              </p>
+            )}
             <p className="text-[11px] text-zinc-500">
-              Locația se salvează ca {bayCode.trim() || "BAY"}
-              {binCode.trim() ? `/${binCode.trim()}` : ""}
+              {warehouseLocationLabel
+                ? `Locație aleasă: ${warehouseLocationLabel}`
+                : "Alege depozit → zonă → rând → locație (nu completa liber)."}
             </p>
             <div className="space-y-1.5">
               <label className="text-xs text-zinc-500" htmlFor="tire-hotel-intake-photos">
