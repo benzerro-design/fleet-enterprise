@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Prisma,
   type TireEventType,
@@ -1250,6 +1255,95 @@ export class TireDomainService {
       },
     });
     return rim.id;
+  }
+
+  /** Brand / model (și opțional size, DOT, uzură) pe o anvelopă din set. */
+  async patchTireAssetSpecs(
+    tenantSlug: string,
+    assetId: string,
+    body: {
+      brand?: string | null;
+      model?: string | null;
+      size?: string | null;
+      dot?: string | null;
+      treadMm?: number | null;
+    },
+    access?: AccessContext,
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+    const asset = await this.prisma.tireAsset.findFirst({
+      where: { id: assetId, tenantId: tenant.id },
+      select: {
+        id: true,
+        setItems: { select: { setId: true, set: { select: { vehicleId: true } } }, take: 1 },
+        placements: {
+          where: { validTo: null, vehicleId: { not: null } },
+          select: { vehicleId: true },
+          take: 1,
+        },
+      },
+    });
+    if (!asset) throw new NotFoundException('Tire asset not found');
+    const vehicleId =
+      asset.placements[0]?.vehicleId ?? asset.setItems[0]?.set.vehicleId ?? null;
+    if (vehicleId) {
+      await assertVehicleOpsWrite(this.prisma, tenantSlug, vehicleId, access);
+    } else if (access && !access.isTenantWide) {
+      throw new ForbiddenException('Tire asset not accessible');
+    }
+
+    const data: Prisma.TireAssetUpdateInput = {};
+    if ('brand' in body) {
+      data.brand =
+        body.brand === null || body.brand === undefined
+          ? null
+          : String(body.brand).trim() || null;
+    }
+    if ('model' in body) {
+      data.model =
+        body.model === null || body.model === undefined
+          ? null
+          : String(body.model).trim() || null;
+    }
+    if ('size' in body) {
+      data.size =
+        body.size === null || body.size === undefined
+          ? null
+          : String(body.size).trim() || null;
+    }
+    if ('dot' in body) {
+      data.dot =
+        body.dot === null || body.dot === undefined
+          ? null
+          : String(body.dot).trim() || null;
+    }
+    if ('treadMm' in body) {
+      if (body.treadMm === null || body.treadMm === undefined) {
+        data.treadMm = null;
+      } else if (!Number.isFinite(body.treadMm) || body.treadMm < 0) {
+        throw new BadRequestException('treadMm must be a non-negative number');
+      } else {
+        data.treadMm = body.treadMm;
+      }
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No identity fields to patch');
+    }
+
+    const updated = await this.prisma.tireAsset.update({
+      where: { id: assetId },
+      data,
+      select: {
+        id: true,
+        brand: true,
+        model: true,
+        size: true,
+        dot: true,
+        treadMm: true,
+      },
+    });
+    return updated;
   }
 
   async patchTireAssetDocs(

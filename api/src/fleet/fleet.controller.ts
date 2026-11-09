@@ -905,6 +905,42 @@ export class FleetController {
     );
   }
 
+  @Patch('tires/assets/:assetId')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchTireAssetSpecs(
+    @TenantId() tenantSlug: string,
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const o =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const treadRaw = o.treadMm;
+    let treadMm: number | null | undefined = undefined;
+    if ('treadMm' in o) {
+      if (treadRaw === null || treadRaw === '') treadMm = null;
+      else if (typeof treadRaw === 'number') treadMm = treadRaw;
+      else if (typeof treadRaw === 'string' && treadRaw.trim()) {
+        const n = Number(treadRaw);
+        treadMm = Number.isFinite(n) ? n : undefined;
+      }
+    }
+    return this.tireDomain.patchTireAssetSpecs(
+      tenantSlug,
+      assetId.trim(),
+      {
+        brand: 'brand' in o ? (o.brand as string | null) : undefined,
+        model: 'model' in o ? (o.model as string | null) : undefined,
+        size: 'size' in o ? (o.size as string | null) : undefined,
+        dot: 'dot' in o ? (o.dot as string | null) : undefined,
+        treadMm,
+      },
+      access,
+    );
+  }
+
   @Patch('tires/assets/:assetId/docs')
   @Roles(...FLEET_WRITE_ROLES)
   patchTireAssetDocs(

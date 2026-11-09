@@ -8,6 +8,7 @@ import {
   tireEventTypeLabel,
   tireHubAlertKindLabel,
   tireHubLocationLabel,
+  type TireHubInventoryItem,
   type TireHubInventoryLocation,
   type TireHubInventorySet,
   type TireHubPayload,
@@ -16,6 +17,8 @@ import { TireMovementLedger } from "@/components/fleet/TireMovementLedger";
 import { TirePurchaseDocsEditor } from "@/components/fleet/TirePurchaseDocsEditor";
 import { formatClientDisplay } from "@/lib/client-display";
 import {
+  TIRE_BRAND_PRESETS,
+  TIRE_MODEL_PRESETS_BY_BRAND,
   tireMountedAsHint,
   tireMountedAsLabel,
   vehicleTireSeasonLabel,
@@ -698,6 +701,39 @@ export function TireHubInventory({
               </h4>
               {(drawer.items?.length ?? 0) === 0 ? (
                 <p className="mt-2 text-sm text-zinc-500">Nicio anvelopă legată de set.</p>
+              ) : canWrite ? (
+                <TireSetItemsEditor
+                  items={drawer.items!}
+                  pending={pending}
+                  onSaved={(assetId, patch) => {
+                    setDrawer((prev) => {
+                      if (!prev?.items) return prev;
+                      const items = prev.items.map((it) =>
+                        it.assetId === assetId ? { ...it, ...patch } : it,
+                      );
+                      const brands = items.map((i) => i.brand).filter(Boolean) as string[];
+                      return {
+                        ...prev,
+                        items,
+                        dominantBrand: brands[0] ?? prev.dominantBrand,
+                      };
+                    });
+                    setRows((prev) =>
+                      prev.map((r) => {
+                        if (r.setId !== drawer.setId || !r.items) return r;
+                        return {
+                          ...r,
+                          items: r.items.map((it) =>
+                            it.assetId === assetId ? { ...it, ...patch } : it,
+                          ),
+                        };
+                      }),
+                    );
+                    router.refresh();
+                  }}
+                  onPending={setPending}
+                  onError={setOpError}
+                />
               ) : (
                 <ul className="mt-3 space-y-2">
                   {drawer.items!.map((it) => (
@@ -904,12 +940,258 @@ export function TireHubInventory({
             </div>
 
             <p className="mt-6 text-xs text-zinc-600">
-              Mutările check-in/out și protocoalele PV semnate (custodie) rămân în portalul
-              partener / WO tip R. Hubul e read-only.
+              Brand/model se editează aici pe anvelope. Check-in/out și PV rămân în portalul
+              partener / WO tip R.
             </p>
           </aside>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+type ItemPatch = {
+  brand?: string | null;
+  model?: string | null;
+  size?: string | null;
+  dot?: string | null;
+  treadMm?: number | null;
+};
+
+function TireSetItemsEditor({
+  items,
+  pending,
+  onSaved,
+  onPending,
+  onError,
+}: {
+  items: TireHubInventoryItem[];
+  pending: string | null;
+  onSaved: (assetId: string, patch: ItemPatch) => void;
+  onPending: (v: string | null) => void;
+  onError: (v: string | null) => void;
+}) {
+  const [drafts, setDrafts] = useState<
+    Record<string, { brand: string; model: string; size: string; dot: string; treadMm: string }>
+  >(() => Object.fromEntries(
+    items.map((it) => [
+      it.assetId,
+      {
+        brand: it.brand ?? "",
+        model: it.model ?? "",
+        size: it.size ?? "",
+        dot: it.dot ?? "",
+        treadMm: it.treadMm != null ? String(it.treadMm) : "",
+      },
+    ]),
+  ));
+
+  useEffect(() => {
+    setDrafts(
+      Object.fromEntries(
+        items.map((it) => [
+          it.assetId,
+          {
+            brand: it.brand ?? "",
+            model: it.model ?? "",
+            size: it.size ?? "",
+            dot: it.dot ?? "",
+            treadMm: it.treadMm != null ? String(it.treadMm) : "",
+          },
+        ]),
+      ),
+    );
+  }, [items]);
+
+  function patchDraft(assetId: string, patch: Partial<(typeof drafts)[string]>) {
+    setDrafts((prev) => ({
+      ...prev,
+      [assetId]: { ...prev[assetId]!, ...patch },
+    }));
+  }
+
+  async function saveOne(assetId: string) {
+    const d = drafts[assetId];
+    if (!d) return;
+    onPending(`asset-${assetId}`);
+    onError(null);
+    try {
+      const treadRaw = d.treadMm.trim();
+      const treadMm =
+        treadRaw === "" ? null : Number.isFinite(Number(treadRaw)) ? Number(treadRaw) : undefined;
+      if (treadMm === undefined) throw new Error("Uzură (mm) invalidă");
+      const body = {
+        brand: d.brand.trim() || null,
+        model: d.model.trim() || null,
+        size: d.size.trim() || null,
+        dot: d.dot.trim() || null,
+        treadMm,
+      };
+      const res = await fetch(
+        `${fleetBrowserBase}/tires/assets/${encodeURIComponent(assetId)}`,
+        {
+          method: "PATCH",
+          headers: fleetJsonHeaders(),
+          body: JSON.stringify(body),
+        },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { message?: string };
+        throw new Error(j.message ?? `HTTP ${res.status}`);
+      }
+      onSaved(assetId, body);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Salvare anvelopă eșuată");
+    } finally {
+      onPending(null);
+    }
+  }
+
+  async function applyBrandModelToAll() {
+    const first = items[0] ? drafts[items[0].assetId] : null;
+    if (!first) return;
+    const brand = first.brand.trim();
+    const model = first.model.trim();
+    if (!brand && !model) {
+      onError("Completează brand/model pe prima anvelopă, apoi aplică pe toate.");
+      return;
+    }
+    onPending("apply-all");
+    onError(null);
+    try {
+      for (const it of items) {
+        const d = drafts[it.assetId]!;
+        const body = {
+          brand: brand || null,
+          model: model || null,
+          size: d.size.trim() || null,
+          dot: d.dot.trim() || null,
+          treadMm: d.treadMm.trim() === "" ? null : Number(d.treadMm),
+        };
+        const res = await fetch(
+          `${fleetBrowserBase}/tires/assets/${encodeURIComponent(it.assetId)}`,
+          {
+            method: "PATCH",
+            headers: fleetJsonHeaders(),
+            body: JSON.stringify(body),
+          },
+        );
+        if (!res.ok) {
+          const j = (await res.json().catch(() => ({}))) as { message?: string };
+          throw new Error(j.message ?? `HTTP ${res.status}`);
+        }
+        patchDraft(it.assetId, { brand, model });
+        onSaved(it.assetId, { brand: brand || null, model: model || null });
+      }
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Aplicare pe toate eșuată");
+    } finally {
+      onPending(null);
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      <button
+        type="button"
+        disabled={pending === "apply-all"}
+        onClick={() => void applyBrandModelToAll()}
+        className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+      >
+        {pending === "apply-all"
+          ? "Se aplică…"
+          : "Aplică brand/model de pe prima anvelopă pe toate"}
+      </button>
+      {items.map((it) => {
+        const d = drafts[it.assetId] ?? {
+          brand: "",
+          model: "",
+          size: "",
+          dot: "",
+          treadMm: "",
+        };
+        const brandListId = `hub-brand-${it.assetId}`;
+        const modelListId = `hub-model-${it.assetId}`;
+        const modelPresets = TIRE_MODEL_PRESETS_BY_BRAND[d.brand] ?? [];
+        return (
+          <li
+            key={it.assetId}
+            className="list-none space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2.5"
+          >
+            <p className="text-[11px] font-medium text-zinc-400">
+              {it.position ? it.position.toUpperCase() : "Poziție —"}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-[10px] text-zinc-500">
+                Brand
+                <input
+                  list={brandListId}
+                  value={d.brand}
+                  onChange={(e) => patchDraft(it.assetId, { brand: e.target.value })}
+                  className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                  placeholder="ex. Michelin"
+                />
+                <datalist id={brandListId}>
+                  {TIRE_BRAND_PRESETS.map((b) => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="block text-[10px] text-zinc-500">
+                Model
+                <input
+                  list={modelListId}
+                  value={d.model}
+                  onChange={(e) => patchDraft(it.assetId, { model: e.target.value })}
+                  className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                  placeholder="ex. Alpin"
+                />
+                <datalist id={modelListId}>
+                  {modelPresets.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="block text-[10px] text-zinc-500">
+                Dimensiune
+                <input
+                  value={d.size}
+                  onChange={(e) => patchDraft(it.assetId, { size: e.target.value })}
+                  className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                  placeholder="205/55 R16"
+                />
+              </label>
+              <label className="block text-[10px] text-zinc-500">
+                DOT
+                <input
+                  value={d.dot}
+                  onChange={(e) => patchDraft(it.assetId, { dot: e.target.value })}
+                  className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                  placeholder="2323"
+                />
+              </label>
+              <label className="col-span-2 block text-[10px] text-zinc-500">
+                Uzură (mm)
+                <input
+                  value={d.treadMm}
+                  onChange={(e) => patchDraft(it.assetId, { treadMm: e.target.value })}
+                  className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                  placeholder="7"
+                  inputMode="decimal"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={pending === `asset-${it.assetId}`}
+              onClick={() => void saveOne(it.assetId)}
+              className="rounded border border-emerald-800/50 bg-emerald-950/30 px-2.5 py-1 text-[11px] text-emerald-100 disabled:opacity-50"
+            >
+              {pending === `asset-${it.assetId}` ? "Se salvează…" : "Salvează anvelopa"}
+            </button>
+          </li>
+        );
+      })}
     </div>
   );
 }
