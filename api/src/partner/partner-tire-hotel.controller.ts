@@ -24,6 +24,7 @@ import { TireCustodyProtocolService } from '../fleet/tires/tire-custody-protocol
 import { TenantId } from '../fleet/tenant-id.decorator';
 import { CurrentAccess } from '../iam/current-access.decorator';
 import type { AccessContext } from '../iam/access-context.types';
+import { parseSupplierIdsQuery } from '../iam/partner-access';
 import { FLEET_READ_ROLES, FLEET_WRITE_ROLES } from '../iam/role-sets';
 import { sendTireCustodySmsOtp } from '../fleet/tires/tire-custody-sms';
 import { PartnerMailService } from './partner-mail.service';
@@ -112,13 +113,41 @@ export class PartnerTireHotelController {
     @TenantId() tenantSlug: string,
     @CurrentAccess() access: AccessContext,
     @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
     @Query('take') take?: string,
   ) {
     const takeN = take != null && take !== '' ? Number(take) : undefined;
+    const supplierIds = parseSupplierIdsQuery(supplierId, suppliers);
     return this.hotel.listTireRequests(tenantSlug, access, {
       supplierId: supplierId?.trim(),
+      supplierIds,
       take: Number.isFinite(takeN) ? takeN : undefined,
     });
+  }
+
+  @Get('requests/meta')
+  @Roles(...FLEET_READ_ROLES)
+  requestCreateMeta(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
+  ) {
+    return this.hotel.listRequestCreateMeta(tenantSlug, access, {
+      supplierId: supplierId?.trim(),
+      supplierIds: parseSupplierIdsQuery(supplierId, suppliers),
+    });
+  }
+
+  @Post('requests')
+  @Roles(...FLEET_WRITE_ROLES)
+  createRequest(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Body() body: unknown,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.hotel.createTireRequest(tenantSlug, access, body, req.user?.id);
   }
 
   @Get('requests/:ticketId')
@@ -128,9 +157,11 @@ export class PartnerTireHotelController {
     @CurrentAccess() access: AccessContext,
     @Param('ticketId') ticketId: string,
     @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
   ) {
     return this.hotel.getTireRequest(tenantSlug, access, ticketId, {
       supplierId: supplierId?.trim(),
+      supplierIds: parseSupplierIdsQuery(supplierId, suppliers),
     });
   }
 

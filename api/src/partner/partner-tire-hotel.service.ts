@@ -1,6 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma, VehicleTireSeason } from '@prisma/client';
-import { TireCustodyProtocolKind } from '@prisma/client';
+import {
+  CrmTicketEventKind,
+  CrmTicketPriority,
+  CrmTicketRoutingLevel,
+  CrmTicketStatus,
+  CrmTicketType,
+  TireCustodyProtocolKind,
+  TireGestiuneOp,
+} from '@prisma/client';
 import type { AccessContext } from '../iam/access-context.types';
 import {
   assertPartnerWrite,
@@ -23,6 +36,14 @@ import {
   supplierHasTireStorage,
   TIRE_HOTEL_SERVICE_CODE_ALIASES,
 } from '../suppliers/supplier-tire-capability';
+import {
+  defaultGestiuneSubject,
+  displayTicketShortId,
+  mapTireRequestKind,
+  parseTireGestiuneOp,
+  TIRE_REQUEST_SERVICE_CODES,
+  tireRequestKindLabel,
+} from './tire-gestiune-request';
 
 function normalizePlate(raw: string | undefined): string | undefined {
   const p = raw?.trim().replace(/\s+/g, '').toUpperCase();
@@ -128,28 +149,192 @@ export class PartnerTireHotelService {
     tenantSlug: string,
     access: AccessContext,
     supplierId?: string,
-    opts?: { allowTenantWide?: boolean },
+    opts?: { allowTenantWide?: boolean; supplierIds?: string[] },
   ): Promise<{ tenantId: string; supplierIds: string[] | null }> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) throw new NotFoundException('Tenant not found');
-    const ids = resolvePartnerSupplierIdsFilter(
-      access,
-      supplierId?.trim() ? [supplierId.trim()] : undefined,
-    );
+    const explicit =
+      opts?.supplierIds?.length
+        ? opts.supplierIds
+        : supplierId?.trim()
+          ? [supplierId.trim()]
+          : undefined;
+    const ids = resolvePartnerSupplierIdsFilter(access, explicit);
     if (ids && ids.length > 0) {
       for (const sid of ids) {
         await assertSupplierReadById(this.prisma, tenantSlug, sid, access);
       }
       return { tenantId: tenant.id, supplierIds: ids };
     }
-    if (supplierId?.trim()) {
-      await assertSupplierReadById(this.prisma, tenantSlug, supplierId.trim(), access);
-      return { tenantId: tenant.id, supplierIds: [supplierId.trim()] };
+    if (explicit?.length) {
+      for (const sid of explicit) {
+        await assertSupplierReadById(this.prisma, tenantSlug, sid, access);
+      }
+      return { tenantId: tenant.id, supplierIds: explicit };
     }
     if (opts?.allowTenantWide && !isPartnerUser(access)) {
       return { tenantId: tenant.id, supplierIds: null };
     }
     throw new BadRequestException('supplierId is required');
+  }
+
+  private async tireRequestScopeFilter(
+    tenantId: string,
+    supplierIds: string[] | null,
+  ): Promise<{
+    where: Prisma.CrmTicketWhereInput;
+    allocByClient: Map<string, { supplierId: string; supplierName: string | null }>;
+  }> {
+    const allocRows = await this.prisma.clientSupplierAllocation.findMany({
+      where: {
+        tenantId,
+        ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
+      },
+      select: {
+        clientId: true,
+        supplierId: true,
+        supplier: { select: { legalName: true } },
+      },
+    });
+    const allocByClient = new Map<string, { supplierId: string; supplierName: string | null }>();
+    for (const a of allocRows) {
+      if (!allocByClient.has(a.clientId)) {
+        allocByClient.set(a.clientId, {
+          supplierId: a.supplierId,
+          supplierName: a.supplier.legalName ?? null,
+        });
+      }
+    }
+    const clientIds = [...allocByClient.keys()];
+
+    const inboxShape: Prisma.CrmTicketWhereInput = {
+      OR: [
+        { gestiuneOp: { not: null } },
+        { serviceType: { code: { in: [...TIRE_REQUEST_SERVICE_CODES] } } },
+      ],
+    };
+
+    let scopeClause: Prisma.CrmTicketWhereInput;
+    if (supplierIds) {
+      scopeClause = {
+        OR: [
+          { assignedSupplierId: { in: supplierIds } },
+          ...(clientIds.length
+            ? [{ assignedSupplierId: null, clientId: { in: clientIds } }]
+            : []),
+        ],
+      };
+    } else {
+      scopeClause = clientIds.length
+        ? {
+            OR: [
+              { assignedSupplierId: { not: null } },
+              { clientId: { in: clientIds } },
+            ],
+          }
+        : { assignedSupplierId: { not: null } };
+    }
+
+    return {
+      where: {
+        tenantId,
+        status: { in: [CrmTicketStatus.open, CrmTicketStatus.in_progress] },
+        AND: [inboxShape, scopeClause],
+      },
+      allocByClient,
+    };
+  }
+
+  private mapTireRequestRow(
+    t: {
+      id: string;
+      subject: string;
+      status: string;
+      priority: string;
+      createdAt: Date;
+      description: string | null;
+      clientId: string;
+      vehicleId: string | null;
+      gestiuneOp: TireGestiuneOp | null;
+      assignedSupplierId: string | null;
+      serviceType: { code: string; label: string } | null;
+      vehicle: { id: string; registrationNumber: string } | null;
+      client: { id: string; legalName: string } | null;
+      assignedSupplier: { id: string; legalName: string } | null;
+      links: Array<{ entityId: string }>;
+    },
+    allocByClient: Map<string, { supplierId: string; supplierName: string | null }>,
+    fallbackSupplierId: string | null,
+  ) {
+    const kind = mapTireRequestKind({
+      gestiuneOp: t.gestiuneOp,
+      serviceCode: t.serviceType?.code ?? null,
+    });
+    const matchedSupplierId =
+      t.assignedSupplierId ??
+      allocByClient.get(t.clientId)?.supplierId ??
+      fallbackSupplierId;
+    const supplierName =
+      t.assignedSupplier?.legalName ??
+      allocByClient.get(t.clientId)?.supplierName ??
+      null;
+    return {
+      id: t.id,
+      displayId: displayTicketShortId(t.id),
+      subject: t.subject,
+      description: t.description,
+      status: t.status,
+      priority: t.priority,
+      createdAt: t.createdAt.toISOString(),
+      kind,
+      kindLabel: tireRequestKindLabel(kind, t.serviceType?.label),
+      gestiuneOp: t.gestiuneOp,
+      serviceCode: t.serviceType?.code ?? null,
+      serviceLabel: t.serviceType?.label ?? null,
+      plate: t.vehicle?.registrationNumber ?? null,
+      vehicleId: t.vehicleId,
+      clientId: t.clientId,
+      clientName: t.client?.legalName ?? null,
+      supplierId: matchedSupplierId,
+      supplierName,
+      stayIds: t.links.map((l) => l.entityId),
+      hrefHotel: buildPartnerHotelCheckInHref({
+        supplierId: matchedSupplierId,
+        plate: t.vehicle?.registrationNumber ?? null,
+        ticketId: t.id,
+      }),
+      hrefTicket: buildPartnerTireRequestHref({
+        ticketId: t.id,
+        supplierId: matchedSupplierId,
+      }),
+      hrefWorkOrders: matchedSupplierId
+        ? `/fleet/partner/work-orders?supplierId=${encodeURIComponent(matchedSupplierId)}`
+        : '/fleet/partner/work-orders',
+    };
+  }
+
+  private tireRequestSelect() {
+    return {
+      id: true,
+      subject: true,
+      description: true,
+      status: true,
+      priority: true,
+      createdAt: true,
+      clientId: true,
+      vehicleId: true,
+      gestiuneOp: true,
+      assignedSupplierId: true,
+      serviceType: { select: { code: true, label: true } },
+      vehicle: { select: { id: true, registrationNumber: true } },
+      client: { select: { id: true, legalName: true } },
+      assignedSupplier: { select: { id: true, legalName: true } },
+      links: {
+        where: { entityType: 'tire_storage_stay' as const },
+        select: { entityId: true },
+        take: 3,
+      },
+    } satisfies Prisma.CrmTicketSelect;
   }
 
   async listActiveStays(
@@ -296,93 +481,26 @@ export class PartnerTireHotelService {
   async listTireRequests(
     tenantSlug: string,
     access: AccessContext,
-    opts: { supplierId?: string; take?: number },
+    opts: { supplierId?: string; supplierIds?: string[]; take?: number },
   ) {
     const scope = await this.resolveSupplierScope(tenantSlug, access, opts.supplierId, {
       allowTenantWide: true,
+      supplierIds: opts.supplierIds,
     });
     const take = Math.min(Math.max(opts.take ?? 50, 1), 200);
-    const supplierIds = scope.supplierIds;
-
-    const allocClientIds = await this.prisma.clientSupplierAllocation.findMany({
-      where: {
-        tenantId: scope.tenantId,
-        ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
-      },
-      select: { clientId: true, supplierId: true },
-    });
-    const clientIds = [...new Set(allocClientIds.map((a) => a.clientId))];
-    if (clientIds.length === 0) {
-      return { items: [] as Array<Record<string, unknown>> };
-    }
-
+    const { where, allocByClient } = await this.tireRequestScopeFilter(
+      scope.tenantId,
+      scope.supplierIds,
+    );
     const tickets = await this.prisma.crmTicket.findMany({
-      where: {
-        tenantId: scope.tenantId,
-        clientId: { in: clientIds },
-        status: { in: ['open', 'in_progress'] },
-        serviceType: { code: { in: ['tire_storage', 'tire_service'] } },
-      },
+      where,
       orderBy: { createdAt: 'desc' },
       take,
-      select: {
-        id: true,
-        subject: true,
-        status: true,
-        priority: true,
-        createdAt: true,
-        clientId: true,
-        vehicleId: true,
-        serviceType: { select: { code: true, label: true } },
-        vehicle: { select: { id: true, registrationNumber: true } },
-        client: { select: { id: true, legalName: true } },
-        links: {
-          where: { entityType: 'tire_storage_stay' },
-          select: { entityId: true },
-          take: 3,
-        },
-      },
+      select: this.tireRequestSelect(),
     });
-
+    const fallback = scope.supplierIds?.[0] ?? null;
     return {
-      items: tickets.map((t) => {
-        const kind =
-          t.serviceType?.code === 'tire_storage'
-            ? 'storage'
-            : t.serviceType?.code === 'tire_service'
-              ? 'service'
-              : 'other';
-        const matchedSupplierId =
-          allocClientIds.find((a) => a.clientId === t.clientId)?.supplierId ??
-          (supplierIds?.[0] ?? null);
-        return {
-          id: t.id,
-          subject: t.subject,
-          status: t.status,
-          priority: t.priority,
-          createdAt: t.createdAt.toISOString(),
-          kind,
-          serviceCode: t.serviceType?.code ?? null,
-          serviceLabel: t.serviceType?.label ?? null,
-          plate: t.vehicle?.registrationNumber ?? null,
-          vehicleId: t.vehicleId,
-          clientName: t.client?.legalName ?? null,
-          supplierId: matchedSupplierId,
-          stayIds: t.links.map((l) => l.entityId),
-          hrefHotel: buildPartnerHotelCheckInHref({
-            supplierId: matchedSupplierId,
-            plate: t.vehicle?.registrationNumber ?? null,
-            ticketId: t.id,
-          }),
-          hrefTicket: buildPartnerTireRequestHref({
-            ticketId: t.id,
-            supplierId: matchedSupplierId,
-          }),
-          hrefWorkOrders: matchedSupplierId
-            ? `/fleet/partner/work-orders?supplierId=${encodeURIComponent(matchedSupplierId)}`
-            : '/fleet/partner/work-orders',
-        };
-      }),
+      items: tickets.map((t) => this.mapTireRequestRow(t, allocByClient, fallback)),
     };
   }
 
@@ -390,88 +508,242 @@ export class PartnerTireHotelService {
     tenantSlug: string,
     access: AccessContext,
     ticketId: string,
-    opts: { supplierId?: string } = {},
+    opts: { supplierId?: string; supplierIds?: string[] } = {},
   ) {
     const id = ticketId.trim();
     if (!id) throw new BadRequestException('ticketId is required');
     const scope = await this.resolveSupplierScope(tenantSlug, access, opts.supplierId, {
       allowTenantWide: true,
+      supplierIds: opts.supplierIds,
+    });
+    const { where, allocByClient } = await this.tireRequestScopeFilter(
+      scope.tenantId,
+      scope.supplierIds,
+    );
+    const t = await this.prisma.crmTicket.findFirst({
+      where: { ...where, id, status: undefined },
+      select: this.tireRequestSelect(),
+    });
+    if (!t) throw new NotFoundException('Tire request not found for this partner scope');
+    return {
+      item: this.mapTireRequestRow(t, allocByClient, scope.supplierIds?.[0] ?? null),
+    };
+  }
+
+  /** Clients + vehicles for creating a gestiune request in partner scope. */
+  async listRequestCreateMeta(
+    tenantSlug: string,
+    access: AccessContext,
+    opts: { supplierId?: string; supplierIds?: string[] } = {},
+  ) {
+    const scope = await this.resolveSupplierScope(tenantSlug, access, opts.supplierId, {
+      allowTenantWide: true,
+      supplierIds: opts.supplierIds,
     });
     const supplierIds = scope.supplierIds;
-    const allocClientIds = await this.prisma.clientSupplierAllocation.findMany({
+    const allocs = await this.prisma.clientSupplierAllocation.findMany({
       where: {
         tenantId: scope.tenantId,
         ...(supplierIds ? { supplierId: { in: supplierIds } } : {}),
       },
-      select: { clientId: true, supplierId: true },
-    });
-    const clientIds = [...new Set(allocClientIds.map((a) => a.clientId))];
-    if (clientIds.length === 0) {
-      throw new NotFoundException('Tire request not found for this partner scope');
-    }
-    const t = await this.prisma.crmTicket.findFirst({
-      where: {
-        id,
-        tenantId: scope.tenantId,
-        clientId: { in: clientIds },
-        serviceType: { code: { in: ['tire_storage', 'tire_service'] } },
-      },
       select: {
-        id: true,
-        subject: true,
-        status: true,
-        priority: true,
-        createdAt: true,
         clientId: true,
-        vehicleId: true,
-        serviceType: { select: { code: true, label: true } },
-        vehicle: { select: { id: true, registrationNumber: true } },
-        client: { select: { id: true, legalName: true } },
-        links: {
-          where: { entityType: 'tire_storage_stay' },
-          select: { entityId: true },
-          take: 3,
+        supplierId: true,
+        client: { select: { id: true, legalName: true, code: true } },
+        supplier: { select: { id: true, legalName: true } },
+      },
+      orderBy: { client: { legalName: 'asc' } },
+      take: 300,
+    });
+    const clientIds = [...new Set(allocs.map((a) => a.clientId))];
+    const vehicles =
+      clientIds.length === 0
+        ? []
+        : await this.prisma.vehicle.findMany({
+            where: {
+              tenantId: scope.tenantId,
+              clientId: { in: clientIds },
+              status: 'active',
+            },
+            select: { id: true, clientId: true, registrationNumber: true },
+            orderBy: { registrationNumber: 'asc' },
+            take: 1000,
+          });
+    const vehiclesByClient = new Map<string, Array<{ id: string; plate: string }>>();
+    for (const v of vehicles) {
+      const list = vehiclesByClient.get(v.clientId) ?? [];
+      list.push({ id: v.id, plate: v.registrationNumber });
+      vehiclesByClient.set(v.clientId, list);
+    }
+    const clientsMap = new Map<
+      string,
+      {
+        id: string;
+        legalName: string;
+        code: string;
+        supplierId: string;
+        supplierName: string;
+        vehicles: Array<{ id: string; plate: string }>;
+      }
+    >();
+    for (const a of allocs) {
+      if (clientsMap.has(a.clientId)) continue;
+      clientsMap.set(a.clientId, {
+        id: a.client.id,
+        legalName: a.client.legalName,
+        code: a.client.code,
+        supplierId: a.supplierId,
+        supplierName: a.supplier.legalName,
+        vehicles: vehiclesByClient.get(a.clientId) ?? [],
+      });
+    }
+    return {
+      clients: [...clientsMap.values()],
+      gestiuneOps: [
+        { code: TireGestiuneOp.cazare, label: 'Cazare' },
+        { code: TireGestiuneOp.eliberare, label: 'Eliberare' },
+        { code: TireGestiuneOp.transfer, label: 'Transfer' },
+        { code: TireGestiuneOp.casare, label: 'Casare' },
+      ],
+    };
+  }
+
+  async createTireRequest(
+    tenantSlug: string,
+    access: AccessContext,
+    body: unknown,
+    actorUserId?: string,
+  ) {
+    assertPartnerWrite(access);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new BadRequestException('Body must be an object');
+    }
+    const o = body as Record<string, unknown>;
+    const gestiuneOp = parseTireGestiuneOp(o.gestiuneOp ?? o.op);
+    if (!gestiuneOp) {
+      throw new BadRequestException('gestiuneOp must be cazare|eliberare|transfer|casare');
+    }
+    const clientId = typeof o.clientId === 'string' ? o.clientId.trim() : '';
+    if (!clientId) throw new BadRequestException('clientId is required');
+    const notes =
+      typeof o.notes === 'string'
+        ? o.notes.trim()
+        : typeof o.description === 'string'
+          ? o.description.trim()
+          : '';
+    const walkIn = o.walkIn === true || o.unconfirmed === true;
+    const setId = typeof o.setId === 'string' ? o.setId.trim() : '';
+
+    const scope = await this.resolveSupplier(
+      tenantSlug,
+      access,
+      typeof o.supplierId === 'string' ? o.supplierId : undefined,
+    );
+
+    const alloc = await this.prisma.clientSupplierAllocation.findFirst({
+      where: {
+        tenantId: scope.tenantId,
+        clientId,
+        supplierId: scope.supplierId,
+      },
+      select: { id: true },
+    });
+    if (!alloc) {
+      throw new ForbiddenException('Client is not allocated to this supplier');
+    }
+
+    let vehicleId: string | null =
+      typeof o.vehicleId === 'string' && o.vehicleId.trim() ? o.vehicleId.trim() : null;
+    const plateHint = normalizePlate(
+      typeof o.plate === 'string' ? o.plate : typeof o.registrationNumber === 'string' ? o.registrationNumber : undefined,
+    );
+    if (vehicleId) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { id: vehicleId, tenantId: scope.tenantId, clientId },
+        select: { id: true, registrationNumber: true },
+      });
+      if (!vehicle) throw new BadRequestException('vehicleId not found for client');
+    } else if (plateHint) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: {
+          tenantId: scope.tenantId,
+          clientId,
+          registrationNumber: { equals: plateHint, mode: 'insensitive' },
+        },
+        select: { id: true, registrationNumber: true },
+      });
+      vehicleId = vehicle?.id ?? null;
+    }
+
+    let plate: string | null = plateHint ?? null;
+    if (vehicleId) {
+      const v = await this.prisma.vehicle.findFirst({
+        where: { id: vehicleId },
+        select: { registrationNumber: true },
+      });
+      plate = v?.registrationNumber ?? plate;
+    }
+
+    if (setId) {
+      const set = await this.prisma.tireSet.findFirst({
+        where: { id: setId, tenantId: scope.tenantId, clientId },
+        select: { id: true },
+      });
+      if (!set) throw new BadRequestException('setId not found for client');
+    }
+
+    const serviceType = await ensureTireStorageServiceType(this.prisma, scope.tenantId);
+    const subject =
+      (typeof o.subject === 'string' && o.subject.trim()) ||
+      defaultGestiuneSubject(gestiuneOp, plate);
+
+    const row = await this.prisma.crmTicket.create({
+      data: {
+        tenantId: scope.tenantId,
+        clientId,
+        ticketType: CrmTicketType.maintenance,
+        serviceTypeId: serviceType.id,
+        subject,
+        description: notes || null,
+        status: CrmTicketStatus.open,
+        priority: CrmTicketPriority.normal,
+        routingLevel: CrmTicketRoutingLevel.L1,
+        assignedQueue: `client:${clientId}`,
+        vehicleId,
+        assignedSupplierId: scope.supplierId,
+        gestiuneOp,
+        createdByUserId: actorUserId ?? null,
+        ownerUserId: actorUserId ?? null,
+      },
+      select: this.tireRequestSelect(),
+    });
+
+    await this.prisma.crmTicketEvent.create({
+      data: {
+        tenantId: scope.tenantId,
+        ticketId: row.id,
+        kind: CrmTicketEventKind.status,
+        body: walkIn
+          ? 'Solicitare gestiune creată de partener (client neanunțat — de confirmat la PV)'
+          : 'Solicitare gestiune creată',
+        actorUserId: actorUserId ?? null,
+        payload: {
+          status: 'open',
+          gestiuneOp,
+          assignedSupplierId: scope.supplierId,
+          walkIn,
+          custodyUnconfirmed: walkIn,
+          setId: setId || null,
+          source: 'partner_tire_request',
         },
       },
     });
-    if (!t) throw new NotFoundException('Tire request not found for this partner scope');
-    const kind =
-      t.serviceType?.code === 'tire_storage'
-        ? 'storage'
-        : t.serviceType?.code === 'tire_service'
-          ? 'service'
-          : 'other';
-    const matchedSupplierId =
-      allocClientIds.find((a) => a.clientId === t.clientId)?.supplierId ??
-      (supplierIds?.[0] ?? null);
+
+    const { allocByClient } = await this.tireRequestScopeFilter(scope.tenantId, [
+      scope.supplierId,
+    ]);
     return {
-      item: {
-        id: t.id,
-        subject: t.subject,
-        status: t.status,
-        priority: t.priority,
-        createdAt: t.createdAt.toISOString(),
-        kind,
-        serviceCode: t.serviceType?.code ?? null,
-        serviceLabel: t.serviceType?.label ?? null,
-        plate: t.vehicle?.registrationNumber ?? null,
-        vehicleId: t.vehicleId,
-        clientName: t.client?.legalName ?? null,
-        supplierId: matchedSupplierId,
-        stayIds: t.links.map((l) => l.entityId),
-        hrefHotel: buildPartnerHotelCheckInHref({
-          supplierId: matchedSupplierId,
-          plate: t.vehicle?.registrationNumber ?? null,
-          ticketId: t.id,
-        }),
-        hrefTicket: buildPartnerTireRequestHref({
-          ticketId: t.id,
-          supplierId: matchedSupplierId,
-        }),
-        hrefWorkOrders: matchedSupplierId
-          ? `/fleet/partner/work-orders?supplierId=${encodeURIComponent(matchedSupplierId)}`
-          : '/fleet/partner/work-orders',
-      },
+      item: this.mapTireRequestRow(row, allocByClient, scope.supplierId),
     };
   }
 
@@ -505,18 +777,9 @@ export class PartnerTireHotelService {
           checkInAt: { gte: weekAgo },
         },
       }),
-      this.prisma.crmTicket.count({
-        where: {
-          tenantId: scope.tenantId,
-          status: { in: ['open', 'in_progress'] },
-          serviceType: { code: { in: ['tire_storage', 'tire_service'] } },
-          client: {
-            supplierAllocations: {
-              some: supplierIds ? { supplierId: { in: supplierIds } } : {},
-            },
-          },
-        },
-      }),
+      this.tireRequestScopeFilter(scope.tenantId, supplierIds).then(({ where }) =>
+        this.prisma.crmTicket.count({ where }),
+      ),
     ]);
 
     return {

@@ -99,8 +99,16 @@ export default async function FleetTiresHubPage({ searchParams }: PageProps) {
               </p>
             ) : null}
             {canSync && !driverPortal ? (
-              <div className="mt-4">
+              <div className="mt-4 flex flex-wrap items-center gap-3">
                 <TireSeasonReminderSyncButton />
+                {canWriteTires ? (
+                  <Link
+                    href="/fleet/tires/gestiune/new"
+                    className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+                  >
+                    Solicitare gestiune
+                  </Link>
+                ) : null}
               </div>
             ) : null}
             <nav className="mt-6 flex gap-4 border-b border-zinc-800 text-sm" aria-label="Secțiuni anvelope">

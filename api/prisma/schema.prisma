@@ -1652,6 +1652,14 @@ enum CrmTicketType {
   other
 }
 
+/// Operație de gestiune anvelope (pachet 1.3) — tichet fără mișcare stoc încă.
+enum TireGestiuneOp {
+  cazare
+  eliberare
+  transfer
+  casare
+}
+
 /// Solicitare CRM — inbox ierarhic L0→L1→L★.
 model CrmTicket {
   id               String                @id @default(cuid())
@@ -1671,6 +1679,10 @@ model CrmTicket {
   eventOdometerKm  Int?
   /// Vehicul mobil / imobil (daună, M/E) — copiat pe ServiceCase la start.
   vehicleMovable   VehicleMovableState?
+  /// Partener alocat pentru solicitare gestiune / hotel (pachet 1.3).
+  assignedSupplierId String?
+  /// Tip operație gestiune; null = tichet CRM clasic (inclusiv tire_service).
+  gestiuneOp       TireGestiuneOp?
   createdByUserId  String?
   ownerUserId      String?
   resolvedAt       DateTime?
@@ -1690,6 +1702,7 @@ model CrmTicket {
   createdBy        User?                 @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
   owner            User?                 @relation("TicketOwner", fields: [ownerUserId], references: [id])
   serviceType      TenantServiceType?    @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
+  assignedSupplier Supplier?             @relation("CrmTicketAssignedSupplier", fields: [assignedSupplierId], references: [id], onDelete: SetNull)
   events           CrmTicketEvent[]
   links            CrmTicketLink[]
   notifications    CrmTicketNotification[]
@@ -1709,6 +1722,8 @@ model CrmTicket {
   @@index([assignedQueue])
   @@index([ticketType])
   @@index([serviceTypeId])
+  @@index([assignedSupplierId])
+  @@index([tenantId, gestiuneOp])
 }
 
 model CrmTicketEvent {
@@ -1885,6 +1900,7 @@ model Supplier {
   tireStorageStays     TireStorageStay[]
   tireWarehouses       TireWarehouse[]
   tireCustodyProtocols TireCustodyProtocol[]
+  assignedCrmTickets   CrmTicket[]          @relation("CrmTicketAssignedSupplier")
 
   @@unique([tenantId, code])
   @@index([tenantId])

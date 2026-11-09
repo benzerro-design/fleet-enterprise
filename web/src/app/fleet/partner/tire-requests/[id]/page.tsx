@@ -4,11 +4,11 @@ import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { getAuthMeResult, isPartnerAdminMode } from "@/lib/auth-server";
 import { fleetServerFetch } from "@/lib/fleet-server";
 import {
-  isPartnerViewAs,
+  appendPartnerSupplierQuery,
   parsePartnerSupplierQuery,
   partnerSupplierSearchParams,
-  appendPartnerSupplierQuery,
 } from "@/lib/partner-context";
+import { tireRequestKindLabel, tireRequestStatusLabel } from "@/lib/tire-gestiune";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -17,12 +17,17 @@ type PageProps = {
 
 type TireRequestItem = {
   id: string;
+  displayId?: string;
   subject: string;
+  description?: string | null;
   status: string;
   kind: string;
+  kindLabel?: string;
   serviceLabel: string | null;
+  gestiuneOp?: string | null;
   plate: string | null;
   clientName: string | null;
+  supplierName?: string | null;
   createdAt: string;
   hrefHotel: string;
   hrefWorkOrders: string;
@@ -54,31 +59,11 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
   const adminMode = auth.ok && isPartnerAdminMode(auth);
   const listHref = appendPartnerSupplierQuery("/fleet/partner/tire-requests", supplierQuery);
 
-  if (adminMode && !isPartnerViewAs(supplierQuery)) {
-    return (
-      <FleetPageMain>
-        <div className="px-4 py-4 lg:px-6">
-          <h1 className="mb-2 text-lg font-semibold text-zinc-100">Solicitare anvelope</h1>
-          <p className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
-            Selectează un furnizor din comutator pentru a vedea solicitarea.
-          </p>
-          <Link href={listHref} className="mt-3 inline-block text-sm text-sky-400 hover:underline">
-            ← Înapoi la solicitări
-          </Link>
-        </div>
-      </FleetPageMain>
-    );
-  }
-
   const item = await loadRequest(id, supplierQuery);
   if (!item) notFound();
 
   const kindLabel =
-    item.kind === "storage"
-      ? "Depozitare (hotel)"
-      : item.kind === "service"
-        ? "Înlocuire (service)"
-        : (item.serviceLabel ?? "Anvelope");
+    item.kindLabel ?? tireRequestKindLabel(item.kind, item.serviceLabel);
 
   return (
     <FleetPageMain>
@@ -86,9 +71,15 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
         <Link href={listHref} className="text-xs text-zinc-500 hover:text-zinc-300">
           ← Solicitări anvelope
         </Link>
-        <h1 className="mt-3 text-lg font-semibold text-zinc-100">{item.subject}</h1>
+        <div className="mt-3 flex flex-wrap items-baseline gap-2">
+          <span className="font-mono text-xs text-zinc-500">
+            #{item.displayId ?? item.id.slice(-6).toUpperCase()}
+          </span>
+          <h1 className="text-lg font-semibold text-zinc-100">{item.subject}</h1>
+        </div>
         <p className="mt-1 text-xs text-zinc-500">
-          Fișă partener — nu CRM flotă. Execuția se face din Hotel / Devize.
+          Fișă solicitare gestiune — fără mișcare stoc în acest pas. PV și check-in vin în
+          pachetele următoare.
         </p>
 
         <dl className="mt-4 grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm sm:grid-cols-2">
@@ -106,14 +97,26 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
           </div>
           <div>
             <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Status</dt>
-            <dd className="mt-0.5 text-zinc-200">{item.status}</dd>
+            <dd className="mt-0.5 text-zinc-200">{tireRequestStatusLabel(item.status)}</dd>
           </div>
-          <div className="sm:col-span-2">
+          {item.supplierName || adminMode ? (
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Partener</dt>
+              <dd className="mt-0.5 text-zinc-200">{item.supplierName ?? "—"}</dd>
+            </div>
+          ) : null}
+          <div>
             <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Creat</dt>
             <dd className="mt-0.5 text-zinc-300">
               {new Date(item.createdAt).toLocaleString("ro-RO")}
             </dd>
           </div>
+          {item.description ? (
+            <div className="sm:col-span-2">
+              <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Note</dt>
+              <dd className="mt-0.5 whitespace-pre-wrap text-zinc-300">{item.description}</dd>
+            </div>
+          ) : null}
           {item.stayIds?.length ? (
             <div className="sm:col-span-2">
               <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Stay hotel legate</dt>
@@ -123,27 +126,20 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
         </dl>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {item.kind === "storage" ? (
-            <Link
-              href={item.hrefHotel}
-              className="rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-600"
-            >
-              Check-in hotel (cu context)
-            </Link>
-          ) : (
-            <Link
-              href={item.hrefWorkOrders}
-              className="rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-600"
-            >
-              Devize & comenzi
-            </Link>
-          )}
           <Link
-            href={appendPartnerSupplierQuery("/fleet/partner/tire-hotel", supplierQuery)}
+            href={listHref}
             className="rounded-lg border border-zinc-700 px-4 py-2.5 text-sm text-zinc-200 hover:bg-zinc-900"
           >
-            Inventar hotel
+            Înapoi la coadă
           </Link>
+          {item.kind === "storage" || item.gestiuneOp === "cazare" ? (
+            <Link
+              href={item.hrefHotel}
+              className="rounded-lg border border-violet-800/50 bg-violet-950/20 px-4 py-2.5 text-sm text-violet-100"
+            >
+              Hotel (pregătire check-in)
+            </Link>
+          ) : null}
         </div>
       </div>
     </FleetPageMain>

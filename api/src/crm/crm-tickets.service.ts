@@ -17,8 +17,14 @@ import {
   MembershipRole,
   Prisma,
   ReminderSourceType,
+  TireGestiuneOp,
   VehicleMovableState,
 } from '@prisma/client';
+import { parseTireGestiuneOp } from '../partner/tire-gestiune-request';
+import {
+  assertSupplierTireStorage,
+  ensureTireStorageServiceType,
+} from '../suppliers/supplier-tire-capability';
 import { AuditService } from '../audit/audit.service';
 import { resolveClientInTenant } from '../clients/client-resolve';
 import type { AccessContext, ActorContext } from '../iam/access-context.types';
@@ -154,6 +160,10 @@ export type CreateTicketInput = {
   eventOdometerKm?: number | null;
   updateVehicleOdometer?: boolean;
   vehicleMovable?: VehicleMovableState | null;
+  /** Pachet 1.3 — partener alocat pentru solicitare gestiune. */
+  assignedSupplierId?: string | null;
+  /** Pachet 1.3 — cazare | eliberare | transfer | casare. */
+  gestiuneOp?: TireGestiuneOp | string | null;
 };
 
 export type PatchTicketInput = {
@@ -604,6 +614,29 @@ export class CrmTicketsService {
     }
     const deadlines = computeSlaDeadlines(sla, priority);
 
+    const gestiuneOp = parseTireGestiuneOp(dto.gestiuneOp);
+    let assignedSupplierId: string | null = null;
+    if (dto.assignedSupplierId?.trim()) {
+      const sid = dto.assignedSupplierId.trim();
+      await assertSupplierTireStorage(this.prisma, tenant.id, sid);
+      const alloc = await this.prisma.clientSupplierAllocation.findFirst({
+        where: { tenantId: tenant.id, clientId: client.id, supplierId: sid },
+        select: { id: true },
+      });
+      if (!alloc) {
+        throw new BadRequestException('assignedSupplierId is not allocated to this client');
+      }
+      assignedSupplierId = sid;
+    }
+    if (gestiuneOp && !assignedSupplierId) {
+      throw new BadRequestException('assignedSupplierId is required for gestiuneOp');
+    }
+    if (gestiuneOp) {
+      const st = await ensureTireStorageServiceType(this.prisma, tenant.id);
+      serviceTypeId = st.id;
+      ticketType = CrmTicketType.maintenance;
+    }
+
     const row = await this.prisma.crmTicket.create({
       data: {
         tenantId: tenant.id,
@@ -620,6 +653,8 @@ export class CrmTicketsService {
         reminderActionId,
         eventOdometerKm,
         vehicleMovable,
+        assignedSupplierId,
+        gestiuneOp,
         firstResponseDueAt: deadlines.firstResponseDueAt,
         resolveDueAt: deadlines.resolveDueAt,
         createdByUserId: actorUserId ?? null,
@@ -635,7 +670,14 @@ export class CrmTicketsService {
         ? `Tichet creat de ${actor.displayName} (${routingLevelLabel(actor.routingLevel)})`
         : 'Tichet creat',
       actor,
-      payload: { status: 'open', routingLevel, assignedQueue },
+      payload: {
+        status: 'open',
+        routingLevel,
+        assignedQueue,
+        ...(gestiuneOp
+          ? { gestiuneOp, assignedSupplierId, source: 'fleet_gestiune_request' }
+          : {}),
+      },
     });
 
     if (eventOdometerKm != null && vehicleId) {
