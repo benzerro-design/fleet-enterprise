@@ -37,6 +37,11 @@ export const PARTNER_NAV_ITEMS: PartnerNavItem[] = [
     activePrefixes: ["/fleet/partner/warehouses"],
   },
   {
+    label: "Stoc în custodie",
+    href: "/fleet/partner/custody-stock",
+    activePrefixes: ["/fleet/partner/custody-stock"],
+  },
+  {
     label: "Asistență RSA",
     href: "/fleet/partner/rsa-missions",
     activePrefixes: ["/fleet/partner/rsa-missions"],

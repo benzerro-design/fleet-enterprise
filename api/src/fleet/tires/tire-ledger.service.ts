@@ -31,6 +31,19 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
 export class TireLedgerService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Mișcări anvelopă fără assert vehicul — apelantul trebuie să verifice accesul (ex. portal partener).
+   */
+  async ledgerForAssetAtTenant(tenantSlug: string, assetId: string): Promise<TireLedgerPayload> {
+    const tenant = await this.requireTenant(tenantSlug);
+    const asset = await this.prisma.tireAsset.findFirst({
+      where: { id: assetId.trim(), tenantId: tenant.id },
+      select: { id: true },
+    });
+    if (!asset) throw new NotFoundException('Asset not found');
+    return this.buildAssetLedger(tenant.id, asset.id);
+  }
+
   async ledgerForAsset(
     tenantSlug: string,
     assetId: string,
@@ -53,9 +66,13 @@ export class TireLedgerService {
       await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
     }
 
+    return this.buildAssetLedger(tenant.id, asset.id);
+  }
+
+  private async buildAssetLedger(tenantId: string, assetId: string): Promise<TireLedgerPayload> {
     const [placements, events, setLinks] = await Promise.all([
       this.prisma.tirePlacement.findMany({
-        where: { tenantId: tenant.id, assetId },
+        where: { tenantId, assetId },
         orderBy: { validFrom: 'asc' },
         include: {
           supplier: { select: { legalName: true } },
@@ -63,7 +80,7 @@ export class TireLedgerService {
         },
       }),
       this.prisma.tireEvent.findMany({
-        where: { tenantId: tenant.id, assetId },
+        where: { tenantId, assetId },
         orderBy: { createdAt: 'asc' },
         select: {
           id: true,
@@ -87,7 +104,7 @@ export class TireLedgerService {
       setIds.length === 0
         ? []
         : await this.prisma.tireStorageStay.findMany({
-            where: { tenantId: tenant.id, setId: { in: setIds } },
+            where: { tenantId, setId: { in: setIds } },
             orderBy: { checkInAt: 'asc' },
             include: {
               supplier: { select: { legalName: true } },

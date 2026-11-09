@@ -1014,6 +1014,8 @@ model TireStorageStay {
   setId            String
   supplierId       String
   locationCode     String?
+  /// Loc fizic în structura depozitului partener (pachet 1.2).
+  warehouseLocationId String?
   checkInAt        DateTime  @default(now())
   checkOutAt       DateTime?
   intakePhotos     Json?
@@ -1032,6 +1034,7 @@ model TireStorageStay {
   set              TireSet   @relation(fields: [setId], references: [id], onDelete: Cascade)
   supplier         Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   workOrder        MaintenanceWorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  warehouseLocation TireWarehouseLocation? @relation(fields: [warehouseLocationId], references: [id], onDelete: SetNull)
   costEntries      CostEntry[]
   custodyProtocols TireCustodyProtocol[]
 
@@ -1039,6 +1042,7 @@ model TireStorageStay {
   @@index([supplierId, checkOutAt])
   @@index([setId, checkOutAt])
   @@index([workOrderId])
+  @@index([warehouseLocationId])
   /// DB enforces one open stay per set: partial unique index
   /// TireStorageStay_set_open_uidx ON ("setId") WHERE "checkOutAt" IS NULL (see migration).
 }
@@ -1959,6 +1963,7 @@ model TireWarehouseLocation {
   updatedAt DateTime @updatedAt
   tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   row       TireWarehouseRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  storageStays TireStorageStay[]
 
   @@unique([rowId, code])
   @@index([tenantId])

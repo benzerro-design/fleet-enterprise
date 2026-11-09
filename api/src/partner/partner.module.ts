@@ -14,6 +14,8 @@ import { PartnerScorecardController } from './partner-scorecard.controller';
 import { PartnerScorecardService } from './partner-scorecard.service';
 import { PartnerTireHotelController } from './partner-tire-hotel.controller';
 import { PartnerTireHotelService } from './partner-tire-hotel.service';
+import { PartnerTireCustodyController } from './partner-tire-custody.controller';
+import { PartnerTireCustodyService } from './partner-tire-custody.service';
 import { PartnerTireWarehouseController } from './partner-tire-warehouse.controller';
 import { PartnerTireWarehouseService } from './partner-tire-warehouse.service';
 
@@ -27,6 +29,7 @@ import { PartnerTireWarehouseService } from './partner-tire-warehouse.service';
     PartnerReportsController,
     PartnerTireHotelController,
     PartnerTireWarehouseController,
+    PartnerTireCustodyController,
   ],
   providers: [
     PartnerAdminService,
@@ -37,6 +40,7 @@ import { PartnerTireWarehouseService } from './partner-tire-warehouse.service';
     PartnerReportsService,
     PartnerTireHotelService,
     PartnerTireWarehouseService,
+    PartnerTireCustodyService,
   ],
   exports: [PartnerAdminService, PartnerNotificationService, PartnerMailService],
 })

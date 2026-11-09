@@ -2,6 +2,23 @@ import { ForbiddenException } from '@nestjs/common';
 import { MembershipRole, SupplierRole } from '@prisma/client';
 import type { AccessContext } from './access-context.types';
 
+/**
+ * Stoc custodie anvelope — doar furnizor (supplier_user) sau rol tenant-wide (view-as).
+ * Nu permite client_user chiar dacă are alocare la furnizor (spre deosebire de assertSupplierReadById).
+ */
+export function assertPartnerOrTenantCustodyAccess(access: AccessContext): void {
+  if (access.isTenantWide) return;
+  if (isPartnerUser(access)) return;
+  if (access.membershipRole === MembershipRole.client_user) {
+    throw new ForbiddenException(
+      'Stocul în custodie este disponibil doar pentru utilizatori furnizor sau administrator tenant.',
+    );
+  }
+  throw new ForbiddenException(
+    'Stocul în custodie necesită acces furnizor sau rol tenant-wide.',
+  );
+}
+
 export function isPartnerUser(access: AccessContext): boolean {
   return access.membershipRole === MembershipRole.supplier_user;
 }
