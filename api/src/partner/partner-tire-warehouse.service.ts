@@ -252,14 +252,69 @@ export class PartnerTireWarehouseService {
     const row = await this.getRowForAccess(tenantSlug, access, rowId);
     const sortOrder =
       typeof b.sortOrder === 'number' && Number.isFinite(b.sortOrder) ? Math.trunc(b.sortOrder) : undefined;
-    return this.prisma.tireWarehouseRow.update({
-      where: { id: row.id },
-      data: {
-        ...(b.name !== undefined ? { name: optionalString(b.name) ?? null } : {}),
-        ...(sortOrder !== undefined ? { sortOrder } : {}),
-        ...(typeof b.active === 'boolean' ? { active: b.active } : {}),
-      },
-    });
+
+    let nextZoneId: string | undefined;
+    if (b.zoneId !== undefined && b.zoneId !== null) {
+      if (typeof b.zoneId !== 'string' || !b.zoneId.trim()) {
+        throw new BadRequestException('zoneId invalid');
+      }
+      const targetZone = await this.getZoneForAccess(tenantSlug, access, b.zoneId.trim());
+      if (targetZone.warehouseId !== row.zone.warehouseId) {
+        throw new BadRequestException(
+          'Rândul poate fi mutat doar într-o zonă din același depozit.',
+        );
+      }
+      if (targetZone.id !== row.zoneId) {
+        nextZoneId = targetZone.id;
+      }
+    }
+
+    try {
+      const updated = await this.prisma.tireWarehouseRow.update({
+        where: { id: row.id },
+        data: {
+          ...(b.name !== undefined ? { name: optionalString(b.name) ?? null } : {}),
+          ...(sortOrder !== undefined ? { sortOrder } : {}),
+          ...(typeof b.active === 'boolean' ? { active: b.active } : {}),
+          ...(nextZoneId ? { zoneId: nextZoneId } : {}),
+        },
+        include: {
+          zone: { include: { warehouse: { select: { code: true, name: true } } } },
+          locations: { select: { id: true, code: true } },
+        },
+      });
+
+      // Path-ul denormalizat pe sejururi deschise trebuie realiniat după mutarea zonei.
+      if (nextZoneId && updated.locations.length > 0) {
+        const locationIds = updated.locations.map((l) => l.id);
+        const openStays = await this.prisma.tireStorageStay.findMany({
+          where: {
+            tenantId: row.tenantId,
+            checkOutAt: null,
+            warehouseLocationId: { in: locationIds },
+          },
+          select: { id: true, warehouseLocationId: true },
+        });
+        for (const stay of openStays) {
+          const loc = updated.locations.find((l) => l.id === stay.warehouseLocationId);
+          if (!loc) continue;
+          const path = [
+            updated.zone.warehouse.code,
+            updated.zone.code,
+            updated.code,
+            loc.code,
+          ].join('/');
+          await this.prisma.tireStorageStay.update({
+            where: { id: stay.id },
+            data: { locationCode: path },
+          });
+        }
+      }
+
+      return updated;
+    } catch (e) {
+      mapPrismaUnique(e);
+    }
   }
 
   async listLocations(tenantSlug: string, access: AccessContext, rowId: string) {

@@ -143,6 +143,48 @@ export async function createRow(
   return data as TireWarehouseStorageRow;
 }
 
+export async function patchRow(
+  rowId: string,
+  body: { name?: string | null; active?: boolean; zoneId?: string; sortOrder?: number },
+): Promise<TireWarehouseStorageRow> {
+  const res = await fetch(`/api/partner/tire-warehouse/rows/${encodeURIComponent(rowId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(apiMessage(res, data));
+  return data as TireWarehouseStorageRow;
+}
+
+export async function patchZone(
+  zoneId: string,
+  body: { name?: string | null; active?: boolean; sortOrder?: number },
+): Promise<TireWarehouseZoneRow> {
+  const res = await fetch(`/api/partner/tire-warehouse/zones/${encodeURIComponent(zoneId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(apiMessage(res, data));
+  return data as TireWarehouseZoneRow;
+}
+
+export async function patchLocation(
+  locationId: string,
+  body: { name?: string | null; active?: boolean },
+): Promise<TireWarehouseLocationRow> {
+  const res = await fetch(`/api/partner/tire-warehouse/locations/${encodeURIComponent(locationId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(apiMessage(res, data));
+  return data as TireWarehouseLocationRow;
+}
+
 export async function fetchLocations(rowId: string): Promise<TireWarehouseLocationRow[]> {
   const res = await fetch(`/api/partner/tire-warehouse/rows/${encodeURIComponent(rowId)}/locations`, {
     cache: "no-store",

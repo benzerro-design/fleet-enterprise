@@ -14,6 +14,9 @@ import {
   fetchRows,
   fetchWarehouses,
   fetchZones,
+  patchLocation,
+  patchRow,
+  patchZone,
   type TireWarehouseLocationLabel,
   type TireWarehouseLocationRow,
   type TireWarehouseRow,
@@ -62,6 +65,8 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
   const [rowName, setRowName] = useState("");
   const [locationCode, setLocationCode] = useState("");
   const [locationName, setLocationName] = useState("");
+  const [moveRowZoneId, setMoveRowZoneId] = useState<string>("");
+  const [editRowName, setEditRowName] = useState("");
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +142,17 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
     void reloadLocations().catch((e: Error) => setError(e.message));
   }, [reloadLocations]);
 
+  useEffect(() => {
+    const row = storageRows.find((r) => r.id === selectedRowId);
+    if (!row) {
+      setMoveRowZoneId("");
+      setEditRowName("");
+      return;
+    }
+    setMoveRowZoneId("");
+    setEditRowName(row.name ?? "");
+  }, [selectedRowId, storageRows]);
+
   async function runAction(key: string, fn: () => Promise<void>) {
     setBusy(key);
     setError(null);
@@ -182,6 +198,7 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
   const selectedWarehouse = warehouses.find((w) => w.id === selectedWarehouseId);
   const selectedZone = zones.find((z) => z.id === selectedZoneId);
   const selectedStorageRow = storageRows.find((r) => r.id === selectedRowId);
+  const otherZonesInWarehouse = zones.filter((z) => z.id !== selectedZoneId);
 
   return (
     <div className="space-y-4">
@@ -290,11 +307,29 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
                     >
                       <span className="font-mono">{z.code}</span>
                       {z.name ? ` — ${z.name}` : ""}
+                      {!z.active ? <span className="text-zinc-500"> (inactiv)</span> : null}
                     </button>
                   </li>
                 ))}
               </ul>
             )}
+            {canWrite && selectedZoneId && selectedZone ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() =>
+                    void runAction("zone-active", async () => {
+                      await patchZone(selectedZoneId, { active: !selectedZone.active });
+                      await reloadZones();
+                    })
+                  }
+                  className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  {selectedZone.active ? "Dezactivează zona" : "Reactivează zona"}
+                </button>
+              </div>
+            ) : null}
             {canWrite && selectedWarehouseId ? (
               <form
                 className="mt-3 space-y-2 border-t border-zinc-800 pt-3"
@@ -366,6 +401,94 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
                 ))}
               </ul>
             )}
+            {canWrite && selectedStorageRow ? (
+              <div className="mt-3 space-y-2 border-t border-zinc-800 pt-3">
+                <p className="text-[11px] font-medium text-zinc-400">
+                  Editează rândul <span className="font-mono text-zinc-200">{selectedStorageRow.code}</span>
+                </p>
+                <input
+                  value={editRowName}
+                  onChange={(e) => setEditRowName(e.target.value)}
+                  placeholder="Nume (opțional)"
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                />
+                <button
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() =>
+                    void runAction("row-name", async () => {
+                      await patchRow(selectedStorageRow.id, {
+                        name: editRowName.trim() || null,
+                      });
+                      await reloadStorageRows();
+                    })
+                  }
+                  className="rounded-md border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  Salvează numele
+                </button>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="min-w-[140px] flex-1 text-[11px] text-zinc-500">
+                    Mută în zona
+                    <select
+                      value={moveRowZoneId}
+                      onChange={(e) => setMoveRowZoneId(e.target.value)}
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                    >
+                      <option value="">— alege zona —</option>
+                      {otherZonesInWarehouse.map((z) => (
+                        <option key={z.id} value={z.id}>
+                          {z.code}
+                          {z.name ? ` — ${z.name}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!!busy || !moveRowZoneId}
+                    onClick={() => {
+                      if (!moveRowZoneId) return;
+                      const target = zones.find((z) => z.id === moveRowZoneId);
+                      if (
+                        !window.confirm(
+                          `Muți rândul ${selectedStorageRow.code} din zona ${selectedZone?.code ?? "?"} în zona ${target?.code ?? "?"}?`,
+                        )
+                      ) {
+                        return;
+                      }
+                      void runAction("row-move", async () => {
+                        const targetZoneId = moveRowZoneId;
+                        const rowId = selectedStorageRow.id;
+                        await patchRow(rowId, { zoneId: targetZoneId });
+                        setSelectedZoneId(targetZoneId);
+                        setSelectedRowId(rowId);
+                        setStorageRows(await fetchRows(targetZoneId));
+                        await reloadZones();
+                      });
+                    }}
+                    className="rounded-md bg-sky-800 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                  >
+                    Mută rândul
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() =>
+                    void runAction("row-active", async () => {
+                      await patchRow(selectedStorageRow.id, {
+                        active: !selectedStorageRow.active,
+                      });
+                      await reloadStorageRows();
+                    })
+                  }
+                  className="rounded-md border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  {selectedStorageRow.active ? "Dezactivează rândul" : "Reactivează rândul"}
+                </button>
+              </div>
+            ) : null}
             {canWrite && selectedZoneId ? (
               <form
                 className="mt-3 space-y-2 border-t border-zinc-800 pt-3"
@@ -428,13 +551,30 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
                       {loc.name ? <span className="text-xs text-zinc-500"> — {loc.name}</span> : null}
                       {!loc.active ? <span className="text-xs text-zinc-600"> (inactiv)</span> : null}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void openLabel(loc.id)}
-                      className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-800"
-                    >
-                      Tipărește etichetă
-                    </button>
+                    <div className="flex flex-wrap gap-1">
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          disabled={!!busy}
+                          onClick={() =>
+                            void runAction(`loc-active-${loc.id}`, async () => {
+                              await patchLocation(loc.id, { active: !loc.active });
+                              await reloadLocations();
+                            })
+                          }
+                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
+                        >
+                          {loc.active ? "Dezactivează" : "Reactivează"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void openLabel(loc.id)}
+                        className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-800"
+                      >
+                        Tipărește etichetă
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
