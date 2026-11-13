@@ -78,7 +78,7 @@ export function buildTireCustodyPdf(input: TireCustodyPdfInput): Promise<Buffer>
 
     const lines: Array<[string, string]> = [
       ['Protocol', input.protocolId],
-      ['Revizie', String(input.revision)],
+      ['Versiune PV', String(input.revision)],
       ['Sejur hotel', input.stayId],
       ['Vehicul', input.plate ?? '—'],
       ['Set', input.setName ?? '—'],

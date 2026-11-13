@@ -126,7 +126,8 @@ export function TireCustodyDriverSignClient({ token }: { token: string }) {
           </p>
           <p className="text-xs text-zinc-500">
             {preview.supplierName}
-            {preview.locationText ? ` · ${preview.locationText}` : ""} · rev {preview.revision}
+            {preview.locationText ? ` · ${preview.locationText}` : ""} · PV versiunea{" "}
+            {preview.revision}
           </p>
           {preview.hasDriverSignature ? (
             <p className="mt-2 text-xs text-amber-200">Semnătura șofer există deja pe acest PV.</p>

@@ -217,7 +217,7 @@ export function TireCustodyProtocolPanel({
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-medium text-emerald-100">
-            {tireCustodyKindLabel(protocol.kind)} · rev {protocol.revision}
+            {tireCustodyKindLabel(protocol.kind)} · versiunea {protocol.revision}
           </p>
           <p className="mt-0.5 text-xs text-zinc-500">
             {protocol.plate ?? "—"} · status{" "}
@@ -499,7 +499,8 @@ export function TireCustodyProtocolPanel({
           {canWrite ? (
             <div className="space-y-2 border-t border-zinc-800 pt-3">
               <p className="text-xs text-zinc-400">
-                Rectificare: anulează PV-ul curent și deschide o revizie nouă (istoric păstrat).
+                Rectificare: anulează PV-ul curent și creează un PV nou (versiune următoare — istoric
+                păstrat).
               </p>
               <input
                 value={voidReason}
@@ -513,7 +514,7 @@ export function TireCustodyProtocolPanel({
                 onClick={() => void voidAndRectify()}
                 className="w-full rounded-xl border border-amber-700/50 px-3 py-2.5 text-sm font-medium text-amber-100 disabled:opacity-50"
               >
-                Anulează și creează revizie nouă
+                Anulează și creează PV nou
               </button>
             </div>
           ) : null}
@@ -522,8 +523,8 @@ export function TireCustodyProtocolPanel({
 
       {protocol.status === "voided" ? (
         <p className="text-xs text-zinc-500">
-          Anulat{protocol.voidReason ? `: ${protocol.voidReason}` : ""}. Deschide din nou PV pentru
-          o revizie nouă.
+          Anulat{protocol.voidReason ? `: ${protocol.voidReason}` : ""}. Deschide din nou un PV
+          pentru o versiune nouă.
         </p>
       ) : null}
     </div>

@@ -87,13 +87,13 @@ function supplierQs(supplierId?: string | null): string {
 }
 
 export function tireCustodyKindLabel(kind: TireCustodyProtocolKind): string {
-  if (kind === "check_in") return "Check-in hotel";
-  if (kind === "check_out") return "Check-out hotel";
-  if (kind === "seasonal") return "Schimb sezonier";
-  if (kind === "transfer") return "Transfer custodie";
-  if (kind === "scrap") return "Casare";
-  if (kind === "leasing_return") return "Returnare leasing";
-  if (kind === "quarantine") return "Carantină";
+  if (kind === "check_in") return "PV check-in";
+  if (kind === "check_out") return "PV check-out";
+  if (kind === "seasonal") return "PV schimb sezonier";
+  if (kind === "transfer") return "PV transfer";
+  if (kind === "scrap") return "PV casare";
+  if (kind === "leasing_return") return "PV returnare leasing";
+  if (kind === "quarantine") return "PV carantină";
   return kind;
 }
 
