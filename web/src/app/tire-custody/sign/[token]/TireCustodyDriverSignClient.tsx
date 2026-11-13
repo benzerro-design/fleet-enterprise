@@ -19,6 +19,17 @@ type Preview = {
   hasDriverSignature: boolean;
 };
 
+function kindLabel(kind: string): string {
+  if (kind === "check_in") return "PV primire în custodie";
+  if (kind === "check_out") return "PV predare / eliberare";
+  if (kind === "transfer") return "PV transfer";
+  if (kind === "scrap") return "PV casare";
+  if (kind === "leasing_return") return "PV returnare leasing";
+  if (kind === "quarantine") return "PV carantină";
+  if (kind === "seasonal") return "PV schimb sezonier";
+  return "PV anvelope";
+}
+
 export function TireCustodyDriverSignClient({ token }: { token: string }) {
   const padRef = useRef<RsaSignaturePadHandle>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -107,9 +118,16 @@ export function TireCustodyDriverSignClient({ token }: { token: string }) {
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-50">Semnare PV anvelope</h1>
+        <h1 className="text-xl font-semibold text-zinc-50">
+          {preview ? kindLabel(preview.kind) : "Semnare PV anvelope"}
+        </h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Introdu OTP-ul primit de la hotel / service, apoi semnează.
+          Verifică vehiculul, setul și hotelul. Introdu codul unic primit, scrie numele și semnează
+          numai dacă accepți predarea / primirea descrisă în document.
+        </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          OTP-ul confirmă invitația și expiră automat; semnătura desenată și datele dispozitivului
+          intră în auditul documentului. Nu este o parolă a contului tău.
         </p>
       </div>
 
@@ -122,7 +140,8 @@ export function TireCustodyDriverSignClient({ token }: { token: string }) {
       {preview ? (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm text-zinc-300">
           <p>
-            {preview.plate ?? "—"} · {preview.setName ?? preview.season ?? "set"}
+            {kindLabel(preview.kind)} · {preview.plate ?? "—"} ·{" "}
+            {preview.setName ?? preview.season ?? "set"}
           </p>
           <p className="text-xs text-zinc-500">
             {preview.supplierName}

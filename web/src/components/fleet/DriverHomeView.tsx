@@ -7,6 +7,7 @@ import { DriverViewportSplit } from "@/components/fleet/DriverViewportSplit";
 import { FleetPageMain } from "@/components/fleet/FleetPageMain";
 import { ReminderActionStatusBadge } from "@/components/fleet/ReminderActionStatusBadge";
 import { VehicleVisual } from "@/components/fleet/VehicleVisual";
+import { VehicleDriverTireCustodyPanel } from "@/components/fleet/VehicleDriverTireCustodyPanel";
 import { formatDateTimeRo } from "@/lib/datetime-local";
 import { FUEL_COST_CATEGORY } from "@/lib/fuel-ops";
 import type { VehicleRecord } from "@/lib/fleet-api";
@@ -294,6 +295,8 @@ export function DriverHomeView({
           )}
         </Section>
       </div>
+
+      {primary ? <VehicleDriverTireCustodyPanel vehicleId={primary.id} /> : null}
     </FleetPageMain>
   );
 
@@ -371,6 +374,7 @@ export function DriverHomeView({
               </ul>
             </section>
           )}
+          <VehicleDriverTireCustodyPanel vehicleId={primary.id} />
         </section>
       ) : null}
     </FleetPageMain>

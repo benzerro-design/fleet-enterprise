@@ -32,9 +32,9 @@ const CHECKLIST_BY_KIND: Record<TireCustodyProtocolKind, Record<string, string>>
   },
   check_out: {
     set_complete: "Set complet la predare",
-    condition_at_exit_noted: "Stare / profil la ieșire notate",
+    condition_at_exit_noted: "Am confirmat profilul de la intrare (sau am notat diferențele)",
     photos_taken: "Poze la predare atașate",
-    recipient_id_checked: "Identitate primitor verificată",
+    recipient_id_checked: "Am verificat vizual identitatea primitorului",
   },
   seasonal: {
     set_complete: "Seturi implicate verificate",
@@ -370,6 +370,12 @@ export function TireCustodyProtocolPanel({
               }}
               className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             />
+            {kind === "check_out" ? (
+              <span className="block text-[11px] text-zinc-500">
+                Valoarea este preluată din PV-ul de intrare. Dacă anvelopele au stat doar pe raft,
+                confirm-o neschimbată; modifică numai diferențele constatate la predare.
+              </span>
+            ) : null}
           </label>
 
           <label className="block space-y-1">
@@ -486,6 +492,14 @@ export function TireCustodyProtocolPanel({
                 {label}
               </label>
             ))}
+            {kind === "check_out" ? (
+              <p className="text-[11px] text-zinc-500">
+                „Identitate verificată” este confirmarea operatorului că numele primitorului
+                corespunde actului / legitimației prezentate. Nu stocăm seria actului sau CNP-ul.
+                Semnătura cu OTP dovedește separat acceptarea documentului de către persoana care a
+                primit invitația.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2 border-t border-zinc-800 pt-3">
@@ -523,6 +537,11 @@ export function TireCustodyProtocolPanel({
 
           <div className="space-y-2 border-t border-zinc-800 pt-3">
             <p className="text-xs font-medium text-zinc-200">Link OTP șofer</p>
+            <p className="text-[11px] text-zinc-500">
+              OTP este un cod unic, valabil temporar. Împreună cu linkul împiedică semnarea doar din
+              posesia accidentală a unuia dintre ele; semnătura este făcută pe dispozitivul
+              primitorului și intră în auditul PV.
+            </p>
             <input
               value={driverEmail}
               onChange={(e) => setDriverEmail(e.target.value)}
@@ -568,7 +587,11 @@ export function TireCustodyProtocolPanel({
                 ) : null}
               </div>
             ) : protocol.hasDriverInvite ? (
-              <p className="text-xs text-sky-300/80">Există un invite activ pentru șofer.</p>
+              <p className="text-xs text-sky-300/80">
+                Invitație activă = linkul și codul OTP au fost deja generate și încă nu au expirat.
+                Nu înseamnă că șoferul a semnat. Poate semna și din aplicație, din notificarea /
+                sarcina afișată pe vehiculul lui.
+              </p>
             ) : null}
           </div>
 

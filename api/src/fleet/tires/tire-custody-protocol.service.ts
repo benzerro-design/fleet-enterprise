@@ -541,13 +541,10 @@ export class TireCustodyProtocolService {
     });
     const revision = (maxRev._max.revision ?? 0) + 1;
 
-    const isExit =
+    const copyIntakeCondition =
+      kind === TireCustodyProtocolKind.check_in ||
       kind === TireCustodyProtocolKind.check_out ||
-      kind === TireCustodyProtocolKind.transfer ||
-      kind === TireCustodyProtocolKind.scrap ||
-      kind === TireCustodyProtocolKind.leasing_return ||
-      kind === TireCustodyProtocolKind.quarantine ||
-      kind === TireCustodyProtocolKind.seasonal;
+      kind === TireCustodyProtocolKind.leasing_return;
 
     const row = await this.prisma.tireCustodyProtocol.create({
       data: {
@@ -560,10 +557,11 @@ export class TireCustodyProtocolService {
         checklistJson: defaultChecklistForKind(kind),
         // Check-in: editable bay. Exit PVs: snapshot of current rack (read-only in UI).
         locationText,
-        // Only seed intake tread notes on check-in — exit PVs start empty (condition at handover).
-        conditionNotes: isExit
-          ? null
-          : formatIntakeTreadNotesForDisplay(stay.intakeTreadNotes),
+        // Stored tyres should leave with the same recorded profile. Check-out starts from the
+        // intake inspection and the operator confirms it unchanged or edits real differences.
+        conditionNotes: copyIntakeCondition
+          ? formatIntakeTreadNotesForDisplay(stay.intakeTreadNotes)
+          : null,
         workOrderId: workOrderId ?? null,
         ticketId: opts?.ticketId?.trim() || null,
         targetSupplierId: opts?.targetSupplierId?.trim() || null,
@@ -767,7 +765,10 @@ export class TireCustodyProtocolService {
     if (!tenant) throw new NotFoundException('Protocol not found');
     const existing = await this.prisma.tireCustodyProtocol.findFirst({
       where: { id: protocolId, tenantId: tenant.id },
-      include: { signatures: true },
+      include: {
+        signatures: true,
+        set: { select: { vehicleId: true, vehicle: { select: { registrationNumber: true } } } },
+      },
     });
     if (!existing) throw new NotFoundException('Protocol not found');
     if (access) {
@@ -1040,7 +1041,10 @@ export class TireCustodyProtocolService {
     if (!tenant) throw new NotFoundException('Protocol not found');
     const existing = await this.prisma.tireCustodyProtocol.findFirst({
       where: { id: protocolId, tenantId: tenant.id },
-      include: { signatures: true },
+      include: {
+        signatures: true,
+        set: { select: { vehicleId: true, vehicle: { select: { registrationNumber: true } } } },
+      },
     });
     if (!existing) throw new NotFoundException('Protocol not found');
     if (access) {
@@ -1072,6 +1076,56 @@ export class TireCustodyProtocolService {
       entityId: protocolId,
       meta: { expiresAt: minted.expiresAt.toISOString() },
     });
+
+    // In-app delivery for an enrolled active driver when the PV belongs to a ticket.
+    // Without a ticket, the same pending signature is still shown on the driver's dashboard/vehicle.
+    const vehicleId = existing.set.vehicleId;
+    const plate = existing.set.vehicle?.registrationNumber ?? null;
+    if (existing.ticketId && vehicleId) {
+      const assignment = await this.prisma.driverVehicleAssignment.findFirst({
+        where: {
+          tenantId: tenant.id,
+          vehicleId,
+          unassignedAt: null,
+        },
+        orderBy: { assignedAt: 'desc' },
+        select: { driverId: true },
+      });
+      const membership = assignment
+        ? await this.prisma.clientMembership.findFirst({
+            where: {
+              tenantId: tenant.id,
+              driverId: assignment.driverId,
+              role: 'driver',
+            },
+            select: { userId: true },
+          })
+        : null;
+      if (membership) {
+        const body = `Semnătură necesară: PV anvelope ${plate ?? vehicleId}`;
+        const duplicate = await this.prisma.crmTicketNotification.findFirst({
+          where: {
+            tenantId: tenant.id,
+            userId: membership.userId,
+            ticketId: existing.ticketId,
+            readAt: null,
+            body,
+          },
+          select: { id: true },
+        });
+        if (!duplicate) {
+          await this.prisma.crmTicketNotification.create({
+            data: {
+              tenantId: tenant.id,
+              userId: membership.userId,
+              ticketId: existing.ticketId,
+              kind: 'mention',
+              body,
+            },
+          });
+        }
+      }
+    }
 
     return {
       protocolId,

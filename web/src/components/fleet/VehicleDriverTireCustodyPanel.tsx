@@ -85,7 +85,8 @@ export function VehicleDriverTireCustodyPanel({ vehicleId }: Props) {
       <div>
         <h3 className="text-sm font-medium text-emerald-100">Protocoale custodie anvelope</h3>
         <p className="mt-0.5 text-[11px] text-zinc-500">
-          Semnează pe telefon (OTP) protocoalele deschise de hotel pentru seturile acestui vehicul.
+          Acțiune necesară: hotelul a pregătit un PV pentru seturile acestui vehicul. Deschide
+          documentul, verifică datele și semnează numai dacă ești de acord.
         </p>
       </div>
       <ul className="space-y-2">
@@ -101,7 +102,7 @@ export function VehicleDriverTireCustodyPanel({ vehicleId }: Props) {
               </p>
               {item.hasDriverInvite && item.driverInviteExpiresAt ? (
                 <p className="mt-0.5 text-[10px] text-emerald-200/80">
-                  Invitație activă până la{" "}
+                  Cod de semnare deja emis (nu este încă semnat) · valabil până la{" "}
                   {new Date(item.driverInviteExpiresAt).toLocaleString("ro-RO")}
                 </p>
               ) : null}
@@ -112,7 +113,11 @@ export function VehicleDriverTireCustodyPanel({ vehicleId }: Props) {
               onClick={() => void openSign(item.protocolId)}
               className="shrink-0 rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/60 disabled:opacity-50"
             >
-              {pendingId === item.protocolId ? "Se pregătește…" : "Deschide semnare"}
+              {pendingId === item.protocolId
+                ? "Se pregătește…"
+                : item.hasDriverInvite
+                  ? "Generează cod nou"
+                  : "Pregătește semnarea"}
             </button>
           </li>
         ))}
@@ -120,6 +125,10 @@ export function VehicleDriverTireCustodyPanel({ vehicleId }: Props) {
       {actionError ? <p className="text-xs text-rose-400">{actionError}</p> : null}
       {signLink ? (
         <div className="rounded-lg border border-emerald-800/50 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-300 space-y-2">
+          <p className="text-zinc-300">
+            Cod unic pentru această invitație. Îl introduci pe pagina următoare; expiră automat și
+            nu poate fi refolosit după semnare.
+          </p>
           <p>
             OTP: <span className="font-mono text-base tracking-widest text-emerald-100">{signLink.otp}</span>
           </p>

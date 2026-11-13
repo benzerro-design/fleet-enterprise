@@ -56,16 +56,22 @@ export async function loadVehicleById(id: string): Promise<VehicleRecord | null>
   }
 }
 
-/** Driver UI — only tickets created by this user or tied to this driverId (not all vehicle tickets). */
+/**
+ * Driver UI — tickets created by the user, explicitly tied to the driver, or concerning
+ * a vehicle currently allocated to the driver.
+ */
 export function filterDriverPortalTickets(
   items: TicketRecord[],
   userId: string | undefined,
   driverId: string | undefined,
+  assignedVehicleIds: string[] = [],
 ): TicketRecord[] {
-  if (!userId && !driverId) return items;
+  const vehicleIds = new Set(assignedVehicleIds.map((id) => id.trim()).filter(Boolean));
+  if (!userId && !driverId && vehicleIds.size === 0) return items;
   return items.filter((t) => {
     if (userId && t.createdByUserId === userId) return true;
     if (driverId && t.driverId === driverId) return true;
+    if (t.vehicleId && vehicleIds.has(t.vehicleId)) return true;
     return false;
   });
 }

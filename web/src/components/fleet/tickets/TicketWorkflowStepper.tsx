@@ -43,6 +43,7 @@ import { formatDateTimeRo } from "@/lib/datetime-local";
 import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
 import { resolveSchedulingServiceTypeCode } from "@/lib/scheduling-service-type";
 import { TicketHotelPanel } from "@/components/fleet/tickets/TicketHotelPanel";
+import { VehicleDriverTireCustodyPanel } from "@/components/fleet/VehicleDriverTireCustodyPanel";
 import { isTireStorageTypeCode } from "@/lib/tire-service-type-codes";
 import { DEFAULT_TIRE_SETTINGS, tireSettingsBrowserBase } from "@/lib/tire-settings";
 
@@ -704,14 +705,25 @@ export function TicketWorkflowStepper({
       <div className={shell}>
         {errorBlock()}
         {isHotelTicket && hasVehicle && vehicleId ? (
-          <TicketHotelPanel
-            ticketId={ticketId}
-            vehicleId={vehicleId}
-            canWrite={canOperate && !closed && !driverPortal}
-            plate={plate}
-            gestiuneOp={gestiuneOp}
-            assignedSupplierId={assignedSupplierId}
-          />
+          driverPortal ? (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-300">
+                Această solicitare privește vehiculul tău
+                {plate ? ` (${plate})` : ""}. Pentru șofer sunt disponibile doar documentele care
+                necesită semnătura lui; execuția de stoc aparține partenerului.
+              </p>
+              <VehicleDriverTireCustodyPanel vehicleId={vehicleId} />
+            </div>
+          ) : (
+            <TicketHotelPanel
+              ticketId={ticketId}
+              vehicleId={vehicleId}
+              canWrite={canOperate && !closed}
+              plate={plate}
+              gestiuneOp={gestiuneOp}
+              assignedSupplierId={assignedSupplierId}
+            />
+          )
         ) : null}
         {!hasVehicle ? (
           <p className="text-sm text-amber-300">

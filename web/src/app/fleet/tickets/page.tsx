@@ -437,6 +437,7 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
 
   const driverId = driverIdFromAuth(auth);
   const userId = auth.ok ? auth.me.userId : undefined;
+  const assignedVehicleIds = auth.ok ? (auth.me.access?.assignedVehicleIds ?? []) : [];
   const status = sp.status === "open" || sp.status === "in_progress" || sp.status === "resolved" ? sp.status : "all";
   const bandHref = (next: string) => (next === "all" ? "/fleet/tickets" : `/fleet/tickets?status=${next}`);
   const mobilePageHref = (nextPage: number) => {
@@ -446,7 +447,9 @@ export default async function FleetTicketsPage({ searchParams }: PageProps) {
     const qs = p.toString();
     return `/fleet/tickets${qs ? `?${qs}` : ""}`;
   };
-  const driverItems = list ? filterDriverPortalTickets(list.items, userId, driverId) : [];
+  const driverItems = list
+    ? filterDriverPortalTickets(list.items, userId, driverId, assignedVehicleIds)
+    : [];
   const filteredByStatus = status === "all" ? driverItems : driverItems.filter((row) => row.status === status);
   const pageSize = 50;
   const mobileTotalPages = Math.max(1, Math.ceil(filteredByStatus.length / pageSize));

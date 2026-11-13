@@ -64,6 +64,7 @@ async function loadDriverHomeData(
   driverId: string | undefined,
   userId: string | undefined,
   vehicleId: string | null,
+  assignedVehicleIds: string[],
 ) {
   const tripQs = new URLSearchParams({ page: "1", pageSize: "8", ended: "open" });
   if (driverId) tripQs.set("driverId", driverId);
@@ -91,7 +92,7 @@ async function loadDriverHomeData(
     if (ticketsRes?.ok) {
       const payload = (await ticketsRes.json()) as TicketListPayload;
       const open = (payload.items ?? []).filter((row) => row.status === "open" || row.status === "in_progress");
-      tickets = filterDriverPortalTickets(open, userId, driverId).slice(0, 8);
+      tickets = filterDriverPortalTickets(open, userId, driverId, assignedVehicleIds).slice(0, 8);
     }
   } catch {
     tickets = [];
@@ -148,7 +149,19 @@ export default async function FleetVehiclesPage({ searchParams }: PageProps) {
       const current = vehicles.find((v) => v.id === currentVehicleId);
       if (current) vehicles = [current, ...vehicles.filter((v) => v.id !== currentVehicleId)];
     }
-    const extra = await loadDriverHomeData(driverId, userId, currentVehicleId ?? vehicles[0]?.id ?? null);
+    const visibleVehicleIds = Array.from(
+      new Set([
+        ...assignedFromAuth,
+        ...vehicles.map((vehicle) => vehicle.id),
+        ...(currentVehicleId ? [currentVehicleId] : []),
+      ]),
+    );
+    const extra = await loadDriverHomeData(
+      driverId,
+      userId,
+      currentVehicleId ?? vehicles[0]?.id ?? null,
+      visibleVehicleIds,
+    );
     return (
       <DriverHomeView
         driverName={profile.fullName ?? driverNameFromAuth(auth)}

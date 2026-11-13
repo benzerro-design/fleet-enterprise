@@ -248,7 +248,18 @@ export type TransformTicketInput =
 type TicketRow = Prisma.CrmTicketGetPayload<{
   include: {
     client: { select: { code: true; legalName: true } };
-    vehicle: { select: { registrationNumber: true; odometerKm: true } };
+    vehicle: {
+      select: {
+        registrationNumber: true;
+        odometerKm: true;
+        driverAssignments: {
+          where: { unassignedAt: null };
+          orderBy: { assignedAt: 'desc' };
+          take: 1;
+          select: { driver: { select: { id: true; fullName: true } } };
+        };
+      };
+    };
     driver: { select: { fullName: true } };
     createdBy: { select: { email: true } };
     owner: { select: { email: true; displayName: true } };
@@ -541,7 +552,22 @@ export class CrmTicketsService {
     if (!subject) throw new BadRequestException('subject is required');
 
     const vehicleId = await this.resolveOptionalVehicle(tenant.id, client.id, dto.vehicleId);
-    const driverId = await this.resolveOptionalDriver(tenant.id, client.id, dto.driverId);
+    let driverId = await this.resolveOptionalDriver(tenant.id, client.id, dto.driverId);
+    // A ticket about an allocated vehicle also concerns its active driver, regardless of
+    // who created it. Persist that relation so driver portal lists/notifications stay correct.
+    if (!driverId && vehicleId) {
+      const activeAssignment = await this.prisma.driverVehicleAssignment.findFirst({
+        where: {
+          tenantId: tenant.id,
+          vehicleId,
+          unassignedAt: null,
+          driver: { clientId: client.id, status: 'active' },
+        },
+        orderBy: { assignedAt: 'desc' },
+        select: { driverId: true },
+      });
+      driverId = activeAssignment?.driverId ?? null;
+    }
     const reminderActionId = await this.resolveOptionalReminder(
       tenant.id,
       vehicleId,
@@ -712,6 +738,29 @@ export class CrmTicketsService {
       body: `S-a creat tichetul ${this.displayId(row.id)}: ${subject}.`,
       driverId,
     });
+
+    if (driverId) {
+      const driverMembership = await this.prisma.clientMembership.findFirst({
+        where: {
+          tenantId: tenant.id,
+          clientId: client.id,
+          driverId,
+          role: 'driver',
+        },
+        select: { userId: true },
+      });
+      if (driverMembership && driverMembership.userId !== actorUserId) {
+        await this.prisma.crmTicketNotification.create({
+          data: {
+            tenantId: tenant.id,
+            userId: driverMembership.userId,
+            ticketId: row.id,
+            kind: 'mention',
+            body: `Solicitare pentru vehiculul tău: ${subject}`,
+          },
+        });
+      }
+    }
 
     const fresh = await this.prisma.crmTicket.findFirstOrThrow({
       where: { id: row.id },
@@ -1681,7 +1730,18 @@ export class CrmTicketsService {
   private ticketInclude() {
     return {
       client: { select: { code: true, legalName: true } },
-      vehicle: { select: { registrationNumber: true, odometerKm: true } },
+      vehicle: {
+        select: {
+          registrationNumber: true,
+          odometerKm: true,
+          driverAssignments: {
+            where: { unassignedAt: null },
+            orderBy: { assignedAt: 'desc' as const },
+            take: 1,
+            select: { driver: { select: { id: true, fullName: true } } },
+          },
+        },
+      },
       driver: { select: { fullName: true } },
       createdBy: { select: { email: true } },
       owner: { select: { email: true, displayName: true } },
@@ -1792,8 +1852,9 @@ export class CrmTicketsService {
       vehicleId: row.vehicleId,
       registrationNumber: row.vehicle?.registrationNumber ?? null,
       vehicleOdometerKm: row.vehicle?.odometerKm ?? null,
-      driverId: row.driverId,
-      driverFullName: row.driver?.fullName ?? null,
+      driverId: row.driverId ?? row.vehicle?.driverAssignments[0]?.driver.id ?? null,
+      driverFullName:
+        row.driver?.fullName ?? row.vehicle?.driverAssignments[0]?.driver.fullName ?? null,
       reminderActionId: row.reminderActionId,
       createdByUserId: row.createdByUserId,
       createdByEmail: row.createdBy?.email ?? null,
