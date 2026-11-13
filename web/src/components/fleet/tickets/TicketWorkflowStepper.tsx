@@ -236,7 +236,7 @@ export function TicketWorkflowStepper({
     void load();
   }, [load]);
 
-  async function startCase() {
+  const startCase = useCallback(async () => {
     setPending(true);
     setError(null);
     try {
@@ -261,7 +261,16 @@ export function TicketWorkflowStepper({
     } finally {
       setPending(false);
     }
-  }
+  }, [ticketId, router]);
+
+  useEffect(() => {
+    if (!canOperate || closed || driverPortal) return;
+    const onStartService = () => {
+      void startCase();
+    };
+    window.addEventListener("fleet-ticket-start-service", onStartService);
+    return () => window.removeEventListener("fleet-ticket-start-service", onStartService);
+  }, [canOperate, closed, driverPortal, startCase]);
 
   async function createAppointment() {
     if (!serviceCase) return;
@@ -711,7 +720,9 @@ export function TicketWorkflowStepper({
               <VehicleDriverTireCustodyPanel vehicleId={vehicleId} alwaysShow />
               <PilotHint>
                 Pe tichetul șoferului apar doar documentele care cer semnătura lui
-                {plate ? ` (${plate})` : ""}; execuția de stoc rămâne la partener.
+                {plate ? ` (${plate})` : ""}; execuția de stoc rămâne la partener. Dacă ai nevoie de
+                montaj pe mașină după predare, solicită continuarea cu service pe acest tichet —
+                adminul sau managerul deschid fluxul (nu creezi tu comanda).
               </PilotHint>
             </div>
           ) : (
@@ -772,7 +783,9 @@ export function TicketWorkflowStepper({
           <VehicleDriverTireCustodyPanel vehicleId={vehicleId} alwaysShow />
           <PilotHint>
             Pe tichetul șoferului apar doar documentele care cer semnătura lui
-            {plate ? ` (${plate})` : ""}; execuția de stoc rămâne la partener.
+            {plate ? ` (${plate})` : ""}; execuția de stoc rămâne la partener. Dacă ai nevoie de
+            montaj pe mașină după predare, solicită continuarea cu service pe acest tichet —
+            adminul sau managerul deschid fluxul (nu creezi tu comanda).
           </PilotHint>
         </div>
       ) : null}

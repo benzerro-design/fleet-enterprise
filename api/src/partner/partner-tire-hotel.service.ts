@@ -1280,7 +1280,7 @@ export class PartnerTireHotelService {
     }
 
     if (opts.vehicleId) {
-      return this.prisma.tireStorageStay.findFirst({
+      const open = await this.prisma.tireStorageStay.findFirst({
         where: {
           tenantId,
           supplierId,
@@ -1289,6 +1289,20 @@ export class PartnerTireHotelService {
         },
         select: staySelect,
         orderBy: { checkInAt: 'desc' },
+      });
+      if (open) return open;
+
+      // Finalizing a release PV closes the stay before this wizard reloads.
+      // Keep the just-closed stay visible so step 5 can resolve the request.
+      return this.prisma.tireStorageStay.findFirst({
+        where: {
+          tenantId,
+          supplierId,
+          set: { vehicleId: opts.vehicleId },
+          checkOutAt: { not: null },
+        },
+        select: staySelect,
+        orderBy: { checkOutAt: 'desc' },
       });
     }
 

@@ -669,6 +669,23 @@ export class FleetController {
     );
   }
 
+  @Get('vehicles/:vehicleId/tire-custody/protocols/:protocolId/pdf')
+  @Roles(...FLEET_READ_ROLES)
+  @Header('Content-Type', 'application/pdf')
+  downloadVehicleCustodyPdf(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Param('protocolId') protocolId: string,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireCustody.downloadVehiclePdf(
+      tenantId,
+      vehicleId,
+      protocolId,
+      access,
+    );
+  }
+
   @Post('vehicles/:vehicleId/tire-custody/protocols/:protocolId/driver-sign-link')
   @Roles(MembershipRole.client_user)
   @HttpCode(200)

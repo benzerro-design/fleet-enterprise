@@ -14,6 +14,7 @@ export type DriverVehicleCustodyPending = {
   supplierName: string;
   locationText: string | null;
   setSeason: string | null;
+  mountedAs: "on_rim" | "tyre_only" | null;
   hasDriverInvite: boolean;
   driverInviteExpiresAt: string | null;
   phase: DriverCustodyPhase;
@@ -30,6 +31,7 @@ export type VehicleTicketCustodyProgress = {
   stayCheckedOut: boolean;
   supplierName: string | null;
   plate: string | null;
+  mountedAs: "on_rim" | "tyre_only" | string | null;
   checkIn: { protocolId: string; status: string; signed: boolean } | null;
   release: {
     protocolId: string;
@@ -104,6 +106,14 @@ export async function issueDriverVehicleCustodySignLink(
 
 export function custodyKindLabel(kind: TireCustodyProtocolKind): string {
   return tireCustodyKindLabel(kind);
+}
+
+export function vehicleCustodyPdfUrl(vehicleId: string, protocolId: string): string {
+  return `${fleetBrowserBase}/vehicles/${encodeURIComponent(vehicleId)}/tire-custody/protocols/${encodeURIComponent(protocolId)}/pdf`;
+}
+
+export function custodySetTypeLabel(mountedAs: string | null | undefined): string {
+  return mountedAs === "on_rim" ? "set complet de roți (anvelope + jante)" : "set de anvelope";
 }
 
 export function driverCustodyPhaseLabel(phase: DriverCustodyPhase): string {

@@ -189,6 +189,7 @@ export type DriverVehicleCustodyPending = {
   supplierName: string;
   locationText: string | null;
   setSeason: string | null;
+  mountedAs: string | null;
   hasDriverInvite: boolean;
   driverInviteExpiresAt: string | null;
   /** Lifecycle for driver UX after OTP sign. */
@@ -206,6 +207,7 @@ export type VehicleTicketCustodyProgress = {
   stayCheckedOut: boolean;
   supplierName: string | null;
   plate: string | null;
+  mountedAs: string | null;
   checkIn: {
     protocolId: string;
     status: string;
@@ -1605,6 +1607,38 @@ export class TireCustodyProtocolService {
     });
   }
 
+  async downloadVehiclePdf(
+    tenantSlug: string,
+    vehicleId: string,
+    protocolId: string,
+    access: AccessContext,
+  ): Promise<StreamableFile> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) throw new NotFoundException('Protocol not found');
+    const row = await this.prisma.tireCustodyProtocol.findFirst({
+      where: { id: protocolId, tenantId: tenant.id, set: { vehicleId } },
+      select: {
+        id: true,
+        kind: true,
+        status: true,
+        pdfBytes: true,
+        pdfSha256: true,
+      },
+    });
+    if (!row) throw new NotFoundException('Protocol not found');
+    if (row.status !== TireCustodyProtocolStatus.signed) {
+      throw new BadRequestException('PDF available after protocol is signed');
+    }
+    if (!row.pdfBytes?.length || !row.pdfSha256) {
+      throw new BadRequestException('Archived PDF missing');
+    }
+    return new StreamableFile(Buffer.from(row.pdfBytes), {
+      type: 'application/pdf',
+      disposition: `attachment; filename="tire-custody-${row.kind}-${row.id}.pdf"`,
+    });
+  }
+
   /**
    * Custody protocols on this vehicle relevant to the driver:
    * - needs signature
@@ -1640,7 +1674,7 @@ export class TireCustodyProtocolService {
       include: {
         signatures: { select: { role: true, signedAt: true } },
         supplier: { select: { legalName: true } },
-        set: { select: { season: true } },
+        set: { select: { season: true, mountedAs: true } },
         stay: { select: { checkOutAt: true } },
       },
       orderBy: { updatedAt: 'desc' },
@@ -1664,6 +1698,7 @@ export class TireCustodyProtocolService {
         supplierName: row.supplier.legalName,
         locationText: row.locationText,
         setSeason: row.set.season,
+        mountedAs: row.set.mountedAs,
         hasDriverInvite: Boolean(
           row.driverInviteTokenHash &&
             row.driverInviteExpiresAt &&
@@ -1703,6 +1738,7 @@ export class TireCustodyProtocolService {
         stayCheckedOut: false,
         supplierName: null,
         plate: null,
+        mountedAs: null,
         checkIn: null,
         release: null,
         steps: [],
@@ -1728,7 +1764,12 @@ export class TireCustodyProtocolService {
       orderBy: [{ checkOutAt: 'asc' }, { checkInAt: 'desc' }],
       include: {
         supplier: { select: { legalName: true } },
-        set: { select: { vehicle: { select: { registrationNumber: true } } } },
+        set: {
+          select: {
+            mountedAs: true,
+            vehicle: { select: { registrationNumber: true } },
+          },
+        },
       },
     });
 
@@ -1739,6 +1780,7 @@ export class TireCustodyProtocolService {
         stayCheckedOut: false,
         supplierName: null,
         plate: null,
+        mountedAs: null,
         checkIn: null,
         release: null,
         steps: [
@@ -1845,6 +1887,7 @@ export class TireCustodyProtocolService {
       stayCheckedOut,
       supplierName: stay.supplier.legalName,
       plate: stay.set.vehicle.registrationNumber,
+      mountedAs: stay.set.mountedAs ?? null,
       checkIn: checkInRow
         ? {
             protocolId: checkInRow.id,

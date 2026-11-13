@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PilotHint } from "@/components/fleet/PilotHint";
 import { TireCustodyProtocolPanel } from "@/components/fleet/partner/TireCustodyProtocolPanel";
 import {
   appendPartnerSupplierQuery,
@@ -12,6 +13,7 @@ import {
 import {
   listTireCustodyProtocols,
   openTireCustodyProtocol,
+  tireCustodyProtocolPdfUrl,
   type TireCustodyProtocolRecord,
 } from "@/lib/tire-custody-api";
 import { tireRequestStatusLabel } from "@/lib/tire-gestiune";
@@ -94,6 +96,22 @@ function Step({
       <span className="font-mono">{done ? "✓" : n}</span>
       {label}
     </div>
+  );
+}
+
+function StatusLine({
+  done,
+  okText,
+  waitText,
+}: {
+  done: boolean;
+  okText: string;
+  waitText: string;
+}) {
+  return (
+    <p className={`mt-2 text-xs ${done ? "text-emerald-300" : "text-zinc-400"}`}>
+      {done ? `✓ ${okText}` : waitText}
+    </p>
   );
 }
 
@@ -249,10 +267,17 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
 
   const { progress, capability, item, stay } = data;
   const hasStay = Boolean(stay);
+  const readyToClose = progress.canComplete && !progress.complete;
   const mountedAsLabel =
     stay?.mountedAs === "on_rim" || stay?.mountedAs === "tyre_only"
       ? tireMountedAsLabel(stay.mountedAs)
       : null;
+  const setTypeLabel =
+    stay?.mountedAs === "on_rim"
+      ? "set complet de roți (anvelope + jante)"
+      : stay?.mountedAs === "tyre_only"
+        ? "set de anvelope"
+        : null;
 
   const activeStep = !hasStay
     ? 1
@@ -263,6 +288,13 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
         : !progress.stayCheckedOut
           ? 4
           : 5;
+
+  const releasePdfId =
+    data.releaseProtocol?.hasArchivedPdf
+      ? data.releaseProtocol.id
+      : releaseProtocol?.status === "signed" && releaseProtocol.hasArchivedPdf
+        ? releaseProtocol.id
+        : null;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -290,8 +322,28 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
         <Step n={5} label="Finalizează" done={progress.complete} active={activeStep === 5} />
       </div>
 
+      {readyToClose ? (
+        <div className="rounded-xl border border-sky-800/60 bg-sky-950/30 px-4 py-3 space-y-2">
+          <p className="text-sm font-medium text-sky-100">Urmează acum</p>
+          <p className="text-xs text-sky-100/90">
+            Ai făcut: sejur identificat → PV check-in OK → PV eliberare semnat → stoc ieșit
+            {setTypeLabel ? ` (${setTypeLabel})` : ""}. Închide solicitarea ca rezolvată.
+          </p>
+          {canWrite ? (
+            <button
+              type="button"
+              disabled={busy === "complete"}
+              onClick={() => void complete()}
+              className="rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-sky-400 disabled:opacity-50"
+            >
+              {busy === "complete" ? "Se finalizează…" : "Finalizează eliberarea"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {!capability.hasTireStorage ? (
-        <p className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
+        <p className="rounded-xl border border-rose-900/40 bg-rose-950/20 px-4 py-3 text-sm text-rose-100/90">
           Furnizorul nu are activată capacitatea <code className="text-xs">tire_storage</code>.
         </p>
       ) : null}
@@ -312,47 +364,67 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
                 Tip set: {mountedAsLabel}
               </span>
             ) : null}
-            {progress.hasOpenStay ? (
-              <p className="text-emerald-300/90">Sejur deschis — gata de eliberare.</p>
-            ) : progress.stayCheckedOut ? (
-              <p className="text-emerald-300/90">Sejur închis (check-out efectuat).</p>
-            ) : null}
+            <StatusLine
+              done={progress.hasOpenStay || progress.stayCheckedOut}
+              okText={
+                progress.stayCheckedOut
+                  ? "Sejur închis — setul a ieșit din inventar."
+                  : "Sejur deschis — gata de eliberare."
+              }
+              waitText="Sejurul încă nu e confirmat."
+            />
           </div>
         ) : (
-          <p className="mt-2 text-xs text-amber-200/90">
-            Nu am găsit un sejur deschis pentru {item.plate ?? "vehiculul solicitării"} la acest
-            furnizor. Verifică inventarul hotel sau creează o solicitare cu nr. înmatriculare corect.
-          </p>
+          <div className="mt-2 space-y-2">
+            <p className="text-xs text-rose-200/90">
+              Lipsă: nu am găsit sejur pentru {item.plate ?? "vehicul"} la acest furnizor.
+            </p>
+            <PilotHint>
+              Verifică inventarul hotel sau numărul de înmatriculare de pe solicitare. Fără sejur nu
+              poți deschide PV de eliberare.
+            </PilotHint>
+          </div>
         )}
       </section>
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
         <h2 className="text-sm font-medium text-zinc-200">2. PV check-in arhivat</h2>
-        {progress.hasSignedCheckInPv ? (
-          <p className="mt-2 text-xs text-emerald-300">PV recepție semnat și arhivat.</p>
-        ) : (
-          <p className="mt-2 text-xs text-amber-200/90">
-            E necesar PV check-in semnat înainte de eliberare. Finalizează PV-ul din inventar hotel
-            sau din stoc custodie.
-          </p>
-        )}
+        <StatusLine
+          done={progress.hasSignedCheckInPv}
+          okText="PV recepție semnat și arhivat."
+          waitText="Așteptăm PV check-in semnat înainte de eliberare."
+        />
+        {!progress.hasSignedCheckInPv ? (
+          <PilotHint className="mt-2">
+            Finalizează PV-ul de recepție din inventar hotel sau stoc custodie, apoi revino aici.
+          </PilotHint>
+        ) : null}
       </section>
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
         <h2 className="text-sm font-medium text-zinc-200">3. PV check-out (eliberează la finalizare)</h2>
-        <p className="mt-1 text-xs text-zinc-500">
+        <PilotHint className="mt-1">
           Finalizarea PV-ului scoate setul din inventar → la client. Nu mai e nevoie de un pas
           separat „Eliberează”, decât ca fallback pe PV-uri vechi.
-        </p>
+        </PilotHint>
         {!hasStay ? (
-          <p className="mt-2 text-xs text-zinc-500">Mai întâi identifică sejurul.</p>
+          <p className="mt-2 text-xs text-zinc-500">Mai întâi identifică sejurul (pasul 1).</p>
         ) : (
           <div className="mt-3 space-y-3">
-            {progress.hasSignedReleasePv ? (
-              <p className="text-xs text-emerald-300">
-                PV eliberare semnat ({data.releaseProtocol?.kind ?? "check_out"}).
-              </p>
-            ) : canWrite ? (
+            <StatusLine
+              done={progress.hasSignedReleasePv}
+              okText={`PV eliberare semnat (${data.releaseProtocol?.kind ?? "check_out"}).`}
+              waitText="Deschide PV check-out, colectează semnăturile, apoi finalizează PV-ul."
+            />
+            {releasePdfId ? (
+              <a
+                href={tireCustodyProtocolPdfUrl(releasePdfId)}
+                className="inline-flex rounded-lg border border-sky-700/60 bg-sky-950/30 px-3 py-2 text-xs font-medium text-sky-100 hover:bg-sky-950/50"
+              >
+                Descarcă PV eliberare (PDF)
+              </a>
+            ) : null}
+            {!progress.hasSignedReleasePv && canWrite ? (
               <button
                 type="button"
                 disabled={busy === "pv"}
@@ -362,7 +434,7 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
                 {busy === "pv" ? "Se deschide…" : releaseProtocol ? "Reîncarcă PV" : "Deschide PV check-out"}
               </button>
             ) : null}
-            {releaseProtocol ? (
+            {releaseProtocol && !progress.hasSignedReleasePv ? (
               <TireCustodyProtocolPanel
                 protocol={releaseProtocol}
                 canWrite={canWrite}
@@ -381,9 +453,11 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
         <h2 className="text-sm font-medium text-zinc-200">4. Stoc (confirmare)</h2>
         {progress.stayCheckedOut ? (
-          <p className="mt-2 text-xs text-emerald-300">
-            Sejur închis — setul a ieșit din inventar (la finalizarea PV sau check-out manual).
-          </p>
+          <StatusLine
+            done
+            okText="Sejur închis — setul a ieșit din inventar (la finalizarea PV sau check-out manual)."
+            waitText=""
+          />
         ) : canWrite && hasStay && progress.hasSignedReleasePv ? (
           <>
             <p className="mt-1 text-xs text-amber-200/90">
@@ -409,18 +483,29 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
         <h2 className="text-sm font-medium text-zinc-200">5. Închide solicitarea</h2>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-zinc-400">
           Marchează eliberarea ca finalizată (resolved) — dispare din coada Anvelope.
         </p>
-        {canWrite ? (
+        {progress.complete ? (
+          <p className="mt-2 text-xs text-emerald-300">✓ Solicitarea e deja rezolvată.</p>
+        ) : canWrite ? (
           <button
             type="button"
             disabled={!progress.canComplete || busy === "complete"}
             onClick={() => void complete()}
-            className="mt-3 rounded-lg bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-40"
+            className={`mt-3 rounded-lg px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${
+              progress.canComplete
+                ? "bg-sky-500 text-zinc-950 hover:bg-sky-400"
+                : "bg-zinc-800 text-zinc-500"
+            }`}
           >
             {busy === "complete" ? "Se finalizează…" : "Finalizează eliberarea"}
           </button>
+        ) : null}
+        {!progress.canComplete && !progress.complete ? (
+          <PilotHint className="mt-2">
+            Butonul se activează doar când pașii 1–4 sunt îndepliniți (inclusiv stoc ieșit).
+          </PilotHint>
         ) : null}
       </section>
 

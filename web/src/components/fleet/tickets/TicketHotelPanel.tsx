@@ -5,7 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import { OPS_INPUT_CLASS } from "@/components/fleet/ops-form-primitives";
 import { PilotHint } from "@/components/fleet/PilotHint";
 import {
+  custodySetTypeLabel,
   fetchVehicleTicketCustodyProgress,
+  vehicleCustodyPdfUrl,
   type VehicleTicketCustodyProgress,
 } from "@/lib/driver-tire-custody-api";
 import { fleetBrowserBase, fleetJsonHeaders } from "@/lib/fleet-api";
@@ -285,10 +287,58 @@ export function TicketHotelPanel({
               . Continuă cu finalizarea PV / scoaterea din stoc.
             </p>
           ) : null}
+          {progress.release?.signed && progress.stayCheckedOut ? (
+            <div className="space-y-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-2">
+              <p className="text-[11px] text-emerald-100">
+                Predare din hotel finalizată
+                {progress.mountedAs
+                  ? ` · ${custodySetTypeLabel(progress.mountedAs)}`
+                  : ""}
+                {progress.supplierName ? ` · ${progress.supplierName}` : ""}. Setul nu mai apare în
+                inventarul hotel — e predat către șofer/client.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={vehicleCustodyPdfUrl(vehicleId, progress.release.protocolId)}
+                  className="rounded-lg border border-sky-700/60 bg-sky-950/30 px-3 py-1.5 text-[11px] font-medium text-sky-100 hover:bg-sky-950/50"
+                >
+                  Descarcă PV eliberare (PDF)
+                </a>
+                {canWrite ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent("fleet-ticket-tab", { detail: "actions" }),
+                        )
+                      }
+                      className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-3 py-1.5 text-[11px] text-emerald-100 hover:bg-emerald-950/60"
+                    >
+                      Rezolvă tichetul
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.dispatchEvent(new CustomEvent("fleet-ticket-start-service"))
+                      }
+                      className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-100 hover:bg-amber-950/50"
+                    >
+                      Deschide flux service
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              <PilotHint>
+                Dacă urmează montaj pe mașină, deschide flux service pe același tichet (WO
+                anvelope/roți). Predarea din hotel nu înseamnă automat montaj.
+              </PilotHint>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
-      {sets.length === 0 ? (
+      {progress?.release?.signed && progress.stayCheckedOut ? null : sets.length === 0 ? (
         <p className="text-xs text-amber-200/90">
           Niciun set pe vehicul. Adaugă seturi din{" "}
           <Link href={wheelsHref} className="underline underline-offset-2">
@@ -312,7 +362,7 @@ export function TicketHotelPanel({
                 <span className="block font-medium">{setTitle(s)}</span>
                 <span className="mt-0.5 block text-[11px] text-zinc-500">
                   {vehicleTireSeasonLabel(s.season)} · {s.itemCount} buc ·{" "}
-                  {tireSetLocationLabel(s.location)}
+                  {custodySetTypeLabel(s.mountedAs)} · {tireSetLocationLabel(s.location)}
                   {s.hotel?.atSupplierHotel && s.hotel.supplierName
                     ? ` · ${s.hotel.supplierName}`
                     : ""}
@@ -424,7 +474,8 @@ export function TicketHotelPanel({
 
       {(isEliberare || isTransfer || isCasare) &&
       selected &&
-      !selected.hotel?.atSupplierHotel ? (
+      !selected.hotel?.atSupplierHotel &&
+      !(progress?.release?.signed && progress.stayCheckedOut) ? (
         <p className="text-xs text-amber-200/90">
           {selected.isMounted
             ? "Setul selectat e montat pe mașină — pentru eliberare alege setul «La hotel»."

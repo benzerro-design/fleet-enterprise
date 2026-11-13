@@ -5,10 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { PilotHint } from "@/components/fleet/PilotHint";
 import {
   custodyKindLabel,
+  custodySetTypeLabel,
   driverCustodyPhaseLabel,
   issueDriverVehicleCustodySignLink,
   listDriverVehicleCustodyPending,
   type DriverVehicleCustodyPending,
+  vehicleCustodyPdfUrl,
 } from "@/lib/driver-tire-custody-api";
 
 type Props = {
@@ -129,10 +131,22 @@ export function VehicleDriverTireCustodyPanel({ vehicleId, alwaysShow = false }:
           </p>
         ) : null}
         {headline?.phase === "done" ? (
-          <p className="mt-1 text-xs text-zinc-300">
-            Predarea e finalizată
-            {headline.stayCheckedOut ? " — setul a ieșit din inventarul hotel." : "."}
-          </p>
+          <div className="mt-1 space-y-2 text-xs text-zinc-300">
+            <p>
+              Predarea este finalizată: {custodySetTypeLabel(headline.mountedAs)} a ieșit din
+              custodia {headline.supplierName} și a fost predat către tine.
+            </p>
+            <p className="text-zinc-400">
+              Păstrează PV-ul ca dovadă a predării. Dacă setul trebuie montat pe vehicul, solicită
+              continuarea tichetului cu service; predarea din hotel nu înseamnă automat montaj.
+            </p>
+            <a
+              href={vehicleCustodyPdfUrl(vehicleId, headline.protocolId)}
+              className="inline-flex rounded-lg border border-sky-700/60 bg-sky-950/30 px-3 py-2 font-medium text-sky-100 hover:bg-sky-950/50"
+            >
+              Descarcă PV-ul de predare (PDF)
+            </a>
+          </div>
         ) : null}
         {!headline ? (
           <p className="mt-1 text-xs text-zinc-500">Nicio acțiune de custodie în curs pe acest vehicul.</p>
@@ -146,6 +160,7 @@ export function VehicleDriverTireCustodyPanel({ vehicleId, alwaysShow = false }:
             {[headline.supplierName, headline.locationText].filter(Boolean).join(" · ") ||
               "Hotel anvelope"}
           </p>
+          <p className="mt-0.5">{custodySetTypeLabel(headline.mountedAs)}</p>
         </div>
       ) : null}
 
