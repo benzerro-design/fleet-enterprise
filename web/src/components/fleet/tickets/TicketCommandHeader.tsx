@@ -7,9 +7,9 @@ import { operationalHeadline } from "@/lib/ticket-operational-story";
 import { serviceCaseStageLabel } from "@/lib/service-cases-api";
 import type { ServiceCaseRecord } from "@/lib/service-cases-api";
 import {
+  ticketCategoryLabel,
   ticketPriorityLabel,
   ticketRoutingLabel,
-  ticketTypeLabel,
   type TicketDetailPayload,
 } from "@/lib/tickets-api";
 
@@ -54,7 +54,7 @@ export function TicketCommandHeader({
               {ticketRoutingLabel(ticket.routingLevel)}
             </span>
             <span className="rounded-md border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400">
-              {ticketTypeLabel(ticket.ticketType)}
+              {ticketCategoryLabel(ticket)}
             </span>
             <span className="text-xs text-zinc-500">{ticketPriorityLabel(ticket.priority)}</span>
           </div>

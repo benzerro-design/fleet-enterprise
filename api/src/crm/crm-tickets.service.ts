@@ -64,6 +64,9 @@ export type TicketRecord = {
   serviceTypeId: string | null;
   serviceTypeCode: string | null;
   serviceTypeLabel: string | null;
+  /** Pachet 1.3 — operație gestiune anvelope (null = tichet CRM clasic). */
+  gestiuneOp: TireGestiuneOp | null;
+  assignedSupplierId: string | null;
   subject: string;
   description: string | null;
   status: CrmTicketStatus;
@@ -1778,6 +1781,8 @@ export class CrmTicketsService {
       serviceTypeId: row.serviceTypeId ?? row.serviceType?.id ?? null,
       serviceTypeCode: row.serviceType?.code ?? null,
       serviceTypeLabel: row.serviceType?.label ?? null,
+      gestiuneOp: row.gestiuneOp ?? null,
+      assignedSupplierId: row.assignedSupplierId ?? null,
       subject: row.subject,
       description: row.description,
       status: row.status,

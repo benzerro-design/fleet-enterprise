@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { TicketRecord } from "@/lib/tickets-api";
-import { ticketPriorityLabel, ticketRoutingLabel, ticketTypeLabel } from "@/lib/tickets-api";
+import { ticketCategoryLabel, ticketPriorityLabel, ticketRoutingLabel } from "@/lib/tickets-api";
 import { TicketStatusBadge } from "@/components/fleet/TicketStatusBadge";
 
 type Props = {
@@ -33,7 +33,7 @@ export function TicketFocusView({ items }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-emerald-400">#{ticket.displayId}</span>
                   <span className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400">
-                    {ticketTypeLabel(ticket.ticketType)}
+                    {ticketCategoryLabel(ticket)}
                   </span>
                   <TicketStatusBadge status={ticket.status} compact />
                 </div>

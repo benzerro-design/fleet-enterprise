@@ -30,6 +30,8 @@ export type TicketLinkEntityType =
   | "service_case"
   | "work_order";
 
+export type TicketGestiuneOp = "cazare" | "eliberare" | "transfer" | "casare";
+
 export type TicketRecord = {
   id: string;
   displayId: string;
@@ -40,6 +42,9 @@ export type TicketRecord = {
   serviceTypeId: string | null;
   serviceTypeCode: string | null;
   serviceTypeLabel: string | null;
+  /** Operație gestiune anvelope — când e setat, badge-ul UI nu mai zice „Mentenanță”. */
+  gestiuneOp?: TicketGestiuneOp | null;
+  assignedSupplierId?: string | null;
   subject: string;
   description: string | null;
   status: TicketStatus;
@@ -222,6 +227,25 @@ export function ticketTypeLabel(type: TicketType): string {
     case "other":
       return "Altele";
   }
+}
+
+/** Badge vizibil pe fișa tichetului — preferă gestiune/hotel față de „Mentenanță”. */
+export function ticketCategoryLabel(
+  ticket: Pick<TicketRecord, "ticketType" | "gestiuneOp" | "serviceTypeCode" | "serviceTypeLabel">,
+): string {
+  const op = ticket.gestiuneOp;
+  if (op === "cazare") return "Cazare anvelope";
+  if (op === "eliberare") return "Eliberare anvelope";
+  if (op === "transfer") return "Transfer anvelope";
+  if (op === "casare") return "Casare anvelope";
+  const code = ticket.serviceTypeCode?.trim().toLowerCase();
+  if (code === "tire_storage") {
+    return ticket.serviceTypeLabel?.trim() || "Hotel anvelope";
+  }
+  if (code === "tire_service") {
+    return ticket.serviceTypeLabel?.trim() || "Service anvelope";
+  }
+  return ticketTypeLabel(ticket.ticketType);
 }
 
 export const TICKET_TYPES: Array<{ value: TicketType; label: string }> = [
