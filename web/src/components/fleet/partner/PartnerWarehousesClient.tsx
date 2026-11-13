@@ -23,6 +23,7 @@ import {
   type TireWarehouseStorageRow,
   type TireWarehouseZoneRow,
 } from "@/lib/partner-tire-warehouse-api";
+import { FleetConfirmDialog } from "@/components/fleet/FleetConfirmDialog";
 import { TireHotelQrPayload } from "@/components/fleet/partner/TireHotelQrPayload";
 
 type Props = {
@@ -70,6 +71,13 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moveConfirm, setMoveConfirm] = useState<{
+    rowId: string;
+    rowCode: string;
+    fromZone: string;
+    toZoneId: string;
+    toZoneCode: string;
+  } | null>(null);
 
   const loadCapability = useCallback(async () => {
     const res = await fetch(`/api/partner/tire-hotel/capability?${qs}`, { cache: "no-store" });
@@ -202,6 +210,34 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
 
   return (
     <div className="space-y-4">
+      <FleetConfirmDialog
+        open={Boolean(moveConfirm)}
+        title="Mutare rând"
+        message={
+          moveConfirm
+            ? `Muți rândul ${moveConfirm.rowCode} din zona ${moveConfirm.fromZone} în zona ${moveConfirm.toZoneCode}?`
+            : ""
+        }
+        confirmLabel="Mută"
+        cancelLabel="Anulează"
+        busy={busy === "row-move"}
+        onCancel={() => {
+          if (busy === "row-move") return;
+          setMoveConfirm(null);
+        }}
+        onConfirm={() => {
+          if (!moveConfirm) return;
+          const { rowId, toZoneId } = moveConfirm;
+          void runAction("row-move", async () => {
+            await patchRow(rowId, { zoneId: toZoneId });
+            setSelectedZoneId(toZoneId);
+            setSelectedRowId(rowId);
+            setStorageRows(await fetchRows(toZoneId));
+            await reloadZones();
+            setMoveConfirm(null);
+          });
+        }}
+      />
       <div className={labelLocationId ? "print:hidden" : undefined}>
         {error ? (
           <p className="rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
@@ -450,21 +486,13 @@ export function PartnerWarehousesClient({ canWrite, adminMode, supplierId }: Pro
                     onClick={() => {
                       if (!moveRowZoneId) return;
                       const target = zones.find((z) => z.id === moveRowZoneId);
-                      if (
-                        !window.confirm(
-                          `Muți rândul ${selectedStorageRow.code} din zona ${selectedZone?.code ?? "?"} în zona ${target?.code ?? "?"}?`,
-                        )
-                      ) {
-                        return;
-                      }
-                      void runAction("row-move", async () => {
-                        const targetZoneId = moveRowZoneId;
-                        const rowId = selectedStorageRow.id;
-                        await patchRow(rowId, { zoneId: targetZoneId });
-                        setSelectedZoneId(targetZoneId);
-                        setSelectedRowId(rowId);
-                        setStorageRows(await fetchRows(targetZoneId));
-                        await reloadZones();
+                      if (!target) return;
+                      setMoveConfirm({
+                        rowId: selectedStorageRow.id,
+                        rowCode: selectedStorageRow.code,
+                        fromZone: selectedZone?.code ?? "?",
+                        toZoneId: target.id,
+                        toZoneCode: target.code,
                       });
                     }}
                     className="rounded-md bg-sky-800 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-sky-700 disabled:opacity-50"
