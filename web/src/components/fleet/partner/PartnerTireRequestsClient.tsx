@@ -30,7 +30,6 @@ export type TireRequestItem = {
   createdAt: string;
   hrefTicket: string;
   gestiuneOp?: string | null;
-  kind?: string;
   hrefCazare?: string;
   hrefEliberare?: string;
 };
