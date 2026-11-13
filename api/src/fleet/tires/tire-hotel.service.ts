@@ -97,22 +97,35 @@ export class TireHotelService {
   ) {}
 
   async checkIn(params: TireHotelCheckInParams) {
-    const row = await this.prisma.$transaction(async (tx) => this.checkInTx(tx, params));
-    const hook = await this.loadWebhookDeliveryOpts(params.tenantId);
-    void emitTireStayWebhook(
-      {
-        event: 'tire.stay.checked_in',
-        tenantId: params.tenantId,
-        stayId: row.id,
-        setId: row.setId,
-        supplierId: params.supplierId,
-        vehicleId: row.vehicleId ?? null,
-        at: row.checkInAt,
-        feeCents: row.feeCents,
-      },
-      hook,
-    );
-    return row;
+    try {
+      // Neon + placeAsset×N + ticket link needs > default 5s interactive tx.
+      const row = await this.prisma.$transaction(
+        async (tx) => this.checkInTx(tx, params),
+        { timeout: 30_000, maxWait: 10_000 },
+      );
+      const hook = await this.loadWebhookDeliveryOpts(params.tenantId);
+      void emitTireStayWebhook(
+        {
+          event: 'tire.stay.checked_in',
+          tenantId: params.tenantId,
+          stayId: row.id,
+          setId: row.setId,
+          supplierId: params.supplierId,
+          vehicleId: row.vehicleId ?? null,
+          at: row.checkInAt,
+          feeCents: row.feeCents,
+        },
+        hook,
+      );
+      return row;
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2028') {
+        throw new BadRequestException(
+          'Check-in a expirat (timeout tranzacție). Reîncearcă — dacă persistă, contactează suportul.',
+        );
+      }
+      throw e;
+    }
   }
 
   async checkInTx(tx: Prisma.TransactionClient, params: TireHotelCheckInParams) {
@@ -126,10 +139,19 @@ export class TireHotelService {
       throw new BadRequestException('locationCode or bayCode is required');
     }
 
+    let actorUserId = params.actorUserId?.trim() || null;
+    if (actorUserId) {
+      const actor = await tx.user.findFirst({
+        where: { id: actorUserId },
+        select: { id: true },
+      });
+      if (!actor) actorUserId = null;
+    }
+
     await acquireTireSetOpsLock(tx, {
       tenantId: params.tenantId,
       setId: params.setId,
-      actorUserId: params.actorUserId,
+      actorUserId,
     });
 
     const set = await tx.tireSet.findFirst({
@@ -326,7 +348,7 @@ export class TireHotelService {
         eventType: 'store',
         vehicleIdForEvent,
         workOrderId: params.workOrderId ?? undefined,
-        actorUserId: params.actorUserId ?? undefined,
+        actorUserId: actorUserId ?? undefined,
         payload: {
           source: 'tire_hotel_check_in',
           storageStayId: stay.id,
@@ -335,9 +357,8 @@ export class TireHotelService {
       });
     }
 
-    if (vehicleIdForEvent) {
-      await this.tires.syncFitmentProjectionTx(tx, params.tenantId, vehicleIdForEvent);
-    }
+    // Check-in moves at_client → hotel; on-vehicle fitment is unchanged — skip sync here
+    // (avoids Neon interactive-tx timeouts from 4× wheel upserts).
 
     const ticketId = params.ticketId?.trim() || null;
     if (ticketId) {
@@ -364,14 +385,6 @@ export class TireHotelService {
               entityId: stay.id,
             },
           });
-        }
-        let actorUserId: string | null = params.actorUserId?.trim() || null;
-        if (actorUserId) {
-          const actor = await tx.user.findFirst({
-            where: { id: actorUserId },
-            select: { id: true },
-          });
-          if (!actor) actorUserId = null;
         }
         await tx.crmTicketEvent.create({
           data: {
