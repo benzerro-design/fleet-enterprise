@@ -43,6 +43,7 @@ import { formatDateTimeRo } from "@/lib/datetime-local";
 import { toDatetimeLocalValue } from "@/lib/scheduler-date-utils";
 import { resolveSchedulingServiceTypeCode } from "@/lib/scheduling-service-type";
 import { TicketHotelPanel } from "@/components/fleet/tickets/TicketHotelPanel";
+import { PilotHint } from "@/components/fleet/PilotHint";
 import { VehicleDriverTireCustodyPanel } from "@/components/fleet/VehicleDriverTireCustodyPanel";
 import { isTireStorageTypeCode } from "@/lib/tire-service-type-codes";
 import { DEFAULT_TIRE_SETTINGS, tireSettingsBrowserBase } from "@/lib/tire-settings";
@@ -707,12 +708,11 @@ export function TicketWorkflowStepper({
         {isHotelTicket && hasVehicle && vehicleId ? (
           driverPortal ? (
             <div className="space-y-3">
-              <p className="text-sm text-zinc-300">
-                Această solicitare privește vehiculul tău
-                {plate ? ` (${plate})` : ""}. Pentru șofer sunt disponibile doar documentele care
-                necesită semnătura lui; execuția de stoc aparține partenerului.
-              </p>
-              <VehicleDriverTireCustodyPanel vehicleId={vehicleId} />
+              <VehicleDriverTireCustodyPanel vehicleId={vehicleId} alwaysShow />
+              <PilotHint>
+                Pe tichetul șoferului apar doar documentele care cer semnătura lui
+                {plate ? ` (${plate})` : ""}; execuția de stoc rămâne la partener.
+              </PilotHint>
             </div>
           ) : (
             <TicketHotelPanel
@@ -732,8 +732,9 @@ export function TicketWorkflowStepper({
           </p>
         ) : canOperate && !closed ? (
           hotelPrimary ? (
-            <details className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
+            <details className="rounded-lg border border-dashed border-amber-800/40 bg-zinc-950/40 px-3 py-2" data-pilot-hint="true">
               <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
+                <span className="mr-1 font-mono text-[9px] uppercase text-amber-200/80">HINT</span>
                 Ai nevoie și de atelier (montaj/demontaj)? Deschide flux service
               </summary>
               <button
@@ -768,12 +769,11 @@ export function TicketWorkflowStepper({
 
       {driverPortal && isHotelTicket && hasVehicle && vehicleId ? (
         <div className="space-y-3">
-          <p className="text-sm text-zinc-300">
-            Această solicitare privește vehiculul tău
-            {plate ? ` (${plate})` : ""}. Pentru șofer sunt disponibile doar documentele care
-            necesită semnătura lui; execuția de stoc aparține partenerului.
-          </p>
-          <VehicleDriverTireCustodyPanel vehicleId={vehicleId} />
+          <VehicleDriverTireCustodyPanel vehicleId={vehicleId} alwaysShow />
+          <PilotHint>
+            Pe tichetul șoferului apar doar documentele care cer semnătura lui
+            {plate ? ` (${plate})` : ""}; execuția de stoc rămâne la partener.
+          </PilotHint>
         </div>
       ) : null}
 

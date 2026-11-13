@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { OPS_INPUT_CLASS } from "@/components/fleet/ops-form-primitives";
+import { PilotHint } from "@/components/fleet/PilotHint";
+import {
+  fetchVehicleTicketCustodyProgress,
+  type VehicleTicketCustodyProgress,
+} from "@/lib/driver-tire-custody-api";
 import { fleetBrowserBase, fleetJsonHeaders } from "@/lib/fleet-api";
 import type { TicketGestiuneOp } from "@/lib/tickets-api";
 import {
@@ -97,6 +102,7 @@ export function TicketHotelPanel({
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [progress, setProgress] = useState<VehicleTicketCustodyProgress | null>(null);
 
   const copy = opCopy(gestiuneOp);
   const isCazare = !gestiuneOp || gestiuneOp === "cazare";
@@ -122,9 +128,26 @@ export function TicketHotelPanel({
     }
   }, [vehicleId, gestiuneOp]);
 
+  const loadProgress = useCallback(async () => {
+    if (!isEliberare && !isTransfer && !isCasare) {
+      setProgress(null);
+      return;
+    }
+    try {
+      const next = await fetchVehicleTicketCustodyProgress(vehicleId, ticketId);
+      setProgress(next);
+    } catch {
+      setProgress(null);
+    }
+  }, [vehicleId, ticketId, isEliberare, isTransfer, isCasare]);
+
   useEffect(() => {
     void loadSets();
   }, [loadSets]);
+
+  useEffect(() => {
+    void loadProgress();
+  }, [loadProgress]);
 
   useEffect(() => {
     if (!canWrite || !isCazare) return;
@@ -223,8 +246,47 @@ export function TicketHotelPanel({
           {copy.what}
           {plate ? ` Vehicul ${plate}.` : ""}
         </p>
-        <p className="mt-1 text-[11px] text-zinc-500">{copy.hint}</p>
+        <PilotHint className="mt-2">{copy.hint}</PilotHint>
       </div>
+
+      {progress && progress.steps.length > 0 ? (
+        <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+            Progres custodie
+          </p>
+          <ul className="space-y-1.5">
+            {progress.steps.map((step) => (
+              <li key={step.key} className="flex items-start gap-2 text-xs">
+                <span
+                  className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${
+                    step.done
+                      ? "bg-emerald-700/80 text-white"
+                      : "border border-zinc-700 text-zinc-500"
+                  }`}
+                  aria-hidden
+                >
+                  {step.done ? "✓" : "·"}
+                </span>
+                <span className="min-w-0">
+                  <span className={step.done ? "text-zinc-200" : "text-zinc-400"}>{step.label}</span>
+                  {step.detail ? (
+                    <span className="mt-0.5 block text-[11px] text-zinc-500">{step.detail}</span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {progress.release?.driverSigned && !progress.release.signed ? (
+            <p className="text-[11px] text-sky-200/90">
+              Șoferul a semnat prin OTP
+              {progress.release.driverSignedAt
+                ? ` (${new Date(progress.release.driverSignedAt).toLocaleString("ro-RO")})`
+                : ""}
+              . Continuă cu finalizarea PV / scoaterea din stoc.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {sets.length === 0 ? (
         <p className="text-xs text-amber-200/90">

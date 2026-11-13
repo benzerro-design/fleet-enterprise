@@ -653,6 +653,22 @@ export class FleetController {
     return this.tireCustody.listDriverPendingForVehicle(tenantId, vehicleId, access);
   }
 
+  @Get('vehicles/:vehicleId/tire-custody/ticket-progress')
+  @Roles(...FLEET_READ_ROLES)
+  vehicleTicketCustodyProgress(
+    @TenantId() tenantId: string,
+    @Param('vehicleId') vehicleId: string,
+    @Query('ticketId') ticketId: string | undefined,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    return this.tireCustody.getVehicleTicketCustodyProgress(
+      tenantId,
+      vehicleId,
+      access,
+      ticketId,
+    );
+  }
+
   @Post('vehicles/:vehicleId/tire-custody/protocols/:protocolId/driver-sign-link')
   @Roles(MembershipRole.client_user)
   @HttpCode(200)

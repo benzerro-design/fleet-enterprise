@@ -6,11 +6,14 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import {
+  CrmTicketEventKind,
+  CrmTicketStatus,
   Prisma,
   TireCustodyMediaKind,
   TireCustodyProtocolKind,
   TireCustodyProtocolStatus,
   TireCustodySignerRole,
+  TireGestiuneOp,
 } from '@prisma/client';
 import { createHash } from 'crypto';
 import { AuditService } from '../../audit/audit.service';
@@ -174,6 +177,11 @@ export type TireCustodyProtocolSummary = {
   pdfSha256: string | null;
 };
 
+export type DriverCustodyPhase =
+  | 'needs_driver_sign'
+  | 'awaiting_partner_finalize'
+  | 'done';
+
 export type DriverVehicleCustodyPending = {
   protocolId: string;
   kind: TireCustodyProtocolKind;
@@ -183,6 +191,42 @@ export type DriverVehicleCustodyPending = {
   setSeason: string | null;
   hasDriverInvite: boolean;
   driverInviteExpiresAt: string | null;
+  /** Lifecycle for driver UX after OTP sign. */
+  phase: DriverCustodyPhase;
+  status: TireCustodyProtocolStatus;
+  driverSignedAt: string | null;
+  partnerSigned: boolean;
+  stayCheckedOut: boolean;
+  ticketId: string | null;
+};
+
+export type VehicleTicketCustodyProgress = {
+  ticketId: string | null;
+  stayId: string | null;
+  stayCheckedOut: boolean;
+  supplierName: string | null;
+  plate: string | null;
+  checkIn: {
+    protocolId: string;
+    status: string;
+    signed: boolean;
+  } | null;
+  release: {
+    protocolId: string;
+    kind: string;
+    status: string;
+    signed: boolean;
+    driverSigned: boolean;
+    driverSignedAt: string | null;
+    partnerSigned: boolean;
+    customerSigned: boolean;
+  } | null;
+  steps: Array<{
+    key: string;
+    label: string;
+    done: boolean;
+    detail: string | null;
+  }>;
 };
 
 @Injectable()
@@ -1202,7 +1246,10 @@ export class TireCustodyProtocolService {
     const tokenHash = hashTireCustodySecret(token);
     const row = await this.prisma.tireCustodyProtocol.findFirst({
       where: { driverInviteTokenHash: tokenHash },
-      include: { signatures: true },
+      include: {
+        signatures: true,
+        set: { select: { vehicleId: true, vehicle: { select: { registrationNumber: true } } } },
+      },
     });
     if (!row) throw new NotFoundException('Invite not found');
     if (row.status !== TireCustodyProtocolStatus.draft) {
@@ -1232,6 +1279,28 @@ export class TireCustodyProtocolService {
       }
     }
 
+    let linkedTicketId = row.ticketId?.trim() || null;
+    if (!linkedTicketId && row.set.vehicleId) {
+      const gestiuneTicket = await this.prisma.crmTicket.findFirst({
+        where: {
+          tenantId: row.tenantId,
+          vehicleId: row.set.vehicleId,
+          status: { in: [CrmTicketStatus.open, CrmTicketStatus.in_progress] },
+          gestiuneOp: {
+            in: [
+              TireGestiuneOp.eliberare,
+              TireGestiuneOp.cazare,
+              TireGestiuneOp.transfer,
+              TireGestiuneOp.casare,
+            ],
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      linkedTicketId = gestiuneTicket?.id ?? null;
+    }
+
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.tireCustodySignature.create({
@@ -1253,8 +1322,35 @@ export class TireCustodyProtocolService {
             driverOtpHash: null,
             driverOtpExpiresAt: null,
             counterpartyName: row.counterpartyName ?? name,
+            ...(linkedTicketId && !row.ticketId ? { ticketId: linkedTicketId } : {}),
           },
         });
+        if (linkedTicketId) {
+          const plate = row.set.vehicle?.registrationNumber ?? null;
+          await tx.crmTicketEvent.create({
+            data: {
+              tenantId: row.tenantId,
+              ticketId: linkedTicketId,
+              kind: CrmTicketEventKind.workflow_advance,
+              body: `Șoferul a semnat PV ${row.kind} prin OTP${plate ? ` (${plate})` : ''}: ${name}.`,
+              payload: {
+                source: 'tire_custody_driver_otp',
+                protocolId: row.id,
+                kind: row.kind,
+                stayId: row.stayId,
+                displayName: name,
+              },
+            },
+          });
+          await tx.crmTicket.updateMany({
+            where: {
+              id: linkedTicketId,
+              tenantId: row.tenantId,
+              status: CrmTicketStatus.open,
+            },
+            data: { status: CrmTicketStatus.in_progress },
+          });
+        }
       });
     } catch (e) {
       if (
@@ -1271,7 +1367,7 @@ export class TireCustodyProtocolService {
       action: 'tire_custody_signature.create',
       entityType: 'tire_custody_protocol',
       entityId: row.id,
-      meta: { role: 'driver', via: 'otp_link' },
+      meta: { role: 'driver', via: 'otp_link', ticketId: linkedTicketId },
     });
 
     return { ok: true, protocolId: row.id };
@@ -1509,7 +1605,12 @@ export class TireCustodyProtocolService {
     });
   }
 
-  /** Draft custody protocols on open hotel stays for this vehicle — driver counterparty pending. */
+  /**
+   * Custody protocols on this vehicle relevant to the driver:
+   * - needs signature
+   * - driver signed, waiting partner finalize / stock release
+   * - recently completed release (stay closed or PV signed)
+   */
   async listDriverPendingForVehicle(
     tenantSlug: string,
     vehicleId: string,
@@ -1519,40 +1620,252 @@ export class TireCustodyProtocolService {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant) return { items: [] };
 
+    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     const rows = await this.prisma.tireCustodyProtocol.findMany({
       where: {
         tenantId: tenant.id,
-        status: TireCustodyProtocolStatus.draft,
         set: { vehicleId },
-        stay: { checkOutAt: null },
-        NOT: {
-          signatures: { some: { role: TireCustodySignerRole.driver } },
-        },
+        status: { not: TireCustodyProtocolStatus.voided },
+        OR: [
+          {
+            status: TireCustodyProtocolStatus.draft,
+            stay: { checkOutAt: null },
+          },
+          {
+            status: TireCustodyProtocolStatus.signed,
+            OR: [{ signedAt: { gte: since } }, { stay: { checkOutAt: { gte: since } } }],
+          },
+        ],
       },
       include: {
-        signatures: { select: { role: true } },
+        signatures: { select: { role: true, signedAt: true } },
         supplier: { select: { legalName: true } },
         set: { select: { season: true } },
+        stay: { select: { checkOutAt: true } },
       },
       orderBy: { updatedAt: 'desc' },
+      take: 20,
     });
 
-    const items: DriverVehicleCustodyPending[] = rows.map((row) => ({
-      protocolId: row.id,
-      kind: row.kind,
-      stayId: row.stayId,
-      supplierName: row.supplier.legalName,
-      locationText: row.locationText,
-      setSeason: row.set.season,
-      hasDriverInvite: Boolean(
-        row.driverInviteTokenHash &&
-          row.driverInviteExpiresAt &&
-          row.driverInviteExpiresAt.getTime() > Date.now(),
-      ),
-      driverInviteExpiresAt: row.driverInviteExpiresAt?.toISOString() ?? null,
-    }));
+    const items: DriverVehicleCustodyPending[] = rows.map((row) => {
+      const driverSig = row.signatures.find((s) => s.role === TireCustodySignerRole.driver);
+      const partnerSigned = row.signatures.some((s) => s.role === TireCustodySignerRole.partner);
+      const stayCheckedOut = Boolean(row.stay.checkOutAt);
+      let phase: DriverCustodyPhase = 'needs_driver_sign';
+      if (row.status === TireCustodyProtocolStatus.signed || stayCheckedOut) {
+        phase = 'done';
+      } else if (driverSig) {
+        phase = 'awaiting_partner_finalize';
+      }
+      return {
+        protocolId: row.id,
+        kind: row.kind,
+        stayId: row.stayId,
+        supplierName: row.supplier.legalName,
+        locationText: row.locationText,
+        setSeason: row.set.season,
+        hasDriverInvite: Boolean(
+          row.driverInviteTokenHash &&
+            row.driverInviteExpiresAt &&
+            row.driverInviteExpiresAt.getTime() > Date.now(),
+        ),
+        driverInviteExpiresAt: row.driverInviteExpiresAt?.toISOString() ?? null,
+        phase,
+        status: row.status,
+        driverSignedAt: driverSig?.signedAt.toISOString() ?? null,
+        partnerSigned,
+        stayCheckedOut,
+        ticketId: row.ticketId ?? null,
+      };
+    });
+
+    // Prefer actionable first: sign → waiting → done.
+    const rank = (p: DriverCustodyPhase) =>
+      p === 'needs_driver_sign' ? 0 : p === 'awaiting_partner_finalize' ? 1 : 2;
+    items.sort((a, b) => rank(a.phase) - rank(b.phase));
 
     return { items };
+  }
+
+  /** Admin/client ticket view: custody progress for a vehicle (optional ticket scope). */
+  async getVehicleTicketCustodyProgress(
+    tenantSlug: string,
+    vehicleId: string,
+    access: AccessContext,
+    ticketId?: string | null,
+  ): Promise<VehicleTicketCustodyProgress> {
+    await assertVehicleOpsRead(this.prisma, tenantSlug, vehicleId, access);
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) {
+      return {
+        ticketId: ticketId ?? null,
+        stayId: null,
+        stayCheckedOut: false,
+        supplierName: null,
+        plate: null,
+        checkIn: null,
+        release: null,
+        steps: [],
+      };
+    }
+
+    const ticket = ticketId?.trim()
+      ? await this.prisma.crmTicket.findFirst({
+          where: { id: ticketId.trim(), tenantId: tenant.id, vehicleId },
+          select: { id: true, assignedSupplierId: true },
+        })
+      : null;
+
+    const stay = await this.prisma.tireStorageStay.findFirst({
+      where: {
+        tenantId: tenant.id,
+        set: { vehicleId },
+        ...(ticket?.assignedSupplierId
+          ? { supplierId: ticket.assignedSupplierId }
+          : {}),
+        OR: [{ checkOutAt: null }, { checkOutAt: { gte: new Date(Date.now() - 14 * 864e5) } }],
+      },
+      orderBy: [{ checkOutAt: 'asc' }, { checkInAt: 'desc' }],
+      include: {
+        supplier: { select: { legalName: true } },
+        set: { select: { vehicle: { select: { registrationNumber: true } } } },
+      },
+    });
+
+    if (!stay) {
+      return {
+        ticketId: ticket?.id ?? ticketId ?? null,
+        stayId: null,
+        stayCheckedOut: false,
+        supplierName: null,
+        plate: null,
+        checkIn: null,
+        release: null,
+        steps: [
+          {
+            key: 'stay',
+            label: 'Sejur hotel',
+            done: false,
+            detail: 'Niciun sejur hotel legat de acest vehicul',
+          },
+        ],
+      };
+    }
+
+    const checkInRow = await this.prisma.tireCustodyProtocol.findFirst({
+      where: {
+        tenantId: tenant.id,
+        stayId: stay.id,
+        kind: TireCustodyProtocolKind.check_in,
+        status: { not: TireCustodyProtocolStatus.voided },
+      },
+      orderBy: { revision: 'desc' },
+      select: { id: true, status: true, pdfSha256: true, pdfArchivedAt: true },
+    });
+
+    const releaseRow = await this.prisma.tireCustodyProtocol.findFirst({
+      where: {
+        tenantId: tenant.id,
+        stayId: stay.id,
+        kind: { in: [...STOCK_RELEASE_CUSTODY_KINDS] },
+        status: { not: TireCustodyProtocolStatus.voided },
+        ...(ticket?.id
+          ? { OR: [{ ticketId: ticket.id }, { ticketId: null }] }
+          : {}),
+      },
+      orderBy: { revision: 'desc' },
+      include: {
+        signatures: { select: { role: true, signedAt: true, displayName: true } },
+      },
+    });
+
+    const checkInSigned =
+      checkInRow?.status === TireCustodyProtocolStatus.signed &&
+      Boolean(checkInRow.pdfSha256 && checkInRow.pdfArchivedAt);
+    const driverSig = releaseRow?.signatures.find((s) => s.role === TireCustodySignerRole.driver);
+    const partnerSigned =
+      releaseRow?.signatures.some((s) => s.role === TireCustodySignerRole.partner) ?? false;
+    const customerSigned =
+      releaseRow?.signatures.some((s) => s.role === TireCustodySignerRole.customer) ?? false;
+    const releaseSigned = releaseRow?.status === TireCustodyProtocolStatus.signed;
+    const stayCheckedOut = Boolean(stay.checkOutAt);
+
+    const steps: VehicleTicketCustodyProgress['steps'] = [
+      {
+        key: 'stay',
+        label: 'Sejur hotel',
+        done: true,
+        detail: stay.supplier.legalName,
+      },
+      {
+        key: 'check_in',
+        label: 'PV check-in',
+        done: checkInSigned,
+        detail: checkInSigned
+          ? 'Semnat și arhivat'
+          : checkInRow
+            ? `Status: ${checkInRow.status}`
+            : 'Lipsește',
+      },
+      {
+        key: 'driver_sign',
+        label: 'Semnătură șofer (OTP)',
+        done: Boolean(driverSig),
+        detail: driverSig
+          ? `${driverSig.displayName} · ${driverSig.signedAt.toLocaleString('ro-RO')}`
+          : releaseRow
+            ? 'În așteptare'
+            : 'PV eliberare nedeschis',
+      },
+      {
+        key: 'partner_sign',
+        label: 'Semnătură partener',
+        done: partnerSigned || customerSigned,
+        detail: partnerSigned
+          ? 'Partener a semnat'
+          : customerSigned
+            ? 'Client a semnat'
+            : 'În așteptare',
+      },
+      {
+        key: 'finalize',
+        label: 'PV finalizat + stoc',
+        done: releaseSigned && stayCheckedOut,
+        detail: releaseSigned
+          ? stayCheckedOut
+            ? 'Ieșit din inventar'
+            : 'PV semnat, stoc încă deschis'
+          : 'Nefinalizat',
+      },
+    ];
+
+    return {
+      ticketId: ticket?.id ?? ticketId ?? null,
+      stayId: stay.id,
+      stayCheckedOut,
+      supplierName: stay.supplier.legalName,
+      plate: stay.set.vehicle.registrationNumber,
+      checkIn: checkInRow
+        ? {
+            protocolId: checkInRow.id,
+            status: checkInRow.status,
+            signed: checkInSigned,
+          }
+        : null,
+      release: releaseRow
+        ? {
+            protocolId: releaseRow.id,
+            kind: releaseRow.kind,
+            status: releaseRow.status,
+            signed: releaseSigned,
+            driverSigned: Boolean(driverSig),
+            driverSignedAt: driverSig?.signedAt.toISOString() ?? null,
+            partnerSigned,
+            customerSigned,
+          }
+        : null,
+      steps,
+    };
   }
 
   /**
