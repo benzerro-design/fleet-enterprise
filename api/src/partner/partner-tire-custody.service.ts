@@ -12,7 +12,9 @@ import {
   resolvePartnerSupplierIdsFilter,
 } from '../iam/partner-access';
 import { parseTireSetSearchInput } from '../fleet/tires/tire-domain.types';
+import { coerceFiniteTreadMm } from '../fleet/tires/tire-intake-inspection';
 import { TireLedgerService } from '../fleet/tires/tire-ledger.service';
+import { TireHotelService } from '../fleet/tires/tire-hotel.service';
 import { parseStayLocation } from '../fleet/tires/tire-stay-location';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertSupplierReadById } from '../suppliers/supplier-access';
@@ -86,6 +88,7 @@ export class PartnerTireCustodyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tireLedger: TireLedgerService,
+    private readonly hotel: TireHotelService,
   ) {}
 
   private async resolveSupplier(
@@ -368,27 +371,21 @@ export class PartnerTireCustodyService {
 
     const stayIdNorm = stayId.trim();
     const locationPath = formatWarehouseLocationPath(location);
-    const update = await this.prisma.tireStorageStay.updateMany({
-      where: {
-        id: stayIdNorm,
+    await this.prisma.$transaction(async (tx) => {
+      await this.hotel.relocateTx(tx, {
         tenantId,
         supplierId: sid,
-        checkOutAt: null,
-      },
-      data: {
+        stayId: stayIdNorm,
         warehouseLocationId: location.id,
         locationCode: locationPath,
-      },
+      });
     });
-    if (update.count === 0) {
-      throw new NotFoundException('Stay not found or closed');
-    }
 
     const updated = await this.prisma.tireStorageStay.findFirst({
       where: { id: stayIdNorm, tenantId, supplierId: sid },
       include: { warehouseLocation: { include: locationInclude } },
     });
-    if (!updated) throw new NotFoundException('Stay not found');
+    if (!updated) throw new NotFoundException('Stay not found or closed');
 
     return {
       id: updated.id,
@@ -466,8 +463,12 @@ export class PartnerTireCustodyService {
         setItems: {
           take: 1,
           select: {
+            setId: true,
             set: {
               select: {
+                id: true,
+                mountedAs: true,
+                vehicleId: true,
                 storageStays: {
                   where: { supplierId, checkOutAt: null },
                   take: 1,
@@ -484,7 +485,8 @@ export class PartnerTireCustodyService {
     if (!asset) throw new NotFoundException('Asset not found');
 
     const placement = asset.placements[0] ?? null;
-    const openStay = asset.setItems[0]?.set.storageStays[0] ?? null;
+    const setLink = asset.setItems[0] ?? null;
+    const openStay = setLink?.set.storageStays[0] ?? null;
 
     const ledger = await this.tireLedger.ledgerForAssetAtTenant(tenantSlug, id);
 
@@ -520,7 +522,108 @@ export class PartnerTireCustodyService {
               : openStay.locationCode,
           }
         : null,
+      set:
+        setLink?.set
+          ? {
+              id: setLink.set.id,
+              mountedAs: setLink.set.mountedAs,
+            }
+          : null,
       movements: ledger.movements,
     };
+  }
+
+  async patchAssetTread(
+    tenantSlug: string,
+    access: AccessContext,
+    assetId: string,
+    body: unknown,
+    opts: { supplierId?: string },
+  ) {
+    assertPartnerOrTenantCustodyAccess(access);
+    assertPartnerWrite(access);
+    const o = body as Record<string, unknown>;
+    const supplierId =
+      typeof o.supplierId === 'string' && o.supplierId.trim()
+        ? o.supplierId.trim()
+        : opts.supplierId;
+
+    const { tenantId, supplierId: sid } = await this.resolveSupplier(tenantSlug, access, supplierId);
+    const id = assetId.trim();
+    await this.assertAssetPartnerScope(tenantId, sid, id);
+
+    const treadMm = coerceFiniteTreadMm(o.treadMm);
+    if (treadMm === null) {
+      throw new BadRequestException('Profil (mm) invalid — introduceți un număr ≥ 0');
+    }
+
+    let note: string | undefined;
+    if (o.note !== undefined && o.note !== null) {
+      const n = String(o.note).trim();
+      if (n.length > 500) {
+        throw new BadRequestException('Nota este prea lungă (max. 500 caractere)');
+      }
+      note = n || undefined;
+    }
+
+    const asset = await this.prisma.tireAsset.findFirst({
+      where: { id, tenantId },
+      select: {
+        id: true,
+        setItems: {
+          take: 1,
+          select: {
+            setId: true,
+            set: {
+              select: {
+                id: true,
+                vehicleId: true,
+                storageStays: {
+                  where: { supplierId: sid, checkOutAt: null },
+                  take: 1,
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!asset) throw new NotFoundException('Anvelopă negăsită');
+
+    const setLink = asset.setItems[0];
+    const openStay = setLink?.set.storageStays[0];
+    if (!openStay) {
+      throw new ForbiddenException('Anvelopa nu are un sejur activ la acest furnizor');
+    }
+
+    const setId = setLink?.setId ?? setLink?.set.id ?? null;
+    const vehicleId = setLink?.set.vehicleId ?? null;
+
+    const payload = {
+      source: 'partner_custody_fiche',
+      treadMm,
+      ...(note ? { note } : {}),
+    } satisfies Record<string, string | number>;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tireAsset.update({
+        where: { id },
+        data: { treadMm },
+      });
+      await tx.tireEvent.create({
+        data: {
+          tenantId,
+          type: 'inspect',
+          assetId: id,
+          setId: setId ?? undefined,
+          vehicleId: vehicleId ?? undefined,
+          actorUserId: access.userId,
+          payload: payload as Prisma.InputJsonValue,
+        },
+      });
+    });
+
+    return this.getAsset(tenantSlug, access, id, { supplierId: sid });
   }
 }

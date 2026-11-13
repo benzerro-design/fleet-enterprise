@@ -29,6 +29,10 @@ export type TireRequestItem = {
   supplierName?: string | null;
   createdAt: string;
   hrefTicket: string;
+  gestiuneOp?: string | null;
+  kind?: string;
+  hrefCazare?: string;
+  hrefEliberare?: string;
 };
 
 type ClientMeta = {
@@ -278,6 +282,20 @@ export function PartnerTireRequestsClient({
               `/fleet/partner/tire-requests/${it.id}`,
               supplierQuery,
             );
+            const isCazare =
+              it.gestiuneOp === "cazare" || it.kind === "cazare" || it.kind === "storage";
+            const isEliberare = it.gestiuneOp === "eliberare" || it.kind === "eliberare";
+            const executeHref = isCazare
+              ? appendPartnerSupplierQuery(
+                  it.hrefCazare ?? `/fleet/partner/tire-requests/${it.id}/cazare`,
+                  supplierQuery,
+                )
+              : isEliberare
+                ? appendPartnerSupplierQuery(
+                    it.hrefEliberare ?? `/fleet/partner/tire-requests/${it.id}/eliberare`,
+                    supplierQuery,
+                  )
+                : null;
             return (
               <li
                 key={it.id}
@@ -297,12 +315,22 @@ export function PartnerTireRequestsClient({
                     {showSupplierColumn && it.supplierName ? ` · ${it.supplierName}` : ""}
                   </p>
                 </div>
-                <Link
-                  href={detailHref}
-                  className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-900"
-                >
-                  Deschide
-                </Link>
+                <div className="flex shrink-0 gap-1.5">
+                  <Link
+                    href={detailHref}
+                    className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-900"
+                  >
+                    Deschide
+                  </Link>
+                  {executeHref ? (
+                    <Link
+                      href={executeHref}
+                      className="rounded-md border border-violet-800/50 bg-violet-950/30 px-2 py-1 text-[11px] text-violet-100 hover:bg-violet-900/40"
+                    >
+                      {isCazare ? "Execută cazarea" : "Execută eliberarea"}
+                    </Link>
+                  ) : null}
+                </div>
               </li>
             );
           })}

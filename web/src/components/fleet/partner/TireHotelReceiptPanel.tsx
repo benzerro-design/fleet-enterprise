@@ -1,7 +1,12 @@
 "use client";
 
 import type { TireHotelStay } from "@/lib/partner-tire-hotel-api";
-import { vehicleTireSeasonLabel } from "@/lib/vehicle-wheels-types";
+import { formatIntakeTreadNotesDisplay } from "@/lib/tire-intake-notes-display";
+import {
+  tireMountedAsLabel,
+  vehicleTireSeasonLabel,
+  type TireMountedAs,
+} from "@/lib/vehicle-wheels-types";
 import { TireHotelQrPayload } from "@/components/fleet/partner/TireHotelQrPayload";
 
 export type TireHotelReceiptProps = {
@@ -35,18 +40,26 @@ export function TireHotelReceiptPanel({
     window.print();
   }
 
+  const intakeNotesDisplay = formatIntakeTreadNotesDisplay(stay.intakeTreadNotes);
+
+  const mountedAsLabel =
+    stay.mountedAs === "on_rim" || stay.mountedAs === "tyre_only"
+      ? tireMountedAsLabel(stay.mountedAs as TireMountedAs)
+      : null;
+
   function downloadText() {
     const lines = [
       "Bon depozitare anvelope — Fleet Enterprise",
       "",
       supplierName ? `Furnizor: ${supplierName}` : "",
       `Nr. înmatriculare: ${stay.plate}`,
+      mountedAsLabel ? `Tip set: ${mountedAsLabel}` : "",
       `Sezon set: ${vehicleTireSeasonLabel(stay.season)}`,
       stay.setName?.trim() ? `Denumire set: ${stay.setName.trim()}` : "",
       stay.locationCode ? `Locație depozit: ${stay.locationCode}` : "",
       `Check-in: ${formatDateTime(stay.checkInAt)}`,
       `Cod QR set: ${stay.qrPayload}`,
-      stay.intakeTreadNotes?.trim() ? `Note profil: ${stay.intakeTreadNotes.trim()}` : "",
+      intakeNotesDisplay ? `Note recepție:\n${intakeNotesDisplay}` : "",
     ].filter(Boolean);
     const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -88,6 +101,12 @@ export function TireHotelReceiptPanel({
           <dt className="text-xs text-zinc-500 print:text-zinc-600">Vehicul</dt>
           <dd className="font-medium text-zinc-100 print:text-black">{stay.plate}</dd>
         </div>
+        {mountedAsLabel ? (
+          <div>
+            <dt className="text-xs text-zinc-500 print:text-zinc-600">Tip set</dt>
+            <dd className="text-zinc-200 print:text-black">{mountedAsLabel}</dd>
+          </div>
+        ) : null}
         <div>
           <dt className="text-xs text-zinc-500 print:text-zinc-600">Set / sezon</dt>
           <dd className="text-zinc-200 print:text-black">
@@ -113,11 +132,11 @@ export function TireHotelReceiptPanel({
           </dd>
           <dd className="hidden break-all font-mono text-xs print:block">{stay.qrPayload}</dd>
         </div>
-        {stay.intakeTreadNotes?.trim() ? (
+        {intakeNotesDisplay ? (
           <div>
-            <dt className="text-xs text-zinc-500 print:text-zinc-600">Note profil la recepție</dt>
+            <dt className="text-xs text-zinc-500 print:text-zinc-600">Note recepție (profil / jante)</dt>
             <dd className="whitespace-pre-wrap text-zinc-300 print:text-black">
-              {stay.intakeTreadNotes.trim()}
+              {intakeNotesDisplay}
             </dd>
           </div>
         ) : null}

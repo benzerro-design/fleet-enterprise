@@ -204,6 +204,45 @@ export class PartnerTireHotelController {
     );
   }
 
+  @Get('requests/:ticketId/eliberare')
+  @Roles(...FLEET_READ_ROLES)
+  getEliberareStatus(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('ticketId') ticketId: string,
+    @Query('supplierId') supplierId?: string,
+    @Query('suppliers') suppliers?: string,
+  ) {
+    return this.hotel.getEliberareStatus(tenantSlug, access, ticketId, {
+      supplierId: supplierId?.trim(),
+      supplierIds: parseSupplierIdsQuery(supplierId, suppliers),
+    });
+  }
+
+  @Post('requests/:ticketId/complete-eliberare')
+  @Roles(...FLEET_WRITE_ROLES)
+  completeEliberare(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('ticketId') ticketId: string,
+    @Req() req: AuthedRequest,
+    @Body() body: Record<string, unknown>,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    const o = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+    const sid =
+      (typeof o.supplierId === 'string' && o.supplierId.trim()) ||
+      supplierId?.trim() ||
+      undefined;
+    return this.hotel.completeEliberare(
+      tenantSlug,
+      access,
+      ticketId,
+      { supplierId: sid },
+      req.user?.id,
+    );
+  }
+
   @Get('dashboard-stats')
   @Roles(...FLEET_READ_ROLES)
   dashboardStats(
@@ -242,6 +281,22 @@ export class PartnerTireHotelController {
       supplierId: supplierId?.trim(),
       setId: setId ?? '',
     });
+  }
+
+  @Get('sets/:setId/intake-items')
+  @Roles(...FLEET_READ_ROLES)
+  setIntakeItems(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('setId') setId: string,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    return this.hotel.getSetIntakeItems(
+      tenantSlug,
+      access,
+      setId,
+      supplierId?.trim(),
+    );
   }
 
   @Post('check-in')

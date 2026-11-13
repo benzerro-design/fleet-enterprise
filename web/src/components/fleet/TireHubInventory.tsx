@@ -16,6 +16,7 @@ import {
 import { TireMovementLedger } from "@/components/fleet/TireMovementLedger";
 import { TirePurchaseDocsEditor } from "@/components/fleet/TirePurchaseDocsEditor";
 import { formatClientDisplay } from "@/lib/client-display";
+import { formatIntakeTreadNotesDisplay } from "@/lib/tire-intake-notes-display";
 import {
   TIRE_BRAND_PRESETS,
   TIRE_MODEL_PRESETS_BY_BRAND,
@@ -812,9 +813,9 @@ export function TireHubInventory({
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-zinc-500">Note uzură intake</dt>
+                    <dt className="text-xs text-zinc-500">Note recepție (profil / jante)</dt>
                     <dd className="whitespace-pre-wrap text-zinc-300">
-                      {drawer.intakeTreadNotes?.trim() || "—"}
+                      {formatIntakeTreadNotesDisplay(drawer.intakeTreadNotes) || "—"}
                     </dd>
                   </div>
                 </dl>

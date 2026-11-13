@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -47,6 +47,20 @@ export class PartnerTireCustodyController {
     @Query('supplierId') supplierId?: string,
   ) {
     return this.custody.getAsset(tenantSlug, access, assetId, {
+      supplierId: supplierId?.trim(),
+    });
+  }
+
+  @Patch('assets/:assetId')
+  @Roles(...FLEET_WRITE_ROLES)
+  patchAsset(
+    @TenantId() tenantSlug: string,
+    @CurrentAccess() access: AccessContext,
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    return this.custody.patchAssetTread(tenantSlug, access, assetId, body, {
       supplierId: supplierId?.trim(),
     });
   }

@@ -32,6 +32,7 @@ type TireRequestItem = {
   createdAt: string;
   hrefHotel: string;
   hrefCazare?: string;
+  hrefEliberare?: string;
   hrefWorkOrders: string;
   stayIds: string[];
 };
@@ -67,9 +68,16 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
   const kindLabel =
     item.kindLabel ?? tireRequestKindLabel(item.kind, item.serviceLabel);
   const isCazare = item.gestiuneOp === "cazare" || item.kind === "cazare" || item.kind === "storage";
+  const isEliberare = item.gestiuneOp === "eliberare" || item.kind === "eliberare";
   const cazareHref =
     item.hrefCazare ??
     appendPartnerSupplierQuery(`/fleet/partner/tire-requests/${item.id}/cazare`, {
+      ...supplierQuery,
+      supplierId: supplierQuery.supplierId ?? item.supplierId ?? undefined,
+    });
+  const eliberareHref =
+    item.hrefEliberare ??
+    appendPartnerSupplierQuery(`/fleet/partner/tire-requests/${item.id}/eliberare`, {
       ...supplierQuery,
       supplierId: supplierQuery.supplierId ?? item.supplierId ?? undefined,
     });
@@ -89,7 +97,9 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
         <p className="mt-1 text-xs text-zinc-500">
           {isCazare
             ? "Fișă solicitare cazare — execută fluxul PV + raft din butonul de mai jos."
-            : "Fișă solicitare gestiune. Execuția pe stoc (eliberare / transfer / casare) vine în pachetele următoare."}
+            : isEliberare
+              ? "Fișă solicitare eliberare — execută PV check-out + eliberare din butonul de mai jos."
+              : "Fișă solicitare gestiune. Transfer și casare vin în pachetele următoare."}
         </p>
 
         <dl className="mt-4 grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm sm:grid-cols-2">
@@ -148,6 +158,14 @@ export default async function PartnerTireRequestDetailPage({ params, searchParam
               className="rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-600"
             >
               {item.stayIds?.length ? "Continuă cazarea" : "Execută cazarea"}
+            </Link>
+          ) : null}
+          {isEliberare ? (
+            <Link
+              href={eliberareHref}
+              className="rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-600"
+            >
+              Execută eliberarea
             </Link>
           ) : null}
         </div>

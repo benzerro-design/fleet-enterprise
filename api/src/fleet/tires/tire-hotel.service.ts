@@ -23,8 +23,10 @@ import { ensureTireStorageStayCostTx } from './tire-hotel-stay-cost';
 import { emitTireStayWebhook } from './tire-hotel-webhooks';
 import { supplierHasTireStorage } from '../../suppliers/supplier-tire-capability';
 import {
+  assertAssetTreadsCoverSetItems,
   type TireIntakeInspectionInput,
   serializeIntakeTreadNotes,
+  stripRimFieldsForTyreOnlyIntake,
 } from './tire-intake-inspection';
 
 export { tireSetQrPayload };
@@ -64,6 +66,8 @@ export type TireHotelCheckOutParams = {
   accountingNote?: string | null;
   /** When false, skip auto CostEntry (manual transform-stay-to-cost). */
   createCost?: boolean;
+  /** CRM ticket that initiated hotel check-out (optional). */
+  ticketId?: string | null;
 };
 
 export type TireHotelTransferParams = {
@@ -86,6 +90,8 @@ export type TireHotelRelocateParams = {
   locationCode?: string | null;
   bayCode?: string | null;
   binCode?: string | null;
+  /** Locație din master Depozite (zonă→rând→locație). */
+  warehouseLocationId?: string | null;
   actorUserId?: string | null;
 };
 
@@ -268,8 +274,36 @@ export class TireHotelService {
         })?.feeCents ?? null;
     }
 
+    const intakeInspection = stripRimFieldsForTyreOnlyIntake(
+      set.mountedAs,
+      params.intakeInspection,
+    );
+
+    const intakeAssets = intakeInspection?.assets;
+    const treadByAssetId = new Map<string, number>();
+    if (intakeAssets?.length) {
+      try {
+        assertAssetTreadsCoverSetItems(setAssetIds, intakeAssets);
+      } catch (e) {
+        throw new BadRequestException(
+          e instanceof Error ? e.message : 'Profil (mm) obligatoriu pentru fiecare anvelopă',
+        );
+      }
+      for (const row of intakeAssets) {
+        treadByAssetId.set(row.assetId, row.treadMm);
+      }
+      for (const item of set.items) {
+        const treadMm = treadByAssetId.get(item.assetId);
+        if (treadMm === undefined) continue;
+        await tx.tireAsset.update({
+          where: { id: item.assetId },
+          data: { treadMm },
+        });
+      }
+    }
+
     const intakeTreadNotes =
-      serializeIntakeTreadNotes(params.intakeInspection ?? {}, {
+      serializeIntakeTreadNotes(intakeInspection ?? {}, {
         legacyText: params.intakeTreadNotes,
       }) ?? (params.intakeTreadNotes?.trim() || undefined);
 
@@ -353,6 +387,9 @@ export class TireHotelService {
           source: 'tire_hotel_check_in',
           storageStayId: stay.id,
           locationCode,
+          ...(treadByAssetId.has(item.assetId)
+            ? { treadMm: treadByAssetId.get(item.assetId) }
+            : {}),
         },
       });
     }
@@ -690,13 +727,55 @@ export class TireHotelService {
   }
 
   async relocateTx(tx: Prisma.TransactionClient, params: TireHotelRelocateParams) {
+    let warehouseLocationId = params.warehouseLocationId?.trim() || null;
+    if (warehouseLocationId) {
+      const locRow = await tx.tireWarehouseLocation.findFirst({
+        where: {
+          id: warehouseLocationId,
+          tenantId: params.tenantId,
+          active: true,
+          row: {
+            active: true,
+            zone: {
+              active: true,
+              warehouse: { supplierId: params.supplierId, active: true },
+            },
+          },
+        },
+        select: {
+          id: true,
+          code: true,
+          row: {
+            select: {
+              code: true,
+              zone: { select: { code: true, warehouse: { select: { code: true } } } },
+            },
+          },
+        },
+      });
+      if (!locRow) {
+        throw new BadRequestException('warehouseLocationId not found for this supplier');
+      }
+      params = {
+        ...params,
+        locationCode: [
+          locRow.row.zone.warehouse.code,
+          locRow.row.zone.code,
+          locRow.row.code,
+          locRow.code,
+        ].join('/'),
+        bayCode: undefined,
+        binCode: undefined,
+      };
+    }
+
     const loc = resolveStayLocationInput({
       locationCode: params.locationCode,
       bayCode: params.bayCode,
       binCode: params.binCode,
     });
     if (!loc.locationCode) {
-      throw new BadRequestException('locationCode or bayCode is required');
+      throw new BadRequestException('locationCode, bayCode or warehouseLocationId is required');
     }
 
     const stay = await tx.tireStorageStay.findFirst({
@@ -741,7 +820,10 @@ export class TireHotelService {
     const fromCode = stay.locationCode;
     const updated = await tx.tireStorageStay.update({
       where: { id: stay.id },
-      data: { locationCode: loc.locationCode },
+      data: {
+        locationCode: loc.locationCode,
+        ...(warehouseLocationId ? { warehouseLocationId } : {}),
+      },
     });
 
     for (const item of stay.set.items) {
@@ -921,6 +1003,57 @@ export class TireHotelService {
 
     if (vehicleId) {
       await this.tires.syncFitmentProjectionTx(tx, params.tenantId, vehicleId);
+    }
+
+    const ticketId = params.ticketId?.trim() || null;
+    if (ticketId) {
+      const ticket = await tx.crmTicket.findFirst({
+        where: { id: ticketId, tenantId: params.tenantId },
+        select: { id: true, status: true, vehicleId: true },
+      });
+      if (ticket) {
+        const existingLink = await tx.crmTicketLink.findFirst({
+          where: {
+            tenantId: params.tenantId,
+            ticketId: ticket.id,
+            entityType: CrmTicketLinkEntityType.tire_storage_stay,
+            entityId: stay.id,
+          },
+          select: { id: true },
+        });
+        if (!existingLink) {
+          await tx.crmTicketLink.create({
+            data: {
+              tenantId: params.tenantId,
+              ticketId: ticket.id,
+              entityType: CrmTicketLinkEntityType.tire_storage_stay,
+              entityId: stay.id,
+            },
+          });
+        }
+        await tx.crmTicketEvent.create({
+          data: {
+            tenantId: params.tenantId,
+            ticketId: ticket.id,
+            kind: CrmTicketEventKind.workflow_advance,
+            body: `Check-out hotel anvelope (stay ${stay.id}).`,
+            payload: {
+              storageStayId: stay.id,
+              setId: stay.setId,
+              supplierId: params.supplierId,
+              releaseKind,
+              plate: stay.set.vehicle.registrationNumber,
+            },
+            actorUserId: params.actorUserId ?? null,
+          },
+        });
+        if (ticket.status === CrmTicketStatus.open) {
+          await tx.crmTicket.update({
+            where: { id: ticket.id },
+            data: { status: CrmTicketStatus.in_progress },
+          });
+        }
+      }
     }
 
     await releaseTireSetOpsLock(tx, { tenantId: params.tenantId, setId: stay.setId });

@@ -8,6 +8,7 @@ import type {
   TireHotelCapability,
   TireHotelReleaseKind,
   TireHotelSearchVehicle,
+  TireHotelSetIntakeItems,
   TireHotelStay,
 } from "@/lib/partner-tire-hotel-api";
 import {
@@ -19,7 +20,11 @@ import {
   parseTireSetSearchInput,
   readIntakePhotoFilesAsDataUrls,
 } from "@/lib/tire-set-search";
-import { tireMountedAsLabel, vehicleTireSeasonLabel } from "@/lib/vehicle-wheels-types";
+import {
+  tireMountedAsHint,
+  tireMountedAsLabel,
+  vehicleTireSeasonLabel,
+} from "@/lib/vehicle-wheels-types";
 import type { TireMountedAs } from "@/lib/vehicle-wheels-types";
 import { TireCustodyProtocolPanel } from "@/components/fleet/partner/TireCustodyProtocolPanel";
 import { TireHotelIntakePhotos } from "@/components/fleet/partner/TireHotelIntakePhotos";
@@ -34,6 +39,11 @@ import {
 import { TireMovementLedger } from "@/components/fleet/TireMovementLedger";
 import { TirePurchaseDocsEditor } from "@/components/fleet/TirePurchaseDocsEditor";
 import { ListColumnPicker } from "@/components/fleet/ListColumnPicker";
+import {
+  formatIntakeTreadNotesDisplay,
+  TIRE_RIM_CONDITION_OPTIONS,
+  type TireRimCondition,
+} from "@/lib/tire-intake-notes-display";
 import {
   defaultPartnerTireHotelInventarLayout,
   PARTNER_TIRE_HOTEL_INVENTAR_COLUMNS,
@@ -54,6 +64,14 @@ type Props = {
   /** inventar = listă tip flotă; check-in = check-in + import (pagină separată). */
   mode?: "inventar" | "check-in";
 };
+
+function parseTreadMmInput(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number(t.replace(",", "."));
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
 
 function formatCheckIn(iso: string): string {
   try {
@@ -173,6 +191,11 @@ export function PartnerTireHotelClient({
   const [intakePhotoFileUrls, setIntakePhotoFileUrls] = useState<string[]>([]);
   const [intakePhotoPreviewUrls, setIntakePhotoPreviewUrls] = useState<string[]>([]);
   const [intakeTreadNotes, setIntakeTreadNotes] = useState("");
+  const [intakeItems, setIntakeItems] = useState<TireHotelSetIntakeItems | null>(null);
+  const [treadMmByAssetId, setTreadMmByAssetId] = useState<Record<string, string>>({});
+  const [rimCondition, setRimCondition] = useState<TireRimCondition | "">("");
+  const [rimNotes, setRimNotes] = useState("");
+  const [intakeItemsBusy, setIntakeItemsBusy] = useState(false);
   const [receiptStay, setReceiptStay] = useState<TireHotelStay | null>(null);
   const [expandedReceiptStayId, setExpandedReceiptStayId] = useState<string | null>(null);
   const [expandedInventarStayId, setExpandedInventarStayId] = useState<string | null>(null);
@@ -180,8 +203,8 @@ export function PartnerTireHotelClient({
   const [staysTotal, setStaysTotal] = useState(0);
   const [activeProtocol, setActiveProtocol] = useState<TireCustodyProtocolRecord | null>(null);
   const [relocateStayId, setRelocateStayId] = useState<string | null>(null);
-  const [relocateBay, setRelocateBay] = useState("");
-  const [relocateBin, setRelocateBin] = useState("");
+  const [relocateWarehouseLocationId, setRelocateWarehouseLocationId] = useState<string | null>(null);
+  const [relocateLocationLabel, setRelocateLocationLabel] = useState("");
   const [transferStayId, setTransferStayId] = useState<string | null>(null);
   const [transferToSupplierId, setTransferToSupplierId] = useState("");
   const [transferBay, setTransferBay] = useState("");
@@ -304,6 +327,72 @@ export function PartnerTireHotelClient({
     return () => window.clearTimeout(t);
   }, [mode, contextPlate, qs]);
 
+  useEffect(() => {
+    if (mode !== "check-in" || !selectedSetId) {
+      setIntakeItems(null);
+      setTreadMmByAssetId({});
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setIntakeItemsBusy(true);
+      setError(null);
+      try {
+        const p = new URLSearchParams();
+        if (qs) {
+          for (const [k, v] of new URLSearchParams(qs)) p.set(k, v);
+        }
+        const res = await fetch(
+          `/api/partner/tire-hotel/sets/${encodeURIComponent(selectedSetId)}/intake-items?${p.toString()}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          const j = (await res.json().catch(() => ({}))) as { message?: string };
+          throw new Error(j.message ?? "Nu am putut încărca anvelopele setului");
+        }
+        const data = (await res.json()) as TireHotelSetIntakeItems;
+        if (cancelled) return;
+        setIntakeItems(data);
+        const prefilled: Record<string, string> = {};
+        for (const item of data.items) {
+          prefilled[item.assetId] =
+            item.treadMm != null && Number.isFinite(item.treadMm) ? String(item.treadMm) : "";
+        }
+        setTreadMmByAssetId(prefilled);
+      } catch (e) {
+        if (!cancelled) {
+          setIntakeItems(null);
+          setTreadMmByAssetId({});
+          setError(e instanceof Error ? e.message : "Eroare");
+        }
+      } finally {
+        if (!cancelled) setIntakeItemsBusy(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, selectedSetId, qs]);
+
+  const intakeTreadReadings = useMemo(() => {
+    if (!intakeItems?.items.length) return null;
+    const assets: Array<{ assetId: string; treadMm: number }> = [];
+    for (const item of intakeItems.items) {
+      const treadMm = parseTreadMmInput(treadMmByAssetId[item.assetId] ?? "");
+      if (treadMm === null) return null;
+      assets.push({ assetId: item.assetId, treadMm });
+    }
+    return assets;
+  }, [intakeItems, treadMmByAssetId]);
+
+  const intakeTreadsComplete = intakeTreadReadings !== null;
+
+  const checkInMountedAs =
+    intakeItems?.mountedAs ?? selectedFeeQuote?.mountedAs ?? null;
+  const isTyreOnlySet = checkInMountedAs === "tyre_only";
+  const isOnRimSet = checkInMountedAs === "on_rim";
+
   async function runSearch() {
     setError(null);
     const raw = searchPlate.trim();
@@ -327,6 +416,10 @@ export function PartnerTireHotelClient({
       setSelectedSetId(null);
       setSelectedVehicleId(null);
       setSelectedFeeQuote(null);
+      setIntakeItems(null);
+      setTreadMmByAssetId({});
+      setRimCondition("");
+      setRimNotes("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
     } finally {
@@ -395,6 +488,10 @@ export function PartnerTireHotelClient({
       dominantSize?: string | null;
     },
   ) {
+    setIntakeItems(null);
+    setTreadMmByAssetId({});
+    setRimCondition("");
+    setRimNotes("");
     setSelectedSetId(set.id);
     setSelectedVehicleId(vehicleId);
     setSelectedPlate(plate.trim() || null);
@@ -421,6 +518,10 @@ export function PartnerTireHotelClient({
       setError("Alege locația din Depozite (zonă → rând → locație)");
       return;
     }
+    if (!intakeTreadsComplete || !intakeTreadReadings?.length) {
+      setError("Completează profilul (mm) pentru fiecare anvelopă din set");
+      return;
+    }
     const intakePhotos = mergeIntakePhotoUrls(
       parseIntakePhotoUrlsInput(intakePhotoUrlsInput),
       intakePhotoFileUrls,
@@ -438,6 +539,11 @@ export function PartnerTireHotelClient({
           warehouseLocationId,
           locationCode: warehouseLocationLabel.trim() || undefined,
           intakePhotos: intakePhotos.length ? intakePhotos : undefined,
+          intakeInspection: {
+            assets: intakeTreadReadings,
+            ...(isOnRimSet && rimCondition ? { rimCondition } : {}),
+            ...(isOnRimSet && rimNotes.trim() ? { rimNotes: rimNotes.trim() } : {}),
+          },
           intakeTreadNotes: intakeTreadNotes.trim() || undefined,
           ticketId: contextTicketId || undefined,
           sourceSystem: contextTicketId ? "partner_tire_request" : undefined,
@@ -471,6 +577,10 @@ export function PartnerTireHotelClient({
       setIntakePhotoFileUrls([]);
       setIntakePhotoPreviewUrls([]);
       setIntakeTreadNotes("");
+      setIntakeItems(null);
+      setTreadMmByAssetId({});
+      setRimCondition("");
+      setRimNotes("");
       if (mode === "check-in" && contextTicketId && stay) {
         // 1.4: din solicitare — nu sări PV; întoarce la wizard cazare.
         const p = new URLSearchParams();
@@ -729,8 +839,8 @@ export function PartnerTireHotelClient({
   }
 
   async function relocateStay(stayId: string) {
-    if (!canWrite || !relocateBay.trim()) {
-      setError("Zona (bay) e obligatorie la mutare");
+    if (!canWrite || !relocateWarehouseLocationId) {
+      setError("Alege locația din Depozite (zonă → rând → locație)");
       return;
     }
     setBusy(`relocate-${stayId}`);
@@ -742,8 +852,8 @@ export function PartnerTireHotelClient({
         body: JSON.stringify({
           supplierId: supplierId ?? supplierQ.supplierId,
           stayId,
-          bayCode: relocateBay.trim(),
-          binCode: relocateBin.trim() || undefined,
+          warehouseLocationId: relocateWarehouseLocationId,
+          locationCode: relocateLocationLabel || undefined,
         }),
       });
       if (!res.ok) {
@@ -751,8 +861,8 @@ export function PartnerTireHotelClient({
         throw new Error(j.message ?? "Mutare eșuată");
       }
       setRelocateStayId(null);
-      setRelocateBay("");
-      setRelocateBin("");
+      setRelocateWarehouseLocationId(null);
+      setRelocateLocationLabel("");
       await loadStays();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Eroare");
@@ -944,6 +1054,126 @@ export function PartnerTireHotelClient({
                 </p>
               </div>
             ) : null}
+            {intakeItems?.mountedAs ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className="rounded-md border border-sky-800/60 bg-sky-950/40 px-2.5 py-1 text-xs font-medium text-sky-100"
+                  title={tireMountedAsHint(
+                    intakeItems.mountedAs === "tyre_only" ? "tyre_only" : "on_rim",
+                  )}
+                >
+                  {tireMountedAsLabel(
+                    intakeItems.mountedAs === "tyre_only" ? "tyre_only" : "on_rim",
+                  )}
+                </span>
+                <span className="text-[11px] text-zinc-500">
+                  {tireMountedAsHint(
+                    intakeItems.mountedAs === "tyre_only" ? "tyre_only" : "on_rim",
+                  )}
+                </span>
+              </div>
+            ) : null}
+            {isTyreOnlySet ? (
+              <p className="text-xs text-sky-200/80">Doar anvelope — fără jante</p>
+            ) : null}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-zinc-300">Profil la recepție (mm)</p>
+              {intakeItemsBusy ? (
+                <p className="text-xs text-zinc-500">Se încarcă anvelopele setului…</p>
+              ) : intakeItems?.items.length ? (
+                <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                  <table className="min-w-full text-left text-xs">
+                    <thead className="border-b border-zinc-800 bg-zinc-900/80 text-zinc-500">
+                      <tr>
+                        <th className="px-3 py-2 font-normal">#</th>
+                        <th className="px-3 py-2 font-normal">Anvelopă</th>
+                        <th className="px-3 py-2 font-normal">DOT</th>
+                        <th className="px-3 py-2 font-normal">Profil (mm)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/80">
+                      {intakeItems.items.map((item, idx) => {
+                        const label = [item.brand, item.model, item.size]
+                          .filter(Boolean)
+                          .join(" · ");
+                        return (
+                          <tr key={item.assetId}>
+                            <td className="px-3 py-2 text-zinc-500">{idx + 1}</td>
+                            <td className="px-3 py-2 text-zinc-200">
+                              {label || item.serialOrQr || item.assetId.slice(0, 8)}
+                            </td>
+                            <td className="px-3 py-2 text-zinc-400">{item.dot ?? "—"}</td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                min={0}
+                                step={0.1}
+                                disabled={!canWrite}
+                                value={treadMmByAssetId[item.assetId] ?? ""}
+                                onChange={(e) =>
+                                  setTreadMmByAssetId((prev) => ({
+                                    ...prev,
+                                    [item.assetId]: e.target.value,
+                                  }))
+                                }
+                                className="w-24 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+                                aria-label={`Profil mm anvelopa ${idx + 1}`}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : selectedSetId ? (
+                <p className="text-xs text-amber-200/90">
+                  Nu s-au găsit anvelope în set — reselectează setul.
+                </p>
+              ) : null}
+              {!intakeTreadsComplete && intakeItems?.items.length ? (
+                <p className="text-[11px] text-amber-200/80">
+                  Toate valorile de profil trebuie completate (≥ 0 mm) înainte de confirmare.
+                </p>
+              ) : null}
+            </div>
+            {isOnRimSet ? (
+              <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+                <p className="text-xs font-medium text-zinc-300">Stare jante la recepție</p>
+                <label className="block text-[11px] text-zinc-500" htmlFor="tire-hotel-rim-condition">
+                  Condiție jantă (opțional)
+                </label>
+                <select
+                  id="tire-hotel-rim-condition"
+                  disabled={!canWrite}
+                  value={rimCondition}
+                  onChange={(e) =>
+                    setRimCondition((e.target.value || "") as TireRimCondition | "")
+                  }
+                  className="w-full max-w-xs rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                >
+                  <option value="">— Neselectat —</option>
+                  {TIRE_RIM_CONDITION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <label className="block text-[11px] text-zinc-500" htmlFor="tire-hotel-rim-notes">
+                  Note jante (opțional)
+                </label>
+                <textarea
+                  id="tire-hotel-rim-notes"
+                  value={rimNotes}
+                  onChange={(e) => setRimNotes(e.target.value)}
+                  rows={2}
+                  disabled={!canWrite}
+                  placeholder="Detalii zgârieturi, abateri, lipsă capace…"
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600"
+                />
+              </div>
+            ) : null}
             {supplierId ?? supplierQ.supplierId ? (
               <WarehouseLocationPicker
                 supplierId={(supplierId ?? supplierQ.supplierId)!}
@@ -1007,20 +1237,26 @@ export function PartnerTireHotelClient({
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-zinc-500" htmlFor="tire-hotel-tread-notes">
-                Note profil / stare anvelope la recepție
+                Note sumar recepție (opțional)
               </label>
               <textarea
                 id="tire-hotel-tread-notes"
                 value={intakeTreadNotes}
                 onChange={(e) => setIntakeTreadNotes(e.target.value)}
                 rows={2}
-                placeholder="Ex. FA 4mm, FD 3mm…"
+                placeholder="Observații generale, zgârieturi, recomandări…"
                 className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600"
               />
             </div>
             <button
               type="button"
-              disabled={!canWrite || busy === "check-in"}
+              disabled={
+                !canWrite ||
+                busy === "check-in" ||
+                !warehouseLocationId ||
+                !intakeTreadsComplete ||
+                intakeItemsBusy
+              }
               onClick={() => void checkIn()}
               className="w-full rounded-xl bg-emerald-600 py-4 text-base font-semibold text-white disabled:opacity-50"
             >
@@ -1330,9 +1566,13 @@ export function PartnerTireHotelClient({
                   </ul>
                 ) : null}
                 <TireHotelQrPayload payload={s.qrPayload} />
-                {s.intakeTreadNotes?.trim() ? (
-                  <p className="whitespace-pre-wrap text-xs text-zinc-400">{s.intakeTreadNotes.trim()}</p>
-                ) : null}
+                {(() => {
+                  const intakeNotesText = formatIntakeTreadNotesDisplay(s.intakeTreadNotes);
+                  if (!intakeNotesText) return null;
+                  return (
+                    <p className="whitespace-pre-wrap text-xs text-zinc-400">{intakeNotesText}</p>
+                  );
+                })()}
                 <TireHotelIntakePhotos urls={s.intakePhotos} />
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <button
@@ -1438,8 +1678,8 @@ export function PartnerTireHotelClient({
                         type="button"
                         onClick={() => {
                           setRelocateStayId(s.id);
-                          setRelocateBay(s.bayCode ?? "");
-                          setRelocateBin(s.binCode ?? "");
+                          setRelocateWarehouseLocationId(null);
+                          setRelocateLocationLabel("");
                           setTransferStayId(null);
                           setInvoiceStayId(null);
                         }}
@@ -1527,26 +1767,31 @@ export function PartnerTireHotelClient({
                   </div>
                 ) : null}
                 {relocateStayId === s.id && !s.checkOutAt ? (
-                  <div className="grid gap-2 rounded-lg border border-zinc-700 bg-zinc-950/50 p-2 sm:grid-cols-[1fr_1fr_auto]">
-                    <input
-                      value={relocateBay}
-                      onChange={(e) => setRelocateBay(e.target.value.toUpperCase())}
-                      placeholder="Bay"
-                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
-                    />
-                    <input
-                      value={relocateBin}
-                      onChange={(e) => setRelocateBin(e.target.value.toUpperCase())}
-                      placeholder="Bin"
-                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
-                    />
+                  <div className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-950/50 p-2">
+                    {supplierId ?? supplierQ.supplierId ? (
+                      <WarehouseLocationPicker
+                        supplierId={(supplierId ?? supplierQ.supplierId)!}
+                        value={relocateWarehouseLocationId}
+                        variant="compact"
+                        onPick={(id, label) => {
+                          setRelocateWarehouseLocationId(id);
+                          setRelocateLocationLabel(label);
+                        }}
+                        onCancel={() => setRelocateStayId(null)}
+                      />
+                    ) : (
+                      <p className="text-xs text-amber-200/90">Selectează furnizorul pentru locație.</p>
+                    )}
+                    {relocateLocationLabel ? (
+                      <p className="text-[11px] text-zinc-500">Destinație: {relocateLocationLabel}</p>
+                    ) : null}
                     <button
                       type="button"
-                      disabled={busy === `relocate-${s.id}`}
+                      disabled={busy === `relocate-${s.id}` || !relocateWarehouseLocationId}
                       onClick={() => void relocateStay(s.id)}
                       className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
                     >
-                      Salvează
+                      Salvează mutarea
                     </button>
                   </div>
                 ) : null}

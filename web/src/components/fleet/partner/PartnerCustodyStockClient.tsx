@@ -8,6 +8,7 @@ import {
   assignCustodyLocation,
   fetchCustodyAssetFiche,
   fetchCustodyStock,
+  patchCustodyAssetTread,
   type CustodyAssetFiche,
   type CustodyStockRow,
 } from "@/lib/partner-tire-custody-api";
@@ -45,13 +46,63 @@ function formatCheckIn(iso: string): string {
 
 function AssetFichePanel({
   fiche,
+  canWrite,
+  supplierId,
   onClose,
+  onFicheUpdated,
 }: {
   fiche: CustodyAssetFiche;
+  canWrite: boolean;
+  supplierId?: string;
   onClose: () => void;
+  onFicheUpdated: (next: CustodyAssetFiche) => void;
 }) {
   const a = fiche.asset;
   const movements = [...(fiche.movements ?? [])].reverse();
+  const [treadInput, setTreadInput] = useState(
+    a.treadMm != null ? String(a.treadMm) : "",
+  );
+  const [noteInput, setNoteInput] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setTreadInput(a.treadMm != null ? String(a.treadMm) : "");
+    setNoteInput("");
+    setSaveError(null);
+  }, [a.assetId, a.treadMm]);
+
+  const saveTread = async () => {
+    if (!supplierId) return;
+    const normalized = treadInput.trim().replace(",", ".");
+    const n = Number(normalized);
+    if (!normalized || !Number.isFinite(n) || n < 0) {
+      setSaveError("Profil (mm) invalid — introduceți un număr ≥ 0");
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const next = await patchCustodyAssetTread(
+        a.assetId,
+        {
+          treadMm: n,
+          ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
+        },
+        supplierId,
+      );
+      onFicheUpdated(next);
+      setNoteInput("");
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Nu s-a putut salva profilul");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const mountedBadge =
+    fiche.set?.mountedAs != null ? tireMountedAsLabel(fiche.set.mountedAs) : null;
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/50" onClick={onClose}>
       <div
@@ -59,7 +110,14 @@ function AssetFichePanel({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
-          <h2 className="text-sm font-semibold text-zinc-100">Fișă anvelopă</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold text-zinc-100">Fișă anvelopă</h2>
+            {mountedBadge ? (
+              <span className="rounded border border-zinc-600 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-300">
+                {mountedBadge}
+              </span>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -81,10 +139,12 @@ function AssetFichePanel({
             <span className="text-zinc-500">DOT: </span>
             {a.dot ?? "—"}
           </div>
-          <div>
-            <span className="text-zinc-500">Profil (mm): </span>
-            {a.treadMm != null ? String(a.treadMm) : "—"}
-          </div>
+          {!canWrite ? (
+            <div>
+              <span className="text-zinc-500">Profil (mm): </span>
+              {a.treadMm != null ? String(a.treadMm) : "—"}
+            </div>
+          ) : null}
           <div>
             <span className="text-zinc-500">Serial / QR: </span>
             {a.serialOrQr ?? "—"}
@@ -96,6 +156,42 @@ function AssetFichePanel({
             </div>
           ) : null}
         </dl>
+        {canWrite ? (
+          <div className="mt-3 space-y-2 rounded border border-zinc-800 bg-zinc-900/40 p-2">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+              Corectare profil după cazare
+            </p>
+            <label className="block text-[11px] text-zinc-400">
+              Profil (mm)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={treadInput}
+                onChange={(e) => setTreadInput(e.target.value)}
+                className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100"
+              />
+            </label>
+            <label className="block text-[11px] text-zinc-400">
+              Notă scurtă (opțional)
+              <textarea
+                rows={2}
+                maxLength={500}
+                value={noteInput}
+                onChange={(e) => setNoteInput(e.target.value)}
+                className="mt-0.5 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100"
+              />
+            </label>
+            {saveError ? <p className="text-[11px] text-red-400">{saveError}</p> : null}
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void saveTread()}
+              className="rounded border border-emerald-800/60 bg-emerald-950/30 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-950/50 disabled:opacity-50"
+            >
+              {saving ? "Se salvează…" : "Salvează"}
+            </button>
+          </div>
+        ) : null}
         <h3 className="mb-2 mt-4 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
           Mișcări
         </h3>
@@ -490,7 +586,15 @@ export function PartnerCustodyStockClient({ canWrite, adminMode, supplierId }: P
           </tbody>
         </table>
       </div>
-      {fiche ? <AssetFichePanel fiche={fiche} onClose={() => setFiche(null)} /> : null}
+      {fiche ? (
+        <AssetFichePanel
+          fiche={fiche}
+          canWrite={canWrite && !adminMode}
+          supplierId={apiSupplierId}
+          onClose={() => setFiche(null)}
+          onFicheUpdated={(next) => setFiche(next)}
+        />
+      ) : null}
     </div>
   );
 }

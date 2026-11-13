@@ -40,6 +40,7 @@ import {
 } from './tire-custody-release-map';
 import { loadSignatureImageBuffer } from './tire-custody-signature-image';
 import { TireHotelService, type TireHotelReleaseKind } from './tire-hotel.service';
+import { formatIntakeTreadNotesForDisplay } from './tire-intake-inspection';
 import { formatStayLocation, parseStayLocation } from './tire-stay-location';
 import { buildPublicUrl } from '../../web-origin';
 
@@ -437,7 +438,7 @@ export class TireCustodyProtocolService {
         revision,
         checklistJson: DEFAULT_CHECKLIST,
         locationText,
-        conditionNotes: stay.intakeTreadNotes,
+        conditionNotes: formatIntakeTreadNotesForDisplay(stay.intakeTreadNotes),
         workOrderId: workOrderId ?? null,
       },
       include: PROTOCOL_INCLUDE,

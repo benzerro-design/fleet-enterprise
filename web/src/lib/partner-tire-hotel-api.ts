@@ -96,3 +96,20 @@ export type TireHotelSearchVehicle = {
   registrationNumber: string;
   sets: TireHotelSearchSet[];
 };
+
+export type TireHotelIntakeItem = {
+  assetId: string;
+  brand: string | null;
+  model: string | null;
+  size: string | null;
+  dot: string | null;
+  treadMm: number | null;
+  serialOrQr: string | null;
+  sortOrder: number;
+};
+
+export type TireHotelSetIntakeItems = {
+  setId: string;
+  mountedAs: string | null;
+  items: TireHotelIntakeItem[];
+};

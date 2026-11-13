@@ -61,6 +61,10 @@ export type CustodyAssetFiche = {
     location: CustodyWarehouseLocation | null;
     locationLabel: string | null;
   } | null;
+  set: {
+    id: string;
+    mountedAs: TireMountedAs;
+  } | null;
   movements: TireLedgerMovement[];
 };
 
@@ -109,5 +113,37 @@ export async function fetchCustodyAssetFiche(
     { cache: "no-store" },
   );
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as CustodyAssetFiche;
+}
+
+export async function patchCustodyAssetTread(
+  assetId: string,
+  body: { treadMm: number; note?: string; supplierId?: string },
+  supplierId?: string,
+): Promise<CustodyAssetFiche> {
+  const sid = body.supplierId ?? supplierId;
+  const res = await fetch(
+    `/api/partner/tire-custody/assets/${encodeURIComponent(assetId)}${qsSupplier(sid)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        treadMm: body.treadMm,
+        ...(body.note !== undefined ? { note: body.note } : {}),
+        ...(sid ? { supplierId: sid } : {}),
+      }),
+    },
+  );
+  if (!res.ok) {
+    let msg = "";
+    try {
+      const j = (await res.json()) as { message?: string | string[] };
+      if (typeof j.message === "string") msg = j.message;
+      else if (Array.isArray(j.message)) msg = j.message.join("; ");
+    } catch {
+      msg = await res.text().catch(() => "");
+    }
+    throw new Error(msg || `Nu s-a putut salva profilul (HTTP ${res.status})`);
+  }
   return (await res.json()) as CustodyAssetFiche;
 }
