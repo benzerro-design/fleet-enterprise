@@ -448,13 +448,27 @@ export class PartnerTireHotelController {
     const kind = parseCustodyKind(kindRaw);
     const workOrderId =
       typeof body.workOrderId === 'string' ? body.workOrderId : undefined;
+    const ticketId = typeof body.ticketId === 'string' ? body.ticketId : undefined;
+    const targetSupplierId =
+      typeof body.targetSupplierId === 'string' ? body.targetSupplierId : undefined;
+    const targetLocationCode =
+      typeof body.targetLocationCode === 'string' ? body.targetLocationCode : undefined;
+    const accountingNote =
+      typeof body.accountingNote === 'string' ? body.accountingNote : undefined;
     return this.custody.getOrCreateForStay(
       tenantSlug,
       stayId,
       kind,
       access,
       supplierId?.trim(),
-      { workOrderId, actorUserId: req.user?.id },
+      {
+        workOrderId,
+        ticketId,
+        targetSupplierId,
+        targetLocationCode,
+        accountingNote,
+        actorUserId: req.user?.id,
+      },
     );
   }
 
@@ -488,6 +502,10 @@ export class PartnerTireHotelController {
         counterpartyName: body.counterpartyName as string | null | undefined,
         counterpartyRoleNote: body.counterpartyRoleNote as string | null | undefined,
         workOrderId: body.workOrderId as string | null | undefined,
+        targetSupplierId: body.targetSupplierId as string | null | undefined,
+        targetLocationCode: body.targetLocationCode as string | null | undefined,
+        accountingNote: body.accountingNote as string | null | undefined,
+        ticketId: body.ticketId as string | null | undefined,
       },
       access,
       req.user?.id,

@@ -922,6 +922,11 @@ export class TireHotelService {
       },
     });
     if (!stay) throw new NotFoundException('Active storage stay not found');
+    if (stay.quarantinedAt) {
+      throw new BadRequestException(
+        'Setul e în carantină — anulează PV carantină (sau deblochează) înainte de eliberare',
+      );
+    }
 
     await acquireTireSetOpsLock(tx, {
       tenantId: params.tenantId,
@@ -1246,6 +1251,8 @@ export class TireHotelService {
       feeCents: number | null;
       contractRef: string | null;
       accountingNote?: string | null;
+      quarantinedAt?: Date | null;
+      quarantineReason?: string | null;
     },
     set: {
       season: VehicleTireSeason;
@@ -1286,6 +1293,8 @@ export class TireHotelService {
       binCode: loc.binCode,
       checkInAt: stay.checkInAt.toISOString(),
       checkOutAt: stay.checkOutAt ? stay.checkOutAt.toISOString() : null,
+      quarantinedAt: stay.quarantinedAt ? stay.quarantinedAt.toISOString() : null,
+      quarantineReason: stay.quarantineReason ?? null,
       intakePhotos: normalizeIntakePhotoUrls(stay.intakePhotos),
       intakeTreadNotes: stay.intakeTreadNotes,
       feeCents: stay.feeCents,

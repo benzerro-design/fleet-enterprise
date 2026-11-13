@@ -25,6 +25,11 @@ export type TireCustodyProtocolRecord = {
   checklist: Record<string, boolean>;
   counterpartyName: string | null;
   counterpartyRoleNote: string | null;
+  targetSupplierId: string | null;
+  targetLocationCode: string | null;
+  accountingNote: string | null;
+  ticketId: string | null;
+  stayLocationLabel: string | null;
   signedAt: string | null;
   voidedAt: string | null;
   voidReason: string | null;
@@ -108,7 +113,13 @@ export async function openTireCustodyProtocol(
   stayId: string,
   kind: TireCustodyProtocolKind,
   supplierId?: string | null,
-  body?: { workOrderId?: string | null },
+  body?: {
+    workOrderId?: string | null;
+    ticketId?: string | null;
+    targetSupplierId?: string | null;
+    targetLocationCode?: string | null;
+    accountingNote?: string | null;
+  },
 ): Promise<TireCustodyProtocolRecord> {
   return custodyJson(`/stays/${stayId}/protocols/${kind}${supplierQs(supplierId)}`, {
     method: "POST",
@@ -136,6 +147,10 @@ export async function patchTireCustodyProtocol(
     counterpartyName: string | null;
     counterpartyRoleNote: string | null;
     workOrderId: string | null;
+    targetSupplierId: string | null;
+    targetLocationCode: string | null;
+    accountingNote: string | null;
+    ticketId: string | null;
   }>,
 ): Promise<TireCustodyProtocolRecord> {
   return custodyJson(`/protocols/${protocolId}`, {

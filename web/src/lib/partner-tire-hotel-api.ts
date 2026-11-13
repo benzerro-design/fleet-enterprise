@@ -34,6 +34,8 @@ export type TireHotelStay = {
   binCode?: string | null;
   checkInAt: string;
   checkOutAt: string | null;
+  quarantinedAt?: string | null;
+  quarantineReason?: string | null;
   plate: string;
   vehicleId: string;
   clientId?: string | null;

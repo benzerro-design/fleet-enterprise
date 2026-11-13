@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RsaSignaturePad,
   type RsaSignaturePadHandle,
@@ -17,22 +17,98 @@ import {
   tireCustodyProtocolPdfUrl,
   tireCustodyRoleLabel,
   voidTireCustodyProtocol,
+  type TireCustodyProtocolKind,
   type TireCustodyProtocolRecord,
   type TireCustodySignerRole,
 } from "@/lib/tire-custody-api";
 
-const CHECKLIST_LABELS: Record<string, string> = {
-  set_complete: "Set complet (toate anvelopele)",
-  tread_noted: "Profil / uzură notate",
-  photos_taken: "Poze intake atașate",
-  bay_assigned: "Bay / bin alocat",
-  counterparty_id_checked: "Identitate contrapartidă verificată",
+const CHECKLIST_BY_KIND: Record<TireCustodyProtocolKind, Record<string, string>> = {
+  check_in: {
+    set_complete: "Set complet (toate anvelopele)",
+    tread_noted: "Profil / uzură notate la primire",
+    photos_taken: "Poze la intrare atașate",
+    bay_assigned: "Locație / raft alocat",
+    counterparty_id_checked: "Identitate predător verificată",
+  },
+  check_out: {
+    set_complete: "Set complet la predare",
+    condition_at_exit_noted: "Stare / profil la ieșire notate",
+    photos_taken: "Poze la predare atașate",
+    recipient_id_checked: "Identitate primitor verificată",
+  },
+  seasonal: {
+    set_complete: "Seturi implicate verificate",
+    photos_taken: "Poze atașate",
+    seasonal_swap_noted: "Schimb sezon documentat",
+  },
+  transfer: {
+    set_complete: "Set complet",
+    photos_taken: "Poze predare atașate",
+    recipient_partner_confirmed: "Partener destinatar confirmat",
+  },
+  scrap: {
+    set_complete: "Set identificat pentru casare",
+    photos_taken: "Poze casare atașate",
+    scrap_reason_noted: "Motiv casare notat",
+  },
+  leasing_return: {
+    set_complete: "Set complet",
+    photos_taken: "Poze predare atașate",
+    leasing_party_confirmed: "Firmă leasing / primitor confirmat",
+  },
+  quarantine: {
+    photos_taken: "Poze stare atașate",
+    quarantine_reason_noted: "Motiv carantină notat",
+    set_isolated: "Set izolat pe raft",
+  },
 };
+
+function conditionLabel(kind: TireCustodyProtocolKind): string {
+  if (kind === "check_in") return "Stare / uzură la primire";
+  if (kind === "check_out" || kind === "leasing_return") return "Stare / uzură la predare";
+  if (kind === "scrap") return "Motiv casare / stare";
+  if (kind === "quarantine") return "Motiv carantină (obligatoriu)";
+  if (kind === "transfer") return "Observații predare";
+  if (kind === "seasonal") return "Observații schimb sezon";
+  return "Stare / observații";
+}
+
+function partyLabel(kind: TireCustodyProtocolKind): string {
+  if (kind === "check_in") return "Predat de (client / șofer)";
+  if (kind === "check_out" || kind === "leasing_return") return "Primit de (client / șofer)";
+  if (kind === "transfer") return "Contact la destinatar (opțional)";
+  if (kind === "scrap") return "Confirmare casare (nume)";
+  if (kind === "quarantine") return "Responsabil";
+  return "Parte";
+}
+
+function finalizeHint(kind: TireCustodyProtocolKind): string | null {
+  if (kind === "check_out") {
+    return "La finalizare setul iese din inventar → la client.";
+  }
+  if (kind === "scrap") {
+    return "La finalizare setul iese din inventar (casare) și se arhivează.";
+  }
+  if (kind === "leasing_return") {
+    return "La finalizare setul iese din inventar → returnare leasing / client.";
+  }
+  if (kind === "transfer") {
+    return "La finalizare sejurul trece la partenerul destinatar (rămâne în hotel).";
+  }
+  if (kind === "quarantine") {
+    return "La finalizare setul rămâne în inventar, dar e blocat (nu poate fi predat).";
+  }
+  if (kind === "seasonal") {
+    return "Document informativ — nu mută stocul. Schimbul complet (predare + recepție) vine separat.";
+  }
+  return null;
+}
 
 type Props = {
   protocol: TireCustodyProtocolRecord;
   canWrite: boolean;
   supplierId?: string | null;
+  transferTargets?: Array<{ id: string; legalName: string }>;
   onUpdated: (p: TireCustodyProtocolRecord) => void;
   onClose?: () => void;
 };
@@ -41,6 +117,7 @@ export function TireCustodyProtocolPanel({
   protocol,
   canWrite,
   supplierId,
+  transferTargets = [],
   onUpdated,
   onClose,
 }: Props) {
@@ -63,6 +140,10 @@ export function TireCustodyProtocolPanel({
   } | null>(null);
   const draft = protocol.status === "draft";
   const media = protocol.media ?? [];
+  const kind = protocol.kind;
+  const checklistLabels = CHECKLIST_BY_KIND[kind] ?? { photos_taken: "Poze atașate" };
+  const isCheckIn = kind === "check_in";
+  const stayLoc = protocol.stayLocationLabel || protocol.locationText;
 
   useEffect(() => {
     setSignerName("");
@@ -70,6 +151,11 @@ export function TireCustodyProtocolPanel({
     setSignerRole(hasPartner ? "customer" : "partner");
     padRef.current?.clear();
   }, [protocol.id, protocol.signatures]);
+
+  const rolesPresent = useMemo(
+    () => new Set(protocol.signatures.map((s) => s.role)),
+    [protocol.signatures],
+  );
 
   async function saveFields(
     patch: Parameters<typeof patchTireCustodyProtocol>[1],
@@ -205,7 +291,6 @@ export function TireCustodyProtocolPanel({
     }
   }
 
-  const rolesPresent = new Set(protocol.signatures.map((s) => s.role));
   const canFinalize =
     draft &&
     rolesPresent.has("partner") &&
@@ -223,6 +308,9 @@ export function TireCustodyProtocolPanel({
             {protocol.plate ?? "—"} · status{" "}
             <span className="text-zinc-300">{protocol.status}</span>
           </p>
+          {finalizeHint(kind) ? (
+            <p className="mt-1 text-[11px] text-amber-200/85">{finalizeHint(kind)}</p>
+          ) : null}
         </div>
         {onClose ? (
           <button
@@ -243,27 +331,36 @@ export function TireCustodyProtocolPanel({
 
       {draft && canWrite ? (
         <>
+          {isCheckIn ? (
+            <label className="block space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-zinc-500">
+                Locație / raft alocat
+              </span>
+              <input
+                defaultValue={protocol.locationText ?? ""}
+                onBlur={(e) => {
+                  const v = e.target.value.trim() || null;
+                  if (v !== (protocol.locationText ?? null)) {
+                    void saveFields({ locationText: v });
+                  }
+                }}
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+          ) : stayLoc ? (
+            <p className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-xs text-zinc-400">
+              Ridicat din / pe raft:{" "}
+              <span className="font-medium text-zinc-200">{stayLoc}</span>
+            </p>
+          ) : null}
+
           <label className="block space-y-1">
             <span className="text-[11px] uppercase tracking-wide text-zinc-500">
-              Locație / bay
-            </span>
-            <input
-              defaultValue={protocol.locationText ?? ""}
-              onBlur={(e) => {
-                const v = e.target.value.trim() || null;
-                if (v !== (protocol.locationText ?? null)) {
-                  void saveFields({ locationText: v });
-                }
-              }}
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-[11px] uppercase tracking-wide text-zinc-500">
-              Stare / uzură
+              {conditionLabel(kind)}
             </span>
             <textarea
               defaultValue={protocol.conditionNotes ?? ""}
+              key={`cond-${protocol.id}-${protocol.revision}`}
               rows={2}
               onBlur={(e) => {
                 const v = e.target.value.trim() || null;
@@ -274,12 +371,14 @@ export function TireCustodyProtocolPanel({
               className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             />
           </label>
+
           <label className="block space-y-1">
             <span className="text-[11px] uppercase tracking-wide text-zinc-500">
-              Contrapartidă (nume)
+              {partyLabel(kind)}
             </span>
             <input
               defaultValue={protocol.counterpartyName ?? ""}
+              key={`party-${protocol.id}`}
               onBlur={(e) => {
                 const v = e.target.value.trim() || null;
                 if (v !== (protocol.counterpartyName ?? null)) {
@@ -289,26 +388,90 @@ export function TireCustodyProtocolPanel({
               className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             />
           </label>
-          <label className="block space-y-1">
-            <span className="text-[11px] uppercase tracking-wide text-zinc-500">
-              Work order ID (opțional)
-            </span>
-            <input
-              defaultValue={protocol.workOrderId ?? ""}
-              onBlur={(e) => {
-                const v = e.target.value.trim() || null;
-                if (v !== (protocol.workOrderId ?? null)) {
-                  void saveFields({ workOrderId: v });
-                }
-              }}
-              placeholder="cuid WO tip R / sezonier"
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-100"
-            />
-          </label>
+
+          {kind === "transfer" ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block space-y-1 sm:col-span-2">
+                <span className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Partener destinatar
+                </span>
+                <select
+                  value={protocol.targetSupplierId ?? ""}
+                  disabled={pending}
+                  onChange={(e) => {
+                    void saveFields({ targetSupplierId: e.target.value || null });
+                  }}
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                >
+                  <option value="">— alege partener —</option>
+                  {transferTargets.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.legalName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1 sm:col-span-2">
+                <span className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Locație la destinatar (opțional)
+                </span>
+                <input
+                  defaultValue={protocol.targetLocationCode ?? ""}
+                  key={`tloc-${protocol.id}`}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim() || null;
+                    if (v !== (protocol.targetLocationCode ?? null)) {
+                      void saveFields({ targetLocationCode: v });
+                    }
+                  }}
+                  placeholder="ex. A1 / bay-bin"
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {kind === "scrap" ? (
+            <label className="block space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-zinc-500">
+                Notă contabilitate (opțional)
+              </span>
+              <input
+                defaultValue={protocol.accountingNote ?? ""}
+                key={`acc-${protocol.id}`}
+                onBlur={(e) => {
+                  const v = e.target.value.trim() || null;
+                  if (v !== (protocol.accountingNote ?? null)) {
+                    void saveFields({ accountingNote: v });
+                  }
+                }}
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+          ) : null}
+
+          {isCheckIn || kind === "seasonal" ? (
+            <label className="block space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-zinc-500">
+                Work order ID (opțional)
+              </span>
+              <input
+                defaultValue={protocol.workOrderId ?? ""}
+                onBlur={(e) => {
+                  const v = e.target.value.trim() || null;
+                  if (v !== (protocol.workOrderId ?? null)) {
+                    void saveFields({ workOrderId: v });
+                  }
+                }}
+                placeholder="cuid WO tip R / sezonier"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-100"
+              />
+            </label>
+          ) : null}
 
           <div className="space-y-1.5">
             <p className="text-[11px] uppercase tracking-wide text-zinc-500">Checklist</p>
-            {Object.entries(CHECKLIST_LABELS).map(([key, label]) => (
+            {Object.entries(checklistLabels).map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 text-xs text-zinc-300">
                 <input
                   type="checkbox"
@@ -387,7 +550,8 @@ export function TireCustodyProtocolPanel({
               <div className="space-y-1 rounded-lg border border-sky-900/40 bg-sky-950/30 p-2 text-xs text-sky-100">
                 <p className="break-all font-mono">{driverInvite.url}</p>
                 <p>
-                  OTP: <span className="font-mono text-base tracking-widest">{driverInvite.otp}</span>
+                  OTP:{" "}
+                  <span className="font-mono text-base tracking-widest">{driverInvite.otp}</span>
                 </p>
                 <p className="text-sky-300/80">
                   Expiră {new Date(driverInvite.expiresAt).toLocaleString("ro-RO")}
@@ -398,9 +562,7 @@ export function TireCustodyProtocolPanel({
                 {driverInvite.emailError ? (
                   <p className="text-amber-200">Email: {driverInvite.emailError}</p>
                 ) : null}
-                {driverInvite.smsSent ? (
-                  <p className="text-emerald-300">SMS OTP trimis.</p>
-                ) : null}
+                {driverInvite.smsSent ? <p className="text-emerald-300">SMS OTP trimis.</p> : null}
                 {driverInvite.smsError ? (
                   <p className="text-amber-200">SMS: {driverInvite.smsError}</p>
                 ) : null}
@@ -447,26 +609,22 @@ export function TireCustodyProtocolPanel({
             </button>
           </div>
 
-          {protocol.kind === "scrap" ||
-          protocol.kind === "transfer" ||
-          protocol.kind === "leasing_return" ? (
-            <p className="text-xs text-amber-200/90">
-              La finalizare se închide sejurul hotel și se mută stocul (
-              {protocol.kind === "scrap"
-                ? "casare"
-                : protocol.kind === "transfer"
-                  ? "in transit"
-                  : "la client / leasing"}
-              ). Necesită PV check-in arhivat.
-            </p>
-          ) : null}
           <button
             type="button"
             disabled={pending || !canFinalize}
             onClick={() => void finalize()}
             className="w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-medium text-white disabled:opacity-50"
           >
-            Finalizează PV (acceptare bilaterală)
+            Finalizează PV
+            {kind === "check_out"
+              ? " (eliberează la client)"
+              : kind === "scrap"
+                ? " (casare)"
+                : kind === "transfer"
+                  ? " (mută la partener)"
+                  : kind === "quarantine"
+                    ? " (blochează pe raft)"
+                    : " (acceptare bilaterală)"}
           </button>
         </>
       ) : null}
@@ -501,6 +659,9 @@ export function TireCustodyProtocolPanel({
               <p className="text-xs text-zinc-400">
                 Rectificare: anulează PV-ul curent și creează un PV nou (versiune următoare — istoric
                 păstrat).
+                {kind === "quarantine"
+                  ? " Anularea unui PV carantină semnat deblochează setul pe raft."
+                  : ""}
               </p>
               <input
                 value={voidReason}

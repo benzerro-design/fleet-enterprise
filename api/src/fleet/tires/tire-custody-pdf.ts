@@ -25,6 +25,9 @@ export type TireCustodyPdfInput = {
   inventoryNotes: string | null;
   counterpartyName: string | null;
   workOrderId: string | null;
+  targetSupplierName?: string | null;
+  targetLocationCode?: string | null;
+  accountingNote?: string | null;
   signedAt: string | null;
   qrPayload: string | null;
   itemLines: string[];
@@ -40,7 +43,7 @@ export type TireCustodyPdfInput = {
 
 const KIND_LABEL: Record<string, string> = {
   check_in: 'Proces-verbal check-in hotel anvelope',
-  check_out: 'Proces-verbal check-out hotel anvelope',
+  check_out: 'Proces-verbal check-out / predare anvelope',
   seasonal: 'Proces-verbal schimb sezonier anvelope',
   transfer: 'Proces-verbal transfer custodie anvelope',
   scrap: 'Proces-verbal casare anvelope',
@@ -54,6 +57,35 @@ const ROLE_LABEL: Record<string, string> = {
   driver: 'Șofer',
   witness: 'Martor',
 };
+
+function partyLabel(kind: string): string {
+  if (kind === 'check_in') return 'Predat de (client / șofer)';
+  if (kind === 'check_out' || kind === 'leasing_return') return 'Primit de (client / șofer)';
+  if (kind === 'transfer') return 'Primit de (partener destinatar)';
+  if (kind === 'scrap') return 'Confirmare casare';
+  if (kind === 'quarantine') return 'Responsabil carantină';
+  return 'Parte';
+}
+
+function locationLabel(kind: string): string {
+  if (kind === 'check_in') return 'Locație alocată (raft)';
+  if (kind === 'check_out' || kind === 'leasing_return' || kind === 'scrap') {
+    return 'Ridicat din locație';
+  }
+  if (kind === 'transfer') return 'Locație la sursă';
+  if (kind === 'quarantine') return 'Locație (blocat pe raft)';
+  return 'Locație';
+}
+
+function conditionLabel(kind: string): string {
+  if (kind === 'check_in') return 'Stare / uzură la primire';
+  if (kind === 'check_out' || kind === 'leasing_return') return 'Stare / uzură la predare';
+  if (kind === 'scrap') return 'Motiv casare / stare';
+  if (kind === 'quarantine') return 'Motiv carantină';
+  if (kind === 'transfer') return 'Observații predare';
+  if (kind === 'seasonal') return 'Observații schimb sezon';
+  return 'Stare / observații';
+}
 
 export function buildTireCustodyPdf(input: TireCustodyPdfInput): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -69,8 +101,9 @@ export function buildTireCustodyPdf(input: TireCustodyPdfInput): Promise<Buffer>
     if (bold) doc.registerFont('Ro-Bold', bold);
     const body = regular ? 'Ro' : 'Helvetica';
     const strong = bold ? 'Ro-Bold' : 'Helvetica-Bold';
+    const kind = String(input.kind);
 
-    doc.font(strong).fontSize(16).text(KIND_LABEL[input.kind] ?? `PV ${input.kind}`);
+    doc.font(strong).fontSize(16).text(KIND_LABEL[kind] ?? `PV ${kind}`);
     doc.moveDown(0.3);
     doc.font(body).fontSize(10).fillColor('#444').text(input.tenantName);
     doc.fillColor('#000');
@@ -84,14 +117,31 @@ export function buildTireCustodyPdf(input: TireCustodyPdfInput): Promise<Buffer>
       ['Set', input.setName ?? '—'],
       ['Sezon', input.season ?? '—'],
       ['Hotel / furnizor', input.supplierName],
-      ['Locație', input.locationText ?? '—'],
-      ['Bay / bin', input.bayBin ?? '—'],
-      ['Contrapartidă', input.counterpartyName ?? '—'],
-      ['Work order', input.workOrderId ?? '—'],
+      [locationLabel(kind), input.locationText ?? input.bayBin ?? '—'],
+      [partyLabel(kind), input.counterpartyName ?? '—'],
+    ];
+
+    if (kind === 'check_in' && input.bayBin && input.bayBin !== input.locationText) {
+      lines.push(['Bay / bin', input.bayBin]);
+    }
+    if (kind === 'transfer') {
+      lines.push(['Partener destinatar', input.targetSupplierName ?? '—']);
+      if (input.targetLocationCode) {
+        lines.push(['Locație la destinatar', input.targetLocationCode]);
+      }
+    }
+    if (kind === 'scrap' && input.accountingNote) {
+      lines.push(['Notă contabilitate', input.accountingNote]);
+    }
+    if (input.workOrderId) {
+      lines.push(['Work order', input.workOrderId]);
+    }
+    lines.push(
       ['Finalizat', input.signedAt ?? '—'],
       ['Media', String(input.mediaCount)],
       ['QR set', input.qrPayload ?? '—'],
-    ];
+    );
+
     for (const [k, v] of lines) {
       doc.font(strong).fontSize(10).text(`${k}: `, { continued: true });
       doc.font(body).text(v);
@@ -107,10 +157,10 @@ export function buildTireCustodyPdf(input: TireCustodyPdfInput): Promise<Buffer>
 
     if (input.conditionNotes?.trim()) {
       doc.moveDown(0.5);
-      doc.font(strong).text('Stare / uzură / observații');
+      doc.font(strong).text(conditionLabel(kind));
       doc.font(body).text(input.conditionNotes.trim());
     }
-    if (input.inventoryNotes?.trim()) {
+    if (input.inventoryNotes?.trim() && kind === 'check_in') {
       doc.moveDown(0.5);
       doc.font(strong).text('Inventar / jante / accesorii');
       doc.font(body).text(input.inventoryNotes.trim());
@@ -143,7 +193,7 @@ export function buildTireCustodyPdf(input: TireCustodyPdfInput): Promise<Buffer>
       .fontSize(8)
       .fillColor('#666')
       .text(
-        'Document generat electronic. Semnăturile pe ecran (telefon/tabletă) sunt atașate în sistem ca PNG + traseu vectorial de audit. Bonul operațional rămâne draft până la acceptarea bilaterală.',
+        'Document generat electronic. Semnăturile pe ecran (telefon/tabletă) sunt atașate în sistem ca PNG + traseu vectorial de audit.',
       );
 
     doc.end();

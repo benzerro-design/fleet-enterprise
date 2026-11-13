@@ -34,7 +34,9 @@ import {
 } from './tire-custody-invite';
 import { buildTireCustodyPdf } from './tire-custody-pdf';
 import {
+  isQuarantineFinalizeKind,
   isStockReleasingCustodyKind,
+  isTransferFinalizeKind,
   releaseKindForCustodyProtocol,
   STOCK_RELEASE_CUSTODY_KINDS,
 } from './tire-custody-release-map';
@@ -44,7 +46,7 @@ import { formatIntakeTreadNotesForDisplay } from './tire-intake-inspection';
 import { formatStayLocation, parseStayLocation } from './tire-stay-location';
 import { buildPublicUrl } from '../../web-origin';
 
-const DEFAULT_CHECKLIST: Record<string, boolean> = {
+const CHECKLIST_CHECK_IN: Record<string, boolean> = {
   set_complete: false,
   tread_noted: false,
   photos_taken: false,
@@ -52,9 +54,58 @@ const DEFAULT_CHECKLIST: Record<string, boolean> = {
   counterparty_id_checked: false,
 };
 
+const CHECKLIST_CHECK_OUT: Record<string, boolean> = {
+  set_complete: false,
+  condition_at_exit_noted: false,
+  photos_taken: false,
+  recipient_id_checked: false,
+};
+
+const CHECKLIST_TRANSFER: Record<string, boolean> = {
+  set_complete: false,
+  photos_taken: false,
+  recipient_partner_confirmed: false,
+};
+
+const CHECKLIST_SCRAP: Record<string, boolean> = {
+  set_complete: false,
+  photos_taken: false,
+  scrap_reason_noted: false,
+};
+
+const CHECKLIST_LEASE: Record<string, boolean> = {
+  set_complete: false,
+  photos_taken: false,
+  leasing_party_confirmed: false,
+};
+
+const CHECKLIST_QUARANTINE: Record<string, boolean> = {
+  photos_taken: false,
+  quarantine_reason_noted: false,
+  set_isolated: false,
+};
+
+const CHECKLIST_SEASONAL: Record<string, boolean> = {
+  set_complete: false,
+  photos_taken: false,
+  seasonal_swap_noted: false,
+};
+
+function defaultChecklistForKind(kind: TireCustodyProtocolKind): Record<string, boolean> {
+  if (kind === TireCustodyProtocolKind.check_in) return { ...CHECKLIST_CHECK_IN };
+  if (kind === TireCustodyProtocolKind.check_out) return { ...CHECKLIST_CHECK_OUT };
+  if (kind === TireCustodyProtocolKind.transfer) return { ...CHECKLIST_TRANSFER };
+  if (kind === TireCustodyProtocolKind.scrap) return { ...CHECKLIST_SCRAP };
+  if (kind === TireCustodyProtocolKind.leasing_return) return { ...CHECKLIST_LEASE };
+  if (kind === TireCustodyProtocolKind.quarantine) return { ...CHECKLIST_QUARANTINE };
+  if (kind === TireCustodyProtocolKind.seasonal) return { ...CHECKLIST_SEASONAL };
+  return { photos_taken: false };
+}
+
 const PROTOCOL_INCLUDE = {
   signatures: true,
   media: true,
+  stay: { select: { locationCode: true, quarantinedAt: true } },
   set: {
     select: {
       name: true,
@@ -79,6 +130,12 @@ export type TireCustodyProtocolRecord = {
   checklist: Record<string, boolean>;
   counterpartyName: string | null;
   counterpartyRoleNote: string | null;
+  targetSupplierId: string | null;
+  targetLocationCode: string | null;
+  accountingNote: string | null;
+  ticketId: string | null;
+  /** Snapshot of stay bay at protocol open — for exit PVs shown read-only. */
+  stayLocationLabel: string | null;
   signedAt: string | null;
   voidedAt: string | null;
   voidReason: string | null;
@@ -179,6 +236,10 @@ export class TireCustodyProtocolService {
     checklistJson: Prisma.JsonValue;
     counterpartyName: string | null;
     counterpartyRoleNote: string | null;
+    targetSupplierId?: string | null;
+    targetLocationCode?: string | null;
+    accountingNote?: string | null;
+    ticketId?: string | null;
     signedAt: Date | null;
     voidedAt: Date | null;
     voidReason: string | null;
@@ -204,6 +265,7 @@ export class TireCustodyProtocolService {
       caption: string | null;
       capturedAt: Date;
     }>;
+    stay?: { locationCode: string | null; quarantinedAt?: Date | null } | null;
     set?: {
       name: string | null;
       season: string;
@@ -213,7 +275,14 @@ export class TireCustodyProtocolService {
     const checklist =
       row.checklistJson && typeof row.checklistJson === 'object' && !Array.isArray(row.checklistJson)
         ? (row.checklistJson as Record<string, boolean>)
-        : { ...DEFAULT_CHECKLIST };
+        : defaultChecklistForKind(row.kind);
+    const stayCode = row.stay?.locationCode ?? null;
+    const stayLoc = stayCode
+      ? (() => {
+          const parsed = parseStayLocation(stayCode);
+          return formatStayLocation(parsed.bayCode, parsed.binCode) || stayCode;
+        })()
+      : null;
     return {
       id: row.id,
       stayId: row.stayId,
@@ -229,6 +298,11 @@ export class TireCustodyProtocolService {
       checklist,
       counterpartyName: row.counterpartyName,
       counterpartyRoleNote: row.counterpartyRoleNote,
+      targetSupplierId: row.targetSupplierId ?? null,
+      targetLocationCode: row.targetLocationCode ?? null,
+      accountingNote: row.accountingNote ?? null,
+      ticketId: row.ticketId ?? null,
+      stayLocationLabel: stayLoc,
       signedAt: row.signedAt?.toISOString() ?? null,
       voidedAt: row.voidedAt?.toISOString() ?? null,
       voidReason: row.voidReason,
@@ -331,7 +405,7 @@ export class TireCustodyProtocolService {
     }
   }
 
-  /** Gate hotel check-out: signed archived check_in + (check_out OR stock-release PV). */
+  /** Gate hotel check-out API (fallback): signed archived check_in + exit PV that closes stock. */
   async assertSignedCheckOutProtocol(tenantId: string, stayId: string): Promise<void> {
     await this.assertArchivedKind(
       tenantId,
@@ -340,7 +414,23 @@ export class TireCustodyProtocolService {
       'Check-in custody',
     );
 
-    for (const kind of STOCK_RELEASE_CUSTODY_KINDS) {
+    const stay = await this.prisma.tireStorageStay.findFirst({
+      where: { id: stayId, tenantId },
+      select: { quarantinedAt: true },
+    });
+    if (stay?.quarantinedAt) {
+      throw new BadRequestException(
+        'Setul e în carantină — anulează PV carantină înainte de eliberare',
+      );
+    }
+
+    // Manual check-out only for kinds that close stock (not transfer/quarantine).
+    const manualKinds: TireCustodyProtocolKind[] = [
+      TireCustodyProtocolKind.check_out,
+      TireCustodyProtocolKind.scrap,
+      TireCustodyProtocolKind.leasing_return,
+    ];
+    for (const kind of manualKinds) {
       const row = await this.prisma.tireCustodyProtocol.findFirst({
         where: {
           tenantId,
@@ -356,7 +446,7 @@ export class TireCustodyProtocolService {
       }
     }
     throw new BadRequestException(
-      'Check-out requires a signed archived release PV (check_out, scrap, transfer, leasing_return, or quarantine).',
+      'Check-out requires a signed archived release PV (check_out, scrap, or leasing_return).',
     );
   }
 
@@ -366,7 +456,14 @@ export class TireCustodyProtocolService {
     kind: TireCustodyProtocolKind,
     access: AccessContext | undefined,
     supplierId?: string,
-    opts?: { workOrderId?: string | null; actorUserId?: string | null },
+    opts?: {
+      workOrderId?: string | null;
+      actorUserId?: string | null;
+      ticketId?: string | null;
+      targetSupplierId?: string | null;
+      targetLocationCode?: string | null;
+      accountingNote?: string | null;
+    },
   ): Promise<TireCustodyProtocolRecord> {
     if (access) assertPartnerWrite(access);
     const { tenantId, supplierId: sid } = await this.resolvePartnerSupplier(
@@ -411,13 +508,29 @@ export class TireCustodyProtocolService {
       include: PROTOCOL_INCLUDE,
     });
     if (active) {
-      if (workOrderId !== undefined && active.status === TireCustodyProtocolStatus.draft) {
-        const row = await this.prisma.tireCustodyProtocol.update({
-          where: { id: active.id },
-          data: { workOrderId },
-          include: PROTOCOL_INCLUDE,
-        });
-        return this.toProtocol(row);
+      if (active.status === TireCustodyProtocolStatus.draft) {
+        const draftPatch: Prisma.TireCustodyProtocolUncheckedUpdateInput = {};
+        if (workOrderId !== undefined) draftPatch.workOrderId = workOrderId;
+        if (opts?.ticketId !== undefined) {
+          draftPatch.ticketId = opts.ticketId?.trim() || null;
+        }
+        if (opts?.targetSupplierId !== undefined) {
+          draftPatch.targetSupplierId = opts.targetSupplierId?.trim() || null;
+        }
+        if (opts?.targetLocationCode !== undefined) {
+          draftPatch.targetLocationCode = opts.targetLocationCode?.trim() || null;
+        }
+        if (opts?.accountingNote !== undefined) {
+          draftPatch.accountingNote = opts.accountingNote?.trim() || null;
+        }
+        if (Object.keys(draftPatch).length > 0) {
+          const row = await this.prisma.tireCustodyProtocol.update({
+            where: { id: active.id },
+            data: draftPatch,
+            include: PROTOCOL_INCLUDE,
+          });
+          return this.toProtocol(row);
+        }
       }
       return this.toProtocol(active);
     }
@@ -428,6 +541,14 @@ export class TireCustodyProtocolService {
     });
     const revision = (maxRev._max.revision ?? 0) + 1;
 
+    const isExit =
+      kind === TireCustodyProtocolKind.check_out ||
+      kind === TireCustodyProtocolKind.transfer ||
+      kind === TireCustodyProtocolKind.scrap ||
+      kind === TireCustodyProtocolKind.leasing_return ||
+      kind === TireCustodyProtocolKind.quarantine ||
+      kind === TireCustodyProtocolKind.seasonal;
+
     const row = await this.prisma.tireCustodyProtocol.create({
       data: {
         tenantId,
@@ -436,10 +557,18 @@ export class TireCustodyProtocolService {
         supplierId: sid,
         kind,
         revision,
-        checklistJson: DEFAULT_CHECKLIST,
+        checklistJson: defaultChecklistForKind(kind),
+        // Check-in: editable bay. Exit PVs: snapshot of current rack (read-only in UI).
         locationText,
-        conditionNotes: formatIntakeTreadNotesForDisplay(stay.intakeTreadNotes),
+        // Only seed intake tread notes on check-in — exit PVs start empty (condition at handover).
+        conditionNotes: isExit
+          ? null
+          : formatIntakeTreadNotesForDisplay(stay.intakeTreadNotes),
         workOrderId: workOrderId ?? null,
+        ticketId: opts?.ticketId?.trim() || null,
+        targetSupplierId: opts?.targetSupplierId?.trim() || null,
+        targetLocationCode: opts?.targetLocationCode?.trim() || null,
+        accountingNote: opts?.accountingNote?.trim() || null,
       },
       include: PROTOCOL_INCLUDE,
     });
@@ -528,6 +657,10 @@ export class TireCustodyProtocolService {
       counterpartyName?: string | null;
       counterpartyRoleNote?: string | null;
       workOrderId?: string | null;
+      targetSupplierId?: string | null;
+      targetLocationCode?: string | null;
+      accountingNote?: string | null;
+      ticketId?: string | null;
     },
     access: AccessContext | undefined,
     actorUserId?: string | null,
@@ -577,6 +710,25 @@ export class TireCustodyProtocolService {
       } else {
         data.workOrderId = null;
       }
+    }
+    if (input.targetSupplierId !== undefined) {
+      data.targetSupplierId = input.targetSupplierId?.trim() || null;
+    }
+    if (input.targetLocationCode !== undefined) {
+      data.targetLocationCode = input.targetLocationCode?.trim() || null;
+    }
+    if (input.accountingNote !== undefined) {
+      data.accountingNote = input.accountingNote?.trim() || null;
+    }
+    if (input.ticketId !== undefined) {
+      data.ticketId = input.ticketId?.trim() || null;
+    }
+    // Exit PVs must not rewrite bay allocation via locationText — only check_in may.
+    if (
+      input.locationText !== undefined &&
+      existing.kind !== TireCustodyProtocolKind.check_in
+    ) {
+      delete data.locationText;
     }
 
     const row = await this.prisma.tireCustodyProtocol.update({
@@ -729,14 +881,32 @@ export class TireCustodyProtocolService {
     const voidReason = reason?.trim() || null;
     if (!voidReason) throw new BadRequestException('voidReason required');
 
-    const row = await this.prisma.tireCustodyProtocol.update({
-      where: { id: protocolId },
-      data: {
-        status: TireCustodyProtocolStatus.voided,
-        voidedAt: new Date(),
-        voidReason,
-      },
-      include: PROTOCOL_INCLUDE,
+    const wasSignedQuarantine =
+      existing.status === TireCustodyProtocolStatus.signed &&
+      isQuarantineFinalizeKind(existing.kind);
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.tireCustodyProtocol.update({
+        where: { id: protocolId },
+        data: {
+          status: TireCustodyProtocolStatus.voided,
+          voidedAt: new Date(),
+          voidReason,
+        },
+        include: PROTOCOL_INCLUDE,
+      });
+      if (wasSignedQuarantine) {
+        await tx.tireStorageStay.updateMany({
+          where: {
+            id: existing.stayId,
+            tenantId: tenant.id,
+            checkOutAt: null,
+            quarantinedAt: { not: null },
+          },
+          data: { quarantinedAt: null, quarantineReason: null },
+        });
+      }
+      return updated;
     });
 
     await this.audit.log({
@@ -816,6 +986,15 @@ export class TireCustodyProtocolService {
       })),
     );
 
+    let targetSupplierName: string | null = null;
+    if (row.targetSupplierId) {
+      const dest = await this.prisma.supplier.findFirst({
+        where: { id: row.targetSupplierId, tenantId: row.tenantId },
+        select: { legalName: true },
+      });
+      targetSupplierName = dest?.legalName ?? null;
+    }
+
     return buildTireCustodyPdf({
       kind: row.kind,
       tenantName,
@@ -831,6 +1010,9 @@ export class TireCustodyProtocolService {
       inventoryNotes: row.inventoryNotes,
       counterpartyName: row.counterpartyName,
       workOrderId: row.workOrderId,
+      targetSupplierName,
+      targetLocationCode: row.targetLocationCode ?? null,
+      accountingNote: row.accountingNote ?? null,
       signedAt:
         (opts?.signedAtOverride ?? row.signedAt)?.toISOString() ?? new Date().toISOString(),
       qrPayload: tireSetQrPayload(row.set.id),
@@ -1057,36 +1239,67 @@ export class TireCustodyProtocolService {
       );
     }
 
-    // Preflight stock-releasing kinds before archive+release transaction.
+    const needsOpenStay =
+      isStockReleasingCustodyKind(existing.kind) ||
+      isTransferFinalizeKind(existing.kind) ||
+      isQuarantineFinalizeKind(existing.kind);
+
     let stockRelease: TireHotelReleaseKind | null = null;
-    if (isStockReleasingCustodyKind(existing.kind)) {
+    if (needsOpenStay) {
       await this.assertArchivedKind(
         tenant.id,
         existing.stayId,
         TireCustodyProtocolKind.check_in,
         'Check-in custody',
       );
-      stockRelease = releaseKindForCustodyProtocol(existing.kind);
-      if (!stockRelease) {
-        throw new BadRequestException('Internal: missing release mapping');
-      }
       const openStay = await this.prisma.tireStorageStay.findFirst({
         where: {
           id: existing.stayId,
           tenantId: tenant.id,
           checkOutAt: null,
         },
-        select: { id: true },
+        select: { id: true, quarantinedAt: true },
       });
       if (!openStay) {
         throw new BadRequestException(
-          'Stay already closed — cannot apply stock release from this protocol',
+          'Stay already closed — cannot apply stock action from this protocol',
+        );
+      }
+      if (
+        openStay.quarantinedAt &&
+        !isQuarantineFinalizeKind(existing.kind) &&
+        existing.kind !== TireCustodyProtocolKind.check_in
+      ) {
+        throw new BadRequestException(
+          'Setul e în carantină — deblochează carantina înainte de predare / transfer / casare',
         );
       }
     }
 
+    if (isStockReleasingCustodyKind(existing.kind)) {
+      stockRelease = releaseKindForCustodyProtocol(existing.kind);
+      if (!stockRelease) {
+        throw new BadRequestException('Internal: missing release mapping');
+      }
+    }
+
+    if (isTransferFinalizeKind(existing.kind)) {
+      const target = existing.targetSupplierId?.trim();
+      if (!target) {
+        throw new BadRequestException(
+          'PV transfer: alege partenerul destinatar înainte de finalizare',
+        );
+      }
+      if (target === existing.supplierId) {
+        throw new BadRequestException('PV transfer: destinatarul trebuie să fie alt partener');
+      }
+    }
+
+    if (isQuarantineFinalizeKind(existing.kind) && !existing.conditionNotes?.trim()) {
+      throw new BadRequestException('PV carantină: motivează blocarea (stare / observații)');
+    }
+
     const signedAt = new Date();
-    // Build PDF before DB commit (signedAt override; status still draft).
     const pdfBuf = await this.renderPdfBuffer(protocolId, tenant.name, {
       signedAtOverride: signedAt,
     });
@@ -1109,6 +1322,7 @@ export class TireCustodyProtocolService {
         },
         include: PROTOCOL_INCLUDE,
       });
+
       if (stockRelease) {
         await this.hotel.checkOutTx(tx, {
           tenantId: tenant.id,
@@ -1116,8 +1330,32 @@ export class TireCustodyProtocolService {
           stayId: existing.stayId,
           actorUserId: actorUserId ?? null,
           releaseKind: stockRelease,
+          accountingNote:
+            existing.kind === TireCustodyProtocolKind.scrap
+              ? existing.accountingNote
+              : undefined,
+          ticketId: existing.ticketId ?? null,
+        });
+      } else if (isTransferFinalizeKind(existing.kind)) {
+        await this.hotel.transferBetweenSuppliersTx(tx, {
+          tenantId: tenant.id,
+          fromSupplierId: existing.supplierId,
+          toSupplierId: existing.targetSupplierId!.trim(),
+          stayId: existing.stayId,
+          locationCode: existing.targetLocationCode,
+          actorUserId: actorUserId ?? null,
+          handoffOnly: false,
+        });
+      } else if (isQuarantineFinalizeKind(existing.kind)) {
+        await tx.tireStorageStay.update({
+          where: { id: existing.stayId },
+          data: {
+            quarantinedAt: signedAt,
+            quarantineReason: existing.conditionNotes?.trim() || existing.accountingNote || null,
+          },
         });
       }
+
       return updated;
     });
 
@@ -1132,6 +1370,8 @@ export class TireCustodyProtocolService {
         revision: existing.revision,
         pdfSha256,
         stockRelease,
+        transfer: isTransferFinalizeKind(existing.kind),
+        quarantine: isQuarantineFinalizeKind(existing.kind),
       },
     });
 

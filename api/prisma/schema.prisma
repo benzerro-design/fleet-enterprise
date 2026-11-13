@@ -1028,6 +1028,9 @@ model TireStorageStay {
   sourceSystem     String?
   /// Comandă R care a declanșat check-in automat (tyre-close).
   workOrderId      String?
+  /// Set blocat în inventar (PV carantină semnat); nu poate fi predat până la deblocare.
+  quarantinedAt    DateTime?
+  quarantineReason String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1096,6 +1099,13 @@ model TireCustodyProtocol {
   checklistJson        Json                       @default("{}")
   counterpartyName     String?
   counterpartyRoleNote String?
+  /// PV transfer: partener destinatar + locație la destinație (aplicate la finalizare).
+  targetSupplierId     String?
+  targetLocationCode   String?
+  /// PV casare: notă contabilitate copiată pe sejur la finalizare.
+  accountingNote       String?
+  /// PV check-out din solicitare CRM (link + eveniment la eliberare).
+  ticketId             String?
   signedAt             DateTime?
   voidedAt             DateTime?
   voidReason           String?
@@ -1125,6 +1135,8 @@ model TireCustodyProtocol {
   @@index([tenantId, setId])
   @@index([workOrderId])
   @@index([tenantId, stayId, kind, status])
+  @@index([targetSupplierId])
+  @@index([ticketId])
 }
 
 model TireCustodySignature {

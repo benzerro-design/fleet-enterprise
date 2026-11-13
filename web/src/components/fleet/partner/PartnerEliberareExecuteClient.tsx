@@ -174,6 +174,7 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
         data.stay.id,
         "check_out",
         data.capability.supplierId,
+        { ticketId },
       );
       setReleaseProtocol(p);
     } catch (e) {
@@ -338,7 +339,11 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
       </section>
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
-        <h2 className="text-sm font-medium text-zinc-200">3. PV eliberare (check-out)</h2>
+        <h2 className="text-sm font-medium text-zinc-200">3. PV check-out (eliberează la finalizare)</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Finalizarea PV-ului scoate setul din inventar → la client. Nu mai e nevoie de un pas
+          separat „Eliberează”, decât ca fallback pe PV-uri vechi.
+        </p>
         {!hasStay ? (
           <p className="mt-2 text-xs text-zinc-500">Mai întâi identifică sejurul.</p>
         ) : (
@@ -374,25 +379,29 @@ export function PartnerEliberareExecuteClient({ ticketId, canWrite }: Props) {
       </section>
 
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
-        <h2 className="text-sm font-medium text-zinc-200">4. Eliberează din stoc</h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          Închide sejurul și mută anvelopele la client (după PV semnat).
-        </p>
+        <h2 className="text-sm font-medium text-zinc-200">4. Stoc (confirmare)</h2>
         {progress.stayCheckedOut ? (
-          <p className="mt-2 text-xs text-emerald-300">Check-out deja efectuat.</p>
+          <p className="mt-2 text-xs text-emerald-300">
+            Sejur închis — setul a ieșit din inventar (la finalizarea PV sau check-out manual).
+          </p>
         ) : canWrite && hasStay && progress.hasSignedReleasePv ? (
-          <button
-            type="button"
-            disabled={busy === "checkout"}
-            onClick={() => void performCheckOut()}
-            className="mt-3 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-600 disabled:opacity-40"
-          >
-            {busy === "checkout" ? "Se eliberează…" : "Confirmă eliberarea (check-out)"}
-          </button>
+          <>
+            <p className="mt-1 text-xs text-amber-200/90">
+              PV semnat dar sejurul încă deschis (probabil PV vechi). Confirmă eliberarea manual.
+            </p>
+            <button
+              type="button"
+              disabled={busy === "checkout"}
+              onClick={() => void performCheckOut()}
+              className="mt-3 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-600 disabled:opacity-40"
+            >
+              {busy === "checkout" ? "Se eliberează…" : "Confirmă eliberarea (fallback)"}
+            </button>
+          </>
         ) : (
           <p className="mt-2 text-xs text-zinc-500">
             {!progress.hasSignedReleasePv
-              ? "Finalizează PV eliberare mai întâi."
+              ? "Finalizează PV check-out mai întâi — eliberarea se face la semnare."
               : "Check-out indisponibil."}
           </p>
         )}

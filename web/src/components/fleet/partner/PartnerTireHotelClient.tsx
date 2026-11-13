@@ -996,6 +996,7 @@ export function PartnerTireHotelClient({
           protocol={activeProtocol}
           canWrite={canWrite}
           supplierId={supplierId ?? supplierQ.supplierId}
+          transferTargets={capability?.transferTargets ?? []}
           onUpdated={(p) => {
             setActiveProtocol(p);
             if (p.status === "signed" || p.status === "voided") {
@@ -1614,12 +1615,20 @@ export function PartnerTireHotelClient({
                   );
                 })()}
                 <TireHotelIntakePhotos urls={s.intakePhotos} />
+                {s.quarantinedAt ? (
+                  <p className="rounded-lg border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
+                    Carantină activă
+                    {s.quarantineReason ? `: ${s.quarantineReason}` : ""}. Predarea e blocată —
+                    anulează PV carantină pentru deblocare.
+                  </p>
+                ) : null}
                 {activeProtocol && activeProtocol.stayId === s.id ? (
                   <div className="rounded-xl border border-emerald-800/50 bg-zinc-950/80 p-1">
                     <TireCustodyProtocolPanel
                       protocol={activeProtocol}
                       canWrite={canWrite}
                       supplierId={supplierId ?? supplierQ.supplierId}
+                      transferTargets={capability?.transferTargets ?? []}
                       onUpdated={(p) => {
                         setActiveProtocol(p);
                         if (p.status === "signed" || p.status === "voided") {
@@ -1659,7 +1668,6 @@ export function PartnerTireHotelClient({
                             type="button"
                             onClick={() => {
                               setInvoiceStayId((id) => (id === s.id ? null : s.id));
-                              setTransferStayId(null);
                               setRelocateStayId(null);
                             }}
                             className="rounded-lg border border-amber-800/50 px-3 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-950/30"
@@ -1670,123 +1678,76 @@ export function PartnerTireHotelClient({
                       </>
                     ) : null}
                   </div>
-                  {canWrite ? (
-                    <div className="space-y-1.5">
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                        Documente PV · status pe fiecare buton
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                        <ProtocolActionButton stay={s} kind="check_in" label="PV check-in" />
-                        <ProtocolActionButton stay={s} kind="check_out" label="PV check-out" />
-                        <ProtocolActionButton stay={s} kind="seasonal" label="PV sezonier" />
-                        <ProtocolActionButton stay={s} kind="transfer" label="PV transfer" />
-                        <ProtocolActionButton stay={s} kind="scrap" label="PV casare" />
-                        <ProtocolActionButton stay={s} kind="leasing_return" label="PV leasing" />
-                        <ProtocolActionButton stay={s} kind="quarantine" label="PV carantină" />
+
+                  <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                      Custodie · cronologie
+                    </p>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-zinc-400 w-16 shrink-0">Intrare</span>
+                        {canWrite ? (
+                          <ProtocolActionButton stay={s} kind="check_in" label="PV check-in" />
+                        ) : (
+                          <span className="text-xs text-zinc-500">
+                            {protocolStatusLabel(protocolStatus(s, "check_in"))}
+                          </span>
+                        )}
                       </div>
-                    </div>
-                  ) : null}
-                  {canWrite && !s.checkOutAt ? (
-                    <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                        Eliberare din inventar
-                      </p>
-                      <p className="text-[11px] text-zinc-500">
-                        1) Semnează un PV de ieșire (check-out / casare / transfer / leasing /
-                        carantină). 2) Alege destinația. 3) Apasă Eliberează — scoate setul din
-                        inventar.
-                      </p>
-                      <label className="block text-xs text-zinc-400">
-                        Destinație eliberare
-                        <select
-                          value={releaseKind}
-                          onChange={(e) =>
-                            setReleaseKind(e.target.value as TireHotelReleaseKind)
-                          }
-                          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200 sm:max-w-xs"
-                        >
-                          <option value="at_client">La client</option>
-                          <option value="in_transit">În tranzit</option>
-                          <option value="scrap">Casare</option>
-                          <option value="quarantine">Carantină</option>
-                        </select>
-                      </label>
-                      {releaseKind === "scrap" ? (
-                        <input
-                          value={scrapAccountingNote}
-                          onChange={(e) => setScrapAccountingNote(e.target.value)}
-                          placeholder="Notă contabilitate (opțional)"
-                          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200 sm:max-w-md"
-                        />
-                      ) : null}
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRelocateStayId(s.id);
-                            setRelocateWarehouseLocationId(null);
-                            setRelocateLocationLabel("");
-                            setTransferStayId(null);
-                            setInvoiceStayId(null);
-                          }}
-                          className="rounded-lg border border-zinc-600 px-3 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
-                        >
-                          Mută raft
-                        </button>
-                        {(capability?.transferTargets?.length ?? 0) > 0 ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-zinc-400 w-16 shrink-0">Pe raft</span>
+                        <span className="text-xs text-zinc-200">
+                          {[s.bayCode, s.binCode].filter(Boolean).join(" / ") ||
+                            s.locationCode ||
+                            "—"}
+                        </span>
+                        {canWrite && !s.checkOutAt ? (
                           <button
                             type="button"
                             onClick={() => {
-                              setTransferStayId((id) => (id === s.id ? null : s.id));
-                              setTransferToSupplierId(
-                                capability?.transferTargets?.[0]?.id ?? "",
-                              );
-                              setTransferBay(s.bayCode ?? "");
-                              setTransferBin(s.binCode ?? "");
-                              setTransferHandoffOnly(false);
-                              setRelocateStayId(null);
+                              setRelocateStayId((id) => (id === s.id ? null : s.id));
+                              setRelocateWarehouseLocationId(null);
+                              setRelocateLocationLabel("");
                               setInvoiceStayId(null);
                             }}
-                            className="rounded-lg border border-sky-800/50 px-3 py-2.5 text-sm font-medium text-sky-100 hover:bg-sky-950/30"
+                            className="rounded-lg border border-zinc-600 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
                           >
-                            {transferStayId === s.id ? "Ascunde transfer" : "Transfer partener"}
+                            {relocateStayId === s.id ? "Ascunde mutare" : "Mută raft"}
                           </button>
                         ) : null}
-                        <button
-                          type="button"
-                          disabled={busy === s.id}
-                          onClick={() => void checkOut(s.id)}
-                          className="rounded-lg border border-zinc-500 bg-zinc-800/80 px-3 py-2.5 text-sm font-medium text-zinc-100 hover:bg-zinc-700 disabled:opacity-50"
-                          title={
-                            protocolStatus(s, "check_out") === "signed" ||
-                            protocolStatus(s, "scrap") === "signed" ||
-                            protocolStatus(s, "transfer") === "signed" ||
-                            protocolStatus(s, "leasing_return") === "signed" ||
-                            protocolStatus(s, "quarantine") === "signed"
-                              ? "PV eliberare semnat — eliberare permisă"
-                              : "Necesită PV check-out / casare / transfer / leasing / carantină semnat"
-                          }
-                        >
-                          Eliberează
-                          {protocolStatus(s, "check_out") === "signed" ||
-                          protocolStatus(s, "scrap") === "signed" ||
-                          protocolStatus(s, "transfer") === "signed" ||
-                          protocolStatus(s, "leasing_return") === "signed" ||
-                          protocolStatus(s, "quarantine") === "signed"
-                            ? ` → ${
-                                releaseKind === "at_client"
-                                  ? "client"
-                                  : releaseKind === "in_transit"
-                                    ? "tranzit"
-                                    : releaseKind === "scrap"
-                                      ? "casare"
-                                      : "carantină"
-                              }`
-                            : " · după PV eliberare"}
-                        </button>
                       </div>
+                      {canWrite && !s.checkOutAt ? (
+                        <div className="space-y-1.5">
+                          <span className="text-xs text-zinc-400">Ieșire — alege tipul</span>
+                          <p className="text-[11px] text-zinc-500">
+                            Finalizarea PV-ului de ieșire face acțiunea (predare / transfer / casare
+                            / leasing / carantină). Nu mai există buton separat „Eliberează”.
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <ProtocolActionButton
+                              stay={s}
+                              kind="check_out"
+                              label="Predă la client"
+                            />
+                            <ProtocolActionButton stay={s} kind="transfer" label="Transfer" />
+                            <ProtocolActionButton stay={s} kind="scrap" label="Casare" />
+                            <ProtocolActionButton stay={s} kind="leasing_return" label="Leasing" />
+                            <ProtocolActionButton
+                              stay={s}
+                              kind="quarantine"
+                              label="Carantină"
+                            />
+                            <ProtocolActionButton stay={s} kind="seasonal" label="Sezonier" />
+                          </div>
+                        </div>
+                      ) : s.checkOutAt ? (
+                        <p className="text-xs text-emerald-300/90">
+                          Sejur închis ·{" "}
+                          {new Date(s.checkOutAt).toLocaleString("ro-RO")}
+                        </p>
+                      ) : null}
                     </div>
-                  ) : null}
+                  </div>
                 </div>
                 {costSummaryByStay[s.id] ? (
                   <pre className="whitespace-pre-wrap rounded-lg border border-amber-900/40 bg-amber-950/20 p-2 text-[11px] text-amber-100/90">
@@ -1849,52 +1810,6 @@ export function PartnerTireHotelClient({
                       className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
                     >
                       Salvează mutarea
-                    </button>
-                  </div>
-                ) : null}
-                {transferStayId === s.id && !s.checkOutAt ? (
-                  <div className="grid gap-2 rounded-lg border border-sky-900/40 bg-sky-950/20 p-2 sm:grid-cols-2">
-                    <select
-                      value={transferToSupplierId}
-                      onChange={(e) => setTransferToSupplierId(e.target.value)}
-                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 sm:col-span-2"
-                    >
-                      <option value="">— furnizor destinație —</option>
-                      {(capability?.transferTargets ?? []).map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.legalName}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      value={transferBay}
-                      onChange={(e) => setTransferBay(e.target.value.toUpperCase())}
-                      placeholder="Bay destinație"
-                      disabled={transferHandoffOnly}
-                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 disabled:opacity-50"
-                    />
-                    <input
-                      value={transferBin}
-                      onChange={(e) => setTransferBin(e.target.value.toUpperCase())}
-                      placeholder="Bin (opțional)"
-                      disabled={transferHandoffOnly}
-                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 disabled:opacity-50"
-                    />
-                    <label className="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2">
-                      <input
-                        type="checkbox"
-                        checked={transferHandoffOnly}
-                        onChange={(e) => setTransferHandoffOnly(e.target.checked)}
-                      />
-                      Doar predare documentată (fără mutare raft la destinație)
-                    </label>
-                    <button
-                      type="button"
-                      disabled={busy === `transfer-${s.id}`}
-                      onClick={() => void transferStay(s.id)}
-                      className="rounded-lg bg-sky-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 sm:col-span-2"
-                    >
-                      Confirmă transfer
                     </button>
                   </div>
                 ) : null}
