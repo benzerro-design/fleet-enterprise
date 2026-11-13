@@ -13,6 +13,11 @@ type Props = {
   vehicleId: string;
 };
 
+function currentAppReturnPath(): string {
+  if (typeof window === "undefined") return "/fleet/vehicles";
+  return `${window.location.pathname}${window.location.search}` || "/fleet/vehicles";
+}
+
 export function VehicleDriverTireCustodyPanel({ vehicleId }: Props) {
   const [items, setItems] = useState<DriverVehicleCustodyPending[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -136,7 +141,7 @@ export function VehicleDriverTireCustodyPanel({ vehicleId }: Props) {
             Expiră {new Date(signLink.expiresAt).toLocaleString("ro-RO")}
           </p>
           <Link
-            href={signLink.url}
+            href={`${signLink.url}${signLink.url.includes("?") ? "&" : "?"}return=${encodeURIComponent(currentAppReturnPath())}`}
             className="inline-block rounded-lg bg-emerald-700 px-3 py-2 text-center text-xs font-medium text-white hover:bg-emerald-600"
           >
             Continuă spre semnătură →

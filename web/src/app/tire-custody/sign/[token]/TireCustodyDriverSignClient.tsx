@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RsaSignaturePad,
   type RsaSignaturePadHandle,
@@ -19,6 +21,24 @@ type Preview = {
   hasDriverSignature: boolean;
 };
 
+const DRIVER_HOME_FALLBACK = "/fleet/vehicles";
+
+/** Only same-app relative /fleet paths — blocks open redirects. */
+function safeAppReturnPath(raw: string | null | undefined): string {
+  if (!raw?.trim()) return DRIVER_HOME_FALLBACK;
+  let decoded = raw.trim();
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    return DRIVER_HOME_FALLBACK;
+  }
+  if (!decoded.startsWith("/") || decoded.startsWith("//") || decoded.includes("://")) {
+    return DRIVER_HOME_FALLBACK;
+  }
+  if (!decoded.startsWith("/fleet")) return DRIVER_HOME_FALLBACK;
+  return decoded;
+}
+
 function kindLabel(kind: string): string {
   if (kind === "check_in") return "PV primire în custodie";
   if (kind === "check_out") return "PV predare / eliberare";
@@ -31,6 +51,11 @@ function kindLabel(kind: string): string {
 }
 
 export function TireCustodyDriverSignClient({ token }: { token: string }) {
+  const searchParams = useSearchParams();
+  const returnHref = useMemo(
+    () => safeAppReturnPath(searchParams.get("return")),
+    [searchParams],
+  );
   const padRef = useRef<RsaSignaturePadHandle>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [otp, setOtp] = useState("");
@@ -108,9 +133,17 @@ export function TireCustodyDriverSignClient({ token }: { token: string }) {
 
   if (done) {
     return (
-      <div className="mx-auto max-w-md rounded-2xl border border-emerald-800/50 bg-emerald-950/30 p-6 text-center">
-        <p className="text-lg font-medium text-emerald-100">Semnătură înregistrată</p>
-        <p className="mt-2 text-sm text-zinc-400">Poți închide această pagină.</p>
+      <div className="mx-auto max-w-md rounded-2xl border border-emerald-800/50 bg-emerald-950/30 p-6 text-center space-y-4">
+        <div>
+          <p className="text-lg font-medium text-emerald-100">Semnătură înregistrată</p>
+          <p className="mt-2 text-sm text-zinc-400">Documentul a fost actualizat.</p>
+        </div>
+        <Link
+          href={returnHref}
+          className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-500"
+        >
+          Înapoi de unde ai venit →
+        </Link>
       </div>
     );
   }
@@ -149,7 +182,15 @@ export function TireCustodyDriverSignClient({ token }: { token: string }) {
             {preview.revision}
           </p>
           {preview.hasDriverSignature ? (
-            <p className="mt-2 text-xs text-amber-200">Semnătura șofer există deja pe acest PV.</p>
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-amber-200">Semnătura șofer există deja pe acest PV.</p>
+              <Link
+                href={returnHref}
+                className="inline-flex w-full items-center justify-center rounded-xl border border-zinc-700 px-4 py-2.5 text-sm text-zinc-100 hover:bg-zinc-900"
+              >
+                Înapoi de unde ai venit →
+              </Link>
+            </div>
           ) : null}
         </div>
       ) : !error ? (
