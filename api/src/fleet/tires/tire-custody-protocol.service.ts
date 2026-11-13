@@ -523,6 +523,13 @@ export class TireCustodyProtocolService {
         if (opts?.accountingNote !== undefined) {
           draftPatch.accountingNote = opts.accountingNote?.trim() || null;
         }
+        const seedIntakeNotes =
+          kind === TireCustodyProtocolKind.check_in ||
+          kind === TireCustodyProtocolKind.check_out ||
+          kind === TireCustodyProtocolKind.leasing_return;
+        if (seedIntakeNotes && !active.conditionNotes?.trim()) {
+          draftPatch.conditionNotes = formatIntakeTreadNotesForDisplay(stay.intakeTreadNotes);
+        }
         if (Object.keys(draftPatch).length > 0) {
           const row = await this.prisma.tireCustodyProtocol.update({
             where: { id: active.id },
@@ -1043,7 +1050,13 @@ export class TireCustodyProtocolService {
       where: { id: protocolId, tenantId: tenant.id },
       include: {
         signatures: true,
-        set: { select: { vehicleId: true, vehicle: { select: { registrationNumber: true } } } },
+        set: {
+          select: {
+            clientId: true,
+            vehicleId: true,
+            vehicle: { select: { registrationNumber: true } },
+          },
+        },
       },
     });
     if (!existing) throw new NotFoundException('Protocol not found');
@@ -1080,6 +1093,7 @@ export class TireCustodyProtocolService {
     // In-app delivery for an enrolled active driver when the PV belongs to a ticket.
     // Without a ticket, the same pending signature is still shown on the driver's dashboard/vehicle.
     const vehicleId = existing.set.vehicleId;
+    const clientId = existing.set.clientId;
     const plate = existing.set.vehicle?.registrationNumber ?? null;
     if (existing.ticketId && vehicleId) {
       const assignment = await this.prisma.driverVehicleAssignment.findFirst({
@@ -1087,6 +1101,7 @@ export class TireCustodyProtocolService {
           tenantId: tenant.id,
           vehicleId,
           unassignedAt: null,
+          driver: { clientId, status: 'active' },
         },
         orderBy: { assignedAt: 'desc' },
         select: { driverId: true },
@@ -1095,6 +1110,7 @@ export class TireCustodyProtocolService {
         ? await this.prisma.clientMembership.findFirst({
             where: {
               tenantId: tenant.id,
+              clientId,
               driverId: assignment.driverId,
               role: 'driver',
             },

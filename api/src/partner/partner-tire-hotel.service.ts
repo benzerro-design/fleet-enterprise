@@ -711,6 +711,22 @@ export class PartnerTireHotelService {
       (typeof o.subject === 'string' && o.subject.trim()) ||
       defaultGestiuneSubject(gestiuneOp, plate);
 
+    // Same as CRM create: a vehicle-linked gestiune ticket belongs to the active driver.
+    let driverId: string | null = null;
+    if (vehicleId) {
+      const activeAssignment = await this.prisma.driverVehicleAssignment.findFirst({
+        where: {
+          tenantId: scope.tenantId,
+          vehicleId,
+          unassignedAt: null,
+          driver: { clientId, status: 'active' },
+        },
+        orderBy: { assignedAt: 'desc' },
+        select: { driverId: true },
+      });
+      driverId = activeAssignment?.driverId ?? null;
+    }
+
     const row = await this.prisma.crmTicket.create({
       data: {
         tenantId: scope.tenantId,
@@ -724,6 +740,7 @@ export class PartnerTireHotelService {
         routingLevel: CrmTicketRoutingLevel.L1,
         assignedQueue: `client:${clientId}`,
         vehicleId,
+        driverId,
         assignedSupplierId: scope.supplierId,
         gestiuneOp,
         createdByUserId: actorUserId ?? null,
@@ -752,6 +769,29 @@ export class PartnerTireHotelService {
         },
       },
     });
+
+    if (driverId) {
+      const driverMembership = await this.prisma.clientMembership.findFirst({
+        where: {
+          tenantId: scope.tenantId,
+          clientId,
+          driverId,
+          role: 'driver',
+        },
+        select: { userId: true },
+      });
+      if (driverMembership && driverMembership.userId !== actorUserId) {
+        await this.prisma.crmTicketNotification.create({
+          data: {
+            tenantId: scope.tenantId,
+            userId: driverMembership.userId,
+            ticketId: row.id,
+            kind: 'mention',
+            body: `Solicitare pentru vehiculul tău: ${subject}`,
+          },
+        });
+      }
+    }
 
     const { allocByClient } = await this.tireRequestScopeFilter(scope.tenantId, [
       scope.supplierId,

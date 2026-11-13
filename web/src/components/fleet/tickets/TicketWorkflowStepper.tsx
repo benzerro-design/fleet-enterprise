@@ -766,6 +766,17 @@ export function TicketWorkflowStepper({
     <div className={shell}>
       {errorBlock()}
 
+      {driverPortal && isHotelTicket && hasVehicle && vehicleId ? (
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-300">
+            Această solicitare privește vehiculul tău
+            {plate ? ` (${plate})` : ""}. Pentru șofer sunt disponibile doar documentele care
+            necesită semnătura lui; execuția de stoc aparține partenerului.
+          </p>
+          <VehicleDriverTireCustodyPanel vehicleId={vehicleId} />
+        </div>
+      ) : null}
+
       <OperationalStoryTimeline chapters={chapters} />
 
       {canScheduleNew && !serviceCase.appointments?.length ? (
