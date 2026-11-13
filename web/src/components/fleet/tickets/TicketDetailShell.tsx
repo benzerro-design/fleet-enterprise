@@ -136,6 +136,9 @@ export function TicketDetailShell({
               vehicleId={ticket.vehicleId}
               ticketServiceTypeCode={ticket.serviceTypeCode}
               ticketCreatedAt={ticket.createdAt}
+              gestiuneOp={ticket.gestiuneOp}
+              assignedSupplierId={ticket.assignedSupplierId}
+              plate={ticket.registrationNumber}
               canOperate={canOperate}
               canSupplierValidate={canSupplierValidate}
               canApproveQuote={canApproveQuote}

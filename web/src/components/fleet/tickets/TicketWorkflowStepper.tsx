@@ -51,6 +51,9 @@ type Props = {
   vehicleId?: string | null;
   ticketServiceTypeCode?: string | null;
   ticketCreatedAt?: string;
+  gestiuneOp?: "cazare" | "eliberare" | "transfer" | "casare" | null;
+  assignedSupplierId?: string | null;
+  plate?: string | null;
   canOperate: boolean;
   /** Validare în locul furnizorului — doar tenant_admin. */
   canSupplierValidate?: boolean;
@@ -78,6 +81,9 @@ export function TicketWorkflowStepper({
   vehicleId,
   ticketServiceTypeCode,
   ticketCreatedAt,
+  gestiuneOp = null,
+  assignedSupplierId = null,
+  plate = null,
   canOperate,
   canSupplierValidate = false,
   canApproveQuote,
@@ -702,6 +708,9 @@ export function TicketWorkflowStepper({
             ticketId={ticketId}
             vehicleId={vehicleId}
             canWrite={canOperate && !closed && !driverPortal}
+            plate={plate}
+            gestiuneOp={gestiuneOp}
+            assignedSupplierId={assignedSupplierId}
           />
         ) : null}
         {!hasVehicle ? (
