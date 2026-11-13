@@ -1370,64 +1370,85 @@ export class TireCustodyProtocolService {
     }
 
     const signedAt = new Date();
-    const pdfBuf = await this.renderPdfBuffer(protocolId, tenant.name, {
-      signedAtOverride: signedAt,
-    });
+    let pdfBuf: Buffer;
+    try {
+      pdfBuf = await this.renderPdfBuffer(protocolId, tenant.name, {
+        signedAtOverride: signedAt,
+      });
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new BadRequestException(`Generare PDF PV eșuată: ${detail}`);
+    }
     const pdfSha256 = createHash('sha256').update(pdfBuf).digest('hex');
     const checklistJson = {
       ...((existing.checklistJson as Record<string, boolean>) ?? {}),
       photos_taken: true,
     };
 
-    const row = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.tireCustodyProtocol.update({
-        where: { id: protocolId },
-        data: {
-          status: TireCustodyProtocolStatus.signed,
-          signedAt,
-          pdfBytes: new Uint8Array(pdfBuf),
-          pdfSha256,
-          pdfArchivedAt: new Date(),
-          checklistJson,
+    let row;
+    try {
+      // Same budget as hotel check-in: Neon + placeAsset×N (+ cost/ticket) exceeds Prisma's 5s default.
+      row = await this.prisma.$transaction(
+        async (tx) => {
+          const updated = await tx.tireCustodyProtocol.update({
+            where: { id: protocolId },
+            data: {
+              status: TireCustodyProtocolStatus.signed,
+              signedAt,
+              pdfBytes: Buffer.from(pdfBuf),
+              pdfSha256,
+              pdfArchivedAt: new Date(),
+              checklistJson,
+            },
+            include: PROTOCOL_INCLUDE,
+          });
+
+          if (stockRelease) {
+            await this.hotel.checkOutTx(tx, {
+              tenantId: tenant.id,
+              supplierId: existing.supplierId,
+              stayId: existing.stayId,
+              actorUserId: actorUserId ?? null,
+              releaseKind: stockRelease,
+              accountingNote:
+                existing.kind === TireCustodyProtocolKind.scrap
+                  ? existing.accountingNote
+                  : undefined,
+              ticketId: existing.ticketId ?? null,
+            });
+          } else if (isTransferFinalizeKind(existing.kind)) {
+            await this.hotel.transferBetweenSuppliersTx(tx, {
+              tenantId: tenant.id,
+              fromSupplierId: existing.supplierId,
+              toSupplierId: existing.targetSupplierId!.trim(),
+              stayId: existing.stayId,
+              locationCode: existing.targetLocationCode,
+              actorUserId: actorUserId ?? null,
+              handoffOnly: false,
+            });
+          } else if (isQuarantineFinalizeKind(existing.kind)) {
+            await tx.tireStorageStay.update({
+              where: { id: existing.stayId },
+              data: {
+                quarantinedAt: signedAt,
+                quarantineReason:
+                  existing.conditionNotes?.trim() || existing.accountingNote || null,
+              },
+            });
+          }
+
+          return updated;
         },
-        include: PROTOCOL_INCLUDE,
-      });
-
-      if (stockRelease) {
-        await this.hotel.checkOutTx(tx, {
-          tenantId: tenant.id,
-          supplierId: existing.supplierId,
-          stayId: existing.stayId,
-          actorUserId: actorUserId ?? null,
-          releaseKind: stockRelease,
-          accountingNote:
-            existing.kind === TireCustodyProtocolKind.scrap
-              ? existing.accountingNote
-              : undefined,
-          ticketId: existing.ticketId ?? null,
-        });
-      } else if (isTransferFinalizeKind(existing.kind)) {
-        await this.hotel.transferBetweenSuppliersTx(tx, {
-          tenantId: tenant.id,
-          fromSupplierId: existing.supplierId,
-          toSupplierId: existing.targetSupplierId!.trim(),
-          stayId: existing.stayId,
-          locationCode: existing.targetLocationCode,
-          actorUserId: actorUserId ?? null,
-          handoffOnly: false,
-        });
-      } else if (isQuarantineFinalizeKind(existing.kind)) {
-        await tx.tireStorageStay.update({
-          where: { id: existing.stayId },
-          data: {
-            quarantinedAt: signedAt,
-            quarantineReason: existing.conditionNotes?.trim() || existing.accountingNote || null,
-          },
-        });
+        { timeout: 30_000, maxWait: 10_000 },
+      );
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2028') {
+        throw new BadRequestException(
+          'Finalizarea PV a expirat (timeout tranzacție). Reîncearcă — semnăturile rămân, doar finalizează din nou.',
+        );
       }
-
-      return updated;
-    });
+      throw e;
+    }
 
     await this.audit.log({
       tenantId: tenant.id,

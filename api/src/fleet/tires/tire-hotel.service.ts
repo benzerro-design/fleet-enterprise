@@ -852,24 +852,37 @@ export class TireHotelService {
   }
 
   async checkOut(params: TireHotelCheckOutParams) {
-    const row = await this.prisma.$transaction(async (tx) => this.checkOutTx(tx, params));
-    const hook = await this.loadWebhookDeliveryOpts(params.tenantId);
-    void emitTireStayWebhook(
-      {
-        event: 'tire.stay.checked_out',
-        tenantId: params.tenantId,
-        stayId: row.id,
-        setId: row.setId,
-        supplierId: params.supplierId,
-        vehicleId: row.vehicleId ?? null,
-        at: row.checkOutAt ?? new Date().toISOString(),
-        feeCents: row.feeCents,
-        releaseKind: params.releaseKind ?? 'at_client',
-        costEntryId: row.costEntryId ?? null,
-      },
-      hook,
-    );
-    return row;
+    try {
+      // Mirror check-in: Neon + placeAsset×N needs > Prisma default 5s.
+      const row = await this.prisma.$transaction(
+        async (tx) => this.checkOutTx(tx, params),
+        { timeout: 30_000, maxWait: 10_000 },
+      );
+      const hook = await this.loadWebhookDeliveryOpts(params.tenantId);
+      void emitTireStayWebhook(
+        {
+          event: 'tire.stay.checked_out',
+          tenantId: params.tenantId,
+          stayId: row.id,
+          setId: row.setId,
+          supplierId: params.supplierId,
+          vehicleId: row.vehicleId ?? null,
+          at: row.checkOutAt ?? new Date().toISOString(),
+          feeCents: row.feeCents,
+          releaseKind: params.releaseKind ?? 'at_client',
+          costEntryId: row.costEntryId ?? null,
+        },
+        hook,
+      );
+      return row;
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2028') {
+        throw new BadRequestException(
+          'Check-out a expirat (timeout tranzacție). Reîncearcă — dacă persistă, contactează suportul.',
+        );
+      }
+      throw e;
+    }
   }
 
   private async loadWebhookDeliveryOpts(tenantId: string) {
