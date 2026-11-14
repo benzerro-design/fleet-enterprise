@@ -60,7 +60,7 @@ function opCopy(op: TicketGestiuneOp | null | undefined): {
     return {
       title: "Flux eliberare hotel",
       what: "Ce e de făcut: alege setul de pe hotel → execută eliberarea (PV check-out). Nu e check-in.",
-      hint: "Setul iese din inventarul hotel. Montaj pe mașină = flux service / WO separat, dacă e nevoie.",
+      hint: "Setul iese din inventarul hotel. Montaj pe mașină = tichet nou sezon / service roți (nu pe acest tichet de custodie).",
     };
   }
   if (op === "transfer") {
@@ -80,7 +80,7 @@ function opCopy(op: TicketGestiuneOp | null | undefined): {
   return {
     title: "Flux cazare hotel",
     what: "Ce e de făcut: alege setul de depozitat → check-in la hotel (sau deschide fișa pe Roți).",
-    hint: "Nu e flux de atelier. Montaj/demontaj = comandă anvelope (WO), separat.",
+    hint: "Nu e flux de atelier. Montaj/demontaj = tichet sezon / service roți separat.",
   };
 }
 
@@ -150,6 +150,9 @@ export function TicketHotelPanel({
   useEffect(() => {
     void loadProgress();
   }, [loadProgress]);
+
+  const custodyDone =
+    Boolean(progress?.release?.signed && progress.stayCheckedOut);
 
   useEffect(() => {
     if (!canWrite || !isCazare) return;
@@ -287,7 +290,7 @@ export function TicketHotelPanel({
               . Continuă cu finalizarea PV / scoaterea din stoc.
             </p>
           ) : null}
-          {progress.release?.signed && progress.stayCheckedOut ? (
+          {custodyDone && progress.release ? (
             <div className="space-y-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-2">
               <p className="text-[11px] text-emerald-100">
                 Predare din hotel finalizată
@@ -305,40 +308,35 @@ export function TicketHotelPanel({
                   Descarcă PV eliberare (PDF)
                 </a>
                 {canWrite ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.dispatchEvent(
-                          new CustomEvent("fleet-ticket-tab", { detail: "actions" }),
-                        )
-                      }
-                      className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-3 py-1.5 text-[11px] text-emerald-100 hover:bg-emerald-950/60"
-                    >
-                      Rezolvă tichetul
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.dispatchEvent(new CustomEvent("fleet-ticket-start-service"))
-                      }
-                      className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-100 hover:bg-amber-950/50"
-                    >
-                      Deschide flux service
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent("fleet-ticket-tab", { detail: "actions" }),
+                      )
+                    }
+                    className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-3 py-1.5 text-[11px] text-emerald-100 hover:bg-emerald-950/60"
+                  >
+                    Rezolvă tichetul
+                  </button>
                 ) : null}
+                <Link
+                  href={`/fleet/tickets/new?vehicleId=${encodeURIComponent(vehicleId)}&subject=${encodeURIComponent(`Montaj anvelope — ${plate ?? "vehicul"}`)}`}
+                  className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-100 hover:bg-amber-950/50"
+                >
+                  Tichet nou sezon / service roți
+                </Link>
               </div>
               <PilotHint>
-                Dacă urmează montaj pe mașină, deschide flux service pe același tichet (WO
-                anvelope/roți). Predarea din hotel nu înseamnă automat montaj.
+                Acest tichet e doar custodie hotel. Montajul (același sau alt partener) se face pe
+                un tichet nou sezon / service roți — nu pe fluxul de eliberare.
               </PilotHint>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      {progress?.release?.signed && progress.stayCheckedOut ? null : sets.length === 0 ? (
+      {custodyDone ? null : sets.length === 0 ? (
         <p className="text-xs text-amber-200/90">
           Niciun set pe vehicul. Adaugă seturi din{" "}
           <Link href={wheelsHref} className="underline underline-offset-2">
@@ -475,7 +473,7 @@ export function TicketHotelPanel({
       {(isEliberare || isTransfer || isCasare) &&
       selected &&
       !selected.hotel?.atSupplierHotel &&
-      !(progress?.release?.signed && progress.stayCheckedOut) ? (
+      !custodyDone ? (
         <p className="text-xs text-amber-200/90">
           {selected.isMounted
             ? "Setul selectat e montat pe mașină — pentru eliberare alege setul «La hotel»."

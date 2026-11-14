@@ -137,8 +137,9 @@ export function VehicleDriverTireCustodyPanel({ vehicleId, alwaysShow = false }:
               custodia {headline.supplierName} și a fost predat către tine.
             </p>
             <p className="text-zinc-400">
-              Păstrează PV-ul ca dovadă a predării. Dacă setul trebuie montat pe vehicul, solicită
-              continuarea tichetului cu service; predarea din hotel nu înseamnă automat montaj.
+              Păstrează PV-ul ca dovadă a predării. Dacă setul trebuie montat pe vehicul, cere un
+              tichet nou sezon / service roți (același sau alt partener); predarea din hotel nu
+              înseamnă automat montaj.
             </p>
             <a
               href={vehicleCustodyPdfUrl(vehicleId, headline.protocolId)}

@@ -46,8 +46,6 @@ import { TicketHotelPanel } from "@/components/fleet/tickets/TicketHotelPanel";
 import { PilotHint } from "@/components/fleet/PilotHint";
 import { VehicleDriverTireCustodyPanel } from "@/components/fleet/VehicleDriverTireCustodyPanel";
 import { isTireStorageTypeCode } from "@/lib/tire-service-type-codes";
-import { DEFAULT_TIRE_SETTINGS, tireSettingsBrowserBase } from "@/lib/tire-settings";
-
 type Props = {
   ticketId: string;
   vehicleId?: string | null;
@@ -106,28 +104,6 @@ export function TicketWorkflowStepper({
   const [serviceCase, setServiceCase] = useState<ServiceCaseRecord | null | undefined>(undefined);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hotelHidesServiceFlow, setHotelHidesServiceFlow] = useState(
-    DEFAULT_TIRE_SETTINGS.hotelTicketHidesServiceFlow,
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(tireSettingsBrowserBase, { cache: "no-store" });
-        if (!res.ok || cancelled) return;
-        const j = (await res.json()) as { hotelTicketHidesServiceFlow?: boolean };
-        if (!cancelled && typeof j.hotelTicketHidesServiceFlow === "boolean") {
-          setHotelHidesServiceFlow(j.hotelTicketHidesServiceFlow);
-        }
-      } catch {
-        /* defaults */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
   const [supplierId, setSupplierId] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [appointmentLocation, setAppointmentLocation] = useState("");
@@ -262,15 +238,6 @@ export function TicketWorkflowStepper({
       setPending(false);
     }
   }, [ticketId, router]);
-
-  useEffect(() => {
-    if (!canOperate || closed || driverPortal) return;
-    const onStartService = () => {
-      void startCase();
-    };
-    window.addEventListener("fleet-ticket-start-service", onStartService);
-    return () => window.removeEventListener("fleet-ticket-start-service", onStartService);
-  }, [canOperate, closed, driverPortal, startCase]);
 
   async function createAppointment() {
     if (!serviceCase) return;
@@ -708,7 +675,6 @@ export function TicketWorkflowStepper({
   }
 
   const isHotelTicket = isTireStorageTypeCode(ticketServiceTypeCode);
-  const hotelPrimary = isHotelTicket && hotelHidesServiceFlow;
 
   if (!serviceCase) {
     return (
@@ -721,8 +687,8 @@ export function TicketWorkflowStepper({
               <PilotHint>
                 Pe tichetul șoferului apar doar documentele care cer semnătura lui
                 {plate ? ` (${plate})` : ""}; execuția de stoc rămâne la partener. Dacă ai nevoie de
-                montaj pe mașină după predare, solicită continuarea cu service pe acest tichet —
-                adminul sau managerul deschid fluxul (nu creezi tu comanda).
+                montaj după predare, cere un tichet nou sezon / service roți — nu pe acest tichet
+                de custodie.
               </PilotHint>
             </div>
           ) : (
@@ -739,37 +705,39 @@ export function TicketWorkflowStepper({
         {!hasVehicle ? (
           <p className="text-sm text-amber-300">
             Atașează un vehicul la tichet pentru a porni fluxul{" "}
-            {isHotelTicket ? "hotel / service" : "service"}.
+            {isHotelTicket ? "hotel" : "service"}.
           </p>
+        ) : isHotelTicket ? (
+          <PilotHint>
+            Tichet de custodie hotel — fără flux service pe același dosar. Pentru montaj (același
+            sau alt partener) deschide un tichet nou sezon / service roți
+            {hasVehicle && vehicleId ? (
+              <>
+                {" "}
+                (
+                <Link
+                  href={`/fleet/tickets/new?vehicleId=${encodeURIComponent(vehicleId)}&subject=${encodeURIComponent(`Montaj anvelope — ${plate ?? "vehicul"}`)}`}
+                  className="underline underline-offset-2"
+                >
+                  solicitare nouă
+                </Link>
+                )
+              </>
+            ) : null}
+            .
+          </PilotHint>
         ) : canOperate && !closed ? (
-          hotelPrimary ? (
-            <details className="rounded-lg border border-dashed border-amber-800/40 bg-zinc-950/40 px-3 py-2" data-pilot-hint="true">
-              <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
-                <span className="mr-1 font-mono text-[9px] uppercase text-amber-200/80">HINT</span>
-                Ai nevoie și de atelier (montaj/demontaj)? Deschide flux service
-              </summary>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void startCase()}
-                className="mt-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-50"
-              >
-                Deschide flux service
-              </button>
-            </details>
-          ) : (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => void startCase()}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
-              Deschide flux service
-            </button>
-          )
-        ) : !isHotelTicket ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void startCase()}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            Deschide flux service
+          </button>
+        ) : (
           <p className="text-sm text-zinc-500">Dosarul service nu a fost deschis.</p>
-        ) : null}
+        )}
       </div>
     );
   }
@@ -784,8 +752,8 @@ export function TicketWorkflowStepper({
           <PilotHint>
             Pe tichetul șoferului apar doar documentele care cer semnătura lui
             {plate ? ` (${plate})` : ""}; execuția de stoc rămâne la partener. Dacă ai nevoie de
-            montaj pe mașină după predare, solicită continuarea cu service pe acest tichet —
-            adminul sau managerul deschid fluxul (nu creezi tu comanda).
+            montaj după predare, cere un tichet nou sezon / service roți — nu pe acest tichet de
+            custodie.
           </PilotHint>
         </div>
       ) : null}
