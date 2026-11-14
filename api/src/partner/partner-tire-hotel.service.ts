@@ -31,6 +31,7 @@ import {
   parseIntakeInspectionBody,
 } from '../fleet/tires/tire-intake-inspection';
 import { parseTireSetSearchInput } from '../fleet/tires/tire-domain.types';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertSupplierReadById } from '../suppliers/supplier-access';
 import {
@@ -63,6 +64,7 @@ export class PartnerTireHotelService {
     private readonly hotel: TireHotelService,
     private readonly custody: TireCustodyProtocolService,
     private readonly tireDomain: TireDomainService,
+    private readonly audit: AuditService,
   ) {}
 
   async capability(tenantSlug: string, access: AccessContext, supplierId?: string) {
@@ -1190,6 +1192,15 @@ export class PartnerTireHotelService {
     }
 
     const scope = await this.resolveSupplier(tenantSlug, access, opts.supplierId);
+    const actor = actorUserId
+      ? await this.prisma.user.findUnique({
+          where: { id: actorUserId },
+          select: { id: true, email: true, displayName: true },
+        })
+      : null;
+    const actorLabel =
+      actor?.displayName?.trim() || actor?.email?.trim() || null;
+
     const updated = await this.prisma.crmTicket.updateMany({
       where: {
         id: ticketId.trim(),
@@ -1210,15 +1221,35 @@ export class PartnerTireHotelService {
         tenantId: scope.tenantId,
         ticketId: ticketId.trim(),
         kind: CrmTicketEventKind.workflow_advance,
-        body: 'Eliberare finalizată: PV eliberare + check-out sejur',
-        actorUserId: actorUserId ?? null,
+        body: actorLabel
+          ? `Eliberare finalizată de ${actorLabel}: PV eliberare + check-out sejur (tichet rezolvat)`
+          : 'Eliberare finalizată: PV eliberare + check-out sejur (tichet rezolvat)',
+        actorUserId: actor?.id ?? actorUserId ?? null,
+        actorDisplayName: actor?.displayName?.trim() || actorLabel,
         payload: {
           action: 'complete_eliberare',
           stayId: status.stay?.id ?? null,
           releaseProtocolId: status.releaseProtocol?.id ?? null,
           releaseProtocolKind: status.releaseProtocol?.kind ?? null,
           status: 'resolved',
+          actorEmail: actor?.email ?? null,
         },
+      },
+    });
+
+    await this.audit.log({
+      tenantId: scope.tenantId,
+      actorUserId: actor?.id ?? actorUserId ?? null,
+      action: 'crm_ticket.complete_eliberare',
+      entityType: 'crm_ticket',
+      entityId: ticketId.trim(),
+      meta: {
+        status: 'resolved',
+        stayId: status.stay?.id ?? null,
+        releaseProtocolId: status.releaseProtocol?.id ?? null,
+        actorDisplayName: actor?.displayName?.trim() || null,
+        actorEmail: actor?.email ?? null,
+        finalizedBy: actorLabel,
       },
     });
 

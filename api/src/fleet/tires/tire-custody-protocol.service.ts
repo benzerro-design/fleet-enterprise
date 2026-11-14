@@ -1548,6 +1548,17 @@ export class TireCustodyProtocolService {
       throw e;
     }
 
+    let actorEmail: string | null = null;
+    let actorDisplayName: string | null = null;
+    if (actorUserId) {
+      const actor = await this.prisma.user.findUnique({
+        where: { id: actorUserId },
+        select: { email: true, displayName: true },
+      });
+      actorEmail = actor?.email ?? null;
+      actorDisplayName = actor?.displayName?.trim() || null;
+    }
+
     await this.audit.log({
       tenantId: tenant.id,
       actorUserId,
@@ -1561,6 +1572,9 @@ export class TireCustodyProtocolService {
         stockRelease,
         transfer: isTransferFinalizeKind(existing.kind),
         quarantine: isQuarantineFinalizeKind(existing.kind),
+        actorDisplayName,
+        actorEmail,
+        finalizedBy: actorDisplayName || actorEmail || actorUserId || null,
       },
     });
 

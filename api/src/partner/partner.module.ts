@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { FleetModule } from '../fleet/fleet.module';
 import { PartnerAdminController } from './partner-admin.controller';
@@ -20,7 +21,7 @@ import { PartnerTireWarehouseController } from './partner-tire-warehouse.control
 import { PartnerTireWarehouseService } from './partner-tire-warehouse.service';
 
 @Module({
-  imports: [AuthModule, FleetModule],
+  imports: [AuthModule, AuditModule, FleetModule],
   controllers: [
     PartnerAdminController,
     PartnerNotificationsController,

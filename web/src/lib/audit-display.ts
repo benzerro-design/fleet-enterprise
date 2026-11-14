@@ -12,6 +12,8 @@ const ACTION_LABELS: Record<string, string> = {
   "user.password_set": "Parolă înlocuită de administrator",
   "user.disabled": "Cont dezactivat",
   "user.enabled": "Cont reactivat",
+  "tire_custody_protocol.finalize": "Finalizare PV custodie",
+  "crm_ticket.complete_eliberare": "Finalizare eliberare hotel",
 };
 
 /** Câmpuri PATCH vehicul → denumiri citibile (aliniate cu formularul flotă). */
@@ -225,6 +227,34 @@ export function auditDetailText(
       default:
         return summarizeGenericMeta(meta);
     }
+  }
+
+  if (
+    entityType === "tire_custody_protocol" ||
+    action === "tire_custody_protocol.finalize"
+  ) {
+    const by =
+      (typeof meta.finalizedBy === "string" && meta.finalizedBy.trim()) ||
+      (typeof meta.actorDisplayName === "string" && meta.actorDisplayName.trim()) ||
+      (typeof meta.actorEmail === "string" && meta.actorEmail.trim()) ||
+      null;
+    const kind = typeof meta.kind === "string" ? meta.kind : "PV";
+    const stock =
+      typeof meta.stockRelease === "string" ? ` · stoc: ${meta.stockRelease}` : "";
+    return by
+      ? `Finalizat de ${by} · ${kind}${stock}.`
+      : `Finalizare ${kind}${stock}.`;
+  }
+
+  if (action === "crm_ticket.complete_eliberare") {
+    const by =
+      (typeof meta.finalizedBy === "string" && meta.finalizedBy.trim()) ||
+      (typeof meta.actorDisplayName === "string" && meta.actorDisplayName.trim()) ||
+      (typeof meta.actorEmail === "string" && meta.actorEmail.trim()) ||
+      null;
+    return by
+      ? `Eliberare hotel finalizată de ${by} — tichet rezolvat.`
+      : "Eliberare hotel finalizată — tichet rezolvat.";
   }
 
   if (entityType !== "vehicle") {
